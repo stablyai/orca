@@ -1175,7 +1175,7 @@ describe('runHook', () => {
         }
       )
       expect(result.runnerScriptPath).toContain('setup-runner.sh')
-      expect(result.shell).toBeUndefined()
+      expect(result.shell).toEqual({ family: 'posix', executable: 'wsl.exe' })
       expect(mkdirSyncMock).toHaveBeenCalled()
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         expect.stringContaining('setup-runner.sh'),
@@ -1287,48 +1287,6 @@ describe('createSetupRunnerScript', () => {
       expect(result).toMatchObject({
         runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
         shell: { family: 'posix' }
-      })
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-    }
-  })
-
-  it('writes PowerShell setup runners for configured PowerShell on native Windows paths', async () => {
-    gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\setup-runner.ps1\n')
-    const fs = await import('node:fs')
-    const writeFileSyncMock = vi.mocked(fs.writeFileSync)
-    writeFileSyncMock.mockClear()
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-
-    try {
-      const { createSetupRunnerScript } = await import('./hooks')
-      const result = createSetupRunnerScript(
-        makeRepo(),
-        'C:\\repo-worktree',
-        'pnpm install\nnpm run build',
-        undefined,
-        { family: 'powershell', executable: 'pwsh.exe' }
-      )
-
-      expect(gitExecFileSyncMock).toHaveBeenCalledWith(
-        ['rev-parse', '--git-path', 'orca/setup-runner.ps1'],
-        { cwd: 'C:\\repo-worktree' }
-      )
-      expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.ps1',
-        expect.stringContaining("$ErrorActionPreference = 'Stop'\r\n"),
-        'utf-8'
-      )
-      expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.ps1',
-        expect.stringContaining('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'),
-        'utf-8'
-      )
-      expect(result).toMatchObject({
-        runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.ps1',
-        shell: { family: 'powershell', executable: 'pwsh.exe' }
       })
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -1447,59 +1405,7 @@ describe('resolveSetupRunnerShell', () => {
     })
   })
 
-  it('maps the configured PowerShell implementation into setup launch metadata', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
-
-    expect(
-      resolveSetupRunnerShell(
-        {
-          terminalWindowsShell: 'powershell',
-          terminalWindowsPowerShellImplementation: 'pwsh.exe'
-        },
-        'win32'
-      )
-    ).toEqual({
-      family: 'powershell',
-      executable: 'pwsh.exe'
-    })
-  })
-
-  it('preserves wsl.exe for Windows setup launch metadata', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
-
-    expect(resolveSetupRunnerShell({ terminalWindowsShell: 'wsl.exe' }, 'win32')).toEqual({
-      family: 'posix',
-      executable: 'wsl.exe'
-    })
-  })
-
-  it('preserves a configured Git Bash executable for Windows setup launch metadata', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
-
-    expect(
-      resolveSetupRunnerShell(
-        { terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash.exe' },
-        'win32'
-      )
-    ).toEqual({
-      family: 'posix',
-      executable: 'C:\\Program Files\\Git\\bin\\bash.exe'
-    })
-  })
-
-  it('does not probe local pwsh for remote targets and keeps powershell.exe for auto', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
-
-    // Why: a remote/SSH Windows worktree runs the runner on the remote host, so local pwsh
-    // presence must not upgrade the auto default to a pwsh.exe the remote may lack.
-    expect(
-      resolveSetupRunnerShell({ terminalWindowsShell: 'powershell.exe' }, 'win32', {
-        probeLocalPwsh: false
-      })
-    ).toEqual({ family: 'powershell', executable: 'powershell.exe' })
-  })
-
-  it('still honors an explicit pwsh.exe implementation for remote targets', async () => {
+  it('preserves the existing cmd runner for PowerShell terminals', async () => {
     const { resolveSetupRunnerShell } = await import('./hooks')
 
     expect(
@@ -1508,10 +1414,28 @@ describe('resolveSetupRunnerShell', () => {
           terminalWindowsShell: 'powershell.exe',
           terminalWindowsPowerShellImplementation: 'pwsh.exe'
         },
-        'win32',
-        { probeLocalPwsh: false }
+        'win32'
       )
-    ).toEqual({ family: 'powershell', executable: 'pwsh.exe' })
+    ).toEqual({ family: 'cmd' })
+  })
+
+  it('preserves cmd setup compatibility when a Windows-host project has a WSL shell setting', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(resolveSetupRunnerShell({ terminalWindowsShell: 'wsl.exe' }, 'win32')).toEqual({
+      family: 'cmd'
+    })
+  })
+
+  it('classifies an explicit Git Bash executable as a POSIX runner', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(
+      resolveSetupRunnerShell(
+        { terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash.exe' },
+        'win32'
+      )
+    ).toEqual({ family: 'posix' })
   })
 })
 

@@ -12,13 +12,6 @@ import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-she
 import { gitExecFileSync, promptGuardShellEnv } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import { addWorktreeSetupWslInteropEnv } from './pty/wsl-orca-env'
-import {
-  resolveEffectiveWindowsPowerShell,
-  shouldProbeWindowsPowerShellAvailability,
-  type WindowsPowerShellImplementation,
-  type WindowsPowerShellShellFamily
-} from './providers/windows-powershell'
-import { isPwshAvailable } from './pwsh'
 import type {
   HookCommandSourcePolicy,
   OrcaHooks,
@@ -410,29 +403,6 @@ export function buildWindowsRunnerScript(script: string): string {
   return runnerScript
 }
 
-export function buildPowerShellRunnerScript(script: string): string {
-  // Why: Windows PowerShell 5.1 (the default powershell.exe) decodes BOM-less files as ANSI and
-  // mangles non-ASCII in the setup script; a UTF-8 BOM makes both 5.1 and pwsh 7 read it as UTF-8.
-  let runnerScript = "\uFEFF$ErrorActionPreference = 'Stop'\r\n"
-
-  for (const rawLine of iterateLfScriptLines(script)) {
-    const command = rawLine.trim()
-    if (!command) {
-      runnerScript += '\r\n'
-      continue
-    }
-
-    // Why: check the native exit code before $? so a failing native command surfaces its exact code;
-    // $? still catches cmdlet soft-failures (-ErrorAction SilentlyContinue) that leave LASTEXITCODE 0.
-    runnerScript +=
-      `$global:LASTEXITCODE = 0\r\n${command}\r\n` +
-      `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\r\n` +
-      `if (-not $?) { exit 1 }\r\n`
-  }
-
-  return runnerScript
-}
-
 function* iterateLfScriptLines(script: string): Generator<string> {
   let lineStart = 0
 
@@ -533,9 +503,13 @@ function createWorktreeRunnerScript(
   const runnerShell: SetupRunnerShell = nativeWindowsWorktree
     ? (setupShell ?? { family: 'cmd' })
     : { family: 'posix' }
+  const launchShell: SetupRunnerShell | undefined = nativeWindowsWorktree
+    ? runnerShell
+    : process.platform === 'win32' && runtimeTarget?.wslDistro
+      ? { family: 'posix', executable: 'wsl.exe' }
+      : undefined
   // Why: linked worktrees use a `.git` file, so resolve the real per-worktree gitdir via git rev-parse --git-path.
-  const runnerExtension =
-    runnerShell.family === 'cmd' ? 'cmd' : runnerShell.family === 'powershell' ? 'ps1' : 'sh'
+  const runnerExtension = runnerShell.family === 'cmd' ? 'cmd' : 'sh'
   const gitRelPath = `orca/${runnerBaseName}.${runnerExtension}`
   let runnerScriptPath = getGitPath(worktreePath, gitRelPath, runtimeTarget)
 
@@ -551,8 +525,6 @@ function createWorktreeRunnerScript(
 
   if (runnerShell.family === 'cmd') {
     writeFileSync(runnerScriptPath, buildWindowsRunnerScript(script), 'utf-8')
-  } else if (runnerShell.family === 'powershell') {
-    writeFileSync(runnerScriptPath, buildPowerShellRunnerScript(script), 'utf-8')
   } else {
     writeFileSync(runnerScriptPath, buildPosixRunnerScript(script), 'utf-8')
     if (!nativeWindowsWorktree) {
@@ -571,15 +543,16 @@ function createWorktreeRunnerScript(
   return {
     runnerScriptPath,
     envVars,
-    ...(nativeWindowsWorktree && runnerBaseName === 'setup-runner' ? { shell: runnerShell } : {}),
+    // Why: WSL git returns /mnt paths that Node converts back to C:\ for file
+    // writes; retain the runtime signal so launch converts them to /mnt again.
+    ...(runnerBaseName === 'setup-runner' && launchShell ? { shell: launchShell } : {}),
     ...(waitForAgentStartup === true ? { waitForAgentStartup: true } : {})
   }
 }
 
 export function resolveSetupRunnerShell(
   settings: SetupRunnerShellSettings,
-  platform: NodeJS.Platform = process.platform,
-  options?: { probeLocalPwsh?: boolean }
+  platform: NodeJS.Platform = process.platform
 ): SetupRunnerShell | undefined {
   if (platform !== 'win32') {
     return undefined
@@ -592,42 +565,13 @@ export function resolveSetupRunnerShell(
       : 'powershell.exe'
   const shellBasename = configuredShell.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   const family = resolveWindowsShellStartupFamily(configuredShell)
-  if (family === 'posix') {
-    // Why: deferred setup launches may happen outside PATH resolution, so keep explicit WSL and Git Bash executables.
-    return shellBasename === 'wsl.exe' || shellBasename === 'wsl' || shellBasename === 'bash.exe'
-      ? { family: 'posix', executable: configuredShell }
-      : { family: 'posix' }
-  }
-  if (family === 'cmd') {
-    return { family: 'cmd' }
+  if (family === 'posix' && shellBasename !== 'wsl.exe' && shellBasename !== 'wsl') {
+    return { family: 'posix' }
   }
 
-  const shellFamily: WindowsPowerShellShellFamily =
-    shellBasename === 'pwsh.exe' ? 'pwsh.exe' : 'powershell.exe'
-  const implementationValue = settings?.terminalWindowsPowerShellImplementation
-  const implementation: WindowsPowerShellImplementation | undefined =
-    implementationValue === 'auto' ||
-    implementationValue === 'powershell.exe' ||
-    implementationValue === 'pwsh.exe'
-      ? implementationValue
-      : undefined
-  // Why: isPwshAvailable() probes the LOCAL host; for a remote/SSH Windows target that presence
-  // says nothing about the remote, so callers pass probeLocalPwsh:false to keep the always-present
-  // powershell.exe default (auto) rather than routing to a pwsh.exe the remote may not have.
-  const shouldProbePwsh =
-    (options?.probeLocalPwsh ?? true) &&
-    shouldProbeWindowsPowerShellAvailability({
-      shellFamily,
-      implementation
-    })
-  const executable =
-    resolveEffectiveWindowsPowerShell({
-      shellFamily,
-      implementation,
-      pwshAvailable: shouldProbePwsh ? isPwshAvailable() : false
-    }) ?? configuredShell
-
-  return { family: 'powershell', executable }
+  // Why: existing Windows setup scripts were authored for Orca's cmd runner;
+  // PowerShell and Windows-host projects can invoke it without changing syntax.
+  return { family: 'cmd' }
 }
 
 /**

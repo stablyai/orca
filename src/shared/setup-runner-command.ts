@@ -1,7 +1,7 @@
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
-export type SetupRunnerShellFamily = 'posix' | 'cmd' | 'powershell'
+export type SetupRunnerShellFamily = 'posix' | 'cmd'
 export type SetupRunnerCommandShell = 'posix' | 'windows'
 export type SetupRunnerShell = {
   family: SetupRunnerShellFamily
@@ -60,9 +60,8 @@ export function resolveSetupRunnerCommand(
       // Why: WSL shells need /mnt/... paths, while Git Bash expects /c/... when replaying deferred setup scripts.
       if (isWslExecutable(shell?.executable)) {
         const wslPath = nativeWindowsPathToWslShellPath(runnerScriptPath)
-        const executable = shell?.executable?.trim() || 'wsl.exe'
         return {
-          command: `${quoteWindowsExecutable(executable)} -- bash ${quotePosixArg(wslPath)}`,
+          command: `bash ${quotePosixArg(wslPath)}`,
           runnerScriptPathForShell: wslPath,
           shell: 'posix'
         }
@@ -73,14 +72,6 @@ export function resolveSetupRunnerCommand(
         command: `bash ${quotePosixArg(posixPath)}`,
         runnerScriptPathForShell: posixPath,
         shell: 'posix'
-      }
-    }
-    if (shell?.family === 'powershell' || /\.ps1$/i.test(runnerScriptPath)) {
-      const executable = shell?.executable?.trim() || 'powershell.exe'
-      return {
-        command: `${quoteWindowsExecutable(executable)} -NoProfile -ExecutionPolicy Bypass -File ${quoteWindowsArg(runnerScriptPath)}`,
-        runnerScriptPathForShell: runnerScriptPath,
-        shell: 'windows'
       }
     }
     return {
@@ -118,10 +109,6 @@ function quotePosixArg(value: string): string {
 
 function quoteWindowsArg(value: string): string {
   return `"${value.replace(/"/g, '""')}"`
-}
-
-function quoteWindowsExecutable(value: string): string {
-  return /[\s"]/.test(value) ? quoteWindowsArg(value) : value
 }
 
 function nativeWindowsPathToPosixShellPath(value: string): string {

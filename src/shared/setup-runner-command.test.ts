@@ -37,24 +37,13 @@ describe('buildSetupRunnerCommand', () => {
     ).toBe('bash /c/repo/.git/orca/setup-runner.sh')
   })
 
-  it('uses the selected PowerShell executable for PowerShell setup runners', () => {
-    expect(
-      buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.ps1', 'windows', {
-        family: 'powershell',
-        executable: 'pwsh.exe'
-      })
-    ).toBe(
-      'pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\repo\\.git\\orca\\setup-runner.ps1"'
-    )
-  })
-
-  it('uses wsl.exe with WSL paths for native Windows POSIX setup runners', () => {
+  it('uses the active WSL shell with WSL paths for native Windows POSIX runners', () => {
     expect(
       buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.sh', 'windows', {
         family: 'posix',
         executable: 'wsl.exe'
       })
-    ).toBe('wsl.exe -- bash /mnt/c/repo/.git/orca/setup-runner.sh')
+    ).toBe('bash /mnt/c/repo/.git/orca/setup-runner.sh')
   })
 
   it('keeps cmd.exe launch semantics for cmd setup runners', () => {
@@ -65,12 +54,9 @@ describe('buildSetupRunnerCommand', () => {
     ).toBe('cmd.exe /c "C:\\repo\\.git\\orca\\setup-runner.cmd"')
   })
 
-  it('infers generated Windows runner shell semantics from extension when metadata is absent', () => {
+  it('infers generated POSIX runner shell semantics from extension when metadata is absent', () => {
     expect(buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.sh', 'windows')).toBe(
       'bash /c/repo/.git/orca/setup-runner.sh'
-    )
-    expect(buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.ps1', 'windows')).toBe(
-      'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\repo\\.git\\orca\\setup-runner.ps1"'
     )
   })
 })

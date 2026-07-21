@@ -88,30 +88,6 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
   })
 
-  it('queues setup through returned PowerShell shell metadata', () => {
-    let createdIndex = 0
-    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
-    const store = createMockStore({ createTab })
-
-    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, {
-      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.ps1',
-      shell: { family: 'powershell', executable: 'pwsh.exe' },
-      envVars: {
-        ORCA_ROOT_PATH: 'C:\\repo',
-        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
-      }
-    })
-
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
-      command:
-        'pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\repo\\.git\\orca\\setup-runner.ps1"',
-      env: {
-        ORCA_ROOT_PATH: 'C:\\repo',
-        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
-      }
-    })
-  })
-
   it('queues setup through returned POSIX shell metadata on native Windows paths', () => {
     let createdIndex = 0
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
@@ -511,7 +487,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
 
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
-      command: 'wsl.exe -- bash /mnt/c/repo/.git/orca/setup-runner.sh',
+      command: 'bash /mnt/c/repo/.git/orca/setup-runner.sh',
       env: {
         ORCA_ROOT_PATH: 'C:\\repo',
         ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
@@ -827,7 +803,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       })
     )
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
-      command: expect.stringContaining('wsl.exe -- bash /mnt/c/repo/.git/orca/setup-runner.sh'),
+      command: expect.stringContaining('bash /mnt/c/repo/.git/orca/setup-runner.sh'),
       env: { ORCA_ROOT_PATH: 'C:\\repo' },
       direction: 'vertical'
     })
@@ -922,27 +898,6 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       env: {
         ORCA_ROOT_PATH: '/tmp/repo',
         ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
-      }
-    })
-  })
-
-  it('queues a shell-aware issue command split when Windows runner metadata is provided', () => {
-    const store = createMockStore()
-
-    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, {
-      runnerScriptPath: 'C:\\repo\\.git\\orca\\issue-command-runner.sh',
-      shell: { family: 'posix', executable: 'wsl.exe' },
-      envVars: {
-        ORCA_ROOT_PATH: 'C:\\repo',
-        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
-      }
-    })
-
-    expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
-      command: 'wsl.exe -- bash /mnt/c/repo/.git/orca/issue-command-runner.sh',
-      env: {
-        ORCA_ROOT_PATH: 'C:\\repo',
-        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
       }
     })
   })

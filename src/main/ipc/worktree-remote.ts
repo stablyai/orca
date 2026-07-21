@@ -46,7 +46,6 @@ import type {
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import {
   buildPosixRunnerScript,
-  buildPowerShellRunnerScript,
   buildWindowsRunnerScript,
   createSetupRunnerScript,
   getDefaultTabsLaunch,
@@ -116,7 +115,6 @@ import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
 } from '../../shared/setup-runner-command'
-import type { SetupRunnerShell } from '../../shared/setup-runner-command'
 import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
 import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
@@ -1223,14 +1221,12 @@ async function createRemoteSetupRunnerScript(
   worktreePath: string,
   script: string,
   gitProvider: SshGitProvider,
-  fsProvider: IFilesystemProvider,
-  setupShell?: SetupRunnerShell
+  fsProvider: IFilesystemProvider
 ): Promise<CreateWorktreeResult['setup']> {
   const useWindowsFormat = isWindowsAbsolutePathLike(worktreePath)
-  const runnerShell = useWindowsFormat ? (setupShell ?? { family: 'cmd' as const }) : undefined
-  const runnerExtension =
-    runnerShell?.family === 'cmd' ? 'cmd' : runnerShell?.family === 'powershell' ? 'ps1' : 'sh'
-  const runnerRelativePath = `orca/setup-runner.${runnerExtension}`
+  // Why: SSH terminals choose their shell on the remote host; local Windows
+  // preferences cannot safely select a remote runner format or launch command.
+  const runnerRelativePath = useWindowsFormat ? 'orca/setup-runner.cmd' : 'orca/setup-runner.sh'
   const { stdout } = await gitProvider.exec(
     ['rev-parse', '--git-path', runnerRelativePath],
     worktreePath
@@ -1242,16 +1238,11 @@ async function createRemoteSetupRunnerScript(
   await fsProvider.createDir(runnerDir)
   await fsProvider.writeFile(
     runnerScriptPath,
-    runnerShell?.family === 'cmd'
-      ? buildWindowsRunnerScript(script)
-      : runnerShell?.family === 'powershell'
-        ? buildPowerShellRunnerScript(script)
-        : buildPosixRunnerScript(script)
+    useWindowsFormat ? buildWindowsRunnerScript(script) : buildPosixRunnerScript(script)
   )
   return {
     runnerScriptPath,
     envVars: getSetupRunnerEnvVars(repo, worktreePath),
-    ...(runnerShell ? { shell: runnerShell } : {}),
     ...(shouldWaitForSetupBeforeAgentStartup(repo.hookSettings?.setupAgentStartupPolicy)
       ? { waitForAgentStartup: true }
       : {})
@@ -1937,13 +1928,7 @@ export async function createRemoteWorktree(
             created.path,
             setupScript,
             provider,
-            fsProvider,
-            resolveSetupRunnerShell(
-              settings,
-              isWindowsAbsolutePathLike(created.path) ? 'win32' : 'linux',
-              // Why: the runner runs on the remote host, so don't let local pwsh presence pick pwsh.exe.
-              { probeLocalPwsh: false }
-            )
+            fsProvider
           )
         } catch (error) {
           console.error(`[hooks] Failed to prepare setup runner for ${created.path}:`, error)

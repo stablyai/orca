@@ -174,7 +174,7 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'nonce-wsl-shell'
     })
 
-    expect(result.setupCommand).toContain('wsl.exe -- bash /mnt/c/repo/.git/orca/setup-runner.sh')
+    expect(result.setupCommand).toContain('bash /mnt/c/repo/.git/orca/setup-runner.sh')
     expect(result.setupCommand).toContain(
       '/mnt/c/repo/.git/orca/setup-runner.sh.nonce-wsl-shell.done'
     )

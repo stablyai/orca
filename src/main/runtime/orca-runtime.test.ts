@@ -36542,86 +36542,6 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('uses returned PowerShell setup shell metadata when runtime spawns setup', async () => {
-    setPlatform('win32')
-    const runtime = new OrcaRuntimeService(store)
-    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-created-worktree' })
-    const spawn = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'pty-primary' })
-      .mockResolvedValueOnce({ id: 'pty-setup' })
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession,
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-
-    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\runtime-hook-powershell')
-    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\runtime-hook-powershell')
-    vi.mocked(getEffectiveHooks).mockReturnValue({
-      scripts: {
-        setup: 'pnpm worktree:setup'
-      }
-    })
-    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
-      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.ps1',
-      shell: { family: 'powershell', executable: 'pwsh.exe' },
-      envVars: {
-        ORCA_ROOT_PATH: 'C:\\repo',
-        ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-powershell'
-      }
-    })
-    vi.mocked(listWorktrees).mockResolvedValue([
-      {
-        path: 'C:/workspaces/runtime-hook-powershell',
-        head: 'def',
-        branch: 'runtime-hook-powershell',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    const result = await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'runtime-hook-powershell'
-    })
-
-    expect(result.setup).toBeUndefined()
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
-    expect(spawn).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        command:
-          'pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\repo\\.git\\orca\\setup-runner.ps1"',
-        env: expect.objectContaining({
-          ORCA_ROOT_PATH: 'C:\\repo',
-          ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-powershell',
-          ORCA_TAB_ID: expect.stringMatching(UUID_RE),
-          ORCA_PANE_KEY: expect.any(String),
-          ORCA_WORKTREE_ID: result.worktree.id
-        }),
-        worktreeId: result.worktree.id
-      })
-    )
-  })
-
   it('uses returned WSL setup shell metadata when runtime spawns setup', async () => {
     setPlatform('win32')
     const runtime = new OrcaRuntimeService(store)
@@ -36688,7 +36608,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        command: 'wsl.exe -- bash /mnt/c/repo/.git/orca/setup-runner.sh',
+        command: 'bash /mnt/c/repo/.git/orca/setup-runner.sh',
         env: expect.objectContaining({
           ORCA_ROOT_PATH: 'C:\\repo',
           ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-wsl',
@@ -36792,7 +36712,7 @@ describe('OrcaRuntimeService', () => {
     expect(nonceMatch?.[1]).toBeTruthy()
     expect(startupCommand).toContain('exec claude')
     expect(startupCommand).toContain('/mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('wsl.exe -- bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+    expect(setupCommand).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
     expect(setupCommand).toContain('printf')
     expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
     expect(result.setup).toBeUndefined()
@@ -38121,9 +38041,7 @@ describe('OrcaRuntimeService', () => {
       expect.any(String),
       expect.objectContaining({
         runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
-        command: expect.stringContaining(
-          'wsl.exe -- bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh'
-        )
+        command: expect.stringContaining('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
       }),
       undefined,
       undefined
