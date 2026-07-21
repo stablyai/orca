@@ -1009,36 +1009,38 @@ describe('PtyHandler', () => {
     ).resolves.toEqual({ replay: 'prompt' })
   })
 
-  it('ignores unsupported startup colors while retaining native owner suppression', async () => {
-    let dataCallback: ((data: string) => void) | undefined
-    const term = {
-      ...mockPtyInstance,
-      onData: vi.fn((cb: (data: string) => void) => {
-        dataCallback = cb
-      }),
-      onExit: vi.fn()
-    }
-    mockPtySpawn.mockReturnValue(term)
-    await dispatcher.callRequest('pty.spawn', {
-      startupIngressVersion: PTY_STARTUP_INGRESS_VERSION - 1,
-      startupIngress: {
-        colors: { foreground: '#2e3434', background: '#ffffff' },
-        deadlineMs: 5_000
+  it('leaves startup queries untouched for an unsupported relay capability version', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
       }
-    })
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', {
+        startupIngressVersion: PTY_STARTUP_INGRESS_VERSION - 1,
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
 
-    const query = '\x1b]10;?\x07'
-    dataCallback!(query)
-    vi.advanceTimersByTime(8)
+      const query = '\x1b]10;?\x07'
+      dataCallback!(query)
+      vi.advanceTimersByTime(8)
 
-    expect(term.write).not.toHaveBeenCalled()
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-      id: 'pty-1',
-      data: '',
-      rawLength: query.length,
-      seq: query.length,
-      transformed: true
-    })
+      expect(term.write).not.toHaveBeenCalled()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
   })
 
   it('consumes a color query at a native Windows SSH relay owner', async () => {
