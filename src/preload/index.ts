@@ -674,6 +674,9 @@ const api = {
 
     forgetLocal: (args) => ipcRenderer.invoke('worktrees:forgetLocal', args),
 
+    pruneStaleRegistrations: (args) =>
+      ipcRenderer.invoke('worktrees:pruneStaleRegistrations', args),
+
     forceDeletePreservedBranch: (args) =>
       ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', args),
 

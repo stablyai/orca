@@ -843,6 +843,7 @@ async function scanRepo(
         worktreeCount: 0,
         scannedWorktreeCount: 0,
         unavailableWorktreeCount: 1,
+        staleRegistrationCount: 0,
         totalSizeBytes: 0,
         reclaimableBytes: 0,
         error: listed.error
@@ -852,7 +853,10 @@ async function scanRepo(
 
   // Why: a prunable registration has no directory to size or reclaim (issue
   // #8389); it would only render a dead "Missing" row with no available
-  // action. Removal flows list worktrees separately and still see it.
+  // action. Count it so the page can offer a prune instead of listing it.
+  const staleRegistrationCount = listed.worktrees.filter(
+    (gitWorktree) => gitWorktree.prunable
+  ).length
   const worktrees = listed.worktrees
     .filter((gitWorktree) => !gitWorktree.prunable)
     .map((gitWorktree) => mergeForSpaceScan(repo, gitWorktree, store))
@@ -910,6 +914,7 @@ async function scanRepo(
       worktreeCount: rows.length,
       scannedWorktreeCount: rows.filter((row) => row.status === 'ok').length,
       unavailableWorktreeCount: rows.filter((row) => row.status !== 'ok').length,
+      staleRegistrationCount,
       totalSizeBytes: rows.reduce((sum, row) => sum + row.sizeBytes, 0),
       reclaimableBytes: rows.reduce((sum, row) => sum + row.reclaimableBytes, 0),
       error: null
@@ -956,6 +961,7 @@ export async function analyzeWorkspaceSpace(
     unavailableWorktreeCount:
       worktrees.filter((row) => row.status !== 'ok').length +
       repos.filter((repo) => repo.error !== null).length,
+    staleRegistrationCount: repos.reduce((sum, repo) => sum + repo.staleRegistrationCount, 0),
     repos,
     worktrees
   }

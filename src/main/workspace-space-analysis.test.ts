@@ -165,6 +165,9 @@ describe('analyzeWorkspaceSpace', () => {
     expect(result.worktrees.find((row) => row.path === stalePath)).toBeUndefined()
     expect(result.worktrees.find((row) => row.path === mainPath)?.status).toBe('ok')
     expect(result.repos[0]?.unavailableWorktreeCount).toBe(0)
+    // The omitted registrations stay countable so the page can offer a prune.
+    expect(result.repos[0]?.staleRegistrationCount).toBe(1)
+    expect(result.staleRegistrationCount).toBe(1)
   })
 
   it('reports scan progress as repos and worktrees are scanned', async () => {

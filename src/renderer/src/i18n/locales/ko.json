@@ -3210,7 +3210,12 @@
             "0990a63160": "아직 스캔된 워크스페이스 크기가 없습니다.",
             "977bdf9a36": "표시할 최상위 항목이 없습니다.",
             "131662ac65": "{{value0}} 열려 있음",
-            "0d1c78d749": "{{value0}} 선택"
+            "0d1c78d749": "{{value0}} 선택",
+            "e1978eea62": "Stale worktree registrations pruned",
+            "db0915334e": "Prune failed",
+            "7edf0a0a79": "{{value0}} stale worktree {{value1}} from deleted directories.",
+            "7176290b7c": "Pruning",
+            "322d74038c": "Prune"
           },
           "ports": {
             "status": {

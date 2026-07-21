@@ -87,6 +87,7 @@ const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); generous enough for a legit large checkout (#7225).
 export const WORKTREE_ADD_TIMEOUT_MS = 180_000
 export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
+export const WORKTREE_PRUNE_TIMEOUT_MS = 30_000
 
 function gitExecOptions(
   cwd: string,
@@ -1092,6 +1093,29 @@ export async function moveWorktree(
 /**
  * Remove a worktree.
  */
+export async function pruneWorktrees(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<void> {
+  // Why: prune only drops registrations whose directory is gone; git itself
+  // preserves locked registrations, so agent-locked worktrees survive.
+  try {
+    await runWithGitReadCacheInvalidation(() =>
+      gitExecFileAsync(
+        ['worktree', 'prune'],
+        gitExecOptions(repoPath, {
+          ...options,
+          // Why: a wedged filesystem must not leave the Space action disabled indefinitely.
+          timeout:
+            options.timeout && options.timeout > 0 ? options.timeout : WORKTREE_PRUNE_TIMEOUT_MS
+        })
+      )
+    )
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
+}
+
 export async function removeWorktree(
   repoPath: string,
   worktreePath: string,

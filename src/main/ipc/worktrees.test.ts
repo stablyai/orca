@@ -27,6 +27,7 @@ const {
   addWorktreeMock,
   addSparseWorktreeMock,
   removeWorktreeMock,
+  pruneWorktreesMock,
   forceDeleteLocalBranchMock,
   resolveLocalGitUsernameMock,
   getBaseRefDefaultMock,
@@ -77,6 +78,7 @@ const {
   addWorktreeMock: vi.fn(),
   addSparseWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
+  pruneWorktreesMock: vi.fn(),
   forceDeleteLocalBranchMock: vi.fn(),
   resolveLocalGitUsernameMock: vi.fn(),
   getBaseRefDefaultMock: vi.fn(),
@@ -124,6 +126,7 @@ vi.mock('../git/worktree', () => ({
   addWorktree: addWorktreeMock,
   addSparseWorktree: addSparseWorktreeMock,
   removeWorktree: removeWorktreeMock,
+  pruneWorktrees: pruneWorktreesMock,
   forceDeleteLocalBranch: forceDeleteLocalBranchMock
 }))
 
@@ -253,7 +256,11 @@ import {
   __resetSshWorktreeCreateFetchCacheForTests,
   notifyWorktreesChanged
 } from './worktree-remote'
-import { invalidateAuthorizedRootsCache, resolveRegisteredWorktreePath } from './filesystem-auth'
+import {
+  invalidateAuthorizedRootsCache,
+  registerWorktreeRootsForRepo,
+  resolveRegisteredWorktreePath
+} from './filesystem-auth'
 import {
   __getDetectedWorktreeScanCacheStatsForTests,
   __resetDetectedWorktreeScanCacheForTests,
@@ -6072,6 +6079,105 @@ describe('registerWorktreeHandlers', () => {
 
     expect(listedIds).toContain('repo-1::/workspace/live-wt')
     expect(listedIds).not.toContain('repo-1::/workspace/stale-wt')
+  })
+
+  it('runs git worktree prune for a local repo via worktrees:pruneStaleRegistrations', async () => {
+    pruneWorktreesMock.mockResolvedValue(undefined)
+
+    await handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
+
+    expect(pruneWorktreesMock).toHaveBeenCalledWith('/workspace/repo', expect.anything())
+  })
+
+  it('routes worktrees:pruneStaleRegistrations to the SSH provider for remote repos', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    store.getRepos.mockReturnValue([repo])
+    pruneWorktreesMock.mockClear()
+    const providerPrune = vi.fn().mockResolvedValue(undefined)
+    getSshGitProviderMock.mockReturnValue({ pruneWorktrees: providerPrune })
+
+    await handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
+
+    expect(providerPrune).toHaveBeenCalledWith('/remote/repo')
+    expect(pruneWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the provider error when the relay lacks prune support', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    store.getRepos.mockReturnValue([repo])
+    const oldRelayError = new Error(
+      'The connected SSH host is running an older Orca relay without worktree prune support. Reconnect to update it, or run `git worktree prune` there.'
+    )
+    getSshGitProviderMock.mockReturnValue({
+      pruneWorktrees: vi.fn().mockRejectedValue(oldRelayError)
+    })
+
+    await expect(
+      handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
+    ).rejects.toBe(oldRelayError)
+  })
+
+  it('continues shared-host pruning and invalidates stale roots after a host fails', async () => {
+    const remoteRepo = {
+      id: 'repo-1',
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepos.mockReturnValue([remoteRepo, localRepo])
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: localRepo.path,
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+    registerWorktreeRootsForRepo(store as never, localRepo.id, [
+      localRepo.path,
+      '/workspace/stale-wt'
+    ])
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/stale-wt', store as never)
+    ).resolves.toBe('/workspace/stale-wt')
+    getSshGitProviderMock.mockReturnValue({
+      pruneWorktrees: vi.fn().mockRejectedValue(new Error('remote unavailable'))
+    })
+    pruneWorktreesMock.mockResolvedValue(undefined)
+
+    await expect(
+      handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
+    ).rejects.toThrow('remote unavailable')
+
+    expect(pruneWorktreesMock).toHaveBeenCalledWith(localRepo.path, expect.anything())
+    expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/stale-wt', store as never)
+    ).rejects.toThrow('unknown repository or worktree path')
   })
 
   it('limits concurrent repo scans in worktrees:listAll while preserving order', async () => {

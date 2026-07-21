@@ -43,6 +43,7 @@ import {
   assertWorktreeCleanForRemoval,
   forceDeleteLocalBranch,
   listWorktreesStrict as listGitWorktreesStrict,
+  pruneWorktrees,
   removeWorktree
 } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
@@ -989,6 +990,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:resolveMrBase')
   ipcMain.removeHandler('worktrees:remove')
   ipcMain.removeHandler('worktrees:forgetLocal')
+  ipcMain.removeHandler('worktrees:pruneStaleRegistrations')
   ipcMain.removeHandler('worktrees:forceDeletePreservedBranch')
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:listLineage')
@@ -1945,6 +1947,51 @@ export function registerWorktreeHandlers(
         if (worktreeRemovalsInFlight.get(inFlightKey)?.promise === forget) {
           worktreeRemovalsInFlight.delete(inFlightKey)
         }
+      }
+    }
+  )
+
+  // Why: a prunable registration (directory deleted without `git worktree
+  // prune`) is hidden from workspace/Space listings, but it still pins its
+  // branch as checked out. This runs git's own prune, which drops only dead
+  // registrations and never touches locked ones (active agent sessions).
+  ipcMain.handle(
+    'worktrees:pruneStaleRegistrations',
+    async (_event, args: { repoId: string }): Promise<void> => {
+      const repos = store.getRepos().filter((candidate) => candidate.id === args.repoId)
+      if (repos.length === 0) {
+        throw new Error(`Repo not found: ${args.repoId}`)
+      }
+      let firstError: unknown
+      let didAttemptPrune = false
+      try {
+        for (const repo of repos) {
+          if (isFolderRepo(repo)) {
+            continue
+          }
+          didAttemptPrune = true
+          try {
+            if (repo.connectionId) {
+              const provider = requireSshGitProvider(repo.connectionId)
+              await provider.pruneWorktrees(repo.path)
+            } else {
+              await pruneWorktrees(repo.path, getLocalProjectWorktreeGitOptions(store, repo))
+            }
+          } catch (error) {
+            // Why: shared project ids can span hosts; attempt every host before surfacing a failure.
+            firstError ??= error
+          }
+        }
+      } finally {
+        // Why: Git may prune one host (or part of one registry) before another host fails.
+        invalidateAuthorizedRootsCache()
+      }
+      if (didAttemptPrune) {
+        // Why: one event invalidates all host views, including partial mutations after a Git error.
+        notifyWorktreesChanged(mainWindow, args.repoId)
+      }
+      if (firstError) {
+        throw firstError
       }
     }
   )

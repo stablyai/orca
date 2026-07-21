@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSpaceAnalysis } from '../../../../shared/workspace-space-types'
 import type { AppState } from '../types'
 import { createWorkspaceSpaceSlice } from './workspace-space'
@@ -21,6 +21,7 @@ function makeAnalysis(): WorkspaceSpaceAnalysis {
     worktreeCount: 2,
     scannedWorktreeCount: 2,
     unavailableWorktreeCount: 0,
+    staleRegistrationCount: 0,
     repos: [
       {
         repoId: 'repo-1',
@@ -30,6 +31,7 @@ function makeAnalysis(): WorkspaceSpaceAnalysis {
         worktreeCount: 2,
         scannedWorktreeCount: 2,
         unavailableWorktreeCount: 0,
+        staleRegistrationCount: 0,
         totalSizeBytes: 300,
         reclaimableBytes: 300,
         error: null
@@ -87,6 +89,10 @@ function makeAnalysis(): WorkspaceSpaceAnalysis {
 }
 
 describe('workspace space slice', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('removes deleted worktrees from cached analysis totals', () => {
     const store = createWorkspaceSpaceTestStore()
     store.setState({ workspaceSpaceAnalysis: makeAnalysis() })
@@ -103,5 +109,31 @@ describe('workspace space slice', () => {
       totalSizeBytes: 100,
       reclaimableBytes: 0
     })
+  })
+
+  it('dedupes shared repo ids, continues after failure, and refreshes once', async () => {
+    const failure = new Error('remote unavailable')
+    const pruneStaleRegistrations = vi
+      .fn<(args: { repoId: string }) => Promise<void>>()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(undefined)
+    const analyze = vi.fn().mockResolvedValue({ ok: true, analysis: makeAnalysis() })
+    vi.stubGlobal('window', {
+      api: {
+        worktrees: { pruneStaleRegistrations },
+        workspaceSpace: { analyze }
+      }
+    })
+    const store = createWorkspaceSpaceTestStore()
+
+    await expect(
+      store.getState().pruneStaleWorktreeRegistrations(['repo-1', 'repo-1', 'repo-2'])
+    ).rejects.toBe(failure)
+
+    expect(pruneStaleRegistrations.mock.calls).toEqual([
+      [{ repoId: 'repo-1' }],
+      [{ repoId: 'repo-2' }]
+    ])
+    expect(analyze).toHaveBeenCalledOnce()
   })
 })

@@ -228,6 +228,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
+    this.dispatcher.onRequest('git.pruneWorktrees', (p, context) => this.pruneWorktrees(p, context))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
     this.dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>
       this.refreshLocalBaseRefForWorktreeCreate(p)
@@ -1365,6 +1366,16 @@ export class GitHandler {
     return this.watcherRegistry && typeof worktreePath === 'string'
       ? this.watcherRegistry.runWithRemovalFence(expandTilde(worktreePath), remove)
       : remove()
+  }
+
+  private async pruneWorktrees(params: Record<string, unknown>, context?: RequestContext) {
+    const repoPath = params.repoPath as string
+    // Why: prune only drops registrations whose directory is gone; git itself
+    // preserves locked registrations, so agent-locked worktrees survive.
+    await this.runWithGitReadCacheClear(() =>
+      this.git(['worktree', 'prune'], repoPath, { signal: context?.signal })
+    )
+    return {}
   }
 
   private async worktreeIsClean(params: Record<string, unknown>) {

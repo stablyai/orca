@@ -46,6 +46,9 @@ export type WorkspaceSpaceRepoSummary = {
   worktreeCount: number
   scannedWorktreeCount: number
   unavailableWorktreeCount: number
+  /** Prunable git registrations (directory deleted without `git worktree
+   *  prune`) omitted from the rows but still reconcilable via prune. */
+  staleRegistrationCount: number
   totalSizeBytes: number
   reclaimableBytes: number
   error: string | null
@@ -58,6 +61,7 @@ export type WorkspaceSpaceAnalysis = {
   worktreeCount: number
   scannedWorktreeCount: number
   unavailableWorktreeCount: number
+  staleRegistrationCount: number
   repos: WorkspaceSpaceRepoSummary[]
   worktrees: WorkspaceSpaceWorktree[]
 }

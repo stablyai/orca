@@ -3210,7 +3210,12 @@
             "0990a63160": "Aún no hay tamaños de espacio de trabajo escaneados.",
             "977bdf9a36": "No hay elementos de nivel superior para mostrar.",
             "131662ac65": "{{value0}} abierto",
-            "0d1c78d749": "Seleccione {{value0}}"
+            "0d1c78d749": "Seleccione {{value0}}",
+            "e1978eea62": "Stale worktree registrations pruned",
+            "db0915334e": "Prune failed",
+            "7edf0a0a79": "{{value0}} stale worktree {{value1}} from deleted directories.",
+            "7176290b7c": "Pruning",
+            "322d74038c": "Prune"
           },
           "ports": {
             "status": {

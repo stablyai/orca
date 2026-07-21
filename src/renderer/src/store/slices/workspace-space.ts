@@ -16,6 +16,7 @@ export type WorkspaceSpaceSlice = {
   cancelWorkspaceSpaceScan: () => Promise<boolean>
   refreshWorkspaceSpace: () => Promise<WorkspaceSpaceAnalysis>
   removeWorkspaceSpaceWorktrees: (worktreeIds: readonly string[]) => void
+  pruneStaleWorktreeRegistrations: (repoIds: readonly string[]) => Promise<void>
 }
 
 function removeDeletedWorktreesFromAnalysis(
@@ -160,5 +161,29 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
           }
         : state
     )
+  },
+  pruneStaleWorktreeRegistrations: async (repoIds) => {
+    if (repoIds.length === 0) {
+      return
+    }
+    get().recordFeatureInteraction?.('workspace-cleanup')
+    let firstError: unknown
+    // Why: one project id can appear once per host, while IPC already fans that id out to all hosts.
+    for (const repoId of new Set(repoIds)) {
+      try {
+        await window.api.worktrees.pruneStaleRegistrations({ repoId })
+      } catch (error) {
+        firstError ??= error
+      }
+    }
+    try {
+      // Why: successful repos must disappear from the notice even when another host failed.
+      await get().refreshWorkspaceSpace()
+    } catch (error) {
+      firstError ??= error
+    }
+    if (firstError) {
+      throw firstError
+    }
   }
 })

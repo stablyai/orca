@@ -1253,6 +1253,43 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const updateWorktreeGitIdentity = useAppStore((state) => state.updateWorktreeGitIdentity)
   const setUpstreamStatus = useAppStore((state) => state.setUpstreamStatus)
   const fetchUpstreamStatus = useAppStore((state) => state.fetchUpstreamStatus)
+  const pruneStaleWorktreeRegistrations = useAppStore(
+    (state) => state.pruneStaleWorktreeRegistrations
+  )
+  const [isPruningStale, setIsPruningStale] = useState(false)
+  const pruneStale = useCallback((): void => {
+    if (!analysis || isPruningStale || isScanning) {
+      return
+    }
+    const repoIds = analysis.repos
+      .filter((repo) => repo.staleRegistrationCount > 0)
+      .map((repo) => repo.repoId)
+    if (repoIds.length === 0) {
+      return
+    }
+    setIsPruningStale(true)
+    pruneStaleWorktreeRegistrations(repoIds)
+      .then(() => {
+        toast.success(
+          translate(
+            'auto.components.status.bar.WorkspaceSpaceManagerPanel.e1978eea62',
+            'Stale worktree registrations pruned'
+          )
+        )
+      })
+      .catch((error: unknown) => {
+        toast.error(
+          translate(
+            'auto.components.status.bar.WorkspaceSpaceManagerPanel.db0915334e',
+            'Prune failed'
+          ),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
+      })
+      .finally(() => {
+        setIsPruningStale(false)
+      })
+  }, [analysis, isPruningStale, isScanning, pruneStaleWorktreeRegistrations])
   const [query, setQuery] = useState('')
   const [onlyDeletable, setOnlyDeletable] = useState(false)
   const [sortKey, setSortKey] = useState<WorkspaceSpaceSortKey>('size')
@@ -1711,7 +1748,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
           variant="outline"
           size="sm"
           onClick={isScanning ? cancelScan : refresh}
-          disabled={progress?.state === 'cancelling'}
+          disabled={isPruningStale || progress?.state === 'cancelling'}
           className="w-28 gap-1.5"
         >
           {isScanning ? (
@@ -1770,6 +1807,46 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
               </span>
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {analysis && analysis.staleRegistrationCount > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          <div className="flex min-w-0 items-center gap-2">
+            <FileWarning className="size-3.5 shrink-0" />
+            <span className="min-w-0 break-words">
+              {translate(
+                'auto.components.status.bar.WorkspaceSpaceManagerPanel.7edf0a0a79',
+                '{{value0}} stale worktree {{value1}} from deleted directories.',
+                {
+                  value0: analysis.staleRegistrationCount,
+                  value1: analysis.staleRegistrationCount === 1 ? 'registration' : 'registrations'
+                }
+              )}
+            </span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={pruneStale}
+            disabled={isPruningStale || isScanning}
+            className="gap-1.5"
+          >
+            {isPruningStale ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="size-3.5" />
+            )}
+            {isPruningStale
+              ? translate(
+                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.7176290b7c',
+                  'Pruning'
+                )
+              : translate(
+                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.322d74038c',
+                  'Prune'
+                )}
+          </Button>
         </div>
       ) : null}
 

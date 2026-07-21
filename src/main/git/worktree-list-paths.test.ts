@@ -3,7 +3,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { listWorktrees, removeWorktree } from './worktree'
+import { listWorktrees, pruneWorktrees, removeWorktree } from './worktree'
 
 const tempRoots: string[] = []
 
@@ -151,5 +151,26 @@ describe('git worktree paths', () => {
       worktreePath.replaceAll('\\', '/')
     )
     expect(branchExists(repoPath, 'feature/locked-delete')).toBe(true)
+  })
+
+  it('prunes a stale registration while keeping its branch and locked worktrees', async () => {
+    const { repoPath, worktreePath } = await createRepoWithPrunableWorktree()
+    const locked = await createRepoWithLockedDeletedWorktree()
+
+    await pruneWorktrees(repoPath)
+    await pruneWorktrees(locked.repoPath)
+
+    const remaining = await listWorktrees(repoPath)
+    expect(
+      remaining.some(
+        (worktree) => worktree.path.replaceAll('\\', '/') === worktreePath.replaceAll('\\', '/')
+      )
+    ).toBe(false)
+    // Git guarantees the branch and its commits survive a prune.
+    expect(branchExists(repoPath, 'feature/stale')).toBe(true)
+    // A lock shields the registration from prune even with the directory gone.
+    expect(git(locked.repoPath, ['worktree', 'list', '--porcelain'])).toContain(
+      locked.worktreePath.replaceAll('\\', '/')
+    )
   })
 })

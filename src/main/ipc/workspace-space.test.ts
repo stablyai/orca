@@ -47,6 +47,7 @@ function createAnalysis(scannedAt: number): WorkspaceSpaceAnalysis {
     worktreeCount: 0,
     scannedWorktreeCount: 0,
     unavailableWorktreeCount: 0,
+    staleRegistrationCount: 0,
     repos: [],
     worktrees: []
   }

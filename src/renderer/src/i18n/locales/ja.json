@@ -3210,7 +3210,12 @@
             "0990a63160": "スキャンされたワークスペースのサイズはまだありません。",
             "977bdf9a36": "表示するトップレベルの項目はありません。",
             "131662ac65": "{{value0}} オープン",
-            "0d1c78d749": "{{value0}} を選択"
+            "0d1c78d749": "{{value0}} を選択",
+            "e1978eea62": "Stale worktree registrations pruned",
+            "db0915334e": "Prune failed",
+            "7edf0a0a79": "{{value0}} stale worktree {{value1}} from deleted directories.",
+            "7176290b7c": "Pruning",
+            "322d74038c": "Prune"
           },
           "ports": {
             "status": {

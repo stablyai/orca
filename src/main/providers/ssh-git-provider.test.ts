@@ -1289,6 +1289,31 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('pruneWorktrees sends the narrow prune request', async () => {
+    await provider.pruneWorktrees('/home/user/repo')
+
+    expect(mux.request).toHaveBeenCalledWith('git.pruneWorktrees', {
+      repoPath: '/home/user/repo'
+    })
+  })
+
+  it('pruneWorktrees maps old relays to the reconnect message', async () => {
+    mux.request.mockRejectedValueOnce(
+      Object.assign(new Error('Method not found: git.pruneWorktrees'), { code: -32601 })
+    )
+
+    await expect(provider.pruneWorktrees('/home/user/repo')).rejects.toThrow(
+      'The connected SSH host is running an older Orca relay without worktree prune support. Reconnect to update it, or run `git worktree prune` there.'
+    )
+  })
+
+  it('pruneWorktrees rethrows non-method-not-found errors', async () => {
+    const error = new Error('remote prune failed')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(provider.pruneWorktrees('/home/user/repo')).rejects.toBe(error)
+  })
+
   it('worktreeIsClean sends git.worktreeIsClean request', async () => {
     const cleanResult = { clean: false, stdout: '?? scratch.txt\n' }
     mux.request.mockResolvedValue(cleanResult)
