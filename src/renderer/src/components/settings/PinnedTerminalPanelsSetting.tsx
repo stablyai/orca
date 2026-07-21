@@ -82,8 +82,10 @@ export function PinnedTerminalPanelsSetting({
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const [editDraft, setEditDraft] = React.useState<PanelDraft>(emptyDraft)
 
+  // Why: settings unit tests (and pre-hydration boot) can mount this surface
+  // before sshTargetLabels is a Map. Never call .values() on undefined.
   const hostSuggestions = React.useMemo(
-    () => [...new Set(sshTargetLabels.values())].sort(),
+    () => [...new Set((sshTargetLabels ?? new Map<string, string>()).values())].sort(),
     [sshTargetLabels]
   )
   const groupSuggestions = React.useMemo(
