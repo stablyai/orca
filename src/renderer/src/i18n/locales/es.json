@@ -12357,7 +12357,9 @@
           "55127a3706": "Dictado fallido: {{value0}}",
           "bb7f599ee7": "Abrir configuración",
           "2d5b9fabf9": "Acceso al micrófono denegado. Conceda acceso en la configuración del sistema, luego reinicie Orca.",
-          "5d2c3e7ae3": "No se detectó ninguna voz."
+          "5d2c3e7ae3": "No se detectó ninguna voz.",
+          "4e9cc6f8a1": "Dictado fallido.",
+          "46ced0a32b": "Error de voz."
         }
       },
       "dashboard": {

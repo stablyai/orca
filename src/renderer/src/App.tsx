@@ -645,9 +645,10 @@ function App(): React.JSX.Element {
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
   const dictationState = useAppStore((s) => s.dictationState)
+  const dictationNotice = useAppStore((s) => s.dictationNotice)
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
   const shouldMountDictationController =
-    settings?.voice?.enabled === true || dictationState !== 'idle'
+    settings?.voice?.enabled === true || dictationState !== 'idle' || dictationNotice !== null
   const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
     settings?.primarySelectionMiddleClickPaste
   )

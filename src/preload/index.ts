@@ -4426,6 +4426,13 @@ const api = {
     }
   },
 
+  dictationOutput: {
+    getCapabilities: () => ipcRenderer.invoke('dictationOutput:getCapabilities'),
+    apply: (sessionId, settings) =>
+      ipcRenderer.invoke('dictationOutput:apply', { sessionId, settings }),
+    restore: (sessionId) => ipcRenderer.invoke('dictationOutput:restore', { sessionId })
+  } satisfies PreloadApi['dictationOutput'],
+
   speech: {
     getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
     getModelStates: (): Promise<SpeechModelState[]> => ipcRenderer.invoke('speech:getModelStates'),

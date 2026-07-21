@@ -617,6 +617,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
+    dictationOutput: {
+      getCapabilities: () =>
+        Promise.resolve({ canMuteOutput: false, canDuckOutput: false, canPauseMedia: false }),
+      apply: () => Promise.resolve(),
+      restore: () => Promise.resolve()
+    },
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
     crashReports: {

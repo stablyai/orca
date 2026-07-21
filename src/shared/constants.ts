@@ -14,6 +14,10 @@ import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
+import {
+  DEFAULT_DUCKED_VOLUME_PERCENT,
+  DEFAULT_OUTPUT_VOLUME_MODE
+} from './dictation-output-settings'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
@@ -380,8 +384,13 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     language: 'en',
     dictationMode: 'toggle' as const,
     terminalConfirmBeforeInsert: false,
+    inputDeviceId: '',
+    customVocabulary: [],
     userModels: [],
-    openAiApiKeyConfigured: false
+    openAiApiKeyConfigured: false,
+    pauseMediaOnDictation: false,
+    outputVolumeMode: DEFAULT_OUTPUT_VOLUME_MODE,
+    duckedVolumePercent: DEFAULT_DUCKED_VOLUME_PERCENT
   }
 }
 

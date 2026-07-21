@@ -72,6 +72,10 @@ import type {
   LocalhostWorktreeLabelRoute
 } from '../shared/localhost-worktree-labels'
 import type {
+  DictationOutputCapabilities,
+  DictationOutputControlSettings
+} from '../shared/dictation-output-settings'
+import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../shared/folder-workspace-path-status'
@@ -3277,6 +3281,11 @@ export type PreloadApi = {
     isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
     getRelayStatus: () => Promise<{ status: MobileRelayStatus }>
     onRelayStatusChanged: (callback: (status: MobileRelayStatus) => void) => () => void
+  }
+  dictationOutput: {
+    getCapabilities: () => Promise<DictationOutputCapabilities>
+    apply: (sessionId: string, settings: DictationOutputControlSettings) => Promise<void>
+    restore: (sessionId: string) => Promise<void>
   }
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>

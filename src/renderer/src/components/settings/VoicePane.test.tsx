@@ -50,6 +50,13 @@ function installWindowApi(
       developerPermissions: {
         request: vi.fn(requestMicrophonePermission)
       },
+      dictationOutput: {
+        getCapabilities: vi.fn(async () => ({
+          canMuteOutput: false,
+          canDuckOutput: false,
+          canPauseMedia: false
+        }))
+      },
       speech: {
         getCatalog: vi.fn(async () => []),
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),

@@ -5,13 +5,19 @@ const {
   fromWebContentsMock,
   getSpeechModelManagerMock,
   getSpeechSttServiceMock,
-  deleteLocalSpeechModelMock
+  deleteLocalSpeechModelMock,
+  writeFileMock,
+  unlinkMock,
+  isTrustedUIRendererMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   fromWebContentsMock: vi.fn(),
   getSpeechModelManagerMock: vi.fn(),
   getSpeechSttServiceMock: vi.fn(),
-  deleteLocalSpeechModelMock: vi.fn()
+  deleteLocalSpeechModelMock: vi.fn(),
+  writeFileMock: vi.fn(),
+  unlinkMock: vi.fn(),
+  isTrustedUIRendererMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -43,16 +49,26 @@ vi.mock('../speech/speech-model-deletion', () => ({
   deleteLocalSpeechModel: deleteLocalSpeechModelMock
 }))
 
+vi.mock('node:fs/promises', () => ({
+  writeFile: writeFileMock,
+  unlink: unlinkMock
+}))
+
+vi.mock('./ui', () => ({
+  isTrustedUIRenderer: isTrustedUIRendererMock
+}))
+
 import { registerSpeechHandlers } from './speech'
+import { normalizeSpeechHotwords } from '../../shared/speech-hotwords'
 
-type SpeechDownloadHandler = (event: { sender: { id: number } }, modelId: string) => Promise<void>
+type IpcHandler = (event: { sender: { id: number } }, ...args: unknown[]) => Promise<void>
 
-function getHandler(channel: string): SpeechDownloadHandler {
+function getHandler(channel: string): IpcHandler {
   const call = handleMock.mock.calls.find((entry) => entry[0] === channel)
   if (!call) {
     throw new Error(`${channel} handler not registered`)
   }
-  return call[1] as SpeechDownloadHandler
+  return call[1] as IpcHandler
 }
 
 describe('registerSpeechHandlers', () => {
@@ -62,6 +78,10 @@ describe('registerSpeechHandlers', () => {
     getSpeechModelManagerMock.mockReset()
     getSpeechSttServiceMock.mockReset()
     deleteLocalSpeechModelMock.mockReset()
+    writeFileMock.mockReset()
+    unlinkMock.mockReset()
+    isTrustedUIRendererMock.mockReset()
+    isTrustedUIRendererMock.mockReturnValue(true)
   })
 
   it('clears the model download progress callback after completion', async () => {
@@ -155,5 +175,59 @@ describe('registerSpeechHandlers', () => {
       sttService,
       modelId: 'model-1'
     })
+  })
+
+  it('writes only sanitized hotwords for desktop dictation startup', async () => {
+    const sttService = {
+      startDictation: vi.fn().mockResolvedValue(undefined),
+      stopDictation: vi.fn()
+    }
+    const window = {
+      isDestroyed: vi.fn(() => false),
+      webContents: { send: vi.fn() },
+      once: vi.fn(),
+      off: vi.fn()
+    }
+    getSpeechSttServiceMock.mockReturnValue(sttService)
+    getSpeechModelManagerMock.mockReturnValue({ getModelsDir: vi.fn(() => '/models') })
+    fromWebContentsMock.mockReturnValue(window)
+    writeFileMock.mockResolvedValue(undefined)
+    unlinkMock.mockResolvedValue(undefined)
+    registerSpeechHandlers({} as never)
+
+    await getHandler('speech:startDictation')(
+      { sender: { id: 7 } },
+      'model-1',
+      ['  Orca  ', '', 'orca', 'Example\nbad', 'x'.repeat(121)],
+      'session-1'
+    )
+
+    expect(writeFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/models\/speech-hotwords-/),
+      'Orca :2.0\n',
+      'utf-8'
+    )
+    expect(sttService.startDictation).toHaveBeenCalledWith(
+      'model-1',
+      expect.any(Function),
+      expect.stringContaining('speech-hotwords-'),
+      'desktop:7:session-1'
+    )
+  })
+
+  it('rejects privileged speech operations from untrusted renderers', async () => {
+    isTrustedUIRendererMock.mockReturnValue(false)
+    registerSpeechHandlers({} as never)
+
+    await expect(
+      getHandler('speech:deleteModel')({ sender: { id: 7 } }, 'model-1')
+    ).rejects.toThrow('Unauthorized speech IPC sender')
+    expect(deleteLocalSpeechModelMock).not.toHaveBeenCalled()
+  })
+
+  it('normalizes speech hotwords before writing sherpa config files', () => {
+    expect(
+      normalizeSpeechHotwords(['  Orca  ', '', 'orca', 'Example\nbad', 'x'.repeat(121)])
+    ).toEqual(['Orca'])
   })
 })

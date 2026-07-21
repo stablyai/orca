@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/speech-types'
+import type { DictationOutputCapabilities } from '../../../../shared/dictation-output-settings'
 import { Separator } from '../ui/separator'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -9,7 +10,10 @@ import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
+import { VoiceMicrophoneSection } from './VoiceMicrophoneSection'
+import { VoiceAudioOutputSection } from './VoiceAudioOutputSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
+import { VoiceVocabularySection } from './VoiceVocabularySection'
 import { matchesSettingsSearch } from './settings-search'
 import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
 import { translate } from '@/i18n/i18n'
@@ -33,6 +37,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
   const [openAiKeyPending, setOpenAiKeyPending] = useState(false)
   const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
+  const [outputCapabilities, setOutputCapabilities] = useState<DictationOutputCapabilities>({
+    canMuteOutput: false,
+    canDuckOutput: false,
+    canPauseMedia: false
+  })
   const mountedRef = useRef(true)
 
   const handlePaneRef = useCallback((node: HTMLDivElement | null): void => {
@@ -75,6 +84,21 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       cancelled = true
     }
   }, [refreshModelStates, updateVoiceSettings, voiceSettings.openAiApiKeyConfigured])
+
+  useEffect(() => {
+    let cancelled = false
+    void window.api.dictationOutput
+      .getCapabilities()
+      .then((capabilities) => {
+        if (!cancelled) {
+          setOutputCapabilities(capabilities)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const cleanup = window.api.speech.onDownloadProgress(() => {
@@ -207,6 +231,19 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onUpdateVoiceSettings={updateVoiceSettings}
       />
 
+      <Separator />
+
+      <VoiceMicrophoneSection
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
+      <VoiceAudioOutputSection
+        voiceSettings={voiceSettings}
+        capabilities={outputCapabilities}
+        onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
       <VoiceSpeechModelSection
         voiceSettings={voiceSettings}
         catalog={catalog}
@@ -214,6 +251,13 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onUpdateVoiceSettings={updateVoiceSettings}
         onOpenOpenAiDialog={openOpenAiDialog}
         onRefreshModelStates={refreshModelStates}
+      />
+
+      <Separator />
+
+      <VoiceVocabularySection
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={updateVoiceSettings}
       />
 
       {showOpenAiSettingsRow && (

@@ -63,7 +63,8 @@ const {
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
-  registerEmulatorVideoStreamHandlersMock
+  registerEmulatorVideoStreamHandlersMock,
+  registerDictationOutputControlHandlersMock
 } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/test/user-data'),
   listEnvironmentsMock: vi.fn(() => []),
@@ -127,7 +128,8 @@ const {
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
-  registerEmulatorVideoStreamHandlersMock: vi.fn()
+  registerEmulatorVideoStreamHandlersMock: vi.fn(),
+  registerDictationOutputControlHandlersMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -158,6 +160,10 @@ vi.mock('./terminal-preview', () => ({
 
 vi.mock('./speech', () => ({
   registerSpeechHandlers: registerSpeechHandlersMock
+}))
+
+vi.mock('./dictation-output-control', () => ({
+  registerDictationOutputControlHandlers: registerDictationOutputControlHandlersMock
 }))
 
 vi.mock('./cli', () => ({
@@ -432,6 +438,7 @@ describe('registerCoreHandlers', () => {
     registerDashboardPopoutHandlersMock.mockReset()
     registerTerminalPreviewHandlersMock.mockReset()
     registerSpeechHandlersMock.mockReset()
+    registerDictationOutputControlHandlersMock.mockReset()
     registerSkillsHandlersMock.mockReset()
     registerWorkspaceSpaceHandlersMock.mockReset()
     registerWorkspacePortHandlersMock.mockReset()
@@ -599,6 +606,7 @@ describe('registerCoreHandlers', () => {
       'aiVault.prepareSessionResume',
       prepareArgs
     )
+    expect(registerDictationOutputControlHandlersMock).toHaveBeenCalled()
   })
 
   it('only registers IPC handlers once but always updates web contents id', () => {
@@ -635,6 +643,7 @@ describe('registerCoreHandlers', () => {
     expect(registerCliHandlersMock).not.toHaveBeenCalled()
     expect(registerPreflightHandlersMock).not.toHaveBeenCalled()
     expect(registerBrowserHandlersMock).not.toHaveBeenCalled()
+    expect(registerDictationOutputControlHandlersMock).not.toHaveBeenCalled()
     // Why: ipcMain.handle throws on duplicate channel registration, so the
     // memory handler must not be wired up a second time on reactivation.
     expect(registerMemoryHandlersMock).not.toHaveBeenCalled()

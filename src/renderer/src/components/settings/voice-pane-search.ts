@@ -28,6 +28,50 @@ export const getOpenaiTranscriptionSearchEntry = createLocalizedCatalog(
   })
 )
 
+export const getVoiceAudioOutputSearchEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.voice.pane.search.audioOutput.title',
+      'Audio Output'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.audioOutput.description',
+      'Mute, lower volume, or pause supported media apps while dictating.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.audioOutput.audio',
+        'audio'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.audioOutput.volume',
+        'volume'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.audioOutput.mute',
+        'mute'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.audioOutput.duck',
+        'duck'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.audioOutput.lower',
+        'lower'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.audioOutput.pauseMedia',
+        'pause media'
+      )
+    ]
+  })
+)
+
 export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -70,6 +114,59 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword(
         'auto.components.settings.voice.pane.search.931b1a9e53',
         'push to talk'
+      )
+    ]
+  },
+  {
+    title: translate('auto.components.settings.voice.pane.search.microphone.title', 'Microphone'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.microphone.description',
+      'Choose the input device Orca uses for voice dictation.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.e360027a65',
+        'microphone'
+      ),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.microphone.mic', 'mic'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.microphone.input',
+        'input device'
+      )
+    ]
+  },
+  getVoiceAudioOutputSearchEntry(),
+  {
+    title: translate(
+      'auto.components.settings.voice.pane.search.customVocabulary.title',
+      'Custom Vocabulary'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.customVocabulary.description',
+      'Add names, product terms, and project jargon for voice dictation.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.customVocabulary.keywordVocabulary',
+        'vocabulary'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.customVocabulary.keywordHotwords',
+        'hotwords'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.customVocabulary.keywordJargon',
+        'jargon'
       )
     ]
   },

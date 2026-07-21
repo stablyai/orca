@@ -134,12 +134,14 @@ describe('renderer startup runtime routing', () => {
     )
   })
 
-  it('loads dictation only when voice is enabled or a session is active', () => {
+  it('loads dictation when voice is enabled, a session is active, or a notice is visible', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
 
     expect(source).toContain("import('./components/dictation/DictationController').then")
     expect(source).not.toContain("from './components/dictation/DictationController'")
-    expect(source).toContain("settings?.voice?.enabled === true || dictationState !== 'idle'")
+    expect(source).toContain(
+      "settings?.voice?.enabled === true || dictationState !== 'idle' || dictationNotice !== null"
+    )
     expect(source).toContain('shouldMountDictationController ?')
   })
 

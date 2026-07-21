@@ -1,7 +1,5 @@
-import { ipcMain, BrowserWindow, systemPreferences } from 'electron'
-import { join } from 'node:path'
-import { writeFile, unlink } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
+import { ipcMain, BrowserWindow, systemPreferences, type IpcMainInvokeEvent } from 'electron'
+
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
@@ -11,31 +9,45 @@ import {
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
+import { removeSpeechHotwordsFile, writeSpeechHotwordsFile } from '../speech/hotwords-file'
+import { isTrustedUIRenderer } from './ui'
+
+function assertTrustedSpeechSender(event: IpcMainInvokeEvent): void {
+  if (!isTrustedUIRenderer(event.sender)) {
+    throw new Error('Unauthorized speech IPC sender')
+  }
+}
 
 export function registerSpeechHandlers(store: Store): void {
-  ipcMain.handle('speech:getCatalog', () => {
+  ipcMain.handle('speech:getCatalog', (event) => {
+    assertTrustedSpeechSender(event)
     return SPEECH_MODEL_CATALOG
   })
 
-  ipcMain.handle('speech:getModelStates', async () => {
+  ipcMain.handle('speech:getModelStates', async (event) => {
+    assertTrustedSpeechSender(event)
     return getSpeechModelManager(store).getModelStates()
   })
 
-  ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
+  ipcMain.handle('speech:getOpenAiApiKeyStatus', async (event) => {
+    assertTrustedSpeechSender(event)
     return { configured: hasOpenAiSpeechApiKey() }
   })
 
-  ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
+  ipcMain.handle('speech:saveOpenAiApiKey', async (event, apiKey: string) => {
+    assertTrustedSpeechSender(event)
     saveOpenAiSpeechApiKey(apiKey)
     return { configured: true }
   })
 
-  ipcMain.handle('speech:clearOpenAiApiKey', async () => {
+  ipcMain.handle('speech:clearOpenAiApiKey', async (event) => {
+    assertTrustedSpeechSender(event)
     clearOpenAiSpeechApiKey()
     return { configured: false }
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
+    assertTrustedSpeechSender(event)
     const manager = getSpeechModelManager(store)
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) {
@@ -65,11 +77,13 @@ export function registerSpeechHandlers(store: Store): void {
     }
   })
 
-  ipcMain.handle('speech:cancelDownload', async (_event, modelId: string) => {
+  ipcMain.handle('speech:cancelDownload', async (event, modelId: string) => {
+    assertTrustedSpeechSender(event)
     getSpeechModelManager(store).cancelDownload(modelId)
   })
 
-  ipcMain.handle('speech:deleteModel', async (_event, modelId: string) => {
+  ipcMain.handle('speech:deleteModel', async (event, modelId: string) => {
+    assertTrustedSpeechSender(event)
     await deleteLocalSpeechModel({
       store,
       modelManager: getSpeechModelManager(store),
@@ -78,19 +92,13 @@ export function registerSpeechHandlers(store: Store): void {
     })
   })
 
-  const getHotwordsFilePath = (content: string): string => {
-    const digest = createHash('sha256').update(content).digest('hex').slice(0, 12)
-    // Why: sherpa-onnx cannot read non-ASCII Windows paths, so co-locate the
-    // hotwords file with the ASCII-safe model cache instead of userData.
-    return join(getSpeechModelManager(store).getModelsDir(), `speech-hotwords-${digest}.txt`)
-  }
-
   const getDesktopOwner = (senderId: number, sessionId: string): string =>
     `desktop:${senderId}:${sessionId}`
 
   ipcMain.handle(
     'speech:startDictation',
     async (event, modelId: string, hotwords?: string[], sessionId = 'desktop') => {
+      assertTrustedSpeechSender(event)
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         return
@@ -103,9 +111,7 @@ export function registerSpeechHandlers(store: Store): void {
         void getSpeechSttService(store)
           .stopDictation(owner)
           .finally(() => {
-            if (resolvedHotwordsPath) {
-              unlink(resolvedHotwordsPath).catch(() => {})
-            }
+            removeSpeechHotwordsFile(resolvedHotwordsPath)
           })
           .catch(() => {})
       }
@@ -133,18 +139,13 @@ export function registerSpeechHandlers(store: Store): void {
           }
         }
 
-        if (hotwords && hotwords.length > 0) {
-          const content = `${hotwords.map((w) => `${w} :2.0`).join('\n')}\n`
-          const hotwordsFilePath = getHotwordsFilePath(content)
-          await writeFile(hotwordsFilePath, content, 'utf-8')
-          resolvedHotwordsPath = hotwordsFilePath
-        }
+        resolvedHotwordsPath = await writeSpeechHotwordsFile(
+          hotwords,
+          getSpeechModelManager(store).getModelsDir()
+        )
 
         if (windowClosed || window.isDestroyed()) {
-          cleanupSessionListener()
-          if (resolvedHotwordsPath) {
-            unlink(resolvedHotwordsPath).catch(() => {})
-          }
+          removeSpeechHotwordsFile(resolvedHotwordsPath)
           return
         }
 
@@ -180,14 +181,10 @@ export function registerSpeechHandlers(store: Store): void {
           resolvedHotwordsPath,
           owner
         )
-        if (resolvedHotwordsPath) {
-          unlink(resolvedHotwordsPath).catch(() => {})
-        }
+        removeSpeechHotwordsFile(resolvedHotwordsPath)
       } catch (err) {
         cleanupSessionListener()
-        if (resolvedHotwordsPath) {
-          unlink(resolvedHotwordsPath).catch(() => {})
-        }
+        removeSpeechHotwordsFile(resolvedHotwordsPath)
         throw err
       }
     }
@@ -195,19 +192,21 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle(
     'speech:feedAudio',
-    async (_event, buffer: Buffer, sampleRate: number, sessionId = 'desktop') => {
+    async (event, buffer: Buffer, sampleRate: number, sessionId = 'desktop') => {
+      assertTrustedSpeechSender(event)
       // Why: the preload sends audio as a Buffer to avoid Float32Array data
       // being zeroed out during contextBridge + IPC serialization.
       const samples = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
       getSpeechSttService(store).feedAudio(
         samples,
         sampleRate,
-        getDesktopOwner(_event.sender.id, sessionId)
+        getDesktopOwner(event.sender.id, sessionId)
       )
     }
   )
 
-  ipcMain.handle('speech:stopDictation', async (_event, sessionId = 'desktop') => {
-    await getSpeechSttService(store).stopDictation(getDesktopOwner(_event.sender.id, sessionId))
+  ipcMain.handle('speech:stopDictation', async (event, sessionId = 'desktop') => {
+    assertTrustedSpeechSender(event)
+    await getSpeechSttService(store).stopDictation(getDesktopOwner(event.sender.id, sessionId))
   })
 }
