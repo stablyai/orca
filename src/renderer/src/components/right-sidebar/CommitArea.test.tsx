@@ -6,8 +6,18 @@ import {
   type PrimaryActionInputs
 } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import React from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { deriveSourceControlPushRecovery } from './source-control-push-recovery'
+
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
+}))
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -144,6 +154,26 @@ describe('CommitArea', () => {
 
   it('enables the primary button when staged + message + no conflicts', () => {
     expect(hasDisabledAttribute(firstButton(renderCommitArea(baseProps())))).toBe(false)
+  })
+
+  it('renders the Commit shortcut keys inside the primary button tooltip when the action is commit', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
+    })
+    expect(markup).toContain('Enter')
+    const hasShortcutCombo = markup.includes('⌘') || markup.includes('Ctrl')
+    expect(hasShortcutCombo).toBe(true)
+  })
+
+  it('does not render the Commit shortcut keys inside the primary button tooltip when the action is not commit', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'push', disabled: false, label: 'Push', title: 'Push changes' }
+    })
+    expect(markup).not.toContain('Enter')
   })
 
   it('disables the textarea while the commit is in flight', () => {
