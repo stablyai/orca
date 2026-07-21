@@ -251,7 +251,7 @@ export function HostRemoveDialog({
                       <span
                         className={cn(
                           'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
-                          deleteWorkspaces ? 'translate-x-4' : 'translate-x-0.5'
+                          deleteWorkspaces ? 'translate-x-4.5' : 'translate-x-0.5'
                         )}
                       />
                     </span>

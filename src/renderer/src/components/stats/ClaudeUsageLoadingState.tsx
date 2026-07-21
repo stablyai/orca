@@ -21,7 +21,7 @@ export function ClaudeUsageLoadingState({
         <div className="flex shrink-0 items-center gap-2 self-start">
           <RefreshCw className="size-3.5 animate-spin text-muted-foreground" />
           <div className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent bg-foreground/80">
-            <span className="pointer-events-none block size-3.5 translate-x-4 rounded-full bg-background shadow-sm" />
+            <span className="pointer-events-none block size-3.5 translate-x-4.5 rounded-full bg-background shadow-sm" />
           </div>
         </div>
       </div>

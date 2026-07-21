@@ -38,7 +38,7 @@ export function KeepAwakeCard(props: {
           <span
             className={cn(
               'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
-              enabled ? 'translate-x-4' : 'translate-x-0.5'
+              enabled ? 'translate-x-4.5' : 'translate-x-0.5'
             )}
           />
         </button>

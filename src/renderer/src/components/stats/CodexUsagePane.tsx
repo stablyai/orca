@@ -235,7 +235,7 @@ export function CodexUsagePane(): React.JSX.Element {
             onClick={() => handleSetEnabled(false)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-foreground transition-colors"
           >
-            <span className="pointer-events-none block size-3.5 translate-x-4 rounded-full bg-background shadow-sm transition-transform" />
+            <span className="pointer-events-none block size-3.5 translate-x-4.5 rounded-full bg-background shadow-sm transition-transform" />
           </button>
         </div>
       </div>

@@ -133,7 +133,7 @@ export function TerminalWindowSection({
             >
               <span
                 className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                  (settings.windowBackgroundBlur ?? false) ? 'translate-x-4' : 'translate-x-0.5'
+                  (settings.windowBackgroundBlur ?? false) ? 'translate-x-4.5' : 'translate-x-0.5'
                 }`}
               />
             </button>
@@ -270,7 +270,7 @@ export function TerminalWindowSection({
             <span
               className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
                 (settings.terminalMouseHideWhileTyping ?? false)
-                  ? 'translate-x-4'
+                  ? 'translate-x-4.5'
                   : 'translate-x-0.5'
               }`}
             />
