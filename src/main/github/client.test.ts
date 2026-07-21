@@ -132,8 +132,20 @@ vi.mock('./github-api-repository', async (importOriginal) => {
       remoteName: string,
       connectionId?: string | null
     ) => getOwnerRepoForRemoteMock(repoPath, remoteName, connectionId),
-    getOriginGitHubApiRepository: async (repoPath: string, connectionId?: string | null) => {
-      const slug = await getOwnerRepoMock(repoPath, connectionId)
+    getOriginGitHubApiRepository: async (
+      repoPath: string,
+      connectionId?: string | null,
+      localGitOptions?: unknown
+    ) => {
+      // Prefer the remote-specific mock (production origin path); fall back for
+      // suites that only configure getOwnerRepo.
+      const fromRemote = await getOwnerRepoForRemoteMock(
+        repoPath,
+        'origin',
+        connectionId,
+        localGitOptions
+      )
+      const slug = fromRemote ?? (await getOwnerRepoMock(repoPath, connectionId, localGitOptions))
       // Mirror production: dotcom origin slugs come back pinned to github.com.
       return slug ? { host: 'github.com', ...slug } : slug
     },
@@ -232,6 +244,11 @@ describe('getPRForBranch', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
+    // Why: resolveGitHubRepoExecution probes origin via getOwnerRepoForRemote.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     resolvePRRepositoryCandidatesMock.mockReset()
     resolvePRRepositoryCandidatesMock.mockImplementation(async (repoPath, connectionId) => {
       const origin = await getOwnerRepoMock(repoPath, connectionId)
@@ -3604,17 +3621,27 @@ describe('getPRForBranch', () => {
         ? { owner: 'fsdwen', repo: 'orca' }
         : { owner: 'stablyai', repo: 'orca' }
     )
+    // Why: getRepoSlug imports getOriginGitHubApiRepository; the suite bridge
+    // prefers getOwnerRepoForRemote for origin, so set both seams.
+    getOwnerRepoMock.mockResolvedValue({ owner: 'fsdwen', repo: 'orca' })
 
-    await expect(getRepoSlug('/repo-root')).resolves.toEqual({ owner: 'fsdwen', repo: 'orca' })
-    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'origin', undefined)
+    await expect(getRepoSlug('/repo-root')).resolves.toEqual({
+      owner: 'fsdwen',
+      repo: 'orca',
+      host: 'github.com'
+    })
   })
 
   it('resolves a distinct upstream remote as the repo upstream', async () => {
     // getRepoUpstream probes origin then upstream via getOwnerRepoForRemote (#7331).
-    getOwnerRepoForRemoteMock
-      .mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
-      .mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'tmchow', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
+      remoteName === 'origin'
+        ? { owner: 'tmchow', repo: 'orca' }
+        : { owner: 'stablyai', repo: 'orca' }
+    )
 
+    // Why: the suite bridge returns getOwnerRepoForRemote fixtures as-is (no host pin).
     await expect(getRepoUpstream('/repo-root')).resolves.toEqual({
       owner: 'stablyai',
       repo: 'orca'
@@ -3624,9 +3651,12 @@ describe('getPRForBranch', () => {
   })
 
   it('does not treat a same-repository upstream remote as a fork', async () => {
-    getOwnerRepoForRemoteMock
-      .mockResolvedValueOnce({ owner: 'StablyAI', repo: 'Orca' })
-      .mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'StablyAI', repo: 'Orca' })
+    getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
+      remoteName === 'origin'
+        ? { owner: 'StablyAI', repo: 'Orca' }
+        : { owner: 'stablyai', repo: 'orca' }
+    )
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({ isFork: false, parent: null })
     })
@@ -3648,7 +3678,7 @@ describe('getPRForBranch', () => {
     await expect(getRepoUpstream('/repo-root')).resolves.toBeNull()
 
     expect(getOwnerRepoForRemoteMock).toHaveBeenCalledTimes(1)
-    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'origin', undefined)
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'origin', undefined, {})
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -3854,6 +3884,12 @@ describe('updatePRState', () => {
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
+    getOwnerRepoForRemoteMock.mockReset()
+    // Why: updatePRState resolves origin through getOwnerRepoForRemote.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     ghRepoExecOptionsMock.mockClear()
     githubRepoContextMock.mockClear()
     acquireMock.mockReset()
@@ -3916,6 +3952,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
+    // Why: getPRComments and mutations resolve origin via getOwnerRepoForRemote.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     resolvePRRepositoryCandidatesMock.mockReset()
     resolvePRRepositoryCandidatesMock.mockImplementation(async (repoPath, connectionId) => {
       const origin = await getOwnerRepoMock(repoPath, connectionId)

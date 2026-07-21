@@ -2,16 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitHubEnterpriseRepository from './github-enterprise-repository'
 import type * as GhUtils from './gh-utils'
 
-const { getEnterpriseGitHubRepoSlugMock, getOwnerRepoMock, isGitHubHostAuthenticatedMock } =
-  vi.hoisted(() => ({
-    getEnterpriseGitHubRepoSlugMock: vi.fn(),
-    getOwnerRepoMock: vi.fn(),
-    isGitHubHostAuthenticatedMock: vi.fn()
-  }))
+const {
+  getEnterpriseGitHubRepoSlugMock,
+  getOwnerRepoMock,
+  getOwnerRepoForRemoteMock,
+  isGitHubHostAuthenticatedMock
+} = vi.hoisted(() => ({
+  getEnterpriseGitHubRepoSlugMock: vi.fn(),
+  getOwnerRepoMock: vi.fn(),
+  getOwnerRepoForRemoteMock: vi.fn(),
+  isGitHubHostAuthenticatedMock: vi.fn()
+}))
 
 vi.mock('./gh-utils', async (importOriginal) => ({
   ...(await importOriginal<typeof GhUtils>()),
-  getOwnerRepo: getOwnerRepoMock
+  getOwnerRepo: getOwnerRepoMock,
+  // Why: origin resolution uses getOwnerRepoForRemote, not getOwnerRepo.
+  getOwnerRepoForRemote: getOwnerRepoForRemoteMock
 }))
 
 vi.mock('./github-enterprise-repository', async (importOriginal) => ({
@@ -32,6 +39,7 @@ beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
   getEnterpriseGitHubRepoSlugMock.mockReset().mockResolvedValue(null)
   getOwnerRepoMock.mockReset().mockResolvedValue(null)
+  getOwnerRepoForRemoteMock.mockReset().mockResolvedValue(null)
   isGitHubHostAuthenticatedMock.mockReset().mockResolvedValue(false)
 })
 
@@ -123,7 +131,7 @@ describe('resolveGitHubRepoExecution', () => {
 
   it('backfills the origin host for a host-less caller-specific resolver', async () => {
     const ownerRepo = { owner: 'upstream', repo: 'widgets' }
-    getOwnerRepoMock.mockResolvedValue({ owner: 'fork', repo: 'widgets' })
+    getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'fork', repo: 'widgets' })
 
     await expect(resolveGitHubRepoExecution('/repo', async () => ownerRepo)).resolves.toEqual({
       ownerRepo: { ...ownerRepo, host: 'github.com' },

@@ -40,7 +40,7 @@ const {
 
 vi.mock('./gh-utils', () => ({
   ghExecFileAsync: ghExecFileAsyncMock,
-  getOwnerRepo: getOwnerRepoMock,
+  getOwnerRepoForRemote: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
   ghRepoExecOptions: vi.fn((context) => ({ cwd: context.repoPath })),
   githubRepoContext: vi.fn((repoPath, connectionId, localGitOptions) => ({

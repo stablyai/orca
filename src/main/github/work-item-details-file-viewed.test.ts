@@ -48,7 +48,7 @@ const {
 
 vi.mock('./gh-utils', () => ({
   ghExecFileAsync: ghExecFileAsyncMock,
-  getOwnerRepo: getOwnerRepoMock,
+  getOwnerRepoForRemote: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   ghRepoExecOptions: vi.fn((context) => (context.connectionId ? {} : { cwd: context.repoPath })),
   githubRepoContext: vi.fn((repoPath, connectionId) => ({
@@ -206,6 +206,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
           : true
       )
     ).toBe(true)
+    expect(noteRepositoryRateLimitSpendMock.mock.calls.length).toBeGreaterThan(0)
     expect(
       noteRepositoryRateLimitSpendMock.mock.calls.every(([, bucket, , options]) =>
         bucket === 'graphql'

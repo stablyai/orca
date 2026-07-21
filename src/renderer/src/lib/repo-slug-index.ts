@@ -35,21 +35,47 @@ export { lookupReposBySlugFromCache } from './repo-slug-cache'
 
 const slugResolutionInFlight = new Map<string, Promise<string | null>>()
 
-/** Drop a repo's cached slug result. Call when a repo is removed or its
- *  remote URL is known to have changed (e.g. after `git remote set-url`),
- *  so the next index build re-resolves rather than serving a stale entry. */
+// Why: an invalidation (repo removed, remote changed) can land while a
+// resolution is in-flight — before it ever wrote to `slugByRepoId`. Deleting
+// the in-flight promise doesn't stop its pending `rememberRepoSlug` write, so a
+// stale slug would repopulate the cache after invalidation. Bump the key's
+// generation on every invalidation and commit a result only if the generation
+// it started with is still current.
+const slugResolutionGeneration = new Map<string, number>()
+
+function invalidateSlugResolution(cacheKey: string): void {
+  slugResolutionInFlight.delete(cacheKey)
+  slugResolutionGeneration.set(cacheKey, (slugResolutionGeneration.get(cacheKey) ?? 0) + 1)
+}
+
+// Why: clear after remove/remote-change so the next index build re-resolves.
 export function clearRepoSlugCacheEntry(repoId: string): void {
+  const suffix = `:${repoId}`
+  // Why: an in-flight-only resolution has no `slugByRepoId` entry yet, so it
+  // must be invalidated via the in-flight map too or its late write survives.
+  const keys = new Set<string>()
   for (const key of slugByRepoId.keys()) {
-    if (key.endsWith(`:${repoId}`)) {
-      deleteRepoSlugCacheKey(key)
-      slugResolutionInFlight.delete(key)
+    if (key.endsWith(suffix)) {
+      keys.add(key)
     }
+  }
+  for (const key of slugResolutionInFlight.keys()) {
+    if (key.endsWith(suffix)) {
+      keys.add(key)
+    }
+  }
+  for (const key of keys) {
+    deleteRepoSlugCacheKey(key)
+    invalidateSlugResolution(key)
   }
 }
 
 /** Clear the entire slug cache. Useful for tests or full repo-list resets. */
 export function clearRepoSlugCache(): void {
   clearRepoSlugCacheValues()
+  for (const key of slugResolutionInFlight.keys()) {
+    slugResolutionGeneration.set(key, (slugResolutionGeneration.get(key) ?? 0) + 1)
+  }
   slugResolutionInFlight.clear()
 }
 
@@ -66,7 +92,16 @@ async function resolveRepoSlug(
   if (inFlight) {
     return inFlight
   }
+  const generation = slugResolutionGeneration.get(cacheKey) ?? 0
   const resolution = (async () => {
+    // Why: only write the resolved value if this key wasn't invalidated
+    // mid-flight; otherwise a stale slug would repopulate the cache.
+    const commit = (value: string | null): string | null => {
+      if ((slugResolutionGeneration.get(cacheKey) ?? 0) === generation) {
+        rememberRepoSlug(cacheKey, value)
+      }
+      return value
+    }
     try {
       const target = getActiveRuntimeTarget(settings)
       const result =
@@ -79,17 +114,14 @@ async function resolveRepoSlug(
             )
           : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
       if (!result) {
-        rememberRepoSlug(cacheKey, null)
-        return null
+        return commit(null)
       }
       const slug = githubRepoIdentityKey(result)
-      rememberRepoSlug(cacheKey, slug)
-      return slug
+      return commit(slug)
     } catch {
       // Why: GHES classification depends on auth that may change outside Orca;
       // retry negative results after a bounded quiet period instead of forever.
-      rememberRepoSlug(cacheKey, null)
-      return null
+      return commit(null)
     }
   })()
   slugResolutionInFlight.set(cacheKey, resolution)
@@ -114,7 +146,7 @@ async function buildIndex(
   for (const key of slugByRepoId.keys()) {
     if (!liveKeys.has(key)) {
       deleteRepoSlugCacheKey(key)
-      slugResolutionInFlight.delete(key)
+      invalidateSlugResolution(key)
     }
   }
   const next: SlugIndex = new Map()

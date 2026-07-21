@@ -2361,7 +2361,8 @@ describe('OrcaRuntimeRpcServer', () => {
       path: 'src/app.ts',
       line: 10,
       startLine: undefined,
-      body: 'please fix'
+      body: 'please fix',
+      prRepo: null
     })
     expect(addRepoPRReviewCommentReply).toHaveBeenCalledWith('id:repo-1', {
       prNumber: 456,
@@ -2378,19 +2379,22 @@ describe('OrcaRuntimeRpcServer', () => {
       oldPath: undefined,
       status: 'modified',
       headSha: 'abc123',
-      baseSha: 'def456'
+      baseSha: 'def456',
+      prRepo: null
     })
     expect(rerunRepoPRChecks).toHaveBeenCalledWith('id:repo-1', 456, {
       headSha: 'abc123',
-      failedOnly: true
+      failedOnly: true,
+      prRepo: null
     })
-    expect(resolveRepoReviewThread).toHaveBeenCalledWith('id:repo-1', 'thread-1', true)
+    expect(resolveRepoReviewThread).toHaveBeenCalledWith('id:repo-1', 'thread-1', true, null)
     expect(setRepoPRFileViewed).toHaveBeenCalledWith('id:repo-1', {
       pullRequestId: 'PR_kw',
       path: 'src/app.ts',
-      viewed: true
+      viewed: true,
+      prRepo: null
     })
-    expect(requestRepoPRReviewers).toHaveBeenCalledWith('id:repo-1', 456, ['alex'])
+    expect(requestRepoPRReviewers).toHaveBeenCalledWith('id:repo-1', 456, ['alex'], null)
     expect(mergeRepoPR).toHaveBeenCalledWith('id:repo-1', 456, 'squash', null)
     expect(addGitLabRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', undefined)
     expect(addGitLabRepoMRComment).toHaveBeenCalledWith('id:repo-1', 456, 'ship it', undefined)

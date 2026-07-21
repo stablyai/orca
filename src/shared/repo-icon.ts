@@ -29,10 +29,9 @@ export function faviconUrlFromWebsite(rawUrl: string): string | null {
   }
 }
 
-// Why: the GitHub owner avatar is the default repo icon, built the same way in
-// main (auto-detect) and renderer (picker); keep the URL and label in one place.
+// Why: shared default icon URL/label for main auto-detect and the renderer picker.
 export function githubAvatarIcon(slug: { owner: string; repo: string; host?: string }): RepoIcon {
-  // Why: GHES serves the same /<login>.png avatar convention as github.com.
+  // Why: GHES uses the same /<login>.png avatar path as github.com.
   const host = normalizeGitHubAvatarHost(slug.host)
   return {
     type: 'image',
@@ -46,9 +45,12 @@ function normalizeGitHubAvatarHost(rawHost?: string): string {
   const candidate = rawHost?.trim().toLowerCase() || 'github.com'
   try {
     const url = new URL(`https://${candidate}`)
+    // Why: only bare hostnames — reject credentials, paths, query, or hash.
+    // Explicit default port 443 is stripped by URL serialization, so accept the
+    // canonical `hostname:443` form too or valid GHES avatars on 443 fall back.
     return !url.username &&
       !url.password &&
-      url.host === candidate &&
+      (url.host === candidate || `${url.host}:443` === candidate) &&
       url.pathname === '/' &&
       !url.search &&
       !url.hash
@@ -75,8 +77,7 @@ function isSupportedImageSrc(src: string, source: RepoIconImageSource): boolean 
   }
 
   if (source === 'github') {
-    // Why: GHES hosts are user-configured and may be internal; constrain their
-    // persisted image URL to GitHub's owner-avatar path and forbid credentials.
+    // Why: only owner-avatar paths; no credentials (GHES hosts may be internal).
     return !url.username && !url.password && /^\/[^/?#]+\.png$/i.test(url.pathname)
   }
 

@@ -38,7 +38,19 @@ vi.mock('./github-api-repository', () => ({
   getOriginGitHubApiRepository: vi.fn(),
   githubHostExecOptions: (repository?: { host?: string } | null) =>
     repository?.host ? { host: repository.host } : {},
-  resolveGitHubRepoExecution: vi.fn()
+  // Why: getWorkItemDetails awaits resolveGitHubRepoExecution and reads .ownerRepo.
+  resolveGitHubRepoExecution: vi.fn(
+    async (
+      _repoPath: string,
+      repository?: { owner: string; repo: string; host?: string } | null
+    ) => ({
+      ownerRepo: repository ?? { owner: 'acme', repo: 'widgets', host: 'github.com' },
+      ghOptions: {
+        cwd: '/repo',
+        host: repository?.host ?? 'github.com'
+      }
+    })
+  )
 }))
 
 vi.mock('./rate-limit', () => ({

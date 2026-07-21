@@ -118,6 +118,11 @@ describe('sanitizeRepoIcon', () => {
     expect(
       githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'GitHub.Acme.Test:8443' })
     ).toMatchObject({ src: 'https://github.acme.test:8443/acme.png?size=64' })
+    // Explicit default port 443 is canonical for an HTTPS host: accept it
+    // (serialized without the port) rather than falling back to github.com.
+    expect(
+      githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'ghe.example:443' })
+    ).toMatchObject({ src: 'https://ghe.example/acme.png?size=64' })
     expect(
       githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'github.com@evil.example' })
     ).toMatchObject({ src: 'https://github.com/acme.png?size=64' })

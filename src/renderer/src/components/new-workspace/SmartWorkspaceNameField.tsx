@@ -567,7 +567,6 @@ export default function SmartWorkspaceNameField({
             directLink.slug,
             repoSlugCacheRef.current
           )
-          handledCrossRepoUrlRef.current = debouncedQuery.trim()
           if (!matchingTarget) {
             return { items: [], prompt: null }
           }
@@ -581,6 +580,9 @@ export default function SmartWorkspaceNameField({
             number: directLink.number,
             type: directLink.type
           })
+          // Why: only suppress re-tries once resolution succeeded — a transient
+          // GHES slug failure (matchingTarget === null) must stay retryable.
+          handledCrossRepoUrlRef.current = debouncedQuery.trim()
           return {
             items: item ? [{ ...item, repoId: matchingTarget.repo.id } as GitHubWorkItem] : [],
             prompt: null

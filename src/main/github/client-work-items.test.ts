@@ -353,12 +353,9 @@ describe('listWorkItems', () => {
       null,
       localGitOptions
     )
-    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
-      '/repo-root',
-      'origin',
-      null,
-      localGitOptions
-    )
+    // Why: the suite bridge routes origin through getOwnerRepoMock and non-origin
+    // remotes through getOwnerRepoForRemoteMock.
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
     expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
       '/repo-root',
       'upstream',

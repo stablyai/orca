@@ -3,7 +3,7 @@
 // header tab strip). Pinned + Recent come from settings; Browse all lazy-loads
 // from `listAccessibleProjects` and is cached for 5 minutes. Paste-to-add
 // accepts org/user project URLs and `owner/number` shorthand.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ChevronDown, Loader, Pin, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { GhAuthErrorHelp } from '@/components/github-project/GhAuthErrorHelp'
@@ -141,7 +141,12 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const browseHost = getProjectPickerBrowseHost(activeProject ?? projectSettings.activeProject)
   const browseCacheKey = getProjectPickerRuntimeScope(settings, browseHost)
   const activeBrowseCacheKeyRef = useRef(browseCacheKey)
-  activeBrowseCacheKeyRef.current = browseCacheKey
+  // Why: sync the ref after commit, not during render — a discarded concurrent
+  // render must not publish a newer cache key that drops the committed tree's
+  // in-flight browse request.
+  useLayoutEffect(() => {
+    activeBrowseCacheKeyRef.current = browseCacheKey
+  }, [browseCacheKey])
   const browseCache = peekProjectPickerBrowseCacheEntry(browseCacheKey)
   const [browseProjects, setBrowseProjects] = useState<GitHubProjectSummary[]>(
     () => browseCache?.projects ?? []

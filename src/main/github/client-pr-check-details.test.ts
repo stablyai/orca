@@ -17,6 +17,16 @@ vi.mock('./gh-utils', () => ({
   ghRepoExecOptions: (context: { repoPath: string }) => ({ cwd: context.repoPath }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
+  // Why: origin repository resolution calls getOwnerRepoForRemote, not getOwnerRepo.
+  getOwnerRepoForRemote: (
+    repoPath: string,
+    remoteName: string,
+    connectionId?: string | null,
+    localGitOptions?: unknown
+  ) =>
+    remoteName === 'origin'
+      ? getOwnerRepoMock(repoPath, connectionId, localGitOptions)
+      : Promise.resolve(null),
   extractExecError: vi.fn((err: unknown) => ({ stderr: String(err), stdout: '' })),
   acquire: vi.fn(),
   release: vi.fn(),

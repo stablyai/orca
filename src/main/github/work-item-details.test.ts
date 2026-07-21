@@ -603,7 +603,8 @@ describe('getWorkItemDetails', () => {
       updatedAt: '2026-04-01T00:00:00Z',
       author: 'pr-author'
     })
-    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    // Why: PR detail resolution uses getOwnerRepoForRemote via origin repository lookup.
+    getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -649,7 +650,12 @@ describe('getWorkItemDetails', () => {
 
     expect(details?.body).toBe('PR body')
     expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 42, 'pr', null, localGitOptions)
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
+      '/repo-root',
+      'origin',
+      null,
+      localGitOptions
+    )
     expect(getPRCommentsMock).toHaveBeenCalledWith(
       '/repo-root',
       42,
@@ -685,7 +691,7 @@ describe('getWorkItemDetails', () => {
       updatedAt: '2026-07-11T00:00:00Z',
       author: 'pr-author'
     })
-    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -719,7 +725,7 @@ describe('getWorkItemDetails', () => {
       updatedAt: '2026-07-11T00:00:00Z',
       author: 'pr-author'
     })
-    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -760,7 +766,7 @@ describe('getWorkItemDetails', () => {
       // A default `u/0` placeholder must be replaced by the resolved avatar.
       assignees: [{ login: 'seah', name: 'Seah', avatarUrl: 'https://avatars.example.com/u/0?v=4' }]
     })
-    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockResolvedValue([])
     const avatars: Record<string, string> = {

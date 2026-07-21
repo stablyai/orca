@@ -139,6 +139,11 @@ describe('GitHub PR local runtime routing', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
+    // Why: host-less prRepo backfill and origin resolution use getOwnerRepoForRemote.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     getEnterpriseGitHubRepoSlugMock.mockReset()
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
     resolvePRRepositoryCandidatesMock.mockReset()

@@ -36,21 +36,35 @@ vi.mock('./github-enterprise-repository', async (importOriginal) => ({
 
 vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
+  const withDotComHost = <T extends { host?: string } | null | undefined>(repo: T) =>
+    repo ? { host: 'github.com' as const, ...repo } : repo
   return {
     ...actual,
     // Why: these suites drive source resolution through the legacy gh-utils
-    // mocks; bridge the hosted seams onto the same mocks.
-    getIssueGitHubApiRepository: (
+    // mocks; bridge the hosted seams onto the same mocks and pin github.com so
+    // host-less fixtures still pass resolveGitHubApiRepository's host gate.
+    getIssueGitHubApiRepository: async (
       repoPath: string,
       connectionId?: string | null,
       localGitOptions?: unknown
-    ) => getIssueOwnerRepoMock(repoPath, connectionId, localGitOptions),
-    resolveIssueGitHubApiRepositorySource: (
+    ) => withDotComHost(await getIssueOwnerRepoMock(repoPath, connectionId, localGitOptions)),
+    resolveIssueGitHubApiRepositorySource: async (
       repoPath: string,
       preference: unknown,
       connectionId?: string | null,
       localGitOptions?: unknown
-    ) => resolveIssueSourceMock(repoPath, preference, connectionId, localGitOptions)
+    ) => {
+      const result = await resolveIssueSourceMock(
+        repoPath,
+        preference,
+        connectionId,
+        localGitOptions
+      )
+      return {
+        ...result,
+        source: withDotComHost(result?.source)
+      }
+    }
   }
 })
 
@@ -104,7 +118,7 @@ describe('issue source operations', () => {
     await expect(getIssue('/repo-root', 923)).resolves.toMatchObject({ number: 923 })
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['api', '--cache', '300s', 'repos/stablyai/orca/issues/923'],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
   })
 
@@ -218,7 +232,7 @@ describe('issue source operations', () => {
         '120s',
         'repos/stablyai/orca/issues?per_page=5&state=open&sort=updated&direction=desc'
       ],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
   })
 
@@ -262,7 +276,7 @@ describe('issue source operations', () => {
         '--raw-field',
         'body=Body'
       ],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
   })
 
@@ -302,7 +316,7 @@ describe('issue source operations', () => {
         '--raw-field',
         'assignees[]=octo'
       ],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
   })
 
@@ -341,17 +355,17 @@ describe('issue source operations', () => {
         'labels[]=bug',
         'assignees[]=octo'
       ]),
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       expect.arrayContaining(['body=', 'title=Image issue', 'labels[]=bug', 'assignees[]=octo']),
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
       ['api', '-X', 'PATCH', 'repos/stablyai/orca/issues/926', '--raw-field', `body=${body}`],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
   })
 
@@ -472,7 +486,7 @@ describe('issue source operations', () => {
     })
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['api', '-X', 'PATCH', 'repos/stablyai/orca/issues/924', '--raw-field', 'body=Updated body'],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
   })
 
@@ -497,17 +511,17 @@ describe('issue source operations', () => {
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       ['issue', 'close', '924', '--repo', 'stablyai/orca', '--reason', 'completed'],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       ['issue', 'close', '925', '--repo', 'stablyai/orca', '--reason', 'not planned'],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
       ['issue', 'close', '926', '--repo', 'stablyai/orca', '--duplicate-of', '99'],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
   })
 
@@ -520,7 +534,7 @@ describe('issue source operations', () => {
     })
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['issue', 'reopen', '924', '--repo', 'stablyai/orca'],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
   })
 })

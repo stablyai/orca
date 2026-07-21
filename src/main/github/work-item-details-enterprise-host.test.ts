@@ -151,7 +151,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
     ).toBe(true)
   })
 
-  it('does not query the default host when an SSH issue repository is unresolved', async () => {
+  it('does not query the default host when an SSH issue work item is not found', async () => {
     getWorkItemMock.mockResolvedValue(null)
 
     await expect(getWorkItemDetails('/remote/repo', 7, 'issue', 'ssh-1')).resolves.toBeNull()
@@ -275,22 +275,38 @@ describe('getWorkItemDetails Enterprise host routing', () => {
     ).toBe(true)
   })
 
-  it('does not fall back to the default host after an Enterprise PR lookup fails', async () => {
-    getWorkItemMock.mockResolvedValue(null)
-
-    await expect(getWorkItemDetails('/remote/repo', 7, 'pr', 'ssh-1')).resolves.toBeNull()
-
-    expect(getWorkItemMock).toHaveBeenCalledTimes(1)
-    expect(getWorkItemByOwnerRepoMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('does not query the default host when an SSH PR repository is unresolved', async () => {
+  it('does not query the default host when an SSH PR work item is not found', async () => {
     getWorkItemMock.mockResolvedValue(null)
 
     await expect(getWorkItemDetails('/remote/repo', 7, 'pr', 'ssh-1')).resolves.toBeNull()
 
     expect(getWorkItemMock).toHaveBeenCalledWith('/remote/repo', 7, 'pr', 'ssh-1')
+    expect(getWorkItemByOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a found SSH PR without any default-host gh call when the repository is unresolved', async () => {
+    // Why: this is the regression under test — a *found* PR whose owner/repo
+    // cannot be resolved to an Enterprise host must not silently fall back to
+    // github.com. With no prRepo, origin resolution runs and returns null.
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'pr:7',
+      type: 'pr',
+      number: 7,
+      title: 'Unresolved Enterprise PR',
+      state: 'open',
+      url: 'https://github.acme-corp.com/team/orca/pull/7',
+      labels: [],
+      updatedAt: '2026-07-16T00:00:00Z',
+      author: 'pr-author'
+    })
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
+
+    const details = await getWorkItemDetails('/remote/repo', 7, 'pr', 'ssh-1')
+
+    // The item is still surfaced, but no host-qualified (or default-host) gh
+    // request is made because the execution repository never resolved.
+    expect(details?.item.id).toBe('pr:7')
     expect(getWorkItemByOwnerRepoMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
