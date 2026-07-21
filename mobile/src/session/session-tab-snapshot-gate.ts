@@ -5,7 +5,13 @@
 // publisher's snapshot reflects it.
 
 /** The last snapshot applied from a publisher, used to reject older ones. */
-export type AppliedSnapshotMarker = { epoch: string | null; version: number }
+export type AppliedSnapshotMarker = {
+  epoch: string | null
+  version: number
+  retiredEpochs?: string[]
+}
+
+const RETIRED_EPOCH_LIMIT = 16
 
 /**
  * Whether an incoming snapshot should be applied. Rejects only snapshots
@@ -27,6 +33,14 @@ export function acceptSessionSnapshot(
       return false
     }
   } else {
+    if (marker.retiredEpochs?.includes(incomingEpoch)) {
+      return false
+    }
+    if (marker.epoch !== null) {
+      marker.retiredEpochs = [...(marker.retiredEpochs ?? []), marker.epoch].slice(
+        -RETIRED_EPOCH_LIMIT
+      )
+    }
     marker.epoch = incomingEpoch
   }
   marker.version = incoming.snapshotVersion

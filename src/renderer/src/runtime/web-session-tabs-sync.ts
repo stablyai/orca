@@ -83,7 +83,11 @@ type SessionTabsListAllResult = {
 type SnapshotFreshness = {
   publicationEpoch: string
   snapshotVersion: number
+  retiredPublicationEpochs: string[]
+  acceptReplay: boolean
 }
+
+const RETIRED_PUBLICATION_EPOCH_LIMIT = 16
 
 const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const lastHostTerminalTabCountByWorktree = new Map<string, number>()
@@ -176,12 +180,16 @@ export function getLastKnownHostTerminalTabCount(
   )
 }
 
-// Why: a post-reconnect replay re-emits the snapshot with unchanged epoch/version; dropping the freshness entry lets the monotonic gate accept it instead of freezing the mirror (#7718).
+// Why: reconnect replays may repeat the current pair, but forgetting the marker would also forget retired epochs and let a delayed old renderer generation return.
 export function acceptReplayedWebSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string
 ): void {
-  latestSessionTabsSnapshotByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const current = latestSessionTabsSnapshotByWorktree.get(key)
+  if (current) {
+    latestSessionTabsSnapshotByWorktree.set(key, { ...current, acceptReplay: true })
+  }
 }
 
 export function shouldApplyWebSessionTabsSnapshot(
@@ -189,30 +197,44 @@ export function shouldApplyWebSessionTabsSnapshot(
   environmentId: string
 ): boolean {
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
-  if ((snapshot as { removed?: unknown }).removed === true) {
-    // Why: removed worktrees can stop publishing, so clean up their tracking now instead of waiting for a replacement snapshot that may never arrive.
-    clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
-    queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
-    return true
-  }
   if (snapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID) {
     // Why: the floating workspace is a local synthetic terminal; a remote empty same-id snapshot would delete the user's local floating tabs.
     return false
   }
-  rememberHostTerminalTabCount(environmentId, snapshot)
   const current = latestSessionTabsSnapshotByWorktree.get(key)
-  // Why: snapshotVersion is monotonic only within one publicationEpoch (resets on host restart); reject as stale only within the same epoch, since a different epoch is a new generation and must apply.
-  if (
-    current &&
-    current.publicationEpoch === snapshot.publicationEpoch &&
-    snapshot.snapshotVersion <= current.snapshotVersion
-  ) {
-    return false
+  if (current?.publicationEpoch === snapshot.publicationEpoch) {
+    const replayAccepted =
+      current.acceptReplay && snapshot.snapshotVersion === current.snapshotVersion
+    if (snapshot.snapshotVersion <= current.snapshotVersion && !replayAccepted) {
+      return false
+    }
+    latestSessionTabsSnapshotByWorktree.set(key, {
+      ...current,
+      snapshotVersion: snapshot.snapshotVersion,
+      acceptReplay: false
+    })
+  } else {
+    if (current?.retiredPublicationEpochs.includes(snapshot.publicationEpoch)) {
+      return false
+    }
+    const retiredPublicationEpochs = current
+      ? [...current.retiredPublicationEpochs, current.publicationEpoch].slice(
+          -RETIRED_PUBLICATION_EPOCH_LIMIT
+        )
+      : []
+    latestSessionTabsSnapshotByWorktree.set(key, {
+      publicationEpoch: snapshot.publicationEpoch,
+      snapshotVersion: snapshot.snapshotVersion,
+      retiredPublicationEpochs,
+      acceptReplay: false
+    })
   }
-  latestSessionTabsSnapshotByWorktree.set(key, {
-    publicationEpoch: snapshot.publicationEpoch,
-    snapshotVersion: snapshot.snapshotVersion
-  })
+  if ((snapshot as { removed?: unknown }).removed === true) {
+    // Why: clear projection metadata while retaining epoch retirement so a delayed pre-removal frame cannot resurrect the worktree.
+    clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree, true)
+  } else {
+    rememberHostTerminalTabCount(environmentId, snapshot)
+  }
   // Why: a mounted mirror that exhausted bounded polling needs fresh host evidence without subscribing to every store write.
   queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
   return true
@@ -297,9 +319,15 @@ export function _getWebSessionTabsTrackingCountsForTest(): {
   }
 }
 
-function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
+function clearWebSessionTabsTrackingForWorktree(
+  environmentId: string,
+  worktreeId: string,
+  preserveFreshness = false
+): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
-  latestSessionTabsSnapshotByWorktree.delete(key)
+  if (!preserveFreshness) {
+    latestSessionTabsSnapshotByWorktree.delete(key)
+  }
   lastHostTerminalTabCountByWorktree.delete(key)
   clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
   clearWebSessionReorderIntentsForWorktree(worktreeId)

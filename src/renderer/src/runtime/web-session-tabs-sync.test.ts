@@ -147,6 +147,48 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
   })
 
+  it('permanently rejects a retired renderer epoch after a newer generation is accepted', () => {
+    const first = makeSnapshot([], {
+      publicationEpoch: 'renderer:e1',
+      snapshotVersion: 5,
+      activeTabType: null
+    })
+    const second = makeSnapshot([], {
+      publicationEpoch: 'renderer:e2',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+    const delayedFirst = makeSnapshot([], {
+      publicationEpoch: 'renderer:e1',
+      snapshotVersion: 6,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(first, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(second, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(delayedFirst, ENV)).toBe(false)
+  })
+
+  it('keeps a removed frame current so its retired publisher cannot resurrect the worktree', () => {
+    const initial = makeSnapshot([], {
+      publicationEpoch: 'renderer:e1',
+      snapshotVersion: 5,
+      activeTabType: null
+    })
+    const removed = {
+      ...makeSnapshot([], {
+        publicationEpoch: 'removed:e2',
+        snapshotVersion: 0,
+        activeTabType: null
+      }),
+      removed: true as const
+    }
+
+    expect(shouldApplyWebSessionTabsSnapshot(initial, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(removed, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(initial, ENV)).toBe(false)
+  })
+
   it('reproduces a different-epoch empty snapshot hiding a tab until freshness resets', () => {
     const surface = {
       type: 'terminal' as const,
@@ -536,7 +578,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     ).toBe(false)
   })
 
-  it('clears web session tracking maps when the host removes a worktree snapshot', () => {
+  it('clears host mappings but retains epoch retirement when the host removes a worktree', () => {
     const workspace: BrowserWorkspace = {
       id: 'local-browser-workspace',
       worktreeId: WT,
@@ -646,7 +688,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     )
 
     expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
-      freshness: 0,
+      freshness: 1,
       hostMappings: 0
     })
   })

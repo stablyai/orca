@@ -39,7 +39,27 @@ describe('acceptSessionSnapshot', () => {
     expect(
       acceptSessionSnapshot({ publicationEpoch: 'headless:b', snapshotVersion: 1 }, marker)
     ).toBe(true)
-    expect(marker).toEqual({ epoch: 'headless:b', version: 1 })
+    expect(marker).toEqual({
+      epoch: 'headless:b',
+      version: 1,
+      retiredEpochs: ['renderer:a']
+    })
+  })
+
+  it('rejects a delayed frame from a retired publisher epoch', () => {
+    const marker: AppliedSnapshotMarker = { epoch: 'renderer:e1', version: 5 }
+
+    expect(
+      acceptSessionSnapshot({ publicationEpoch: 'renderer:e2', snapshotVersion: 1 }, marker)
+    ).toBe(true)
+    expect(
+      acceptSessionSnapshot({ publicationEpoch: 'renderer:e1', snapshotVersion: 6 }, marker)
+    ).toBe(false)
+    expect(marker).toEqual({
+      epoch: 'renderer:e2',
+      version: 1,
+      retiredEpochs: ['renderer:e1']
+    })
   })
 
   it('treats a missing epoch as its own publisher key', () => {
