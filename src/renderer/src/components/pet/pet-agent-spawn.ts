@@ -15,6 +15,30 @@ import { setPetBoundSession } from './pet-bound-session'
  */
 export const PET_OMP_MODEL = 'mesh-litellm/LFM2.5-8B-A1B-Q4_0.gguf'
 
+/** Root for pet session storage, matching the mesh convention already used by
+ * `scripts/mesh/omp_orca_dispatch.sh`. `$HOME` is left literal on purpose — the
+ * startup command runs in the pty's shell on the worktree's owner host, so the
+ * shell expands it there, which is also the only host that can resolve it
+ * correctly for an SSH/remote worktree. */
+const PET_SESSION_ROOT = '$HOME/.local/state/meshina/omp-sessions'
+
+/**
+ * A stable, filesystem-safe session-dir name for a worktree's pet assistant.
+ *
+ * Keyed by worktree so the assistant spawned in repo A resumes repo A's thread,
+ * not some global one. worktreeIds look like `repo::/abs/path`; anything that is
+ * not `[A-Za-z0-9._-]` becomes `-` so the result is a single safe path segment,
+ * and a short suffix keeps two worktrees that sanitize alike from colliding.
+ */
+export function petSessionDirName(worktreeId: string): string {
+  const safe = worktreeId.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 80)
+  let hash = 0
+  for (let i = 0; i < worktreeId.length; i++) {
+    hash = (hash * 31 + worktreeId.charCodeAt(i)) | 0
+  }
+  return `orca-pet-${safe}-${(hash >>> 0).toString(36)}`
+}
+
 /**
  * CLI arguments for a pet-spawned omp session.
  *
@@ -24,15 +48,22 @@ export const PET_OMP_MODEL = 'mesh-litellm/LFM2.5-8B-A1B-Q4_0.gguf'
  * next step; until then they surface in the pane itself, which is why this
  * spawns a visible pane rather than a headless session.
  *
- * Note what is NOT here: `--session-dir`/`--resume` (a per-pet long-lived
- * thread) and `--mode rpc`. A pane-hosted omp is what makes agent status free —
- * Orca auto-detects the omp executable and injects its status extension, gated
- * on ORCA_PANE_KEY, which a session we spawned ourselves would never satisfy.
- * Binding a durable session dir on top of the pane is a follow-up, not a
- * reason to leave the pane.
+ * `--session-dir <per-worktree> --continue` is what makes the assistant
+ * durable. `--continue` resumes the most recent session in that dir — probed
+ * 2026-07-21: across separate processes it appends to the one session file and
+ * turn N sees turns 1..N-1, and on an empty dir it simply starts fresh (exit 0,
+ * no error). So the pet's assistant survives a tab close or an app restart:
+ * re-spawning into the same dir picks the thread back up. We use `--continue`
+ * rather than `--resume <id>` precisely to avoid discovering the session uuid
+ * from the renderer, which cannot read the owner host's filesystem.
+ *
+ * Still a pane, not `--mode rpc`: pane-hosting is what earns free agent status
+ * via the ORCA_PANE_KEY-gated extension, which a session we drove ourselves
+ * could never satisfy.
  */
-export function buildPetOmpAgentArgs(model: string = PET_OMP_MODEL): string {
-  return `--approval-mode always-ask --model ${model}`
+export function buildPetOmpAgentArgs(worktreeId: string, model: string = PET_OMP_MODEL): string {
+  const sessionDir = `${PET_SESSION_ROOT}/${petSessionDirName(worktreeId)}`
+  return `--approval-mode always-ask --model ${model} --session-dir ${sessionDir} --continue`
 }
 
 /**
@@ -61,7 +92,7 @@ export function usePetAgentSpawn(): {
       const result = launchAgentInNewTab({
         agent: 'omp',
         worktreeId: activeWorktreeId,
-        agentArgs: buildPetOmpAgentArgs(),
+        agentArgs: buildPetOmpAgentArgs(activeWorktreeId),
         launchSource: 'pet'
       })
       // Why bind here and not from agent status: an omp pane reports `agents:
