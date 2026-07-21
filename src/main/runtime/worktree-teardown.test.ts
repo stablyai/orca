@@ -611,6 +611,29 @@ describe('killAllProcessesForWorktree', () => {
     )
   })
 
+  it('still fails the destructive delete closed when a provider PTY refuses to stop, even though the runtime cannot resolve the worktree (#9197)', async () => {
+    // Guard the invariant the #9197 fix depends on: swallowing selector_not_found
+    // relaxes only the renderer-graph sweep. A real provider-visible PTY that
+    // cannot be physically stopped must still block filesystem removal.
+    const worktreeId = 'repo-1::\\\\wsl.localhost\\Ubuntu\\root\\orca\\workspaces\\wt'
+    const runtime = {
+      stopTerminalsForWorktree: vi.fn().mockRejectedValue(new Error('selector_not_found'))
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [
+      { id: `${worktreeId}@@live-1`, cwd: '/wsl/wt', title: 'shell' }
+    ])
+    localProvider.shutdown = vi.fn().mockRejectedValue(new Error('daemon refused kill'))
+    listRegisteredPtysMock.mockReturnValue([])
+
+    await expect(
+      killAllProcessesForWorktree(worktreeId, {
+        runtime,
+        localProvider,
+        requirePhysicalStop: true
+      })
+    ).rejects.toThrow('Failed to physically stop every PTY')
+  })
+
   it('bounds the entire process sweep when a provider never settles', async () => {
     vi.useFakeTimers()
     try {
