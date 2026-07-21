@@ -11098,12 +11098,13 @@ export class OrcaRuntimeService {
   async listTerminals(
     worktreeSelector?: string,
     limit = DEFAULT_TERMINAL_LIST_LIMIT,
-    opts: { requireFreshPtyLiveness?: boolean } = {}
+    opts: { requireFreshPtyLiveness?: boolean; repoSelector?: string } = {}
   ): Promise<RuntimeTerminalListResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
     const graphEpoch = this.graphStatus === 'ready' ? this.rendererGraphEpoch : null
+    const repoId = opts.repoSelector ? (await this.resolveRepoSelector(opts.repoSelector)).id : null
     const explicitTargetWorktreeId = worktreeSelector
       ? this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
       : null
@@ -11123,8 +11124,12 @@ export class OrcaRuntimeService {
         : null
     const targetWorktree =
       worktreeSelector && !explicitTargetWorktreeId
-        ? await this.resolveWorktreeSelector(worktreeSelector)
+        ? await this.resolveWorktreeSelector(worktreeSelector, repoId)
         : (cachedExplicitTargetWorktree ?? parsedExplicitTargetWorktree)
+    // Why: repo scope is a safety boundary; a worktree from another repo must not bypass it.
+    if (targetWorktree && repoId !== null && targetWorktree.repoId !== repoId) {
+      throw new Error('selector_not_found')
+    }
     const targetWorktreeId = explicitTargetWorktreeId ?? targetWorktree?.id ?? null
     const classificationResolvedWorktreeCache = this.resolvedWorktreeCache
     const classificationResolvedWorktrees =
@@ -11143,12 +11148,16 @@ export class OrcaRuntimeService {
         ? new Map([[targetWorktree.id, targetWorktree]])
         : targetWorktreeId
           ? new Map()
-          : await this.getResolvedWorktreeMap()
+          : new Map(
+              [...(await this.getResolvedWorktreeMap())].filter(
+                ([, worktree]) => repoId === null || worktree.repoId === repoId
+              )
+            )
     if (graphEpoch !== null) {
       this.assertStableReadyGraph(graphEpoch)
     }
 
-    const resolvedWorktrees =
+    const resolvedWorktrees = (
       targetWorktreeId && classificationResolvedWorktrees
         ? classificationResolvedWorktrees
         : targetWorktreeId && targetWorktree
@@ -11156,6 +11165,7 @@ export class OrcaRuntimeService {
           : targetWorktreeId
             ? []
             : [...worktreesById.values()]
+    ).filter((worktree) => repoId === null || worktree.repoId === repoId)
     const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
       resolvedWorktrees,
       targetWorktreeId
@@ -11176,6 +11186,9 @@ export class OrcaRuntimeService {
     if (graphEpoch !== null) {
       for (const leaf of this.leaves.values()) {
         if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
+          continue
+        }
+        if (repoId !== null && !worktreesById.has(leaf.worktreeId)) {
           continue
         }
         if (opts.requireFreshPtyLiveness && leaf.ptyId && !refreshedPtyLiveness?.has(leaf.ptyId)) {
@@ -11202,6 +11215,9 @@ export class OrcaRuntimeService {
         continue
       }
       if (targetWorktreeId && pty.worktreeId !== targetWorktreeId) {
+        continue
+      }
+      if (repoId !== null && !worktreesById.has(pty.worktreeId)) {
         continue
       }
       terminals.push(this.buildPtyTerminalSummary(pty, worktreesById))
@@ -12344,7 +12360,10 @@ export class OrcaRuntimeService {
     })
   }
 
-  async getWorktreePs(limit = DEFAULT_WORKTREE_PS_LIMIT): Promise<{
+  async getWorktreePs(
+    limit = DEFAULT_WORKTREE_PS_LIMIT,
+    opts: { repoSelector?: string } = {}
+  ): Promise<{
     worktrees: RuntimeWorktreePsSummary[]
     totalCount: number
     truncated: boolean
@@ -12352,9 +12371,11 @@ export class OrcaRuntimeService {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
+    const repoId = opts.repoSelector ? (await this.resolveRepoSelector(opts.repoSelector)).id : null
     const resolvedWorktreeSnapshot = await this.listResolvedWorktreeSnapshot()
-    const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter((worktree) =>
-      this.isRuntimeWorktreeVisible(worktree)
+    const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter(
+      (worktree) =>
+        this.isRuntimeWorktreeVisible(worktree) && (repoId === null || worktree.repoId === repoId)
     )
     // Why: worktree.ps backs the mobile sidebar, so it must use the same
     // host-owned imported-worktree visibility gate as worktree.list/desktop.
@@ -12450,6 +12471,9 @@ export class OrcaRuntimeService {
         continue
       }
       const worktree = folderWorkspaceToWorktree(folderWorkspace)
+      if (repoId !== null && worktree.repoId !== repoId) {
+        continue
+      }
       summaries.set(worktree.id, {
         // Why: folder workspaces use the same mobile grouping/order contract as
         // git worktrees, but legacy records may be missing order metadata.
@@ -20930,9 +20954,14 @@ export class OrcaRuntimeService {
     return worktreeId
   }
 
-  private async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
+  private async resolveWorktreeSelector(
+    selector: string,
+    repoId: string | null = null
+  ): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
-    const worktrees = await this.listResolvedWorktrees()
+    const worktrees = (await this.listResolvedWorktrees()).filter(
+      (worktree) => repoId === null || worktree.repoId === repoId
+    )
     let candidates: ResolvedWorktree[]
 
     if (selector === 'active') {

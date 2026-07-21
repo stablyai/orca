@@ -25,6 +25,18 @@ const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () =>
   run()
 
 describe('worktree RPC methods', () => {
+  it('forwards worktree ps repo scope and limit', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getWorktreePs: vi.fn().mockResolvedValue({ worktrees: [], totalCount: 0, truncated: false })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch(makeRequest('worktree.ps', { repo: 'id:repo-a', limit: 1 }))
+
+    expect(runtime.getWorktreePs).toHaveBeenCalledWith(1, { repoSelector: 'id:repo-a' })
+  })
+
   it('routes mobile session-only activation without notifying desktop clients', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

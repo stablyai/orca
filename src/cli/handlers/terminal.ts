@@ -34,6 +34,7 @@ import { RuntimeClientError } from '../runtime-client'
 import {
   getBrowserWorktreeSelector,
   getOptionalWorktreeSelector,
+  resolveRepoSelectorFlag,
   getRequiredWorktreeSelector,
   getTerminalHandle
 } from '../selectors'
@@ -52,8 +53,10 @@ const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }
 
 export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'terminal list': async ({ flags, client, cwd, json }) => {
+    const repo = await resolveRepoSelectorFlag(flags, cwd, client)
     const result = await client.call<RuntimeTerminalListResult>('terminal.list', {
       worktree: await getOptionalWorktreeSelector(flags, 'worktree', cwd, client),
+      ...(repo ? { repo } : {}),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
     printResult(result, json, formatTerminalList)

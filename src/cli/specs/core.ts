@@ -174,14 +174,14 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
-    usage: 'orca worktree ps [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit']
+    usage: 'orca worktree ps [--repo <selector>] [--limit <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit']
   },
   {
     path: ['terminal', 'list'],
     summary: 'List live Orca-managed terminals',
-    usage: 'orca terminal list [--worktree <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit']
+    usage: 'orca terminal list [--worktree <selector>] [--repo <selector>] [--limit <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'repo', 'limit']
   },
   {
     path: ['terminal', 'show'],

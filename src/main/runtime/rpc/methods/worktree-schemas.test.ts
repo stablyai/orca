@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WorktreeCreate } from './worktree-schemas'
+import { WorktreeCreate, WorktreePsParams } from './worktree-schemas'
 
 describe('worktree RPC schemas', () => {
   it('rejects invalid startup agent values', () => {
@@ -21,5 +21,12 @@ describe('worktree RPC schemas', () => {
     })
 
     expect(parsed.success).toBe(false)
+  })
+
+  it('accepts an optional repo selector for worktree ps', () => {
+    expect(WorktreePsParams.parse({ repo: 'id:repo-a', limit: 10 })).toEqual({
+      repo: 'id:repo-a',
+      limit: 10
+    })
   })
 })

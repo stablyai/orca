@@ -41,6 +41,7 @@ export const WorktreeDetectedListParams = z.object({
 })
 
 export const WorktreePsParams = z.object({
+  repo: OptionalString,
   limit: OptionalFiniteNumber
 })
 

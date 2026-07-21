@@ -5,6 +5,7 @@ import type {
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
+import { splitWorktreeId } from '../shared/worktree-id'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
@@ -96,6 +97,31 @@ export async function getOptionalWorktreeSelector(
     return await resolveCurrentWorktreeSelector(cwd, client)
   }
   return normalizeWorktreeSelector(value, cwd)
+}
+
+export function getRepoSelectorFromWorktreeSelector(
+  selector: string | undefined
+): string | undefined {
+  if (!selector?.startsWith('id:')) {
+    return undefined
+  }
+  const repoId = splitWorktreeId(selector.slice('id:'.length))?.repoId
+  return repoId ? `id:${repoId}` : undefined
+}
+
+export async function resolveRepoSelectorFlag(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<string | undefined> {
+  const value = getOptionalStringFlag(flags, 'repo')
+  if (!value) {
+    return undefined
+  }
+  if (value === 'active' || value === 'current') {
+    return getRepoSelectorFromWorktreeSelector(await resolveCurrentWorktreeSelector(cwd, client))
+  }
+  return value
 }
 
 export async function getRequiredWorktreeSelector(

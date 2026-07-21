@@ -19754,6 +19754,138 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('filters renderer and PTY-only terminals by repo selector before counting', async () => {
+    const repoB = {
+      id: 'repo-2',
+      path: '/tmp/repo-b',
+      displayName: 'repo-b',
+      badgeColor: 'green',
+      addedAt: 2
+    }
+    const repoBWorktreePath = '/tmp/worktree-b'
+    const repoBWorktreeId = `${repoB.id}::${repoBWorktreePath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ displayName: 'Repo A' }),
+      [repoBWorktreeId]: makeWorktreeMeta({ displayName: 'Repo B' })
+    }
+    const repos = [store.getRepos()[0]!, repoB]
+    const runtimeStore = {
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath: string) => {
+      if (repoPath === repoB.path) {
+        return [
+          {
+            path: repoBWorktreePath,
+            head: 'def',
+            branch: 'feature/foo',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ]
+      }
+      return MOCK_GIT_WORKTREES
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-a',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Repo A graph',
+          activeLeafId: 'pane:1',
+          layout: null
+        },
+        {
+          tabId: 'tab-b',
+          worktreeId: repoBWorktreeId,
+          title: 'Repo B graph',
+          activeLeafId: 'pane:2',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-a',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-graph-a'
+        },
+        {
+          tabId: 'tab-b',
+          worktreeId: repoBWorktreeId,
+          leafId: 'pane:2',
+          paneRuntimeId: 1,
+          ptyId: 'pty-graph-b'
+        }
+      ]
+    })
+    runtime.registerPty('pty-fallback-a', TEST_WORKTREE_ID)
+    runtime.registerPty('pty-fallback-b', repoBWorktreeId)
+    runtime.onPtyData('pty-fallback-a', 'repo a fallback\r\n', 123)
+    runtime.onPtyData('pty-fallback-b', 'repo b fallback\r\n', 124)
+
+    const listed = await runtime.listTerminals(undefined, undefined, {
+      repoSelector: `id:${TEST_REPO_ID}`
+    })
+
+    expect(listed).toMatchObject({ totalCount: 2, truncated: false })
+    expect(listed.terminals).toHaveLength(2)
+    expect(listed.terminals.every((terminal) => terminal.worktreeId === TEST_WORKTREE_ID)).toBe(
+      true
+    )
+    expect(listed.terminals.map((terminal) => terminal.worktreePath)).toEqual([
+      TEST_WORKTREE_PATH,
+      TEST_WORKTREE_PATH
+    ])
+    expect(listed.terminals.map((terminal) => terminal.ptyId)).toEqual([
+      'pty-graph-a',
+      'pty-fallback-a'
+    ])
+    expect(listed.terminals.map((terminal) => terminal.preview)).toEqual(['', 'repo a fallback'])
+
+    const scopedByBranch = await runtime.listTerminals('branch:feature/foo', undefined, {
+      repoSelector: `id:${TEST_REPO_ID}`
+    })
+    expect(scopedByBranch.terminals).toHaveLength(2)
+    expect(
+      scopedByBranch.terminals.every((terminal) => terminal.worktreeId === TEST_WORKTREE_ID)
+    ).toBe(true)
+  })
+
+  it('keeps repo scope authoritative when listing an explicit worktree', async () => {
+    const repoB = {
+      id: 'repo-2',
+      path: '/tmp/repo-b',
+      displayName: 'repo-b',
+      badgeColor: 'green',
+      addedAt: 2
+    }
+    const repos = [store.getRepos()[0]!, repoB]
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id)
+    } as never)
+
+    await expect(
+      runtime.listTerminals(`id:${TEST_WORKTREE_ID}`, undefined, {
+        repoSelector: `id:${repoB.id}`
+      })
+    ).rejects.toThrow('selector_not_found')
+  })
+
   it('shows and resolves active PTY-backed mobile session terminals without a renderer graph', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
@@ -24239,6 +24371,27 @@ describe('OrcaRuntimeService', () => {
       hasAttachedPty: false,
       status: 'inactive'
     })
+  })
+
+  it('excludes folder workspaces from repo-scoped compact worktree summaries', async () => {
+    const folderWorkspace = makeFolderWorkspace({
+      name: 'GG',
+      comment: 'dujiao-next-eval'
+    })
+    const projectGroup = makeFolderProjectGroup({ name: 'Store' })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
+    )
+
+    const listed = await runtime.getWorktreePs(undefined, {
+      repoSelector: `id:${TEST_REPO_ID}`
+    })
+
+    expect(
+      listed.worktrees.find((worktree) => worktree.worktreeId === TEST_FOLDER_WORKSPACE_KEY)
+    ).toBeUndefined()
+    expect(listed.worktrees.every((worktree) => worktree.repoId === TEST_REPO_ID)).toBe(true)
+    expect(listed).toMatchObject({ totalCount: 1, truncated: false })
   })
 
   it('attaches inline agent rows from the latest OSC 9999 status', async () => {
