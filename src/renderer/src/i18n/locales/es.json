@@ -6881,10 +6881,10 @@
             "tui": "TUI",
             "tuiDescription": "Eventos discretos de rueda para apps de terminal de pantalla completa."
           },
-          "behavior_title": "Terminal Behavior",
-          "behavior_description": "Command input behavior for terminal panes.",
-          "autosuggest_title": "Command Autosuggest",
-          "autosuggest_description": "Show an inline suggestion from prior commands as you type; accept with the Right Arrow or End key."
+          "behavior_title": "Comportamiento del terminal",
+          "behavior_description": "Comportamiento de entrada de comandos para los paneles de terminal.",
+          "autosuggest_title": "Autosugerencia de comandos",
+          "autosuggest_description": "Muestra una sugerencia en línea basada en comandos anteriores mientras escribes; acéptala con la flecha derecha o la tecla Fin."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Vista previa del tema {{value0}}",
@@ -8593,8 +8593,8 @@
               "keyword_target": "destino",
               "keyword_editing": "edición"
             },
-            "autosuggest_title": "Command Autosuggest",
-            "autosuggest_description": "Show an inline ghost-text suggestion from prior commands while typing at a shell prompt."
+            "autosuggest_title": "Autosugerencia de comandos",
+            "autosuggest_description": "Muestra una sugerencia de texto fantasma en línea basada en comandos anteriores mientras escribes en el prompt de la shell."
           },
           "windows": {
             "search": {

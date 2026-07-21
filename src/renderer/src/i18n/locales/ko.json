@@ -6866,10 +6866,10 @@
             "tui": "TUI",
             "tuiDescription": "전체 화면 터미널 앱을 위한 개별 휠 보고."
           },
-          "behavior_title": "Terminal Behavior",
-          "behavior_description": "Command input behavior for terminal panes.",
-          "autosuggest_title": "Command Autosuggest",
-          "autosuggest_description": "Show an inline suggestion from prior commands as you type; accept with the Right Arrow or End key."
+          "behavior_title": "터미널 동작",
+          "behavior_description": "터미널 패널의 명령 입력 동작입니다.",
+          "autosuggest_title": "명령어 자동 제안",
+          "autosuggest_description": "입력하는 동안 이전 명령어를 기반으로 인라인 제안을 표시합니다. 오른쪽 화살표 키 또는 End 키로 수락하세요."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} 테마 미리보기",
@@ -8578,8 +8578,8 @@
               "keyword_target": "대상",
               "keyword_editing": "편집"
             },
-            "autosuggest_title": "Command Autosuggest",
-            "autosuggest_description": "Show an inline ghost-text suggestion from prior commands while typing at a shell prompt."
+            "autosuggest_title": "명령어 자동 제안",
+            "autosuggest_description": "셸 프롬프트에서 입력하는 동안 이전 명령어를 기반으로 흐릿한 고스트 텍스트 제안을 표시합니다."
           },
           "windows": {
             "search": {

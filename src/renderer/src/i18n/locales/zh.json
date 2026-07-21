@@ -6866,10 +6866,10 @@
             "tui": "TUI",
             "tuiDescription": "面向全屏终端应用的离散滚轮报告。"
           },
-          "behavior_title": "Terminal Behavior",
-          "behavior_description": "Command input behavior for terminal panes.",
-          "autosuggest_title": "Command Autosuggest",
-          "autosuggest_description": "Show an inline suggestion from prior commands as you type; accept with the Right Arrow or End key."
+          "behavior_title": "终端行为",
+          "behavior_description": "终端面板的命令输入行为。",
+          "autosuggest_title": "命令自动建议",
+          "autosuggest_description": "在你输入时显示基于之前命令的内联建议；按右箭头键或 End 键接受。"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "预览 {{value0}} 主题",
@@ -8578,8 +8578,8 @@
               "keyword_target": "目标",
               "keyword_editing": "编辑"
             },
-            "autosuggest_title": "Command Autosuggest",
-            "autosuggest_description": "Show an inline ghost-text suggestion from prior commands while typing at a shell prompt."
+            "autosuggest_title": "命令自动建议",
+            "autosuggest_description": "在 shell 提示符输入时，显示基于之前命令的内联幽灵文本建议。"
           },
           "windows": {
             "search": {
