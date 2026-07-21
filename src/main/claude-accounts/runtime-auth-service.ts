@@ -417,6 +417,23 @@ export class ClaudeRuntimeAuthService {
         credentialsJson = refreshed
       }
     }
+    // Why: a live Claude PTY can still own and later refresh a wiped runtime
+    // blob, so only the non-live path fails closed on an expired snapshot.
+    if (!liveClaudePtys && isOauthTokenExpiring(credentialsJson)) {
+      console.warn(
+        '[claude-runtime-auth] Skipping runtime materialization for expired managed credentials after refresh failure'
+      )
+      if (previousAccount && previousAccount.id !== activeAccount.id) {
+        await this.restoreSystemDefaultSnapshotForMissingManagedCredentials(
+          previousAccount,
+          previousManagedOauthAccount
+        )
+      } else if (!previousAccount && this.hasMaterializedRuntimeAuth) {
+        await this.restoreSystemDefaultSnapshot(this.lastWrittenCredentialsJson, undefined)
+      }
+      this.lastSyncedAccountId = activeAccount.id
+      return
+    }
 
     const paths = this.pathResolver.getRuntimePaths()
     this.writeRuntimeCredentials(credentialsJson)
