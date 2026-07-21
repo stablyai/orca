@@ -10,7 +10,11 @@ const RECOVERABLE_CODES = new Set([
 
 const RECOVERABLE_MESSAGE_FRAGMENTS = [
   'could not connect to the remote orca runtime',
+  'remote orca runtime closed the connection',
+  'remote orca runtime connection closed',
+  'remote orca runtime is not connected',
   'remote runtime connection closed',
+  'remote runtime subscription closed before it started',
   'remote terminal stream is not connected',
   'timed out waiting for the remote orca runtime'
 ]

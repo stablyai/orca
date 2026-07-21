@@ -265,6 +265,45 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  it('recovers when the runtime closes before a restored subscription becomes ready', async () => {
+    vi.useFakeTimers()
+    try {
+      let attempt = 0
+      runtimeSubscribe.mockImplementation(
+        async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+          attempt += 1
+          subscriptionCallbacks = callbacks
+          if (attempt === 1) {
+            queueMicrotask(() => callbacks.onClose?.())
+          } else {
+            queueMicrotask(emitMultiplexReady)
+          }
+          return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+        }
+      )
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+
+      transport.attach({
+        existingPtyId: 'remote:terminal-1',
+        callbacks: { onError }
+      })
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(1))
+      await vi.advanceTimersByTimeAsync(250)
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+      const { streamId } = latestSubscribePayload()
+      emitSnapshot(streamId, 'restored')
+
+      expect(onError).not.toHaveBeenCalled()
+      expect(transport.isConnected()).toBe(true)
+      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('surfaces a fatal error during subscription setup exactly once', async () => {
     const unsubscribe = vi.fn()
     runtimeSubscribe.mockImplementation(

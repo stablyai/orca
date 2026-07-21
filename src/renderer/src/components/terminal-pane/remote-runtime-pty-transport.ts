@@ -861,7 +861,8 @@ export function createRemoteRuntimePtyTransport(
           recovery.isCurrent(recoveryEpoch) &&
           !stopWaitingForPublishedHandle &&
           pendingHandle &&
-          pendingHandle === handle
+          pendingHandle === handle &&
+          !getCurrentMultiplexedStream(pendingHandle)
         ) {
           scheduleResubscribeAfterTransportClose(pendingRequiresReplacement)
         }

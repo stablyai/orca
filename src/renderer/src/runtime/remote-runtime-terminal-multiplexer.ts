@@ -793,6 +793,8 @@ class RemoteRuntimeTerminalMultiplexer {
     this.subscription = null
     closingSubscription?.unsubscribe()
     this.streams.clear()
+    // Why: close callbacks may resubscribe synchronously; release first so every replacement shares the new environment multiplexer.
+    this.releaseIfCurrent(this.environmentId, this)
     for (const stream of streams) {
       clearSnapshot(stream)
       rejectPendingSnapshotRequest(stream, message ?? 'Remote runtime connection closed.')
@@ -802,10 +804,6 @@ class RemoteRuntimeTerminalMultiplexer {
         stream.callbacks.onError?.(message)
       }
     }
-    // Why: a closed transport has no live streams or subscription; keeping it
-    // in the module map only retains callbacks for an environment that must
-    // reconnect through a fresh subscription anyway.
-    this.releaseIfCurrent(this.environmentId, this)
   }
 
   private closeIfIdle(): void {

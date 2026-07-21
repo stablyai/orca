@@ -26,10 +26,14 @@ describe('remote runtime client error classification', () => {
     ).toBe(false)
   })
 
-  it('normalizes unstructured connection failures from older clients', () => {
-    const error = toRemoteRuntimeClientErrorLike(
-      new Error('Could not connect to the remote Orca runtime.')
-    )
+  it.each([
+    'Could not connect to the remote Orca runtime.',
+    'Remote Orca runtime closed the connection.',
+    'Remote Orca runtime connection closed.',
+    'Remote Orca runtime is not connected.',
+    'Remote runtime subscription closed before it started.'
+  ])('normalizes unstructured connection failure: %s', (message) => {
+    const error = toRemoteRuntimeClientErrorLike(new Error(message))
     expect(isRecoverableRemoteRuntimeConnectionError(error)).toBe(true)
   })
 })

@@ -2478,6 +2478,7 @@
             "replacement does not emit pane exit or disconnect callbacks and explicit terminal exit still retires the mirror",
             "replacement polling and each in-flight request share a 15-second deadline, then accepted snapshots own recovery without input re-arming polling",
             "cold restored-terminal subscription failure retries and resumes snapshot, output, and input without a fatal error",
+            "a canonical close before subscription readiness opens exactly one replacement stream without surfacing a fatal error",
             "recovery exposes connecting, recovering, backoff, connected, and fatal-offline phases with fenced epochs",
             "ten partition cycles retain one PTY identity, reject detached input, and unsubscribe each epoch exactly once",
             "cached terminal pixels remain disconnected until authoritative replay completes",
@@ -2575,7 +2576,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
           "result": "passed",
           "durationSeconds": 5,
-          "summary": "Eleven fault-injection and recovery-UI files and 117 tests passed in three consecutive cycles, covering suspended heartbeat clocks, stale socket and PTY recovery generations, cold and repeated PTY reattachment, authoritative health, bounded automatic recovery, same-PTY manual reconnect, pane-state cleanup, fatal error deduplication, stable create identity, cross-process PTY adoption, and fail-closed legacy inventory."
+          "summary": "Eleven fault-injection and recovery-UI files and 122 tests passed in three consecutive cycles, covering suspended heartbeat clocks, stale socket and PTY recovery generations, canonical pre-ready close recovery with one replacement subscription, cold and repeated PTY reattachment, authoritative health, bounded automatic recovery, same-PTY manual reconnect, pane-state cleanup, fatal error deduplication, stable create identity, cross-process PTY adoption, and fail-closed legacy inventory."
         }
       ],
       "runtimeBudget": {
