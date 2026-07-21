@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
@@ -42,6 +42,7 @@ type AiVaultListRow =
 export function AiVaultSessionVirtualList({
   groups,
   collapsedGroups,
+  expandedSessionIds,
   loading,
   sessionsCount,
   filteredSessionsCount,
@@ -54,6 +55,7 @@ export function AiVaultSessionVirtualList({
   getSessionResumeState,
   getSessionResumeActions,
   onToggleGroup,
+  onToggleSessionDetails,
   onJumpToOriginalPane,
   onJumpToWorktree,
   onResume,
@@ -66,6 +68,7 @@ export function AiVaultSessionVirtualList({
 }: {
   groups: readonly AiVaultSessionGroup[]
   collapsedGroups: ReadonlySet<string>
+  expandedSessionIds: ReadonlySet<string>
   loading: boolean
   sessionsCount: number
   filteredSessionsCount: number
@@ -78,6 +81,7 @@ export function AiVaultSessionVirtualList({
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
   onToggleGroup: (key: string) => void
+  onToggleSessionDetails: (sessionId: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
   onJumpToWorktree: (worktreeId: string) => void
   onResume: (session: AiVaultSession, worktreeId: string) => void
@@ -91,7 +95,6 @@ export function AiVaultSessionVirtualList({
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
-  const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(() => new Set())
 
   const vaultRows = useMemo(() => {
     const rows: AiVaultListRow[] = []
@@ -139,18 +142,6 @@ export function AiVaultSessionVirtualList({
       return row.type === 'group' ? `group:${row.group.key}` : `session:${row.session.id}`
     }
   })
-
-  const toggleSessionDetails = useCallback((sessionId: string) => {
-    setExpandedSessionIds((current) => {
-      const next = new Set(current)
-      if (next.has(sessionId)) {
-        next.delete(sessionId)
-      } else {
-        next.add(sessionId)
-      }
-      return next
-    })
-  }, [])
 
   const virtualItems = virtualizer.getVirtualItems()
   activeStickyHeaderIndexRef.current = getActiveStickyHeaderIndexForScroll({
@@ -205,7 +196,7 @@ export function AiVaultSessionVirtualList({
               getSessionResumeState={getSessionResumeState}
               getSessionResumeActions={getSessionResumeActions}
               onToggleGroup={onToggleGroup}
-              onToggleSessionDetails={toggleSessionDetails}
+              onToggleSessionDetails={onToggleSessionDetails}
               onJumpToOriginalPane={onJumpToOriginalPane}
               onJumpToWorktree={onJumpToWorktree}
               onResume={onResume}
