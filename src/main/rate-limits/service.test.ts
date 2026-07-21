@@ -922,12 +922,13 @@ describe('RateLimitService', () => {
 
       // The stale cycle resumed after the switch; while its Claude fetch is still in flight,
       // a live post from the outgoing session must not land on the incoming account's bar.
+      const beforeOutgoingPost = service.getState().claude?.session?.usedPercent
       service.ingestLiveClaudeRateLimits({
         configDir: '/outgoing/.claude',
         fiveHour: { used_percentage: 99 },
         sevenDay: null
       })
-      expect(service.getState().claude?.session?.usedPercent).not.toBe(99)
+      expect(service.getState().claude?.session?.usedPercent).toBe(beforeOutgoingPost)
 
       staleClaudeFetch.resolve(okProvider('claude', 18))
       await Promise.all([firstRefresh, switchPromise])
