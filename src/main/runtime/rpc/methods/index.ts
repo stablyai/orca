@@ -34,6 +34,7 @@ import { SKILL_METHODS } from './skills'
 import { CLIPBOARD_METHODS } from './clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'
 import { EMULATOR_METHODS } from './emulator'
+import { PET_PRESENCE_METHODS } from './pet-presence'
 import { PAIRING_METHODS } from './pairing'
 
 // Why: a flat manifest keeps registration order explicit and provides one
@@ -75,5 +76,6 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...CLIENT_EVENT_METHODS,
   ...CLIENT_UI_METHODS,
   ...EMULATOR_METHODS,
-  ...PAIRING_METHODS
+  ...PAIRING_METHODS,
+  ...PET_PRESENCE_METHODS
 ]
