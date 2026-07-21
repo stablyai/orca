@@ -942,6 +942,77 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
   })
 
+  it('replaces stale client title precedence with the host title after reconnect', () => {
+    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+    const existingTab: TerminalTab = {
+      id: mirroredId,
+      ptyId: 'remote:web-env-1@@terminal-1',
+      worktreeId: WT,
+      title: 'Pi ready',
+      defaultTitle: 'Pi ready',
+      quickCommandLabel: 'Stale quick label',
+      generatedTitle: 'Stale generated label',
+      customTitle: 'Pi ready',
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const existingUnifiedTab: Tab = {
+      id: mirroredId,
+      entityId: mirroredId,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'terminal',
+      label: 'Pi ready',
+      quickCommandLabel: 'Stale quick label',
+      generatedLabel: 'Stale generated label',
+      customLabel: 'Pi ready',
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false,
+      isPinned: false
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        unifiedTabsByWorktree: { [WT]: [existingUnifiedTab] },
+        ptyIdsByTabId: { [mirroredId]: ['remote:web-env-1@@terminal-1'] }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Just Noticed a few more bugs lol Orca',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: mirroredId,
+      title: 'Just Noticed a few more bugs lol Orca',
+      defaultTitle: 'Just Noticed a few more bugs lol Orca',
+      customTitle: null
+    })
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.quickCommandLabel).toBeUndefined()
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.generatedTitle).toBeUndefined()
+    expect(patch.unifiedTabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: mirroredId,
+      label: 'Just Noticed a few more bugs lol Orca',
+      customLabel: null
+    })
+    expect(patch.unifiedTabsByWorktree?.[WT]?.[0]?.quickCommandLabel).toBeUndefined()
+    expect(patch.unifiedTabsByWorktree?.[WT]?.[0]?.generatedLabel).toBeUndefined()
+  })
+
   it('drops mirrored launch intent when a later host snapshot omits it', () => {
     const existingTab: TerminalTab = {
       id: toWebTerminalSurfaceTabId('host-tab-1'),

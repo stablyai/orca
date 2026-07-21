@@ -569,8 +569,7 @@ function buildMirroredTerminalTabs(
         .find((tab): tab is TerminalTab => Boolean(tab))
     const quickCommandLabel =
       activeSurface.quickCommandLabel?.trim() ||
-      surfaces.find((surface) => surface.quickCommandLabel?.trim())?.quickCommandLabel?.trim() ||
-      existing?.quickCommandLabel?.trim()
+      surfaces.find((surface) => surface.quickCommandLabel?.trim())?.quickCommandLabel?.trim()
     // Why: startupCwd is host-owned launch metadata; once the host omits it, don't resurrect stale subdirectory intent.
     const startupCwd =
       activeSurface.startupCwd || surfaces.find((surface) => surface.startupCwd)?.startupCwd
@@ -589,10 +588,11 @@ function buildMirroredTerminalTabs(
         ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? null,
         worktreeId: snapshot.worktree,
         title,
-        defaultTitle: existing?.defaultTitle ?? title,
+        // Why: mirrored title metadata belongs to the host; stale client precedence must not mask a newer host label after reconnect.
+        defaultTitle: title,
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
-        customTitle: existing?.customTitle ?? null,
+        customTitle: null,
         color,
         isPinned,
         ...(viewMode ? { viewMode } : {}),

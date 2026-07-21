@@ -34,6 +34,7 @@ import {
   parsePaneKey
 } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
@@ -1483,6 +1484,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   updateTabTitle: (tabId, title) => {
+    // Why: the serving runtime owns mirrored tab labels; client-side OSC and hook updates remain pane-local until the next host snapshot.
+    if (isWebTerminalSurfaceTabId(tabId)) {
+      return
+    }
     set((s) => {
       // Why: mutate only the owning worktree's tab array — rebuilding all of them would break shallow-equality selectors and spuriously re-render background worktrees on every OSC title frame.
       const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
@@ -1563,7 +1568,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
     const tabId = getTabIdFromPaneKey(paneKey)
-    if (!tabId || prompt.length === 0) {
+    if (!tabId || prompt.length === 0 || isWebTerminalSurfaceTabId(tabId)) {
       return
     }
     const ownerWorktreeId = getTerminalTabOwnerWorktreeId(get().tabsByWorktree, tabId)

@@ -16,9 +16,48 @@ vi.mock('@/components/terminal-pane/shutdown-buffer-captures', () => ({
 // @ts-expect-error -- minimal preload API stub for the slice's IPC writes
 globalThis.window = { api: {} }
 
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
 describe('runtimePaneTitle → sortEpoch', () => {
+  it('keeps mirrored tab titles host-owned while accepting live pane titles', () => {
+    const tabId = toWebTerminalSurfaceTabId('host-tab-1')
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: 'wt-bg', repoId: 'repo1', path: '/path/wt-bg' })]
+      },
+      tabsByWorktree: {
+        'wt-bg': [
+          makeTab({
+            id: tabId,
+            worktreeId: 'wt-bg',
+            title: 'Just Noticed a few more bugs lol Orca'
+          })
+        ]
+      }
+    })
+
+    store.setState((state) => ({
+      settings: { ...state.settings!, tabAutoGenerateTitle: true }
+    }))
+    store.getState().setRuntimePaneTitle(tabId, 1, 'Pi ready')
+    store.getState().updateTabTitle(tabId, 'Pi ready')
+    store
+      .getState()
+      .setGeneratedTabTitleFromAgentPrompt(
+        makePaneKey(tabId, '11111111-1111-4111-8111-111111111111'),
+        'Rewrite the remote title'
+      )
+
+    expect(store.getState().runtimePaneTitlesByTabId[tabId]?.[1]).toBe('Pi ready')
+    expect(store.getState().tabsByWorktree['wt-bg']?.[0]?.title).toBe(
+      'Just Noticed a few more bugs lol Orca'
+    )
+    expect(store.getState().tabsByWorktree['wt-bg']?.[0]?.generatedTitle).toBeUndefined()
+  })
+
   it('bumps sortEpoch when the new title classifies differently than the previous title', () => {
     // Why: smart sort's title-heuristic fallback (Edge case 9) reads
     // runtimePaneTitlesByTabId. A hookless agent transitioning from
