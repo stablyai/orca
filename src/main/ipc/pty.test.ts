@@ -217,6 +217,9 @@ import {
   isHiddenRendererPty
 } from './pty-hidden-delivery-gate'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { detachedWindowRegistry } from '../window/detached-window-registry'
+import { paneOwnershipRegistry } from '../window/pane-ownership-registry'
+import { trustedRendererRegistry } from '../window/trusted-renderer-registry'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import * as livePtyGate from '../claude-accounts/live-pty-gate'
 import {
@@ -264,6 +267,8 @@ describe('registerPtyHandlers', () => {
     isVisible: () => true,
     isMinimized: () => false,
     webContents: {
+      id: 17,
+      isDestroyed: vi.fn(() => false),
       on: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn(),
@@ -274,6 +279,19 @@ describe('registerPtyHandlers', () => {
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
   const foreignWindowIpcEvent = {
     sender: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
+  }
+  function createDetachedWindow(id: number) {
+    return {
+      isDestroyed: () => false,
+      on: vi.fn(),
+      close: vi.fn(),
+      focus: vi.fn(),
+      webContents: {
+        id,
+        isDestroyed: vi.fn(() => false),
+        send: vi.fn()
+      }
+    }
   }
 
   const savedOpenCodeConfigDir = process.env.OPENCODE_CONFIG_DIR
@@ -350,6 +368,8 @@ describe('registerPtyHandlers', () => {
     _resetHiddenRendererPtyDeliveryGateForTest()
 
     // Why: mirror real Electron — ipcMain.handle throws on a duplicate channel, catching re-registration that forgot removeHandler.
+    trustedRendererRegistry.clearWebContents(mainWindow.webContents.id)
+    paneOwnershipRegistry.clearPaneOwnerByWebContentsId(mainWindow.webContents.id)
     handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
       if (handlers.has(channel)) {
         throw new Error(`Attempted to register a second handler for '${channel}'`)
@@ -4289,6 +4309,217 @@ describe('registerPtyHandlers', () => {
       }
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  it('fans PTY data and exit to the main window and owning detached window', async () => {
+    vi.useFakeTimers()
+    const detachedWindow = createDetachedWindow(88)
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-detached'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { awaitLocalPtyStartup: () => Promise.resolve() }
+      )
+      const pendingSpawn = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId: 'detached-fanout-session'
+      }) as Promise<{ id: string }>
+      await Promise.resolve()
+      const daemon = installObservableDaemonTestProvider()
+      rebindLocalProviderListeners()
+      const result = await pendingSpawn
+
+      detachedWindowRegistry.registerDetachedTerminalWindow(
+        { worktreeId: 'wt-1', tabId: 'tab-1' },
+        detachedWindow as never,
+        { ptyIds: [result.id] } as never
+      )
+      paneOwnershipRegistry.registerPaneOwner({
+        webContentsId: detachedWindow.webContents.id,
+        ptyId: result.id,
+        worktreeId: 'wt-1',
+        tabId: 'tab-1'
+      })
+
+      daemon.emitData(result.id, 'detached output')
+      vi.advanceTimersByTime(8)
+      daemon.emitExit(result.id, 0)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: result.id,
+        data: 'detached output'
+      })
+      expect(detachedWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: result.id,
+        data: 'detached output'
+      })
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+        id: result.id,
+        code: 0
+      })
+      expect(detachedWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+        id: result.id,
+        code: 0
+      })
+    } finally {
+      detachedWindowRegistry.unregisterWindow(detachedWindow as never)
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps main-window data acknowledgements valid after a detached owner is registered', async () => {
+    vi.useFakeTimers()
+    const detachedWindow = createDetachedWindow(89)
+    const acknowledgeDataEvent = vi.fn()
+    let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      acknowledgeDataEvent,
+      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+        dataHandler = handler
+        return () => {}
+      }),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+
+    try {
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      const ackData = getPtyAckDataListener()
+      detachedWindowRegistry.registerDetachedTerminalWindow(
+        { worktreeId: 'wt-ack', tabId: 'tab-ack' },
+        detachedWindow as never,
+        { ptyIds: ['pty-ack'] } as never
+      )
+      paneOwnershipRegistry.registerPaneOwner({
+        webContentsId: detachedWindow.webContents.id,
+        ptyId: 'pty-ack',
+        worktreeId: 'wt-ack',
+        tabId: 'tab-ack'
+      })
+
+      const deliverPtyData = dataHandler as ((payload: { id: string; data: string }) => void) | null
+      if (!deliverPtyData) {
+        throw new Error('expected PTY data handler to be registered')
+      }
+      deliverPtyData({ id: 'pty-ack', data: 'ack me' })
+      vi.advanceTimersByTime(8)
+      ackData({ sender: detachedWindow.webContents }, { id: 'pty-ack', charCount: 6 })
+      ackData({ sender: mainWindow.webContents }, { id: 'pty-ack', charCount: 6 })
+
+      expect(acknowledgeDataEvent).toHaveBeenCalledTimes(1)
+      expect(acknowledgeDataEvent).toHaveBeenCalledWith('pty-ack', 6)
+    } finally {
+      detachedWindowRegistry.unregisterWindow(detachedWindow as never)
+      vi.useRealTimers()
+    }
+  })
+
+  it('limits detached PTY session listing and per-PTY controls to owned panes', async () => {
+    const detachedWindow = createDetachedWindow(91)
+    const ownedShutdown = vi.fn(async () => undefined)
+    const sendSignal = vi.fn(async () => undefined)
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: ownedShutdown,
+      sendSignal,
+      getCwd: vi.fn(async (id: string) => `/cwd/${id}`),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(async (id: string) => id === 'pty-owned'),
+      getForegroundProcess: vi.fn(async (id: string) => `fg:${id}`),
+      serialize: vi.fn(async (id: string) => ({
+        data: `buffer:${id}`,
+        cols: 80,
+        rows: 24
+      })),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => [
+        { id: 'pty-owned', cwd: '/owned', title: 'owned' },
+        { id: 'pty-foreign', cwd: '/foreign', title: 'foreign' }
+      ]),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      trustedRendererRegistry.grant(detachedWindow.webContents.id, 'pty')
+      paneOwnershipRegistry.registerPaneOwner({
+        webContentsId: detachedWindow.webContents.id,
+        ptyId: 'pty-owned',
+        worktreeId: 'wt-owned',
+        tabId: 'tab-owned'
+      })
+
+      await expect(
+        handlers.get('pty:listSessions')!({ sender: detachedWindow.webContents }, undefined)
+      ).resolves.toEqual([{ id: 'pty-owned', cwd: '/owned', title: 'owned' }])
+      await expect(
+        handlers.get('pty:getMainBufferSnapshot')!(
+          { sender: detachedWindow.webContents },
+          { id: 'pty-foreign' }
+        )
+      ).resolves.toBeNull()
+      await expect(
+        handlers.get('pty:hasChildProcesses')!(
+          { sender: detachedWindow.webContents },
+          { id: 'pty-foreign' }
+        )
+      ).resolves.toBe(false)
+      await expect(
+        handlers.get('pty:getForegroundProcess')!(
+          { sender: detachedWindow.webContents },
+          { id: 'pty-foreign' }
+        )
+      ).resolves.toBeNull()
+      await expect(
+        handlers.get('pty:getCwd')!({ sender: detachedWindow.webContents }, { id: 'pty-foreign' })
+      ).resolves.toBe('')
+      await handlers.get('pty:kill')!({ sender: detachedWindow.webContents }, { id: 'pty-foreign' })
+      const signalListener = onMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'pty:signal'
+      )?.[1] as ((event: unknown, args: { id: string; signal: string }) => void) | undefined
+      signalListener?.(
+        { sender: detachedWindow.webContents },
+        { id: 'pty-foreign', signal: 'SIGTERM' }
+      )
+
+      expect(ownedShutdown).not.toHaveBeenCalled()
+      expect(sendSignal).not.toHaveBeenCalled()
+    } finally {
+      trustedRendererRegistry.clearWebContents(detachedWindow.webContents.id)
+      paneOwnershipRegistry.clearPaneOwnerByWebContentsId(detachedWindow.webContents.id)
     }
   })
 
@@ -12058,6 +12289,60 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('routes clear-buffer requests to the owning detached window', async () => {
+    const detachedWindow = createDetachedWindow(90)
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+    const clearBuffer = vi.fn()
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      clearBuffer,
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+
+    try {
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      detachedWindowRegistry.registerDetachedTerminalWindow(
+        { worktreeId: 'wt-clear', tabId: 'tab-clear' },
+        detachedWindow as never,
+        { ptyIds: ['pty-clear'] } as never
+      )
+      paneOwnershipRegistry.registerPaneOwner({
+        webContentsId: detachedWindow.webContents.id,
+        ptyId: 'pty-clear',
+        worktreeId: 'wt-clear',
+        tabId: 'tab-clear'
+      })
+
+      const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+        clearBuffer(ptyId: string): Promise<void>
+      }
+      await controller.clearBuffer('pty-clear')
+
+      expect(detachedWindow.webContents.send).toHaveBeenCalledWith('pty:clearBuffer:request', {
+        ptyId: 'pty-clear'
+      })
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:clearBuffer:request', {
+        ptyId: 'pty-clear'
+      })
+      expect(clearBuffer).toHaveBeenCalledWith('pty-clear')
+    } finally {
+      detachedWindowRegistry.unregisterWindow(detachedWindow as never)
+    }
+  })
+
   describe('serializeBuffer dispatch', () => {
     type SerializeListener = (
       _event: unknown,
@@ -12096,6 +12381,14 @@ describe('registerPtyHandlers', () => {
 
     function getSentRequestIds(): string[] {
       return mainWindow.webContents.send.mock.calls
+        .filter((call: unknown[]) => call[0] === 'pty:serializeBuffer:request')
+        .map((call: unknown[]) => (call[1] as { requestId: string }).requestId)
+    }
+
+    function getDetachedSentRequestIds(
+      detachedWindow: ReturnType<typeof createDetachedWindow>
+    ): string[] {
+      return detachedWindow.webContents.send.mock.calls
         .filter((call: unknown[]) => call[0] === 'pty:serializeBuffer:request')
         .map((call: unknown[]) => (call[1] as { requestId: string }).requestId)
     }
@@ -12152,6 +12445,59 @@ describe('registerPtyHandlers', () => {
         rows: 30,
         lastTitle: 'A-title'
       })
+    })
+
+    it('routes serialize requests to the owning detached window and accepts only that response', async () => {
+      const detachedWindow = createDetachedWindow(91)
+      try {
+        const { listener, controller } = setup()
+        detachedWindowRegistry.registerDetachedTerminalWindow(
+          { worktreeId: 'wt-serialize', tabId: 'tab-serialize' },
+          detachedWindow as never,
+          { ptyIds: ['pty-owned'] } as never
+        )
+        paneOwnershipRegistry.registerPaneOwner({
+          webContentsId: detachedWindow.webContents.id,
+          ptyId: 'pty-owned',
+          worktreeId: 'wt-serialize',
+          tabId: 'tab-serialize'
+        })
+
+        const pending = controller.serializeBuffer('pty-owned')
+        const requestId = getDetachedSentRequestIds(detachedWindow)[0]
+
+        expect(requestId).toBeTruthy()
+        expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+          'pty:serializeBuffer:request',
+          expect.objectContaining({ ptyId: 'pty-owned' })
+        )
+
+        listener(
+          { sender: mainWindow.webContents },
+          {
+            requestId,
+            snapshot: { data: 'wrong', cols: 1, rows: 1 }
+          }
+        )
+
+        let resolved = false
+        void pending.then(() => {
+          resolved = true
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(resolved).toBe(false)
+
+        listener(
+          { sender: detachedWindow.webContents },
+          {
+            requestId,
+            snapshot: { data: 'owned', cols: 80, rows: 24 }
+          }
+        )
+        await expect(pending).resolves.toEqual({ data: 'owned', cols: 80, rows: 24 })
+      } finally {
+        detachedWindowRegistry.unregisterWindow(detachedWindow as never)
+      }
     })
 
     it('ignores responses with unknown requestId without affecting pending requests', async () => {

@@ -2738,6 +2738,10 @@
             "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
             "removeWorkspaceButton": "Remove workspace"
           }
+        },
+        "DetachedTerminalShell": {
+          "loading": "Loading detached terminal",
+          "unavailable": "Detached terminal unavailable"
         }
       },
       "tab": {
@@ -2841,7 +2845,8 @@
             "60f958ec75": "Pin Tab",
             "417722e9c2": "Unpin Tab",
             "splitTerminalRight": "Split terminal right",
-            "splitTerminalDown": "Split terminal down"
+            "splitTerminalDown": "Split terminal down",
+            "openInNewWindow": "Open in New Window"
           },
           "TabBar": {
             "b1a132357f": "New tab",

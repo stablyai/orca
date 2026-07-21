@@ -63,7 +63,9 @@ const {
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
-  registerEmulatorVideoStreamHandlersMock
+  registerEmulatorVideoStreamHandlersMock,
+  registerDetachedTerminalHandlersMock,
+  grantManyMock
 } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/test/user-data'),
   listEnvironmentsMock: vi.fn(() => []),
@@ -127,7 +129,9 @@ const {
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
-  registerEmulatorVideoStreamHandlersMock: vi.fn()
+  registerEmulatorVideoStreamHandlersMock: vi.fn(),
+  registerDetachedTerminalHandlersMock: vi.fn(),
+  grantManyMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -343,6 +347,11 @@ vi.mock('./browser', () => ({
   setTrustedBrowserRendererWebContentsId: setTrustedBrowserRendererWebContentsIdMock,
   setAgentBrowserBridgeRef: setAgentBrowserBridgeRefMock
 }))
+vi.mock('../window/trusted-renderer-registry', () => ({
+  trustedRendererRegistry: {
+    grantMany: grantManyMock
+  }
+}))
 
 vi.mock('./app', () => ({
   registerAppHandlers: registerAppHandlersMock
@@ -370,6 +379,10 @@ vi.mock('./hosted-review', () => ({
 
 vi.mock('./native-chat', () => ({
   registerNativeChatHandlers: registerNativeChatHandlersMock
+}))
+
+vi.mock('../window/detached-window-coordinator', () => ({
+  registerDetachedTerminalHandlers: registerDetachedTerminalHandlersMock
 }))
 
 import { registerCoreHandlers } from './register-core-handlers'
@@ -422,6 +435,7 @@ describe('registerCoreHandlers', () => {
     registerBrowserHandlersMock.mockReset()
     setAgentBrowserBridgeRefMock.mockReset()
     setTrustedBrowserRendererWebContentsIdMock.mockReset()
+    grantManyMock.mockReset()
     registerFilesystemWatcherHandlersMock.mockReset()
     registerAppHandlersMock.mockReset()
     registerLinearHandlersMock.mockReset()
@@ -439,6 +453,7 @@ describe('registerCoreHandlers', () => {
     registerNativeChatHandlersMock.mockReset()
     registerEmulatorFrameStreamHandlersMock.mockReset()
     registerEmulatorVideoStreamHandlersMock.mockReset()
+    registerDetachedTerminalHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', async () => {
@@ -539,9 +554,8 @@ describe('registerCoreHandlers', () => {
     expect(registerShellHandlersMock).toHaveBeenCalled()
     expect(registerClipboardHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
-    expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)
-    expect(setTrustedClipboardRendererWebContentsIdMock).toHaveBeenCalledWith(null)
-    expect(setTrustedUIRendererWebContentsIdMock).toHaveBeenCalledWith(null)
+    expect(registerDetachedTerminalHandlersMock).toHaveBeenCalled()
+    expect(grantManyMock).not.toHaveBeenCalled()
     expect(registerBrowserHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
     expect(registerSpeechHandlersMock).toHaveBeenCalledWith(store)
@@ -628,9 +642,7 @@ describe('registerCoreHandlers', () => {
     )
 
     // Web contents ID should always be updated
-    expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(42)
-    expect(setTrustedClipboardRendererWebContentsIdMock).toHaveBeenCalledWith(42)
-    expect(setTrustedUIRendererWebContentsIdMock).toHaveBeenCalledWith(42)
+    expect(grantManyMock).toHaveBeenCalledWith(42, ['ui', 'clipboard', 'pty', 'browser'])
     // IPC handlers should NOT be registered again
     expect(registerCliHandlersMock).not.toHaveBeenCalled()
     expect(registerPreflightHandlersMock).not.toHaveBeenCalled()

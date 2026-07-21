@@ -132,6 +132,7 @@ import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from './clipboard-ipc-handlers'
+import { trustedRendererRegistry } from './trusted-renderer-registry'
 import { cleanupExpiredRemoteClipboardFiles } from './clipboard-remote-file-copy'
 
 function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
@@ -213,7 +214,9 @@ describe('registerClipboardHandlers', () => {
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     getSshFilesystemProviderMock.mockReset()
     callRuntimeEnvironmentMock.mockReset()
-    setTrustedClipboardRendererWebContentsId(null)
+    trustedRendererRegistry.clearWebContents(17)
+    trustedRendererRegistry.clearWebContents(42)
+    setTrustedClipboardRendererWebContentsId(17)
   })
 
   afterEach(() => {
@@ -421,7 +424,7 @@ describe('registerClipboardHandlers', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
-  it('rejects clipboard IPC from destroyed, browser, and mismatched dev-origin senders', async () => {
+  it('rejects clipboard IPC from destroyed, browser, and ungranted dev-origin senders', async () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
@@ -436,11 +439,13 @@ describe('registerClipboardHandlers', () => {
 
     await expect(
       handlers.get('clipboard:readText')?.(
-        makeClipboardEvent({ getURL: () => 'http://127.0.0.1:5173/workspace' })
+        makeClipboardEvent({ id: 42, getURL: () => 'http://localhost:5173/workspace' })
       )
     ).rejects.toThrow('Unauthorized clipboard IPC sender')
     await expect(
-      handlers.get('clipboard:readText')?.(makeClipboardEvent({ getURL: () => 'not a url' }))
+      handlers.get('clipboard:readText')?.(
+        makeClipboardEvent({ id: 42, getURL: () => 'not a url' })
+      )
     ).rejects.toThrow('Unauthorized clipboard IPC sender')
 
     expect(clipboardReadTextMock).not.toHaveBeenCalled()

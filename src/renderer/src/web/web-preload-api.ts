@@ -744,6 +744,13 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     shell: createShellApi(),
     skills: createSkillsApi(),
     pty: createPtyApi(),
+    detachedTerminal: {
+      openWindow: () => Promise.resolve({ ok: false, error: 'detached_terminal_tab_unavailable' }),
+      getSnapshot: () =>
+        Promise.reject(new Error('Detached terminal windows are unavailable in the web client.')),
+      closeWindow: () => Promise.resolve({ ok: true }),
+      rendererPtyReady: () => Promise.resolve({ ok: true })
+    },
     ssh: createSshApi(),
     wsl: {
       isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),

@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "filePath": "src/renderer/src/web/web-preload-api.ts",
+    "kind": "object-property:error",
+    "text": "detached_terminal_tab_unavailable",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Machine-readable error code in the detachedTerminal IPC result union, not user-facing copy."
+  }
+]

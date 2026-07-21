@@ -48,6 +48,8 @@ import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { trustedRendererRegistry } from './trusted-renderer-registry'
+import { detachedWindowRegistry } from './detached-window-registry'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -252,8 +254,12 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
-  // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
+  // Why: privileged renderer IPC is capability-scoped so detached terminal
+  // windows can receive only the subsets they need; the UI renderer id mirror
+  // keeps single-target gh/dashboard event routing on the primary window.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
+  trustedRendererRegistry.grantMany(rendererWebContentsId, ['ui', 'clipboard', 'pty', 'browser'])
+  detachedWindowRegistry.registerMainWindow(mainWindow)
 
   if (process.platform === 'darwin') {
     // Why: throttle the main window while hidden (guests self-unthrottle); toggle only while visible or Chromium blanks the surface (electron#42378).
@@ -1007,6 +1013,8 @@ export function createMainWindow(
     // Why: powerMonitor is app-global; without this the resume relay leaks and fires against a destroyed webContents.
     powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)
+    trustedRendererRegistry.clearWebContents(rendererWebContentsId)
+    detachedWindowRegistry.unregisterWindow(mainWindow)
     // Why: on updater shutdown 'closed' can fire after webContents is destroyed, so don't touch mainWindow.webContents here.
     app.removeListener('before-quit', freezeBoundsOnQuit)
   })

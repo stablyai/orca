@@ -41,6 +41,7 @@ import {
   sendToTrustedUIRenderer,
   setTrustedUIRendererWebContentsId
 } from './ui'
+import { trustedRendererRegistry } from '../window/trusted-renderer-registry'
 
 function makeStore() {
   return {
@@ -83,7 +84,8 @@ describe('UI IPC', () => {
     handleMock.mockReset()
     onMock.mockReset()
     removeAllListenersMock.mockReset()
-    setTrustedUIRendererWebContentsId(null)
+    trustedRendererRegistry.clearWebContents(17)
+    trustedRendererRegistry.clearWebContents(42)
   })
 
   afterEach(() => {
@@ -165,6 +167,23 @@ describe('UI IPC', () => {
     expect(oldRendererSend).toHaveBeenCalledTimes(1)
     expect(newRendererSend).toHaveBeenCalledTimes(1)
     expect(newRendererSend).toHaveBeenCalledWith('gh:prRefreshEvent', { sequence: 2 })
+  })
+
+  it('broadcasts UI state changes to every live window, skipping destroyed ones', () => {
+    const liveSend = vi.fn()
+    const destroyedSend = vi.fn()
+    const store = makeStore()
+    getAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, webContents: { send: liveSend } },
+      { isDestroyed: () => true, webContents: { send: destroyedSend } }
+    ] as never)
+
+    registerUIHandlers(store as never)
+    const listener = store.onUIChanged.mock.calls[0]?.[0] as (ui: unknown) => void
+    listener({ activeTabId: 'tab-1' })
+
+    expect(liveSend).toHaveBeenCalledWith('ui:stateChanged', { activeTabId: 'tab-1' })
+    expect(destroyedSend).not.toHaveBeenCalled()
   })
 
   it('routes native paste fallback to the requesting webContents only', () => {
@@ -257,7 +276,7 @@ describe('UI IPC', () => {
     expect(paste).not.toHaveBeenCalled()
   })
 
-  it('allows native paste fallback only from the configured dev renderer origin', () => {
+  it('rejects dev renderer origin senders until a capability is granted', () => {
     const paste = vi.fn()
     const pasteAndMatchStyle = vi.fn()
     const event = makeUIEvent({ getURL: () => 'http://localhost:5173/workspace' })
@@ -269,17 +288,13 @@ describe('UI IPC', () => {
     const nativePasteHandler = getNativePasteHandler()
     nativePasteHandler?.(event)
 
-    expect(fromWebContentsMock).toHaveBeenCalledWith(event.sender)
-    expect(paste).toHaveBeenCalledTimes(1)
-
-    fromWebContentsMock.mockClear()
-    paste.mockClear()
-    nativePasteHandler?.(makeUIEvent({ getURL: () => 'http://127.0.0.1:5173/workspace' }))
-    nativePasteHandler?.(makeUIEvent({ getURL: () => 'file:///orca/index.html' }))
-    nativePasteHandler?.(makeUIEvent({ getURL: () => 'not a url' }))
-
     expect(fromWebContentsMock).not.toHaveBeenCalled()
     expect(paste).not.toHaveBeenCalled()
-    expect(pasteAndMatchStyle).not.toHaveBeenCalled()
+
+    setTrustedUIRendererWebContentsId(17)
+    nativePasteHandler?.(event)
+
+    expect(fromWebContentsMock).toHaveBeenCalledWith(event.sender)
+    expect(paste).toHaveBeenCalledTimes(1)
   })
 })

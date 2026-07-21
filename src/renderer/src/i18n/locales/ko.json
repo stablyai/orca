@@ -2715,6 +2715,10 @@
             "removedBody": "이 워크트리의 SSH 호스트가 제거되어 더 이상 연결할 수 없습니다. 워크트리를 제거하여 정리하세요 — 원격 파일은 그대로 남아 있습니다.",
             "removeWorkspaceButton": "워크트리 제거"
           }
+        },
+        "DetachedTerminalShell": {
+          "loading": "Loading detached terminal",
+          "unavailable": "Detached terminal unavailable"
         }
       },
       "tab": {
@@ -2818,7 +2822,8 @@
             "60f958ec75": "탭 고정",
             "417722e9c2": "탭 고정 해제",
             "splitTerminalRight": "터미널을 오른쪽으로 분할",
-            "splitTerminalDown": "터미널을 아래로 분할"
+            "splitTerminalDown": "터미널을 아래로 분할",
+            "openInNewWindow": "Open in New Window"
           },
           "TabBar": {
             "b1a132357f": "새 탭",

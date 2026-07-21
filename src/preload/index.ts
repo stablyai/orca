@@ -233,6 +233,10 @@ import type {
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
 } from '../shared/crash-reporting'
+import type {
+  DetachedTerminalOpenSnapshot,
+  DetachedTerminalSnapshot
+} from '../shared/detached-terminal-window'
 import type { PreloadApi } from './api-types'
 import {
   createUpdaterQuitAbortRelay,
@@ -789,6 +793,25 @@ const api = {
       return () => ipcRenderer.removeListener('workspacePorts:advertised-url-changed', listener)
     }
   } satisfies PreloadApi['workspacePorts'],
+
+  detachedTerminal: {
+    openWindow: (args: {
+      worktreeId: string
+      tabId: string
+      snapshot: DetachedTerminalOpenSnapshot
+    }): Promise<
+      { ok: true } | { ok: false; error: 'invalid_payload' | 'detached_terminal_tab_unavailable' }
+    > => ipcRenderer.invoke('detachedTerminal:openWindow', args),
+    getSnapshot: (args: { worktreeId: string; tabId: string }): Promise<DetachedTerminalSnapshot> =>
+      ipcRenderer.invoke('detachedTerminal:getSnapshot', args),
+    closeWindow: (args: { worktreeId: string; tabId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('detachedTerminal:closeWindow', args),
+    rendererPtyReady: (args: {
+      worktreeId: string
+      tabId: string
+      ptyId: string
+    }): Promise<{ ok: true }> => ipcRenderer.invoke('detachedTerminal:rendererPtyReady', args)
+  } satisfies PreloadApi['detachedTerminal'],
 
   pty: {
     spawn: (opts: {

@@ -481,6 +481,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     terminalColorQueryReplies,
     telemetry,
     onPtyExit,
+    onPtyDataSubscriptionReady,
     onTitleChange,
     onPtySpawn,
     onBell,
@@ -739,6 +740,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         if (exitedBeforeAttach) {
           return { id: spawnResult.id, exitedBeforeAttach: true } satisfies PtyConnectResult
         }
+        onPtyDataSubscriptionReady?.(spawnResult.id)
         if (!connected || ptyId !== spawnResult.id) {
           return undefined
         }
@@ -818,6 +820,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       // Why: skip onPtySpawn — it would reset lastActivityAt and destroy the recency sort order reconnectPersistedTerminals preserved.
       registerPtyDataHandler(id)
       registerPtyExitHandler(id)
+      onPtyDataSubscriptionReady?.(id)
       if (!connected || ptyId !== id) {
         return
       }

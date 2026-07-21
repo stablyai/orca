@@ -2,17 +2,26 @@ import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import { trustedRendererRegistry } from '../window/trusted-renderer-registry'
 
+// Why: gh/dashboard events target exactly one renderer (the primary window's),
+// so keep the id mirror for targeting while the capability registry answers
+// trust checks (detached windows hold their own grants).
 let trustedUIRendererWebContentsId: number | null = null
 
 export function setTrustedUIRendererWebContentsId(webContentsId: number | null): void {
   trustedUIRendererWebContentsId = webContentsId
+  if (webContentsId === null) {
+    return
+  }
+  trustedRendererRegistry.grant(webContentsId, 'ui')
 }
 
 export function clearTrustedUIRendererWebContentsId(webContentsId: number): void {
   if (trustedUIRendererWebContentsId === webContentsId) {
     trustedUIRendererWebContentsId = null
   }
+  trustedRendererRegistry.revoke(webContentsId, 'ui')
 }
 
 export function sendToTrustedUIRenderer(
@@ -91,20 +100,5 @@ export function isTrustedUIRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }
-  if (trustedUIRendererWebContentsId != null) {
-    return sender.id === trustedUIRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  // Why: packaged fallback must be tied to the created main window id, not any
-  // file:// document that can obtain this IPC channel.
-  return false
+  return trustedRendererRegistry.has(sender.id, 'ui')
 }

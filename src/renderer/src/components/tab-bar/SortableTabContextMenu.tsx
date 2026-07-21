@@ -17,6 +17,14 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import type { TerminalTab } from '../../../../shared/types'
+import type {
+  DetachedTerminalBufferSnapshot,
+  DetachedTerminalOpenSnapshot
+} from '../../../../shared/detached-terminal-window'
+import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
+import { serializeRegisteredPtyBuffer } from '@/components/terminal-pane/pty-buffer-serializer'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
+import { clampUtf8TextTail, measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 import { useAppStore } from '../../store'
 import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
@@ -85,6 +93,23 @@ const TAB_COLORS = [
   }
 ] as const
 
+function capBufferSnapshot(
+  snapshot: DetachedTerminalBufferSnapshot
+): DetachedTerminalBufferSnapshot {
+  if (
+    snapshot.data.length <= TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT &&
+    !measureUtf8ByteLength(snapshot.data, {
+      stopAfterBytes: TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+    }).exceededLimit
+  ) {
+    return snapshot
+  }
+  return {
+    ...snapshot,
+    data: clampUtf8TextTail(snapshot.data, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text
+  }
+}
+
 type SortableTabContextMenuProps = {
   tab: TerminalTab
   unifiedTabId: string
@@ -139,6 +164,64 @@ export function SortableTabContextMenu({
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
 
+  const state = useAppStore.getState()
+  const terminalLayout = state.terminalLayoutsByTabId[tab.id]
+  const layoutPtyIds = Object.values(terminalLayout?.ptyIdsByLeafId ?? {}).filter(Boolean)
+  const canOpenInNewWindow = Boolean(tab.ptyId) || layoutPtyIds.length > 0
+  const openTerminalInNewWindow = async (): Promise<void> => {
+    const latest = useAppStore.getState()
+    const latestLayout = latest.terminalLayoutsByTabId[tab.id]
+    if (!latestLayout) {
+      return
+    }
+    const worktree = Object.values(latest.worktreesByRepo)
+      .flat()
+      .find((candidate) => candidate.id === tab.worktreeId)
+    const unifiedTab = latest.unifiedTabsByWorktree[tab.worktreeId]?.find(
+      (candidate) => candidate.id === unifiedTabId && candidate.contentType === 'terminal'
+    )
+    const group = latest.groupsByWorktree[tab.worktreeId]?.find(
+      (candidate) => candidate.id === groupId
+    )
+    const groupLayout = latest.layoutByWorktree[tab.worktreeId]
+    if (!worktree || !unifiedTab || !group || !groupLayout || !latest.settings) {
+      return
+    }
+    const leafIds = collectLeafIdsInOrder(latestLayout.root)
+    const bufferSnapshotsByLeafId: Record<string, DetachedTerminalBufferSnapshot> = {}
+    for (const leafId of leafIds) {
+      const ptyId = latestLayout.ptyIdsByLeafId?.[leafId]
+      if (!ptyId) {
+        continue
+      }
+      const snapshot =
+        (await window.api.pty.getMainBufferSnapshot(ptyId, { scrollbackRows: 5000 })) ??
+        (await serializeRegisteredPtyBuffer(ptyId, { scrollbackRows: 5000 }))
+      if (snapshot) {
+        bufferSnapshotsByLeafId[leafId] = capBufferSnapshot(snapshot)
+      }
+    }
+    const snapshot: DetachedTerminalOpenSnapshot = {
+      worktree,
+      terminalTab: tab,
+      unifiedTab,
+      group: { ...group, activeTabId: unifiedTab.id },
+      groupLayout,
+      terminalLayout: latestLayout,
+      activeGroupId: group.id,
+      activeTabId: unifiedTab.id,
+      repos: latest.repos,
+      worktreesByRepo: latest.worktreesByRepo,
+      bufferSnapshotsByLeafId,
+      settings: latest.settings,
+      keybindings: latest.keybindingSnapshot
+    }
+    await window.api.detachedTerminal.openWindow({
+      worktreeId: tab.worktreeId,
+      tabId: tab.id,
+      snapshot
+    })
+  }
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
 
@@ -183,6 +266,17 @@ export function SortableTabContextMenu({
             </DropdownMenuItem>
           </>
         ) : null}
+        <DropdownMenuItem
+          onSelect={() => {
+            void openTerminalInNewWindow()
+          }}
+          disabled={!canOpenInNewWindow}
+        >
+          {translate(
+            'auto.components.tab.bar.SortableTabContextMenu.openInNewWindow',
+            'Open in New Window'
+          )}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>
           {isPinned ? (

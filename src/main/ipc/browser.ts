@@ -34,8 +34,8 @@ import {
   isValidBrowserAnnotationViewportBridgeToken,
   type BrowserSetAnnotationViewportBridgeArgs
 } from '../../shared/browser-annotation-viewport-bridge'
+import { trustedRendererRegistry } from '../window/trusted-renderer-registry'
 
-let trustedBrowserRendererWebContentsId: number | null = null
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
 // Why: CLI-driven tab creation must wait until the renderer mounts the webview
@@ -140,7 +140,10 @@ export function waitForAnyTabRegistration(timeoutMs = 8_000): Promise<void> {
 }
 
 export function setTrustedBrowserRendererWebContentsId(webContentsId: number | null): void {
-  trustedBrowserRendererWebContentsId = webContentsId
+  if (webContentsId === null) {
+    return
+  }
+  trustedRendererRegistry.grant(webContentsId, 'browser')
 }
 
 export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): void {
@@ -151,20 +154,7 @@ function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }
-  if (trustedBrowserRendererWebContentsId != null) {
-    return sender.id === trustedBrowserRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  return senderUrl.startsWith('file://')
+  return trustedRendererRegistry.has(sender.id, 'browser')
 }
 
 export function registerBrowserHandlers(): void {

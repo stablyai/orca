@@ -1119,6 +1119,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   closeTab: (tabId, opts) => {
+    // Why: a tab may be popped out into a detached window — close that window
+    // before retiring the session so the pop-out never outlives its tab.
+    const detachedOwnerWorktreeId = getTerminalTabOwnerWorktreeId(get().tabsByWorktree, tabId)
+    if (detachedOwnerWorktreeId) {
+      void window.api.detachedTerminal?.closeWindow({ worktreeId: detachedOwnerWorktreeId, tabId })
+    }
     const closeReason = opts?.reason ?? 'user'
     const retiresSession = closeReason === 'user' || closeReason === 'cleanup'
     const retirementPlan =

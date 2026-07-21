@@ -2715,6 +2715,10 @@
             "removedBody": "此工作区的 SSH 主机已被移除，无法再连接。请移除工作区以清理 — 远程文件不会受影响。",
             "removeWorkspaceButton": "移除工作区"
           }
+        },
+        "DetachedTerminalShell": {
+          "loading": "Loading detached terminal",
+          "unavailable": "Detached terminal unavailable"
         }
       },
       "tab": {
@@ -2818,7 +2822,8 @@
             "60f958ec75": "固定标签",
             "417722e9c2": "取消固定标签",
             "splitTerminalRight": "向右拆分终端",
-            "splitTerminalDown": "向下拆分终端"
+            "splitTerminalDown": "向下拆分终端",
+            "openInNewWindow": "Open in New Window"
           },
           "TabBar": {
             "b1a132357f": "新标签页",

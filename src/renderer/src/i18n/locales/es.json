@@ -2715,6 +2715,10 @@
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
           }
+        },
+        "DetachedTerminalShell": {
+          "loading": "Loading detached terminal",
+          "unavailable": "Detached terminal unavailable"
         }
       },
       "tab": {
@@ -2818,7 +2822,8 @@
             "60f958ec75": "Fijar pestaña",
             "417722e9c2": "Desanclar pestaña",
             "splitTerminalRight": "Dividir terminal a la derecha",
-            "splitTerminalDown": "Dividir terminal hacia abajo"
+            "splitTerminalDown": "Dividir terminal hacia abajo",
+            "openInNewWindow": "Open in New Window"
           },
           "TabBar": {
             "b1a132357f": "Nueva pestaña",

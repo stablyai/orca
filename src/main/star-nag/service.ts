@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
 import { checkOrcaStarred } from '../github/client'
 import type { Store } from '../persistence'
@@ -17,6 +17,7 @@ import { deferAfterStarNagWebHandoff } from './web-handoff'
 import { runStarNagDirectStarAttempt } from './direct-star-attempt'
 import { handleStarNagOnboardingCompleted } from './onboarding-completed'
 import { ensureStarNagBaseline, shouldShowStarNagThresholdPrompt } from './threshold-trigger'
+import { detachedWindowRegistry } from '../window/detached-window-registry'
 
 const STAR_NAG_COOLDOWN_DAYS = 3
 const STAR_NAG_COOLDOWN_MS = STAR_NAG_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
@@ -174,7 +175,7 @@ export class StarNagService {
     mode: StarNagPromptMode,
     surface: StarNagSurface = 'card'
   ): boolean {
-    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    const win = detachedWindowRegistry.getPrimaryAppWindow()
     if (!win) {
       this.promptVisible = false
       this.promptSession = null
@@ -190,7 +191,7 @@ export class StarNagService {
   }
 
   private broadcastHide(): void {
-    for (const win of BrowserWindow.getAllWindows()) {
+    for (const win of detachedWindowRegistry.getAppWindows()) {
       if (!win.isDestroyed()) {
         win.webContents.send('star-nag:hide')
       }

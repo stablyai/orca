@@ -10,6 +10,9 @@ import { SortableTabContextMenu } from './SortableTabContextMenu'
 
 const storeMock = vi.hoisted(() => ({
   dropUnifiedTab: vi.fn(),
+  getMainBufferSnapshot: vi.fn(),
+  openWindow: vi.fn(),
+  serializeRegisteredPtyBuffer: vi.fn(),
   state: {
     keybindings: {},
     unifiedTabsByWorktree: {},
@@ -68,6 +71,10 @@ vi.mock('lucide-react', () => ({
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
+}))
+
+vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
+  serializeRegisteredPtyBuffer: storeMock.serializeRegisteredPtyBuffer
 }))
 
 vi.mock('../../store', () => ({
@@ -147,6 +154,26 @@ function getLastSplitEvent(spy: ReturnType<typeof vi.spyOn>): CustomEvent {
 
 beforeEach(() => {
   storeMock.dropUnifiedTab.mockReset()
+  storeMock.getMainBufferSnapshot.mockReset().mockResolvedValue({
+    data: 'main-buffer',
+    cols: 80,
+    rows: 24,
+    source: 'headless'
+  })
+  storeMock.openWindow.mockReset().mockResolvedValue({ ok: true })
+  storeMock.serializeRegisteredPtyBuffer.mockReset().mockResolvedValue({
+    data: 'renderer-buffer',
+    cols: 80,
+    rows: 24,
+    source: 'renderer'
+  })
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      pty: { getMainBufferSnapshot: storeMock.getMainBufferSnapshot },
+      detachedTerminal: { openWindow: storeMock.openWindow }
+    }
+  })
   storeMock.state = {
     keybindings: {},
     dropUnifiedTab: storeMock.dropUnifiedTab,
@@ -175,7 +202,22 @@ beforeEach(() => {
           createdAt: 0
         }
       ]
-    }
+    },
+    activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+    activeTabIdByWorktree: { 'wt-1': 'tab-1' },
+    layoutByWorktree: { 'wt-1': { type: 'leaf', groupId: 'group-1' } },
+    terminalLayoutsByTabId: {
+      'term-1': {
+        root: { type: 'leaf', leafId: 'leaf-1' },
+        activeLeafId: 'leaf-1',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'leaf-1': 'pty-1' }
+      }
+    },
+    repos: [{ id: 'repo-1', path: '/tmp/repo' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/tmp/wt' }] },
+    settings: {},
+    keybindingSnapshot: null
   }
 })
 
@@ -255,5 +297,154 @@ describe('SortableTabContextMenu', () => {
 
     expect(container.textContent).not.toContain('Move Tab to Split')
     expect(container.textContent).toContain('Split terminal right')
+  })
+
+  it('selects Open in New Window with a fresh snapshot payload', async () => {
+    const { container } = renderMenu()
+
+    await act(async () => {
+      getButton(container, 'Open in New Window').click()
+    })
+
+    expect(storeMock.getMainBufferSnapshot).toHaveBeenCalledWith('pty-1', { scrollbackRows: 5000 })
+    expect(storeMock.openWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'wt-1',
+        tabId: 'term-1',
+        snapshot: expect.objectContaining({
+          terminalLayout: expect.objectContaining({
+            ptyIdsByLeafId: { 'leaf-1': 'pty-1' }
+          }),
+          bufferSnapshotsByLeafId: {
+            'leaf-1': expect.objectContaining({ data: 'main-buffer' })
+          }
+        })
+      })
+    )
+  })
+
+  it('targets the right-clicked inactive terminal tab when staging a detached snapshot', async () => {
+    storeMock.state = {
+      ...storeMock.state,
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'terminal',
+            entityId: 'term-1',
+            label: 'bash',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          },
+          {
+            id: 'tab-2',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'terminal',
+            entityId: 'term-2',
+            label: 'zsh',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-1': 'pty-1' }
+        },
+        'term-2': {
+          root: { type: 'leaf', leafId: 'leaf-2' },
+          activeLeafId: 'leaf-2',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-2': 'pty-2' }
+        }
+      },
+      activeTabIdByWorktree: { 'wt-1': 'tab-1' }
+    }
+    const { container } = renderMenu({
+      isActive: false,
+      tab: {
+        id: 'term-2',
+        ptyId: 'pty-2',
+        worktreeId: 'wt-1',
+        title: 'zsh',
+        customTitle: null,
+        color: null,
+        sortOrder: 1,
+        createdAt: 1
+      },
+      unifiedTabId: 'tab-2'
+    })
+
+    await act(async () => {
+      getButton(container, 'Open in New Window').click()
+    })
+
+    expect(storeMock.openWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        snapshot: expect.objectContaining({
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-2'
+        })
+      })
+    )
+  })
+
+  it('keeps Open in New Window enabled for a split tab with only layout PTYs', async () => {
+    storeMock.state = {
+      ...storeMock.state,
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'leaf-1' },
+            second: { type: 'leaf', leafId: 'leaf-2' }
+          },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-1': 'pty-1', 'leaf-2': 'pty-2' }
+        }
+      }
+    }
+    const { container } = renderMenu()
+
+    await act(async () => {
+      getButton(container, 'Open in New Window').click()
+    })
+
+    expect(storeMock.openWindow).toHaveBeenCalled()
+    expect(getButton(container, 'Open in New Window').disabled).toBe(false)
+  })
+
+  it('falls back to renderer serialization when main has no buffer snapshot', async () => {
+    storeMock.getMainBufferSnapshot.mockResolvedValue(null)
+    const { container } = renderMenu()
+
+    await act(async () => {
+      getButton(container, 'Open in New Window').click()
+    })
+
+    expect(storeMock.serializeRegisteredPtyBuffer).toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 5000
+    })
+    expect(storeMock.openWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        snapshot: expect.objectContaining({
+          bufferSnapshotsByLeafId: {
+            'leaf-1': expect.objectContaining({ data: 'renderer-buffer' })
+          }
+        })
+      })
+    )
   })
 })

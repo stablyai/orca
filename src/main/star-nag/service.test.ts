@@ -20,7 +20,9 @@ const {
   starOrcaMock,
   trackMock,
   getCohortAtEmitMock,
-  ipcMainHandleMock
+  ipcMainHandleMock,
+  getPrimaryAppWindowMock,
+  getAppWindowsMock
 } = vi.hoisted(() => ({
   appMock: {
     getVersion: vi.fn(() => '1.2.3')
@@ -32,7 +34,9 @@ const {
   starOrcaMock: vi.fn(),
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn(() => ({ nth_repo_added: 3 })),
-  ipcMainHandleMock: vi.fn()
+  ipcMainHandleMock: vi.fn(),
+  getPrimaryAppWindowMock: vi.fn<() => TestWindow | null>(() => null),
+  getAppWindowsMock: vi.fn<() => TestWindow[]>(() => [])
 }))
 
 vi.mock('electron', () => ({
@@ -40,6 +44,13 @@ vi.mock('electron', () => ({
   BrowserWindow: browserWindowMock,
   ipcMain: {
     handle: ipcMainHandleMock
+  }
+}))
+
+vi.mock('../window/detached-window-registry', () => ({
+  detachedWindowRegistry: {
+    getPrimaryAppWindow: getPrimaryAppWindowMock,
+    getAppWindows: getAppWindowsMock
   }
 }))
 
@@ -149,6 +160,12 @@ describe('StarNagService', () => {
     appMock.getVersion.mockReturnValue('1.2.3')
     browserWindowMock.getAllWindows.mockReset()
     browserWindowMock.getAllWindows.mockReturnValue([])
+    getPrimaryAppWindowMock.mockReset()
+    getPrimaryAppWindowMock.mockImplementation(
+      () => browserWindowMock.getAllWindows().find((window) => !window.isDestroyed()) ?? null
+    )
+    getAppWindowsMock.mockReset()
+    getAppWindowsMock.mockImplementation(() => browserWindowMock.getAllWindows())
     checkOrcaStarredMock.mockReset()
     checkOrcaStarredMock.mockResolvedValue(false)
     starOrcaMock.mockReset()
@@ -186,6 +203,24 @@ describe('StarNagService', () => {
       threshold: STAR_NAG_INITIAL_THRESHOLD,
       agents_since_baseline: 35,
       source: 'threshold'
+    })
+  })
+
+  it('shows prompts on the primary registered app window instead of a raw offscreen window', async () => {
+    const offscreenWindow = createWindow()
+    const appWindow = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([offscreenWindow])
+    getPrimaryAppWindowMock.mockReturnValue(appWindow)
+    const { service, emitAgentStarted } = createHarness()
+
+    service.start()
+    emitAgentStarted(45)
+    await flushAsyncWork()
+
+    expect(offscreenWindow.webContents.send).not.toHaveBeenCalled()
+    expect(appWindow.webContents.send).toHaveBeenCalledWith('star-nag:show', {
+      mode: 'gh',
+      surface: 'card'
     })
   })
 

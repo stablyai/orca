@@ -115,6 +115,14 @@ export function hasPtySerializer(ptyId: string): boolean {
   return serializersByPtyId.has(ptyId)
 }
 
+export async function serializeRegisteredPtyBuffer(
+  ptyId: string,
+  opts?: SerializeOpts
+): Promise<SerializedBuffer | null> {
+  const entry = serializersByPtyId.get(ptyId)
+  return entry?.fn(opts) ?? null
+}
+
 function ensureSerializerListener(): void {
   if (listenerAttached) {
     return
