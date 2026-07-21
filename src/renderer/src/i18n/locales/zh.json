@@ -2950,7 +2950,12 @@
             "f395c9a685": "导入文件失败",
             "e6234bcc17": "自定义宠物上传需要完全重启应用（不仅是重新加载）。",
             "6d0a8cd179": "显示宠物",
-            "1fbc51cc77": "隐藏宠物"
+            "1fbc51cc77": "隐藏宠物",
+            "seed-needs-restart": "Petdex seed needs a full app restart (not just reload).",
+            "seed-start": "Installing Petdex starter pack…",
+            "seed-done": "Installed {count} Petdex pets",
+            "seed-fail": "Petdex seed failed",
+            "seed-petdex": "Install Petdex starter pack…"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "未检测到外部端口",
@@ -10478,6 +10483,17 @@
           "running2": "处理中…",
           "running3": "进行中…",
           "countSuffix": "+{{value0}}"
+        },
+        "PetAskDialog": {
+          "title": "Ask {{value0}}",
+          "description": "Sends a prompt to the session the pet is watching.",
+          "placeholder": "Ask the agent something…",
+          "cancel": "Cancel",
+          "send": "Send"
+        },
+        "PetOverlay": {
+          "jumpToAgent": "Go to {{value0}}",
+          "askAgent": "Ask {{value0}}…"
         }
       },
       "onboarding": {

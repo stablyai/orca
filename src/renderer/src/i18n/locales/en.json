@@ -2973,7 +2973,12 @@
             "f395c9a685": "Failed to import file",
             "e6234bcc17": "Custom pet upload needs a full app restart (not just reload).",
             "6d0a8cd179": "Show pet",
-            "1fbc51cc77": "Hide pet"
+            "1fbc51cc77": "Hide pet",
+            "seed-needs-restart": "Petdex seed needs a full app restart (not just reload).",
+            "seed-start": "Installing Petdex starter pack…",
+            "seed-done": "Installed {count} Petdex pets",
+            "seed-fail": "Petdex seed failed",
+            "seed-petdex": "Install Petdex starter pack…"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "No external ports detected",
@@ -10501,6 +10506,17 @@
           "running2": "on it…",
           "running3": "in progress…",
           "countSuffix": "+{{value0}}"
+        },
+        "PetAskDialog": {
+          "title": "Ask {{value0}}",
+          "description": "Sends a prompt to the session the pet is watching.",
+          "placeholder": "Ask the agent something…",
+          "cancel": "Cancel",
+          "send": "Send"
+        },
+        "PetOverlay": {
+          "jumpToAgent": "Go to {{value0}}",
+          "askAgent": "Ask {{value0}}…"
         }
       },
       "onboarding": {
