@@ -12,6 +12,7 @@ import { waitForMacBundleVersion } from './mac-app-update-bundle'
 export const SERVE_REPLACEMENT_READY_TIMEOUT_MS = 60_000
 
 type InstallRequestedHandoff = Extract<ServeUpdateHandoffState, { phase: 'install-requested' }>
+type ServeReadiness = 'not-expected' | 'pending' | 'verified' | 'failed'
 
 type ServeSupervisorArgs = {
   executable: string
@@ -103,12 +104,12 @@ function waitForForegroundChild(
 ): Promise<{
   code: number | null
   signal: NodeJS.Signals | null
-  readiness: 'not-expected' | 'pending' | 'verified' | 'failed'
+  readiness: ServeReadiness
 }> {
   return new Promise((resolveWait, reject) => {
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null
     let readyTimer: ReturnType<typeof setTimeout> | null = null
-    let readiness = expected ? ('pending' as const) : ('not-expected' as const)
+    let readiness: ServeReadiness = expected ? 'pending' : 'not-expected'
     let stateWrite = Promise.resolve()
     const terminateChild = (): void => {
       child.kill('SIGTERM')
