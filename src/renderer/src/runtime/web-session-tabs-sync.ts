@@ -339,15 +339,20 @@ function clearWebSessionTabsTrackingForWorktree(
   }
 }
 
-export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
+export function clearWebSessionTabsTrackingForEnvironment(
+  environmentId: string,
+  preserveFreshness = false
+): void {
   const trimmedEnvironmentId = environmentId.trim()
   if (!trimmedEnvironmentId) {
     return
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
-  for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      latestSessionTabsSnapshotByWorktree.delete(key)
+  if (!preserveFreshness) {
+    for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
+      if (key.startsWith(keyPrefix)) {
+        latestSessionTabsSnapshotByWorktree.delete(key)
+      }
     }
   }
   for (const key of lastHostTerminalTabCountByWorktree.keys()) {
@@ -2646,9 +2651,9 @@ export function useWebSessionTabsSync(): void {
       for (const unsubscribe of unsubscribes) {
         unsubscribe()
       }
-      // Why: environment ids churn as paired runtimes reconnect; don't leak stale tracking for the renderer lifetime.
+      // Why: reconnect teardown may reuse the same environment id; retain authority generations while clearing projection-only mappings.
       for (const environmentId of environmentIds) {
-        clearWebSessionTabsTrackingForEnvironment(environmentId)
+        clearWebSessionTabsTrackingForEnvironment(environmentId, true)
       }
     }
   }, [runtimeSessionMirrorEnvironmentKey, workspaceSessionReady])

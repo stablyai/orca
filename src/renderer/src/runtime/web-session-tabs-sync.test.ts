@@ -169,6 +169,32 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(delayedFirst, ENV)).toBe(false)
   })
 
+  it('retains retired epochs across reconnect teardown and accepts the current replay', () => {
+    const first = makeSnapshot([], {
+      publicationEpoch: 'renderer:e1',
+      snapshotVersion: 5,
+      activeTabType: null
+    })
+    const current = makeSnapshot([], {
+      publicationEpoch: 'renderer:e2',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(first, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(current, ENV)).toBe(true)
+    clearWebSessionTabsTrackingForEnvironment(ENV, true)
+    acceptReplayedWebSessionTabsSnapshot(ENV, current.worktree)
+
+    expect(shouldApplyWebSessionTabsSnapshot(current, ENV)).toBe(true)
+    expect(
+      shouldApplyWebSessionTabsSnapshot(
+        { ...first, snapshotVersion: first.snapshotVersion + 1 },
+        ENV
+      )
+    ).toBe(false)
+  })
+
   it('keeps a removed frame current so its retired publisher cannot resurrect the worktree', () => {
     const initial = makeSnapshot([], {
       publicationEpoch: 'renderer:e1',

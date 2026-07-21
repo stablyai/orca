@@ -8,7 +8,7 @@
 export type AppliedSnapshotMarker = {
   epoch: string | null
   version: number
-  retiredEpochs?: string[]
+  retiredEpochs?: Array<string | null>
 }
 
 const RETIRED_EPOCH_LIMIT = 16
