@@ -22,17 +22,54 @@ const HERM_MODEL = 'LFM2.5-8B-A1B-Q4_0.gguf'
 
 // RECEIPT 2026-07-21: this budget must cover the arm's REASONING phase plus the
 // answer, not just the answer. Every Config A arm (Qwopus, Gemma, LFM) emits
-// chain-of-thought into `reasoning_content` first; at max_tokens 160 all three
-// returned an EMPTY `content` because the budget ran out mid-reasoning, which
-// would have failed this feature 100% of the time on the phone. At 700 the same
-// question answers in 334 completion tokens with finish_reason 'stop'. Do not
-// lower this to "keep spoken answers short" — the system prompt does that.
-const MAX_ANSWER_TOKENS = 700
+// chain-of-thought into `reasoning_content` first; when the budget runs out
+// mid-reasoning the answer never starts and `content` comes back EMPTY.
+//
+// Reasoning length VARIES a lot for the same question (measured: 238 vs 529
+// completion tokens on back-to-back identical calls), which is what made this
+// hit-and-miss at 700. The cap is a CEILING, not a cost: raising it does not
+// slow the normal case, because a model that is done emits finish_reason
+// 'stop' and returns. Measured — max_tokens 1400 finished in 6.9s using 238
+// tokens, while the same question at 700 took 15.4s using 529. So set it high.
+//
+// Suppression was tried and does not work on this stack: `enable_thinking:
+// false` is ignored, a `/no_think` instruction is ignored, and
+// `reasoning_effort` is rejected by the API outright. Do not re-litigate.
+// Answer LENGTH is the system prompt's job, never this number's.
+const MAX_ANSWER_TOKENS = 1600
 
+// Mirrors the fields Orca's `worktree.ps` already streams to this client. The
+// phone is authenticated to the host runtime, so live agent state is available
+// as STRUCTURED data — no screenshot, no vision model, no log scraping.
 export type HermWorkspaceContext = {
   hostName: string
-  workspaces: { title: string; repo?: string | null; status?: string | null }[]
+  workspaces: {
+    title: string
+    repo?: string | null
+    status?: string | null
+    branch?: string | null
+    liveTerminalCount?: number
+    agents?: {
+      state?: string | null
+      agentType?: string | null
+      /** What the operator actually asked this agent to do. */
+      prompt?: string | null
+      taskTitle?: string | null
+      lastAssistantMessage?: string | null
+      toolName?: string | null
+      interrupted?: boolean
+    }[]
+  }[]
 }
+
+// MEASURED 2026-07-21: the raw terminal tail (`preview`) was deliberately left
+// OUT of this context. Including it cost ~7s of extra reasoning (864 vs 609
+// completion tokens, 25.2s vs 17.9s) AND made the answer worse — the arm
+// echoed spinner noise like "Moonwalking…" back as if it were content. Agent
+// state is the high-signal part; the tail is decoration. Do not add it back
+// without re-measuring both latency and answer quality.
+const MAX_PROMPT_CHARS = 160
+const MAX_REPLY_CHARS = 200
 
 const SYSTEM_PROMPT = [
   'You are Herm, the operator\'s strategist for the Sovereign Machina mesh.',
@@ -40,24 +77,61 @@ const SYSTEM_PROMPT = [
   'spoken back through a speaker. So: answer in at most three short sentences.',
   'No markdown, no lists, no code blocks, no headings — plain spoken English.',
   'Be direct and concrete. If the workspace context below does not contain the',
-  'answer, say so plainly instead of guessing.'
+  'answer, say so plainly instead of guessing.',
+  'The context is a live snapshot of the operator\'s Orca host: each workspace',
+  'lists its git branch, its status, and any coding agents running in it with',
+  'what they were asked to do and what tool they are using right now.',
+  'Answer from that, and refer to workspaces by name.'
 ].join(' ')
+
+function truncate(value: string, limit: number): string {
+  const clean = value.replace(/\s+/g, ' ').trim()
+  return clean.length > limit ? `${clean.slice(0, limit)}…` : clean
+}
+
+function renderAgent(agent: NonNullable<HermWorkspaceContext['workspaces'][number]['agents']>[number]): string {
+  const bits: string[] = [`${agent.agentType ?? 'agent'} is ${agent.state ?? 'in an unknown state'}`]
+  if (agent.interrupted) {
+    bits.push('INTERRUPTED')
+  }
+  if (agent.toolName) {
+    bits.push(`running tool ${agent.toolName}`)
+  }
+  const task = agent.taskTitle ?? agent.prompt
+  if (task) {
+    bits.push(`asked to: "${truncate(task, MAX_PROMPT_CHARS)}"`)
+  }
+  if (agent.lastAssistantMessage) {
+    bits.push(`last said: "${truncate(agent.lastAssistantMessage, MAX_REPLY_CHARS)}"`)
+  }
+  return `    · ${bits.join('; ')}`
+}
 
 function renderContext(context: HermWorkspaceContext): string {
   if (context.workspaces.length === 0) {
     return `Host ${context.hostName || 'unknown'} has no workspaces.`
   }
-  const lines = context.workspaces.map((w) => {
-    const bits = [w.title]
+  const lines = context.workspaces.flatMap((w) => {
+    const head = [w.title]
     if (w.repo) {
-      bits.push(`repo ${w.repo}`)
+      head.push(`repo ${w.repo}`)
+    }
+    if (w.branch) {
+      head.push(w.branch.replace('refs/heads/', ''))
     }
     if (w.status) {
-      bits.push(w.status)
+      head.push(`status ${w.status}`)
     }
-    return `- ${bits.join(' · ')}`
+    if (w.liveTerminalCount) {
+      head.push(`${w.liveTerminalCount} live terminal${w.liveTerminalCount === 1 ? '' : 's'}`)
+    }
+    const out = [`- ${head.join(' · ')}`]
+    for (const agent of w.agents ?? []) {
+      out.push(renderAgent(agent))
+    }
+    return out
   })
-  return `Host ${context.hostName || 'unknown'} workspaces:\n${lines.join('\n')}`
+  return `Live snapshot of Orca host ${context.hostName || 'unknown'}:\n${lines.join('\n')}`
 }
 
 /** Ask Herm a spoken question about the host's workspaces. Returns the answer

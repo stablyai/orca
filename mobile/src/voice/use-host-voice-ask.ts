@@ -65,10 +65,26 @@ export function useHostVoiceAsk(options: {
           const { hostName: name, worktrees: rows } = contextRef.current
           const answer = await askHerm(question, {
             hostName: name,
+            // Why this much: `worktree.ps` already streams live agent state to
+            // this client over the authenticated host connection, so Herm can
+            // be told what each agent was asked to do and what it is doing
+            // right now. Sending only titles was why Herm sounded like it had
+            // never seen the host.
             workspaces: rows.slice(0, MAX_CONTEXT_WORKSPACES).map((w) => ({
               title: w.displayName || w.branch,
               repo: w.repo,
-              status: w.workspaceStatus ?? (w.hasAttachedPty ? 'agent attached' : null)
+              branch: w.branch,
+              status: w.workspaceStatus ?? (w.hasAttachedPty ? 'agent attached' : null),
+              liveTerminalCount: w.liveTerminalCount,
+              agents: (w.agents ?? []).map((a) => ({
+                state: a.state,
+                agentType: a.agentType,
+                prompt: a.prompt,
+                taskTitle: a.taskTitle,
+                lastAssistantMessage: a.lastAssistantMessage,
+                toolName: a.toolName,
+                interrupted: a.interrupted
+              }))
             }))
           })
           setLastAnswer(answer)
