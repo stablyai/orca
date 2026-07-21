@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { setPetBoundSession } from './pet-bound-session'
+import { resolveSpawnFreshness } from './pet-session-epoch'
 
 /**
  * The pet's assistant arm.
@@ -60,10 +61,20 @@ export function petSessionDirName(worktreeId: string): string {
  * Still a pane, not `--mode rpc`: pane-hosting is what earns free agent status
  * via the ORCA_PANE_KEY-gated extension, which a session we drove ourselves
  * could never satisfy.
+ *
+ * `fresh` drops `--continue` so omp starts a NEW session in the same dir instead
+ * of resuming the latest — the rotation the operator asked for, so context does
+ * not accrete indefinitely on a small local model. The dir is unchanged, so a
+ * later resume still finds this fresh thread as the most recent.
  */
-export function buildPetOmpAgentArgs(worktreeId: string, model: string = PET_OMP_MODEL): string {
+export function buildPetOmpAgentArgs(
+  worktreeId: string,
+  options: { fresh?: boolean; model?: string } = {}
+): string {
+  const model = options.model ?? PET_OMP_MODEL
   const sessionDir = `${PET_SESSION_ROOT}/${petSessionDirName(worktreeId)}`
-  return `--approval-mode always-ask --model ${model} --session-dir ${sessionDir} --continue`
+  const base = `--approval-mode always-ask --model ${model} --session-dir ${sessionDir}`
+  return options.fresh ? base : `${base} --continue`
 }
 
 /**
@@ -89,10 +100,12 @@ export function usePetAgentSpawn(): {
       return
     }
     try {
+      // Rotate to a clean session on the 1–3h cadence; otherwise resume.
+      const fresh = resolveSpawnFreshness(petSessionDirName(activeWorktreeId))
       const result = launchAgentInNewTab({
         agent: 'omp',
         worktreeId: activeWorktreeId,
-        agentArgs: buildPetOmpAgentArgs(activeWorktreeId),
+        agentArgs: buildPetOmpAgentArgs(activeWorktreeId, { fresh }),
         launchSource: 'pet'
       })
       // Why bind here and not from agent status: an omp pane reports `agents:

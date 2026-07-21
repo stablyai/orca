@@ -35,10 +35,19 @@ describe('buildPetOmpAgentArgs', () => {
   })
 
   it('lets the arm be overridden without touching approval or durability', () => {
-    const args = buildPetOmpAgentArgs(WT, 'mesh-litellm/other.gguf')
+    const args = buildPetOmpAgentArgs(WT, { model: 'mesh-litellm/other.gguf' })
     expect(args).toContain('--model mesh-litellm/other.gguf')
     expect(args).toContain('--approval-mode always-ask')
     expect(args).toContain('--continue')
+  })
+
+  it('drops --continue on a fresh (rotated) spawn but keeps the same dir', () => {
+    // Rotation must start a NEW session, not resume — so --continue is gone —
+    // while the session-dir is unchanged so a later resume still finds it.
+    const fresh = buildPetOmpAgentArgs(WT, { fresh: true })
+    expect(fresh).not.toContain('--continue')
+    expect(fresh).toContain('--session-dir')
+    expect(fresh).toContain(petSessionDirName(WT))
   })
 })
 
