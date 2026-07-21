@@ -220,7 +220,12 @@ import {
 } from '../../shared/setup-agent-sequencing'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import {
@@ -7577,7 +7582,8 @@ export class OrcaRuntimeService {
 
   private dropAgentStatusEntriesForClosedTab(tabId: string): void {
     for (const paneKey of this.latestAgentStatusByPaneKey.keys()) {
-      if (parsePaneKey(paneKey)?.tabId === tabId) {
+      const paneTabId = parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId
+      if (paneTabId === tabId) {
         this.latestAgentStatusByPaneKey.delete(paneKey)
       }
     }

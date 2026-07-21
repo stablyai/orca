@@ -22064,6 +22064,11 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       dropAgentStatusEntriesByTabPrefix
     })
+    const retainedAgentRows = (
+      runtime as unknown as { latestAgentStatusByPaneKey: Map<string, unknown> }
+    ).latestAgentStatusByPaneKey
+    retainedAgentRows.set('host-tab:1', {})
+    retainedAgentRows.set('host-tab-sibling:1', {})
     runtime.setPtyController({
       write: () => true,
       kill,
@@ -22103,6 +22108,7 @@ describe('OrcaRuntimeService', () => {
     // Best-effort renderer notify so no adopted pane is left dead.
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
     expect(dropAgentStatusEntriesByTabPrefix).toHaveBeenCalledWith('host-tab')
+    expect([...retainedAgentRows.keys()]).toEqual(['host-tab-sibling:1'])
   })
 
   it('delegates a renderer-owned daemon-session (worktreeId@@uuid) local terminal to the renderer', async () => {
