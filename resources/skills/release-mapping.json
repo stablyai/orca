@@ -561,6 +561,19 @@
         "orca-per-workspace-env": 2,
         "orchestration": 25
       }
+    },
+    {
+      "appVersion": "1.4.149-rc.2",
+      "skills": {
+        "computer-use": 5,
+        "linear-tickets": 6,
+        "orca-cli": 35,
+        "orca-emulator": 4,
+        "orca-emulator-android": 2,
+        "orca-linear": 4,
+        "orca-per-workspace-env": 2,
+        "orchestration": 25
+      }
     }
   ]
 }

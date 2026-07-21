@@ -22,7 +22,7 @@
     {
       "name": "linear-tickets",
       "sourcePath": "skills/linear-tickets",
-      "releaseRevision": 6,
+      "releaseRevision": 7,
       "packageDigest": "ff9f085631f753f059c631d874177ddd4fa847c5eca85a420dc85fb2bece6ff6",
       "gitTreeSha": "e35ac3c0c583661983d3fc1352ff3aec74e67e8c",
       "files": [
@@ -94,7 +94,7 @@
     {
       "name": "orca-linear",
       "sourcePath": "skills/orca-linear",
-      "releaseRevision": 4,
+      "releaseRevision": 5,
       "packageDigest": "5e9622bd3883c0f53e6bd349758096deafceebd2fa260d3e90d677e64d06416d",
       "gitTreeSha": "f3727995a4719fd522119eca6d1b57542cb5fe23",
       "files": [
