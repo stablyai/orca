@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { IBuffer, IBufferCell, IBufferLine } from '@xterm/xterm'
-import { resolveCursorAgentImeAnchor } from './terminal-ime-anchor'
+import { isCursorAgentVisibleScreen, resolveCursorAgentImeAnchor } from './terminal-ime-anchor'
 
 type FakeCell = {
   chars: string
@@ -152,5 +152,28 @@ describe('resolveCursorAgentImeAnchor', () => {
         cursorY: 4
       })
     ).toEqual({ row: 3, column: 8 })
+  })
+})
+
+describe('isCursorAgentVisibleScreen', () => {
+  it('recognizes a live prompt after redraws move the header down', () => {
+    const buffer = makeBuffer([
+      'old',
+      'old',
+      'old',
+      'old',
+      'old',
+      'old',
+      '  Cursor Agent',
+      '  → prompt'
+    ])
+
+    expect(isCursorAgentVisibleScreen(buffer, 8)).toBe(true)
+  })
+
+  it('rejects shell output that only mentions Cursor Agent', () => {
+    const buffer = makeBuffer(['$ grep docs', 'Cursor Agent', 'matching documentation'])
+
+    expect(isCursorAgentVisibleScreen(buffer, 3)).toBe(false)
   })
 })

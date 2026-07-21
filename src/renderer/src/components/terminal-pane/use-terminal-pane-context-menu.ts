@@ -41,6 +41,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
+import { isCursorAgentVisibleScreen } from '@/lib/pane-manager/terminal-ime-anchor'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -302,6 +303,7 @@ export function useTerminalPaneContextMenu({
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
       runtimeEnvironmentId,
+      isCursorAgent: isCursorAgentVisibleScreen(pane.terminal.buffer.active, pane.terminal.rows),
       forceBracketedMultilineTextPaste,
       pasteText: (text, options) => executeMenuPasteText(pane, source, text, options),
       onTextPasteError: () =>
