@@ -22023,6 +22023,137 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it.each([
+    { agent: 'codex' as const, title: 'Codex', exitCode: 127 },
+    { agent: 'claude' as const, title: 'Claude Code', exitCode: 1 }
+  ])(
+    'does not publish a completed $agent row after its launch terminal exits non-zero',
+    async ({ agent, title, exitCode }) => {
+      const spawn = vi.fn().mockResolvedValue({ id: `pty-missing-${agent}` })
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {}
+        })
+      } as never)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+      await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, { agent })
+      runtime.onPtyData(`pty-missing-${agent}`, `\x1b]0;${title}\x07`, Date.now())
+      runtime.onPtyExit(`pty-missing-${agent}`, exitCode)
+
+      const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+      expect(listed.tabs[0]).toMatchObject({
+        type: 'terminal',
+        launchAgent: agent,
+        status: 'pending-handle'
+      })
+      expect(listed.tabs[0]).not.toHaveProperty('agentStatus')
+    }
+  )
+
+  it('keeps a completed mobile agent row after its launch terminal exits successfully', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-complete-codex' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {}
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, { agent: 'codex' })
+    runtime.onPtyData('pty-complete-codex', '\x1b]0;Codex\x07', Date.now())
+    runtime.onPtyExit('pty-complete-codex', 0)
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs[0]).toMatchObject({
+      type: 'terminal',
+      launchAgent: 'codex',
+      agentStatus: expect.objectContaining({ state: 'done', agentType: 'codex' })
+    })
+  })
+
+  it('does not preserve renderer-synced working status after an agent launch exits non-zero', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'failed-agent-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'failed-agent-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-failed-renderer-agent',
+          paneTitle: 'Codex'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-failed-agent',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: `failed-agent-tab::${leafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `failed-agent-tab::${leafId}`,
+              parentTabId: 'failed-agent-tab',
+              leafId,
+              title: 'Codex',
+              launchAgent: 'codex',
+              agentStatus: {
+                state: 'working',
+                prompt: 'fix the issue',
+                updatedAt: 1_700_000_000_000,
+                stateStartedAt: 1_700_000_000_000,
+                agentType: 'codex',
+                paneKey: `failed-agent-tab:${leafId}`,
+                stateHistory: []
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    runtime.onPtyExit('pty-failed-renderer-agent', 127)
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs[0]).not.toHaveProperty('agentStatus')
+  })
+
   it('rejects disabled mobile session agent launches before spawning', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
     const runtime = new OrcaRuntimeService({

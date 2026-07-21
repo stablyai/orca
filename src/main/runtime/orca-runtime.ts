@@ -1063,6 +1063,17 @@ type RuntimePtyWorktreeRecord = {
   tailWaitState?: TerminalTailWaitState
 }
 
+// Why: exit status is stable across local, remote, and platform-specific shells;
+// parsing their localized command-not-found text would be incomplete and brittle.
+function didLaunchedAgentTerminalFail(
+  pty: Pick<RuntimePtyWorktreeRecord, 'connected' | 'lastExitCode'> | null,
+  launchAgent: TuiAgent | null | undefined
+): boolean {
+  return Boolean(
+    launchAgent && pty && !pty.connected && pty.lastExitCode !== null && pty.lastExitCode !== 0
+  )
+}
+
 type TerminalCreateOptions = {
   command?: string
   claudeAgentTeamsSourceCommand?: string
@@ -22491,6 +22502,7 @@ export class OrcaRuntimeService {
           )
         : null
       const launchAgent = tab.launchAgent ?? liveLeafPty?.launchAgent ?? pty?.launchAgent ?? null
+      const launchedAgentTerminalFailed = didLaunchedAgentTerminalFail(mobileStatusPty, launchAgent)
       // Why: a retained OMP hook stays stable while wrapper foreground reads can report Pi.
       const ownerAgent =
         resolvePaneAgentOwner({
@@ -22518,25 +22530,27 @@ export class OrcaRuntimeService {
         (liveTitleEvidence === null ||
           liveTitleEvidenceClassification === 'agent' ||
           hasLiveAgentSignal)
-      const agentStatus = keepFullAgentStatus
-        ? { agentStatus: normalizedTabAgentStatus }
-        : // Why: idle live title → drop stale "working" (no spinner) but keep agent identity so native chat can still address the transcript.
-          normalizedTabAgentStatus?.agentType != null
-          ? {
-              agentStatus: {
-                state: 'done' as const,
-                prompt: '',
-                updatedAt: normalizedTabAgentStatus.updatedAt,
-                stateStartedAt: normalizedTabAgentStatus.stateStartedAt,
-                paneKey: normalizedTabAgentStatus.paneKey,
-                stateHistory: [],
-                agentType: normalizedTabAgentStatus.agentType,
-                ...(normalizedTabAgentStatus.providerSession
-                  ? { providerSession: normalizedTabAgentStatus.providerSession }
-                  : {})
+      const agentStatus = launchedAgentTerminalFailed
+        ? null
+        : keepFullAgentStatus
+          ? { agentStatus: normalizedTabAgentStatus }
+          : // Why: idle live title → drop stale "working" (no spinner) but keep agent identity so native chat can still address the transcript.
+            normalizedTabAgentStatus?.agentType != null
+            ? {
+                agentStatus: {
+                  state: 'done' as const,
+                  prompt: '',
+                  updatedAt: normalizedTabAgentStatus.updatedAt,
+                  stateStartedAt: normalizedTabAgentStatus.stateStartedAt,
+                  paneKey: normalizedTabAgentStatus.paneKey,
+                  stateHistory: [],
+                  agentType: normalizedTabAgentStatus.agentType,
+                  ...(normalizedTabAgentStatus.providerSession
+                    ? { providerSession: normalizedTabAgentStatus.providerSession }
+                    : {})
+                }
               }
-            }
-          : null
+            : null
       // Why: web/mobile clients hold handles across renderer graph syncs; leaf handles are epoch-bound but PTY handles stay streamable.
       const terminalHandle = liveLeafPtyId
         ? this.issuePtyHandle(
@@ -22623,7 +22637,10 @@ export class OrcaRuntimeService {
     retained: RuntimeAgentRowSnapshot | null
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
     const paneKey = this.getMobileTerminalPaneKey(tab)
-    if (!pty?.lastAgentStatus && !retained) {
+    if (
+      didLaunchedAgentTerminalFail(pty, tab.launchAgent ?? pty?.launchAgent) ||
+      (!pty?.lastAgentStatus && !retained)
+    ) {
       return {}
     }
     const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
