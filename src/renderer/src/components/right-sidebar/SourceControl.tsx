@@ -45,6 +45,7 @@ import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
+import { isMacPlatform } from '@/components/terminal-pane/terminal-link-open-hints'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
   DropdownMenu,
@@ -791,7 +792,7 @@ function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement | null>(null)
   // Why: virtualize against the panel's shared scroller; use state (not a ref) so lists re-render and start observing once the element attaches.
   const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
-  const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
+  const isMac = isMacPlatform()
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
   // Why: setState is async, so a double-click can pass the isCommitting guard before re-render; a synchronously-flipped ref gives a true single-flight lock.
   const commitInFlightRef = useRef<Record<string, boolean>>({})
@@ -6503,6 +6504,22 @@ export function CommitArea({
     .filter(Boolean)
     .join(' ')
 
+  const isMac = isMacPlatform()
+
+  // Why: Commit with Cmd+Enter (Mac) or Ctrl+Enter / Win+Enter (Windows/Linux) when the commit action is available.
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      const modifierPressed = event.ctrlKey || event.metaKey
+      if (event.key === 'Enter' && modifierPressed) {
+        if (!primaryAction.disabled && primaryAction.kind === 'commit') {
+          event.preventDefault()
+          onPrimaryAction()
+        }
+      }
+    },
+    [primaryAction, onPrimaryAction]
+  )
+
   // Why: config errors are surfaced by the generation dialog, so entry-point visibility only follows the feature toggle.
   // Why: Create PR intent owns generation, so a second composer spinner would stack on the primary spinner.
   const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
@@ -6579,6 +6596,7 @@ export function CommitArea({
             value={commitMessage}
             disabled={isCommitMessageDisabled}
             onChange={(e) => onCommitMessageChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder={translate(
               'auto.components.right.sidebar.SourceControl.0d0a8359d3',
               'Message'
@@ -6694,8 +6712,10 @@ export function CommitArea({
                 </Button>
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6} className="max-w-72">
-              {primaryAction.title}
+            <TooltipContent side="top" sideOffset={6}>
+              {primaryAction.kind === 'commit'
+                ? `${primaryAction.title} (${isMac ? '⌘Enter' : 'Ctrl+Enter'})`
+                : primaryAction.title}
             </TooltipContent>
           </Tooltip>
           <DropdownMenu>
