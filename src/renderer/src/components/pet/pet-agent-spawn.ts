@@ -23,6 +23,34 @@ export const PET_OMP_MODEL = 'mesh-litellm/LFM2.5-8B-A1B-Q4_0.gguf'
  * correctly for an SSH/remote worktree. */
 const PET_SESSION_ROOT = '$HOME/.local/state/meshina/omp-sessions'
 
+/** The mesh's omp overlay — model roles, web provider, approval posture, and the
+ * lean tool discipline the mesh's own doers run under (`configs/omp/mesh-coding.yml`,
+ * loaded exactly as `scripts/mesh/spawn_omp_worker.sh` does). Without it the pet
+ * spawns on omp's bare defaults: no mesh tool surface and no idea what the mesh
+ * gives it — the "empty toolset / unaware of its capabilities" the operator hit.
+ * `$HOME` literal for the owner-host shell, same reason as the session root. */
+const PET_MESH_CONFIG = '$HOME/meshina/configs/omp/mesh-coding.yml'
+
+/** Lean coding core + web, matching spawn_omp_worker.sh's default with --with-web.
+ * `web_search` is the door to the mesh's actual web reach (SearXNG on node-d:8080,
+ * CloakBrowser CDP on node-b:9222 — neither is an omp built-in, both are reached
+ * through the config's provider + bash). Heavy surface stays off deliberately. */
+const PET_TOOLS = 'read,bash,edit,write,grep,glob,todo,web_search'
+
+/** A short persona so the pet knows what it is and how to reach the mesh's web
+ * tools, rather than sitting on a generic assistant prompt unaware of them.
+ * Single-quoted as one shell token by tokenizeStartupCommand; keep it free of
+ * single quotes and `$` so neither the tokenizer nor the owner-host shell mangle
+ * it. */
+const PET_PERSONA = [
+  'You are the operator’s pet assistant inside Orca, bound to this workspace.',
+  'You have read, bash, edit, write, grep, glob, todo and web_search tools.',
+  'For web search prefer the mesh SearXNG at node-d:8080 via',
+  'scripts/mesh/searxng_search.sh; for full-page fetch use the CloakBrowser CDP',
+  'endpoint on node-b:9222. Keep replies short and spoken-friendly — they are',
+  'read aloud. Lead with the outcome.'
+].join(' ')
+
 /**
  * A stable, filesystem-safe session-dir name for a worktree's pet assistant.
  *
@@ -73,8 +101,17 @@ export function buildPetOmpAgentArgs(
 ): string {
   const model = options.model ?? PET_OMP_MODEL
   const sessionDir = `${PET_SESSION_ROOT}/${petSessionDirName(worktreeId)}`
-  const base = `--approval-mode always-ask --model ${model} --session-dir ${sessionDir}`
-  return options.fresh ? base : `${base} --continue`
+  const parts = [
+    '--approval-mode always-ask',
+    `--model ${model}`,
+    `--config ${PET_MESH_CONFIG}`,
+    `--tools ${PET_TOOLS}`,
+    `--session-dir ${sessionDir}`,
+    // Fresh spawns omit --continue so omp starts a new session in the same dir.
+    ...(options.fresh ? [] : ['--continue']),
+    `--append-system-prompt '${PET_PERSONA}'`
+  ]
+  return parts.join(' ')
 }
 
 /**
