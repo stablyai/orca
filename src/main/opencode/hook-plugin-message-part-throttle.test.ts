@@ -243,6 +243,44 @@ describe('OpenCode plugin MessagePart throttling', () => {
     expect(posts.at(-1)?.body.payload.hook_event_name).toBe('SessionBusy')
   })
 
+  it('does not post synthetic text parts over a real preview', async () => {
+    const handler = await loadPluginEventHandler()
+    await handler({
+      event: {
+        type: 'message.updated',
+        properties: {
+          sessionID: 'session-1',
+          info: { id: 'msg-user', role: 'user' }
+        }
+      }
+    })
+    await handler({
+      event: {
+        type: 'message.part.updated',
+        properties: {
+          sessionID: 'session-1',
+          part: { type: 'text', text: 'real user prompt', messageID: 'msg-user' }
+        }
+      }
+    })
+    await handler({
+      event: {
+        type: 'message.part.updated',
+        properties: {
+          sessionID: 'session-1',
+          part: {
+            type: 'text',
+            text: 'synthetic replacement',
+            synthetic: true,
+            messageID: 'msg-user'
+          }
+        }
+      }
+    })
+
+    expect(messagePartPosts().map((post) => post.body.payload.text)).toEqual(['real user prompt'])
+  })
+
   it('posts user prompts immediately without consuming the assistant throttle slot', async () => {
     const handler = await loadPluginEventHandler()
     await handler({

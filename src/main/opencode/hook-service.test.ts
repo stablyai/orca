@@ -49,6 +49,9 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain(
       'if (sessionID && (await isChildSession(client, sessionID)) !== false) {\n      return;\n    }'
     )
+    expect(source).toContain('const activeChildByKey = new Map();')
+    expect(source).toContain('rememberActiveChild(rootSessionID, sessionID, factoryID)')
+    expect(source).toContain('clearActiveChild(sessionID, factoryID)')
   })
 
   it('still accepts an optional opaque plugin context instead of destructuring', () => {

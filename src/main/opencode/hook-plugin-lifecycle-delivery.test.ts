@@ -725,6 +725,26 @@ describe('OpenCode plugin lifecycle delivery', () => {
     expect(names().at(-1)).toBe('SessionIdle')
   })
 
+  it('keeps the root Busy until every active descendant is idle', async () => {
+    const sessions = [
+      { id: 'root' },
+      { id: 'child', parentID: 'root' },
+      { id: 'grandchild', parentID: 'child' }
+    ]
+    const handler = await loadHandler(async () => ({ data: sessions }))
+
+    await handler({ event: status('busy', 'root') })
+    await handler({ event: status('busy', 'child') })
+    await handler({ event: status('retry', 'grandchild') })
+    await handler({ event: status('idle', 'root') })
+    await handler({ event: status('idle', 'child') })
+    expect(names()).not.toContain('SessionIdle')
+
+    await handler({ event: status('idle', 'grandchild') })
+    expect(names().filter((name) => name === 'SessionIdle')).toHaveLength(1)
+    expect(posts.at(-1)).toMatchObject({ hook_event_name: 'SessionIdle', sessionID: 'root' })
+  })
+
   it('reasserts Busy through the refreshed endpoint after a live text delta', async () => {
     const deliveries: { url: string; token: string | null }[] = []
     globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
