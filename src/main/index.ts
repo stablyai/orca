@@ -1052,7 +1052,8 @@ function openMainWindow(): BrowserWindow {
       // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).
       isRecoveryReloadInFlight,
       onBeforeUpdateQuit: () =>
-        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
+        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
+      updateInstallMode: isServeMode ? 'headless-serve' : 'interactive'
     }
   )
   rateLimits.attach(window)

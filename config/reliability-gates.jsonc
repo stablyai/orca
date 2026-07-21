@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-19",
+  "updatedAt": "2026-07-20",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -171,7 +171,8 @@
         "headless orca serve",
         "single-instance desktop activation",
         "CLI open",
-        "persistent terminal reattach"
+        "persistent terminal reattach",
+        "update install handoff"
       ],
       "platforms": [
         "macos",
@@ -193,16 +194,19 @@
       ],
       "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, and SSH identity transfer. A macOS Electron journey starts one headless owner in an isolated profile, creates and writes to a daemon PTY, activates the GUI through a second process, and verifies the original owner/runtime/daemon/PTY identities plus pre- and post-promotion I/O. Live packaged, Linux, and Windows journeys remain uncollected.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/issues/8457"
+        "https://github.com/stablyai/orca/issues/8457",
+        "https://github.com/stablyai/orca/issues/9563"
       ],
-      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation opens a window in that same process only after the persistent PTY provider and runtime RPC are ready; every live persisted local or SSH terminal remains bound to the same PTY/session, and a committed Cmd+Q still exits the promoted app.",
-      "oracle": "Unit tests coalesce early activation, fail closed on a fallback local provider, preserve the production single-instance path for serve, expose explicit desktop window state to local and remote clients, persist headless tab/leaf bindings, transfer local and SSH reattach metadata, and retain quit intent. The Electron journey asserts one main-process PID, runtime id, daemon PID, and PTY id across activation; confirms output written before promotion is visible afterward; confirms new terminal input still works; and requires the activating second process to exit.",
+      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation opens a window in that same process only after the persistent PTY provider and runtime RPC are ready; every live persisted local or SSH terminal remains bound to the same PTY/session; update installation is deferred before native quit, client disconnect, or session cleanup; and a committed Cmd+Q still exits the promoted app.",
+      "oracle": "Unit tests coalesce early activation, fail closed on a fallback local provider, preserve the production single-instance path for serve, expose explicit desktop window state to local and remote clients, persist headless tab/leaf bindings, transfer local and SSH reattach metadata, retain quit intent, and drive a staged update through the native quit boundary while asserting the serving owner and its clients remain intact. The Electron journey asserts one main-process PID, runtime id, daemon PID, and PTY id across activation; confirms output written before promotion is visible afterward; confirms new terminal input still works; and requires the activating second process to exit.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
       ],
       "testFiles": [
+        "src/main/updater.headless-serve-install.test.ts",
         "src/main/startup/serve-desktop-activation.test.ts",
         "src/main/startup/serve-desktop-activation-wiring.test.ts",
         "src/main/startup/single-instance-lock.test.ts",
@@ -213,6 +217,14 @@
         "tests/e2e/headless-serve-desktop-activation.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/updater.headless-serve-install.test.ts",
+          "assertions": [
+            "a ready update in headless serve is deferred before native install, paired-client disconnect, or active-session cleanup",
+            "headless serve refuses updater staging and install-on-quit while preserving availability checks",
+            "repeated requests emit one deterministic status and lifecycle diagnostic while interactive installs remain unchanged"
+          ]
+        },
         {
           "file": "src/main/startup/serve-desktop-activation.test.ts",
           "assertions": [
@@ -273,6 +285,15 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-07-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "Five focused files passed with 113 tests. The regression harness retained the staged-installer boundary but made zero native install, paired-client disconnect, and session-cleanup calls; download staging and install-on-quit were also disabled only for serve mode."
+        },
+        {
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
@@ -301,11 +322,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The first Electron red run proved that bypassing the dev single-instance lock created a second owner. After enforcing one owner, the next red run retained owner/runtime/daemon identity but exposed a new PTY because the headless tab/leaf binding was not persisted. The final implementation persists that binding before renderer hydration and both subsequent Electron runs kept the original PTY and transcript. Focused unit tests were also observed red before the activation gate, promotion metadata transfer, and headless spawn-persistence changes were added."
+        "evidence": "The updater regression was observed red with one native install call, one paired-client disconnect, one session-cleanup start, an unverified old owner, no replacement owner, a still-staged installer, and no deferral status. It passed after the serve install policy moved ahead of download and native quit. Earlier activation evidence also proved and fixed second-owner and replacement-PTY failures before the final Electron journey kept the original owner, runtime, daemon, PTY, and transcript."
       },
       "performanceBudget": {
-        "required": false,
-        "evidence": "Activation adds no polling in the app owner and performs one bounded pass over live PTY records plus persisted terminal bindings only when a headless owner opens its first window. Desktop-only bell, command, PR-link, and mode scanners are rebuilt only while a real renderer graph is ready, preserving the prior pure-headless output path. CLI open keeps its existing 250ms bounded startup poll."
+        "required": true,
+        "evidence": "Update deferral adds no polling, subprocesses, scans, timers, or provider calls: it is a constant-time mode check at user-triggered download/install boundaries, with one deduplicated diagnostic per version and phase. Activation still adds no polling and performs one bounded pass over live PTY records plus persisted terminal bindings only when a headless owner opens its first window."
       },
       "promotionCriteria": [
         "Collect at least 100 consecutive CI or soak passes or 14 days without an unexplained flake.",
