@@ -174,12 +174,11 @@ type FetchNewerReleaseTagOptions = {
   releaseFilter?: 'perf'
 }
 
-export type FetchNewerReleaseTagsResult = {
-  tags: string[]
-  state: 'ready' | 'no-newer' | 'not-ready' | 'unavailable'
-  lastGoodTag?: string
-  unavailableReason?: 'feed' | 'manifest'
-}
+export type FetchNewerReleaseTagsResult =
+  | { tags: string[]; state: 'ready' }
+  | { tags: string[]; state: 'no-newer' }
+  | { tags: string[]; state: 'not-ready'; lastGoodTag?: string }
+  | { tags: string[]; state: 'unavailable'; unavailableReason: 'feed' | 'manifest' }
 
 export async function fetchNewerReleaseTag(
   currentVersion: string,
@@ -202,12 +201,12 @@ export async function fetchNewerReleaseTagsWithReadiness(
   options: FetchNewerReleaseTagOptions = {}
 ): Promise<FetchNewerReleaseTagsResult> {
   const includePrerelease = options.includePrerelease ?? true
+  if (maxTags <= 0) {
+    return { tags: [], state: 'no-newer' }
+  }
   const tags = await fetchReleaseFeedTags()
   if (!tags) {
     return { tags: [], state: 'unavailable', unavailableReason: 'feed' }
-  }
-  if (maxTags <= 0) {
-    return { tags: [], state: 'no-newer' }
   }
 
   // Why: perf builds are explicit opt-in; regular prerelease checks should

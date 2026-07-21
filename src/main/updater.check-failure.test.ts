@@ -105,10 +105,7 @@ const FRIENDLY_MESSAGE = "Couldn't reach the update server. Try again in a few m
 const PUBLISHING_MESSAGE = 'A new release is still being published. Try again shortly.'
 
 function makeBenignCheckFailure(message: string): void {
-  const error = new Error(message) as Error & { updaterReleaseChannel?: 'default' }
-  if (message === 'Latest release assets are still publishing') {
-    error.updaterReleaseChannel = 'default'
-  }
+  const error = new Error(message)
   autoUpdaterMock.checkForUpdates.mockImplementation(() => {
     autoUpdaterMock.emit('checking-for-update')
     queueMicrotask(() => {
@@ -200,39 +197,6 @@ describe('updater check failure handling', () => {
         expect.objectContaining({ state: 'not-available', userInitiated: true })
       )
     })
-  })
-
-  it('surfaces the publishing sentinel with publishing-specific copy', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-05-24T21:40:00Z'))
-    makeBenignCheckFailure('Latest release assets are still publishing')
-
-    const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
-    const setLastUpdateCheckAt = vi.fn()
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
-
-    setupAutoUpdater(mainWindow as never, {
-      getLastUpdateCheckAt: () => Date.now(),
-      setLastUpdateCheckAt
-    })
-    checkForUpdatesFromMenu()
-    await vi.waitFor(() => {
-      expect(sendMock.mock.calls.map(([, status]) => status)).toContainEqual(
-        expect.objectContaining({
-          state: 'error',
-          userInitiated: true,
-          message: PUBLISHING_MESSAGE
-        })
-      )
-    })
-    expect(
-      sendMock.mock.calls.filter(([, status]) => status?.message === PUBLISHING_MESSAGE)
-    ).toHaveLength(1)
-    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
   })
 
   it('maps the captured release incident through readiness into publishing copy', async () => {

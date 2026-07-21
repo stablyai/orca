@@ -50,9 +50,17 @@ type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
 type PrimaryEventSuppression = { failureKey: string; error: unknown }
 type UpdateCheckVariant = 'default' | 'prerelease' | 'perf'
-type ReleasePublishingError = Error & {
-  updaterReleaseChannel?: UpdateCheckVariant
-  updaterPreserveNudge?: boolean
+type ReleaseFeedPreflightFailure = 'manifest-unavailable' | 'release-publishing'
+// Why: expected preflight outcomes need typed context so UI routing never depends on matching error text.
+class ReleaseFeedPreflightError extends Error {
+  constructor(
+    readonly reason: ReleaseFeedPreflightFailure,
+    readonly releaseChannel: UpdateCheckVariant,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ReleaseFeedPreflightError'
+  }
 }
 type ReleaseFeedPreflightResult = 'ready' | 'not-available'
 export type UpdateInstallMode =
@@ -859,7 +867,7 @@ async function sendCheckFailureStatus(
       if (userInitiated) {
         // Why: a user click needs visible feedback (idle looks broken); distinguish incomplete releases from transport failures.
         sendErrorStatus(
-          isStableReleasePublishingFailure(message, sourceError)
+          isStableReleasePublishingFailure(sourceError)
             ? 'A new release is still being published. Try again shortly.'
             : "Couldn't reach the update server. Try again in a few minutes.",
           true
@@ -895,16 +903,17 @@ async function sendCheckFailureStatus(
 function shouldPreserveNudgeForReleaseProbe(message: string, sourceError: unknown): boolean {
   return (
     isReleaseAssetsPublishingFailure(message) ||
-    (sourceError as ReleasePublishingError | null)?.updaterPreserveNudge === true
+    (sourceError instanceof ReleaseFeedPreflightError &&
+      sourceError.reason === 'manifest-unavailable')
   )
 }
 
-function isStableReleasePublishingFailure(message: string, sourceError: unknown): boolean {
-  if (!isReleaseAssetsPublishingFailure(message)) {
-    return false
-  }
-  const channel = (sourceError as ReleasePublishingError | null)?.updaterReleaseChannel
-  return channel === 'default'
+function isStableReleasePublishingFailure(sourceError: unknown): boolean {
+  return (
+    sourceError instanceof ReleaseFeedPreflightError &&
+    sourceError.reason === 'release-publishing' &&
+    sourceError.releaseChannel === 'default'
+  )
 }
 
 export function getUpdateStatus(): UpdateStatus {
@@ -1158,13 +1167,11 @@ async function pinDefaultReleaseFeed(
     console.info(
       `[updater] release feed deferred: current=${currentVersion} includePrerelease=${includePrerelease}; newest release assets are still publishing`
     )
-    const error = new Error('Latest release assets are still publishing') as ReleasePublishingError
-    error.updaterReleaseChannel = isPerfCheck
-      ? 'perf'
-      : includePrerelease
-        ? 'prerelease'
-        : 'default'
-    throw error
+    throw new ReleaseFeedPreflightError(
+      'release-publishing',
+      isPerfCheck ? 'perf' : includePrerelease ? 'prerelease' : 'default',
+      'Latest release assets are still publishing'
+    )
   } else if (
     releaseTagsResult.state === 'unavailable' &&
     releaseTagsResult.unavailableReason === 'manifest' &&
@@ -1172,14 +1179,11 @@ async function pinDefaultReleaseFeed(
   ) {
     clearPrereleaseFallbackContext()
     clearPublishingWindowLastGoodCheck()
-    const error = new Error('Unable to find latest version on GitHub') as ReleasePublishingError
-    error.updaterReleaseChannel = isPerfCheck
-      ? 'perf'
-      : includePrerelease
-        ? 'prerelease'
-        : 'default'
-    error.updaterPreserveNudge = true
-    throw error
+    throw new ReleaseFeedPreflightError(
+      'manifest-unavailable',
+      'default',
+      'Unable to find latest version on GitHub'
+    )
   } else if (isPerfCheck) {
     clearPrereleaseFallbackContext()
     clearPublishingWindowLastGoodCheck()
