@@ -62,12 +62,31 @@ describe('GitHub source runtime context', () => {
       activeRuntimeEnvironmentId: 'repo-owner-env'
     }
 
+    const resolved = resolveGitHubSourceSettings(repoOwnerSettings, {
+      ...runtimeSourceContext,
+      hostId: 'local'
+    })
+
+    expect(resolved).toBe(repoOwnerSettings)
+  })
+
+  it('keeps the repo owner runtime for SSH and non-GitHub sources', () => {
+    const repoOwnerSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> = {
+      activeRuntimeEnvironmentId: 'repo-owner-env'
+    }
+
     expect(
       resolveGitHubSourceSettings(repoOwnerSettings, {
         ...runtimeSourceContext,
-        hostId: 'local'
+        hostId: 'ssh:connection-1'
       })
-    ).toEqual({ activeRuntimeEnvironmentId: 'repo-owner-env' })
+    ).toBe(repoOwnerSettings)
+    expect(
+      resolveGitHubSourceSettings(repoOwnerSettings, {
+        ...runtimeSourceContext,
+        provider: 'gitlab'
+      })
+    ).toBe(repoOwnerSettings)
   })
 
   it('uses the GitHub source runtime when it is remote', () => {

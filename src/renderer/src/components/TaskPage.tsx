@@ -187,6 +187,7 @@ import PullRequestPage from '@/components/PullRequestPage'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { resolveGitHubSourceSettings } from '@/lib/github-source-runtime-context'
 import {
   buildExecutionHostRegistry,
   type ExecutionHostRegistryEntry
@@ -225,7 +226,6 @@ import { projectHostSetupProjectionFromRepos } from '../../../shared/project-hos
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
   getTaskSourceCacheScope,
-  getTaskSourceRuntimeSettings,
   normalizeTaskSourceContext,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
@@ -1042,13 +1042,7 @@ function GHStatusCell({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const parsedIssueLink = useMemo(() => parseGitHubIssueOrPRLink(item.url), [item.url])
@@ -1678,13 +1672,7 @@ function GHAssigneesCell({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const [open, setOpen] = useState(false)
@@ -2008,13 +1996,7 @@ function PRReviewCell({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
@@ -2655,13 +2637,7 @@ function PRMergeCell({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   if (item.type !== 'pr') {
@@ -4157,13 +4133,7 @@ export default function TaskPage(): React.JSX.Element {
       { repos: [newIssueTargetRepo], settings },
       newIssueTargetRepo.id
     )
-    const targetSettings =
-      newIssueSourceContext?.provider === 'github'
-        ? {
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(newIssueSourceContext)
-          }
-        : repoOwnerSettings
+    const targetSettings = resolveGitHubSourceSettings(repoOwnerSettings, newIssueSourceContext)
     const target = getActiveRuntimeTarget(targetSettings)
     if (target.kind !== 'environment') {
       return null

@@ -74,6 +74,25 @@ describe('TaskPage source switching host boundary', () => {
     expect(TASK_PAGE_SOURCE).toContain('runtimePreflightStatusByHostId')
   })
 
+  it('resolves GitHub task actions without letting local source context erase repo ownership', () => {
+    const sections = [
+      sourceBetween(TASK_PAGE_SOURCE, 'function GHStatusCell', 'function GitHubAssigneeAvatar'),
+      sourceBetween(TASK_PAGE_SOURCE, 'function GHAssigneesCell', 'const triggerContent ='),
+      sourceBetween(TASK_PAGE_SOURCE, 'function PRReviewCell', 'function PRChecksCell'),
+      sourceBetween(TASK_PAGE_SOURCE, 'function PRMergeCell', 'const handleAutoMerge'),
+      sourceBetween(
+        TASK_PAGE_SOURCE,
+        'const newIssueRuntimeTarget = useMemo',
+        'const newIssueRepoLabels'
+      )
+    ]
+
+    for (const section of sections) {
+      expect(section).toContain('resolveGitHubSourceSettings(')
+      expect(section).not.toContain('...getTaskSourceRuntimeSettings(')
+    }
+  })
+
   it('preserves exact GitLab project identity when opening or starting from an item', () => {
     const sourceContextBuilder = sourceBetween(
       TASK_PAGE_SOURCE,
