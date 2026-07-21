@@ -292,6 +292,16 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  qoder: {
+    // Why: the published binary is `qodercli` (docs.qoder.com), not `qoder`. Keep the TuiAgent id
+    // short as `qoder` for stored preferences, but detect/launch/identify the real binary name.
+    detectCmd: 'qodercli',
+    launchCmd: 'qodercli',
+    expectedProcess: 'qodercli',
+    // Why: Qoder CLI does not document a `--prefill`-style argv prompt flag, so fall back to
+    // stdin-after-start like ante/goose/amp/devin until a native prefill path is verified.
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 
