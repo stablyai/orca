@@ -191,7 +191,10 @@ describe('command aliases dispatch to the canonical handler', () => {
 
     await main(['terminal', 'focus', '--terminal', 'term_abc', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith('terminal.focus', expect.objectContaining({}))
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.focus',
+      expect.objectContaining({ navigation: 'host' })
+    )
   })
 
   it('serves `agent-context --json` without contacting the runtime', async () => {

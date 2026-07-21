@@ -14,7 +14,7 @@ function request(params: unknown): RpcRequest {
 }
 
 describe('terminal focus navigation authority', () => {
-  it('denies implicit mobile focus while preserving runtime, local, and explicit focus', async () => {
+  it('denies implicit paired focus while preserving local and explicit host focus', async () => {
     const runtime = {
       getRuntimeId: () => 'runtime-1',
       focusTerminal: vi.fn().mockResolvedValue({
@@ -47,7 +47,7 @@ describe('terminal focus navigation authority', () => {
       navigateHost: true
     })
     expect(runtime.focusTerminal).toHaveBeenNthCalledWith(3, 'term-1', {
-      navigateHost: true
+      navigateHost: false
     })
     expect(runtime.focusTerminal).toHaveBeenNthCalledWith(4, 'term-1', {
       navigateHost: true

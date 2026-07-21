@@ -38,7 +38,10 @@ import {
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../scrollback-limits'
 import { assertTerminalAgentSendable } from '../terminal-agent-send-guard'
-import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
+import {
+  navigationTargetsHost,
+  resolveRuntimeNavigationTarget
+} from '../../../../shared/runtime-navigation'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
@@ -1420,9 +1423,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalFocus,
     handler: async (params, { runtime, clientKind }) => ({
       focus: await runtime.focusTerminal(params.terminal, {
-        // Why: legacy mobile used focus as an implicit tap side effect; runtime/local callers use it as an explicit CLI reveal.
         navigateHost: navigationTargetsHost(
-          params.navigation ?? (clientKind === 'mobile' ? 'caller' : 'host')
+          resolveRuntimeNavigationTarget({ navigation: params.navigation, clientKind })
         )
       })
     })

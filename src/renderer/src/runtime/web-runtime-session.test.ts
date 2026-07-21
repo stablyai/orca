@@ -80,7 +80,7 @@ describe('activateWebRuntimeSessionWorktree', () => {
     vi.clearAllMocks()
   })
 
-  it('can ask the host to activate session surfaces without notifying desktop clients', async () => {
+  it('activates caller-owned session surfaces without steering host or clients', async () => {
     const runtimeCall = vi.fn().mockResolvedValueOnce({
       id: 'activate',
       ok: true,

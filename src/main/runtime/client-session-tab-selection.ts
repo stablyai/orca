@@ -76,6 +76,7 @@ export function projectClientSessionTabSelection(
   selection: ClientSessionTabSelection
 ): { snapshot: RuntimeMobileSessionTabsResult; selection: ClientSessionTabSelection } {
   const selectedGroup = snapshot.tabGroups?.find((group) => group.id === selection.activeGroupId)
+  // Why: preserve the client's leaf and group choices before falling back to shared snapshot order.
   const activeTab =
     snapshot.tabs.find((tab) => tab.id === selection.activeTabId) ??
     findTabByTopLevelId(

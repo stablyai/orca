@@ -93,15 +93,14 @@ describe('client session-tab selection', () => {
     const selected = activateClientSessionTabSelection(
       initial,
       deriveClientSessionTabSelection(initial),
-      'browser-unified'
+      'terminal-a::leaf-b'
     )
     const removed = {
       ...initial,
       activeGroupId: 'group-left',
       activeTabId: 'terminal-a::leaf-a',
       activeTabType: 'terminal' as const,
-      tabGroups: initial.tabGroups?.filter((group) => group.id === 'group-left'),
-      tabs: initial.tabs.filter((tab) => tab.type === 'terminal')
+      tabs: initial.tabs.filter((tab) => tab.id !== 'terminal-a::leaf-b')
     }
 
     const projected = projectClientSessionTabSelection(removed, selected)

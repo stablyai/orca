@@ -175,6 +175,7 @@ export class RpcDispatcher {
           clientId: options?.clientId,
           pairedDeviceId: options?.pairedDeviceId,
           clientKind: options?.clientKind,
+          pairing: options?.pairing,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         },
