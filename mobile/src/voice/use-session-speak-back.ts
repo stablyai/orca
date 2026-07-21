@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { onAgentTaskComplete } from '../notifications/agent-complete-signal'
 import { summarizeForSpeech } from './summarize-for-speech'
 import { useMeshSpeak } from './use-mesh-speak'
 
@@ -119,9 +120,17 @@ export function useSessionSpeakBack(options: {
     }
     void tick()
     const timer = setInterval(() => void tick(), POLL_MS)
+    // Why also listen: the interval alone is throttled hard in the background
+    // (measured gaps up to 62s), while the desktop's agent-task-complete push
+    // arrives promptly on the live socket. Tick immediately on that push so a
+    // finished turn is spoken when it happens, not on the next throttled wake.
+    const unsubscribe = onAgentTaskComplete(() => {
+      void tick()
+    })
     return () => {
       cancelled = true
       clearInterval(timer)
+      unsubscribe()
     }
   }, [enabled, client, worktreeId, handleAgentRow])
 
