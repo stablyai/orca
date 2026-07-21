@@ -5658,7 +5658,7 @@ const WorktreeList = React.memo(function WorktreeList({
       return visibleHostIdSet.has(hostId)
     })
   }, [defaultHostId, projectGroups, visibleHostIdSet])
-  const visibleFolderWorkspacesForRows = useMemo(() => {
+  const recomputedVisibleFolderWorkspacesForRows = useMemo(() => {
     // Why agentStatusEpoch: sleeping-state membership must update immediately
     // without subscribing to the full agent-status map (same as worktrees).
     void agentStatusEpoch
@@ -5689,6 +5689,12 @@ const WorktreeList = React.memo(function WorktreeList({
     tabsByWorktree,
     visibleHostIdSet
   ])
+  // Why: agentStatusEpoch bumps recompute this memo even when membership and
+  // order are unchanged; keeping the previous identity stops the whole
+  // rows/sectionRows/renderedWorktrees chain from churning per epoch (same as visibleWorktrees).
+  const visibleFolderWorkspacesForRows = useReusedArrayIdentity(
+    recomputedVisibleFolderWorkspacesForRows
+  )
   const repoOrder = useMemo(() => {
     return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   }, [repos])
