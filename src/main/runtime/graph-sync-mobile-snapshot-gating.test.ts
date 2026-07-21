@@ -262,6 +262,40 @@ describe('graph-sync mobile snapshot gating', () => {
     expect(events[0]?.publicationEpoch).toBe('renderer:epoch-2')
   })
 
+  it('rejects a delayed retired epoch so a new subscriber cannot inherit stale authority', async () => {
+    const { runtime, events, sync } = createRuntime(makeSession())
+
+    sync([makeRendererSnapshot({ version: 5, epoch: 'renderer:epoch-1', title: 'Old' })])
+    vi.advanceTimersByTime(60)
+    sync([makeRendererSnapshot({ version: 1, epoch: 'renderer:epoch-2', title: 'Current' })])
+    vi.advanceTimersByTime(60)
+    events.length = 0
+
+    sync([makeRendererSnapshot({ version: 6, epoch: 'renderer:epoch-1', title: 'Delayed' })])
+    vi.advanceTimersByTime(60)
+
+    expect(events).toHaveLength(0)
+    await expect(runtime.listMobileSessionTabs(`id:${WT}`)).resolves.toMatchObject({
+      publicationEpoch: 'renderer:epoch-2',
+      tabs: [expect.objectContaining({ title: 'Current' })]
+    })
+  })
+
+  it('does not resurrect a removed snapshot when its retired epoch replays', () => {
+    const { runtime, events, sync } = createRuntime(makeSession())
+
+    sync([makeRendererSnapshot({ version: 1, epoch: 'renderer:removed' })])
+    vi.advanceTimersByTime(60)
+    sync([])
+    events.length = 0
+
+    sync([makeRendererSnapshot({ version: 2, epoch: 'renderer:removed' })])
+    vi.advanceTimersByTime(60)
+
+    expect(events).toHaveLength(0)
+    expect((runtime as unknown as RuntimeInternals).mobileSessionTabsByWorktree.has(WT)).toBe(false)
+  })
+
   it('hydrates headless browser tabs when an offscreen backend exists despite zero serve terminals', () => {
     const { runtime, events, sync } = createRuntime(
       makeSession({

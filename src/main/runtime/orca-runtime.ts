@@ -2281,6 +2281,7 @@ export class OrcaRuntimeService {
     string,
     { publicationEpoch: string; rendererVersion: number }
   >()
+  private retiredRendererMobilePublicationEpochsByWorktree = new Map<string, Set<string>>()
   private clientSessionTabSelections = new ClientSessionTabSelectionStore()
   // Why: idempotency map for mobile terminal creation — a retried create with the
   // same clientMutationId returns the in-flight operation instead of duplicating.
@@ -22771,6 +22772,12 @@ export class OrcaRuntimeService {
       // against the stored snapshot's version: main-local touches bump it
       // independently and would reject genuinely newer renderer revisions.
       const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
+      const retiredEpochs = this.retiredRendererMobilePublicationEpochsByWorktree.get(
+        snapshot.worktree
+      )
+      if (retiredEpochs?.has(snapshot.publicationEpoch)) {
+        continue
+      }
       if (
         accepted &&
         accepted.publicationEpoch === snapshot.publicationEpoch &&
@@ -22804,6 +22811,14 @@ export class OrcaRuntimeService {
           ? nextSnapshot
           : { ...nextSnapshot, snapshotVersion: storedVersion }
       )
+      if (accepted && accepted.publicationEpoch !== snapshot.publicationEpoch) {
+        const nextRetiredEpochs = retiredEpochs ?? new Set<string>()
+        nextRetiredEpochs.add(accepted.publicationEpoch)
+        this.retiredRendererMobilePublicationEpochsByWorktree.set(
+          snapshot.worktree,
+          nextRetiredEpochs
+        )
+      }
       this.acceptedRendererMobileSnapshotByWorktree.set(snapshot.worktree, {
         publicationEpoch: snapshot.publicationEpoch,
         rendererVersion: snapshot.snapshotVersion
@@ -22830,6 +22845,14 @@ export class OrcaRuntimeService {
           nextWorktrees.add(worktreeId)
         } else {
           this.mobileSessionTabsByWorktree.delete(worktreeId)
+          const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
+          if (accepted) {
+            const retiredEpochs =
+              this.retiredRendererMobilePublicationEpochsByWorktree.get(worktreeId) ??
+              new Set<string>()
+            retiredEpochs.add(accepted.publicationEpoch)
+            this.retiredRendererMobilePublicationEpochsByWorktree.set(worktreeId, retiredEpochs)
+          }
           this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
           // Why: drop any pending coalesced notify so a stale snapshot can't land after the removed frame.
           this.mobileSessionTabsNotifyCoalescer.cancel(worktreeId)
