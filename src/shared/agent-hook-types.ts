@@ -38,10 +38,7 @@ export type AgentHookInstallStatus = {
   skipReason?: AgentHookInstallSkipReason
 }
 
-// Why: hook installs on SSH remotes happen host-side, so a local file check
-// cannot answer "are hooks installed where the agent runs?". Each relay
-// session records its last install outcome in this shape so `agent hooks
-// status` reports the host that actually executes the agent (#8711).
+// Why: SSH hook state belongs to the executing host, not the desktop's local install (#8711).
 export type RemoteAgentHookInstallReport = {
   targetId: string
   remoteHome: string | null

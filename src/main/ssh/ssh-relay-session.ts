@@ -443,6 +443,7 @@ export class SshRelaySession {
     }
   }
 
+  // Why: SSH agents read host-side hooks, so the CLI must not substitute local install state (#8711).
   getAgentHookInstallReport(): RemoteAgentHookInstallReport | null {
     return this.agentHookInstallReport
   }

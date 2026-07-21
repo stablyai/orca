@@ -209,6 +209,27 @@ describe('agent hooks CLI handler', () => {
     })
   })
 
+  it('labels SSH status unavailable in offline text output', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getManagedAgentHookStatusesMock.mockReturnValue([])
+
+    await main(['agent', 'hooks', 'status'], userDataPath)
+
+    expect(vi.mocked(console.log).mock.calls.at(-1)?.[0]).toContain(
+      'ssh: unavailable — runtime is not reachable'
+    )
+  })
+
+  it('surfaces a runtime status transport failure instead of falling back', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getCliStatusMock.mockRejectedValueOnce(new Error('status transport failed'))
+
+    await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+
+    expect(process.exitCode).toBe(1)
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain('status transport failed')
+  })
+
   it('keeps new card style off when creating offline settings for a fresh profile', async () => {
     await runAgentHooksOff(userDataPath)
 

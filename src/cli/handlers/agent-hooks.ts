@@ -184,37 +184,38 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   const statusSummary = result.statuses
     .map((status) => `${status.agent}: ${status.state}`)
     .join('\n')
-  const remoteSummary = (result.remotes ?? [])
-    .flatMap((remote) => [
-      `ssh:${remote.targetId}: ${remote.state}${remote.detail ? ` - ${remote.detail}` : ''}`,
-      ...remote.statuses.map(
-        (status) => `  ${status.agent}: ${status.state}${status.detail ? ` - ${status.detail}` : ''}`
-      )
-    ])
-    .join('\n')
-  return [
+  const lines = [
     `agentStatusHooksEnabled: ${result.enabled}`,
     `appliedBy: ${result.appliedBy}`,
     `settingsPath: ${result.settingsPath}`,
-    statusSummary,
-    result.remotes === null ? 'ssh: unavailable (runtime offline)' : remoteSummary
-  ]
-    .filter(Boolean)
-    .join('\n')
+    statusSummary
+  ].filter(Boolean)
+  if (result.remotes === null) {
+    lines.push('ssh: unavailable — runtime is not reachable')
+  }
+  for (const remote of result.remotes ?? []) {
+    lines.push(formatRemoteReport(remote))
+  }
+  return lines.join('\n')
 }
 
+function formatRemoteReport(remote: RemoteAgentHookInstallReport): string {
+  const header = `ssh:${remote.targetId}: ${remote.state}${remote.detail ? ` — ${remote.detail}` : ''}`
+  const agentLines = remote.statuses.map((status) => {
+    const detail = status.state !== 'installed' && status.detail ? ` — ${status.detail}` : ''
+    return `  ${status.agent}: ${status.state}${detail}`
+  })
+  return [header, ...agentLines].join('\n')
+}
+
+/** Reads remote status only from a reachable runtime. Transport failures must
+ * surface instead of being converted into a misleading local-only success. */
 async function fetchRuntimeHookStatuses(client: RuntimeClient): Promise<{
   local: AgentHookInstallStatus[]
   remotes: RemoteAgentHookInstallReport[]
 } | null> {
-  let reachable = false
-  try {
-    const status = await client.getCliStatus()
-    reachable = status.result.runtime.reachable
-  } catch {
-    return null
-  }
-  if (!reachable) {
+  const status = await client.getCliStatus()
+  if (!status.result.runtime.reachable) {
     return null
   }
   const response = await client.call<{
@@ -242,26 +243,13 @@ async function setAgentHooksEnabled(
   }
 }
 
-// Why: an SSH agent reads hooks on its remote host, so a purely local file
-// check reports `installed` for a host it never looked at (#8711). Only the
-// running runtime knows each relay session's actual install outcome; when it
-// is unreachable no SSH agents are running either, so local-only is truthful.
-// A reachable runtime whose RPC fails is different: swallowing that error
-// would print a local-only report that can say `installed` while active SSH
-// state is unknown — the exact green-but-wrong output this command fixes —
-// so the RPC failure surfaces to the caller instead.
+// Why: only a reachable runtime knows SSH-host state; transport failures must surface instead of printing a false local green.
 async function fetchRuntimeHookStatuses(client: RuntimeClient): Promise<{
   local: AgentHookInstallStatus[]
   remotes: RemoteAgentHookInstallReport[]
 } | null> {
-  let reachable = false
-  try {
-    const status = await client.getCliStatus()
-    reachable = status.result.runtime.reachable
-  } catch {
-    return null
-  }
-  if (!reachable) {
+  const status = await client.getCliStatus()
+  if (!status.result.runtime.reachable) {
     return null
   }
   const response = await client.call<{
