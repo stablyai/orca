@@ -3992,6 +3992,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // Why: folder pin state lands after the update round-trip; wait so
         // reveal targets the row's new position.
         void Promise.allSettled(folderUpdatePromises).then(() => {
+          const activeWorkspaceId = getActiveSidebarWorkspaceId(
+            get().activeWorkspaceKey,
+            get().activeWorktreeId
+          )
+          // Why: a slow remote update must not pull the viewport back after the user navigates away.
+          if (activeWorkspaceId !== revealTargetId) {
+            return
+          }
           get().revealWorktreeInSidebar(revealTargetId, { behavior: 'smooth', highlight: true })
         })
       } else {

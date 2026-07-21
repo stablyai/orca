@@ -6745,6 +6745,32 @@ describe('setWorktreesPinnedAndReveal', () => {
     })
   })
 
+  it('does not reveal a folder workspace after focus moves during its pin update', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ isPinned: false })
+    const folderId = folderWorkspaceKey(folderWorkspace.id)
+    const reveal = vi.fn()
+    let resolveUpdate: (() => void) | undefined
+    const updatePromise = new Promise<void>((resolve) => {
+      resolveUpdate = resolve
+    })
+    store.setState({
+      folderWorkspaces: [folderWorkspace],
+      activeWorkspaceKey: folderId,
+      revealWorktreeInSidebar: reveal,
+      updateWorktreeMeta: vi.fn(() => updatePromise)
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([folderId], true)
+    store.setState({ activeWorkspaceKey: null, activeWorktreeId: 'repo1::/other' })
+
+    resolveUpdate?.()
+    await updatePromise
+    await Promise.resolve()
+
+    expect(reveal).not.toHaveBeenCalled()
+  })
+
   it('skips a no-op toggle without requesting a reveal', () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: true })

@@ -295,7 +295,6 @@ import {
 } from './worktree-list-host-filtering'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 import {
-  getPreferredWorktreeRows,
   getRenderedWorktreesInSidebarOrder,
   isWorkspaceRowIdentityRendered
 } from './worktree-sidebar-row-preference'
@@ -660,6 +659,8 @@ type VirtualizedWorktreeViewportProps = {
   agentSendTargetWorktreeId: string | null
   worktrees: Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
+  visibleFolderWorkspaces: readonly FolderWorkspace[]
+  folderWorkspaceSortComparatorRef: React.MutableRefObject<(a: Worktree, b: Worktree) => number>
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
@@ -1359,6 +1360,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   agentSendTargetWorktreeId,
   worktrees,
   folderWorkspaces,
+  visibleFolderWorkspaces,
+  folderWorkspaceSortComparatorRef,
   selectedWorktreeIds,
   selectedWorktrees,
   onSelectionGesture,
@@ -2485,7 +2488,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
       // Why: cycle over an all-expanded layout so navigation doesn't skip worktrees in collapsed groups; reveal uncollapses the target.
-      const allWorktreeRows = buildRows(
+      const allWorkspaceRows = buildRows(
         groupBy,
         worktrees,
         repoMap,
@@ -2504,34 +2507,40 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         new Map(),
         [],
         projectGrouping,
-        [],
+        visibleFolderWorkspaces,
         undefined,
         defaultHostId,
+        pinnedDisplayPolicy,
+        folderWorkspaceSortComparatorRef.current
+      )
+      const navigationWorkspaces = getRenderedWorktreesInSidebarOrder(
+        allWorkspaceRows,
         pinnedDisplayPolicy
-      ).filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
-      const worktreeRows = getPreferredWorktreeRows(allWorktreeRows, pinnedDisplayPolicy)
-      if (worktreeRows.length === 0) {
+      )
+      if (navigationWorkspaces.length === 0) {
         return
       }
 
       let nextIndex = 0
-      const currentIndex = worktreeRows.findIndex((r) => r.worktree.id === activeWorktreeId)
+      const currentIndex = navigationWorkspaces.findIndex(
+        (workspace) => workspace.id === activeWorktreeId
+      )
 
       if (currentIndex !== -1) {
         if (direction === 'up') {
           nextIndex = currentIndex - 1
           if (nextIndex < 0) {
-            nextIndex = worktreeRows.length - 1
+            nextIndex = navigationWorkspaces.length - 1
           }
         } else {
           nextIndex = currentIndex + 1
-          if (nextIndex >= worktreeRows.length) {
+          if (nextIndex >= navigationWorkspaces.length) {
             nextIndex = 0
           }
         }
       }
 
-      const nextWorktreeId = worktreeRows[nextIndex].worktree.id
+      const nextWorktreeId = navigationWorkspaces[nextIndex].id
       // Why: keyboard cycling is real navigation; route through the activation helper that records history.
       activateAndRevealWorktree(nextWorktreeId)
 
@@ -2561,7 +2570,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       settings,
       projectGroups,
       projectGrouping,
-      pinnedDisplayPolicy
+      pinnedDisplayPolicy,
+      visibleFolderWorkspaces,
+      folderWorkspaceSortComparatorRef
     ]
   )
 
@@ -5692,9 +5703,9 @@ const WorktreeList = React.memo(function WorktreeList({
   // Why: agentStatusEpoch bumps recompute this memo even when membership and
   // order are unchanged; keeping the previous identity stops the whole
   // rows/sectionRows/renderedWorktrees chain from churning per epoch (same as visibleWorktrees).
-  const visibleFolderWorkspacesForRows = useReusedArrayIdentity(
-    recomputedVisibleFolderWorkspacesForRows
-  )
+  const visibleFolderWorkspacesForRows = useReusedArrayIdentity([
+    ...recomputedVisibleFolderWorkspacesForRows
+  ])
   const repoOrder = useMemo(() => {
     return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   }, [repos])
@@ -5786,8 +5797,9 @@ const WorktreeList = React.memo(function WorktreeList({
 
   // Why: folder workspaces bypass sortedIds, so their comparator must match the
   // Git-row comparator before mixed lanes are merged.
+  const settledSmartSortIds = sortBy === 'smart' ? sortedIds : null
   const folderWorkspaceSortComparator = useMemo(() => {
-    void sortedIds
+    void settledSmartSortIds
     const now = Date.now()
     // Why: Smart cold start uses persisted sortOrder for Git rows; folder rows
     // must use the same key until live attention exists.
@@ -5817,7 +5829,9 @@ const WorktreeList = React.memo(function WorktreeList({
       mergedAttention.set(id, attention)
     }
     return buildWorktreeComparator('smart', repoMap, now, mergedAttention)
-  }, [sortBy, repoMap, sortedIds, visibleFolderWorkspacesForRows])
+  }, [sortBy, repoMap, settledSmartSortIds, visibleFolderWorkspacesForRows])
+  const folderWorkspaceSortComparatorRef = useRef(folderWorkspaceSortComparator)
+  folderWorkspaceSortComparatorRef.current = folderWorkspaceSortComparator
 
   // Build flat row list for rendering
   const rows: Row[] = useMemo(
@@ -6871,6 +6885,8 @@ const WorktreeList = React.memo(function WorktreeList({
         agentSendTargetWorktreeId={agentSendTargetWorktreeId}
         worktrees={worktrees}
         folderWorkspaces={folderWorkspaces}
+        visibleFolderWorkspaces={visibleFolderWorkspacesForRows}
+        folderWorkspaceSortComparatorRef={folderWorkspaceSortComparatorRef}
         selectedWorktreeIds={selectedWorktreeIds}
         selectedWorktrees={selectedWorktrees}
         onSelectionGesture={updateSelectionForGesture}

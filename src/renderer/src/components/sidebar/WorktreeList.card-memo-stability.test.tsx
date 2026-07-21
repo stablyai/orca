@@ -3,13 +3,21 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type {
+  FolderWorkspace,
+  ProjectGroup,
+  Repo,
+  Worktree,
+  WorktreeCardProperty
+} from '../../../../shared/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   activateWorktreeFromSidebar: vi.fn(),
+  activateAndRevealWorktree: vi.fn(),
   openModal: vi.fn()
 }))
 
@@ -97,7 +105,7 @@ vi.mock('@/lib/sidebar-worktree-activation', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
+  activateAndRevealWorktree: mockStore.activateAndRevealWorktree
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
@@ -319,5 +327,62 @@ describe('WorktreeCard memo bail-out across epoch bumps', () => {
     // The changed card re-renders; identity reuse must not freeze real updates.
     expect(cardRenderSpy.mock.calls.length).toBeGreaterThan(countAfterMount)
     expect(cardRenderSpy).toHaveBeenCalledWith('wt-a')
+  })
+
+  it('includes folder workspaces in arrow-key navigation order', async () => {
+    const alpha = makeWorktree({ id: 'wt-a', displayName: 'alpha', sortOrder: 20 })
+    const zeta = makeWorktree({ id: 'wt-z', displayName: 'zeta', sortOrder: 10 })
+    const projectGroup: ProjectGroup = {
+      id: 'group-1',
+      name: 'Folders',
+      parentPath: '/tmp/folders',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const folderWorkspace: FolderWorkspace = {
+      id: 'folder-1',
+      projectGroupId: projectGroup.id,
+      name: 'beta',
+      folderPath: '/tmp/folders',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 15,
+      lastActivityAt: 15,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    mockStore.state = {
+      ...mockStore.state,
+      activeModal: 'none',
+      activeWorktreeId: alpha.id,
+      folderWorkspaces: [folderWorkspace],
+      projectGroups: [projectGroup],
+      sortBy: 'name',
+      worktreesByRepo: { 'repo-1': [alpha, zeta] }
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+
+    await renderList(root)
+    const sidebar = container.querySelector<HTMLElement>('[data-worktree-sidebar]')
+    expect(sidebar).not.toBeNull()
+
+    await act(async () => {
+      sidebar?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+
+    expect(mockStore.activateAndRevealWorktree).toHaveBeenCalledWith(
+      folderWorkspaceKey(folderWorkspace.id)
+    )
   })
 })
