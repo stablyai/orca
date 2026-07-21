@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import type { AiVaultScope } from '../../../../shared/ai-vault-types'
 import { DEFAULT_AI_VAULT_SCOPE, normalizeAiVaultScopeForContext } from './ai-vault-scope-state'
 
@@ -9,10 +9,6 @@ type AiVaultPanelTransientState = {
   collapsedGroups: ReadonlySet<string>
   expandedSessionIds: ReadonlySet<string>
 }
-
-type AiVaultPanelTransientStateUpdate = (
-  current: AiVaultPanelTransientState
-) => AiVaultPanelTransientState
 
 const EMPTY_DISCLOSURE_KEYS: ReadonlySet<string> = new Set()
 
@@ -27,6 +23,29 @@ function createDefaultTransientState(): AiVaultPanelTransientState {
 // Why: inactive sidebar panels unmount, so renderer-session state preserves transient
 // choices across navigation without promoting context-sensitive scope to a setting.
 let cachedTransientState = createDefaultTransientState()
+const transientStateSubscribers = new Set<() => void>()
+
+function getTransientStateSnapshot(): AiVaultPanelTransientState {
+  return cachedTransientState
+}
+
+function subscribeToTransientState(subscriber: () => void): () => void {
+  transientStateSubscribers.add(subscriber)
+  return () => transientStateSubscribers.delete(subscriber)
+}
+
+function updateTransientState(
+  update: (current: AiVaultPanelTransientState) => AiVaultPanelTransientState
+): void {
+  const next = update(cachedTransientState)
+  if (next === cachedTransientState) {
+    return
+  }
+  cachedTransientState = next
+  for (const subscriber of transientStateSubscribers) {
+    subscriber()
+  }
+}
 
 function toggleBoundedDisclosureKey(
   current: ReadonlySet<string>,
@@ -47,6 +66,26 @@ function toggleBoundedDisclosureKey(
   return next
 }
 
+function selectScope(preferredScope: AiVaultScope): void {
+  updateTransientState((current) =>
+    current.preferredScope === preferredScope ? current : { ...current, preferredScope }
+  )
+}
+
+function toggleGroup(key: string): void {
+  updateTransientState((current) => ({
+    ...current,
+    collapsedGroups: toggleBoundedDisclosureKey(current.collapsedGroups, key)
+  }))
+}
+
+function toggleSessionDetails(sessionId: string): void {
+  updateTransientState((current) => ({
+    ...current,
+    expandedSessionIds: toggleBoundedDisclosureKey(current.expandedSessionIds, sessionId)
+  }))
+}
+
 export type AiVaultPanelTransientStateControls = {
   scope: AiVaultScope
   collapsedGroups: ReadonlySet<string>
@@ -60,44 +99,12 @@ export function useAiVaultPanelTransientState(args: {
   activeProjectKey: string | null
   activeWorktreePath: string | null
 }): AiVaultPanelTransientStateControls {
-  const [rendered, setRendered] = useState<AiVaultPanelTransientState>(cachedTransientState)
-
-  const commit = useCallback((update: AiVaultPanelTransientStateUpdate): void => {
-    const next = update(cachedTransientState)
-    if (next === cachedTransientState) {
-      return
-    }
-    cachedTransientState = next
-    setRendered(next)
-  }, [])
-
-  const selectScope = useCallback(
-    (preferredScope: AiVaultScope): void => {
-      commit((current) =>
-        current.preferredScope === preferredScope ? current : { ...current, preferredScope }
-      )
-    },
-    [commit]
-  )
-
-  const toggleGroup = useCallback(
-    (key: string): void => {
-      commit((current) => ({
-        ...current,
-        collapsedGroups: toggleBoundedDisclosureKey(current.collapsedGroups, key)
-      }))
-    },
-    [commit]
-  )
-
-  const toggleSessionDetails = useCallback(
-    (sessionId: string): void => {
-      commit((current) => ({
-        ...current,
-        expandedSessionIds: toggleBoundedDisclosureKey(current.expandedSessionIds, sessionId)
-      }))
-    },
-    [commit]
+  // Why: this renderer-session cache outlives any one panel mount, so consumers
+  // subscribe through React's external-store contract instead of holding stale copies.
+  const rendered = useSyncExternalStore(
+    subscribeToTransientState,
+    getTransientStateSnapshot,
+    getTransientStateSnapshot
   )
 
   return {
@@ -115,5 +122,5 @@ export function useAiVaultPanelTransientState(args: {
 }
 
 export function clearAiVaultPanelTransientStateForTests(): void {
-  cachedTransientState = createDefaultTransientState()
+  updateTransientState(() => createDefaultTransientState())
 }

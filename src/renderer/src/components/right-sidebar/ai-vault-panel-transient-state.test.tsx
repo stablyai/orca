@@ -118,6 +118,21 @@ describe('useAiVaultPanelTransientState', () => {
     expect(hook.result.current.expandedSessionIds).toEqual(new Set())
   })
 
+  it('keeps concurrent consumers synchronized', () => {
+    const first = renderHook(() => useAiVaultPanelTransientState(AVAILABLE_CONTEXT))
+    const second = renderHook(() => useAiVaultPanelTransientState(AVAILABLE_CONTEXT))
+
+    act(() => {
+      first.result.current.selectScope('project')
+      first.result.current.toggleGroup('project:orca')
+      first.result.current.toggleSessionDetails('session-1')
+    })
+
+    expect(second.result.current.scope).toBe('project')
+    expect(second.result.current.collapsedGroups).toEqual(new Set(['project:orca']))
+    expect(second.result.current.expandedSessionIds).toEqual(new Set(['session-1']))
+  })
+
   it('bounds disclosure state and evicts the oldest entries', () => {
     const hook = renderHook(() => useAiVaultPanelTransientState(AVAILABLE_CONTEXT))
 
