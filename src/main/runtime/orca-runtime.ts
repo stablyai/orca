@@ -10113,7 +10113,10 @@ export class OrcaRuntimeService {
       this.remoteDesktopOwners.set(ptyId, subscriptionKey)
       return this.applyRemoteDesktopLayout(ptyId)
     }
-    return true
+    // Why: ordinary fit updates from the connected owner must resize its PTY without letting passive peers steal ownership.
+    return this.remoteDesktopOwners.get(ptyId) === subscriptionKey
+      ? this.applyRemoteDesktopLayout(ptyId)
+      : true
   }
 
   claimRemoteDesktopViewer(ptyId: string, subscriptionKey: string): Promise<boolean> {

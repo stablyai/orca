@@ -569,20 +569,22 @@ describe('session tab RPC methods', () => {
     )
   })
 
-  it('registers session tab subscription cleanup with the resolved worktree id', async () => {
+  it('registers session tab cleanup before resolving initial inventory', async () => {
+    const listMobileSessionTabs = vi.fn().mockResolvedValue({
+      worktree: 'wt-1',
+      publicationEpoch: 'epoch-1',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    })
+    const registerSubscriptionCleanup = vi.fn()
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      listMobileSessionTabs: vi.fn().mockResolvedValue({
-        worktree: 'wt-1',
-        publicationEpoch: 'epoch-1',
-        snapshotVersion: 1,
-        activeGroupId: null,
-        activeTabId: null,
-        activeTabType: null,
-        tabs: []
-      }),
+      listMobileSessionTabs,
       onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
-      registerSubscriptionCleanup: vi.fn()
+      registerSubscriptionCleanup
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
@@ -593,14 +595,12 @@ describe('session tab RPC methods', () => {
     )
 
     expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
-      'session.tabs:conn-1:wt-1:req-1',
+      'session.tabs:conn-1:id:wt-1:req-1',
       expect.any(Function),
       'conn-1'
     )
-    expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalledWith(
-      'session.tabs:conn-1:id:wt-1',
-      expect.any(Function),
-      'conn-1'
+    expect(registerSubscriptionCleanup.mock.invocationCallOrder[0]!).toBeLessThan(
+      listMobileSessionTabs.mock.invocationCallOrder[0]!
     )
   })
 
@@ -633,7 +633,7 @@ describe('session tab RPC methods', () => {
     )
 
     expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
-      'session.tabs:conn-1:wt-1:sub-1',
+      'session.tabs:conn-1:id:wt-1:sub-1',
       expect.any(Function),
       'conn-1'
     )
@@ -701,6 +701,7 @@ describe('session tab RPC methods', () => {
       { connectionId: 'conn-1' }
     )
 
+    expect(cleanupSubscription).toHaveBeenCalledWith('session.tabs:conn-1:id:wt-1:sub-1')
     expect(cleanupSubscription).toHaveBeenCalledWith('session.tabs:conn-1:wt-1:sub-1')
     expect(cleanupSubscriptionsByPrefix).not.toHaveBeenCalled()
   })

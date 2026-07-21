@@ -80,10 +80,8 @@ export type PtyTransport = {
     cols?: number
     rows?: number
     sessionId?: string
-    /** Hidden-at-spawn declaration (terminal-query-authority.md): no visible
-     *  view will consume this PTY's bytes, so main marks it hidden BEFORE the
-     *  first byte and the gate + model responder own spawn-time queries.
-     *  Ignored by remote-runtime transports (not gate-markable). */
+    /** Hidden-at-spawn declaration (terminal-query-authority.md): local main
+     *  gates query delivery; remote-runtime transports keep viewport attachment passive. */
     initiallyHidden?: boolean
     command?: string
     env?: Record<string, string>
@@ -99,6 +97,7 @@ export type PtyTransport = {
     existingPtyId: string
     cols?: number
     rows?: number
+    initiallyHidden?: boolean
     isAlternateScreen?: boolean
     callbacks: PtyCallbacks
   }) => void
@@ -113,6 +112,7 @@ export type PtyTransport = {
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
   claimViewport?: (cols: number, rows: number) => boolean
+  setViewportClaimEnabled?: (enabled: boolean) => void
   resize: (
     cols: number,
     rows: number,

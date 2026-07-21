@@ -94,6 +94,7 @@ export function createRemoteRuntimePtyTransport(
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
   let multiplexedStreamHandle: string | null = null
   let desiredViewport: { cols: number; rows: number } | null = null
+  let claimViewportOnSubscribe = true
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribing = false
   let resubscribeRequestedHandle: string | null = null
@@ -670,6 +671,7 @@ export function createRemoteRuntimePtyTransport(
       terminal: subscribedHandle,
       client: { id: clientId, type: 'desktop' },
       viewport: subscribedViewport ?? undefined,
+      claimViewport: claimViewportOnSubscribe,
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
@@ -783,6 +785,7 @@ export function createRemoteRuntimePtyTransport(
   return {
     async connect(options) {
       storedCallbacks = options.callbacks
+      claimViewportOnSubscribe = options.initiallyHidden !== true
       if (destroyed || !worktreeId) {
         return
       }
@@ -856,6 +859,7 @@ export function createRemoteRuntimePtyTransport(
     attach(options) {
       clearPublishedHandleWait()
       storedCallbacks = options.callbacks
+      claimViewportOnSubscribe = options.initiallyHidden !== true
       currentRuntimeEnvironmentId =
         getRemoteRuntimePtyEnvironmentId(options.existingPtyId) ?? runtimeEnvironmentId
       const previousHandle = handle
@@ -983,6 +987,10 @@ export function createRemoteRuntimePtyTransport(
       viewportBatcher.clear()
       sendViewportUpdate(cols, rows, true)
       return true
+    },
+
+    setViewportClaimEnabled(enabled: boolean): void {
+      claimViewportOnSubscribe = enabled
     },
 
     resize(cols: number, rows: number, meta): boolean {

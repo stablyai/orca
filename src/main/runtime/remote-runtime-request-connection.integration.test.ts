@@ -7,12 +7,20 @@ import type { Repo } from '../../shared/types'
 import { parsePairingCode } from '../../shared/pairing'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import {
+  subscribeRemoteRuntimeRequest,
+  type RemoteRuntimeSubscription
+} from '../../shared/remote-runtime-client'
+import {
+  TerminalStreamOpcode,
+  encodeTerminalStreamFrame,
+  encodeTerminalStreamJson
+} from '../../shared/terminal-stream-protocol'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
 } from '../../shared/runtime-client-events'
-import type { OrcaRuntimeService } from './orca-runtime'
+import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
 
@@ -250,6 +258,146 @@ describe('remote runtime request connection integration', () => {
           mobile.close()
         }
       } finally {
+        await server.stop()
+        rmSync(userDataPath, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it(
+    'transfers terminal viewport ownership across real paired desktop connections',
+    { timeout: REMOTE_RUNTIME_TEST_TIMEOUT_MS },
+    async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-pty-owner-'))
+      const worktreeId = 'repo-1::/tmp/worktree-a'
+      const ptySizes = new Map([['pty-1', { cols: 150, rows: 40 }]])
+      const runtime = new OrcaRuntimeService()
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        getSize: (ptyId) => ptySizes.get(ptyId) ?? null,
+        resize: (ptyId, cols, rows) => {
+          ptySizes.set(ptyId, { cols, rows })
+          return true
+        }
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId,
+            title: 'Agent',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-1',
+            paneTitle: null
+          }
+        ]
+      })
+      const terminal = (await runtime.listTerminals(`id:${worktreeId}`)).terminals[0]?.handle
+      if (!terminal) {
+        throw new Error('terminal unavailable')
+      }
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        enableWebSocket: true,
+        wsPort: 0
+      })
+
+      await server.start()
+      const subscriptions: RemoteRuntimeSubscription[] = []
+      try {
+        const openDesktop = async (name: string) => {
+          const offer = server.createPairingOffer({ name, scope: 'runtime' })
+          if (!offer.available) {
+            throw new Error('pairing unavailable')
+          }
+          const pairing = parsePairingCode(offer.pairingUrl)
+          if (!pairing) {
+            throw new Error('invalid pairing')
+          }
+          const events: { type?: string; streamId?: number }[] = []
+          const subscription = await subscribeRemoteRuntimeRequest(
+            pairing,
+            'terminal.multiplex',
+            {},
+            REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
+            {
+              onResponse: (response) => {
+                if (response.ok) {
+                  events.push(response.result as { type?: string; streamId?: number })
+                }
+              },
+              onError: (error) => {
+                throw error
+              }
+            }
+          )
+          subscriptions.push(subscription)
+          await waitFor(() => events.some((event) => event.type === 'ready'))
+          return { events, subscription }
+        }
+        const subscribeDesktop = async (
+          desktop: Awaited<ReturnType<typeof openDesktop>>,
+          clientId: string,
+          cols: number,
+          rows: number
+        ) => {
+          sendTerminalMultiplexJsonFrame(desktop.subscription, {
+            opcode: TerminalStreamOpcode.Subscribe,
+            streamId: 0,
+            seq: 1,
+            payload: {
+              streamId: 1,
+              terminal,
+              client: { id: clientId, type: 'desktop' },
+              viewport: { cols, rows },
+              claimViewport: true,
+              capabilities: { ackOutput: 1, desktopViewportClaims: 1 }
+            }
+          })
+          await waitFor(() =>
+            desktop.events.some((event) => event.type === 'subscribed' && event.streamId === 1)
+          )
+        }
+
+        const desktopA = await openDesktop('desktop-a')
+        await subscribeDesktop(desktopA, 'desktop-a', 100, 30)
+        await waitFor(() => ptySizes.get('pty-1')?.cols === 100)
+
+        // Pair B only after A authenticates; rotating an unused offer would invalidate A's token.
+        const desktopB = await openDesktop('desktop-b')
+        await subscribeDesktop(desktopB, 'desktop-b', 80, 24)
+        await waitFor(() => ptySizes.get('pty-1')?.cols === 80)
+
+        sendTerminalMultiplexJsonFrame(desktopA.subscription, {
+          opcode: TerminalStreamOpcode.ClaimViewport,
+          streamId: 1,
+          seq: 2,
+          payload: { cols: 120, rows: 36 }
+        })
+        await waitFor(() => ptySizes.get('pty-1')?.cols === 120)
+
+        desktopA.subscription.close()
+        await waitFor(() => ptySizes.get('pty-1')?.cols === 80)
+
+        desktopB.subscription.close()
+        await waitFor(() => ptySizes.get('pty-1')?.cols === 150)
+      } finally {
+        for (const subscription of subscriptions) {
+          subscription.close()
+        }
         await server.stop()
         rmSync(userDataPath, { recursive: true, force: true })
       }
@@ -525,6 +673,28 @@ describe('remote runtime request connection integration', () => {
     }
   )
 })
+
+function sendTerminalMultiplexJsonFrame(
+  subscription: RemoteRuntimeSubscription,
+  frame: {
+    opcode: TerminalStreamOpcode
+    streamId: number
+    seq: number
+    payload: unknown
+  }
+): void {
+  const sent = subscription.sendBinary(
+    encodeTerminalStreamFrame({
+      opcode: frame.opcode,
+      streamId: frame.streamId,
+      seq: frame.seq,
+      payload: encodeTerminalStreamJson(frame.payload)
+    })
+  )
+  if (!sent) {
+    throw new Error('terminal multiplex frame was not sent')
+  }
+}
 
 async function waitFor(
   predicate: () => boolean,

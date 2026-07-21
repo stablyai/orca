@@ -216,6 +216,7 @@ class RemoteRuntimeTerminalMultiplexer {
     terminal: string
     client: { id: string; type: 'desktop' | 'mobile' }
     viewport?: { cols: number; rows: number }
+    claimViewport?: boolean
     callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   }): Promise<RemoteRuntimeMultiplexedTerminal> {
     const streamId = this.allocateStreamId()
@@ -288,6 +289,7 @@ class RemoteRuntimeTerminalMultiplexer {
           terminal: args.terminal,
           client: args.client,
           viewport: args.viewport,
+          ...(args.claimViewport ? { claimViewport: true } : {}),
           capabilities:
             args.client.type === 'desktop' ? { ackOutput: 1, desktopViewportClaims: 1 } : undefined
         })

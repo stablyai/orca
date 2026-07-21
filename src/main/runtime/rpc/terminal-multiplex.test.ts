@@ -213,6 +213,7 @@ describe('terminal multiplex RPC', () => {
               terminal: 'terminal-1',
               client: { id: 'desktop-1', type: 'desktop' },
               viewport: { cols: 300, rows: 150 },
+              claimViewport: true,
               capabilities: { desktopViewportClaims: 1 }
             })
           })
@@ -236,13 +237,15 @@ describe('terminal multiplex RPC', () => {
           })
         ])
       )
+      // A connected remote desktop owns its viewport immediately; waiting for
+      // input leaves full-screen TUIs rendered at the serving desktop's grid.
       expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
         'pty-1',
         'multiplex:conn-1:5',
         'desktop-1',
         300,
         150,
-        false
+        true
       )
       expect(handlers.has(5)).toBe(true)
 
@@ -582,6 +585,7 @@ describe('terminal multiplex RPC', () => {
               terminal: 'terminal-1',
               client: { id: 'desktop-1', type: 'desktop' },
               viewport: { cols: 300, rows: 150 },
+              claimViewport: true,
               capabilities: { desktopViewportClaims: 1 }
             })
           })

@@ -213,6 +213,17 @@ describe('remote desktop viewer width driver', () => {
     expect(resizeCalls).toHaveLength(0)
   })
 
+  it('keeps the connected owner locked while its pane geometry changes', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 24, false)
+
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 132, 42, false)
+
+    expect(runtime.isRemoteDesktopViewerOwner('pty-1', 'sub-A')).toBe(true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 132, rows: 42 })
+  })
+
   it('lets host activity automatically reclaim from a remote owner', async () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 24)

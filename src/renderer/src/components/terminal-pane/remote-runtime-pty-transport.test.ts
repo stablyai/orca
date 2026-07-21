@@ -38,6 +38,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     terminal: string
     client: { id: string; type: string }
     viewport?: { cols: number; rows: number }
+    claimViewport?: true
     capabilities?: { desktopViewportClaims?: 1 }
   } {
     const frames = subscriptionSendBinary.mock.calls
@@ -52,6 +53,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       terminal: string
       client: { id: string; type: string }
       viewport?: { cols: number; rows: number }
+      claimViewport?: true
       capabilities?: { desktopViewportClaims?: 1 }
     }>(frame.payload)
     if (!payload) {
@@ -187,8 +189,25 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(latestSubscribePayload()).toMatchObject({
       terminal: 'terminal-1',
       client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
-      viewport: { cols: 120, rows: 40 }
+      viewport: { cols: 120, rows: 40 },
+      claimViewport: true
     })
+  })
+
+  it('keeps a hidden remote pane subscription passive', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+
+    transport.attach({
+      existingPtyId: 'remote:terminal-1',
+      cols: 120,
+      rows: 40,
+      initiallyHidden: true,
+      callbacks: {}
+    })
+
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    expect(latestSubscribePayload()).not.toHaveProperty('claimViewport')
   })
 
   it('scopes the same legacy handle independently for each runtime environment', async () => {

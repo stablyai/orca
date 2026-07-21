@@ -1002,6 +1002,7 @@ const TerminalSubscribe = TerminalHandle.extend({
     })
     .optional(),
   viewport: TerminalViewport.optional(),
+  claimViewport: z.literal(true).optional(),
   capabilities: z
     .object({
       terminalBinaryStream: z.literal(1).optional(),
@@ -1022,6 +1023,7 @@ const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
     })
     .optional(),
   viewport: TerminalViewport.optional(),
+  claimViewport: z.literal(true).optional(),
   capabilities: z
     .object({
       ackOutput: z.literal(1).optional(),
@@ -2190,7 +2192,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (isMobile && request.client?.id) {
             await runtime.handleMobileSubscribe(ptyId, request.client.id, request.viewport)
           } else if (request.client?.id && request.viewport) {
-            // Why: subscribe records this stream's geometry and cleanup key but doesn't claim ownership; activity frames claim later.
+            // Why: a visible connected desktop claims before snapshot replay; hidden hydration remains passive.
             stream.registeredRemoteDesktopDriver = true
             stream.pendingRemoteDesktopViewport = request.viewport
           }
@@ -2210,7 +2212,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               viewport,
               'desktop',
               'register',
-              !stream.supportsDesktopViewportClaims
+              request.claimViewport === true || !stream.supportsDesktopViewportClaims
             )
           }
           if (closed || streams.get(request.streamId) !== stream) {
@@ -2582,7 +2584,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               params.viewport,
               'desktop',
               'register',
-              !supportsDesktopViewportClaims
+              params.claimViewport === true || !supportsDesktopViewportClaims
             )
           }
           if (closed || signal?.aborted) {
