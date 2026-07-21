@@ -43,7 +43,10 @@ import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
 } from './remote-runtime-pty-batching'
-import { RemoteRuntimePtyRecoveryState } from './remote-runtime-pty-recovery-state'
+import {
+  REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
+  RemoteRuntimePtyRecoveryState
+} from './remote-runtime-pty-recovery-state'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
@@ -426,34 +429,57 @@ export function createRemoteRuntimePtyTransport(
     let retryAttempt = 0
     let idempotencySupported = false
     let reconcileExisting = false
+    let recoveryDeadlineAt: number | null = null
     let lastError: unknown = new Error('Remote terminal creation was cancelled.')
     while (!destroyed) {
+      const requestRemainingMs =
+        recoveryDeadlineAt === null ? null : recoveryDeadlineAt - Date.now()
+      if (requestRemainingMs !== null && requestRemainingMs <= 0) {
+        break
+      }
       try {
-        return await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-          ...params,
-          ...(reconcileExisting ? { reconcileExisting: true } : {})
-        })
+        return await callRuntime<{ terminal: RuntimeTerminalCreate }>(
+          'terminal.create',
+          {
+            ...params,
+            ...(reconcileExisting ? { reconcileExisting: true } : {})
+          },
+          Math.min(15_000, requestRemainingMs ?? 15_000)
+        )
       } catch (error) {
         lastError = error
         const clientError = toRemoteRuntimeClientErrorLike(error)
         if (!isRecoverableRemoteRuntimeConnectionError(clientError)) {
           throw error
         }
+        recoveryDeadlineAt ??= Date.now() + REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS
         while (!idempotencySupported && !destroyed) {
           let status: RuntimeStatus
           try {
-            status = await callRuntime<RuntimeStatus>('status.get', undefined, 5_000)
+            const statusRemainingMs = recoveryDeadlineAt - Date.now()
+            if (statusRemainingMs <= 0) {
+              break
+            }
+            status = await callRuntime<RuntimeStatus>(
+              'status.get',
+              undefined,
+              Math.min(5_000, statusRemainingMs)
+            )
           } catch (statusError) {
             const statusClientError = toRemoteRuntimeClientErrorLike(statusError)
             if (!isRecoverableRemoteRuntimeConnectionError(statusClientError)) {
-              throw error
+              throw statusError
             }
             const statusDelayMs =
               TERMINAL_CREATE_RETRY_DELAYS_MS[
                 Math.min(retryAttempt, TERMINAL_CREATE_RETRY_DELAYS_MS.length - 1)
               ]
             retryAttempt += 1
-            if (!(await waitForTerminalCreateRetry(statusDelayMs))) {
+            const remainingMs = recoveryDeadlineAt - Date.now()
+            if (
+              remainingMs <= 0 ||
+              !(await waitForTerminalCreateRetry(Math.min(statusDelayMs, remainingMs)))
+            ) {
               break
             }
             continue
@@ -467,12 +493,16 @@ export function createRemoteRuntimePtyTransport(
         if (destroyed) {
           break
         }
+        const remainingMs = recoveryDeadlineAt - Date.now()
+        if (remainingMs <= 0) {
+          break
+        }
         const delayMs =
           TERMINAL_CREATE_RETRY_DELAYS_MS[
             Math.min(retryAttempt, TERMINAL_CREATE_RETRY_DELAYS_MS.length - 1)
           ]
         retryAttempt += 1
-        if (!(await waitForTerminalCreateRetry(delayMs))) {
+        if (!(await waitForTerminalCreateRetry(Math.min(delayMs, remainingMs)))) {
           break
         }
       }

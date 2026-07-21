@@ -1,5 +1,5 @@
 const RECOVERY_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000] as const
-export const REMOTE_RUNTIME_PTY_AUTO_RECOVERY_TIMEOUT_MS = 60_000
+export const REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS = 60_000
 
 export type RemoteRuntimePtyRecoveryPhase =
   | 'idle'
@@ -117,7 +117,7 @@ export class RemoteRuntimePtyRecoveryState {
       this.clearRetryTimer()
       this.phase = 'disconnected'
       this.onChange?.()
-    }, REMOTE_RUNTIME_PTY_AUTO_RECOVERY_TIMEOUT_MS)
+    }, REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
     timer.unref?.()
     this.deadlineTimer = timer
   }

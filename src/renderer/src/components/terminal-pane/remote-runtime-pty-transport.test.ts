@@ -405,6 +405,63 @@ describe('createRemoteRuntimePtyTransport', () => {
     transport.destroy?.()
   })
 
+  it('surfaces an authoritative capability-probe failure after an unknown create outcome', async () => {
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'status.get') {
+        throw Object.assign(new Error('Remote runtime pairing credentials expired.'), {
+          code: 'unauthorized'
+        })
+      }
+      throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+        code: 'runtime_timeout'
+      })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+
+    await transport.connect({ url: '', callbacks: { onError } })
+
+    expect(onError).toHaveBeenCalledWith('Remote runtime pairing credentials expired.')
+    expect(
+      runtimeCall.mock.calls.filter(([args]) => args.method === 'terminal.create')
+    ).toHaveLength(1)
+    transport.destroy?.()
+  })
+
+  it('stops unknown terminal-create recovery after one minute', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'status.get') {
+          return {
+            ok: true,
+            result: { capabilities: [TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
+          }
+        }
+        throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+          code: 'runtime_timeout'
+        })
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+
+      const connect = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(60_000)
+      await connect
+      const callsAtCutoff = runtimeCall.mock.calls.length
+
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(runtimeCall.mock.calls.some(([args]) => args.method === 'terminal.create')).toBe(true)
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(runtimeCall).toHaveBeenCalledTimes(callsAtCutoff)
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('scopes the same legacy handle independently for each runtime environment', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const first = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
