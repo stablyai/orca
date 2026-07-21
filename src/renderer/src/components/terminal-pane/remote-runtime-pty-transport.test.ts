@@ -753,6 +753,76 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  it('resubscribes the surviving handle when a later host snapshot follows bounded reconnect failure', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-tab-1',
+        leafId: 'pane:1'
+      })
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-survived',
+        cols: 80,
+        rows: 24,
+        callbacks: {}
+      })
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'session.tabs.list') {
+          throw new Error('runtime reconnect in progress')
+        }
+        return { ok: true, result: {} }
+      })
+
+      subscriptionCallbacks?.onClose?.()
+      await vi.advanceTimersByTimeAsync(16_000)
+      const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+      expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
+
+      handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+        {
+          worktree: 'wt-1',
+          publicationEpoch: 'epoch-2',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Claude Code',
+              isActive: true,
+              status: 'ready',
+              terminal: 'terminal-survived'
+            }
+          ]
+        },
+        'env-1'
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.waitFor(() => {
+        const subscribedTerminals = subscriptionSendBinary.mock.calls
+          .map((call) => decodeTerminalStreamFrame(call[0]))
+          .flatMap((frame) => {
+            if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
+              return []
+            }
+            const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+            return payload ? [payload.terminal] : []
+          })
+        expect(subscribedTerminals).toEqual(['terminal-survived', 'terminal-survived'])
+      })
+      expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('coalesces concurrent stale errors for the handle that was replaced', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()

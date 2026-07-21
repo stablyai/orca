@@ -516,7 +516,11 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
-  function waitForPublishedHostSessionHandle(hostTabId: string, previousHandle: string): void {
+  function waitForPublishedHostSessionHandle(
+    hostTabId: string,
+    previousHandle: string,
+    requireReplacement: boolean
+  ): void {
     if (!worktreeId) {
       return
     }
@@ -537,7 +541,20 @@ export function createRemoteRuntimePtyTransport(
           retireRemoteTerminalId()
           return
         }
-        if (!update.terminalHandle || update.terminalHandle === previousHandle) {
+        if (!update.terminalHandle) {
+          return
+        }
+        if (update.terminalHandle === previousHandle) {
+          // Why: bounded reconnect can end while the same host PTY survives; its accepted snapshot must restart the missing visual stream.
+          if (!requireReplacement) {
+            clearPublishedHandleWait()
+            const survivingPtyId = remotePtyId
+            void subscribeToHandle().catch((error) => {
+              if (isCurrentRemoteTerminal(previousHandle, survivingPtyId)) {
+                handleRemoteTerminalError(error)
+              }
+            })
+          }
           return
         }
         rebindRemoteTerminalHandle(update.terminalHandle)
@@ -629,7 +646,11 @@ export function createRemoteRuntimePtyTransport(
     clearPublishedHandleWait()
     if (tabId && isWebTerminalSurfaceTabId(tabId)) {
       // Why: subscribe before polling so a fresh host snapshot can't land in the gap between the inventory loop and its event-driven fallback.
-      waitForPublishedHostSessionHandle(toHostSessionTabId(tabId), resubscribeHandle)
+      waitForPublishedHostSessionHandle(
+        toHostSessionTabId(tabId),
+        resubscribeHandle,
+        requireReplacement
+      )
     }
     resubscribing = true
     void resubscribeAfterTransportClose(resubscribeHandle, requireReplacement)
