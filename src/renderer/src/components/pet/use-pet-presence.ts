@@ -47,6 +47,10 @@ export type PetPresenceBinding = {
   facing: 'left' | 'right'
   /** Edge the pet just arrived through, or null once acknowledged. */
   enteredFromEdge: PetEdge | null
+  /** WHICH pet the authority currently believes is travelling, or null before
+   *  it has spoken. Exposed so a surface owning the operator's selection can
+   *  notice the authority disagreeing and correct the record. */
+  petId: string | null
   /** True when some OTHER live surface exists, i.e. leaving is possible. */
   canHandOff: boolean
   /** Report that the pet reached an edge. Safe to call spuriously — the
@@ -142,6 +146,7 @@ export function usePetPresence(
     position: presence.position,
     facing: presence.facing,
     enteredFromEdge: presence.enteredFromEdge,
+    petId: authorityAnswered ? presence.petId : null,
     canHandOff: surfaces.some((surface) => surface.id !== surfaceId),
     reportExit,
     acknowledgeEntry
@@ -156,17 +161,38 @@ export function usePetPresence(
  * WHICH pet, so each surface picked its own sprite — the phone drew the first
  * pet in its bundle and the "handoff" was two different creatures taking turns.
  *
- * Idempotent by design: every window reports the same value and the authority
- * no-ops on an unchanged id, so it does not matter which one gets there first.
+ * NOT idempotent across surfaces, despite what this comment used to claim.
+ * "Every window reports the same value" held only while every window was
+ * hydrated; a popout is not, and it published the store default. Only surfaces
+ * entitled to speak may pass a non-null id — see PetOverlay's
+ * `reportsPetIdentity`.
+ *
+ * Self-healing is the second half. Reporting keyed solely on the local id fires
+ * once at mount and never again, so a single bad write STUCK: the authority
+ * held `claude-the-mage`, the main window's own selection had not changed so
+ * its effect never re-ran, and nothing on the mesh ever put the record right.
+ * That is why the wall survived returning to the main canvas. Comparing against
+ * the authority's value means any divergence is corrected by the surface that
+ * actually owns the answer, on the next snapshot.
+ *
+ * Why the wall, and not merely a wrong sprite: the phone declares which pets it
+ * can draw, and `pickHandoffTarget` refuses a surface that cannot draw the
+ * current one (no silent substitution). `claude-the-mage` is an Orca bundled
+ * pet, absent from the phone's 12 mesh-defaults, so the phone stopped being an
+ * eligible destination and the pet had nowhere to go.
  */
-export function usePetIdentityReporting(petId: string | null | undefined): void {
+export function usePetIdentityReporting(
+  petId: string | null | undefined,
+  /** What the authority currently holds, so a stale record can be corrected. */
+  authorityPetId: string | null
+): void {
   useEffect(() => {
     const api = window.api?.petPresence
-    if (!api || !petId) {
+    if (!api || !petId || authorityPetId === petId) {
       return
     }
     void api.setPetId(petId)
-  }, [petId])
+  }, [petId, authorityPetId])
 }
 
 /** Pixel position within a surface, as the overlay tracks it. */

@@ -382,7 +382,7 @@ export function PetOverlay({
   // Identity travels with the pet: the desktop owns the operator's choice of
   // creature, so it publishes it. Without this the phone drew a different pet.
   const selectedPetId = useAppStore((s) => s.petId)
-  usePetIdentityReporting(reportsPetIdentity ? selectedPetId : null)
+  usePetIdentityReporting(reportsPetIdentity ? selectedPetId : null, presence.petId)
 
   // Why roam is gated on holding the pet: a window that does not hold it must
   // not be simulating a second pet in the background, or the two would drift

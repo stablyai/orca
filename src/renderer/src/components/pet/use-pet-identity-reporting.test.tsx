@@ -30,26 +30,26 @@ afterEach(() => {
 
 describe('usePetIdentityReporting', () => {
   it('publishes the operator’s pet when the surface knows it', () => {
-    renderHook(() => usePetIdentityReporting('mini-gandalf-the-grey'))
+    renderHook(() => usePetIdentityReporting('mini-gandalf-the-grey', null))
     expect(setPetId).toHaveBeenCalledWith('mini-gandalf-the-grey')
   })
 
   it('stays silent when the surface has no identity to report', () => {
     // The popout case: reportsPetIdentity=false passes null until the store has
     // been hydrated from persisted UI.
-    renderHook(() => usePetIdentityReporting(null))
+    renderHook(() => usePetIdentityReporting(null, null))
     expect(setPetId).not.toHaveBeenCalled()
   })
 
   it('stays silent for undefined rather than falling back to a default', () => {
-    renderHook(() => usePetIdentityReporting(undefined))
+    renderHook(() => usePetIdentityReporting(undefined, null))
     expect(setPetId).not.toHaveBeenCalled()
   })
 
   it('does not republish an unchanged id on re-render', () => {
     // The authority no-ops on an unchanged id, but a surface that re-reports on
     // every render turns a cheap no-op into per-frame RPC traffic.
-    const { rerender } = renderHook(() => usePetIdentityReporting('spike'))
+    const { rerender } = renderHook(() => usePetIdentityReporting('spike', null))
     rerender()
     rerender()
     expect(setPetId).toHaveBeenCalledTimes(1)
@@ -57,11 +57,25 @@ describe('usePetIdentityReporting', () => {
 
   it('publishes again when the operator switches pet', () => {
     const { rerender } = renderHook(
-      ({ id }: { id: string | null }) => usePetIdentityReporting(id),
+      ({ id }: { id: string | null }) => usePetIdentityReporting(id, null),
       { initialProps: { id: 'spike' as string | null } }
     )
     rerender({ id: 'mini-gandalf-the-grey' })
     expect(setPetId).toHaveBeenNthCalledWith(1, 'spike')
     expect(setPetId).toHaveBeenNthCalledWith(2, 'mini-gandalf-the-grey')
+  })
+
+  it('corrects the authority when it holds a pet the owner did not choose', () => {
+    // The popout clobber: the authority ends up on the bundled default while
+    // the surface that owns the choice still has the operator's real pet.
+    renderHook(() => usePetIdentityReporting('mini-gandalf-the-grey', 'claude-the-mage'))
+    expect(setPetId).toHaveBeenCalledWith('mini-gandalf-the-grey')
+  })
+
+  it('stays quiet when the authority already agrees', () => {
+    // Without this the effect would re-report on every snapshot, turning a
+    // no-op into per-frame RPC traffic.
+    renderHook(() => usePetIdentityReporting('mini-gandalf-the-grey', 'mini-gandalf-the-grey'))
+    expect(setPetId).not.toHaveBeenCalled()
   })
 })
