@@ -38,6 +38,7 @@ export function GitHubIssueWorkspaceLaunchButton({
   })
   const visibleAgentState: AgentLoadState =
     agentState.repoKey === repoKey ? agentState : { repoKey, status: 'idle', agents: [] }
+  // Why: reopening, switching repositories, or unmounting must invalidate late detection results.
   const loadRequestRef = useRef(0)
 
   useEffect(() => {

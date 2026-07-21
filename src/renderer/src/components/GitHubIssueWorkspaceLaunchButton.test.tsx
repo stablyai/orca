@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Repo } from '../../../shared/types'
 
+// Why: vi.mock runs before module initialization, so its shared mock must be hoisted too.
 const mocks = vi.hoisted(() => ({
   loadAgents: vi.fn()
 }))
@@ -70,12 +71,13 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
 
   it('loads configured agents when opened and starts with the selected agent', async () => {
     const user = userEvent.setup()
+    const onStartDefault = vi.fn()
     const onStartWithAgent = vi.fn()
     render(
       <TooltipProvider>
         <GitHubIssueWorkspaceLaunchButton
           repo={repo}
-          onStartDefault={vi.fn()}
+          onStartDefault={onStartDefault}
           onStartWithAgent={onStartWithAgent}
         />
       </TooltipProvider>
@@ -86,6 +88,7 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
     await waitFor(() => expect(mocks.loadAgents).toHaveBeenCalledWith(repo))
     await user.click(await screen.findByRole('menuitem', { name: 'Claude' }))
     expect(onStartWithAgent).toHaveBeenCalledWith('claude')
+    expect(onStartDefault).not.toHaveBeenCalled()
   })
 
   it('ignores an in-flight agent result after the repository changes', async () => {

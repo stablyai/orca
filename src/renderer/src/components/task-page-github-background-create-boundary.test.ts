@@ -46,6 +46,16 @@ describe('GitHub workspace creation source boundaries', () => {
     expect(COMPOSER_MODAL_SOURCE).toContain('modalData.initialAgent')
   })
 
+  it('lets nested GitHub row controls handle their own keyboard activation', () => {
+    const section = sourceBetween(
+      TASK_PAGE_SOURCE,
+      'key={`${item.repoId}:${item.id}`}',
+      'className={cn('
+    )
+
+    expect(section).toContain('if (event.target !== event.currentTarget)')
+  })
+
   it('keeps project-view GitHub actions on the direct start-work path for issue #4756', () => {
     const section = sourceBetween(
       PROJECT_VIEW_SOURCE,

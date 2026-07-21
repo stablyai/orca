@@ -9295,6 +9295,9 @@ export default function TaskPage(): React.JSX.Element {
                           tabIndex={0}
                           onClick={() => openGitHubDetailPage(item)}
                           onKeyDown={(event) => {
+                            if (event.target !== event.currentTarget) {
+                              return
+                            }
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault()
                               openGitHubDetailPage(item)
