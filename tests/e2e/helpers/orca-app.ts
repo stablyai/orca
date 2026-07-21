@@ -28,6 +28,10 @@ import { TEST_REPO_PATH_FILE } from '../global-setup'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
+import {
+  assertElectronResolvedIsolatedHome,
+  createElectronHomeIsolation
+} from './electron-home-isolation'
 import { createSeededTestRepo, isValidGitRepo } from './seeded-test-repo'
 
 type OrcaTestFixtures = {
@@ -51,6 +55,9 @@ type OrcaTestFixtures = {
   // memory benchmarks). Prepended before the main entry so Electron forwards
   // them to Chromium without affecting other specs' launches.
   orcaAppExtraArgs: string[]
+  // Why: real-home E2E must still resolve inside the disposable fixture HOME.
+  // Generic env overlays cannot opt out of that data-safety boundary.
+  codexRealHomeEnabled: boolean
   // Why: a few IPC repro specs need to launch the Electron app with a scoped
   // PATH/token environment. Keep this fixture-owned so tests never mutate the
   // developer's shell or already-running Orca instance.
@@ -168,6 +175,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       launchEnv,
       orcaAppExtraEnv,
       orcaAppExtraArgs,
+      codexRealHomeEnabled,
       registerPostElectronShutdownCleanup
     },
     provideFixture,
@@ -197,6 +205,13 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // which Node rejects with "bad option" and the process exits immediately.
     const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
     void _unused
+    const homeIsolation = createElectronHomeIsolation({
+      inheritedEnv: cleanEnv,
+      launchEnv,
+      extraEnv: orcaAppExtraEnv,
+      userDataDir,
+      codexRealHomeEnabled
+    })
     // Why: ORCA_E2E_SLOWMO_MS adds a pause between every Playwright action so a
     // developer running with ORCA_E2E_FORCE_HEADFUL=1 can actually watch what
     // the test does. Defaults to 0 (no slowdown) for normal runs.
@@ -228,19 +243,25 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // Electron app's getAppPath() points at the compiled main bundle in E2E,
       // so pass the repo-root relay path explicitly for this opt-in suite.
       env: {
-        ...cleanEnv,
-        ...launchEnv,
+        ...homeIsolation.env,
         NODE_ENV: 'development',
-        ORCA_E2E_USER_DATA_DIR: userDataDir,
         ...((process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
           process.env.ORCA_E2E_SSH_DOCKER === '1') &&
         !cleanEnv.ORCA_RELAY_PATH
           ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
           : {}),
-        ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' }),
-        ...orcaAppExtraEnv
+        ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
+    try {
+      const resolvedHome = await app.evaluate(({ app }) => app.getPath('home'))
+      assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+    } catch (error) {
+      await closeElectronAppForE2E(app)
+      await cleanupE2EDaemons(userDataDir)
+      await removeUserDataDirAfterShutdown(userDataDir)
+      throw error
+    }
     forwardElectronProcessLogs(app, testInfo)
     await provideFixture(app)
     // Why: the Playwright close promise can settle before all Electron and PTY
@@ -256,6 +277,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   launchEnv: [{}, { option: true }],
   orcaAppExtraEnv: [{}, { option: true }],
   orcaAppExtraArgs: [[], { option: true }],
+  codexRealHomeEnabled: [false, { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.

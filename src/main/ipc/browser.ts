@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: browser IPC handlers must be registered together so the
    trust boundary (isTrustedBrowserRenderer) and handler teardown stay consistent. */
 import { BrowserWindow, ipcMain, webContents } from 'electron'
-import { browserManager } from '../browser/browser-manager'
+import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
@@ -24,6 +24,7 @@ import type {
 } from '../../shared/browser-grab-types'
 import type {
   BrowserCookieImportResult,
+  BrowserCertificateProceedResult,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
   BrowserViewportOverride
@@ -180,6 +181,7 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
   ipcMain.removeHandler('browser:activeTabChanged')
+  ipcMain.removeHandler('browser:proceedCertificate')
 
   ipcMain.handle(
     'browser:registerGuest',
@@ -201,10 +203,13 @@ export function registerBrowserHandlers(): void {
       // with a new webContentsId. The bridge must destroy the old session's
       // proxy (its webContents is gone) and let the next command recreate it.
       const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
-      browserManager.registerGuest({
+      const registered = browserManager.registerGuest({
         ...args,
         rendererWebContentsId: event.sender.id
       })
+      if (!registered) {
+        return false
+      }
       if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
         agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
       }
@@ -234,6 +239,23 @@ export function registerBrowserHandlers(): void {
     browserManager.unregisterGuest(args.browserPageId)
     return true
   })
+
+  ipcMain.handle(
+    'browser:proceedCertificate',
+    (
+      event,
+      args: { browserPageId?: unknown; challengeId?: unknown }
+    ): BrowserCertificateProceedResult => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.browserPageId !== 'string' ||
+        typeof args.challengeId !== 'string'
+      ) {
+        return { ok: false, reason: 'missing' }
+      }
+      return browserCertificateTrustController.proceed(args.browserPageId, args.challengeId)
+    }
+  )
 
   // Why: keeps the bridge's active tab in sync with the renderer's UI state.
   // Without this, a user switching tabs in the UI would leave the agent operating

@@ -1,5 +1,9 @@
 import { net } from 'electron'
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow,
+  UsageRateLimitMetadata
+} from '../../shared/rate-limit-types'
 import {
   isGrokAccessTokenFresh,
   readGrokAuthSession,
@@ -12,8 +16,8 @@ const GROK_CLI_PROXY_BASE =
   process.env.GROK_CLI_CHAT_PROXY_BASE_URL?.trim().replace(/\/$/, '') ||
   'https://cli-chat-proxy.grok.com/v1'
 const BILLING_CREDITS_URL = `${GROK_CLI_PROXY_BASE}/billing?format=credits`
-// Why: unified-billing accounts have no weekly credits; their included monthly
-// budget is only present in the default (format-less) billing view.
+// Why: some unified-billing accounts expose only a monthly included budget,
+// which is present in the default (format-less) billing view.
 const BILLING_DEFAULT_URL = `${GROK_CLI_PROXY_BASE}/billing`
 const API_TIMEOUT_MS = 10_000
 const WEEKLY_WINDOW_MINUTES = 10_080
@@ -47,14 +51,19 @@ type GrokBillingResponse = GrokBillingConfig & {
   config?: GrokBillingConfig
 }
 
-function result(status: ProviderRateLimits['status'], error: string | null): ProviderRateLimits {
+function result(
+  status: ProviderRateLimits['status'],
+  error: string | null,
+  usageMetadata?: UsageRateLimitMetadata
+): ProviderRateLimits {
   return {
     provider: 'grok',
     session: null,
     weekly: null,
     updatedAt: Date.now(),
     error,
-    status
+    status,
+    ...(usageMetadata ? { usageMetadata } : {})
   }
 }
 
@@ -72,8 +81,28 @@ function parseResetDescription(isoString: string | undefined): string | null {
     : date.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
 }
 
+function timestampsMatch(left: string | undefined, right: string | undefined): boolean {
+  const leftTimestamp = left ? Date.parse(left) : Number.NaN
+  const rightTimestamp = right ? Date.parse(right) : Number.NaN
+  return Number.isFinite(leftTimestamp) && leftTimestamp === rightTimestamp
+}
+
+function hasConfirmedWeeklyPeriod(config: GrokBillingConfig): boolean {
+  const period = config.currentPeriod
+  // Why: monthly unified-billing responses can also carry a weekly currentPeriod;
+  // matching billing bounds identify Grok's omitted protobuf zero unambiguously.
+  return (
+    period?.type === 'USAGE_PERIOD_TYPE_WEEKLY' &&
+    timestampsMatch(period.start, config.billingPeriodStart) &&
+    timestampsMatch(period.end, config.billingPeriodEnd)
+  )
+}
+
 function mapWeeklyCredits(config: GrokBillingConfig): RateLimitWindow | null {
-  const usedPercent = config.creditUsagePercent
+  const usedPercent =
+    config.creditUsagePercent === undefined && hasConfirmedWeeklyPeriod(config)
+      ? 0
+      : config.creditUsagePercent
   if (typeof usedPercent !== 'number' || !Number.isFinite(usedPercent)) {
     return null
   }
@@ -225,7 +254,11 @@ export async function fetchGrokRateLimits(
     // Why: a genuine sign-out returns 'missing' earlier, so reaching here always
     // means a stored, refreshable session — Grok CLI refreshes the access token
     // on its next run, so don't tell users to re-run `grok login` (#8497).
-    return result('error', 'Grok access token expired — Grok CLI will refresh it on next use')
+    return result(
+      'error',
+      'Grok sign-in expired — run grok on the computer running Orca; sign in if prompted. No chat message is needed.',
+      { failureKind: 'delegated-refresh-required', source: 'oauth' }
+    )
   }
 
   try {
@@ -244,9 +277,8 @@ export async function fetchGrokRateLimits(
     if (weekly) {
       return billingUsageResult({ weekly }, config, session)
     }
-    // Why: unified-billing accounts report a monthly included-usage budget
-    // instead of weekly credits; the credits view omits creditUsagePercent
-    // for them, so read the default billing view before giving up.
+    // Why: some unified-billing accounts expose only a monthly included budget;
+    // their credits view omits creditUsagePercent, so read the default view.
     const fallback = await fetchMonthlyUsageFallback(session, options.signal)
     if (fallback.kind === 'result') {
       return fallback.result

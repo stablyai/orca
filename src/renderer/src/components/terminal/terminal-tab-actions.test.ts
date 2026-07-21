@@ -442,6 +442,27 @@ describe('closeTerminalTab', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects a pinned background lifecycle close without opening a confirmation modal', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    const onClosed = vi.fn()
+    const onCancel = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1', { rejectPinned: true, onClosed, onCancel })
+
+    expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(onClosed).not.toHaveBeenCalled()
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
   it('guards a pinned tab closed by its unified id (workspace overlay path)', () => {
     const requestPinnedTabCloseConfirm = vi.fn()
     const closeUnifiedTab = vi.fn()

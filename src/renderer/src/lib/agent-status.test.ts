@@ -189,14 +189,9 @@ describe('detectAgentStatusFromTitle', () => {
   })
 
   // --- Cursor (cursor-agent) synthesized titles ---
-  // Why: cursor-agent's native OSC title stays literally "Cursor Agent" for
-  // the entire turn, so Orca synthesizes decorated titles from hook events
-  // to drive the existing spinner/unread pipeline. These tests pin the
-  // contract the main-process hook listener relies on.
+  // Why: cursor-agent's native title stays "Cursor Agent" all turn, so Orca synthesizes decorated titles for the spinner/unread pipeline.
   it('treats the bare "Cursor Agent" native title as a no-op (not idle)', () => {
-    // Why: if the native title classified as idle, cursor's own per-turn
-    // re-emissions would trigger working→idle transitions between our
-    // synthesized working frames, stomping the spinner off mid-turn.
+    // Why: if the native title classified as idle, cursor's per-turn re-emissions would stomp the spinner off mid-turn.
     expect(detectAgentStatusFromTitle('Cursor Agent')).toBeNull()
     expect(detectAgentStatusFromTitle('cursor agent')).toBeNull()
     expect(detectAgentStatusFromTitle('  Cursor Agent  ')).toBeNull()
@@ -246,10 +241,7 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Codex Working')).toBe('working')
   })
 
-  // Why: `containsAgentName` token-matches legacy agent names, so a cwd-path
-  // fragment like "~/codex-scratch" (hyphen-adjacent) or "opencode-blinker"
-  // (the worktree name that mislabeled Codex tabs as OpenCode) no longer mints
-  // an 'idle' agent signal. A bare "~/codex" path still has no strong keyword.
+  // Why: `containsAgentName` token-matches, so cwd-path fragments like "~/codex-scratch" no longer mint an 'idle' agent signal.
   it('does not treat cwd-path agent-name fragments as agent activity', () => {
     expect(detectAgentStatusFromTitle('~/codex-scratch')).toBeNull()
     expect(detectAgentStatusFromTitle('~/codex already built')).toBeNull()
@@ -257,10 +249,7 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('claude-scratch')).toBeNull()
   })
 
-  // Why: short agent names are unsafe under substring detection. Telemetry now
-  // records explicit launch facts rather than widening OSC-title inference, so
-  // this detector must not grow aliases that turn ordinary shell titles like
-  // "timestamp ready" into agent activity.
+  // Why: short agent names are unsafe under substring detection; don't add aliases that turn "timestamp ready" into agent activity.
   it('does not treat ordinary words containing "amp" as agent titles', () => {
     expect(detectAgentStatusFromTitle('timestamp ready')).toBeNull()
     expect(detectAgentStatusFromTitle('clamp working')).toBeNull()
@@ -280,15 +269,7 @@ describe('detectAgentStatusFromTitle', () => {
   })
 })
 
-// Why: regression guard for the STRONG_WORKING_KEYWORDS_RE path-separator
-// false positive. Before the lookarounds were widened to `[\w./\\-]`, a title
-// like `~/codex/working` matched STRONG_WORKING_KEYWORDS_RE (because `/` is
-// not in `[\w\-]`) and the function classified a plain path as 'working',
-// driving spinners and agent counts off a shell cwd. The idle-side fallback
-// at the bottom of `detectAgentStatusFromTitle` still returns 'idle' for
-// agent-name-containing titles — that's the known `containsAgentName`
-// substring gap documented in the test above — so the behavior this block
-// pins is specifically "no path fragment is ever classified as 'working'."
+// Why: regression guard — a path fragment like `~/codex/working` must never classify as 'working' (path separators aren't word boundaries).
 describe('detectAgentStatusFromTitle path-separator rejection', () => {
   test('rejects working keywords adjacent to POSIX path separators', () => {
     expect(detectAgentStatusFromTitle('~/codex/working')).not.toBe('working')
@@ -314,9 +295,7 @@ describe('detectAgentStatusFromTitle path-separator rejection', () => {
     expect(detectAgentStatusFromTitle('Aider thinking')).toBe('working')
   })
 
-  // Why: path separators only need to be blocked on the LEFT of the keyword
-  // (where path fragments sit). Blocking them on the right would regress
-  // legitimate sentence-style titles where a keyword is followed by `.`/`!`/`?`.
+  // Why: block path separators only on the LEFT of the keyword; blocking the right would regress titles ending in `.`/`!`/`?`.
   test('still accepts keywords followed by trailing punctuation', () => {
     expect(detectAgentStatusFromTitle('Codex done.')).toBe('idle')
     expect(detectAgentStatusFromTitle('Aider idle!')).toBe('idle')
@@ -355,12 +334,7 @@ describe('clearWorkingIndicators', () => {
     expect(clearWorkingIndicators('Terminal 1')).toBe('Terminal 1')
   })
 
-  // Why: clearWorkingIndicators must use the same hyphen/word-char-aware
-  // boundary as STRONG_WORKING_KEYWORDS_RE (agent-detection.ts). A prior
-  // implementation used plain `\b${keyword}\b` which — since `-` is a
-  // non-word char — would strip "working" out of "codex is-working-cap"
-  // even though detectAgentStatusFromTitle correctly refuses to classify
-  // that title as 'working'. The clearer and detector must stay symmetric.
+  // Why: clearWorkingIndicators must use the same hyphen-aware boundary as STRONG_WORKING_KEYWORDS_RE so clearer and detector stay symmetric.
   it('does not strip working keywords inside hyphenated compounds', () => {
     expect(clearWorkingIndicators('codex is-working-cap')).toBe('codex is-working-cap')
     expect(clearWorkingIndicators('claude reworking diff')).toBe('claude reworking diff')
@@ -391,8 +365,7 @@ describe('normalizeTerminalTitle', () => {
   })
 
   it('collapses Grok rotating working titles to one stable label', () => {
-    // Grok interpolates a rotating status/tool phrase between the spinner and its
-    // name, so each frame is a distinct title; they must all fold to one label.
+    // Grok interpolates a rotating phrase between spinner and name, so each frame differs; all must fold to one label.
     expect(normalizeTerminalTitle('⠋ - Waiting for response… - grok')).toBe('⠋ Grok')
     expect(normalizeTerminalTitle('⠴ - Thinking - grok')).toBe('⠋ Grok')
     expect(normalizeTerminalTitle('⠙ - Responding - grok')).toBe('⠋ Grok')
@@ -410,8 +383,7 @@ describe('normalizeTerminalTitle', () => {
     expect(normalizeTerminalTitle('Fix the auth bug - grok')).toBe('Fix the auth bug - grok')
     // Names "grok" mid-title but ends with another agent → not a Grok frame.
     expect(normalizeTerminalTitle('⠋ debugging grok - claude')).toBe('⠋ debugging grok - claude')
-    // Claude/Codex task text ending in "grok" must not collapse — only the
-    // Grok frame shape "spinner - phrase - grok" is the rotating-frame signal.
+    // Only the Grok frame shape "spinner - phrase - grok" is the rotating-frame signal; task text ending in "grok" must not collapse.
     expect(normalizeTerminalTitle('⠋ wire up grok')).toBe('⠋ wire up grok')
     expect(normalizeTerminalTitle('⠋ Codex is thinking about grok')).toBe(
       '⠋ Codex is thinking about grok'
@@ -511,10 +483,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('android emulator ready')).toBeNull()
   })
 
-  // Why: cwd/worktree titles embed agent-name fragments. Substring matching
-  // mislabeled a Codex tab whose title fell back to the "opencode-blinker"
-  // worktree name as OpenCode. Token matching must reject these fragments for
-  // every legacy agent name.
+  // Why: substring matching mislabeled cwd/worktree name fragments (e.g. "opencode-blinker") as agents; token-match to reject them.
   it('does not label cwd/worktree path fragments as an agent', () => {
     expect(getAgentLabel('opencode-blinker')).toBeNull()
     expect(getAgentLabel('claude-scratch')).toBeNull()
@@ -534,9 +503,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Devin working')).toBe('Devin')
   })
 
-  // Why: `cursor` is ordinary editor vocabulary in another agent's task title, so a
-  // bare token is not Cursor identity — a Claude tab working on cursor code was being
-  // mislabeled Cursor on the worktree card. Match Cursor's closed title set only.
+  // Why: "cursor" is ordinary editor vocabulary, so a bare token isn't Cursor identity; match Cursor's closed title set only.
   it('labels Cursor by identity, not a bare "cursor" token in another agent title', () => {
     expect(getAgentLabel('Cursor Agent')).toBe('Cursor')
     expect(getAgentLabel('⠋ Cursor Agent')).toBe('Cursor')
@@ -555,8 +522,7 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('OpenClaude ready')).toBe(false)
   })
 
-  // Why: a braille Claude title merely mentioning a text cursor is still Claude, so its
-  // prompt-cache paths must fire; only Cursor's own identity titles are excluded.
+  // Why: a Claude title merely mentioning a text cursor is still Claude; only Cursor's own identity titles are excluded.
   it('counts cursor-mentioning Claude braille titles as Claude, excludes real Cursor', () => {
     expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
     expect(isClaudeAgent('⠋ Cursor Agent')).toBe(false)
@@ -585,8 +551,7 @@ describe('isClaudeAgent', () => {
 
 describe('createAgentStatusTracker', () => {
   // --- Claude Code: real captured OSC title sequence (v2.1.86) ---
-  // CRITICAL: Claude Code changes the title to the TASK DESCRIPTION,
-  // not "Claude Code". The ✳ prefix is the only reliable idle indicator.
+  // Claude Code sets the title to the TASK DESCRIPTION, not "Claude Code"; ✳ prefix is the only reliable idle indicator.
   it('fires on Claude Code working → idle (real captured titles)', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
@@ -655,9 +620,7 @@ describe('createAgentStatusTracker', () => {
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
-  // Why: end-to-end tracker coverage for cursor — synthesized working frames
-  // interleaved with cursor's own "Cursor Agent" re-emissions must not fire
-  // onBecameIdle until the "Cursor ready" done frame arrives.
+  // Why: cursor's native "Cursor Agent" re-emissions between synthesized working frames must not fire onBecameIdle before the done frame.
   it('fires on Cursor working → idle across native "Cursor Agent" re-emissions', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
@@ -739,10 +702,7 @@ describe('createAgentStatusTracker', () => {
     expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
-  // Why: reset() clears the tracker's working latch so stale working→idle
-  // transitions cannot fire after the owning transport is torn down. Without
-  // this guarantee, a reattach or late title delivery could surface a
-  // phantom idle notification for work the user already dismissed.
+  // Why: reset() clears the working latch so a late/reattach idle title can't fire a phantom notification after teardown.
   it('reset() clears working state so a subsequent idle does not fire onBecameIdle', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
@@ -758,8 +718,7 @@ describe('createAgentStatusTracker', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    // Simulate raw PTY data chunks containing OSC title sequences
-    // Uses real title patterns: task description, NOT "Claude Code"
+    // Real title patterns: task description, NOT "Claude Code"
     const oscTitle = (title: string): string => `\x1b]0;${title}\x07`
 
     const chunks = [
@@ -804,9 +763,7 @@ describe('createAgentStatusTracker', () => {
 
 describe('isExplicitAgentStatusFresh', () => {
   it('treats the boundary (now - updatedAt == staleAfterMs) as fresh', () => {
-    // Why: the function uses `<=`, so equality at the boundary must remain
-    // fresh. Protecting this invariant keeps entries from flipping to stale
-    // one tick earlier than the configured TTL implies.
+    // Why: uses `<=`, so equality at the boundary stays fresh (not stale one tick before the TTL).
     const staleAfterMs = 60_000
     const now = 1_000_000
     const entry = { updatedAt: now - staleAfterMs }
@@ -930,9 +887,7 @@ describe('agentTypeToIconAgent', () => {
   })
 
   it('returns null for arbitrary non-iconable strings', () => {
-    // Why: guards against hook payloads reporting agentTypes that AgentIcon
-    // cannot render (e.g. "totally-fake-agent"); returning null lets the
-    // caller fall back to a neutral glyph instead of a broken icon.
+    // Why: unknown agentTypes must return null so the caller falls back to a neutral glyph, not a broken icon.
     expect(agentTypeToIconAgent('totally-fake-agent')).toBeNull()
   })
 })

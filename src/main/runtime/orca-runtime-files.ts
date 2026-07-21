@@ -81,17 +81,23 @@ import {
 } from '../ipc/parcel-watcher-process-failure'
 import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
+import {
+  rankRuntimeMobileFilePaths,
+  RuntimeMobileFilePathSearchCache
+} from './runtime-mobile-file-path-search'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
+const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
+const MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES = 8
+const MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS = 30_000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
 export const WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS = 10_000
 const TERMINAL_FILE_GRANT_TTL_MS = 10 * 60 * 1000
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
-// Why: runtime files.watch subscriptions are cleaned up through synchronous RPC
-// callbacks. Track native Parcel unsubscribe work so app shutdown can drain it.
+// Why: files.watch cleanup is synchronous RPC; track native Parcel unsubscribes so shutdown can drain them.
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
 type RuntimeFileWatcherLease = {
   suspend(): Promise<void>
@@ -115,9 +121,7 @@ const MOBILE_BINARY_EXTENSIONS = new Set([
   '.webp',
   '.zip'
 ])
-// Raster image extensions the mobile client can render from a base64 data URI
-// via files.readPreview. Mirrors mobile's classifyMobileArtifact image set;
-// SVG/PDF are intentionally excluded (RN <Image> can't decode those data URIs).
+// Mirror of mobile classifyMobileArtifact's image set; SVG/PDF excluded because RN <Image> can't decode those data URIs.
 const MOBILE_PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
   '.png',
   '.jpg',
@@ -196,8 +200,7 @@ function runtimeWatcherReleaseKey(
   connectionId: string | undefined,
   rootPath: string
 ): string {
-  // Why: identical absolute paths are valid on local and multiple SSH hosts;
-  // destructive teardown must stay scoped to the execution host that owns it.
+  // Why: identical absolute paths exist on local and multiple SSH hosts; scope teardown to the host that owns it.
   return JSON.stringify([runtimeId, connectionId ?? null, normalizeRuntimeWatcherRoot(rootPath)])
 }
 
@@ -262,8 +265,7 @@ function registerRuntimeFileWatcherRelease(
           })
           physicalExitPromise = physicalExit
         } else {
-          // Why: a synchronous close failure retains the native owner so a
-          // later removal or logical unsubscribe can retry the same handle.
+          // Why: a synchronous close failure retains the native owner so a later removal or unsubscribe can retry the same handle.
           releasePromise = null
         }
       }
@@ -279,8 +281,7 @@ function registerRuntimeFileWatcherRelease(
       if (resumePromise) {
         return physicalExitPromise ? Promise.resolve() : resumePromise
       }
-      // Why: a timed-out child still owns native handles until its physical
-      // exit; restoration must join that owner before starting a replacement.
+      // Why: a timed-out child still owns native handles until physical exit; join that owner before starting a replacement.
       const resumesAfterPhysicalExit = physicalExitPromise !== null
       const attempt = Promise.resolve(physicalExitPromise ?? releasePromise)
         .then(async () => {
@@ -408,6 +409,10 @@ export type RuntimeFileCommandHost = {
 export class RuntimeFileCommands {
   private activeRuntimeTextSearches = new Map<string, ChildProcess>()
   private terminalFileGrants = new Map<string, TerminalFileGrant>()
+  private mobileFilePathSearchCache = new RuntimeMobileFilePathSearchCache(
+    MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES,
+    MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS
+  )
 
   constructor(private readonly host: RuntimeFileCommandHost) {}
 
@@ -437,16 +442,61 @@ export class RuntimeFileCommands {
     }
   }
 
+  async searchMobileFilePaths(
+    worktreeSelector: string,
+    query: string,
+    limit: number
+  ): Promise<RuntimeFileListResult> {
+    const store = this.host.requireStore()
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = target
+    const cacheKey = `${connectionId ?? 'local'}:${worktree.id}:${worktree.path}`
+    const inventory = await this.mobileFilePathSearchCache.get(cacheKey, async () => {
+      const listed = connectionId
+        ? await this.listRemoteMobileFiles(
+            worktree.path,
+            connectionId,
+            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+          )
+        : await listQuickOpenFiles(
+            worktree.path,
+            store,
+            undefined,
+            undefined,
+            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+          )
+      const safePaths = listed
+        .filter((relativePath) => isSafeMobileRelativePath(relativePath))
+        .sort((a, b) => a.localeCompare(b))
+      return {
+        paths: safePaths.slice(0, MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT),
+        totalCount: safePaths.length,
+        truncated: safePaths.length > MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT
+      }
+    })
+    const matches = rankRuntimeMobileFilePaths(inventory.paths, query, limit)
+    return {
+      worktree: worktree.id,
+      rootPath: worktree.path,
+      files: matches.paths.map((relativePath) => ({
+        relativePath,
+        basename: basenameFromRelativePath(relativePath),
+        kind: isMobileBinaryPath(relativePath) ? ('binary' as const) : ('text' as const)
+      })),
+      totalCount: matches.totalCount,
+      truncated: inventory.truncated || matches.totalCount > limit
+    }
+  }
+
   async openMobileFile(
     worktreeSelector: string,
     relativePath: string
   ): Promise<RuntimeFileOpenResult> {
-    const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
-    // Previewable images open like text (the mobile viewer renders them via
-    // files.readPreview); other binaries stay unavailable on mobile.
+    // Previewable images open like text (mobile renders via files.readPreview); other binaries stay unavailable on mobile.
     const kind = isMobilePreviewableImagePath(relativePath)
       ? 'image'
       : isMobileBinaryPath(relativePath)
@@ -458,14 +508,30 @@ export class RuntimeFileCommands {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    // Why: the service's internal runtimeId is not a registered runtime env selector
-    // (those live in orca-environments.json). Passing it caused Unknown environment
-    // errors on content load for CLI-initiated opens (via files.open from orca cli
-    // used by agents). Instead pass undefined so the renderer openFile falls back to
-    // the current activeRuntimeEnvironmentId (or null), matching sidebar opens and
-    // allowing correct routing for local vs remote envs.
+    // Why: CLI/agents treat opened:true as success; stat first so missing paths fail the RPC instead of opening a ghost tab.
+    await this.assertMobileOpenTargetExists(filePath, connectionId)
+    // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
     this.host.openFile(worktree.id, filePath, relativePath, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
+  }
+
+  private async assertMobileOpenTargetExists(
+    filePath: string,
+    connectionId?: string
+  ): Promise<void> {
+    try {
+      await (connectionId
+        ? this.statRemoteTerminalPath(filePath, connectionId)
+        : stat(await resolveAuthorizedPath(filePath, this.host.requireStore())))
+    } catch (error) {
+      if (
+        isENOENT(error) ||
+        (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
+      ) {
+        throw new Error(`ENOENT: no such file or directory, open '${filePath}'`)
+      }
+      throw error
+    }
   }
 
   async openMobileDiff(
@@ -517,10 +583,7 @@ export class RuntimeFileCommands {
     }
   }
 
-  // Resolves a path tapped in the mobile terminal (absolute, relative, or ~/…)
-  // to a worktree-relative path the file RPCs can open, plus existence.
-  // Relative paths resolve against `cwd` when the caller supplies it, else
-  // against the worktree root.
+  // Resolves a mobile terminal tap to a worktree-relative path; relatives resolve against cwd, else the worktree root.
   async resolveTerminalPath(
     worktreeSelector: string,
     pathText: string,
@@ -531,8 +594,7 @@ export class RuntimeFileCommands {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree, connectionId } = target
-    // Why: mobile may attach after OSC7 cwd metadata was emitted; the runtime
-    // still owns the terminal's latest cwd and can resolve the tap correctly.
+    // Why: mobile may attach after OSC7 cwd was emitted; the runtime still owns the terminal's latest cwd to resolve the tap.
     const normalizedTerminalHandle =
       terminalHandle && terminalHandle.trim().length > 0 ? terminalHandle.trim() : null
     const terminalCwd = normalizedTerminalHandle
@@ -551,9 +613,7 @@ export class RuntimeFileCommands {
       isDirectory: false
     }
 
-    // `~/…` is home-relative. The local home is known (os.homedir); the remote
-    // home is not, so don't guess — a tapped `~/…` on a remote worktree would
-    // mis-resolve under cwd/worktree-root, so treat it as not-openable instead.
+    // Why: remote home is unknown (only local os.homedir), so a tapped ~/… on a remote worktree is not-openable, not guessed.
     const isTilde = pathText.startsWith('~/') || pathText.startsWith('~\\')
     if (isTilde && connectionId) {
       return empty
@@ -590,9 +650,7 @@ export class RuntimeFileCommands {
         }
       }
 
-      // Why: mobile taps can point at agent-created artifacts outside the
-      // worktree. Authorize and grant the exact existing path instead of
-      // widening worktree-relative file RPCs to arbitrary absolute paths.
+      // Why: mobile taps may hit agent artifacts outside the worktree; grant the exact path, not arbitrary absolute paths.
       if (!normalizedTerminalHandle || !terminalCwd) {
         return { ...empty, relativePath, absolutePath }
       }
@@ -654,9 +712,7 @@ export class RuntimeFileCommands {
           : undefined
       }
     } catch (error) {
-      // A genuine "not found" → the path simply doesn't exist (report it, not an
-      // error). Transport/permission/provider failures must surface so a remote
-      // session doesn't silently report every tapped path as missing.
+      // Report genuine not-found as missing; let transport/permission errors surface so remote taps aren't all reported missing.
       if (
         isENOENT(error) ||
         (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
@@ -667,9 +723,7 @@ export class RuntimeFileCommands {
     }
   }
 
-  // A remote stat failure that means "the file isn't there" vs a transport /
-  // permission / provider error. The mux drops the ErrnoException `code`, so the
-  // message is the only signal — match the not-found shapes the relay surfaces.
+  // The mux drops ErrnoException.code, so match not-found by message shape (vs transport/permission/provider errors).
   private static isRemoteNotFoundErrorMessage(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
     return /\bENOENT\b|no such file|not found|does not exist/i.test(message)
@@ -718,8 +772,7 @@ export class RuntimeFileCommands {
       provider.realpath(absolutePath),
       ...roots.map((root) => provider.realpath(root).catch(() => root))
     ])
-    // Why: SSH reads and writes follow symlinks on the relay. Grant the
-    // canonical target so a /tmp link cannot escape the temp-artifact boundary.
+    // Why: SSH I/O follows symlinks on the relay; grant the canonical target so a /tmp link can't escape the temp boundary.
     return realRoots.some((root) => isPathInsideOrEqual(root, realArtifactPath))
       ? realArtifactPath
       : null
@@ -1074,8 +1127,7 @@ export class RuntimeFileCommands {
       grant.absolutePath,
       grant.connectionId
     )
-    // Why: relay stat/read/write follow symlinks, so a remote temp artifact
-    // grant must be re-canonicalized after the terminal process can mutate it.
+    // Why: relay I/O follows symlinks, so re-canonicalize a remote temp-artifact grant after the process can mutate it.
     if (allowedPath !== grant.absolutePath) {
       throw new Error('terminal_file_grant_stale')
     }
@@ -1130,8 +1182,7 @@ export class RuntimeFileCommands {
           if (!provider) {
             throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
           }
-          // Why: the RPC layer already threads AbortSignal for local watches; SSH
-          // must cancel the remote fs.watch request instead of waiting it out.
+          // Why: the RPC layer already threads AbortSignal for local watches; SSH must cancel the remote fs.watch, not wait it out.
           const close = await provider.watch(target.path, callback, { signal, onTerminalError })
           return { unsubscribe: async () => close(), rootPaths: [target.path] }
         }
@@ -1145,8 +1196,7 @@ export class RuntimeFileCommands {
           const close = watchWindowsRuntimeFileExplorer(rootPath, callback, onTerminalError)
           return { unsubscribe: close, rootPaths: [target.path, rootPath] }
         }
-        // Why: the forked watcher keeps the blocking crawl and native faults out
-        // of the main/`serve` process (issues #5308 and #8212).
+        // Why: the forked watcher keeps the blocking crawl and native faults out of the main/`serve` process (issues #5308, #8212).
         const dispose = await watchFileExplorerInWatcherProcess(
           rootPath,
           callback,
@@ -1176,8 +1226,7 @@ export class RuntimeFileCommands {
       await Promise.all(Array.from(leases, (lease) => lease.suspend()))
     }
     if (!connectionId) {
-      // Why: setup can fail before registerRuntimeFileWatcherRelease publishes
-      // its callback, while the host still retains an unkillable child owner.
+      // Why: setup can fail before registerRuntimeFileWatcherRelease publishes its callback while the child owner still lives.
       const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
       await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)
     }
@@ -1508,8 +1557,7 @@ export class RuntimeFileCommands {
       preserveSymlink: true
     })
     await mkdir(dirname(destinationPath), { recursive: true })
-    // Why: duplicate/copy operations are deconflicted by the caller. COPYFILE_EXCL
-    // preserves the same no-clobber invariant as the local shell copy IPC.
+    // Why: COPYFILE_EXCL preserves the no-clobber invariant of the local shell copy IPC (caller already deconflicts names).
     await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
     return { ok: true }
   }
@@ -1532,8 +1580,7 @@ export class RuntimeFileCommands {
     const targetPath = await resolveAuthorizedPath(target.path, this.host.requireStore(), {
       preserveSymlink: true
     })
-    // Why: a non-local runtime has no client OS Trash/Recycling Bin; server-side
-    // file mutations are permanent and the renderer confirms before calling this.
+    // Why: a non-local runtime has no client Trash; this delete is permanent, so the renderer confirms before calling.
     await rm(targetPath, { recursive: recursive === true, force: true })
     return { ok: true }
   }
@@ -1730,12 +1777,16 @@ export class RuntimeFileCommands {
     }
   }
 
-  private async listRemoteMobileFiles(rootPath: string, connectionId: string): Promise<string[]> {
+  private async listRemoteMobileFiles(
+    rootPath: string,
+    connectionId: string,
+    maxResults?: number
+  ): Promise<string[]> {
     const provider = getSshFilesystemProvider(connectionId)
     if (!provider) {
       return []
     }
-    return provider.listFiles(rootPath)
+    return provider.listFiles(rootPath, { maxResults })
   }
 
   private async readRemoteMobileFile(filePath: string, connectionId: string): Promise<string> {
@@ -1744,8 +1795,7 @@ export class RuntimeFileCommands {
       throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
     }
     const fileStat = await provider.stat(filePath)
-    // Why: the SSH filesystem API does not expose ranged reads here, so reject
-    // oversized remote previews instead of streaming a large file just to trim it.
+    // Why: no ranged reads over SSH here, so reject oversized previews instead of streaming a whole file just to trim it.
     if (fileStat.size > MOBILE_FILE_READ_MAX_BYTES) {
       throw new Error('file_too_large')
     }
@@ -1785,9 +1835,7 @@ function watchWindowsRuntimeFileExplorer(
     timer = setTimeout(emitOverflow, WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS)
   }
 
-  // Why: Parcel probes Watchman before the Windows backend and its native
-  // watcher can abort the headless server process. For remote Windows runtimes,
-  // a conservative overflow refresh is safer than a process-wide native crash.
+  // Why: Parcel's Watchman probe can crash the headless server on Windows; use a conservative overflow refresh instead.
   const watcher = watchFs(rootPath, { recursive: true }, scheduleOverflow)
   const onClose = (): void => {
     watcher.removeListener('error', onError)
@@ -1801,8 +1849,7 @@ function watchWindowsRuntimeFileExplorer(
     }
     watcher.removeListener('close', onClose)
     watcher.removeListener('error', onError)
-    // Why: Node closes and nulls FSWatcher's native handle on error without a
-    // close event; that error is positive physical-exit proof for deletion.
+    // Why: Node nulls FSWatcher's native handle on error without a close event; treat the error as physical-exit proof.
     physicalClose.markExited()
     if (!disposed) {
       try {
@@ -1836,8 +1883,7 @@ function watchWindowsRuntimeFileExplorer(
         () => new Error('Windows watcher did not close before deletion deadline')
       )
     } catch (error) {
-      // Why: late Windows close still owns native directory handles; expose its
-      // exact completion so destructive cleanup retains and then clears the root.
+      // Why: late Windows close still owns native dir handles; expose its completion so cleanup retains then clears the root.
       throw new WatcherProcessFailure(
         error instanceof Error ? error.message : String(error),
         'supervisor',
@@ -1878,8 +1924,7 @@ async function isRuntimeDirectoryEntry(
   entry: { isDirectory(): boolean; isSymbolicLink(): boolean },
   _entryPath: string
 ): Promise<boolean> {
-  // Why: runtime-backed file explorer listings are still passive UI reads.
-  // Do not stat symlink targets here; explicit open/expand can resolve them.
+  // Why: listings are passive UI reads; don't stat symlink targets here (explicit open/expand resolves them).
   if (entry.isSymbolicLink()) {
     void _entryPath
     return false
@@ -1930,8 +1975,7 @@ function rethrowRuntimeFileCreateError(error: unknown, targetPath: string): neve
 async function readLocalMobileFile(filePath: string, store: Store): Promise<string> {
   const authorizedPath = await resolveAuthorizedPath(filePath, store)
   const fileStat = await stat(authorizedPath)
-  // Why: mobile file previews are read-only convenience views; cap the read so
-  // opening a generated log or bundle cannot block the WebSocket like oversized scrollback.
+  // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
   const readLimit = Math.min(fileStat.size, MOBILE_FILE_READ_MAX_BYTES + 1)
   const handle = await open(authorizedPath, 'r')
   try {
@@ -2060,8 +2104,7 @@ function normalizeTerminalFileUriAuthorityPath(
   if (isLoopbackFileUriHostname(host) && (connectionId || process.platform !== 'win32')) {
     return normalizeLeadingSlashDrivePath(match[2]!, worktreePath)
   }
-  // Why: a file URI authority names a host. Without a verified host match,
-  // stripping it could open a same-path local or SSH artifact on the wrong machine.
+  // Why: without a verified host match, stripping the file-URI authority could open a same-path artifact on the wrong machine.
   return pathText
 }
 

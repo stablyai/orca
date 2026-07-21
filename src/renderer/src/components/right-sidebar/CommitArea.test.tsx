@@ -448,7 +448,8 @@ describe('CommitArea', () => {
         review: null,
         canCreate: false,
         blockedReason: 'dirty',
-        nextAction: 'commit'
+        nextAction: 'commit',
+        reviewLookupOutcome: 'not_found'
       }
     })
     const markup = renderCommitArea(baseProps(input))
@@ -481,7 +482,8 @@ describe('CommitArea', () => {
         review: null,
         canCreate: false,
         blockedReason: 'needs_push',
-        nextAction: 'push'
+        nextAction: 'push',
+        reviewLookupOutcome: 'not_found'
       }
     })
     const markup = renderCommitArea(baseProps(input))

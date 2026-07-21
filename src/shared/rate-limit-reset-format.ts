@@ -30,3 +30,32 @@ export function formatResetCountdown(ms: number): string {
   const duration = formatResetDuration(ms)
   return duration === 'now' ? 'Resets now' : `Resets in ${duration}`
 }
+
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+const DAY_MS = 24 * HOUR_MS
+
+/**
+ * Delay (ms) until the soonest reset countdown label would change, or null when
+ * no future reset needs a tick. Because labels are floored to minutes (or hours
+ * past a day), a countdown clock only needs to wake just after the next unit
+ * boundary — not every second — so callers schedule one short-lived timeout
+ * instead of polling. Returns the minimum delay across all reset times.
+ */
+export function getResetCountdownNextTickDelay(
+  now: number,
+  resetTimes: readonly number[]
+): number | null {
+  let nextDelay: number | null = null
+  for (const resetAt of resetTimes) {
+    if (!Number.isFinite(resetAt) || resetAt <= now) {
+      continue
+    }
+    const remainingMs = resetAt - now
+    const tickUnitMs = remainingMs >= DAY_MS ? HOUR_MS : MINUTE_MS
+    // Why: +1ms so the timeout fires just past the boundary the label flips on.
+    const delayMs = (remainingMs % tickUnitMs) + 1
+    nextDelay = nextDelay === null ? delayMs : Math.min(nextDelay, delayMs)
+  }
+  return nextDelay
+}

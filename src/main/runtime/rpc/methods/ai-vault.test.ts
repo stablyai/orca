@@ -13,7 +13,11 @@ vi.mock('../../../ai-vault/session-scanner', () => ({
   scanAiVaultSessions
 }))
 
-import { AI_VAULT_METHODS, AiVaultListSessionsParams } from './ai-vault'
+import {
+  AI_VAULT_METHODS,
+  AiVaultListSessionsParams,
+  AiVaultPrepareSessionResumeParams
+} from './ai-vault'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions,
@@ -103,6 +107,41 @@ describe('aiVault.listSessions params schema', () => {
     expect(AiVaultListSessionsParams.safeParse({ executionHostId: 'ssh:dev-box' }).success).toBe(
       false
     )
+  })
+})
+
+describe('aiVault.prepareSessionResume', () => {
+  it('validates bounded paths and executes against the receiving host identity', async () => {
+    expect(
+      AiVaultPrepareSessionResumeParams.safeParse({
+        agent: 'codex',
+        filePath: '/managed/sessions/rollout-a.jsonl',
+        codexHome: '/managed'
+      }).success
+    ).toBe(true)
+    const prepareAiVaultSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      prepareAiVaultSessionResume
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('aiVault.prepareSessionResume', {
+        agent: 'codex',
+        filePath: '/managed/sessions/rollout-a.jsonl',
+        codexHome: '/managed',
+        executionHostId: 'ssh:spoofed'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { useRealCodexHome: true } })
+    expect(prepareAiVaultSessionResume).toHaveBeenCalledWith({
+      agent: 'codex',
+      filePath: '/managed/sessions/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'local'
+    })
   })
 })
 

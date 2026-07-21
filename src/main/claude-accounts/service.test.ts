@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- test suite covers Claude capture and rollback edge cases */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -669,6 +669,159 @@ describe('ClaudeAccountService credential capture', () => {
     expect(rateLimits.evictInactiveClaudeCache).toHaveBeenCalledWith(
       settings.claudeManagedAccounts[1].id
     )
+  })
+
+  it('rejects adding a Claude account whose identity already exists', async () => {
+    setPlatform('linux')
+    tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    const existingAuthPath = join(tempDir, 'claude-accounts', 'existing-account', 'auth')
+    mkdirSync(existingAuthPath, { recursive: true })
+    const existingMarkerPath = join(existingAuthPath, '.orca-managed-claude-auth')
+    writeFileSync(existingMarkerPath, 'existing-account\n', 'utf-8')
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'existing-account',
+          email: 'new@example.com',
+          managedAuthPath: existingAuthPath,
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          wslLinuxAuthPath: null,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: 'existing-account',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'existing-account', wsl: {} }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      clearLastWrittenCredentialsJson: vi.fn(),
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    ;(
+      service as unknown as {
+        runClaudeLoginAndCapture(): Promise<{
+          credentialsJson: string
+          oauthAccount: unknown
+          identity: { email: string; organizationUuid: string | null; organizationName: null }
+        }>
+      }
+    ).runClaudeLoginAndCapture = vi.fn(async () => ({
+      credentialsJson: '{"new":true}\n',
+      oauthAccount: { newOauth: true },
+      identity: { email: 'new@example.com', organizationUuid: null, organizationName: null }
+    }))
+
+    await expect(service.addAccount({ runtime: 'host' })).rejects.toThrow(
+      'This Claude account is already added.'
+    )
+
+    expect(settings.claudeManagedAccounts).toHaveLength(1)
+    expect(readFileSync(existingMarkerPath, 'utf-8')).toBe('existing-account\n')
+    // The guard fires before credentials/settings change, so rollback I/O
+    // would only add latency and could mask the duplicate error.
+    expect(store.updateSettings).not.toHaveBeenCalled()
+    expect(runtimeAuth.forceMaterializeCurrentSelectionForRollback).not.toHaveBeenCalled()
+    // The rejected add's throwaway managed-auth dir must be cleaned up, leaving
+    // only the pre-existing account's dir behind.
+    expect(readdirSync(join(tempDir, 'claude-accounts')).sort()).toEqual(['existing-account'])
+  })
+
+  it('adds a Claude account with the same email under a different organization', async () => {
+    setPlatform('linux')
+    tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    const existingAuthPath = join(tempDir, 'claude-accounts', 'existing-account', 'auth')
+    mkdirSync(existingAuthPath, { recursive: true })
+    writeFileSync(
+      join(existingAuthPath, '.orca-managed-claude-auth'),
+      'existing-account\n',
+      'utf-8'
+    )
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'existing-account',
+          email: 'new@example.com',
+          managedAuthPath: existingAuthPath,
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          wslLinuxAuthPath: null,
+          authMethod: 'subscription-oauth',
+          organizationUuid: 'org-A',
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: 'existing-account',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'existing-account', wsl: {} }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      clearLastWrittenCredentialsJson: vi.fn(),
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    ;(
+      service as unknown as {
+        runClaudeLoginAndCapture(): Promise<{
+          credentialsJson: string
+          oauthAccount: unknown
+          identity: { email: string; organizationUuid: string | null; organizationName: null }
+        }>
+      }
+    ).runClaudeLoginAndCapture = vi.fn(async () => ({
+      credentialsJson: '{"new":true}\n',
+      oauthAccount: { newOauth: true },
+      identity: { email: 'new@example.com', organizationUuid: 'org-B', organizationName: null }
+    }))
+
+    await service.addAccount({ runtime: 'host' })
+
+    expect(settings.claudeManagedAccounts).toHaveLength(2)
+    expect(settings.claudeManagedAccounts[1].email).toBe('new@example.com')
+    expect(settings.claudeManagedAccounts[1].organizationUuid).toBe('org-B')
   })
 
   it('switches the active Claude account while PTYs are live', async () => {

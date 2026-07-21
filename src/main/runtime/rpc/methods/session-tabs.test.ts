@@ -142,6 +142,7 @@ describe('session tab RPC methods', () => {
         command: 'zsh',
         cwd: '/repo/packages/app',
         env: { CODEX_PROFILE: 'captured' },
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
         launchToken: 'launch-token-123',
         launchConfig: {
           agentArgs: '--model gpt-5',
@@ -160,6 +161,7 @@ describe('session tab RPC methods', () => {
       command: 'zsh',
       cwd: '/repo/packages/app',
       env: { CODEX_PROFILE: 'captured' },
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       startupCommandDelivery: undefined,
       agent: undefined,
       launchToken: 'launch-token-123',
@@ -196,7 +198,8 @@ describe('session tab RPC methods', () => {
     const response = await dispatcher.dispatch(
       makeRequest('session.tabs.createTerminal', {
         worktree: 'id:wt-1',
-        agent: 'codex'
+        agent: 'codex',
+        agentPrompt: 'Review this diff'
       })
     )
 
@@ -207,8 +210,30 @@ describe('session tab RPC methods', () => {
       command: undefined,
       startupCommandDelivery: undefined,
       agent: 'codex',
+      agentPrompt: 'Review this diff',
       activate: undefined
     })
+  })
+
+  it('rejects agent prompts without an agent preset', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        agentPrompt: 'Review this diff'
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message: 'Agent prompt requires an agent preset' }
+    })
+    expect(runtime.createMobileSessionTerminal).not.toHaveBeenCalled()
   })
 
   it('dispatches terminal creation with startup command delivery metadata', async () => {

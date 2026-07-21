@@ -79,6 +79,8 @@ function mockBrowserManager(
     getWebContentsIdByTabId: () => tabs,
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
+    getBrowserPageLoadError: vi.fn(() => null),
+    getBrowserPageCertificateFailure: vi.fn(() => null),
     unregisterGuest: vi.fn(),
     ensureWebviewVisible: vi.fn(async () => () => {}),
     acquireAutomationVisibility: vi.fn(async () => () => {}),
@@ -529,6 +531,43 @@ describe('AgentBrowserBridge', () => {
       expect(result.tabs).toHaveLength(1)
       expect(result.tabs[0].browserPageId).toBe('tab-a')
       expect(result.tabs[0].url).toBe('https://a.com')
+    })
+
+    it('surfaces the browser-manager load error on each listed tab', () => {
+      const tabs = new Map([['tab-a', 1]])
+      const wc1 = mockWebContents(1, 'chrome-error://chromewebdata/', '')
+      webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : null))
+      const loadError = {
+        code: -202,
+        description: 'ERR_CERT_AUTHORITY_INVALID',
+        validatedUrl: 'https://localhost:3443/'
+      }
+      const certificateFailure = {
+        challengeId: 'challenge-1',
+        browserPageId: 'tab-a',
+        errorCode: -202,
+        error: 'ERR_CERT_AUTHORITY_INVALID',
+        origin: 'https://localhost:3443',
+        displayHost: 'localhost:3443',
+        canProceed: true,
+        observedAt: 123
+      }
+      const b = new AgentBrowserBridge(
+        mockBrowserManager(tabs, new Map(), {
+          getBrowserPageLoadError: vi.fn((tabId: string) => (tabId === 'tab-a' ? loadError : null)),
+          getBrowserPageCertificateFailure: vi.fn((tabId: string) =>
+            tabId === 'tab-a' ? certificateFailure : null
+          )
+        })
+      )
+
+      // Why: an agent driving the browser must see the structured cert failure,
+      // not just chrome-error:// from getURL().
+      expect(b.tabList().tabs[0]).toMatchObject({
+        url: 'https://localhost:3443/',
+        loadError,
+        certificateFailure
+      })
     })
 
     it('does not mutate active-tab routing when tab-list infers the first live tab', () => {

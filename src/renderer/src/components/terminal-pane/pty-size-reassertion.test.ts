@@ -15,7 +15,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize: vi.fn(async () => ({ cols: 120, rows: 30 })),
       forwardResize
@@ -34,7 +34,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize: vi.fn(async () => ({ cols: 82, rows: 30 })),
       forwardResize
@@ -53,8 +53,9 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(() => {
+      fitAndRun: vi.fn((continuation) => {
         calls.push('fit')
+        continuation()
       }),
       getTerminalDimensions: vi.fn(() => {
         calls.push('measure')
@@ -81,8 +82,9 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(() => {
+      fitAndRun: vi.fn((continuation) => {
         forwardResize(82, 30)
+        continuation()
       }),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize: vi.fn(async () => ({ cols: 82, rows: 30 })),
@@ -97,14 +99,14 @@ describe('createPtySizeReassertion', () => {
   })
 
   it('can verify current dimensions without fitting again', async () => {
-    const fit = vi.fn()
+    const fitAndRun = vi.fn((continuation: () => void) => continuation())
     const forwardResize = vi.fn()
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit,
+      fitAndRun,
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize: vi.fn(async () => ({ cols: 120, rows: 30 })),
       forwardResize
@@ -113,7 +115,7 @@ describe('createPtySizeReassertion', () => {
     reassertion.request({ fit: false })
     await flushAsyncTicks()
 
-    expect(fit).not.toHaveBeenCalled()
+    expect(fitAndRun).not.toHaveBeenCalled()
     expect(forwardResize).toHaveBeenCalledWith(82, 30)
   })
 
@@ -124,7 +126,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'remote:terminal-1',
       isRemotePtyId: () => true,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize,
       forwardResize: vi.fn()
@@ -134,7 +136,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => true,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize,
       forwardResize: vi.fn()
@@ -164,7 +166,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize,
       forwardResize
@@ -201,7 +203,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: targetCols, rows: 40 }),
       getAppliedSize,
       forwardResize
@@ -240,7 +242,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => dims,
       getAppliedSize,
       forwardResize
@@ -273,7 +275,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => dims,
       getAppliedSize,
       forwardResize
@@ -313,7 +315,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => dims,
       getAppliedSize,
       forwardResize
@@ -346,7 +348,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => dims,
       getAppliedSize,
       forwardResize
@@ -369,7 +371,7 @@ describe('createPtySizeReassertion', () => {
       getPtyId: () => 'pty-1',
       isRemotePtyId: () => false,
       shouldSuppressDesktopResize: () => false,
-      fit: vi.fn(),
+      fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize: vi.fn(async () => {
         throw new Error('unavailable')

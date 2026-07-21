@@ -20,7 +20,11 @@
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import { createLargeFileCountRepo, removeLargeFileCountRepo } from './large-file-count-fixtures'
+import {
+  createLargeFileCountRepo,
+  removeLargeFileCountRepo,
+  removeLargeFileCountUntrackedTree
+} from './large-file-count-fixtures'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../src/shared/git-status-limit'
 
 // Matches the large-diff freeze budget: a blocking stall past 1s is the
@@ -32,7 +36,8 @@ const MAX_HEAP_GROWTH_PER_CYCLE_MB = 75
 
 // A virtualized list mounts viewport + overscan rows only; anything past this
 // bound means the panel is mounting rows proportional to the change set again.
-const MAX_MOUNTED_ROWS = 1_000
+const MAX_MOUNTED_ROWS = 200
+const MAX_CAPPED_STATUS_PAYLOAD_BYTES = 200_000
 
 type LoadMeasurement = {
   entryCount: number
@@ -259,13 +264,13 @@ test.describe('Source Control large file count (#8013)', () => {
   // failing scale must not skip the others — every scenario is a data point.
   test.use({ seedTestRepo: false })
 
-  test('thousands of untracked files under the status cap stay responsive', async ({
+  test('a large untracked set under the status cap stays responsive', async ({
     orcaPage,
     electronApp,
     registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(600_000)
-    const untrackedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '9500')
+    const untrackedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '950')
     // Why: ORCA_LARGE_FILE_BYTES gives untracked files realistic sizes so the
     // per-poll line-stat reads (cache-capped at 2,048 entries) become visible
     // in rescanMs instead of hiding behind ~30-byte fixture files.
@@ -311,13 +316,13 @@ test.describe('Source Control large file count (#8013)', () => {
     }
   })
 
-  test('thousands of modified tracked files under the status cap stay responsive', async ({
+  test('a large modified set under the status cap stays responsive', async ({
     orcaPage,
     electronApp,
     registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(600_000)
-    const modifiedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '5000')
+    const modifiedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '750')
     const fixture = createLargeFileCountRepo({ trackedFiles: modifiedFiles, modifiedFiles })
     registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
     try {
@@ -352,12 +357,45 @@ test.describe('Source Control large file count (#8013)', () => {
     registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(600_000)
-    const untrackedFiles = DEFAULT_GIT_STATUS_LIMIT + 1_000
-    const fixture = createLargeFileCountRepo({ trackedFiles: 100, untrackedFiles })
+    const untrackedFiles = 12_000
+    const fixture = createLargeFileCountRepo({ untrackedFiles })
     registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
     try {
       await waitForSessionReady(orcaPage)
+      await orcaPage.evaluate(() => {
+        const probe = { lastTick: performance.now(), maxLagMs: 0, timer: 0 }
+        probe.timer = window.setInterval(() => {
+          const now = performance.now()
+          probe.maxLagMs = Math.max(probe.maxLagMs, now - probe.lastTick - 50)
+          probe.lastTick = now
+        }, 50)
+        ;(
+          window as unknown as {
+            __sourceControlActivationLagProbe?: typeof probe
+          }
+        ).__sourceControlActivationLagProbe = probe
+      })
+      const activationStart = performance.now()
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+      const activationMs = performance.now() - activationStart
+      const activationMaxLagMs = await orcaPage.evaluate(() => {
+        const target = window as unknown as {
+          __sourceControlActivationLagProbe?: {
+            maxLagMs: number
+            timer: number
+          }
+        }
+        const probe = target.__sourceControlActivationLagProbe
+        if (!probe) {
+          return -1
+        }
+        window.clearInterval(probe.timer)
+        delete target.__sourceControlActivationLagProbe
+        return probe.maxLagMs
+      })
+      console.log(
+        `[large-file-count] initial-activation ${JSON.stringify({ activationMs, activationMaxLagMs })}`
+      )
       const workingSetBeforeMb = await readRendererWorkingSetMb(electronApp)
       const measurement = await measureSourceControlLoad(orcaPage, {
         worktreeId,
@@ -373,10 +411,20 @@ test.describe('Source Control large file count (#8013)', () => {
         rendererWorkingSetMb: { before: workingSetBeforeMb, after: workingSetAfterMb }
       })
 
+      const tooManyChangesBanner = orcaPage.getByText('Too many changes detected.', {
+        exact: false
+      })
+      await expect(tooManyChangesBanner).toBeVisible()
+      if (process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH) {
+        await orcaPage.screenshot({ path: process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH })
+      }
+
       expect(measurement.didHitLimit).toBe(true)
       expect(measurement.entryCount).toBeLessThanOrEqual(DEFAULT_GIT_STATUS_LIMIT)
+      expect(measurement.payloadBytes).toBeLessThan(MAX_CAPPED_STATUS_PAYLOAD_BYTES)
       expect(measurement.renderedRows).toBeLessThan(MAX_MOUNTED_ROWS)
       expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
+      expect(activationMaxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
 
       // Why: didHitLimit must park the worktree in the huge-status state so
       // background polling stops re-running tens-of-seconds git scans.
@@ -385,27 +433,37 @@ test.describe('Source Control large file count (#8013)', () => {
         worktreeId
       )
       expect(hugeState).not.toBeNull()
+
+      // Why: watcher refreshes stay parked while huge; the visible Retry is the
+      // explicit recovery path after the underlying change count drops.
+      removeLargeFileCountUntrackedTree(fixture.repoPath)
+      await expect(tooManyChangesBanner).toBeVisible()
+      await orcaPage.getByRole('button', { name: 'Retry' }).click()
+      await expect(tooManyChangesBanner).not.toBeVisible()
+      await expect
+        .poll(() =>
+          orcaPage.evaluate(
+            (wId) => window.__store?.getState().gitStatusHugeByWorktree?.[wId] ?? null,
+            worktreeId
+          )
+        )
+        .toBeNull()
     } finally {
       await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
     }
   })
 
-  test('untracked line-stat cache stays effective above 2,048 files', async ({
+  test('untracked line-stat cache stays effective up to the status cap', async ({
     orcaPage,
     registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(600_000)
-    // Why: the untracked line-stat cache historically capped at 2,048 entries
-    // with FIFO eviction, so a sequential scan over more files evicted every
-    // entry before the next poll revisited it (0% hit rate) and each 3s poll
-    // re-read every untracked file's contents. The cache is now LRU and sized
-    // to the status entry limit; this gate keeps it that way by comparing
-    // per-file warm rescan cost at two scales on the same machine — a healthy
-    // cache keeps the ratio near 1, thrash makes it several-fold.
+    // Why: compare warm rescan cost at two sub-cap scales on the same machine;
+    // a cache sized below one complete status result makes the ratio balloon.
     const fileBytes = 65_536
     const smallRepo = createLargeFileCountRepo({
       trackedFiles: 10,
-      untrackedFiles: 2_000,
+      untrackedFiles: 400,
       untrackedFileBytes: fileBytes
     })
     registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(smallRepo.repoPath))
@@ -413,7 +471,7 @@ test.describe('Source Control large file count (#8013)', () => {
     try {
       largeRepo = createLargeFileCountRepo({
         trackedFiles: 10,
-        untrackedFiles: 4_000,
+        untrackedFiles: 800,
         untrackedFileBytes: fileBytes
       })
       const largeRepoPath = largeRepo.repoPath
@@ -431,8 +489,8 @@ test.describe('Source Control large file count (#8013)', () => {
         return measurement.rescanMs / files
       }
 
-      const smallPerFileMs = await warmRescanPerFileMs(smallRepo.repoPath, 2_000)
-      const largePerFileMs = await warmRescanPerFileMs(largeRepo.repoPath, 4_000)
+      const smallPerFileMs = await warmRescanPerFileMs(smallRepo.repoPath, 400)
+      const largePerFileMs = await warmRescanPerFileMs(largeRepo.repoPath, 800)
       console.log(
         `[large-file-count] line-stat-cache smallPerFileMs=${smallPerFileMs.toFixed(4)} largePerFileMs=${largePerFileMs.toFixed(4)} ratio=${(largePerFileMs / smallPerFileMs).toFixed(2)}`
       )

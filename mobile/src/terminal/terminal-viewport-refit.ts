@@ -28,14 +28,9 @@ type TerminalViewportRefitOptions = {
   initializedHandlesRef: RefObject<Set<string>>
   connState: ConnectionState
   tabStripVisible: boolean
-  // Why: terminal text size (font scale) — changing it changes the cell size, so
-  // the PTY must be re-fitted to a new column count and reflowed.
+  // Why: text size (font scale); changing it changes cell size, so the PTY must be re-fitted to a new column count.
   textScale: number
-  // Why: the terminal's measured frame width changes when a side panel docks/undocks
-  // or EITHER sidebar is drag-resized (the left worktree sidebar shrinks the detail
-  // pane; the right dock takes a slice of the row) — all without any window-dim or
-  // tab-strip change. Carries that measured width so those resizes re-fit the PTY;
-  // the 150ms debounce coalesces the stream of drag widths into one settle-time refit.
+  // Why: measured frame width; panel dock/undock or sidebar resize changes it with no window/tab change, so it re-fits the PTY.
   terminalFrameWidth: number
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
@@ -46,12 +41,7 @@ type TerminalViewportRefitNotifications = {
   notifyKeyboardVisibility: (visible: boolean) => void
 }
 
-// Why: re-measure the phone viewport when layout-affecting state changes
-// outside the subscribe path — the tab strip toggling visibility, and the
-// window itself resizing (fold/unfold on foldables, orientation rotation,
-// split-screen). Without the resize trigger, a PTY fitted on the folded
-// cover screen stays at cover-screen cols after unfolding and the terminal
-// renders in only part of the display (#4579's "cut in half" symptom).
+// Why: re-measure on layout changes outside the subscribe path (tab strip, fold/rotate/resize), or a PTY renders "cut in half" (#4579).
 export function useTerminalViewportRefit(
   options: TerminalViewportRefitOptions
 ): TerminalViewportRefitNotifications {
@@ -82,9 +72,7 @@ export function useTerminalViewportRefit(
     keyboardVisible: false,
     pending: false
   })
-  // Why: marks the currently-armed timer as a height refit so its callback can
-  // re-check the keyboard at fire time. Non-height refits (width/rotation and
-  // the forced reconnect/foreground re-asserts) stay unguarded so they always run.
+  // Why: marks the armed timer as a height refit so its callback re-checks the keyboard; other refits always run unguarded.
   const heightOriginatedRefitRef = useRef(false)
   const scheduleViewportRefit = useCallback(
     (options?: { heightOriginated?: boolean }) => {
@@ -94,9 +82,7 @@ export function useTerminalViewportRefit(
       heightOriginatedRefitRef.current = options?.heightOriginated ?? false
       refitTimerRef.current = setTimeout(() => {
         refitTimerRef.current = null
-        // Why: a height refit deferred at keyboard-close can fire after the keyboard
-        // reopened within the 150ms debounce; re-check and re-defer so we never
-        // reflow the PTY mid-keystroke. Scoped via the height-originated flag.
+        // Why: a height refit can fire after the keyboard reopened within the debounce; re-check so we never reflow the PTY mid-keystroke.
         if (heightOriginatedRefitRef.current) {
           heightOriginatedRefitRef.current = false
           const decision = reduceTerminalFrameHeightRefit(frameHeightRefitStateRef.current, {
@@ -143,11 +129,7 @@ export function useTerminalViewportRefit(
           }
           viewportRef.current = dims
           viewportMeasuredRef.current = true
-          // Why: prefer the in-place viewport update RPC over the legacy
-          // unsubscribe → subscribe cycle. This keeps the server-side
-          // mobile subscriber record alive (no driver=idle blip on the
-          // desktop banner; no false phone-fit baseline capture on the
-          // re-subscribe). See docs/mobile-presence-lock.md.
+          // Why: prefer in-place updateViewport over resubscribe to keep the mobile subscriber record alive. See docs/mobile-presence-lock.md.
           const rpc = clientRef.current
           const deviceToken = deviceTokenRef.current
           if (rpc && deviceToken && updateViewportCapabilityRef.current !== 'unsupported') {
@@ -165,11 +147,7 @@ export function useTerminalViewportRefit(
               if (isTerminalUpdateViewportUpdated(response)) {
                 rpc.updateTerminalSubscriptionViewport(handle, dims)
                 if (isTerminalUpdateViewportApplied(response)) {
-                  // Why: updateViewport reflows the server PTY and re-streams only
-                  // the visible screen, so the WebView's local xterm scrollback
-                  // stays wrapped at the old width. Reflow it locally only when
-                  // the server actually applied phone-fit; desktop mode records
-                  // the viewport but leaves the PTY at desktop dims.
+                  // Why: updateViewport re-streams only the visible screen, so local scrollback stays wrapped at the old width — reflow it locally.
                   ref.reflow(dims.cols, dims.rows)
                 }
                 return
@@ -205,14 +183,7 @@ export function useTerminalViewportRefit(
     scheduleViewportRefit()
   }, [scheduleViewportRefit])
 
-  // Why: the tab strip is hidden when only one terminal exists and shown
-  // once a second is created. Crossing the 1↔2 boundary changes the
-  // visible terminal area by ~40px, so the cached viewport dims in
-  // viewportRef become stale. Mark the viewport as un-measured so the
-  // next subscribe path's self-correcting loop (init → measure →
-  // resubscribe-with-fresh-viewport) re-runs against the new layout.
-  // Also schedule an explicit refit to cover the case where no new
-  // subscribe is happening.
+  // Why: the tab strip toggles at the 1↔2 terminal boundary (~40px area change), so the cached viewport goes stale.
   const prevTabStripVisibleRef = useRef(tabStripVisible)
   useEffect(() => {
     if (prevTabStripVisibleRef.current === tabStripVisible) {
@@ -223,10 +194,7 @@ export function useTerminalViewportRefit(
     scheduleViewportRefit()
   }, [tabStripVisible, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Why: fold/unfold and rotation change the window dimensions without any
-  // subscribe or tab-strip transition. The PTY must be re-fitted to the new
-  // viewport or the terminal keeps the old grid (fit scale is capped at 1,
-  // so a grown window leaves the surface pinned to a fraction of the screen).
+  // Why: fold/unfold and rotation change window dims with no subscribe/tab change; refit or the grid stays stale (fit capped at 1).
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const prevWindowDimsRef = useRef({ width: windowWidth, height: windowHeight })
   useEffect(() => {
@@ -235,8 +203,7 @@ export function useTerminalViewportRefit(
       return
     }
     prevWindowDimsRef.current = { width: windowWidth, height: windowHeight }
-    // Why: adjustResize can change only window height while the IME is open;
-    // the frame-height notifier schedules one correction after it closes.
+    // Why: adjustResize can change only window height while the IME is open; the frame-height notifier corrects once it closes.
     if (prev.width === windowWidth && frameHeightRefitStateRef.current.keyboardVisible) {
       return
     }
@@ -244,10 +211,7 @@ export function useTerminalViewportRefit(
     scheduleViewportRefit()
   }, [windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Why: the text size changed, so the WebView is re-rendering at a new font/cell
-  // size. Re-measure and resize the PTY so the server reflows to the new column
-  // count. The refit's own 150ms debounce gives the WebView a frame to apply the
-  // new fontSize before we measure the resulting cell metrics.
+  // Why: on text-size change the refit's 150ms debounce lets the WebView apply the new fontSize before we re-measure cell metrics.
   const prevTextScaleRef = useRef(textScale)
   useEffect(() => {
     if (prevTextScaleRef.current === textScale) {
@@ -258,10 +222,7 @@ export function useTerminalViewportRefit(
     scheduleViewportRefit()
   }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Why: the terminal's measured frame width changes when a panel docks/undocks or
-  // either sidebar is drag-resized — none of which touch the window dims or tab
-  // strip — so the cached viewport goes stale and the PTY keeps the pre-resize
-  // width. Mark un-measured and refit when the measured width changes.
+  // Why: panel dock/undock or sidebar resize changes frame width with no window/tab change, so the cached viewport goes stale.
   const prevFrameWidthRef = useRef(terminalFrameWidth)
   useEffect(() => {
     if (prevFrameWidthRef.current === terminalFrameWidth) {
@@ -284,8 +245,7 @@ export function useTerminalViewportRefit(
     },
     [viewportMeasuredRef, scheduleViewportRefit]
   )
-  // Why: notify imperatively so layout churn does not rerender the full session;
-  // a height change during typing is coalesced into one refit after keyboard close.
+  // Why: notify imperatively so layout churn doesn't rerender the full session.
   const notifyTerminalFrameHeight = useCallback(
     (height: number) => notifyFrameHeightRefitEvent({ type: 'frame-height', height }),
     [notifyFrameHeightRefitEvent]
@@ -310,8 +270,7 @@ export function useTerminalViewportRefit(
       if (!shouldRefit) {
         return
       }
-      // Why: the cached grid can match while the host PTY changed in background;
-      // reasserting equal dimensions is the convergence signal after iOS resume.
+      // Why: cached grid can match while the host PTY changed in background; reassert equal dims to converge after iOS resume.
       viewportMeasuredRef.current = false
       scheduleForcedViewportRefit()
     })
@@ -325,11 +284,9 @@ export function useTerminalViewportRefit(
     if (previous === 'connected' || connState !== 'connected') {
       return
     }
-    // Why: an in-place desktop upgrade may add updateViewport; reconnect is the
-    // narrow boundary where an old-host method_not_found cache becomes stale.
+    // Why: an in-place desktop upgrade may add updateViewport; reconnect is where the cached method_not_found goes stale.
     updateViewportCapabilityRef.current = 'unknown'
-    // Why: reconnect can restore a PTY whose host-side size changed while the
-    // socket was down, so equal cached dimensions still need reassertion.
+    // Why: reconnect can restore a PTY resized while the socket was down, so equal cached dims still need reassertion.
     viewportMeasuredRef.current = false
     scheduleForcedViewportRefit()
   }, [connState, viewportMeasuredRef, scheduleForcedViewportRefit])

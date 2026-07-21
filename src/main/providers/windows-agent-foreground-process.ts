@@ -1,8 +1,14 @@
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
-  recognizeAgentProcessFromCommandLine
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine,
+  type RecognizedAgentProcess
 } from '../../shared/agent-process-recognition'
+import {
+  resolveOuterWrapperForegroundProcess,
+  shouldInspectOuterWrapperForegroundProcess
+} from '../../shared/foreground-wrapper-agent'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import {
   queryWindowsProcessDescendants,
@@ -26,7 +32,12 @@ export type WindowsAgentForegroundResolution = {
 }
 
 export function shouldInspectWindowsAgentForeground(fallbackProcess: string): boolean {
-  return isAgentForegroundWrapperProcess(fallbackProcess) || isShellProcess(fallbackProcess)
+  const recognized = recognizeAgentProcess(fallbackProcess)
+  return (
+    isAgentForegroundWrapperProcess(fallbackProcess) ||
+    isShellProcess(fallbackProcess) ||
+    (recognized !== null && shouldInspectOuterWrapperForegroundProcess(recognized))
+  )
 }
 
 export async function resolveWindowsAgentForegroundProcess(
@@ -106,14 +117,18 @@ function resolveWindowsProcessName(
     windowsCandidateMatchesFallbackWrapper(candidate, fallbackProcess)
   )
   if (wrapperCandidates.length !== 1) {
-    return resolveWrapperForegroundProcessFromWindowsCandidates(wrapperCandidates, contextPaths)
+    return resolveWrapperForegroundProcessFromWindowsCandidates(
+      wrapperCandidates,
+      candidates,
+      contextPaths
+    )
   }
   const [candidate] = wrapperCandidates
   const recognized =
     recognizeAgentProcessFromCommandLine(candidate.command) ??
     recognizeAgentProcessFromCommandLine(candidate.name)
   if (recognized) {
-    return recognized.processName
+    return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
   }
   return null
 }
@@ -132,6 +147,7 @@ function resolveShellForegroundProcessFromWindowsCandidates(
 
 function resolveWrapperForegroundProcessFromWindowsCandidates(
   candidates: readonly WindowsProcessCandidate[],
+  allCandidates: readonly WindowsProcessCandidate[],
   contextPaths: readonly string[] | undefined
 ): string | null {
   const contextCandidates = createRecognizedWindowsProcessCandidates(
@@ -139,7 +155,7 @@ function resolveWrapperForegroundProcessFromWindowsCandidates(
     contextPaths
   ).filter((candidate) => candidate.contextMatch)
   return contextCandidates.length > 0
-    ? resolveRecognizedWindowsProcessCandidates(contextCandidates, candidates)
+    ? resolveRecognizedWindowsProcessCandidates(contextCandidates, allCandidates)
     : null
 }
 
@@ -147,6 +163,7 @@ type RecognizedWindowsProcessCandidate = WindowsProcessRow & {
   contextMatch: boolean
   depth: number
   processName: string
+  recognized: RecognizedAgentProcess
 }
 
 function createRecognizedWindowsProcessCandidates(
@@ -163,7 +180,8 @@ function createRecognizedWindowsProcessCandidates(
       {
         ...candidate,
         contextMatch: candidateMatchesContextPath(candidate, normalizedContextPaths),
-        processName: recognized
+        processName: recognized.processName,
+        recognized
       }
     ]
   })
@@ -176,13 +194,6 @@ function resolveRecognizedWindowsProcessCandidates(
   if (recognizedCandidates.length === 0) {
     return null
   }
-  const recognizedProcessNames = new Set(
-    recognizedCandidates.map((candidate) => candidate.processName)
-  )
-  if (recognizedProcessNames.size === 1) {
-    return [...recognizedProcessNames][0]
-  }
-
   const candidatesByPid = new Map(allCandidates.map((candidate) => [candidate.pid, candidate]))
   const leafCandidates = recognizedCandidates.filter(
     (candidate) =>
@@ -192,7 +203,11 @@ function resolveRecognizedWindowsProcessCandidates(
           windowsCandidateIsAncestor(candidate, other, candidatesByPid)
       )
   )
-  const leafProcessNames = new Set(leafCandidates.map((candidate) => candidate.processName))
+  const leafProcessNames = new Set(
+    leafCandidates.map((candidate) =>
+      resolveOuterWrapperForegroundProcess(candidate.recognized, candidate, allCandidates)
+    )
+  )
   // Why: Windows lacks a cheap PTY foreground marker like POSIX '+'. A single
   // recognized lineage leaf is strong enough; sibling agent leaves are not.
   return leafProcessNames.size === 1 ? [...leafProcessNames][0] : null
@@ -267,11 +282,13 @@ function commandLineContainsPath(haystack: string, contextPath: string): boolean
   return false
 }
 
-function recognizeWindowsProcessCandidate(candidate: WindowsProcessRow): string | null {
-  const recognized =
+function recognizeWindowsProcessCandidate(
+  candidate: WindowsProcessRow
+): RecognizedAgentProcess | null {
+  return (
     recognizeAgentProcessFromCommandLine(candidate.command) ??
     recognizeAgentProcessFromCommandLine(candidate.name)
-  return recognized?.processName ?? null
+  )
 }
 
 function windowsCandidateMatchesFallbackWrapper(

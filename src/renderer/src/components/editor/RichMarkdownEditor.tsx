@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
 import type { DiffComment, MarkdownDocument } from '../../../../shared/types'
 import { useAppStore } from '@/store'
@@ -10,9 +10,7 @@ import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { registerPendingEditorFlush } from './editor-pending-flush'
-import type { MarkdownTocItem } from './markdown-table-of-contents'
-import { findRichMarkdownTocHeadingTarget } from './rich-markdown-toc-heading-target'
-import { selectMarkdownTableOfContents } from './markdown-toc-visibility-gate'
+import { useRichMarkdownTableOfContents } from './use-rich-markdown-table-of-contents'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
 import { useRichMarkdownMenuController } from './useRichMarkdownMenuController'
@@ -54,10 +52,6 @@ type RichMarkdownEditorProps = {
   // want it visible to the user. It renders between the toolbar and the editor
   // surface so the formatting toolbar stays at the top of the pane.
   headerSlot?: React.ReactNode
-}
-
-function flattenMarkdownTocItems(items: MarkdownTocItem[]): MarkdownTocItem[] {
-  return items.flatMap((item) => [item, ...flattenMarkdownTocItems(item.children)])
 }
 
 export default function RichMarkdownEditor({
@@ -112,6 +106,7 @@ export default function RichMarkdownEditor({
   const onOpenDocLinkRef = useRef(onOpenDocLink)
   const handleLocalImagePickRef = useRef<() => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
+  const openAnnotationPopoverRef = useRef<(requireLiveSelection?: boolean) => boolean>(() => false)
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
   const editorRef = useRef<Editor | null>(null)
@@ -145,17 +140,10 @@ export default function RichMarkdownEditor({
     worktreeId,
     worktreeRoot
   })
-  // Why: building the table of contents runs a full-document remark parse on
-  // every content change. The result is only used while the panel is open
-  // (closed by default), so gate the parse on visibility; including
-  // showTableOfContents in deps rebuilds the outline the moment it opens.
-  const tableOfContentsItems = useMemo(
-    () => selectMarkdownTableOfContents(showTableOfContents, content),
-    [content, showTableOfContents]
-  )
-  const flatTableOfContentsItems = useMemo(
-    () => flattenMarkdownTocItems(tableOfContentsItems),
-    [tableOfContentsItems]
+  const { tableOfContentsItems, navigateToTableOfContentsItem } = useRichMarkdownTableOfContents(
+    showTableOfContents,
+    content,
+    scrollContainerRef
   )
 
   // Why: assigning callback refs during render keeps them current before any
@@ -166,6 +154,7 @@ export default function RichMarkdownEditor({
   onSaveRef.current = onSave
   onOpenDocLinkRef.current = onOpenDocLink
   isEditingLinkRef.current = isEditingLink
+  openAnnotationPopoverRef.current = review.openAnnotationPopover
   const reconcileRoundTripRef = useRichMarkdownReconcileRoundTrip({
     htmlSuperscriptLinkContext,
     filePath,
@@ -258,6 +247,7 @@ export default function RichMarkdownEditor({
     markdownSourceLineOffsetRef: review.markdownSourceLineOffsetRef,
     flushPendingSerialization,
     openSearchRef,
+    openAnnotationPopoverRef,
     syncAnnotationTarget: review.syncAnnotationTarget,
     clearAnnotationTarget: review.clearAnnotationTarget,
     scrollRichMarkdownReviewNoteCardIntoView: review.scrollRichMarkdownReviewNoteCardIntoView,
@@ -359,18 +349,6 @@ export default function RichMarkdownEditor({
     scrollContainerRef
   })
   openSearchRef.current = openSearch
-
-  const navigateToTableOfContentsItem = useCallback(
-    (id: string): void => {
-      const container = scrollContainerRef.current
-      if (!container) {
-        return
-      }
-      const heading = findRichMarkdownTocHeadingTarget(container, flatTableOfContentsItems, id)
-      heading?.scrollIntoView({ block: 'center' })
-    },
-    [flatTableOfContentsItems]
-  )
 
   return (
     <RichMarkdownEditorSurface

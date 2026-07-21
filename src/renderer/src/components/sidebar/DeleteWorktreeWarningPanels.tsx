@@ -21,7 +21,7 @@ export function DeleteWorktreeWarningPanels({
               {translate(
                 'auto.components.sidebar.DeleteWorktreeWarningPanels.e3be9eba15',
                 'This is the'
-              )}
+              )}{' '}
               <span className="font-semibold text-foreground">
                 {translate(
                   'auto.components.sidebar.DeleteWorktreeWarningPanels.c4f96a6e18',
@@ -32,7 +32,7 @@ export function DeleteWorktreeWarningPanels({
                 'auto.components.sidebar.DeleteWorktreeWarningPanels.026738155a',
                 '(the original clone directory).'
               )}
-              {mainWorktreeBlocker}
+              {mainWorktreeBlocker ? <> {mainWorktreeBlocker}</> : null}
             </div>
           </div>
         </div>

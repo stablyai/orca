@@ -5,15 +5,7 @@ import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import { getDaemonProvider, restartDaemon } from '../daemon/daemon-init'
 import type { DaemonSessionInfo } from '../daemon/types'
 
-// Why: the daemon's session.kill() sends SIGTERM first and escalates to
-// SIGKILL after a 5s grace window (KILL_TIMEOUT_MS in session.ts). We have
-// to poll past that ladder, or well-behaved-but-slow shells (zsh hosting a
-// long-running agent) look like they "refused to exit" when they're actually
-// still inside their SIGTERM handler waiting for SIGKILL. 65 polls at 100ms
-// each (≈6.5s) covers the 5s ladder plus ~1.5s of slack for the final
-// SIGKILL reap and the adapter's listSessions IPC roundtrip. The user waits
-// during this window with a spinner; the alternative — reporting fake
-// "refused" numbers — is worse.
+// Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
 const MAX_POLL_ATTEMPTS = 65
 const POLL_INTERVAL_MS = 100
 
@@ -32,9 +24,7 @@ function getDaemonAdapters(): DaemonPtyAdapter[] {
   return [provider]
 }
 
-// Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the
-// session-management UI can warn that new terminals lack daemon persistence
-// until the daemon is restarted, instead of it being a silent console.warn.
+// Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.
 function isDaemonDegraded(): boolean {
   return getDaemonProvider() instanceof DegradedDaemonPtyProvider
 }
@@ -66,12 +56,7 @@ export function registerDaemonManagementHandlers(): void {
     }
   )
 
-  // Why: killAll operates on *sessions* (user-facing concept), not daemons, so
-  // it fans across every adapter — current + legacy — to match the user's
-  // "kill everything I might be attached to" mental model. The daemon
-  // processes themselves survive; only sessions are torn down. See
-  // docs/daemon-staleness-ux.md §Phase 1 "Scope rationale" for why legacy
-  // daemons aren't killed here.
+  // Why: tears down sessions across all adapters (current + legacy); daemon processes survive. See docs/daemon-staleness-ux.md §Phase 1.
   ipcMain.handle(
     'pty:management:killAll',
     async (): Promise<{
@@ -80,12 +65,7 @@ export function registerDaemonManagementHandlers(): void {
       killedSessionIds: string[]
     }> => {
       const adapters = getDaemonAdapters()
-      // Why: snapshot the initial session set once, up front. All subsequent
-      // accounting is relative to these IDs. If the renderer respawns panes
-      // with *fresh* session IDs while we're polling (e.g. a remount fires
-      // pty:spawn mid-kill), those new sessions must not count as
-      // "remaining" — the user asked to kill what was alive at the moment
-      // they clicked the button, not to chase new spawns.
+      // Why: snapshot session IDs up front so mid-kill respawns aren't counted as "remaining".
       const initial = await collectSessions(adapters)
       const initialIds = new Set(initial.map((s) => s.sessionId))
       const initialCount = initial.length
@@ -94,40 +74,20 @@ export function registerDaemonManagementHandlers(): void {
         return { killedCount: 0, remainingCount: 0, killedSessionIds: [] }
       }
 
-      // Why: fire one shutdown per initial session, in parallel, once — no
-      // per-session retry. The daemon's session.kill() is idempotent and
-      // schedules its own SIGTERM→SIGKILL ladder; firing the RPC repeatedly
-      // in a tight retry loop before the grace window expires just races our
-      // own polling. Promise.allSettled ensures a single adapter failure (or
-      // rejected RPC — e.g. session already exiting) does not short-circuit
-      // the remaining shutdowns.
+      // Why: no retry — session.kill() is idempotent and runs its own kill ladder; allSettled so one rejection doesn't abort the rest.
       await Promise.allSettled(
         initial.map(async (session) => {
-          // Why: protocolVersion is unique across adapters by construction —
-          // PROTOCOL_VERSION is always distinct from every entry in
-          // PREVIOUS_DAEMON_PROTOCOL_VERSIONS (see types.ts). If a future
-          // bump forgets to rotate the retired version into the previous
-          // list, this find() would silently route legacy sessions to the
-          // current adapter. Keep the two constants in lockstep.
+          // Why: assumes PROTOCOL_VERSION stays distinct from PREVIOUS_DAEMON_PROTOCOL_VERSIONS (types.ts), else legacy sessions misroute here.
           const owner = adapters.find((a) => a.protocolVersion === session.protocolVersion)
           if (!owner) {
             return
           }
-          // Why: immediate=true is the adapter's "kill it now" signal. The
-          // current adapter ignores the flag (the daemon's SIGTERM→SIGKILL
-          // ladder handles escalation) but preserve it for legacy adapters
-          // and so a future adapter could honor it. Rejections are swallowed
-          // per-session — remainingCount surfaces truly-stuck sessions in
-          // the toast.
+          // Why: immediate=true only matters to legacy/future adapters; swallow rejections since remainingCount reports stuck sessions.
           await owner.shutdown(session.sessionId, { immediate: true }).catch(() => {})
         })
       )
 
-      // Why: poll listSessions every POLL_INTERVAL_MS until none of the
-      // *initial* IDs are still alive, or we've exhausted MAX_POLL_ATTEMPTS.
-      // Counting only the initial-snapshot intersection (not the total
-      // session count) is what keeps the math honest when the renderer
-      // respawns panes with fresh IDs mid-kill.
+      // Why: count only the initial-snapshot intersection so renderer respawns mid-kill aren't counted as remaining.
       let remainingOriginalCount = initialCount
       let remainingOriginalIds = initialIds
       for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {

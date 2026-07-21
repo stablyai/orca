@@ -17,6 +17,7 @@ import {
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
+import { prepareAiVaultSessionForResume } from '@/lib/ai-vault-session-resume-preparation'
 import type { Worktree } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from './ai-vault-session-filters'
@@ -65,13 +66,20 @@ export function useAiVaultSessionLaunchActions({
 
   const copyResumeCommand = useCallback(
     async (session: AiVaultSession, worktreeId?: string | null): Promise<void> => {
-      await window.api.ui.writeClipboardText(buildResumeCommand(session, worktreeId))
-      toast.success(
-        translate(
-          'auto.components.right.sidebar.AiVaultPanel.resumeCommandCopied',
-          'Resume command copied'
+      try {
+        const preparedSession = await prepareAiVaultSessionForResume(session)
+        await window.api.ui.writeClipboardText(buildResumeCommand(preparedSession, worktreeId))
+        toast.success(
+          translate(
+            'auto.components.right.sidebar.AiVaultPanel.resumeCommandCopied',
+            'Resume command copied'
+          )
         )
-      )
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'Could not prepare this session for resume.'
+        )
+      }
     },
     [buildResumeCommand]
   )
@@ -100,11 +108,6 @@ export function useAiVaultSessionLaunchActions({
         return
       }
 
-      const launchResult = launchAiVaultSessionInNewTab({
-        agent: session.agent,
-        worktreeId: targetId.worktreeId,
-        ...buildResumeStartup(session, targetId.worktreeId)
-      })
       const showQueuedToast = (): void => {
         toast.success(
           translate(
@@ -114,26 +117,39 @@ export function useAiVaultSessionLaunchActions({
           )
         )
       }
-      if (launchResult.tabId === null) {
-        void launchResult.runtimeLaunch.then((created) => {
-          if (!created) {
-            toast.error(
-              translate(
-                'auto.lib.launch.agent.in.new.tab.11cce5cc77',
-                'Could not launch {{value0}} in a new terminal.',
-                { value0: agentLabel(session.agent) }
-              )
-            )
+      void prepareAiVaultSessionForResume(session)
+        .then((preparedSession) => {
+          const launchResult = launchAiVaultSessionInNewTab({
+            agent: session.agent,
+            worktreeId: targetId.worktreeId,
+            ...buildResumeStartup(preparedSession, targetId.worktreeId)
+          })
+          if (launchResult.tabId === null) {
+            void launchResult.runtimeLaunch.then((created) => {
+              if (!created) {
+                toast.error(
+                  translate(
+                    'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+                    'Could not launch {{value0}} in a new terminal.',
+                    { value0: agentLabel(session.agent) }
+                  )
+                )
+                return
+              }
+              showQueuedToast()
+            })
             return
+          }
+          if (useAppStore.getState().activeWorktreeId !== targetId.worktreeId) {
+            activateAiVaultResumeWorkspace(targetId.worktreeId)
           }
           showQueuedToast()
         })
-        return
-      }
-      if (useAppStore.getState().activeWorktreeId !== targetId.worktreeId) {
-        activateAiVaultResumeWorkspace(targetId.worktreeId)
-      }
-      showQueuedToast()
+        .catch((error: unknown) => {
+          toast.error(
+            error instanceof Error ? error.message : 'Could not prepare this session for resume.'
+          )
+        })
     },
     [activeWorktree?.id, activeWorktreeId, buildResumeStartup, targetState]
   )

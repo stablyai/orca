@@ -1853,7 +1853,7 @@ describe('generateBranchNameFromContext', () => {
     })
   })
 
-  it('includes the branch-name custom prompt in the generated prompt', async () => {
+  it('keeps branch-name guidance first without dropping the output contract', async () => {
     let prompt = ''
     await generateBranchNameFromContext(
       { firstPrompt: 'Fix login flow' },
@@ -1861,7 +1861,8 @@ describe('generateBranchNameFromContext', () => {
         agentId: 'custom',
         model: '',
         customAgentCommand: 'agent',
-        customPrompt: 'Prefer auth terminology.'
+        customPrompt: 'Prefer auth terminology.',
+        commandInputTemplate: 'Prefer auth terminology.\n\n{basePrompt}'
       },
       {
         kind: 'remote',
@@ -1879,8 +1880,11 @@ describe('generateBranchNameFromContext', () => {
       }
     )
 
-    expect(prompt).toContain('Additional user prompt:')
+    expect(prompt.startsWith('Prefer auth terminology.')).toBe(true)
     expect(prompt).toContain('Prefer auth terminology.')
+    expect(prompt).not.toContain('Additional user prompt:')
+    expect(prompt).toContain('Generate a short git branch name')
+    expect(prompt).toContain('Output ONLY the branch name on a single line')
   })
 })
 

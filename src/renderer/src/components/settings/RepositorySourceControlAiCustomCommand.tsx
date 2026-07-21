@@ -1,4 +1,5 @@
 import type React from 'react'
+import { useState } from 'react'
 import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -12,19 +13,27 @@ import { translate } from '@/i18n/i18n'
 type RepositorySourceControlAiCustomCommandProps = {
   value: string | undefined
   source: SourceControlAiSettings
+  // onChange drafts the value locally (per keystroke); onCommit persists it (on blur / mode change).
   onChange: (value: string | undefined) => void
+  onCommit: (value: string | undefined) => void
+}
+
+function isRepoCommand(value: string | undefined): boolean {
+  return typeof value === 'string' && value.trim().length > 0
 }
 
 export function RepositorySourceControlAiCustomCommand({
   value,
   source,
-  onChange
+  onChange,
+  onCommit
 }: RepositorySourceControlAiCustomCommandProps): React.JSX.Element {
-  // Why: value only counts as a repo command when it is a non-empty trimmed string;
-  // empty/nullish values make hasRepoCommand select CUSTOM_COMMAND_MODE_INHERIT
-  // instead of CUSTOM_COMMAND_MODE_REPO, so clearing the input switches mode.
-  const hasRepoCommand = typeof value === 'string' && value.trim().length > 0
-  const mode = hasRepoCommand ? CUSTOM_COMMAND_MODE_REPO : CUSTOM_COMMAND_MODE_INHERIT
+  // Why: selecting "Repository command" with an empty global/repo value would otherwise snap the
+  // Select back to inherit (empty is not a repo command). Keep a local intent so the user can type.
+  const [forceRepoMode, setForceRepoMode] = useState(false)
+  const hasRepoCommand = isRepoCommand(value)
+  const mode =
+    hasRepoCommand || forceRepoMode ? CUSTOM_COMMAND_MODE_REPO : CUSTOM_COMMAND_MODE_INHERIT
   return (
     <div className="space-y-2 rounded-md border border-border px-3 py-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -45,13 +54,23 @@ export function RepositorySourceControlAiCustomCommand({
         <Select
           value={mode}
           onValueChange={(nextMode) => {
-            // Why: CUSTOM_COMMAND_MODE_REPO pre-populates onChange from
-            // source.customAgentCommand when this repo has no command yet; other modes clear.
-            onChange(
-              nextMode === CUSTOM_COMMAND_MODE_REPO
-                ? (value ?? source.customAgentCommand)
-                : undefined
-            )
+            if (nextMode === CUSTOM_COMMAND_MODE_REPO) {
+              // Why: pre-populate from the current draft or the global command when available; when
+              // both are empty, stay in local REPO mode so the Select does not snap back to inherit.
+              const nextValue = value ?? source.customAgentCommand
+              if (isRepoCommand(nextValue)) {
+                setForceRepoMode(false)
+                onChange(nextValue)
+                onCommit(nextValue)
+                return
+              }
+              setForceRepoMode(true)
+              onChange(nextValue === '' ? undefined : nextValue)
+              return
+            }
+            setForceRepoMode(false)
+            onChange(undefined)
+            onCommit(undefined)
           }}
         >
           <SelectTrigger size="sm" className="h-8 w-full text-xs sm:w-[150px]">
@@ -77,7 +96,18 @@ export function RepositorySourceControlAiCustomCommand({
         value={value ?? ''}
         onChange={(event) => {
           const nextValue = event.target.value
+          // Why: an empty field while typing keeps local REPO intent so the Select doesn't snap to
+          // inherit mid-edit; blur is what commits the clear. A non-empty value exits the intent.
+          setForceRepoMode(!isRepoCommand(nextValue))
           onChange(nextValue === '' ? undefined : nextValue)
+        }}
+        onBlur={(event) => {
+          const nextValue = event.target.value
+          // Why: blur with an empty field exits local REPO intent and commits inherit (clear).
+          if (!isRepoCommand(nextValue)) {
+            setForceRepoMode(false)
+          }
+          onCommit(nextValue === '' ? undefined : nextValue)
         }}
         placeholder={
           source.customAgentCommand ||

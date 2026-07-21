@@ -108,14 +108,9 @@ function isErrorVerdict(v: ConnectionVerdict): boolean {
 const REPO_METADATA_REFRESH_MS = 60_000
 
 type HostScreenProps = {
-  // Why: when true, this worktree list is rendered as the persistent tablet
-  // sidebar by the host layout rather than as its own routed screen. That
-  // swaps the back button for a hide-sidebar control, drives data fetching
-  // from a plain mount effect (the sidebar is never the "focused" route), and
-  // opens sessions into the detail pane instead of pushing a new full screen.
+  // When true, rendered as the persistent tablet sidebar by the host layout, not as its own routed screen.
   embedded?: boolean
-  // Route params aren't in scope when rendered from the layout, so the caller
-  // passes hostId/action explicitly; falls back to the local route params.
+  // Route params aren't in scope when rendered from the layout, so the caller passes these explicitly.
   hostId?: string
   action?: string
   onHideSidebar?: () => void
@@ -133,16 +128,12 @@ export function HostScreen({
   const router = useRouter()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
-  // Why: cap and center the worktree list on wide/tablet canvases; on phones
-  // isWideLayout is false so the list stays edge-to-edge as before. When
-  // embedded as the sidebar the list already lives in a narrow pane, so the
-  // cap is skipped (see the SectionList contentContainerStyle below).
+  // Why: cap and center the list on wide/tablet canvases; on phones isWideLayout is false so it stays edge-to-edge.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
-  // Why: shared client per host owned by RpcClientProvider. See
-  // docs/mobile-shared-client-per-host.md.
+  // Shared client per host owned by RpcClientProvider. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
@@ -156,9 +147,7 @@ export function HostScreen({
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
-  // Why: opening a worktree activates it on the host, but the active-row
-  // highlight otherwise waits for the next worktree.ps poll to reflect it.
-  // Track the locally-opened worktree so the highlight moves instantly.
+  // Why: track the locally-opened worktree so the active-row highlight moves instantly instead of waiting for the next poll.
   const [optimisticActiveWorktreeId, setOptimisticActiveWorktreeId] = useState<string | null>(null)
   // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
@@ -180,9 +169,7 @@ export function HostScreen({
   const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(
     DEFAULT_MOBILE_WORKSPACE_STATUSES
   )
-  // displayName → repo id, populated from repo.list. The filter model keys on
-  // repo ids (desktop's PersistedUIState), but the section headers/rows key on
-  // displayName, so we bridge the two here.
+  // displayName → repo id: filters key on repo id, but section headers/rows key on displayName, so bridge the two.
   const [repoIdsByName, setRepoIdsByName] = useState<Map<string, string>>(new Map())
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [showGroupPicker, setShowGroupPicker] = useState(false)
@@ -201,9 +188,7 @@ export function HostScreen({
   }, [router])
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-  // Why: snapshot of the synced view settings so the focus-effect ui.get merge
-  // and the optimistic ui.set writes read the latest values without forcing the
-  // callbacks to re-create on every state change.
+  // Why: ref so the ui.get merge and ui.set writes read the latest values without re-creating callbacks on every state change.
   const viewStateRef = useRef<MobileViewState>({
     groupMode: 'repo',
     sortMode: 'recent',
@@ -226,8 +211,7 @@ export function HostScreen({
     }
   }, [groupMode, sortMode, filters, collapsedGroups, workspaceStatuses])
 
-  // Apply a MobileViewState (e.g. from a desktop ui.get) onto the individual
-  // states and the snapshot ref in one shot.
+  // Apply a MobileViewState onto the individual states and the snapshot ref in one shot.
   const applyViewState = useCallback((next: MobileViewState) => {
     viewStateRef.current = next
     setGroupMode(next.groupMode)
@@ -241,8 +225,7 @@ export function HostScreen({
     })
   }, [])
 
-  // Optimistically apply a partial change locally, then push the full mapped
-  // settings to the desktop's shared store via ui.set so both apps stay in sync.
+  // Apply the change locally, then push full settings to the desktop's shared store (ui.set) so both apps stay in sync.
   const persistViewSettings = useCallback(
     (patch: Partial<MobileViewState>) => {
       const next: MobileViewState = { ...viewStateRef.current, ...patch }
@@ -275,8 +258,7 @@ export function HostScreen({
   }, [])
 
   const resolvedRouteActionState = resolveHostRouteActionState(routeActionState, action)
-  // Why: `action=newWorktree` is a route-derived open edge. Resolve it before
-  // commit, but don't reopen after the user closes while the same URL remains.
+  // Why: resolve `action=newWorktree` before commit, but don't reopen after the user closes while the URL persists.
   if (resolvedRouteActionState !== routeActionState) {
     setRouteActionState(resolvedRouteActionState)
   }
@@ -285,8 +267,7 @@ export function HostScreen({
     setRouteActionState((current) => setHostRouteNewWorktreeVisible(current, visible))
   }, [])
 
-  // Load persisted pins from the local cache. View settings are no longer
-  // stored locally — they sync from the desktop's shared store via ui.get.
+  // Load persisted pins from local cache; view settings are no longer local (they sync via ui.get).
   useEffect(() => {
     if (!hostId) {
       return
@@ -304,9 +285,7 @@ export function HostScreen({
     }
   }, [hostId])
 
-  // Read the desktop's shared view settings (PersistedUIState) and merge them
-  // onto local state. Runs on connect and on screen focus so changes made on
-  // desktop appear on the phone.
+  // Merge the desktop's shared view settings (PersistedUIState) onto local state so desktop changes appear here.
   const syncViewSettingsFromDesktop = useCallback(async () => {
     if (!client || connState !== 'connected') {
       return
@@ -328,9 +307,7 @@ export function HostScreen({
     }
   }, [client, connState, hostId, applyViewState])
 
-  // Why: keep clientRef in sync so existing imperative call sites work
-  // unchanged. Also re-seed the cached worktree list on hostId change
-  // since the useState initializer only runs on first mount.
+  // Why: mirror client into a ref so imperative call sites read it without re-subscribing.
   useEffect(() => {
     clientRef.current = client
   }, [client])
@@ -342,9 +319,7 @@ export function HostScreen({
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
     repoMetadataFetchedAtRef.current = 0
-    // Why: re-seed from the current host's cache on every hostId change.
-    // The useState initializer only runs on first mount, so if Expo Router
-    // reuses this screen with a different hostId, we must reset here.
+    // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
     if (freshCache) {
       setWorktrees(freshCache)
@@ -432,8 +407,7 @@ export function HostScreen({
       if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
         return
       }
-      // The embedded sidebar polls for the whole split-view session; keep slow
-      // remote hosts from stacking overlapping expensive list requests.
+      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during polling.
       if (fetchWorktreesInFlightRef.current) {
         return
       }
@@ -442,8 +416,7 @@ export function HostScreen({
       const requestHostId = hostId
 
       try {
-        // Why: worktree.ps defaults to 200 and silently truncates; match the
-        // desktop's high cap so large hosts don't drop workspaces on mobile.
+        // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.
         const response = await requestClient.sendRequest('worktree.ps', { limit: 10000 })
         if (clientRef.current !== requestClient || hostId !== requestHostId) {
           return
@@ -453,9 +426,7 @@ export function HostScreen({
         }
         if (response.ok) {
           const result = (response as RpcSuccess).result as { worktrees: Worktree[] }
-          // Why: large hosts can return identical worktree.ps snapshots every
-          // poll. Preserving the existing array keeps SectionList/sort rebuilds
-          // off the JS tap path unless something actually changed.
+          // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) =>
             areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
           )
@@ -463,25 +434,18 @@ export function HostScreen({
             areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
           )
           setWorktreesLoaded(true)
-          // Why (#8498): the host detail screen seeds its list from the
-          // home-written cache, so a partial home fetch could poison it until a
-          // focus poll corrected it. Write the confirmed snapshot back through
-          // the same cache so a reconnect refetch (or a remount) can't serve a
-          // stale worktree list.
+          // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
           if (hostId) {
             setCachedWorktrees(hostId, result.worktrees)
           }
-          // Drop the optimistic active override once the host confirms it (the
-          // activate RPC has landed and worktree.ps now reports it active), so we
-          // stop overriding and respect any later desktop-driven change.
+          // Drop the optimistic active override once the host reports it active, so later desktop changes win.
           setOptimisticActiveWorktreeId((pending) =>
             pending && result.worktrees.some((w) => w.worktreeId === pending && w.isActive)
               ? null
               : pending
           )
 
-          // Clear optimistic sleep overrides once the server confirms the
-          // worktree is actually inactive (liveTerminalCount dropped to 0).
+          // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
           setSleptIds((prev) => {
             if (prev.size === 0) {
               return prev
@@ -496,8 +460,7 @@ export function HostScreen({
             return still.size === prev.size ? prev : still
           })
 
-          // Sync local pin state from server so desktop-initiated pins/unpins
-          // are reflected without relying on stale AsyncStorage.
+          // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
           const serverPinned = new Set(
             result.worktrees.filter((w) => w.isPinned).map((w) => w.worktreeId)
           )
@@ -520,17 +483,10 @@ export function HostScreen({
     [client, connState, hostId]
   )
 
-  // Why: read desktop's protocol version from status.get on every connect
-  // and re-evaluate compatibility. If the desktop declares this mobile
-  // build too old (or vice versa via the local minimum), the host detail
-  // screen swaps to a hard-block screen instead of the worktree list.
-  // Today's compat constants are wide-open so this never blocks; the wire
-  // format is in place to flip a switch in a future release.
+  // Why: re-evaluate protocol compat on connect; today's constants are wide-open so this never blocks yet.
   useEffect(() => {
     if (connState !== 'connected' || !client) {
-      // Why: drop the prior host's capabilities while disconnected/switching so
-      // a capability-gated action (e.g. Agent Session History) can't linger for
-      // a host that doesn't support it.
+      // Why: drop capabilities while disconnected/switching so a capability-gated action can't linger for a new host.
       setHostCapabilities([])
       return
     }
@@ -556,8 +512,7 @@ export function HostScreen({
         })
         setCompatVerdict(verdict)
         if (verdict.kind === 'blocked') {
-          // Why: deterministic breadcrumb so support can confirm a block
-          // actually fired (vs a render bug). No PII — just version ints.
+          // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
           console.warn('[protocol-compat] blocked', {
             reason: verdict.reason,
             desktopVersion: verdict.desktopVersion,
@@ -566,8 +521,7 @@ export function HostScreen({
           })
         }
       } catch {
-        // Why: rare path — sendRequest can throw on transport tear-down.
-        // Treat as transient; verdict stays at previous value.
+        // Why: sendRequest can throw on transport tear-down; treat as transient, keep the prior verdict.
       }
     })()
     return () => {
@@ -577,29 +531,22 @@ export function HostScreen({
 
   useFocusEffect(
     useCallback(() => {
-      // Why: opening the host is a strong user signal — reset a backed-off or
-      // trickling reconnect loop (and probe a possibly half-open socket)
-      // immediately instead of waiting out its timer. Deps stay empty so this
-      // fires per focus transition, not per connection-state change; nudging
-      // on every reconnecting↔connecting flip would defeat the backoff.
+      // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
       clientRef.current?.notifyForeground()
     }, [])
   )
 
   useFocusEffect(
     useCallback(() => {
-      // The embedded sidebar drives its own polling below; focus never fires
-      // for it since it isn't a routed screen.
+      // The embedded sidebar isn't a routed screen (focus never fires); it polls via the mount effect below.
       if (embedded || connState !== 'connected') {
         return
       }
       void fetchWorktrees()
       void fetchRepoMetadata()
-      // Pull desktop's shared view settings on focus so desktop-side changes
-      // show up here without a manual refresh.
+      // Pull desktop's shared view settings on focus so desktop changes show up without a manual refresh.
       void syncViewSettingsFromDesktop()
-      // Why: React Navigation keeps previous stack screens mounted; only
-      // poll the host list while this route is visible.
+      // Why: React Navigation keeps prior screens mounted; only poll while this route is visible.
       const interval = setInterval(() => {
         void fetchWorktrees()
         void fetchRepoMetadata()
@@ -608,9 +555,7 @@ export function HostScreen({
     }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
   )
 
-  // Why: as the persistent tablet sidebar this list is never the focused
-  // route, so useFocusEffect won't fetch/poll. Mirror that behavior from a
-  // plain mount effect while connected instead.
+  // Why: the embedded sidebar is never the focused route, so useFocusEffect never polls; mirror it from a mount effect.
   useEffect(() => {
     if (!embedded || connState !== 'connected') {
       return
@@ -625,10 +570,7 @@ export function HostScreen({
     return () => clearInterval(interval)
   }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
 
-  // Why (#8498): reconnect refetch + manual pull-to-refresh, extracted to
-  // useWorktreeResync so this screen stays under its max-lines budget. The
-  // steady-state focus/embedded polls don't cover the transition INTO
-  // 'connected' after a background/sleep, which is when the cache is stalest.
+  // Why (#8498): steady-state polls miss the transition INTO 'connected' after background/sleep, when the cache is stalest.
   const { refreshing, onRefresh } = useWorktreeResync({
     client,
     connState,
@@ -720,8 +662,7 @@ export function HostScreen({
       await removeHostAndCloseClient(hostId, closeHostClient)
       leaveHost()
     } catch {
-      // Why: metadata commit can fail while the host is still paired; keep the
-      // screen mounted and re-open confirm (ConfirmModal closes on confirm).
+      // Why: removal can fail while still paired; re-open confirm (ConfirmModal closes on confirm).
       setConfirmRemoveHost(true)
       Alert.alert('Could not remove host', 'Please try again.')
     }
@@ -748,11 +689,9 @@ export function HostScreen({
 
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
-      // Highlight the row immediately; the next worktree.ps poll confirms it.
       setOptimisticActiveWorktreeId(item.worktreeId)
       if (client && connState === 'connected') {
-        // Why: opening a mobile session should hydrate host-owned tabs without
-        // pulling other paired clients, especially desktop, into this worktree.
+        // Why: notifyClients:false hydrates host tabs without pulling desktop into this worktree.
         void client
           .sendRequest('worktree.activate', {
             worktree: `id:${item.worktreeId}`,
@@ -831,8 +770,7 @@ export function HostScreen({
       const slept = sleptIds.has(w.worktreeId)
         ? { liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' as const }
         : null
-      // Force the just-opened worktree active (and the rest inactive) until the
-      // next poll confirms it, so the highlight doesn't lag the navigation.
+      // Force the just-opened worktree active until the next poll confirms it, so the highlight doesn't lag.
       const active =
         optimisticActiveWorktreeId !== null
           ? { isActive: w.worktreeId === optimisticActiveWorktreeId }
@@ -912,12 +850,7 @@ export function HostScreen({
                 </View>
                 {connState !== 'connected' &&
                   (() => {
-                    // Why: status label removed in favor of just the dot +
-                    // Reconnect button — the home screen already surfaces the
-                    // verdict text per host, and the dot color already
-                    // signals severity here. Auth-failed routes through its
-                    // dedicated banner so we still want to suppress the
-                    // Reconnect button for that case.
+                    // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
                     const verdict = headerVerdict
                     const isError = isErrorVerdict(verdict)
                     const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
@@ -1166,8 +1099,7 @@ export function HostScreen({
             onChangeText={setSearch}
             placeholder="Search worktrees…"
             autoFocus
-            // Why: new key each open remounts focus effect if the field stays mounted
-            // across rapid toggles; pairs with delayed focus so the keyboard appears.
+            // Why: new key per open remounts the focus effect across rapid toggles so the keyboard reappears.
             focusKey={showSearch}
             accessibilityLabel="Search worktrees"
           />
@@ -1206,13 +1138,10 @@ export function HostScreen({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           onScrollToIndexFailed={onScrollToIndexFailed}
-          // Why: edge-to-edge — the list scrolls under the system nav bar
-          // while reserving insets.bottom keeps the last worktree row reachable
-          // above the Samsung 3-button nav / iOS home indicator.
+          // Why: edge-to-edge under the system nav bar; insets.bottom keeps the last row above it.
           contentContainerStyle={[
             styles.list,
-            // Phone shows a floating "+" button bottom-right; reserve room so the
-            // last row stays tappable above it. Embedded sidebars keep the toolbar +.
+            // Reserve room so the last row stays tappable above the phone's floating "+" (embedded uses the toolbar +).
             { paddingBottom: (embedded ? spacing.lg : FAB_SIZE + spacing.xl) + insets.bottom },
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
@@ -1252,8 +1181,7 @@ export function HostScreen({
             )
           }}
           ItemSeparatorComponent={ListSeparator}
-          // Why (#8498): manual pull-to-refresh forces a fresh worktree
-          // snapshot after a reconnect or whenever the cache looks stale.
+          // Why (#8498): manual pull-to-refresh forces a fresh snapshot after a stale-cache reconnect.
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1478,10 +1406,7 @@ export function HostScreen({
   )
 }
 
-// Default route export. On wide tablet/foldable canvases the worktree list is
-// rendered as a persistent sidebar by the host layout, so the route itself
-// becomes the empty detail pane until a workspace is opened. On phones it is
-// the full-screen worktree list as before.
+// On wide layouts the sidebar hosts the list, so this route is just the empty detail pane.
 export default function HostWorktreeRoute() {
   const { isWideLayout } = useResponsiveLayout()
   if (isWideLayout) {

@@ -11,30 +11,38 @@ import { powerShellCommand } from './ssh-remote-powershell'
 const PLATFORM_PROBE_MARKER = '__ORCA_REMOTE_PLATFORM__'
 
 export async function detectRemoteHostPlatform(
-  conn: SshConnection
+  conn: SshConnection,
+  options?: { signal?: AbortSignal }
 ): Promise<RemoteHostPlatform | null> {
-  const unamePlatform = await detectUnamePlatform(conn)
+  const unamePlatform = await detectUnamePlatform(conn, options?.signal)
   if (unamePlatform) {
     return getRemoteHostPlatform(unamePlatform)
   }
-  const windowsPlatform = await detectWindowsPlatform(conn)
+  const windowsPlatform = await detectWindowsPlatform(conn, options?.signal)
   return windowsPlatform ? getRemoteHostPlatform(windowsPlatform) : null
 }
 
-async function detectUnamePlatform(conn: SshConnection): Promise<RelayPlatform | null> {
+async function detectUnamePlatform(
+  conn: SshConnection,
+  signal?: AbortSignal
+): Promise<RelayPlatform | null> {
   try {
-    const output = await execCommand(
-      conn,
-      // Why: Remote startup output may omit its trailing newline and must not absorb the marker.
-      `printf '\\n%s ' '${PLATFORM_PROBE_MARKER}'; uname -sm`
-    )
+    // Why: Remote startup output may omit its trailing newline and must not absorb the marker.
+    const command = `printf '\\n%s ' '${PLATFORM_PROBE_MARKER}'; uname -sm`
+    const output = signal
+      ? await execCommand(conn, command, { signal })
+      : await execCommand(conn, command)
     return parseRemotePlatformOutput(output)
   } catch {
+    signal?.throwIfAborted()
     return null
   }
 }
 
-async function detectWindowsPlatform(conn: SshConnection): Promise<RelayPlatform | null> {
+async function detectWindowsPlatform(
+  conn: SshConnection,
+  signal?: AbortSignal
+): Promise<RelayPlatform | null> {
   try {
     const script = [
       '$arch = $env:PROCESSOR_ARCHITECTURE',
@@ -43,9 +51,13 @@ async function detectWindowsPlatform(conn: SshConnection): Promise<RelayPlatform
       // Why: Remote startup output may omit its trailing newline and must not absorb the marker.
       `Write-Output ("\`n${PLATFORM_PROBE_MARKER} Windows " + $arch)`
     ].join('; ')
-    const output = await execCommand(conn, powerShellCommand(script), { wrapCommand: false })
+    const output = await execCommand(conn, powerShellCommand(script), {
+      wrapCommand: false,
+      ...(signal ? { signal } : {})
+    })
     return parseRemotePlatformOutput(output)
   } catch {
+    signal?.throwIfAborted()
     return null
   }
 }

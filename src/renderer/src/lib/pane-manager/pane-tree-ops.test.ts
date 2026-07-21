@@ -1,7 +1,23 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { equalizePaneSplitSizes, safeFit } from './pane-tree-ops'
+import {
+  cancelPendingSafeFitContinuations,
+  equalizePaneSplitSizes,
+  safeFit,
+  safeFitAndThen
+} from './pane-tree-ops'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import { setFitOverride, hydrateOverrides } from './mobile-fit-overrides'
+import {
+  captureTerminalStructuralScrollIntent,
+  enforceTerminalCurrentScrollIntent,
+  markTerminalPinnedViewport,
+  restoreTerminalStructuralScrollIntent
+} from './terminal-scroll-intent'
+import {
+  beginTerminalScrollIntentBufferRebuild,
+  cancelTerminalScrollIntentBufferRebuildCompletions,
+  endTerminalScrollIntentBufferRebuild
+} from './terminal-scroll-intent-rebuild'
 
 class MockHTMLElement {
   classList: { contains: (cls: string) => boolean }
@@ -21,6 +37,7 @@ beforeAll(() => {
 
 afterEach(() => {
   hydrateOverrides([])
+  vi.unstubAllGlobals()
 })
 
 function createPane({
@@ -178,6 +195,54 @@ describe('safeFit', () => {
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
   })
 
+  it('coalesces fits until replay parsing and scroll restoration complete', async () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
+    activeBuffer.viewportY = 80
+    activeBuffer.baseY = 100
+    markTerminalPinnedViewport(pane.terminal)
+    const intent = captureTerminalStructuralScrollIntent(pane.terminal)
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
+    activeBuffer.viewportY = 0
+    activeBuffer.baseY = 0
+
+    safeFit(pane)
+    safeFit(pane)
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+
+    activeBuffer.viewportY = 200
+    activeBuffer.baseY = 200
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      expect(activeBuffer.viewportY).toBe(180)
+    })
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+    restoreTerminalStructuralScrollIntent(pane.terminal, intent, { restoreBy: 'bottomOffset' })
+    await Promise.resolve()
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a deferred fit when a replay rebuild is canceled', async () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
+    safeFit(pane)
+    cancelTerminalScrollIntentBufferRebuildCompletions(pane.terminal)
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+    await Promise.resolve()
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+  })
+
   it('restores the viewport if fit clobbers it during resize', () => {
     const pane = createPane({
       proposedCols: 100,
@@ -231,6 +296,66 @@ describe('safeFit', () => {
     expect(marker.dispose).toHaveBeenCalled()
   })
 
+  it('records the restored post-reflow pin when widening lowers baseY', () => {
+    const pane = createPane({
+      proposedCols: 160,
+      proposedRows: 32,
+      terminalCols: 80,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as {
+      viewportY: number
+      baseY: number
+      cursorY?: number
+    }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    activeBuffer.cursorY = 0
+    const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
+    markTerminalPinnedViewport(pane.terminal)
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      activeBuffer.baseY = 70
+      activeBuffer.viewportY = 0
+      marker.line = 30
+    })
+
+    safeFit(pane)
+    activeBuffer.viewportY = 0
+    vi.mocked(pane.terminal.scrollToLine).mockClear()
+    enforceTerminalCurrentScrollIntent(pane.terminal)
+
+    expect(pane.terminal.scrollToLine).toHaveBeenLastCalledWith(30)
+  })
+
+  it('preserves a durable pin when the remounted fit buffer is still empty', () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 80,
+      terminalRows: 24
+    })
+    const activeBuffer = pane.terminal.buffer.active as {
+      viewportY: number
+      baseY: number
+      cursorY?: number
+    }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    activeBuffer.cursorY = 0
+    markTerminalPinnedViewport(pane.terminal)
+
+    activeBuffer.viewportY = 0
+    activeBuffer.baseY = 0
+    safeFit(pane)
+
+    activeBuffer.viewportY = 0
+    activeBuffer.baseY = 80
+    vi.mocked(pane.terminal.scrollToLine).mockClear()
+    enforceTerminalCurrentScrollIntent(pane.terminal)
+    expect(pane.terminal.scrollToLine).toHaveBeenLastCalledWith(22)
+  })
+
   it('keeps a follow-output pane at the bottom through fit', () => {
     const pane = createPane({
       proposedCols: 100,
@@ -251,22 +376,236 @@ describe('safeFit', () => {
     expect(pane.terminal.scrollToBottom).toHaveBeenCalled()
   })
 
-  it('does not throw when xterm rejects scroll restoration during layout', () => {
+  it('retries a transient dimensions failure before recording the post-fit pin', () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
       terminalCols: 120,
       terminalRows: 32
     })
-    const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
+    const activeBuffer = pane.terminal.buffer.active as {
+      viewportY: number
+      baseY: number
+      cursorY?: number
+    }
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
-    vi.mocked(pane.terminal.scrollToLine).mockImplementation(() => {
-      throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+    activeBuffer.cursorY = 0
+    const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
+    markTerminalPinnedViewport(pane.terminal)
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      activeBuffer.baseY = 70
+      activeBuffer.viewportY = 0
+      marker.line = 30
     })
+    vi.mocked(pane.terminal.scrollToLine)
+      .mockImplementationOnce(() => {
+        throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+      })
+      .mockImplementation((line: number) => {
+        activeBuffer.viewportY = line
+      })
 
     expect(() => safeFit(pane)).not.toThrow()
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(activeBuffer.viewportY).toBe(0)
+    expect(marker.dispose).not.toHaveBeenCalled()
+
+    frameCallbacks.shift()?.(0)
+    expect(activeBuffer.viewportY).toBe(30)
+    expect(marker.dispose).toHaveBeenCalled()
+
+    activeBuffer.viewportY = 0
+    vi.mocked(pane.terminal.scrollToLine).mockClear()
+    enforceTerminalCurrentScrollIntent(pane.terminal)
+    expect(pane.terminal.scrollToLine).toHaveBeenLastCalledWith(30)
+  })
+
+  it('cancels a pending fit retry when snapshot replay starts', () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as {
+      viewportY: number
+      baseY: number
+      cursorY?: number
+    }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    activeBuffer.cursorY = 0
+    const marker = { line: 30, isDisposed: false, dispose: vi.fn() }
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
+    markTerminalPinnedViewport(pane.terminal)
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      activeBuffer.baseY = 70
+      activeBuffer.viewportY = 0
+    })
+    vi.mocked(pane.terminal.scrollToLine).mockImplementationOnce(() => {
+      throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+    })
+
+    safeFit(pane)
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
+    frameCallbacks.shift()?.(0)
+
+    expect(pane.terminal.scrollToLine).toHaveBeenCalledTimes(1)
+    expect(marker.dispose).toHaveBeenCalledTimes(1)
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+  })
+
+  it('carries the original fit marker across another fit before retry', () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as {
+      viewportY: number
+      baseY: number
+      cursorY?: number
+    }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    activeBuffer.cursorY = 0
+    const originalMarker = { line: 30, isDisposed: false, dispose: vi.fn() }
+    const replacementMarker = { line: 5, isDisposed: false, dispose: vi.fn() }
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
+      .fn()
+      .mockReturnValueOnce(originalMarker)
+      .mockReturnValueOnce(replacementMarker)
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      activeBuffer.baseY = 70
+      activeBuffer.viewportY = 0
+    })
+    vi.mocked(pane.terminal.scrollToLine)
+      .mockImplementationOnce(() => {
+        throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+      })
+      .mockImplementation((line: number) => {
+        activeBuffer.viewportY = line
+      })
+    markTerminalPinnedViewport(pane.terminal)
+
+    safeFit(pane)
+    safeFit(pane)
+
+    expect(activeBuffer.viewportY).toBe(30)
+    expect(originalMarker.dispose).toHaveBeenCalledTimes(1)
+    expect(replacementMarker.dispose).toHaveBeenCalledTimes(1)
+    expect(frameCallbacks).toHaveLength(1)
+  })
+
+  it('resumes an exhausted dimensions retry on a same-grid reveal fit', () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as {
+      viewportY: number
+      baseY: number
+      cursorY?: number
+    }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    activeBuffer.cursorY = 0
+    const marker = { line: 30, isDisposed: false, dispose: vi.fn() }
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      activeBuffer.baseY = 70
+      activeBuffer.viewportY = 0
+    })
+    vi.mocked(pane.terminal.scrollToLine).mockImplementation(() => {
+      throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+    })
+    markTerminalPinnedViewport(pane.terminal)
+
+    safeFit(pane)
+    frameCallbacks.shift()?.(0)
+    frameCallbacks.shift()?.(0)
+    expect(marker.dispose).not.toHaveBeenCalled()
+
+    vi.mocked(pane.terminal.scrollToLine).mockImplementation((line: number) => {
+      activeBuffer.viewportY = line
+    })
+    ;(pane.terminal as unknown as { cols: number }).cols = 100
+    safeFit(pane)
+    expect(activeBuffer.viewportY).toBe(30)
+    expect(marker.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases a replacement marker when a resumed retry throws', () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as {
+      viewportY: number
+      baseY: number
+      cursorY?: number
+    }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    activeBuffer.cursorY = 0
+    const originalMarker = { line: 30, isDisposed: false, dispose: vi.fn() }
+    const replacementMarker = { line: 5, isDisposed: false, dispose: vi.fn() }
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
+      .fn()
+      .mockReturnValueOnce(originalMarker)
+      .mockReturnValueOnce(replacementMarker)
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      activeBuffer.baseY = 70
+      activeBuffer.viewportY = 0
+    })
+    vi.mocked(pane.terminal.scrollToLine)
+      .mockImplementationOnce(() => {
+        throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('unexpected resumed restore failure')
+      })
+    markTerminalPinnedViewport(pane.terminal)
+
+    safeFit(pane)
+    expect(() => safeFit(pane)).not.toThrow()
+
+    expect(originalMarker.dispose).toHaveBeenCalledTimes(1)
+    expect(replacementMarker.dispose).toHaveBeenCalledTimes(1)
   })
 
   it('still refits when a split-scroll lock is active and the grid changed', () => {
@@ -395,6 +734,73 @@ describe('safeFit', () => {
     expect(paneA.fitAddon.fit).not.toHaveBeenCalled()
     expect(paneB.fitAddon.fit).toHaveBeenCalledTimes(1)
     expect(paneB.terminal.resize).not.toHaveBeenCalled()
+  })
+
+  it('runs an authoritative continuation only after a deferred replay fit', async () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 80,
+      terminalRows: 24
+    })
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      pane.terminal.resize(100, 32)
+    })
+    const observedDimensions: { cols: number; rows: number }[] = []
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
+
+    safeFitAndThen(pane, 'pty-resize', () => {
+      observedDimensions.push({ cols: pane.terminal.cols, rows: pane.terminal.rows })
+    })
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(observedDimensions).toEqual([])
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+    await Promise.resolve()
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(observedDimensions).toEqual([{ cols: 100, rows: 32 }])
+  })
+
+  it('retains an authoritative continuation until a later measurable fit succeeds', async () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 80,
+      terminalRows: 24
+    })
+    vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue(undefined)
+    const continuation = vi.fn()
+
+    const pending = safeFitAndThen(pane, 'pty-resize', continuation)
+
+    expect(continuation).not.toHaveBeenCalled()
+    vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue({ cols: 100, rows: 32 })
+    safeFit(pane)
+
+    await expect(pending.completion).resolves.toBe(true)
+    expect(continuation).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels an authoritative fit continuation disposed before its post-replay microtask', async () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 80,
+      terminalRows: 24
+    })
+    const continuation = vi.fn()
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
+    const pending = safeFitAndThen(pane, 'pty-resize', continuation)
+
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+    cancelTerminalScrollIntentBufferRebuildCompletions(pane.terminal)
+    cancelPendingSafeFitContinuations(pane)
+    await Promise.resolve()
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(continuation).not.toHaveBeenCalled()
+    await expect(pending.completion).resolves.toBe(false)
   })
 })
 

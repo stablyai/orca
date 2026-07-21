@@ -6,11 +6,17 @@ type RegisteredPaneManager = {
   fitAllPanes?: () => void
   refreshAllPanes?: () => void
   getRenderingDiagnostics?: () => PaneRenderingDiagnostics[]
+  getPanes?: () => { id: number; terminal: unknown }[]
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
+const managerIds = new WeakMap<RegisteredPaneManager, number>()
+let nextManagerId = 1
 
 export function registerLivePaneManager(manager: RegisteredPaneManager): void {
+  if (!managerIds.has(manager)) {
+    managerIds.set(manager, nextManagerId++)
+  }
   liveManagers.add(manager)
 }
 
@@ -81,6 +87,34 @@ export function getAllPaneRenderingDiagnostics(): PaneRenderingDiagnostics[] {
     }
   }
   return all
+}
+
+/**
+ * Iterates every live pane for the render-desync sentinel. Weakly-held manager
+ * ids stay stable when an earlier manager unregisters without retaining it.
+ */
+export function forEachLivePaneForDesyncSentinel(
+  visit: (paneKey: string, pane: { id: number; terminal: unknown }) => void
+): void {
+  for (const manager of liveManagers) {
+    const managerId = managerIds.get(manager)
+    if (managerId == null) {
+      continue
+    }
+    let panes: { id: number; terminal: unknown }[] = []
+    try {
+      panes = manager.getPanes?.() ?? []
+    } catch {
+      continue
+    }
+    for (const pane of panes) {
+      try {
+        visit(`m${managerId}:p${pane.id}`, pane)
+      } catch {
+        // Why: one pane's failure must not stop sentinel coverage of the rest.
+      }
+    }
+  }
 }
 
 export function refitAndRefreshAllTerminalPanes(): void {

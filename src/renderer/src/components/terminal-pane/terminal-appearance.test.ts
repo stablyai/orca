@@ -63,8 +63,7 @@ describe('maybePushMode2031Flip', () => {
   })
 
   it('suppresses repeat pushes when the resolved mode has not changed', () => {
-    // This is the spam-gate: applyTerminalAppearance re-runs on every font /
-    // opacity / cursor tweak, and we must not emit CSI 997 on each one.
+    // Spam-gate: applyTerminalAppearance re-runs on every font/opacity/cursor tweak; don't emit CSI 997 each time.
     const transport = fakeTransport()
     const subs = new Map([[1, true]])
     const last = new Map<number, 'dark' | 'light'>()
@@ -140,13 +139,7 @@ describe('maybePushMode2031Flip', () => {
   })
 })
 describe('installMode2031Handlers', () => {
-  // Regression coverage for the "random characters on restart" bug: a restored
-  // xterm buffer may contain `CSI ?2031h` emitted by the previous session's
-  // TUI (e.g. Claude Code). Before the fix, replaying that buffer fired our
-  // CSI handler and pushed `CSI ?997;1n` into the fresh shell via
-  // transport.sendInput — zsh then echoed the literal `^[[?997;1n` onto the
-  // prompt. These tests drive a real headless xterm parser so they cover the
-  // actual parser path, not a mock.
+  // Regression coverage for the "random characters on restart" bug: a replayed `CSI ?2031h` pushed `CSI ?997;1n` into the fresh shell.
 
   function writeSync(term: Terminal, data: string): Promise<void> {
     return new Promise((resolve) => term.write(data, resolve))
@@ -207,16 +200,11 @@ describe('installMode2031Handlers', () => {
   })
 
   it('does NOT fire onSubscribe or record state when the sequence arrives during replay', async () => {
-    // This is the regression: on cold restore the serialized xterm buffer is
-    // replayed through replayIntoTerminal, which sets the replay guard before
-    // xterm parses the bytes. The handler must skip both the push (so no
-    // CSI 997 leaks to the fresh shell) AND the bookkeeping (so a later theme
-    // flip doesn't push either).
+    // On cold restore the replay guard is set before xterm parses, so the handler must skip both the push and the bookkeeping.
     const h = setup()
     try {
       replayIntoTerminal(h.pane, h.replayingPanesRef, '\x1b[?2031h')
-      // write() is async-ish: the guard stays engaged until the
-      // write-completion callback fires. Await parser completion.
+      // write() is async: the replay guard stays engaged until the write-completion callback fires.
       await new Promise<void>((resolve) => h.term.write('', resolve))
 
       expect(h.onSubscribe).not.toHaveBeenCalled()
@@ -230,8 +218,7 @@ describe('installMode2031Handlers', () => {
   })
 
   it('still honors a real `CSI ?2031h` received after a replay window closes', async () => {
-    // If the user relaunches Claude Code after a cold restore, the real TUI
-    // emits `?2031h` itself — that must take effect normally.
+    // A real `?2031h` from a TUI relaunched after cold restore must take effect normally.
     const h = setup()
     try {
       replayIntoTerminal(h.pane, h.replayingPanesRef, '\x1b[?2031h')
@@ -247,10 +234,7 @@ describe('installMode2031Handlers', () => {
   })
 
   it('clears subscribe state on `CSI ?2031l` regardless of replay state', async () => {
-    // The `l` (unsubscribe) branch is intentionally not replay-guarded: a
-    // serialized buffer ending in `?2031l` means the TUI unsubscribed before
-    // shutdown, and clearing our stale bookkeeping is harmless — we only send
-    // on subscribe, never on unsubscribe.
+    // The `l` (unsubscribe) branch is intentionally not replay-guarded: clearing is harmless since we only send on subscribe.
     const h = setup()
     try {
       // Non-replay path: subscribe then unsubscribe clears state.
@@ -262,9 +246,7 @@ describe('installMode2031Handlers', () => {
       expect(h.paneMode2031.has(1)).toBe(false)
       expect(h.paneLastThemeMode.has(1)).toBe(false)
 
-      // Replay path: resubscribe, then receive `?2031l` during a replay
-      // window. The `l` handler must still clear — this is the invariant
-      // promised by the test name.
+      // Replay path: the `l` handler must still clear even during a replay window.
       await writeSync(h.term, '\x1b[?2031h')
       h.paneLastThemeMode.set(1, 'dark')
       expect(h.paneMode2031.get(1)).toBe(true)
@@ -279,22 +261,13 @@ describe('installMode2031Handlers', () => {
   })
 
   it('returns `false` so compound DEC private modes still reach xterm', async () => {
-    // Why: we return `false` from both handlers so compound sequences like
-    // `CSI ?25;2031h` still go through xterm's built-in DEC private mode
-    // handler. If a future refactor accidentally returned `true`, cursor
-    // visibility (and any other unrelated mode sharing the sequence) would
-    // desync. xterm's public API does not expose cursor visibility, so assert
-    // the handler's return value directly via a spy wrapping the real parser.
+    // Why: handlers return `false` so compound sequences like `CSI ?25;2031h` still reach xterm's built-in DEC private mode handler.
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     const paneMode2031 = new Map<number, boolean>()
     const paneLastThemeMode = new Map<number, 'dark' | 'light'>()
     const onSubscribe = vi.fn()
     const returnValues: boolean[] = []
-    // Why the cast: the headless parser's registerCsiHandler callback
-    // returns just `boolean`, but our `Mode2031Parser` type reflects xterm's
-    // canonical `boolean | Promise<boolean>` signature. The spy wraps the
-    // real parser and synchronously records whatever the wrapped handler
-    // returned; in this codebase all mode-2031 handlers are synchronous.
+    // Cast: parser cb returns plain `boolean` but `Mode2031Parser` reflects xterm's `boolean | Promise<boolean>` (handlers here are sync).
     const spyParser: Parameters<typeof installMode2031Handlers>[0]['parser'] = {
       registerCsiHandler: (id, cb) =>
         term.parser.registerCsiHandler(id, (params) => {
@@ -317,8 +290,7 @@ describe('installMode2031Handlers', () => {
       // Our 2031 recording fired:
       expect(paneMode2031.get(1)).toBe(true)
       expect(onSubscribe).toHaveBeenCalledTimes(1)
-      // And every invocation of our handler returned `false`, so xterm's
-      // built-in DEC private mode handler still processes the sequence.
+      // Every handler invocation returned `false`, so xterm's built-in DEC private mode handler still processes the sequence.
       expect(returnValues.length).toBeGreaterThan(0)
       expect(returnValues.every((v) => v === false)).toBe(true)
     } finally {
@@ -330,9 +302,7 @@ describe('installMode2031Handlers', () => {
   })
 
   it('keeps per-pane state isolated when two panes share the parser API', async () => {
-    // Each pane registers its own handlers on its own xterm parser, but the
-    // subscribe bookkeeping map is shared across panes. A replay on pane 1
-    // must not leak into pane 2's live subscribe.
+    // The subscribe bookkeeping map is shared across panes, so a replay on pane 1 must not leak into pane 2's live subscribe.
     const shared2031 = new Map<number, boolean>()
     const sharedLast = new Map<number, 'dark' | 'light'>()
     const replayingPanesRef = makeReplayingRef()
@@ -382,12 +352,7 @@ describe('installMode2031Handlers', () => {
 })
 
 describe('applyTerminalAppearance theme assignment', () => {
-  // xterm's OptionsService fires the theme change on object IDENTITY, and
-  // ThemeService._setTheme then rebuilds the palette, discarding OSC
-  // 4/10/11/12 SET mutations. Attribute-neutral applies (font size, padding,
-  // zoom) compose a fresh-but-value-identical theme; assigning it anyway
-  // wipes TUI color mutations on visible panes while the deduped publisher
-  // keeps hidden overlays — so the assignment must be value-gated.
+  // xterm rebuilds the palette on any new theme-object identity (wiping OSC color mutations), so the assignment must be value-gated.
   function makePane(id: number): ManagedPane {
     return { id, terminal: { options: {}, cols: 80, rows: 24 } } as unknown as ManagedPane
   }
@@ -423,8 +388,7 @@ describe('applyTerminalAppearance theme assignment', () => {
 
     apply(pane, { ...settings, terminalFontSize: settings.terminalFontSize + 2 })
 
-    // Identity-stable theme means xterm never re-runs _setTheme, so a TUI's
-    // modifyColors mutation survives the font tweak.
+    // Identity-stable theme means xterm never re-runs _setTheme, so a TUI's modifyColors mutation survives the font tweak.
     expect(pane.terminal.options.theme).toBe(firstTheme)
     expect(pane.terminal.options.fontSize).toBe(settings.terminalFontSize + 2)
   })
@@ -444,9 +408,7 @@ describe('applyTerminalAppearance theme assignment', () => {
 })
 
 describe('publishTerminalViewAttributesAtAppStart', () => {
-  // Phase 6 prerequisite (terminal-query-authority.md): hidden-at-launch
-  // PTYs can query OSC 10/11 before any terminal pane mounts; the app-start
-  // publication must go out with no pane manager involved at all.
+  // Hidden-at-launch PTYs query OSC 10/11 before any pane mounts; publish with no pane manager (terminal-query-authority.md).
   it('publishes composed attributes without any pane mount and dedupes repeats', () => {
     _resetTerminalViewAttributesPublisherForTest()
     const sent: TerminalViewAttributes[] = []
@@ -476,8 +438,7 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
       publishTerminalViewAttributesAtAppStart(settings, true)
       expect(publishMock).toHaveBeenCalledTimes(1)
 
-      // The first pane mount composes the identical app-global snapshot, so
-      // the publisher dedupe keeps it a single push.
+      // Identical app-global snapshot, so the publisher dedupe keeps it a single push.
       const manager = {
         getPanes: () => [],
         setPaneLigaturesEnabled: vi.fn(),
