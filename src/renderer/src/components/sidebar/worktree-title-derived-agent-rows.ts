@@ -145,8 +145,12 @@ function buildTitleDerivedAgentRow(args: {
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
   const titleAgentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(title, label)
   // Why: a braille spinner proves activity, not identity, so the resolver drops
-  // it. Hook-less agents over SSH (Codex, #8711) surface only spinner+cwd
-  // titles; fall back to the tab's launch identity instead of hiding the pane.
+  // it. Hook-less agents over SSH (Codex, #8711) surface only spinner+cwd titles;
+  // fall back to the tab's launch identity instead of hiding the pane. Gated on
+  // the spinner on purpose — unlike the hook path's unconditional launchAgent
+  // fallback (resolveRowAgentType), this path manufactures agent-ness from a
+  // title alone, so a non-agent title must never become a row. Residual: a split
+  // pane whose own title carries a braille glyph is still attributed to launchAgent.
   const agentType =
     titleAgentType ?? (containsBrailleSpinner(title) ? (args.tab.launchAgent ?? null) : null)
   if (!agentType) {
