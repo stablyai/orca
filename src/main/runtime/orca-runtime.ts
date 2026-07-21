@@ -23187,6 +23187,14 @@ export class OrcaRuntimeService {
     if (!db) {
       return undefined
     }
+    // Why: this runs on every 16ms graph publish (title/status churn). With no
+    // dispatch rows — the overwhelming majority who never orchestrate — the
+    // per-terminal query fan-out below can only ever yield an empty result, so
+    // skip it wholesale via the DB's cached emptiness probe. Optional call so
+    // partial test-injected DBs without the probe fall through to the scan.
+    if (db.hasAnyDispatchContexts?.() === false) {
+      return undefined
+    }
     const contexts: Record<string, AgentStatusOrchestrationContext> = {}
     for (const leaf of this.leaves.values()) {
       if (!leaf.ptyId) {
