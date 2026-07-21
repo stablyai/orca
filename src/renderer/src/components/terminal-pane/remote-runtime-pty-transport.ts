@@ -107,6 +107,8 @@ export function createRemoteRuntimePtyTransport(
   let destroyed = false
   let terminalEnded = false
   let connecting = false
+  // Why: transport methods overlap during remounts; only the latest pane lifecycle may install a returned PTY.
+  let lifecycleEpoch = 0
   let handle: string | null = null
   let remotePtyId: string | null = null
   let currentRuntimeEnvironmentId = runtimeEnvironmentId
@@ -136,6 +138,10 @@ export function createRemoteRuntimePtyTransport(
     timer: ReturnType<typeof setTimeout>
     resolve: (continueRetrying: boolean) => void
   } | null = null
+  // Why: after an unknown result, every later attempt must reconcile first so older runtimes cannot duplicate the PTY.
+  let terminalCreateNeedsReconciliation = false
+  let terminalCreateUnknownOutcomeError: unknown = null
+  let lastConnectOptions: Parameters<PtyTransport['connect']>[0] | null = null
   const viewportClaimReadyWaiters = new Set<(ready: boolean) => void>()
   const clearPendingViewportClaim = (): void => {
     pendingViewportClaim = false
@@ -384,18 +390,27 @@ export function createRemoteRuntimePtyTransport(
     } satisfies PtyConnectResult
   }
 
-  async function callRuntime<TResult>(
+  async function callRuntimeForEnvironment<TResult>(
+    environmentId: string,
     method: string,
     params?: unknown,
     timeoutMs = 15_000
   ): Promise<TResult> {
     const response = await window.api.runtimeEnvironments.call({
-      selector: currentRuntimeEnvironmentId,
+      selector: environmentId,
       method,
       params,
       timeoutMs
     })
     return unwrapRuntimeRpcResult(response as RuntimeRpcResponse<TResult>)
+  }
+
+  async function callRuntime<TResult>(
+    method: string,
+    params?: unknown,
+    timeoutMs = 15_000
+  ): Promise<TResult> {
+    return callRuntimeForEnvironment(currentRuntimeEnvironmentId, method, params, timeoutMs)
   }
 
   function cancelTerminalCreateRetryWait(): void {
@@ -424,27 +439,96 @@ export function createRemoteRuntimePtyTransport(
   }
 
   async function createTerminalWithUnknownOutcomeRecovery(
-    params: Record<string, unknown>
-  ): Promise<{ terminal: RuntimeTerminalCreate }> {
+    params: Record<string, unknown>,
+    environmentId: string,
+    expectedLifecycleEpoch: number
+  ): Promise<{ terminal: RuntimeTerminalCreate } | null> {
     let retryAttempt = 0
     let idempotencySupported = false
-    let reconcileExisting = false
-    let recoveryDeadlineAt: number | null = null
-    let lastError: unknown = new Error('Remote terminal creation was cancelled.')
-    while (!destroyed) {
-      const requestRemainingMs =
-        recoveryDeadlineAt === null ? null : recoveryDeadlineAt - Date.now()
-      if (requestRemainingMs !== null && requestRemainingMs <= 0) {
+    let reconcileExisting = terminalCreateNeedsReconciliation
+    let recoveryDeadlineAt: number | null = recovery.isActive
+      ? Date.now() + REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS
+      : null
+    let lastError: unknown =
+      terminalCreateUnknownOutcomeError ?? new Error('Remote terminal creation was cancelled.')
+    while (
+      !destroyed &&
+      lifecycleEpoch === expectedLifecycleEpoch &&
+      recovery.currentPhase !== 'disconnected'
+    ) {
+      if (recoveryDeadlineAt !== null && recoveryDeadlineAt - Date.now() <= 0) {
+        break
+      }
+      while (
+        reconcileExisting &&
+        !idempotencySupported &&
+        !destroyed &&
+        lifecycleEpoch === expectedLifecycleEpoch &&
+        recovery.currentPhase !== 'disconnected'
+      ) {
+        let status: RuntimeStatus
+        try {
+          const statusRemainingMs =
+            recoveryDeadlineAt === null ? 5_000 : recoveryDeadlineAt - Date.now()
+          if (statusRemainingMs <= 0) {
+            break
+          }
+          status = await callRuntimeForEnvironment<RuntimeStatus>(
+            environmentId,
+            'status.get',
+            undefined,
+            Math.min(5_000, statusRemainingMs)
+          )
+        } catch (statusError) {
+          const statusClientError = toRemoteRuntimeClientErrorLike(statusError)
+          if (!isRecoverableRemoteRuntimeConnectionError(statusClientError)) {
+            throw statusError
+          }
+          const startsRecovery = recoveryDeadlineAt === null
+          recoveryDeadlineAt ??= Date.now() + REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS
+          if (startsRecovery && !recovery.isActive) {
+            recovery.begin()
+          }
+          const statusDelayMs =
+            TERMINAL_CREATE_RETRY_DELAYS_MS[
+              Math.min(retryAttempt, TERMINAL_CREATE_RETRY_DELAYS_MS.length - 1)
+            ]
+          retryAttempt += 1
+          const remainingMs = recoveryDeadlineAt - Date.now()
+          if (
+            remainingMs <= 0 ||
+            recovery.currentPhase === 'disconnected' ||
+            !(await waitForTerminalCreateRetry(Math.min(statusDelayMs, remainingMs)))
+          ) {
+            break
+          }
+          continue
+        }
+        if (!status.capabilities?.includes(TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY)) {
+          throw lastError
+        }
+        idempotencySupported = true
+      }
+      if (
+        destroyed ||
+        lifecycleEpoch !== expectedLifecycleEpoch ||
+        (recoveryDeadlineAt !== null && recoveryDeadlineAt - Date.now() <= 0)
+      ) {
+        break
+      }
+      const createRemainingMs = recoveryDeadlineAt === null ? null : recoveryDeadlineAt - Date.now()
+      if (createRemainingMs !== null && createRemainingMs <= 0) {
         break
       }
       try {
-        return await callRuntime<{ terminal: RuntimeTerminalCreate }>(
+        return await callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
+          environmentId,
           'terminal.create',
           {
             ...params,
             ...(reconcileExisting ? { reconcileExisting: true } : {})
           },
-          Math.min(15_000, requestRemainingMs ?? 15_000)
+          Math.min(15_000, createRemainingMs ?? 15_000)
         )
       } catch (error) {
         lastError = error
@@ -452,49 +536,19 @@ export function createRemoteRuntimePtyTransport(
         if (!isRecoverableRemoteRuntimeConnectionError(clientError)) {
           throw error
         }
+        terminalCreateNeedsReconciliation = true
+        terminalCreateUnknownOutcomeError ??= error
+        reconcileExisting = true
+        const startsRecovery = recoveryDeadlineAt === null
         recoveryDeadlineAt ??= Date.now() + REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS
-        while (!idempotencySupported && !destroyed) {
-          let status: RuntimeStatus
-          try {
-            const statusRemainingMs = recoveryDeadlineAt - Date.now()
-            if (statusRemainingMs <= 0) {
-              break
-            }
-            status = await callRuntime<RuntimeStatus>(
-              'status.get',
-              undefined,
-              Math.min(5_000, statusRemainingMs)
-            )
-          } catch (statusError) {
-            const statusClientError = toRemoteRuntimeClientErrorLike(statusError)
-            if (!isRecoverableRemoteRuntimeConnectionError(statusClientError)) {
-              throw statusError
-            }
-            const statusDelayMs =
-              TERMINAL_CREATE_RETRY_DELAYS_MS[
-                Math.min(retryAttempt, TERMINAL_CREATE_RETRY_DELAYS_MS.length - 1)
-              ]
-            retryAttempt += 1
-            const remainingMs = recoveryDeadlineAt - Date.now()
-            if (
-              remainingMs <= 0 ||
-              !(await waitForTerminalCreateRetry(Math.min(statusDelayMs, remainingMs)))
-            ) {
-              break
-            }
-            continue
-          }
-          if (!status.capabilities?.includes(TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY)) {
-            throw error
-          }
-          idempotencySupported = true
-          reconcileExisting = true
+        if (startsRecovery && !recovery.isActive) {
+          recovery.begin()
         }
-        if (destroyed) {
+        if (destroyed || lifecycleEpoch !== expectedLifecycleEpoch) {
           break
         }
         const remainingMs = recoveryDeadlineAt - Date.now()
-        if (remainingMs <= 0) {
+        if (remainingMs <= 0 || recovery.currentPhase === 'disconnected') {
           break
         }
         const delayMs =
@@ -507,16 +561,19 @@ export function createRemoteRuntimePtyTransport(
         }
       }
     }
-    throw lastError
+    return null
   }
 
-  async function closeRemoteTerminal(handleOverride?: string): Promise<void> {
+  async function closeRemoteTerminal(
+    handleOverride?: string,
+    environmentId = currentRuntimeEnvironmentId
+  ): Promise<void> {
     const targetHandle = handleOverride ?? handle
     if (!targetHandle) {
       return
     }
     try {
-      await callRuntime('terminal.close', { terminal: targetHandle })
+      await callRuntimeForEnvironment(environmentId, 'terminal.close', { terminal: targetHandle })
     } catch {
       // Best-effort parity with local disconnect/kill.
     }
@@ -1055,8 +1112,12 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
-  return {
+  const transport: PtyTransport = {
     async connect(options) {
+      cancelTerminalCreateRetryWait()
+      const connectLifecycleEpoch = ++lifecycleEpoch
+      const createEnvironmentId = currentRuntimeEnvironmentId
+      lastConnectOptions = options
       storedCallbacks = options.callbacks
       recoveryRequiresReplacement = false
       terminalEnded = false
@@ -1080,35 +1141,50 @@ export function createRemoteRuntimePtyTransport(
         const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
         const launchTokenToSend = options.launchToken ?? launchToken
         const launchAgentToSend = options.launchAgent ?? launchAgent
-        const created = await createTerminalWithUnknownOutcomeRecovery({
-          worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
-          clientMutationId: terminalCreateMutationId,
-          ...(commandToSend !== undefined ? { command: commandToSend } : {}),
-          ...(startupCommandDeliveryToSend !== undefined
-            ? { startupCommandDelivery: startupCommandDeliveryToSend }
-            : {}),
-          ...(envToSend !== undefined ? { env: envToSend } : {}),
-          ...(envToDeleteToSend !== undefined ? { envToDelete: envToDeleteToSend } : {}),
-          ...(launchConfigToSend !== undefined ? { launchConfig: launchConfigToSend } : {}),
-          ...(resumeProviderSessionToSend !== undefined
-            ? { resumeProviderSession: resumeProviderSessionToSend }
-            : {}),
-          ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
-          ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
-          ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
-          tabId,
-          leafId,
-          focus: false,
-          // Why: transport backs an already-mounted pane; activation is local state, not permission for remote UI reveal.
-          presentation: 'background',
-          ...(activate === true ? { activate: true } : {})
-        })
-        handle = created.terminal.handle
-        if (destroyed) {
-          // Why: cancelled launch, not a shared session; close the server PTY so rapid tab-open/close does not leak.
-          await closeRemoteTerminal(created.terminal.handle)
+        const created = await createTerminalWithUnknownOutcomeRecovery(
+          {
+            worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
+            clientMutationId: terminalCreateMutationId,
+            ...(commandToSend !== undefined ? { command: commandToSend } : {}),
+            ...(startupCommandDeliveryToSend !== undefined
+              ? { startupCommandDelivery: startupCommandDeliveryToSend }
+              : {}),
+            ...(envToSend !== undefined ? { env: envToSend } : {}),
+            ...(envToDeleteToSend !== undefined ? { envToDelete: envToDeleteToSend } : {}),
+            ...(launchConfigToSend !== undefined ? { launchConfig: launchConfigToSend } : {}),
+            ...(resumeProviderSessionToSend !== undefined
+              ? { resumeProviderSession: resumeProviderSessionToSend }
+              : {}),
+            ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
+            ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
+            ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+            tabId,
+            leafId,
+            focus: false,
+            // Why: transport backs an already-mounted pane; activation is local state, not permission for remote UI reveal.
+            presentation: 'background',
+            ...(activate === true ? { activate: true } : {})
+          },
+          createEnvironmentId,
+          connectLifecycleEpoch
+        )
+        if (!created) {
+          if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
+            connecting = false
+            recovery.markDisconnected()
+          }
           return
         }
+        if (destroyed || lifecycleEpoch !== connectLifecycleEpoch) {
+          if (
+            created.terminal.handle !== handle ||
+            createEnvironmentId !== currentRuntimeEnvironmentId
+          ) {
+            await closeRemoteTerminal(created.terminal.handle, createEnvironmentId)
+          }
+          return
+        }
+        handle = created.terminal.handle
 
         remotePtyId = toRemoteRuntimePtyId(handle, currentRuntimeEnvironmentId)
         connected = true
@@ -1135,8 +1211,9 @@ export function createRemoteRuntimePtyTransport(
           replay: ''
         } satisfies PtyConnectResult
       } catch (error) {
-        if (!destroyed) {
+        if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
           connecting = false
+          recovery.cancel()
           storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
           emitRecoveryState()
         }
@@ -1145,6 +1222,8 @@ export function createRemoteRuntimePtyTransport(
     },
 
     attach(options) {
+      lifecycleEpoch += 1
+      cancelTerminalCreateRetryWait()
       recovery.cancel()
       recoveryRequiresReplacement = false
       clearPublishedHandleWait()
@@ -1188,6 +1267,7 @@ export function createRemoteRuntimePtyTransport(
     },
 
     disconnect() {
+      lifecycleEpoch += 1
       cancelTerminalCreateRetryWait()
       recovery.cancel()
       recoveryRequiresReplacement = false
@@ -1215,6 +1295,7 @@ export function createRemoteRuntimePtyTransport(
     },
 
     detach() {
+      lifecycleEpoch += 1
       cancelTerminalCreateRetryWait()
       recovery.cancel()
       recoveryRequiresReplacement = false
@@ -1325,6 +1406,19 @@ export function createRemoteRuntimePtyTransport(
 
     retryRecovery() {
       if (
+        !destroyed &&
+        !terminalEnded &&
+        !connected &&
+        !handle &&
+        terminalCreateNeedsReconciliation &&
+        lastConnectOptions &&
+        recovery.currentPhase === 'disconnected'
+      ) {
+        recovery.begin()
+        void transport.connect(lastConnectOptions)
+        return true
+      }
+      if (
         destroyed ||
         terminalEnded ||
         !connected ||
@@ -1365,4 +1459,5 @@ export function createRemoteRuntimePtyTransport(
       viewportBatcher.clear()
     }
   }
+  return transport
 }

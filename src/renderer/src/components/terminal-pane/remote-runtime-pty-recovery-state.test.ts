@@ -80,4 +80,19 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     expect(state.isCurrent(firstEpoch)).toBe(false)
     expect(state.isCurrent(manualEpoch)).toBe(true)
   })
+
+  it('cancels scheduled work when a caller reaches its own recovery cutoff', async () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    const retry = vi.fn()
+    const epoch = state.begin()
+    state.schedule(epoch, retry)
+
+    state.markDisconnected()
+    await vi.runAllTimersAsync()
+
+    expect(state.currentPhase).toBe('disconnected')
+    expect(state.isCurrent(epoch)).toBe(false)
+    expect(retry).not.toHaveBeenCalled()
+  })
 })

@@ -89,6 +89,15 @@ export class RemoteRuntimePtyRecoveryState {
     this.onChange?.()
   }
 
+  markDisconnected(): void {
+    if (this.phase === 'disposed') {
+      return
+    }
+    this.clearTimers()
+    this.phase = 'disconnected'
+    this.onChange?.()
+  }
+
   cancel(): void {
     if (this.phase === 'disposed') {
       return
