@@ -10,6 +10,9 @@ const fetchIssue = vi.fn()
 const fetchLinearIssue = vi.fn()
 const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
+const hoverCardState = vi.hoisted(() => ({
+  onOpenChange: undefined as ((open: boolean) => void) | undefined
+}))
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let root: Root | null = null
@@ -52,6 +55,21 @@ vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+}))
+
+vi.mock('@/components/ui/hover-card', () => ({
+  HoverCard: ({
+    children,
+    onOpenChange
+  }: {
+    children: ReactNode
+    onOpenChange?: (open: boolean) => void
+  }) => {
+    hoverCardState.onOpenChange = onOpenChange
+    return <>{children}</>
+  },
+  HoverCardContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  HoverCardTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -137,6 +155,7 @@ describe('WorktreeCard hosted review refresh', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    hoverCardState.onOpenChange = undefined
     worktreeCardProperties = ['status']
     container = document.createElement('div')
     document.body.appendChild(container)
@@ -233,5 +252,29 @@ describe('WorktreeCard hosted review refresh', () => {
     })
 
     expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes coordinator-owned GitHub review details on demand when status is hidden', async () => {
+    worktreeCardProperties = []
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    act(() => {
+      root?.render(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeGitHubRepo()}
+          isActive={false}
+          coordinatedGitHubRefresh
+        />
+      )
+    })
+
+    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
+
+    act(() => {
+      hoverCardState.onOpenChange?.(true)
+    })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(1)
   })
 })

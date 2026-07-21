@@ -673,12 +673,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
       isFolder ||
       worktree.isBare ||
       !hostedReviewCacheKey ||
-      usesCoordinatedGitHubRefresh ||
       isMacAppDataPath(repo.path)
     ) {
       return
     }
-    // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
+    // Why: the list coordinator excludes hidden metadata; keep this one-shot
+    // hover refresh card-owned without restoring background polling.
     void fetchHostedReviewForBranch(repo.path, branch, {
       repoId: repo.id,
       linkedGitHubPR: worktree.linkedPR ?? null,
@@ -708,8 +708,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linkedGiteaPR,
     fetchHostedReviewForBranch,
     branch,
-    hostedReviewCacheKey,
-    usesCoordinatedGitHubRefresh
+    hostedReviewCacheKey
   ])
 
   // Why: same as above for issues — hidden-surface polling only burns GitHub calls for invisible data.
