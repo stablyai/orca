@@ -51,6 +51,7 @@ type Props<T extends WorktreeListRowItem> = {
   // When the list is already grouped under this repo's section header, the row
   // omits its own repo icon+name to avoid the redundant "📁 orca" on every row.
   hideRepo?: boolean
+  showAgents?: boolean
   status: WorktreeRollupStatus
   onPress: (item: T) => void
   onLongPress?: (item: T) => void
@@ -67,7 +68,8 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
   status,
   onPress,
   onLongPress,
-  onToggleLineage
+  onToggleLineage,
+  showAgents = true
 }: Props<T>) {
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
   const folderMeta = item.comment?.trim() || item.path || 'Folder'
@@ -164,7 +166,7 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
         </View>
         {/* Only agents get a secondary activity line, matching desktop. A plain
             terminal's shell-output tail is intentionally not surfaced here. */}
-        {item.agents && item.agents.length > 0 ? (
+        {showAgents && item.agents && item.agents.length > 0 ? (
           <WorktreeAgentList agents={item.agents} now={now} unvisited={item.unread} />
         ) : null}
         {lineageChildCount > 0 && onToggleLineage ? (
