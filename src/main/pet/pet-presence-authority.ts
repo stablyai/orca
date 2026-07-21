@@ -12,6 +12,7 @@ import {
   type PetEdge,
   type PetPoint,
   type PetPresence,
+  type PetPresenceSnapshot,
   type PetSurface,
   type PetSurfaceKind
 } from '../../shared/pet-presence'
@@ -35,11 +36,6 @@ import {
 /** How often stale surfaces are swept. Comfortably under SURFACE_STALE_AFTER_MS
  *  so a dead surface is noticed well before a full stale window has passed. */
 const RECONCILE_INTERVAL_MS = 5_000
-
-type PetPresenceSnapshot = {
-  presence: PetPresence
-  surfaces: PetSurface[]
-}
 
 type PresenceListener = (snapshot: PetPresenceSnapshot) => void
 

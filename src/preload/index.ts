@@ -1,6 +1,12 @@
 /* eslint-disable max-lines -- Why: the preload bridge is the audited contract between
 renderer and Electron. Keeping the IPC surface co-located in one file makes security
 review and type drift checks easier than scattering these bindings across modules. */
+import type {
+  PetEdge,
+  PetPoint,
+  PetPresenceSnapshot,
+  PetSurfaceKind
+} from '../shared/pet-presence'
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
@@ -2287,6 +2293,25 @@ const api = {
     freshnessInventory: (): Promise<SkillFreshnessInventory> =>
       ipcRenderer.invoke('skills:freshnessInventory')
   },
+
+  petPresence: {
+    get: () => ipcRenderer.invoke('petPresence:get'),
+    registerSurface: (surfaceId: string, kind: PetSurfaceKind) =>
+      ipcRenderer.invoke('petPresence:registerSurface', surfaceId, kind),
+    removeSurface: (surfaceId: string) =>
+      ipcRenderer.invoke('petPresence:removeSurface', surfaceId),
+    reportExit: (surfaceId: string, edge: PetEdge, position: PetPoint) =>
+      ipcRenderer.invoke('petPresence:reportExit', surfaceId, edge, position),
+    acknowledgeEntry: (surfaceId: string) =>
+      ipcRenderer.invoke('petPresence:acknowledgeEntry', surfaceId),
+    claim: (surfaceId: string) => ipcRenderer.invoke('petPresence:claim', surfaceId),
+    onChanged: (callback: (snapshot: PetPresenceSnapshot) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, snapshot: PetPresenceSnapshot): void =>
+        callback(snapshot)
+      ipcRenderer.on('petPresence:changed', listener)
+      return () => ipcRenderer.removeListener('petPresence:changed', listener)
+    }
+  } satisfies PreloadApi['petPresence'],
 
   pet: {
     import: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:import'),

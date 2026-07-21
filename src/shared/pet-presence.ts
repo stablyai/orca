@@ -29,6 +29,12 @@ export type PetSurface = {
 
 export type PetEdge = 'left' | 'right' | 'top' | 'bottom'
 
+/** What every client reads: who holds the pet, and which surfaces exist. */
+export type PetPresenceSnapshot = {
+  presence: PetPresence
+  surfaces: PetSurface[]
+}
+
 /** Normalized position within whichever surface currently holds the pet. */
 export type PetPoint = { x: number; y: number }
 

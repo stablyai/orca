@@ -1,5 +1,11 @@
 /* eslint-disable max-lines -- Why: the preload contract is intentionally centralized in one declaration file so renderer and preload stay in lockstep when IPC surfaces change. */
 import type {
+  PetEdge,
+  PetPoint,
+  PetPresenceSnapshot,
+  PetSurfaceKind
+} from '../shared/pet-presence'
+import type {
   CreateHostedReviewArgs,
   CreateHostedReviewResult,
   HostedReviewCreationEligibility,
@@ -2338,6 +2344,21 @@ export type PreloadApi = {
   skills: {
     discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
     freshnessInventory: () => Promise<SkillFreshnessInventory>
+  }
+  petPresence: {
+    get: () => Promise<PetPresenceSnapshot>
+    /** Register or heartbeat this window as a pet surface. */
+    registerSurface: (surfaceId: string, kind: PetSurfaceKind) => Promise<PetPresenceSnapshot>
+    removeSurface: (surfaceId: string) => Promise<void>
+    /** Ask the authority to hand the pet on; ignored unless this surface holds it. */
+    reportExit: (
+      surfaceId: string,
+      edge: PetEdge,
+      position: PetPoint
+    ) => Promise<PetPresenceSnapshot>
+    acknowledgeEntry: (surfaceId: string) => Promise<PetPresenceSnapshot>
+    claim: (surfaceId: string) => Promise<PetPresenceSnapshot>
+    onChanged: (callback: (snapshot: PetPresenceSnapshot) => void) => () => void
   }
   pet: {
     import: () => Promise<CustomPet | null>

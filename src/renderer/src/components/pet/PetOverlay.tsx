@@ -15,6 +15,7 @@ import { buildSpriteAnimationCss } from './sprite-animation-css'
 import { PetBubble } from './pet-bubble'
 import { clampPositionToViewport, type Position } from './pet-roam'
 import { usePetRoam } from './usePetRoam'
+import { usePetPresence, usePetSurfaceSync } from './use-pet-presence'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -301,7 +302,7 @@ function defaultPosition(size: number = SIZE): Position {
 // out of i18n so translated locales cannot invalidate the keyframes.
 const PET_BOB_KEYFRAMES_CSS =
   '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
-export function PetOverlay(): React.JSX.Element {
+export function PetOverlay(): React.JSX.Element | null {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
   const { url, sprite, detected } = usePetUrl()
@@ -353,10 +354,18 @@ export function PetOverlay(): React.JSX.Element {
     () => Object.values(agentStatusByPaneKey),
     [agentStatusByPaneKey]
   )
-  // Why: roam only when the document is visible and motion is allowed — matches
-  // sprite/bob pause rules so a hidden tab does not burn rAF.
+  // P2 presence: this window is one surface among several (other windows,
+  // popouts, the phone). The authority decides who holds the pet; we only
+  // register, report edges, and draw when told.
+  const presence = usePetPresence(true)
+
+  // Why roam is gated on holding the pet: a window that does not hold it must
+  // not be simulating a second pet in the background, or the two would drift
+  // apart and the "one creature" illusion breaks the moment it comes back.
+  // Also unchanged: roam only when the document is visible and motion is
+  // allowed, matching sprite/bob pause rules so a hidden tab does not burn rAF.
   usePetRoam({
-    enabled: motionAllowed,
+    enabled: motionAllowed && presence.holdsPet,
     position,
     setPosition,
     size,
@@ -365,6 +374,8 @@ export function PetOverlay(): React.JSX.Element {
     now: Date.now,
     staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
   })
+
+  usePetSurfaceSync({ presence, position, size, dragging, setPosition })
 
   useEffect(() => {
     const onResize = (): void => setPosition((prev) => clampToViewport(prev, size))
@@ -388,6 +399,13 @@ export function PetOverlay(): React.JSX.Element {
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
   const bobAnimate = motionAllowed && !dragging
   const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
+
+  // The pet is exclusive: when the authority says another surface holds it,
+  // this window renders nothing. That is what makes it read as one creature
+  // that walked away, rather than a copy that blinked out.
+  if (!presence.holdsPet) {
+    return null
+  }
 
   return (
     // Why: the outer box and middle layer stay pointer-events-none so app chrome
