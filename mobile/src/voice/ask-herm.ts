@@ -13,13 +13,21 @@
 
 import { MESH_VOICE_BASE_URL } from './mesh-voice-turn'
 
-// Default arm = live B arm, matching config.yaml's delegation default. A2c
-// makes this settings-configurable alongside the STT/TTS endpoints.
-const HERM_MODEL = 'Qwopus3.6-27B-Coder-Compat-MTP-Q4_K_M.gguf'
+// Default arm = LFM on D's iGPU. Two reasons: "what's running on this host" is a
+// compressive fold over a short list, which is exactly the hybrid-attention
+// lane per HERMES.md memory-class routing; and it is the fastest arm, which
+// matters when a human is holding a button waiting to hear a voice. Measured
+// 2026-07-21: ~5.3s to a correct spoken answer. A2c makes this configurable.
+const HERM_MODEL = 'LFM2.5-8B-A1B-Q4_0.gguf'
 
-// Spoken answers get read aloud in full, so cap length hard — a wall of text is
-// a minute of talking at the user.
-const MAX_ANSWER_TOKENS = 160
+// RECEIPT 2026-07-21: this budget must cover the arm's REASONING phase plus the
+// answer, not just the answer. Every Config A arm (Qwopus, Gemma, LFM) emits
+// chain-of-thought into `reasoning_content` first; at max_tokens 160 all three
+// returned an EMPTY `content` because the budget ran out mid-reasoning, which
+// would have failed this feature 100% of the time on the phone. At 700 the same
+// question answers in 334 completion tokens with finish_reason 'stop'. Do not
+// lower this to "keep spoken answers short" — the system prompt does that.
+const MAX_ANSWER_TOKENS = 700
 
 export type HermWorkspaceContext = {
   hostName: string
@@ -84,7 +92,12 @@ export async function askHerm(
   // chain-of-thought in `reasoning_content`. Never speak reasoning_content.
   const answer = body.choices?.[0]?.message?.content?.trim()
   if (!answer) {
-    throw new Error('Herm returned no answer')
+    // Why this exact wording: an empty `content` with a populated
+    // `reasoning_content` means the arm spent the whole budget thinking. That
+    // is a token-budget symptom, not a network one, and saying so saves the
+    // next person the probe that found it. Never fall back to speaking
+    // `reasoning_content` — that is chain-of-thought, not an answer.
+    throw new Error('Herm ran out of tokens before answering')
   }
   return answer
 }
