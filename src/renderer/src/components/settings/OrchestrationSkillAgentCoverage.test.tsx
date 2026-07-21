@@ -16,6 +16,17 @@ describe('OrchestrationSkillAgentCoverage', () => {
     const markup = renderToStaticMarkup(
       <OrchestrationSkillAgentCoverage
         loading={false}
+        sources={[
+          {
+            id: 'claude-home',
+            label: 'Claude home',
+            path: '/Users/test/.claude/skills',
+            sourceKind: 'home',
+            providers: ['claude'],
+            owner: 'claude',
+            exists: true
+          }
+        ]}
         skills={[
           {
             id: 'claude-skill',

@@ -66,6 +66,7 @@ export function OrchestrationPane(): React.JSX.Element {
     loading: orchestrationSkillLoading,
     error: orchestrationSkillError,
     skills: discoveredSkills,
+    sources: discoveredSkillSources,
     refresh: refreshOrchestrationSkill
   } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -150,6 +151,7 @@ export function OrchestrationPane(): React.JSX.Element {
           <OrchestrationSkillAgentCoverage
             embedded
             skills={discoveredSkills}
+            sources={discoveredSkillSources}
             loading={orchestrationSkillLoading}
           />
         }

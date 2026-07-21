@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
+  SkillDiscoverySource,
   SkillDiscoveryTarget,
   SkillSourceKind
 } from '../../../shared/skills'
@@ -29,6 +30,7 @@ export type InstalledAgentSkillState = {
   loading: boolean
   error: string | null
   skills: readonly DiscoveredSkill[]
+  sources: readonly SkillDiscoverySource[]
   refresh: () => Promise<boolean>
 }
 
@@ -304,6 +306,10 @@ export function useInstalledAgentSkillNames(
     () => (enabled && resultForRender ? resultForRender.skills : []),
     [enabled, resultForRender]
   )
+  const sources = useMemo(
+    () => (enabled && resultForRender ? resultForRender.sources : []),
+    [enabled, resultForRender]
+  )
 
   const installed = useMemo(
     () =>
@@ -326,6 +332,7 @@ export function useInstalledAgentSkillNames(
     loading: loadingForRender,
     error: errorForRender,
     skills,
+    sources,
     refresh: forceRefresh
   }
 }
