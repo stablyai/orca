@@ -9,6 +9,7 @@ let accountsSubscriptionSeq = 0
 
 const CodexResetTarget = z.discriminatedUnion('runtime', [
   z.object({ runtime: z.literal('host'), wslDistro: z.null() }).strict(),
+  // Why: reset scope must identify one exact WSL distro; null means all slots only for selection.
   z.object({ runtime: z.literal('wsl'), wslDistro: z.string().trim().min(1).max(255) }).strict()
 ])
 
@@ -50,7 +51,7 @@ const ConsumeCodexResetCreditParams = z
   .object({
     // Why: the phone owns the logical attempt key so a lost response can be
     // retried without spending a finite earned credit twice.
-    idempotencyKey: z.string().uuid('Invalid idempotencyKey'),
+    idempotencyKey: z.uuid('Invalid idempotencyKey'),
     expectedScope: CodexResetExpectedScope
   })
   .strict()

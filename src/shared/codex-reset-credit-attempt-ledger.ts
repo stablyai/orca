@@ -19,14 +19,14 @@ const CodexResetCreditExpectedScopeSchema = z
 const DurableCodexResetCreditAttemptSchema = z.discriminatedUnion('state', [
   z
     .object({
-      idempotencyKey: z.string().uuid(),
+      idempotencyKey: z.uuid(),
       expectedScope: CodexResetCreditExpectedScopeSchema,
       state: z.literal('providerPending')
     })
     .strict(),
   z
     .object({
-      idempotencyKey: z.string().uuid(),
+      idempotencyKey: z.uuid(),
       expectedScope: CodexResetCreditExpectedScopeSchema,
       state: z.literal('settled'),
       outcome: z.enum(['reset', 'nothingToReset', 'noCredit', 'alreadyRedeemed'])

@@ -11,7 +11,11 @@ import type { TerminalQuickCommand } from '../../src/shared/types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'
-import { FAKE_SCROLLBACK, STREAMING_CHUNKS } from './mock-server-terminal-fixtures'
+import {
+  createMockTerminals,
+  FAKE_SCROLLBACK,
+  STREAMING_CHUNKS
+} from './mock-server-terminal-fixtures'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
 const MOCK_REPO_COUNT = readScenarioNumber('MOCK_REPO_COUNT', 2)
@@ -42,22 +46,7 @@ let fakeQuickCommands: TerminalQuickCommand[] = [
   }
 ]
 
-const FAKE_TERMINALS = [
-  {
-    handle: 'term-1',
-    worktreeId: fakeWorktrees[0]?.worktreeId ?? 'repo-1::/tmp/orca-mobile-repro/orca',
-    title: 'Claude — auth refactor',
-    isActive: true,
-    hasRunningProcess: true
-  },
-  {
-    handle: 'term-2',
-    worktreeId: fakeWorktrees[0]?.worktreeId ?? 'repo-1::/tmp/orca-mobile-repro/orca',
-    title: 'zsh',
-    isActive: false,
-    hasRunningProcess: false
-  }
-]
+const FAKE_TERMINALS = createMockTerminals(fakeWorktrees[0]?.worktreeId)
 
 export type RpcRequest = {
   id: string

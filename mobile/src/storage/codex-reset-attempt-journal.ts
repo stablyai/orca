@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { CodexResetCreditExpectedScope } from '../../../src/shared/codex-reset-credit-scope'
 
 const STORAGE_PREFIX = 'orca:codex-reset-credit-attempt:v1:'
-const IdempotencyKeySchema = z.string().uuid()
+const IdempotencyKeySchema = z.uuid()
 
 export const CodexResetCreditExpectedScopeSchema = z
   .object({

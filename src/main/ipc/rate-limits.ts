@@ -12,6 +12,7 @@ export function registerRateLimitHandlers(
   ipcMain.handle('rateLimits:refreshCodexForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshCodexForTarget(target)
   )
+  // Why: managed desktop resets must share the mobile mutation queue and durable ledger.
   ipcMain.handle('rateLimits:consumeCodexResetCredit', () =>
     codexAccounts.consumeCurrentRateLimitResetCredit()
   )
