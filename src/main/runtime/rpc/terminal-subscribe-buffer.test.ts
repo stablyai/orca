@@ -80,7 +80,7 @@ describe('terminal subscribe buffering', () => {
     }
   })
 
-  it('captures live queries before awaiting mobile fit and delivers them after the snapshot', async () => {
+  it('replays boundary-spanning queries without corrupting residual output metadata', async () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const cleanups = new Map<string, () => void>()
     let dataListener:
@@ -105,7 +105,7 @@ describe('terminal subscribe buffering', () => {
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
       serializeTerminalBuffer: vi
         .fn()
-        .mockResolvedValue({ data: 'snapshot', cols: 80, rows: 24, seq: 4 }),
+        .mockResolvedValue({ data: 'snapshot', cols: 80, rows: 24, seq: 2 }),
       getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
       getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
       getLayout: vi.fn().mockReturnValue({ seq: 1 }),
@@ -142,7 +142,7 @@ describe('terminal subscribe buffering', () => {
     await vi.waitFor(() => expect(runtime.handleMobileSubscribe).toHaveBeenCalled())
     expect(dataListener).toBeDefined()
     expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith('pty-1')
-    dataListener?.('\x1b[6n', { seq: 4, rawLength: 4 })
+    dataListener?.('\x1b[6nafter', { seq: 9, rawLength: 9 })
     resolveMobileSubscribe()
 
     await vi.waitFor(() =>
@@ -151,7 +151,7 @@ describe('terminal subscribe buffering', () => {
           const frame = decodeTerminalStreamFrame(bytes)
           return (
             frame?.opcode === TerminalStreamOpcode.Output &&
-            decodeTerminalStreamText(frame.payload) === '\x1b[6n'
+            decodeTerminalStreamText(frame.payload) === '\x1b[6nafter'
           )
         })
       ).toBe(true)
@@ -160,7 +160,7 @@ describe('terminal subscribe buffering', () => {
       const frame = decodeTerminalStreamFrame(bytes)
       return (
         frame?.opcode === TerminalStreamOpcode.Output &&
-        decodeTerminalStreamText(frame.payload) === '\x1b[6n'
+        decodeTerminalStreamText(frame.payload) === '\x1b[6nafter'
       )
     })
     expect(queryOutputFrames).toHaveLength(1)

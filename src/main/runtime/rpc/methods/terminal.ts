@@ -421,6 +421,17 @@ function stripSnapshotBoundaryQuerySuffixes(
   return output + data.slice(offset)
 }
 
+// 剥离查询字节后，普通残余需按实际数据重对齐，避免被误编码为 OutputSpan。
+function realignResidualOutputMeta(
+  data: string,
+  meta: TerminalOutputMeta | undefined
+): TerminalOutputMeta | undefined {
+  if (!meta || meta.transformed) {
+    return meta
+  }
+  return { ...meta, rawLength: data.length }
+}
+
 function appendAckPendingOutput(
   stream: TerminalMultiplexStream,
   chunk: TerminalOutputFrameChunk
@@ -3119,7 +3130,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         if (!initialOutputOverflowed) {
           for (const item of bufferedOutput) {
             let uncoveredData = getOutputAfterSnapshotSeq(item, snapshotOutputSeq)
-            let uncoveredMeta = item.meta
             if (
               uncoveredData &&
               uncoveredData !== item.data &&
@@ -3127,9 +3137,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               typeof item.meta?.seq === 'number' &&
               typeof item.meta.rawLength === 'number'
             ) {
-              if (item.meta.rawLength === item.data.length) {
-                uncoveredMeta = { ...item.meta, rawLength: uncoveredData.length }
-              }
               uncoveredData = stripSnapshotBoundaryQuerySuffixes(
                 uncoveredData,
                 snapshotOutputSeq,
@@ -3138,7 +3145,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               )
             }
             if (uncoveredData) {
-              outputBatcher.push(uncoveredData, uncoveredMeta)
+              outputBatcher.push(uncoveredData, realignResidualOutputMeta(uncoveredData, item.meta))
             }
           }
         }
