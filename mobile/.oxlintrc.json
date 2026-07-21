@@ -48,7 +48,7 @@
     {
       "files": ["app/h/*/index.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 1603, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 1608, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

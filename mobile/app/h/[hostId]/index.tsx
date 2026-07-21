@@ -48,7 +48,8 @@ import {
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
-import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
+import { FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
+import { HostFabRow } from '../../../src/components/HostFabRow'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
@@ -1281,9 +1282,14 @@ export function HostScreen({
         />
       )}
 
-      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
       {!embedded && (
-        <NewWorkspaceFab onPress={openNewWorktreeModal} disabled={connState !== 'connected'} />
+        <HostFabRow
+          client={client}
+          hostName={hostName}
+          worktrees={worktrees}
+          connected={connState === 'connected'}
+          onNewWorkspace={openNewWorktreeModal}
+        />
       )}
 
       <PickerModal
