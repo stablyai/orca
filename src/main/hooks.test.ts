@@ -1486,6 +1486,33 @@ describe('resolveSetupRunnerShell', () => {
       executable: 'C:\\Program Files\\Git\\bin\\bash.exe'
     })
   })
+
+  it('does not probe local pwsh for remote targets and keeps powershell.exe for auto', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    // Why: a remote/SSH Windows worktree runs the runner on the remote host, so local pwsh
+    // presence must not upgrade the auto default to a pwsh.exe the remote may lack.
+    expect(
+      resolveSetupRunnerShell({ terminalWindowsShell: 'powershell.exe' }, 'win32', {
+        probeLocalPwsh: false
+      })
+    ).toEqual({ family: 'powershell', executable: 'powershell.exe' })
+  })
+
+  it('still honors an explicit pwsh.exe implementation for remote targets', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(
+      resolveSetupRunnerShell(
+        {
+          terminalWindowsShell: 'powershell.exe',
+          terminalWindowsPowerShellImplementation: 'pwsh.exe'
+        },
+        'win32',
+        { probeLocalPwsh: false }
+      )
+    ).toEqual({ family: 'powershell', executable: 'pwsh.exe' })
+  })
 })
 
 describe('shouldRunSetupForCreate', () => {

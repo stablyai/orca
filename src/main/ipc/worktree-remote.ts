@@ -1940,7 +1940,9 @@ export async function createRemoteWorktree(
             fsProvider,
             resolveSetupRunnerShell(
               settings,
-              isWindowsAbsolutePathLike(created.path) ? 'win32' : 'linux'
+              isWindowsAbsolutePathLike(created.path) ? 'win32' : 'linux',
+              // Why: the runner runs on the remote host, so don't let local pwsh presence pick pwsh.exe.
+              { probeLocalPwsh: false }
             )
           )
         } catch (error) {

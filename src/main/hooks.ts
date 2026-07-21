@@ -411,7 +411,9 @@ export function buildWindowsRunnerScript(script: string): string {
 }
 
 export function buildPowerShellRunnerScript(script: string): string {
-  let runnerScript = "$ErrorActionPreference = 'Stop'\r\n"
+  // Why: Windows PowerShell 5.1 (the default powershell.exe) decodes BOM-less files as ANSI and
+  // mangles non-ASCII in the setup script; a UTF-8 BOM makes both 5.1 and pwsh 7 read it as UTF-8.
+  let runnerScript = "\uFEFF$ErrorActionPreference = 'Stop'\r\n"
 
   for (const rawLine of iterateLfScriptLines(script)) {
     const command = rawLine.trim()
@@ -420,10 +422,12 @@ export function buildPowerShellRunnerScript(script: string): string {
       continue
     }
 
+    // Why: check the native exit code before $? so a failing native command surfaces its exact code;
+    // $? still catches cmdlet soft-failures (-ErrorAction SilentlyContinue) that leave LASTEXITCODE 0.
     runnerScript +=
       `$global:LASTEXITCODE = 0\r\n${command}\r\n` +
-      `if (-not $?) { exit 1 }\r\n` +
-      `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\r\n`
+      `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\r\n` +
+      `if (-not $?) { exit 1 }\r\n`
   }
 
   return runnerScript
@@ -574,7 +578,8 @@ function createWorktreeRunnerScript(
 
 export function resolveSetupRunnerShell(
   settings: SetupRunnerShellSettings,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  options?: { probeLocalPwsh?: boolean }
 ): SetupRunnerShell | undefined {
   if (platform !== 'win32') {
     return undefined
@@ -606,10 +611,15 @@ export function resolveSetupRunnerShell(
     implementationValue === 'pwsh.exe'
       ? implementationValue
       : undefined
-  const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
-    shellFamily,
-    implementation
-  })
+  // Why: isPwshAvailable() probes the LOCAL host; for a remote/SSH Windows target that presence
+  // says nothing about the remote, so callers pass probeLocalPwsh:false to keep the always-present
+  // powershell.exe default (auto) rather than routing to a pwsh.exe the remote may not have.
+  const shouldProbePwsh =
+    (options?.probeLocalPwsh ?? true) &&
+    shouldProbeWindowsPowerShellAvailability({
+      shellFamily,
+      implementation
+    })
   const executable =
     resolveEffectiveWindowsPowerShell({
       shellFamily,
