@@ -193,8 +193,11 @@ function expectTabContainerWidth(markup: string, root: string): void {
   // without this assertion drifting; width lives on the wrapper, never the root.
   const widthClasses = getTabContainerWidthClasses()
   expect(container).toContain(widthClasses)
-  expect(root).not.toContain('max-w-[280px]')
-  expect(root).not.toContain('flex-[1_1_180px]')
+  // Why: assert every width class (incl. min-w) is absent from the root so a
+  // regression that moves any of them off the wrapper can't slip through.
+  for (const widthClass of widthClasses.split(' ')) {
+    expect(root).not.toContain(widthClass)
+  }
 }
 
 function expectTooltipContent(markup: string, text: string): void {
