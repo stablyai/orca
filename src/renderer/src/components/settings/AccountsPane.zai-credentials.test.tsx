@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { AccountsPane } from './AccountsPane'
@@ -73,5 +73,26 @@ describe('AccountsPane Z.ai credentials', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Forget key' })).toBeNull()
     expect(input).toHaveValue('')
+  })
+
+  it('does not let a stale initial status overwrite a successful save', async () => {
+    let resolveInitialStatus: ((status: { configured: boolean }) => void) | undefined
+    getStatus.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveInitialStatus = resolve
+      })
+    )
+    const user = userEvent.setup()
+    render(<AccountsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
+
+    await user.type(screen.getByPlaceholderText('Enter API key'), 'test-zai-key-not-secret')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeVisible()
+
+    await act(async () => {
+      resolveInitialStatus?.({ configured: false })
+    })
+
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeVisible()
   })
 })

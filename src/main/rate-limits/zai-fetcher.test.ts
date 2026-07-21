@@ -82,7 +82,7 @@ describe('fetchZaiRateLimits', () => {
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 
-  it('sends the exact Authorization header without a Bearer prefix', async () => {
+  it('sends the API key with the provider-documented Bearer scheme', async () => {
     netFetchMock.mockResolvedValueOnce(
       makeResponse(makeQuotaPayload([{ type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 12 }]))
     )
@@ -92,10 +92,9 @@ describe('fetchZaiRateLimits', () => {
       expect.objectContaining({
         method: 'GET',
         redirect: 'error',
-        headers: expect.objectContaining({ Authorization: 'glm-key' })
+        headers: expect.objectContaining({ Authorization: 'Bearer glm-key' })
       })
     )
-    expect(netFetchMock.mock.calls[0][1].headers.Authorization).not.toContain('Bearer')
   })
 
   it('parses realistic data.limits entries with type and exact numeric reset epochs', async () => {
@@ -175,7 +174,13 @@ describe('fetchZaiRateLimits', () => {
         code: 200,
         data: {
           limits: [
-            { type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 10, nextResetTime: 12345 }
+            {
+              type: 'TOKENS_LIMIT',
+              unit: 3,
+              number: 5,
+              percentage: 10,
+              nextResetTime: 1_784_199_600
+            }
           ]
         }
       })
@@ -184,7 +189,38 @@ describe('fetchZaiRateLimits', () => {
     const result = await fetchZaiRateLimits({ apiKey: 'glm-key' })
 
     expect(result.status).toBe('ok')
-    expect(result.session?.resetsAt).toBe(12345)
+    expect(result.session?.resetsAt).toBe(1_784_199_600_000)
+  })
+
+  it('accepts the alternate weekly number used by newer quota payloads', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse(
+        makeQuotaPayload([
+          { type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 10 },
+          { type: 'TOKENS_LIMIT', unit: 6, number: 7, percentage: 25 }
+        ])
+      )
+    )
+
+    const result = await fetchZaiRateLimits({ apiKey: 'glm-key' })
+
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(25)
+    expect(result.weekly?.windowMinutes).toBe(10080)
+  })
+
+  it('ignores non-positive reset epochs', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse(
+        makeQuotaPayload([
+          { type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 10, nextResetTime: -1 }
+        ])
+      )
+    )
+
+    const result = await fetchZaiRateLimits({ apiKey: 'glm-key' })
+
+    expect(result.session?.resetsAt).toBeNull()
   })
 
   it.each([
@@ -238,14 +274,17 @@ describe('fetchZaiRateLimits', () => {
     expect(result.usageMetadata?.failureKind).toBe('network')
   })
 
-  it.each([null, 42, 'oops'])('maps non-object JSON payload %j to parse failures', async (body) => {
-    netFetchMock.mockResolvedValueOnce(makeResponse(body))
+  it.each([null, 42, 'oops', []])(
+    'maps non-object JSON payload %j to parse failures',
+    async (body) => {
+      netFetchMock.mockResolvedValueOnce(makeResponse(body))
 
-    const result = await fetchZaiRateLimits({ apiKey: 'glm-key' })
+      const result = await fetchZaiRateLimits({ apiKey: 'glm-key' })
 
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('parse')
-  })
+      expect(result.status).toBe('error')
+      expect(result.usageMetadata?.failureKind).toBe('parse')
+    }
+  )
 
   it('maps unsuccessful payloads to usage-unavailable', async () => {
     netFetchMock.mockResolvedValueOnce(
@@ -257,6 +296,23 @@ describe('fetchZaiRateLimits', () => {
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
     expect(result.error).toBe('Z.ai usage data is currently unavailable')
+  })
+
+  it.each([
+    [401, 'stale-token'],
+    ['403', 'stale-token'],
+    [429, 'rate-limited'],
+    [503, 'server']
+  ] as const)('maps business code %s to %s when HTTP status is 200', async (code, failureKind) => {
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse({ code, success: code === 401, msg: 'remote error detail' })
+    )
+
+    const result = await fetchZaiRateLimits({ apiKey: 'glm-key' })
+
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe(failureKind)
+    expect(result.error).not.toContain('remote error detail')
   })
 
   it('never propagates the remote usage-unavailable message to renderer state', async () => {
@@ -277,9 +333,12 @@ describe('fetchZaiRateLimits', () => {
   })
 
   it('maps network failures to network', async () => {
-    netFetchMock.mockRejectedValueOnce(new Error('socket hang up'))
-    const result = await fetchZaiRateLimits({ apiKey: 'glm-key' })
+    const leakedApiKey = 'glm-secret-key'
+    netFetchMock.mockRejectedValueOnce(new Error(`socket hang up for ${leakedApiKey}`))
+    const result = await fetchZaiRateLimits({ apiKey: leakedApiKey })
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('network')
+    expect(result.error).toBe('Z.ai usage request failed')
+    expect(result.error).not.toContain(leakedApiKey)
   })
 })

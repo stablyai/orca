@@ -4966,7 +4966,22 @@
           "remoteEmptyClaudeAccounts": "{{value0}} に管理対象の Claude アカウントはありません。システム既定の Claude ログインを使用します。アカウントの追加はそのサーバー上で行ってください。",
           "remoteEmptyCodexAccounts": "{{value0}} に管理対象の Codex アカウントはありません。システム既定の Codex ログインを使用します。アカウントの追加はそのサーバー上で行ってください。",
           "codexSystemDefaultCustomProvider": "カスタムプロバイダー — 使用量は追跡されません。",
-          "codexSystemDefaultNeedsSignIn": "{{value0}} の Codex サインインが見つかりません。"
+          "codexSystemDefaultNeedsSignIn": "{{value0}} の Codex サインインが見つかりません。",
+          "zaiRequired": "Z.ai API キーが必要です。",
+          "zaiNotSaved": "Z.ai API キーを保存できませんでした。",
+          "zaiSaved": "Z.ai API キーを保存しました。",
+          "zaiUpdateFailed": "Z.ai API キーを更新できませんでした。",
+          "zaiTitle": "Z.ai GLM",
+          "zaiDescription": "API キーで Z.ai GLM の使用量追跡を設定します。",
+          "openConsole": "コンソールを開く",
+          "zaiApiKeyLabel": "Z.ai API キー",
+          "zaiApiKeyDescription": "ローカルでレート制限を取得する Z.ai API キーを貼り付けます。",
+          "zaiApiKeyPlaceholder": "API キーを入力",
+          "storedLocally": "ローカルに保存済み",
+          "apiKeyNotSet": "API キー未設定",
+          "zaiStoredCopy": "ローカルに保存され、使用量更新のため api.z.ai にのみ送信されます。",
+          "zaiForget": "キーを忘れる",
+          "zaiConsoleCopy": "Z.ai 公式コンソールで API キーを作成または管理します。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",
@@ -7157,7 +7172,9 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "認証",
-            "a9f3d7b5c8": "ログイン"
+            "a9f3d7b5c8": "ログイン",
+            "zaiTitle": "Z.ai GLM 使用量",
+            "zaiDescription": "ローカルでレート制限を取得するための Z.ai API キーを保存します。"
           }
         },
         "advanced": {
@@ -7384,7 +7401,9 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "使用率",
-            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。"
+            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。",
+            "zaiTitle": "Z.ai GLM 使用量",
+            "zaiDescription": "ステータスバーに Z.ai GLM 使用量を表示します。"
           }
         },
         "auto": {

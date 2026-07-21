@@ -4966,7 +4966,22 @@
           "remoteEmptyClaudeAccounts": "{{value0}} 上没有受管理的 Claude 账户。它使用其系统默认的 Claude 登录；请在该服务器上添加账户。",
           "remoteEmptyCodexAccounts": "{{value0}} 上没有受管理的 Codex 账户。它使用其系统默认的 Codex 登录；请在该服务器上添加账户。",
           "codexSystemDefaultCustomProvider": "自定义提供商 — 不跟踪使用情况。",
-          "codexSystemDefaultNeedsSignIn": "未找到 {{value0}} 的 Codex 登录信息。"
+          "codexSystemDefaultNeedsSignIn": "未找到 {{value0}} 的 Codex 登录信息。",
+          "zaiRequired": "需要 Z.ai API 密钥。",
+          "zaiNotSaved": "Z.ai API 密钥未保存。",
+          "zaiSaved": "Z.ai API 密钥已保存。",
+          "zaiUpdateFailed": "Z.ai API 密钥更新失败。",
+          "zaiTitle": "Z.ai GLM",
+          "zaiDescription": "使用 API 密钥配置 Z.ai GLM 用量跟踪。",
+          "openConsole": "打开控制台",
+          "zaiApiKeyLabel": "Z.ai API 密钥",
+          "zaiApiKeyDescription": "粘贴 Z.ai API 密钥以在本地获取速率限制。",
+          "zaiApiKeyPlaceholder": "输入 API 密钥",
+          "storedLocally": "已本地保存",
+          "apiKeyNotSet": "未设置 API 密钥",
+          "zaiStoredCopy": "密钥保存在本地，仅发送到 api.z.ai 用于刷新用量。",
+          "zaiForget": "忘记密钥",
+          "zaiConsoleCopy": "在 Z.ai 官方控制台创建或管理 API 密钥。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -7120,7 +7135,9 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
-            "a9f3d7b5c8": "登录"
+            "a9f3d7b5c8": "登录",
+            "zaiTitle": "Z.ai GLM 用量",
+            "zaiDescription": "保存 Z.ai API 密钥，以便在本地获取速率限制。"
           }
         },
         "advanced": {
@@ -7347,7 +7364,9 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "用量百分比",
-            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。"
+            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。",
+            "zaiTitle": "Z.ai GLM 用量",
+            "zaiDescription": "在状态栏显示 Z.ai GLM 用量。"
           }
         },
         "auto": {

@@ -8,6 +8,7 @@ const WEEKLY_WINDOW_MINUTES = 10080
 const MONTHLY_WINDOW_MINUTES = 43200
 const ZAI_USAGE_UNAVAILABLE_MESSAGE = 'Z.ai usage data is currently unavailable'
 const ZAI_USAGE_PARSE_ERROR_MESSAGE = 'Invalid Z.ai usage response'
+const ZAI_USAGE_NETWORK_ERROR_MESSAGE = 'Z.ai usage request failed'
 
 type ZaiQuotaEntry = {
   quotaType?: unknown
@@ -89,7 +90,7 @@ function asString(value: unknown): string | null {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value))
     : null
 }
@@ -118,7 +119,12 @@ function asQuotaEntries(data: ZaiUsagePayload['data']): ZaiQuotaEntry[] {
 function parseResetTime(value: unknown): number | null {
   const numeric = asNumber(value)
   if (numeric !== null) {
-    return numeric
+    if (numeric <= 0) {
+      return null
+    }
+    // Why: quota payloads in the wild contain both Unix seconds and milliseconds.
+    // Normalizing here prevents valid second epochs from rendering as 1970 dates.
+    return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric
   }
   const text = asString(value)
   if (!text) {
@@ -144,7 +150,8 @@ function parseQuotaWindow(entry: ZaiQuotaEntry): RateLimitWindow | null {
       resetDescription: null
     }
   }
-  if (quotaType === 'TOKENS_LIMIT' && unit === 6 && number === 1) {
+  // Why: weekly payloads use both 1 and 7 for `number`; unit 6 is the stable discriminator.
+  if (quotaType === 'TOKENS_LIMIT' && unit === 6) {
     return {
       usedPercent: clampPercent(percentage),
       windowMinutes: WEEKLY_WINDOW_MINUTES,
@@ -192,24 +199,37 @@ function extractQuotaWindows(payload: ZaiUsagePayload): {
 }
 
 function payloadSucceeded(payload: ZaiUsagePayload): boolean {
-  if (payload.success === true) {
-    return true
-  }
+  const code = asNumber(payload.code)
   if (payload.success === false) {
     return false
   }
-  if (payload.code === 0 || payload.code === '0') {
+  if (code !== null && code !== 0 && code !== 200) {
+    return false
+  }
+  if (payload.success === true) {
     return true
   }
-  if (payload.code === 200 || payload.code === '200') {
+  if (code === 0 || code === 200) {
     return true
   }
   return asQuotaEntries(payload.data).length > 0
 }
 
-function payloadErrorMessage(payload: ZaiUsagePayload): string {
-  void payload
-  return ZAI_USAGE_UNAVAILABLE_MESSAGE
+function payloadFailureKind(
+  payload: ZaiUsagePayload
+): NonNullable<ProviderRateLimits['usageMetadata']>['failureKind'] {
+  // Why: this endpoint reports auth/rate-limit failures as business codes inside HTTP 200.
+  const code = asNumber(payload.code)
+  if (code === 401 || code === 403) {
+    return 'stale-token'
+  }
+  if (code === 429) {
+    return 'rate-limited'
+  }
+  if (code !== null && code >= 500) {
+    return 'server'
+  }
+  return 'usage-unavailable'
 }
 
 export async function fetchZaiRateLimits(
@@ -226,7 +246,7 @@ export async function fetchZaiRateLimits(
     const response = await net.fetch(options.endpoint ?? ZAI_USAGE_ENDPOINT, {
       method: 'GET',
       headers: {
-        Authorization: apiKey,
+        Authorization: `Bearer ${apiKey}`,
         Accept: 'application/json'
       },
       redirect: 'error',
@@ -253,7 +273,12 @@ export async function fetchZaiRateLimits(
       return makeError(ZAI_USAGE_PARSE_ERROR_MESSAGE, 'parse')
     }
     if (!payloadSucceeded(payload)) {
-      return makeError(payloadErrorMessage(payload), 'usage-unavailable')
+      const failureKind = payloadFailureKind(payload)
+      const message =
+        failureKind === 'stale-token'
+          ? 'Z.ai API key expired or unauthorized'
+          : ZAI_USAGE_UNAVAILABLE_MESSAGE
+      return makeError(message, failureKind)
     }
     const windows = extractQuotaWindows(payload)
     if (!windows.session) {
@@ -272,8 +297,9 @@ export async function fetchZaiRateLimits(
       status: 'ok',
       usageMetadata: { source: 'web' }
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown Z.ai usage error'
-    return makeError(message, 'network')
+  } catch {
+    // Why: transport errors are not a trusted renderer boundary and may embed
+    // request context; keep them fixed just like malformed response errors.
+    return makeError(ZAI_USAGE_NETWORK_ERROR_MESSAGE, 'network')
   }
 }

@@ -4981,7 +4981,22 @@
           "remoteEmptyClaudeAccounts": "No hay cuentas de Claude administradas en {{value0}}. Usa su inicio de sesión de Claude predeterminado del sistema; agrega cuentas en ese servidor.",
           "remoteEmptyCodexAccounts": "No hay cuentas de Codex administradas en {{value0}}. Usa su inicio de sesión de Codex predeterminado del sistema; agrega cuentas en ese servidor.",
           "codexSystemDefaultCustomProvider": "Proveedor personalizado — no se registra el uso.",
-          "codexSystemDefaultNeedsSignIn": "No se encontró ningún inicio de sesión de Codex para {{value0}}."
+          "codexSystemDefaultNeedsSignIn": "No se encontró ningún inicio de sesión de Codex para {{value0}}.",
+          "zaiRequired": "Se requiere la clave API de Z.ai.",
+          "zaiNotSaved": "La clave API de Z.ai no se guardó.",
+          "zaiSaved": "Clave API de Z.ai guardada.",
+          "zaiUpdateFailed": "No se pudo actualizar la clave API de Z.ai.",
+          "zaiTitle": "Z.ai GLM",
+          "zaiDescription": "Configura el seguimiento de uso de Z.ai GLM con una clave API.",
+          "openConsole": "Abrir consola",
+          "zaiApiKeyLabel": "Clave API de Z.ai",
+          "zaiApiKeyDescription": "Pega tu clave API de Z.ai para consultar los límites de uso localmente.",
+          "zaiApiKeyPlaceholder": "Ingresa la clave API",
+          "storedLocally": "Guardada localmente",
+          "apiKeyNotSet": "Clave API no configurada",
+          "zaiStoredCopy": "Se guarda localmente y solo se envía a api.z.ai para actualizar el uso.",
+          "zaiForget": "Olvidar clave",
+          "zaiConsoleCopy": "Crea o administra claves API en la consola oficial de Z.ai."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reiniciar",
@@ -7135,7 +7150,9 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
-            "a9f3d7b5c8": "inicio de sesión"
+            "a9f3d7b5c8": "inicio de sesión",
+            "zaiTitle": "Uso de Z.ai GLM",
+            "zaiDescription": "Guarda una clave API de Z.ai para consultar los límites de uso localmente."
           }
         },
         "advanced": {
@@ -7362,7 +7379,9 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Porcentajes de uso",
-            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante.",
+            "zaiTitle": "Uso de Z.ai GLM",
+            "zaiDescription": "Muestra el uso de Z.ai GLM en la barra de estado."
           }
         },
         "auto": {
