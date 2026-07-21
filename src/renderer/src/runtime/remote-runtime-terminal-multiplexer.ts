@@ -764,7 +764,14 @@ class RemoteRuntimeTerminalMultiplexer {
     this.readyResolver = null
     this.readyRejecter = null
     for (const stream of this.streams.values()) {
-      stream.callbacks.onError?.(error.message)
+      // Why: a stream with an onTransportClose resubscribe handler recovers from
+      // a liveness reset on its own (#7718). Surfacing onError here paints a red
+      // xterm banner that survives the successful resubscribe and must be
+      // dismissed by hand. Only surface the error for streams that cannot
+      // recover -- parity with handleClose's guard.
+      if (!stream.callbacks.onTransportClose) {
+        stream.callbacks.onError?.(error.message)
+      }
     }
     this.subscription?.unsubscribe()
     this.handleClose()
