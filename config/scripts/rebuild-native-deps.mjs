@@ -399,10 +399,11 @@ function getPatchedNodePtyRebuildReason() {
     return null
   }
 
-  // Why: Orca patches node-pty's native Unix spawn path; upstream prebuilds can
-  // load successfully in Electron while missing the patched fd/error handling.
+  // Why: upstream prebuilds can load successfully while omitting Orca's native
+  // Unix error handling or Windows Job Object ownership.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
+  const nativeArtifact = process.platform === 'win32' ? 'conpty.node' : 'pty.node'
+  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', nativeArtifact)]
   // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
   if (process.platform === 'darwin') {
     artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
@@ -418,9 +419,6 @@ function getPatchedNodePtyRebuildReason() {
 
 function requiresPatchedNodePtySourceBuild() {
   if (!onlyModules.includes('node-pty')) {
-    return false
-  }
-  if (rebuildPlatform === 'win32') {
     return false
   }
   if (rebuildPlatform !== osPlatform() || rebuildArch !== process.arch) {

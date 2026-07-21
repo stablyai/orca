@@ -121,6 +121,80 @@ describe('spawnShellWithFallback on Windows', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
+  it('preserves requested ConPTY Job Object ownership across Windows fallback attempts', () => {
+    restorePlatform = setPlatform('win32')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const attempts = [makeAttempt(PWSH7), makeAttempt(WINDOWS_POWERSHELL)]
+    const ptySpawn = vi.fn((shellPath: string) => {
+      if (shellPath === PWSH7) {
+        throw new Error(ACCESS_DENIED_5)
+      }
+      return makeFakePty()
+    }) as unknown as typeof pty.spawn
+
+    spawnShellWithFallback({
+      shellPath: PWSH7,
+      shellArgs: attempts[0].shellArgs,
+      cols: 80,
+      rows: 24,
+      cwd: 'C:\\repo',
+      env: {},
+      ptySpawn,
+      useConptyJobObject: true,
+      windowsFallbackAttempts: attempts
+    })
+
+    expect(ptySpawn).toHaveBeenNthCalledWith(
+      1,
+      PWSH7,
+      attempts[0].shellArgs,
+      expect.objectContaining({ useConptyJobObject: true })
+    )
+    expect(ptySpawn).toHaveBeenNthCalledWith(
+      2,
+      WINDOWS_POWERSHELL,
+      attempts[1].shellArgs,
+      expect.objectContaining({ useConptyJobObject: true })
+    )
+  })
+
+  it('does not carry requested Job Object ownership into a WSL fallback', () => {
+    restorePlatform = setPlatform('win32')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const attempts = [makeAttempt(PWSH7), makeAttempt('wsl')]
+    const ptySpawn = vi.fn((shellPath: string) => {
+      if (shellPath === PWSH7) {
+        throw new Error(ACCESS_DENIED_5)
+      }
+      return makeFakePty()
+    }) as unknown as typeof pty.spawn
+
+    spawnShellWithFallback({
+      shellPath: PWSH7,
+      shellArgs: attempts[0].shellArgs,
+      cols: 80,
+      rows: 24,
+      cwd: 'C:\\repo',
+      env: {},
+      ptySpawn,
+      useConptyJobObject: true,
+      windowsFallbackAttempts: attempts
+    })
+
+    expect(ptySpawn).toHaveBeenNthCalledWith(
+      1,
+      PWSH7,
+      attempts[0].shellArgs,
+      expect.objectContaining({ useConptyJobObject: true })
+    )
+    expect(ptySpawn).toHaveBeenNthCalledWith(
+      2,
+      'wsl',
+      attempts[1].shellArgs,
+      expect.not.objectContaining({ useConptyJobObject: true })
+    )
+  })
+
   it('throws a descriptive error when every Windows fallback fails', () => {
     restorePlatform = setPlatform('win32')
     vi.spyOn(console, 'warn').mockImplementation(() => {})

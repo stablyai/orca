@@ -508,6 +508,74 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('opts only recognized native Windows agent PTYs into ConPTY Job Object ownership', () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'agent',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: { COMSPEC: CMD_ABS },
+        command: 'claude'
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[2]).toMatchObject({
+        useConptyDll: true,
+        useConptyJobObject: true
+      })
+
+      createPtySubprocess({
+        sessionId: 'terminal',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: { COMSPEC: CMD_ABS }
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[2]).not.toHaveProperty('useConptyJobObject')
+
+      createPtySubprocess({
+        sessionId: 'wsl-agent-no-extension',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: { COMSPEC: CMD_ABS },
+        command: 'codex',
+        shellOverride: 'wsl'
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[2]).not.toHaveProperty('useConptyJobObject')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('does not apply the native Windows Job Object option to WSL agent PTYs', () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'wsl-agent',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: { COMSPEC: CMD_ABS },
+        command: 'codex',
+        shellOverride: 'wsl.exe'
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[2]).not.toHaveProperty('useConptyJobObject')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('suppresses the first-run Powerlevel10k wizard for daemon terminals', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

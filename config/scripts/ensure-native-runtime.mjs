@@ -64,7 +64,7 @@ function ensureNodeRuntime() {
     if (!initial.ok) {
       printCheckError(initial)
     }
-    runPnpm(['rebuild', 'node-pty'])
+    runPnpm(['rebuild', 'node-pty'], { buildFromSource: true })
     verifyNodeRuntimeAfterRebuild()
     return
   }
@@ -300,10 +300,11 @@ function getPatchedNodePtyRebuildReason() {
     return null
   }
 
-  // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix
-  // patch only lands in the source-built build/Release artifacts.
+  // Why: a loadable upstream node-pty prebuild is not enough; Orca's native
+  // patch only lands in source-built build/Release artifacts.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
+  const nativeArtifact = process.platform === 'win32' ? 'conpty.node' : 'pty.node'
+  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', nativeArtifact)]
   // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
   if (process.platform === 'darwin') {
     artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
@@ -318,10 +319,6 @@ function getPatchedNodePtyRebuildReason() {
 }
 
 function requiresPatchedNodePtySourceBuild() {
-  if (process.platform === 'win32') {
-    return false
-  }
-
   const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
   if (!existsSync(nodePtyPatchPath)) {
     return false
@@ -339,10 +336,14 @@ function getWindowsBuildNumber() {
   return match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
 }
 
-function runPnpm(args) {
+function runPnpm(args, options = {}) {
   const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
   const result = spawnSync(command, args, {
     cwd: projectDir,
+    env: {
+      ...process.env,
+      ...(options.buildFromSource ? { npm_config_build_from_source: 'true' } : {})
+    },
     stdio: 'inherit',
     shell: process.platform === 'win32'
   })

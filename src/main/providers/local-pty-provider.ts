@@ -87,7 +87,7 @@ const ptyProcesses = new Map<string, pty.IPty>()
 const ptyIncarnations = new Map<string, string>()
 // Why: agent sessions always sweep descendant trees; plain terminals preserve nohup children except on immediate win32 shutdown.
 const ptyAgentSessionIds = new Set<string>()
-// Why: descendant capture is async, so reattach/duplicate shutdown must wait for the original owner, not return a dying PTY.
+// Why: descendant teardown is async, so reattach/duplicate shutdown must wait for the original owner, not return a dying PTY.
 type PtyShutdownOperation = {
   promise: Promise<void>
   immediate: boolean
@@ -856,6 +856,7 @@ export class LocalPtyProvider implements IPtyProvider {
       onBeforeFallbackSpawn: historyResult?.histFile
         ? (env, fallbackShell) => updateHistFileForFallback(env, fallbackShell)
         : undefined,
+      useConptyJobObject: process.platform === 'win32' && isAgentPty,
       windowsFallbackAttempts
     })
     args.onPtySpawnCommitted?.()
@@ -1145,9 +1146,9 @@ export class LocalPtyProvider implements IPtyProvider {
     operation: PtyShutdownOperation
   ): Promise<void> {
     const physicalExit = ptyPhysicalExits.get(id)
-    const signalRoot = (): void => {
-      // Why: natural exit can race the sweep — never signal after this PTY loses ownership.
-      if (ptyProcesses.get(id) !== proc) {
+    const ownsRoot = (): boolean => ptyProcesses.get(id) === proc
+    const killRoot = (): void => {
+      if (!ownsRoot()) {
         return
       }
       // Cancel startup delivery now, but keep the exit listener and ownership maps until node-pty reports physical exit.
@@ -1155,23 +1156,22 @@ export class LocalPtyProvider implements IPtyProvider {
       operation.rootSignalled = true
       this.requestTrackedPtyShutdown(id, proc, operation.immediate)
     }
-    if (ptyAgentSessionIds.has(id)) {
-      // Why: POSIX needs a pre-kill descendant snapshot; Windows tree-kills only when the
-      // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
-      // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
-      await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
-      })
+    if (ptyAgentSessionIds.has(id) && process.platform === 'win32') {
+      // Why: Windows agent trees are owned by node-pty Job Objects (useConptyJobObject);
+      // killRoot closing the job reaps descendants — taskkill /T is redundant.
+      killRoot()
+    } else if (ptyAgentSessionIds.has(id)) {
+      // Why: POSIX needs a pre-kill descendant snapshot so agent/MCP orphans cannot
+      // hold the worktree cwd after shell stop (#10004).
+      await killWithDescendantSweep(proc.pid, killRoot, { ownsRoot })
     } else if (process.platform === 'win32' && operation.immediate) {
       // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
       // skips the console reap), so a live `pnpm i`/`node` keeps the ConPTY console alive and
-      // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
-      // otherwise root close alone, and detached children may block physical stop (#10004).
-      await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
-      })
+      // holds the worktree cwd, failing destructive removal. taskkill /T /F clears the tree so
+      // physical stop is verifiable. POSIX shells reach their child pgroup on forceKill (#10004).
+      await killWithDescendantSweep(proc.pid, killRoot, { ownsRoot })
     } else {
-      signalRoot()
+      killRoot()
     }
     await waitForPtyPhysicalExit(id, physicalExit)
   }

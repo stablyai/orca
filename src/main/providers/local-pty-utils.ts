@@ -1,6 +1,7 @@
 import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
+import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { wslUncDirectoryExists } from '../wsl'
 import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
@@ -163,6 +164,8 @@ export type ShellSpawnParams = {
    *  fails to spawn, the next real absolute executable is tried with its own
    *  recomputed args/cwd. */
   windowsFallbackAttempts?: WindowsShellSpawnAttempt[]
+  /** Native Windows agent PTYs opt into pre-resume Job Object ownership. */
+  useConptyJobObject?: boolean
 }
 
 export type ShellSpawnResult = {
@@ -186,8 +189,18 @@ export type ShellSpawnResult = {
 // has the modern wrap-marker behavior xterm expects; legacy system ConPTY can
 // corrupt full-width TUI rows in scrollback. Without this, degraded-mode and
 // fresh-local spawns silently behave differently from daemon terminals.
-function windowsConptyDllOptions(): { useConptyDll: true } | Record<string, never> {
-  return process.platform === 'win32' ? { useConptyDll: true } : {}
+function windowsConptyOptions(
+  shellPath: string,
+  useConptyJobObject: boolean | undefined
+): { useConptyDll: true; useConptyJobObject?: true } | Record<string, never> {
+  return process.platform === 'win32'
+    ? {
+        useConptyDll: true,
+        ...(useConptyJobObject === true && !isWslShellName(shellPath)
+          ? { useConptyJobObject: true }
+          : {})
+      }
+    : {}
 }
 
 function spawnWindowsFallbackChain(
@@ -205,7 +218,7 @@ function spawnWindowsFallbackChain(
         rows,
         cwd: attempt.effectiveCwd,
         env,
-        ...windowsConptyDllOptions()
+        ...windowsConptyOptions(attempt.shellPath, params.useConptyJobObject)
       })
       console.warn(
         `[pty] Primary shell "${params.shellPath}" failed (${primaryError}), fell back to "${attempt.shellPath}"`
@@ -255,7 +268,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
           rows,
           cwd,
           env,
-          ...windowsConptyDllOptions()
+          ...windowsConptyOptions(shellPath, params.useConptyJobObject)
         }),
         shellPath
       }

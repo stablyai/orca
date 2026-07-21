@@ -429,3 +429,330 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
    }
  }
  #endif
+diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+index a358ffb177..8722bcd166 100644
+--- a/lib/windowsPtyAgent.js
++++ b/lib/windowsPtyAgent.js
+@@ -29 +29 @@ var WindowsPtyAgent = /** @class */ (function () {
+-    function WindowsPtyAgent(file, args, env, cwd, cols, rows, debug, _useConpty, _useConptyDll, conptyInheritCursor) {
++    function WindowsPtyAgent(file, args, env, cwd, cols, rows, debug, _useConpty, _useConptyDll, _useConptyJobObject, conptyInheritCursor) {
+@@ -31,0 +32 @@ var WindowsPtyAgent = /** @class */ (function () {
++        if (_useConptyJobObject === void 0) { _useConptyJobObject = false; }
+@@ -34,0 +36 @@ var WindowsPtyAgent = /** @class */ (function () {
++        this._useConptyJobObject = _useConptyJobObject;
+@@ -89 +91 @@ var WindowsPtyAgent = /** @class */ (function () {
+-            var connect = this._ptyNative.connect(this._pty, commandLine, cwd, env, this._useConptyDll, function (c) { return _this._$onProcessExit(c); });
++            var connect = this._ptyNative.connect(this._pty, commandLine, cwd, env, this._useConptyDll, this._useConptyJobObject, function (c) { return _this._$onProcessExit(c); });
+@@ -137 +139,14 @@ var WindowsPtyAgent = /** @class */ (function () {
+-            if (!this._useConptyDll) {
++            if (this._useConptyJobObject || this._useConptyDll) {
++                // Close the input write handle to signal the end of session.
++                this._inSocket.destroy();
++                this._ptyNative.kill(this._pty, this._useConptyDll);
++                if (this._useConptyDll) {
++                    this._outSocket.on('data', function () {
++                        _this._conoutSocketWorker.dispose();
++                    });
++                }
++                else {
++                    this._conoutSocketWorker.dispose();
++                }
++            }
++            else {
+@@ -153,8 +167,0 @@ var WindowsPtyAgent = /** @class */ (function () {
+-            else {
+-                // Close the input write handle to signal the end of session.
+-                this._inSocket.destroy();
+-                this._ptyNative.kill(this._pty, this._useConptyDll);
+-                this._outSocket.on('data', function () {
+-                    _this._conoutSocketWorker.dispose();
+-                });
+-            }
+@@ -320 +327 @@ function xOr(arg1, arg2) {
+-//# sourceMappingURL=windowsPtyAgent.js.map
+\ No newline at end of file
++//# sourceMappingURL=windowsPtyAgent.js.map
+diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
+index 3c38f89d14..2de1d0c7db 100644
+--- a/lib/windowsTerminal.js
++++ b/lib/windowsTerminal.js
+@@ -51 +51 @@ var WindowsTerminal = /** @class */ (function (_super) {
+-        _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
++        _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.useConptyJobObject, opt.conptyInheritCursor);
+@@ -199 +199 @@ exports.WindowsTerminal = WindowsTerminal;
+-//# sourceMappingURL=windowsTerminal.js.map
+\ No newline at end of file
++//# sourceMappingURL=windowsTerminal.js.map
+diff --git a/src/interfaces.ts b/src/interfaces.ts
+index a269e77bd2..8b45c785a0 100644
+--- a/src/interfaces.ts
++++ b/src/interfaces.ts
+@@ -122,0 +123 @@ export interface IWindowsPtyForkOptions extends IBasePtyForkOptions {
++  useConptyJobObject?: boolean;
+diff --git a/src/native.d.ts b/src/native.d.ts
+index c53e086b49..71f493040d 100644
+--- a/src/native.d.ts
++++ b/src/native.d.ts
+@@ -7 +7 @@ interface IConptyNative {
+-  connect(ptyId: number, commandLine: string, cwd: string, env: string[], useConptyDll: boolean, onExitCallback: (exitCode: number) => void): { pid: number };
++  connect(ptyId: number, commandLine: string, cwd: string, env: string[], useConptyDll: boolean, useConptyJobObject: boolean, onExitCallback: (exitCode: number) => void): { pid: number; jobAssigned: boolean };
+diff --git a/src/win/conpty.cc b/src/win/conpty.cc
+index 7b286d3d64..7434bcc994 100644
+--- a/src/win/conpty.cc
++++ b/src/win/conpty.cc
+@@ -16,0 +17,3 @@
++#include <atomic>
++#include <memory>
++#include <mutex>
+@@ -47 +50,5 @@ struct pty_baton {
+-  HANDLE hShell;
++  std::mutex hShellMutex;
++  HANDLE hShell = nullptr;
++  std::atomic<HANDLE> hJob{nullptr};
++  bool jobObjectAssigned = false;
++  bool jobObjectSetupFailed = false;
+@@ -52 +59,2 @@ struct pty_baton {
+-static std::vector<std::unique_ptr<pty_baton>> ptyHandles;
++static std::vector<std::shared_ptr<pty_baton>> ptyHandles;
++static std::mutex ptyHandlesMutex;
+@@ -55 +63,2 @@ static volatile LONG ptyCounter;
+-static pty_baton* get_pty_baton(int id) {
++static std::shared_ptr<pty_baton> get_pty_baton(int id) {
++  std::lock_guard<std::mutex> lock(ptyHandlesMutex);
+@@ -60 +69 @@ static pty_baton* get_pty_baton(int id) {
+-    return it->get();
++    return *it;
+@@ -65,0 +75 @@ static bool remove_pty_baton(int id) {
++  std::lock_guard<std::mutex> lock(ptyHandlesMutex);
+@@ -70 +80 @@ static bool remove_pty_baton(int id) {
+-    ptyHandles.erase(it);
++    ptyHandles.erase(it, ptyHandles.end());
+@@ -75,0 +86,42 @@ static bool remove_pty_baton(int id) {
++static HANDLE take_job_handle(const std::shared_ptr<pty_baton>& baton) {
++  return baton->hJob.exchange(nullptr);
++}
++
++static void close_job_handle(const std::shared_ptr<pty_baton>& baton) {
++  HANDLE hJob = take_job_handle(baton);
++  if (hJob != nullptr) {
++    CloseHandle(hJob);
++  }
++}
++
++static HANDLE get_shell_handle(const std::shared_ptr<pty_baton>& baton) {
++  std::lock_guard<std::mutex> lock(baton->hShellMutex);
++  return baton->hShell;
++}
++
++static void terminate_shell_process(const std::shared_ptr<pty_baton>& baton) {
++  std::lock_guard<std::mutex> lock(baton->hShellMutex);
++  if (baton->hShell != nullptr) {
++    TerminateProcess(baton->hShell, 1);
++  }
++}
++
++static void close_shell_handle(const std::shared_ptr<pty_baton>& baton) {
++  std::lock_guard<std::mutex> lock(baton->hShellMutex);
++  if (baton->hShell != nullptr) {
++    CloseHandle(baton->hShell);
++    baton->hShell = nullptr;
++  }
++}
++
++static void read_exit_code_and_close_shell_handle(
++    const std::shared_ptr<pty_baton>& baton,
++    DWORD* exitCode) {
++  std::lock_guard<std::mutex> lock(baton->hShellMutex);
++  if (baton->hShell != nullptr) {
++    GetExitCodeProcess(baton->hShell, exitCode);
++    CloseHandle(baton->hShell);
++    baton->hShell = nullptr;
++  }
++}
++
+@@ -77 +129 @@ struct ExitEvent {
+-  int exit_code = 0;
++  DWORD exit_code = 0;
+@@ -80 +132 @@ struct ExitEvent {
+-void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
++void SetupExitCallback(Napi::Env env, Napi::Function cb, std::shared_ptr<pty_baton> baton) {
+@@ -101,6 +153,10 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+-    WaitForSingleObject(baton->hShell, INFINITE);
+-    // Get process exit code.
+-    GetExitCodeProcess(baton->hShell, (LPDWORD)(&exit_event->exit_code));
+-    // Clean up handles
+-    CloseHandle(baton->hShell);
+-    assert(remove_pty_baton(baton->id));
++    HANDLE hShell = get_shell_handle(baton);
++    if (hShell != nullptr) {
++      WaitForSingleObject(hShell, INFINITE);
++    }
++    // Closing the last kill-on-close Job Object handle also reaps surviving descendants.
++    close_job_handle(baton);
++    read_exit_code_and_close_shell_handle(baton, &exit_event->exit_code);
++    const bool removed = remove_pty_baton(baton->id);
++    assert(removed);
++    (void)removed;
+@@ -128 +184 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+-Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text) {
++Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text, DWORD errorCode) {
+@@ -131 +187 @@ Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text) {
+-  errorText << ", error code: " << GetLastError();
++  errorText << ", error code: " << errorCode;
+@@ -134,0 +191,4 @@ Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text) {
++Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text) {
++  return errorWithCode(info, text, GetLastError());
++}
++
+@@ -304,2 +364,5 @@ static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
+-    ptyHandles.emplace_back(
+-        std::make_unique<pty_baton>(ptyId, hIn, hOut, hpc));
++    {
++      std::lock_guard<std::mutex> lock(ptyHandlesMutex);
++      ptyHandles.emplace_back(
++          std::make_shared<pty_baton>(ptyId, hIn, hOut, hpc));
++    }
+@@ -336 +399 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+-  if (info.Length() != 6 ||
++  if (info.Length() != 7 ||
+@@ -342,2 +405,3 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+-      !info[5].IsFunction()) {
+-    throw Napi::Error::New(env, "Usage: pty.connect(id, cmdline, cwd, env, useConptyDll, exitCallback)");
++      !info[5].IsBoolean() ||
++      !info[6].IsFunction()) {
++    throw Napi::Error::New(env, "Usage: pty.connect(id, cmdline, cwd, env, useConptyDll, useConptyJobObject, exitCallback)");
+@@ -351 +415,2 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+-  Napi::Function exitCallback = info[5].As<Napi::Function>();
++  const bool useConptyJobObject = info[5].As<Napi::Boolean>().Value();
++  Napi::Function exitCallback = info[6].As<Napi::Function>();
+@@ -354 +419 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+-  pty_baton* handle = get_pty_baton(id);
++  std::shared_ptr<pty_baton> handle = get_pty_baton(id);
+@@ -419 +484,2 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+-      EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, // dwCreationFlags
++      EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT |
++        (useConptyJobObject ? CREATE_SUSPENDED : 0), // dwCreationFlags
+@@ -428,0 +495,44 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
++  {
++    std::lock_guard<std::mutex> lock(handle->hShellMutex);
++    handle->hShell = piClient.hProcess;
++  }
++  bool jobAssigned = false;
++  if (useConptyJobObject) {
++    HANDLE hJob = CreateJobObjectW(nullptr, nullptr);
++    if (hJob != nullptr) {
++      JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobInfo{};
++      jobInfo.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
++      if (SetInformationJobObject(
++            hJob,
++            JobObjectExtendedLimitInformation,
++            &jobInfo,
++            sizeof(jobInfo)) &&
++          AssignProcessToJobObject(hJob, piClient.hProcess)) {
++        handle->hJob.store(hJob);
++        jobAssigned = true;
++      } else {
++        CloseHandle(hJob);
++      }
++    }
++
++    handle->jobObjectAssigned = jobAssigned;
++    handle->jobObjectSetupFailed = !jobAssigned;
++
++    if (ResumeThread(piClient.hThread) == static_cast<DWORD>(-1)) {
++      const DWORD resumeError = GetLastError();
++      HANDLE hJob = take_job_handle(handle);
++      if (hJob != nullptr) {
++        TerminateJobObject(hJob, 1);
++        CloseHandle(hJob);
++      } else {
++        terminate_shell_process(handle);
++      }
++      CloseHandle(piClient.hThread);
++      close_shell_handle(handle);
++      const bool removed = remove_pty_baton(handle->id);
++      assert(removed);
++      (void)removed;
++      throw errorWithCode(info, "Cannot resume process", resumeError);
++    }
++  }
++
+@@ -441,3 +550,0 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+-  // Update handle
+-  handle->hShell = piClient.hProcess;
+-
+@@ -454,0 +562 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
++  marshal.Set("jobAssigned", Napi::Boolean::New(env, jobAssigned));
+@@ -475 +583 @@ static Napi::Value PtyResize(const Napi::CallbackInfo& info) {
+-  const pty_baton* handle = get_pty_baton(id);
++  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
+@@ -516 +624 @@ static Napi::Value PtyClear(const Napi::CallbackInfo& info) {
+-  const pty_baton* handle = get_pty_baton(id);
++  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
+@@ -547 +655 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+-  const pty_baton* handle = get_pty_baton(id);
++  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
+@@ -549,0 +658,5 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
++    HANDLE hJob = take_job_handle(handle);
++    if (hJob != nullptr) {
++      TerminateJobObject(hJob, 1);
++      CloseHandle(hJob);
++    }
+@@ -562,2 +675,4 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+-    if (useConptyDll) {
+-      TerminateProcess(handle->hShell, 1);
++    if (hJob == nullptr &&
++        !handle->jobObjectAssigned &&
++        (useConptyDll || handle->jobObjectSetupFailed)) {
++      terminate_shell_process(handle);
+diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
+index d705444951..0d4fbdd5e5 100644
+--- a/src/windowsPtyAgent.ts
++++ b/src/windowsPtyAgent.ts
+@@ -58,0 +59 @@ export class WindowsPtyAgent {
++    private _useConptyJobObject: boolean = false,
+@@ -119 +120 @@ export class WindowsPtyAgent {
+-      const connect = (this._ptyNative as IConptyNative).connect(this._pty, commandLine, cwd, env, this._useConptyDll, c => this._$onProcessExit(c));
++      const connect = (this._ptyNative as IConptyNative).connect(this._pty, commandLine, cwd, env, this._useConptyDll, this._useConptyJobObject, c => this._$onProcessExit(c));
+@@ -144 +145,12 @@ export class WindowsPtyAgent {
+-      if (!this._useConptyDll) {
++      if (this._useConptyJobObject || this._useConptyDll) {
++        // Close the input write handle to signal the end of session.
++        this._inSocket.destroy();
++        (this._ptyNative as IConptyNative).kill(this._pty, this._useConptyDll);
++        if (this._useConptyDll) {
++          this._outSocket.on('data', () => {
++            this._conoutSocketWorker.dispose();
++          });
++        } else {
++          this._conoutSocketWorker.dispose();
++        }
++      } else {
+@@ -158,7 +169,0 @@ export class WindowsPtyAgent {
+-      } else {
+-        // Close the input write handle to signal the end of session.
+-        this._inSocket.destroy();
+-        (this._ptyNative as IConptyNative).kill(this._pty, this._useConptyDll);
+-        this._outSocket.on('data', () => {
+-          this._conoutSocketWorker.dispose();
+-        });
+diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
+index 13f6c6dbb3..03c2f3421f 100644
+--- a/src/windowsTerminal.ts
++++ b/src/windowsTerminal.ts
+@@ -51 +51 @@ export class WindowsTerminal extends Terminal {
+-    this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
++    this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.useConptyDll, opt.useConptyJobObject, opt.conptyInheritCursor);
+diff --git a/typings/node-pty.d.ts b/typings/node-pty.d.ts
+index 6f050ff1d9..0b28e5a667 100644
+--- a/typings/node-pty.d.ts
++++ b/typings/node-pty.d.ts
+@@ -105,0 +106,8 @@ declare module 'node-pty' {
++    /**
++     * (EXPERIMENTAL)
++     *
++     * Whether to assign the suspended ConPTY child to a kill-on-close Windows Job Object before it runs.
++     * If Job Object setup is unavailable, kill falls back to terminating only the direct child.
++     */
++    useConptyJobObject?: boolean;
++

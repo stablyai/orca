@@ -71,6 +71,7 @@ import {
   expandWindowsPathEnvironmentVariables
 } from '../../shared/windows-environment-expansion'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
+import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
 import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
 
 const PANE_IDENTITY_ENV_KEYS = [
@@ -543,6 +544,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   cols: number
   rows: number
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
+  useConptyJobObject: boolean
 }): {
   process: pty.IPty
   shellPath: string
@@ -558,7 +560,14 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       cwd,
       env: args.env,
       // Why: legacy system ConPTY can corrupt full-width TUI rows in scrollback; bundled ConPTY has the wrap-marker behavior xterm expects.
-      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
+      ...(process.platform === 'win32'
+        ? {
+            useConptyDll: true,
+            ...(args.useConptyJobObject && !isWslShellName(shellPath)
+              ? { useConptyJobObject: true }
+              : {})
+          }
+        : {})
     })
   }
 
@@ -633,6 +642,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let startupCommandDeliveredInShellArgs = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
+  const isAgentPty = Boolean(opts.launchAgent || startupAgentRecognition)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
   // Why: gate on the effective cwd, not raw opts.cwd — an omitted cwd becomes a safe
   // default (mirrors LocalPtyProvider). Guarding first treated undefined as root-like (#9578).
@@ -837,7 +847,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       env,
       cols: size.cols,
       rows: size.rows,
-      windowsFallbackAttempts
+      windowsFallbackAttempts,
+      useConptyJobObject: process.platform === 'win32' && isAgentPty
     })
     proc = spawned.process
     // Why: a Windows fallback (e.g. cmd.exe) carries its own argv-embedded startup command; adopt the winning shell's identity + delivery flag.
