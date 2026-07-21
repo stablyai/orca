@@ -2323,6 +2323,7 @@ export type NotificationSettings = {
   suppressWhenFocused: boolean
   customSoundId:
     | 'system'
+    | 'none'
     | 'two-tone'
     | 'bong'
     | 'thump'
