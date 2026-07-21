@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildProjectGroupByRepoId,
   loadRepoProjectGroupResponses
@@ -28,6 +28,10 @@ function repo(id: string, projectGroupId?: string | null): RepoSummary {
   return { id, displayName: id, projectGroupId }
 }
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('loadRepoProjectGroupResponses', () => {
   it('keeps repo metadata when the project-group request rejects', async () => {
     const repoResponse = {
@@ -36,12 +40,14 @@ describe('loadRepoProjectGroupResponses', () => {
       result: { repos: [repo('r', 'child')] },
       _meta: { runtimeId: 'runtime' }
     }
+    const groupError = new Error('Request timed out: projectGroup.list')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const client: Pick<RpcClient, 'sendRequest'> = {
       sendRequest: vi.fn(async (method: string) => {
         if (method === 'repo.list') {
           return repoResponse
         }
-        throw new Error('Request timed out: projectGroup.list')
+        throw groupError
       })
     }
 
@@ -50,6 +56,53 @@ describe('loadRepoProjectGroupResponses', () => {
       { ok: false }
     ])
     expect(client.sendRequest).toHaveBeenCalledTimes(2)
+    expect(warn).toHaveBeenCalledWith('[mobile workspaces] projectGroup.list failed', groupError)
+  })
+
+  it('keeps repo-list transport failures fatal', async () => {
+    const repoError = new Error('Request timed out: repo.list')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const client: Pick<RpcClient, 'sendRequest'> = {
+      sendRequest: vi.fn(async (method: string) => {
+        if (method === 'repo.list') {
+          throw repoError
+        }
+        return {
+          id: 'project-group-list',
+          ok: true,
+          result: { groups: [] },
+          _meta: { runtimeId: 'runtime' }
+        }
+      })
+    }
+
+    await expect(loadRepoProjectGroupResponses(client)).rejects.toBe(repoError)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('preserves resolved project-group RPC failures', async () => {
+    const repoResponse = {
+      id: 'repo-list',
+      ok: true as const,
+      result: { repos: [] },
+      _meta: { runtimeId: 'runtime' }
+    }
+    const groupResponse = {
+      id: 'project-group-list',
+      ok: false as const,
+      error: { code: 'unsupported', message: 'old host' },
+      _meta: { runtimeId: 'runtime' }
+    }
+    const client: Pick<RpcClient, 'sendRequest'> = {
+      sendRequest: vi.fn(async (method: string) =>
+        method === 'repo.list' ? repoResponse : groupResponse
+      )
+    }
+
+    await expect(loadRepoProjectGroupResponses(client)).resolves.toEqual([
+      repoResponse,
+      groupResponse
+    ])
   })
 })
 

@@ -14,7 +14,10 @@ export async function loadRepoProjectGroupResponses(
   // Why: group labels are decorative; transport failure must not discard successful repo metadata.
   return Promise.all([
     client.sendRequest('repo.list'),
-    client.sendRequest('projectGroup.list').catch(() => ({ ok: false as const }))
+    client.sendRequest('projectGroup.list').catch((error: unknown) => {
+      console.warn('[mobile workspaces] projectGroup.list failed', error)
+      return { ok: false as const }
+    })
   ])
 }
 
