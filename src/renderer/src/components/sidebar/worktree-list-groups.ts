@@ -43,6 +43,8 @@ import {
 } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { getFolderWorkspaceExecutionHostIdForRows } from './worktree-list-host-filtering'
 
 export { branchName }
 
@@ -126,6 +128,9 @@ export type FolderWorkspaceRow = {
   projectGroup: ProjectGroup
   depth: number
   groupDepth: number
+  // Why: pinnedDisplayPolicy can render the same folder workspace in Pinned
+  // and its natural lane; sectionKey tells the two copies apart.
+  sectionKey: string
 }
 
 /** Minimal shape buildRows needs for an in-flight create. Deliberately not the
@@ -466,10 +471,12 @@ function emitPinnedGroup(
   renderedNaturalAnchorRepoIds: ReadonlySet<string>,
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>,
   allowImportedFallback: boolean,
+  pinnedFolderWorkspaces: readonly LaneFolderWorkspaceEntry[],
+  sortComparator: ((a: Worktree, b: Worktree) => number) | undefined,
   result: Row[]
 ): void {
   const pinned = worktrees.filter((w) => w.isPinned)
-  if (pinned.length === 0) {
+  if (pinned.length === 0 && pinnedFolderWorkspaces.length === 0) {
     return
   }
   const hostWorktreeCounts = new Map<ExecutionHostId, number>()
@@ -487,17 +494,21 @@ function emitPinnedGroup(
       seenPinnedRepoIds.add(worktree.repoId)
     }
   }
+  addFolderWorkspaceHostEntries(hostWorktreeCounts, hostWorktreeIds, pinnedFolderWorkspaces)
 
   result.push({
     type: 'header',
     key: PINNED_GROUP_KEY,
     label: PINNED_GROUP_META.label,
-    count: pinned.length,
+    count: pinned.length + pinnedFolderWorkspaces.length,
     tone: PINNED_GROUP_META.tone,
     icon: PINNED_GROUP_META.icon,
     hostWorktreeCounts,
     hostWorktreeIds,
-    worktreeIds: pinned.map((worktree) => worktree.id)
+    worktreeIds: [
+      ...pinned.map((worktree) => worktree.id),
+      ...pinnedFolderWorkspaces.map((entry) => entry.sortProxy.id)
+    ]
   })
   if (collapsedGroups.has(PINNED_GROUP_KEY)) {
     for (const repoId of pinnedRepoOrder) {
@@ -507,10 +518,11 @@ function emitPinnedGroup(
       }
     }
   } else {
+    const laneRows: Row[] = []
     const lastPinnedIndexByRepoId = new Map<string, number>()
     pinned.forEach((worktree, index) => lastPinnedIndexByRepoId.set(worktree.repoId, index))
     for (const [index, worktree] of pinned.entries()) {
-      result.push(
+      laneRows.push(
         buildWorktreeRow(worktree, repoMap, {
           rowKey: `${PINNED_GROUP_KEY}:${worktree.id}`,
           sectionKey: PINNED_GROUP_KEY,
@@ -529,9 +541,10 @@ function emitPinnedGroup(
         !renderedNaturalAnchorRepoIds.has(worktree.repoId) &&
         lastPinnedIndexByRepoId.get(worktree.repoId) === index
       ) {
-        result.push(buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
+        laneRows.push(buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
       }
     }
+    pushLaneRowsWithFolderWorkspaces(result, laneRows, pinnedFolderWorkspaces, sortComparator)
   }
 }
 
@@ -964,6 +977,115 @@ function sortProjectEntries(
   })
 }
 
+/** Folder row data needed for host counts and mixed-workspace sorting. */
+type LaneFolderWorkspaceEntry = {
+  folderWorkspace: FolderWorkspace
+  projectGroup: ProjectGroup
+  row: FolderWorkspaceRow
+  hostId: ExecutionHostId
+  sortProxy: Worktree
+}
+
+function addFolderWorkspaceHostEntries(
+  hostWorktreeCounts: Map<ExecutionHostId, number>,
+  hostWorktreeIds: Map<ExecutionHostId, string[]>,
+  entries: readonly LaneFolderWorkspaceEntry[]
+): void {
+  for (const entry of entries) {
+    hostWorktreeCounts.set(entry.hostId, (hostWorktreeCounts.get(entry.hostId) ?? 0) + 1)
+    const ids = hostWorktreeIds.get(entry.hostId) ?? []
+    ids.push(entry.sortProxy.id)
+    hostWorktreeIds.set(entry.hostId, ids)
+  }
+}
+
+/** Merges folder rows at root boundaries so lineage children stay with their parent. */
+function pushLaneRowsWithFolderWorkspaces(
+  result: Row[],
+  laneRows: readonly Row[],
+  laneFolderWorkspaces: readonly LaneFolderWorkspaceEntry[],
+  sortComparator?: (a: Worktree, b: Worktree) => number
+): void {
+  if (laneFolderWorkspaces.length === 0) {
+    result.push(...laneRows)
+    return
+  }
+  if (!sortComparator) {
+    result.push(...laneRows)
+    for (const entry of laneFolderWorkspaces) {
+      result.push(entry.row)
+    }
+    return
+  }
+  const pendingEntries = [...laneFolderWorkspaces].sort((a, b) =>
+    sortComparator(a.sortProxy, b.sortProxy)
+  )
+  let next = 0
+  for (const row of laneRows) {
+    if (row.type === 'item' && row.depth === 0) {
+      while (
+        next < pendingEntries.length &&
+        sortComparator(pendingEntries[next].sortProxy, row.worktree) < 0
+      ) {
+        result.push(pendingEntries[next].row)
+        next += 1
+      }
+    }
+    result.push(row)
+  }
+  for (; next < pendingEntries.length; next += 1) {
+    result.push(pendingEntries[next].row)
+  }
+}
+
+/** Resolves the flat lane for a folder row; repo grouping uses project headers. */
+export function getFolderWorkspaceSidebarGroupKey(
+  groupBy: WorktreeGroupBy,
+  folderWorkspace: Pick<FolderWorkspace, 'workspaceStatus'>,
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+): string | null {
+  if (groupBy === 'repo') {
+    return null
+  }
+  if (groupBy === 'none') {
+    return ALL_GROUP_KEY
+  }
+  if (groupBy === 'workspace-status') {
+    return getWorkspaceStatusGroupKey(getWorkspaceStatus(folderWorkspace, workspaceStatuses))
+  }
+  // Why: folder workspaces have no branch, so they share the bucket
+  // getPRGroupKey assigns branchless (no-PR) worktrees.
+  return 'pr:in-progress'
+}
+
+function compareFolderWorkspacesForSidebar(left: FolderWorkspace, right: FolderWorkspace): number {
+  const leftOrder = left.manualOrder ?? left.sortOrder
+  const rightOrder = right.manualOrder ?? right.sortOrder
+  return rightOrder - leftOrder || left.name.localeCompare(right.name)
+}
+
+function buildFolderWorkspaceRow(
+  folderWorkspace: FolderWorkspace,
+  projectGroup: ProjectGroup,
+  groupDepth: number,
+  sectionKey: string
+): FolderWorkspaceRow {
+  return {
+    type: 'folder-workspace',
+    // Why: the Pinned copy needs its own key so duplicate-in-groups can render
+    // both copies without colliding virtualized row keys.
+    key:
+      sectionKey === PINNED_GROUP_KEY
+        ? `pinned:folder-workspace:${folderWorkspace.id}`
+        : `folder-workspace:${folderWorkspace.id}`,
+    folderWorkspace,
+    projectGroup,
+    depth: 0,
+    groupDepth,
+    sectionKey
+  }
+}
+
 /**
  * Build the flat row list consumed by the virtualizer.
  * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
@@ -995,7 +1117,10 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  // Why: the active sidebar sort lives upstream (sortedIds); this comparator
+  // is how folder workspaces interleave with pre-sorted worktrees per lane.
+  sortComparator?: (a: Worktree, b: Worktree) => number
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -1013,6 +1138,58 @@ export function buildRows(
   if (groupBy !== 'repo' && pendingCreations.length > 0) {
     for (const creation of pendingCreations) {
       result.push(buildPendingCreationRow(creation, repoMap))
+    }
+  }
+
+  // Why: folder workspaces are stored apart from worktrees; every grouping
+  // must fold them into its lanes here or they silently drop from the sidebar.
+  const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
+  const eligibleFolderWorkspaceSources: Omit<LaneFolderWorkspaceEntry, 'row'>[] = []
+  for (const folderWorkspace of [...folderWorkspaces].sort(compareFolderWorkspacesForSidebar)) {
+    const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
+    // Why: matches the Project-grouping guard — only folder-scan (parentPath)
+    // groups own folder workspaces; stale or manual-group references stay hidden.
+    if (!projectGroup?.parentPath) {
+      continue
+    }
+    eligibleFolderWorkspaceSources.push({
+      folderWorkspace,
+      projectGroup,
+      hostId: getFolderWorkspaceExecutionHostIdForRows({
+        folderWorkspace,
+        projectGroup,
+        defaultHostId
+      }),
+      sortProxy: folderWorkspaceToWorktree(folderWorkspace)
+    })
+  }
+  const pinnedFolderWorkspaceEntries: LaneFolderWorkspaceEntry[] = eligibleFolderWorkspaceSources
+    .filter((source) => source.folderWorkspace.isPinned)
+    .map((source) => ({
+      ...source,
+      row: buildFolderWorkspaceRow(source.folderWorkspace, source.projectGroup, 0, PINNED_GROUP_KEY)
+    }))
+  const naturalFolderWorkspaceSources =
+    pinnedDisplayPolicy === 'duplicate-in-groups'
+      ? eligibleFolderWorkspaceSources
+      : eligibleFolderWorkspaceSources.filter((source) => !source.folderWorkspace.isPinned)
+  const folderWorkspaceEntriesByGroupKey = new Map<string, LaneFolderWorkspaceEntry[]>()
+  if (groupBy !== 'repo') {
+    for (const source of naturalFolderWorkspaceSources) {
+      const key = getFolderWorkspaceSidebarGroupKey(
+        groupBy,
+        source.folderWorkspace,
+        workspaceStatuses
+      )
+      if (!key) {
+        continue
+      }
+      const entries = folderWorkspaceEntriesByGroupKey.get(key) ?? []
+      entries.push({
+        ...source,
+        row: buildFolderWorkspaceRow(source.folderWorkspace, source.projectGroup, 0, key)
+      })
+      folderWorkspaceEntriesByGroupKey.set(key, entries)
     }
   }
 
@@ -1038,28 +1215,48 @@ export function buildRows(
     renderedNaturalAnchorRepoIds,
     importedWorktreesByRepo,
     groupBy !== 'repo',
+    pinnedFolderWorkspaceEntries,
+    sortComparator,
     result
   )
   if (groupBy === 'none') {
-    if (naturalWorktrees.length > 0) {
+    const flatFolderWorkspaceEntries = folderWorkspaceEntriesByGroupKey.get(ALL_GROUP_KEY) ?? []
+    if (naturalWorktrees.length > 0 || flatFolderWorkspaceEntries.length > 0) {
+      const hostWorktreeCounts =
+        getHostWorktreeCounts(naturalWorktrees, repoMap, defaultHostId) ??
+        new Map<ExecutionHostId, number>()
+      const hostWorktreeIds =
+        getHostWorktreeIds(naturalWorktrees, repoMap, defaultHostId) ??
+        new Map<ExecutionHostId, string[]>()
+      addFolderWorkspaceHostEntries(hostWorktreeCounts, hostWorktreeIds, flatFolderWorkspaceEntries)
       result.push({
         type: 'header',
         key: ALL_GROUP_KEY,
         label: ALL_GROUP_META.label,
-        count: naturalWorktrees.length,
+        count: naturalWorktrees.length + flatFolderWorkspaceEntries.length,
         tone: ALL_GROUP_META.tone,
         icon: ALL_GROUP_META.icon,
-        hostWorktreeCounts: getHostWorktreeCounts(naturalWorktrees, repoMap, defaultHostId),
-        hostWorktreeIds: getHostWorktreeIds(naturalWorktrees, repoMap, defaultHostId),
-        worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
+        hostWorktreeCounts,
+        hostWorktreeIds,
+        worktreeIds: [
+          ...naturalWorktrees.map((worktree) => worktree.id),
+          ...flatFolderWorkspaceEntries.map((entry) => entry.sortProxy.id)
+        ]
       })
       if (!collapsedGroups.has(ALL_GROUP_KEY)) {
-        appendWorktreeRows(result, naturalWorktrees, repoMap, lineageById, worktreeMap, {
+        const laneRows: Row[] = []
+        appendWorktreeRows(laneRows, naturalWorktrees, repoMap, lineageById, worktreeMap, {
           nestLineage,
           collapsedGroups,
           groupDepth: 0,
           sectionKey: ALL_GROUP_KEY
         })
+        pushLaneRowsWithFolderWorkspaces(
+          result,
+          laneRows,
+          flatFolderWorkspaceEntries,
+          sortComparator
+        )
       }
     }
     return result
@@ -1174,6 +1371,11 @@ export function buildRows(
       const group = grouped.get(key)
       if (group) {
         orderedGroups.push([key, group])
+      } else if (folderWorkspaceEntriesByGroupKey.has(key)) {
+        orderedGroups.push([
+          key,
+          { label: PR_GROUP_META[prGroup].label, items: [], repoIds: new Set() }
+        ])
       }
     }
   } else if (groupBy === 'workspace-status') {
@@ -1184,6 +1386,8 @@ export function buildRows(
       const group = grouped.get(key)
       if (group) {
         orderedGroups.push([key, group])
+      } else if (folderWorkspaceEntriesByGroupKey.has(key)) {
+        orderedGroups.push([key, { label: status.label, items: [], repoIds: new Set() }])
       }
     }
   } else {
@@ -1210,6 +1414,7 @@ export function buildRows(
   ): void => {
     for (const [key, group] of groupsToAppend) {
       const isCollapsed = collapsedGroups.has(key)
+      const groupFolderWorkspaceEntries = folderWorkspaceEntriesByGroupKey.get(key) ?? []
       const repo = group.repo
       const header =
         groupBy === 'repo'
@@ -1231,31 +1436,59 @@ export function buildRows(
                   'in-progress'
                 const definition = workspaceStatuses.find((status) => status.id === workspaceStatus)
                 const meta = getWorkspaceStatusVisualMeta(definition ?? workspaceStatus)
+                const hostWorktreeCounts =
+                  getHostWorktreeCounts(group.items, repoMap, defaultHostId) ??
+                  new Map<ExecutionHostId, number>()
+                const hostWorktreeIds =
+                  getHostWorktreeIds(group.items, repoMap, defaultHostId) ??
+                  new Map<ExecutionHostId, string[]>()
+                addFolderWorkspaceHostEntries(
+                  hostWorktreeCounts,
+                  hostWorktreeIds,
+                  groupFolderWorkspaceEntries
+                )
                 return {
                   type: 'header' as const,
                   key,
                   label: definition?.label ?? workspaceStatus,
-                  count: group.items.length,
+                  count: group.items.length + groupFolderWorkspaceEntries.length,
                   tone: meta.tone,
                   icon: meta.icon,
-                  hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
-                  hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
-                  worktreeIds: group.items.map((worktree) => worktree.id)
+                  hostWorktreeCounts,
+                  hostWorktreeIds,
+                  worktreeIds: [
+                    ...group.items.map((worktree) => worktree.id),
+                    ...groupFolderWorkspaceEntries.map((entry) => entry.sortProxy.id)
+                  ]
                 }
               })()
             : (() => {
                 const prGroup = key.replace(/^pr:/, '') as PRGroupKey
                 const meta = PR_GROUP_META[prGroup]
+                const hostWorktreeCounts =
+                  getHostWorktreeCounts(group.items, repoMap, defaultHostId) ??
+                  new Map<ExecutionHostId, number>()
+                const hostWorktreeIds =
+                  getHostWorktreeIds(group.items, repoMap, defaultHostId) ??
+                  new Map<ExecutionHostId, string[]>()
+                addFolderWorkspaceHostEntries(
+                  hostWorktreeCounts,
+                  hostWorktreeIds,
+                  groupFolderWorkspaceEntries
+                )
                 return {
                   type: 'header' as const,
                   key,
                   label: meta.label,
-                  count: group.items.length,
+                  count: group.items.length + groupFolderWorkspaceEntries.length,
                   tone: meta.tone,
                   icon: meta.icon,
-                  hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
-                  hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
-                  worktreeIds: group.items.map((worktree) => worktree.id)
+                  hostWorktreeCounts,
+                  hostWorktreeIds,
+                  worktreeIds: [
+                    ...group.items.map((worktree) => worktree.id),
+                    ...groupFolderWorkspaceEntries.map((entry) => entry.sortProxy.id)
+                  ]
                 }
               })()
 
@@ -1305,13 +1538,20 @@ export function buildRows(
             hostContextLabelByRepoId
           })
         } else {
-          appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
+          const laneRows: Row[] = []
+          appendWorktreeRows(laneRows, items, repoMap, lineageById, worktreeMap, {
             nestLineage,
             collapsedGroups,
             groupDepth: projectGroupDepth,
             sectionKey: key,
             hostContextLabelByRepoId
           })
+          pushLaneRowsWithFolderWorkspaces(
+            result,
+            laneRows,
+            groupFolderWorkspaceEntries,
+            sortComparator
+          )
         }
       }
     }
@@ -1349,28 +1589,22 @@ export function buildRows(
     })
   }
 
-  const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
   const folderWorkspacesByProjectGroupId = new Map<string, FolderWorkspace[]>()
-  for (const workspace of folderWorkspaces) {
-    const group = projectGroupsById.get(workspace.projectGroupId)
-    if (!group?.parentPath) {
-      continue
-    }
+  // Why natural sources: under single-location the pinned copy renders only in
+  // the Pinned section; duplicate-in-groups keeps the group copy as well.
+  for (const source of naturalFolderWorkspaceSources) {
+    const workspace = source.folderWorkspace
     const list = folderWorkspacesByProjectGroupId.get(workspace.projectGroupId) ?? []
     list.push(workspace)
     folderWorkspacesByProjectGroupId.set(workspace.projectGroupId, list)
   }
   for (const list of folderWorkspacesByProjectGroupId.values()) {
-    list.sort((left, right) => {
-      const leftOrder = left.manualOrder ?? left.sortOrder
-      const rightOrder = right.manualOrder ?? right.sortOrder
-      return rightOrder - leftOrder || left.name.localeCompare(right.name)
-    })
+    list.sort(compareFolderWorkspacesForSidebar)
   }
   const childGroupsByParentId = new Map<string | null, ProjectGroup[]>()
   for (const group of projectGroups) {
     const parentId =
-      group.parentGroupId && projectGroupsById.has(group.parentGroupId) ? group.parentGroupId : null
+      group.parentGroupId && projectGroupById.has(group.parentGroupId) ? group.parentGroupId : null
     const children = childGroupsByParentId.get(parentId) ?? []
     children.push(group)
     childGroupsByParentId.set(parentId, children)
@@ -1407,14 +1641,7 @@ export function buildRows(
     })
     if (!collapsedGroups.has(key)) {
       for (const folderWorkspace of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {
-        result.push({
-          type: 'folder-workspace',
-          key: `folder-workspace:${folderWorkspace.id}`,
-          folderWorkspace,
-          projectGroup,
-          depth: 0,
-          groupDepth: depth + 1
-        })
+        result.push(buildFolderWorkspaceRow(folderWorkspace, projectGroup, depth + 1, key))
       }
       appendOrderedGroups(withRepoSectionDisplayLabels(repoEntries), depth + 1)
       for (const childGroup of childGroups) {
@@ -1430,7 +1657,7 @@ export function buildRows(
 
   const remainingRepoEntries = [...(groupByProjectGroupId.get(null) ?? [])]
   for (const [projectGroupId, entries] of groupByProjectGroupId) {
-    if (projectGroupId === null || projectGroupsById.has(projectGroupId)) {
+    if (projectGroupId === null || projectGroupById.has(projectGroupId)) {
       continue
     }
     // Why: startup can have repos from hosts whose project-group metadata was

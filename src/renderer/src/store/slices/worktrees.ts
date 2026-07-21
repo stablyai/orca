@@ -3963,6 +3963,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const updates = new Map<string, Partial<WorktreeMeta>>()
     let didChange = false
     let revealWorktreeId: string | null = null
+    const folderUpdatePromises: Promise<unknown>[] = []
     for (const worktreeId of worktreeIds) {
       const current = get().getKnownWorktreeById(worktreeId)
       if (!current || current.isPinned === isPinned) {
@@ -3971,7 +3972,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       didChange = true
       const workspaceScope = parseWorkspaceKey(worktreeId)
       if (workspaceScope?.type === 'folder') {
-        void get().updateWorktreeMeta(worktreeId, { isPinned })
+        folderUpdatePromises.push(get().updateWorktreeMeta(worktreeId, { isPinned }))
       } else {
         updates.set(worktreeId, { isPinned })
       }
@@ -3985,7 +3986,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // updateWorktreesMeta applies the store update synchronously, so the reveal below sees the row already rendered.
     void get().updateWorktreesMeta(updates)
     if (revealWorktreeId !== null) {
-      get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
+      const revealTargetId = revealWorktreeId
+      const revealTargetIsFolder = parseWorkspaceKey(revealTargetId)?.type === 'folder'
+      if (revealTargetIsFolder && folderUpdatePromises.length > 0) {
+        // Why: folder pin state lands after the update round-trip; wait so
+        // reveal targets the row's new position.
+        void Promise.allSettled(folderUpdatePromises).then(() => {
+          get().revealWorktreeInSidebar(revealTargetId, { behavior: 'smooth', highlight: true })
+        })
+      } else {
+        get().revealWorktreeInSidebar(revealTargetId, { behavior: 'smooth', highlight: true })
+      }
     }
   },
 

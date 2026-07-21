@@ -118,6 +118,7 @@ import {
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import {
   computeClearFilterActions,
+  computeVisibleFolderWorkspaces,
   computeVisibleWorktreeIds,
   setVisibleWorktreeIds,
   sidebarHasActiveFilters
@@ -290,13 +291,13 @@ import {
 } from './worktree-list-folder-reveal'
 import {
   getFolderPathStatusRouteOptionsForRows,
-  getFolderWorkspaceExecutionHostIdForRows,
   getProjectGroupExecutionHostIdForRows
 } from './worktree-list-host-filtering'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 import {
   getPreferredWorktreeRows,
-  getRenderedWorktreesInSidebarOrder
+  getRenderedWorktreesInSidebarOrder,
+  isWorkspaceRowIdentityRendered
 } from './worktree-sidebar-row-preference'
 
 export {
@@ -506,7 +507,9 @@ function getRenderRowSidebarKey(row: RenderRow): string | null {
     return row.rowKey
   }
   if (row.type === 'folder-workspace') {
-    return folderWorkspaceKey(row.folderWorkspace.id)
+    // Why: duplicate folder copies use row.key in the DOM, so reveal must use
+    // that same identity.
+    return row.key
   }
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
@@ -1077,7 +1080,9 @@ function getRenderRowOptionId(
     return getWorktreeOptionId(row.rowKey)
   }
   if (row.type === 'folder-workspace') {
-    return getWorktreeOptionId(folderWorkspaceKey(row.folderWorkspace.id))
+    // Why row.key: duplicate-in-groups renders a Pinned and a natural copy of
+    // one folder workspace; the option id must be unique per rendered row.
+    return getWorktreeOptionId(row.key)
   }
   return undefined
 }
@@ -1112,8 +1117,7 @@ function getActiveDescendantOptionId(args: {
       const itemRow = getRenderRowWorktreeItem(row, args.activeWorktreeId)
       if (
         args.pinnedDisplayPolicy === 'duplicate-in-groups' &&
-        itemRow &&
-        !isPinnedWorktreeRow(itemRow)
+        ((itemRow && !isPinnedWorktreeRow(itemRow)) || isNaturalFolderWorkspaceRow(row))
       ) {
         return optionId
       }
@@ -1138,11 +1142,18 @@ function findPreferredRenderRowIndexForWorktree(
       fallbackIndex = index
     }
     const itemRow = getRenderRowWorktreeItem(row, worktreeId)
-    if (pinnedDisplayPolicy === 'duplicate-in-groups' && itemRow && !isPinnedWorktreeRow(itemRow)) {
+    if (
+      pinnedDisplayPolicy === 'duplicate-in-groups' &&
+      ((itemRow && !isPinnedWorktreeRow(itemRow)) || isNaturalFolderWorkspaceRow(row))
+    ) {
       return index
     }
   }
   return fallbackIndex
+}
+
+function isNaturalFolderWorkspaceRow(row: RenderRow): boolean {
+  return row.type === 'folder-workspace' && row.sectionKey !== PINNED_GROUP_KEY
 }
 
 export function getPinnedWorktreeRevealCollapsedGroupKeys({
@@ -1222,7 +1233,9 @@ export function getRenderRowKey(row: RenderRow): string {
     return `pending:${row.creationId}`
   }
   if (row.type === 'folder-workspace') {
-    return `folder-workspace:${row.folderWorkspace.id}`
+    // Why row.key: the Pinned and natural copies of one folder workspace must
+    // not share a virtualized row key under duplicate-in-groups.
+    return row.key
   }
   return `wt:${row.rowKey}`
 }
@@ -1746,24 +1759,23 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       if (current === null || current.worktreeId !== activeWorktreeId) {
         return null
       }
-      const rowStillVisible = rows.some(
-        (row) =>
-          row.type === 'item' &&
-          row.worktree.id === current.worktreeId &&
-          row.rowKey === current.rowKey
-      )
+      const rowStillVisible = isWorkspaceRowIdentityRendered(rows, current)
       return rowStillVisible ? current : null
     })
   }, [activeWorktreeId, rows])
   const getActiveSurfaceVariant = useCallback(
-    (row: WorktreeItemRow): ActiveSurfaceVariant => {
-      if (primaryActiveWorktreeRow?.worktreeId === row.worktree.id) {
-        return primaryActiveWorktreeRow.rowKey === row.rowKey ? 'primary' : 'secondary'
+    (identity: {
+      worktreeId: string
+      rowKey: string
+      isPinnedRow: boolean
+    }): ActiveSurfaceVariant => {
+      if (primaryActiveWorktreeRow?.worktreeId === identity.worktreeId) {
+        return primaryActiveWorktreeRow.rowKey === identity.rowKey ? 'primary' : 'secondary'
       }
       if (
         pinnedDisplayPolicy === 'duplicate-in-groups' &&
-        activeWorktreeId === row.worktree.id &&
-        isPinnedWorktreeRow(row)
+        activeWorktreeId === identity.worktreeId &&
+        identity.isPinnedRow
       ) {
         return 'secondary'
       }
@@ -2067,7 +2079,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       const folderGroupKeys = getFolderWorkspaceRevealGroupKeys(
         pendingRevealWorktree.worktreeId,
         folderWorkspaces,
-        projectGroups
+        projectGroups,
+        groupBy,
+        workspaceStatuses,
+        defaultHostId,
+        pinnedDisplayPolicy
       )
       if (folderGroupKeys.length > 0) {
         for (const groupKey of folderGroupKeys) {
@@ -4798,7 +4814,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   nativeLineageDropTargetId === itemRow.worktree.id)
               const isPinnedOverlayRow = itemRow.sectionKey === PINNED_GROUP_KEY
               const isActiveWorktree = activeWorktreeId === itemRow.worktree.id
-              const activeSurfaceVariant = getActiveSurfaceVariant(itemRow)
+              const activeSurfaceVariant = getActiveSurfaceVariant({
+                worktreeId: itemRow.worktree.id,
+                rowKey: itemRow.rowKey,
+                isPinnedRow: isPinnedWorktreeRow(itemRow)
+              })
               return (
                 <div
                   key={itemRow.rowKey}
@@ -5061,12 +5081,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               return (
                 <div
                   key={vItem.key}
-                  id={getWorktreeOptionId(folderWorktree.id)}
+                  id={getWorktreeOptionId(folderWorkspaceRow.key)}
                   role="option"
                   aria-selected={selectedWorktreeIds.has(folderWorktree.id)}
                   aria-current={activeWorktreeId === folderWorktree.id ? 'page' : undefined}
                   data-worktree-id={folderWorktree.id}
-                  data-worktree-row-key={folderWorktree.id}
+                  // Why: Pinned and natural copies need distinct identities so
+                  // only the clicked copy remains the primary active surface.
+                  data-worktree-row-key={folderWorkspaceRow.key}
                   data-worktree-virtual-row
                   data-worktree-virtual-row-key={String(vItem.key)}
                   data-worktree-virtual-row-start={vItem.start}
@@ -5076,7 +5098,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   style={{ transform: getVirtualRowTransform(vItem.start) }}
                   onClickCapture={handleWorktreeRowClickCapture}
                   onPointerDown={(event) =>
-                    handleWorktreeRowPointerDown(event, folderWorktree.id, folderWorktree.id)
+                    handleWorktreeRowPointerDown(event, folderWorktree.id, folderWorkspaceRow.key)
                   }
                 >
                   <div
@@ -5088,6 +5110,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       repo={undefined}
                       isActive={activeWorktreeId === folderWorktree.id}
                       isCurrentWorktree={currentWorktreeId === folderWorktree.id}
+                      activeSurfaceVariant={getActiveSurfaceVariant({
+                        worktreeId: folderWorktree.id,
+                        rowKey: folderWorkspaceRow.key,
+                        isPinnedRow: folderWorkspaceRow.sectionKey === PINNED_GROUP_KEY
+                      })}
                       contentIndent={cardContentIndent}
                       flushSurface
                       nativeDragEnabled={false}
@@ -5096,7 +5123,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           ? undefined
                           : handleImmediateWorktreeRowActivate
                       }
-                      activationRowKey={folderWorktree.id}
+                      activationRowKey={folderWorkspaceRow.key}
+                      renameRowKey={folderWorkspaceRow.key}
                       onSelectionGesture={onSelectionGesture}
                       onContextMenuSelect={onContextMenuSelect}
                       statusPrDisplay={folderPrDisplay}
@@ -5631,19 +5659,36 @@ const WorktreeList = React.memo(function WorktreeList({
     })
   }, [defaultHostId, projectGroups, visibleHostIdSet])
   const visibleFolderWorkspacesForRows = useMemo(() => {
-    if (!visibleHostIdSet) {
-      return folderWorkspaces
-    }
-    const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
-    return folderWorkspaces.filter((folderWorkspace) => {
-      const hostId = getFolderWorkspaceExecutionHostIdForRows({
-        folderWorkspace,
-        projectGroup: projectGroupById.get(folderWorkspace.projectGroupId),
-        defaultHostId
-      })
-      return visibleHostIdSet.has(hostId)
+    // Why agentStatusEpoch: sleeping-state membership must update immediately
+    // without subscribing to the full agent-status map (same as worktrees).
+    void agentStatusEpoch
+    return computeVisibleFolderWorkspaces(folderWorkspaces, {
+      projectGroupById: new Map(projectGroups.map((group) => [group.id, group])),
+      visibleHostIdSet,
+      defaultHostId,
+      showSleepingWorkspaces,
+      tabsByWorktree,
+      ptyIdsByTabId,
+      browserTabsByWorktree,
+      worktreeIdsWithLiveAgent: showSleepingWorkspaces
+        ? EMPTY_WORKTREE_ID_SET
+        : getWorktreeIdsWithLiveAgent(
+            useAppStore.getState().agentStatusByPaneKey,
+            tabsByWorktree,
+            Date.now()
+          )
     })
-  }, [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet])
+  }, [
+    agentStatusEpoch,
+    browserTabsByWorktree,
+    defaultHostId,
+    folderWorkspaces,
+    projectGroups,
+    ptyIdsByTabId,
+    showSleepingWorkspaces,
+    tabsByWorktree,
+    visibleHostIdSet
+  ])
   const repoOrder = useMemo(() => {
     return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   }, [repos])
@@ -5733,6 +5778,42 @@ const WorktreeList = React.memo(function WorktreeList({
     [hostOptions]
   )
 
+  // Why: folder workspaces bypass sortedIds, so their comparator must match the
+  // Git-row comparator before mixed lanes are merged.
+  const folderWorkspaceSortComparator = useMemo(() => {
+    void sortedIds
+    const now = Date.now()
+    // Why: Smart cold start uses persisted sortOrder for Git rows; folder rows
+    // must use the same key until live attention exists.
+    const isSmartColdStart = sortBy === 'smart' && lastAttentionByWorktreeRef.current === null
+    if (isSmartColdStart) {
+      return (a: Worktree, b: Worktree) =>
+        b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b)
+    }
+    if (sortBy !== 'smart') {
+      return buildWorktreeComparator(sortBy, repoMap, now, new Map())
+    }
+    // Why: folder activity uses synthetic workspace keys; merge it with Git
+    // attention so active folders do not sort as idle.
+    const state = useAppStore.getState()
+    const mergedAttention = new Map(lastAttentionByWorktreeRef.current)
+    const folderAttention = buildAttentionByWorktree(
+      visibleFolderWorkspacesForRows.map(folderWorkspaceToWorktree),
+      state.tabsByWorktree,
+      state.agentStatusByPaneKey,
+      state.runtimePaneTitlesByTabId,
+      state.ptyIdsByTabId,
+      now,
+      state.migrationUnsupportedByPtyId,
+      state.terminalLayoutsByTabId
+    )
+    for (const [id, attention] of folderAttention) {
+      mergedAttention.set(id, attention)
+    }
+    return buildWorktreeComparator('smart', repoMap, now, mergedAttention)
+  }, [sortBy, repoMap, sortedIds, visibleFolderWorkspacesForRows])
+
+  // Build flat row list for rendering
   const rows: Row[] = useMemo(
     () =>
       buildRows(
@@ -5757,7 +5838,8 @@ const WorktreeList = React.memo(function WorktreeList({
         visibleFolderWorkspacesForRows,
         hostLabelById,
         defaultHostId,
-        pinnedDisplayPolicy
+        pinnedDisplayPolicy,
+        folderWorkspaceSortComparator
       ),
     [
       groupBy,
@@ -5780,7 +5862,8 @@ const WorktreeList = React.memo(function WorktreeList({
       newExternalWorktreesInboxByRepo,
       pendingCreations,
       hostLabelById,
-      pinnedDisplayPolicy
+      pinnedDisplayPolicy,
+      folderWorkspaceSortComparator
     ]
   )
   const orderedHostOptions = useMemo(
@@ -6631,6 +6714,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const filtersHideAllRows =
     hasFilters &&
     worktrees.length === 0 &&
+    visibleFolderWorkspacesForRows.length === 0 &&
     placeholderRepoIds.size === 0 &&
     importedWorktreesByRepo.size === 0
   // Why: when active filters hide every row, the Clear Filters empty state must win over Project Group headers.

@@ -125,6 +125,7 @@ function folderWorkspaceRow(
   return {
     type: 'folder-workspace',
     key: 'folder-workspace:folder-1',
+    sectionKey: 'all',
     folderWorkspace,
     projectGroup,
     depth: 0,

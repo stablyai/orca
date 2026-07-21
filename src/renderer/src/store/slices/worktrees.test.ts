@@ -6713,6 +6713,38 @@ describe('setWorktreesPinnedAndReveal', () => {
     expect(reveal).not.toHaveBeenCalled()
   })
 
+  it('defers the folder workspace reveal until its pin update lands in the store', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ isPinned: false })
+    const folderId = folderWorkspaceKey(folderWorkspace.id)
+    const reveal = vi.fn()
+    let resolveUpdate: (() => void) | undefined
+    const updateWorktreeMeta = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUpdate = resolve
+        })
+    )
+    store.setState({
+      folderWorkspaces: [folderWorkspace],
+      activeWorkspaceKey: folderId,
+      revealWorktreeInSidebar: reveal,
+      updateWorktreeMeta
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([folderId], true)
+
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(folderId, { isPinned: true })
+    // Why: folder pin state only lands after the async update; revealing
+    // earlier scrolls to the row's pre-move position.
+    expect(reveal).not.toHaveBeenCalled()
+
+    resolveUpdate?.()
+    await vi.waitFor(() => {
+      expect(reveal).toHaveBeenCalledWith(folderId, { behavior: 'smooth', highlight: true })
+    })
+  })
+
   it('skips a no-op toggle without requesting a reveal', () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: true })

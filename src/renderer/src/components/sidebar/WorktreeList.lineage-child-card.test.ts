@@ -114,9 +114,8 @@ vi.mock('./WorktreeCard', () => ({
         : null
     const isDeleting = deleteStateByWorktreeId[worktree.id]?.isDeleting === true
     const showSshDialog = isActive && repo?.connectionId && sshState?.status !== 'connected'
-    // Why: the real WorktreeCard owns the inline-rename surface and decides
-    // begin-editing from renameRowKey + renamingWorktreeId, so mirror that here
-    // to verify WorktreeList hands each row its row-scoped rename key.
+    // Why: mirror WorktreeCard's row-scoped rename match so this boundary test
+    // verifies the key passed by WorktreeList.
     const renamingRequest = mockStore.state.renamingWorktreeId as {
       worktreeId: string
       rowKey?: string
@@ -1057,8 +1056,31 @@ describe('WorktreeList lineage child card renderer', () => {
     setFolderWorkspaceFixtureState()
     const markup = await renderWorktreeListMarkup()
 
+    // Why: duplicate folder copies require option ids keyed by rendered row.
     expect(markup).toContain(
-      'aria-activedescendant="worktree-list-option-folder%3Afolder-workspace-1"'
+      'aria-activedescendant="worktree-list-option-folder-workspace%3Afolder-workspace-1"'
+    )
+  })
+
+  it('renders a folder-only result while a host filter is active', async () => {
+    setFolderWorkspaceFixtureState()
+    mockStore.state.visibleWorkspaceHostIds = ['local']
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('Folder workspace fixture')
+    expect(markup).not.toContain('No workspaces found')
+  })
+
+  it('passes the rendered folder row key to inline rename', async () => {
+    setFolderWorkspaceFixtureState()
+    mockStore.state.renamingWorktreeId = {
+      worktreeId: folderWorkspaceKey('folder-workspace-1'),
+      rowKey: 'folder-workspace:folder-workspace-1'
+    }
+    const markup = await renderWorktreeListMarkup()
+
+    expect(getCardOpeningTag(markup, folderWorkspaceKey('folder-workspace-1'))).toContain(
+      'data-begin-editing="true"'
     )
   })
 

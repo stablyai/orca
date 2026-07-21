@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import {
   ALL_GROUP_META,
@@ -3168,6 +3169,509 @@ describe('project groups', () => {
       }
     ])
     expect(rows.some((row) => row.type === 'folder-workspace')).toBe(false)
+  })
+
+  const flatViewGroup: ProjectGroup = {
+    id: 'group-flat',
+    name: 'Platform',
+    parentPath: '/monorepo',
+    parentGroupId: null,
+    createdFrom: 'folder-scan',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1
+  }
+  const flatViewFolderWorkspace: FolderWorkspace = {
+    id: 'folder-workspace-flat',
+    projectGroupId: flatViewGroup.id,
+    name: 'Refund fix',
+    folderPath: '/monorepo',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 10,
+    lastActivityAt: 0,
+    createdAt: 1,
+    updatedAt: 1
+  }
+
+  it('lists folder workspaces in the flat view (groupBy none)', () => {
+    const rows = buildRows(
+      'none',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [flatViewFolderWorkspace]
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'all', count: 2 },
+      { type: 'item', worktree: { id: worktree.id } },
+      {
+        type: 'folder-workspace',
+        folderWorkspace: { id: 'folder-workspace-flat' },
+        projectGroup: { id: 'group-flat' },
+        groupDepth: 0
+      }
+    ])
+  })
+
+  it('renders a flat view section when only folder workspaces exist', () => {
+    const rows = buildRows(
+      'none',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [flatViewFolderWorkspace]
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'all', count: 1 },
+      { type: 'folder-workspace', folderWorkspace: { id: 'folder-workspace-flat' } }
+    ])
+  })
+
+  it('hides folder workspaces when the flat view section is collapsed', () => {
+    const rows = buildRows(
+      'none',
+      [worktree],
+      repoMap,
+      null,
+      new Set(['all']),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [flatViewFolderWorkspace]
+    )
+
+    expect(rows).toMatchObject([{ type: 'header', key: 'all', count: 2 }])
+  })
+
+  it('buckets folder workspaces by status in workspace-status grouping', () => {
+    const statusWorktree: Worktree = { ...worktree, workspaceStatus: 'in-progress' }
+    const statusFolderWorkspace: FolderWorkspace = {
+      ...flatViewFolderWorkspace,
+      workspaceStatus: 'in-review'
+    }
+
+    const rows = buildRows(
+      'workspace-status',
+      [statusWorktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [statusFolderWorkspace]
+    )
+
+    // Why: the in-review lane has no worktrees, so it must still materialize
+    // for the folder workspace instead of dropping it from the sidebar.
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'workspace-status:in-progress', count: 1 },
+      { type: 'item', worktree: { id: worktree.id } },
+      { type: 'header', key: 'workspace-status:in-review', count: 1 },
+      { type: 'folder-workspace', folderWorkspace: { id: 'folder-workspace-flat' } }
+    ])
+  })
+
+  it('lists folder workspaces under the no-PR lane in pr-status grouping', () => {
+    const rows = buildRows(
+      'pr-status',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [flatViewFolderWorkspace]
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'pr:in-progress', count: 2 },
+      { type: 'item', worktree: { id: worktree.id } },
+      { type: 'folder-workspace', folderWorkspace: { id: 'folder-workspace-flat' } }
+    ])
+  })
+
+  it('hides folder workspaces under non-folder Project Groups in flat views', () => {
+    const manualGroup: ProjectGroup = {
+      ...flatViewGroup,
+      id: 'group-manual-flat',
+      parentPath: null,
+      createdFrom: 'manual'
+    }
+    const manualFolderWorkspace: FolderWorkspace = {
+      ...flatViewFolderWorkspace,
+      id: 'folder-workspace-manual',
+      projectGroupId: manualGroup.id
+    }
+
+    const rows = buildRows(
+      'none',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [manualGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [manualFolderWorkspace]
+    )
+
+    expect(rows).toEqual([])
+  })
+
+  it('interleaves folder workspaces with worktrees using the sort comparator', () => {
+    const alpha: Worktree = { ...worktree, id: 'wt-alpha', displayName: 'alpha' }
+    const zeta: Worktree = { ...worktree, id: 'wt-zeta', displayName: 'zeta' }
+    const betaFolderWorkspace: FolderWorkspace = { ...flatViewFolderWorkspace, name: 'beta' }
+
+    const rows = buildRows(
+      'none',
+      [alpha, zeta],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [betaFolderWorkspace],
+      undefined,
+      undefined,
+      undefined,
+      (a, b) => a.displayName.localeCompare(b.displayName)
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'all', count: 3 },
+      { type: 'item', worktree: { id: 'wt-alpha' } },
+      { type: 'folder-workspace', folderWorkspace: { id: 'folder-workspace-flat' } },
+      { type: 'item', worktree: { id: 'wt-zeta' } }
+    ])
+  })
+
+  it('interleaves folder workspaces inside a workspace-status lane via the comparator', () => {
+    const alpha: Worktree = {
+      ...worktree,
+      id: 'wt-alpha',
+      displayName: 'alpha',
+      workspaceStatus: 'in-progress'
+    }
+    const zeta: Worktree = {
+      ...worktree,
+      id: 'wt-zeta',
+      displayName: 'zeta',
+      workspaceStatus: 'in-progress'
+    }
+    const betaFolderWorkspace: FolderWorkspace = {
+      ...flatViewFolderWorkspace,
+      name: 'beta',
+      workspaceStatus: 'in-progress'
+    }
+
+    const rows = buildRows(
+      'workspace-status',
+      [alpha, zeta],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [betaFolderWorkspace],
+      undefined,
+      undefined,
+      undefined,
+      (a, b) => a.displayName.localeCompare(b.displayName)
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'workspace-status:in-progress', count: 3 },
+      { type: 'item', worktree: { id: 'wt-alpha' } },
+      { type: 'folder-workspace', folderWorkspace: { id: 'folder-workspace-flat' } },
+      { type: 'item', worktree: { id: 'wt-zeta' } }
+    ])
+  })
+
+  it('renders pinned folder workspaces in the Pinned section instead of natural lanes', () => {
+    const pinnedFolderWorkspace: FolderWorkspace = {
+      ...flatViewFolderWorkspace,
+      isPinned: true
+    }
+
+    const rows = buildRows(
+      'none',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [pinnedFolderWorkspace]
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: PINNED_GROUP_KEY, count: 1 },
+      { type: 'folder-workspace', folderWorkspace: { id: 'folder-workspace-flat' } }
+    ])
+  })
+
+  it('duplicates pinned folder workspaces into their natural lane under duplicate-in-groups', () => {
+    const pinnedFolderWorkspace: FolderWorkspace = {
+      ...flatViewFolderWorkspace,
+      isPinned: true
+    }
+
+    const rows = buildRows(
+      'none',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [pinnedFolderWorkspace],
+      undefined,
+      undefined,
+      'duplicate-in-groups'
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: PINNED_GROUP_KEY, count: 1 },
+      {
+        type: 'folder-workspace',
+        key: 'pinned:folder-workspace:folder-workspace-flat',
+        sectionKey: PINNED_GROUP_KEY
+      },
+      { type: 'header', key: 'all', count: 1 },
+      {
+        type: 'folder-workspace',
+        key: 'folder-workspace:folder-workspace-flat',
+        sectionKey: 'all'
+      }
+    ])
+  })
+
+  it('keeps pinned folder workspaces out of Project Group nesting', () => {
+    const pinnedFolderWorkspace: FolderWorkspace = {
+      ...flatViewFolderWorkspace,
+      isPinned: true
+    }
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [pinnedFolderWorkspace]
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: PINNED_GROUP_KEY, count: 1 },
+      { type: 'folder-workspace', folderWorkspace: { id: 'folder-workspace-flat' } },
+      { type: 'header', key: 'project-group:group-flat', count: 0 }
+    ])
+  })
+
+  it('counts folder workspaces in lane host counts and ids', () => {
+    const sshFolderWorkspace: FolderWorkspace = {
+      ...flatViewFolderWorkspace,
+      connectionId: 'vm-1'
+    }
+
+    const rows = buildRows(
+      'none',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [sshFolderWorkspace]
+    )
+
+    const header = rows[0]
+    if (header.type !== 'header') {
+      throw new Error('expected a header row')
+    }
+    const folderRowId = folderWorkspaceKey('folder-workspace-flat')
+    expect(header.hostWorktreeCounts?.get('ssh:vm-1')).toBe(1)
+    expect(header.hostWorktreeIds?.get('ssh:vm-1')).toEqual([folderRowId])
+    expect(header.worktreeIds).toContain(folderRowId)
+  })
+
+  it('skips folder workspaces with stale project group references in flat views', () => {
+    const orphanFolderWorkspace: FolderWorkspace = {
+      ...flatViewFolderWorkspace,
+      id: 'folder-workspace-orphan',
+      projectGroupId: 'group-deleted'
+    }
+
+    const rows = buildRows(
+      'none',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [flatViewGroup],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [orphanFolderWorkspace]
+    )
+
+    expect(rows).toEqual([])
   })
 
   it('renders imported repos under nested Project Groups before worktree rows load', () => {
