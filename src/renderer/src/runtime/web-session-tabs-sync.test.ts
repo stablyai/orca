@@ -147,6 +147,51 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
   })
 
+  it('reproduces a different-epoch empty snapshot hiding a tab until freshness resets', () => {
+    const surface = {
+      type: 'terminal' as const,
+      id: HOST_SURFACE_ID,
+      parentTabId: 'host-tab-1',
+      leafId: LEAF_ID,
+      title: 'Terminal',
+      status: 'ready' as const,
+      terminal: 'term_host',
+      isActive: true
+    }
+    const initial = makeSnapshot([surface], {
+      publicationEpoch: 'epoch-with-tab',
+      snapshotVersion: 5
+    })
+    const emptyReplacement = makeSnapshot([], {
+      publicationEpoch: 'epoch-empty',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null
+    })
+    const sameEpochRecovery = makeSnapshot([surface], {
+      publicationEpoch: 'epoch-empty',
+      snapshotVersion: 1
+    })
+
+    const state = makeState()
+    const initialPatch = applyFreshWebSessionTabsSnapshot(state, initial, ENV, NOW)
+    const withTab = { ...state, ...(initialPatch as Partial<WebSessionTabsSyncState>) }
+    expect(withTab.tabsByWorktree[WT]).toHaveLength(1)
+
+    const emptyPatch = applyFreshWebSessionTabsSnapshot(withTab, emptyReplacement, ENV, NOW)
+    const hidden = { ...withTab, ...(emptyPatch as Partial<WebSessionTabsSyncState>) }
+    expect(hidden.tabsByWorktree[WT]).toBeUndefined()
+
+    // The correct frame cannot restore the tab at the same accepted epoch/version.
+    expect(applyFreshWebSessionTabsSnapshot(hidden, sameEpochRecovery, ENV, NOW)).toBe(hidden)
+
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    const recoveredPatch = applyFreshWebSessionTabsSnapshot(hidden, sameEpochRecovery, ENV, NOW)
+    const recovered = { ...hidden, ...(recoveredPatch as Partial<WebSessionTabsSyncState>) }
+    expect(recovered.tabsByWorktree[WT]).toHaveLength(1)
+  })
+
   it('accepts a replayed same-epoch same-version snapshot after a transport reconnect', () => {
     // Why: after a shared-control reconnect the server re-emits the current
     // snapshot with an UNCHANGED epoch/version (the host did not restart).

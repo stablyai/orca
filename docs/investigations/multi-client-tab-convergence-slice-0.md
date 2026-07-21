@@ -79,9 +79,30 @@ pnpm exec vitest run --config config/vitest.config.ts \
   src/main/runtime/rpc/methods/session-tabs.test.ts
 ```
 
-Result: **7 files, 144 tests passed**. These tests validate current behavior and code-level characterizations; they do not satisfy the live Slice 0 gate. There is no two-desktop legacy-relay harness on `origin/main`: the nearest coverage is the in-process runtime multi-client integration test, relay handler unit tests, and the `ORCA_E2E_WEB_CLIENT` Playwright path.
+Result: **7 files, 146 tests passed**. These tests validate current behavior and code-level characterizations; they do not satisfy the live Slice 0 gate. There is no two-desktop legacy-relay harness on `origin/main`: the nearest coverage is the in-process runtime multi-client integration test, relay handler unit tests, and the `ORCA_E2E_WEB_CLIENT` Playwright path.
 
 A first raw `vitest` invocation without the repository config produced alias/mobile dependency-resolution errors. Re-running with `config/vitest.config.ts` passed; those initial errors were test invocation errors, not product failures.
+
+## Follow-up: remote tab appears briefly, then disappears until restart
+
+The reporter added a discriminating symptom from Orca 1.4.146: B hosts one tab; A connects to B and briefly renders that tab, then hides it until A restarts. The three Macs are used bidirectionally, and the same broader failures occur when the host is a visible desktop or `orca serve`.
+
+Two deterministic characterizations now reproduce independent event sequences matching this symptom:
+
+1. `src/main/ipc/remote-workspace.test.ts` seeds a non-empty cached relay snapshot at revision 1, then invokes the normal hydrated-target write using an empty persisted local partition. Main sends a current-revision `replace-session` containing an empty `tabsByWorktreePath`. This proves CAS does not prevent a freshly hydrated client from destructively replacing the host tab: its revision is current, but its exported partition is empty.
+2. `src/renderer/src/runtime/web-session-tabs-sync.test.ts` applies E1/version 5 containing tab T, then E2/version 1 with no tabs. The different-epoch rule accepts E2 and removes T from the client store; a correct E2/version 1 frame is then rejected, so T remains hidden until freshness tracking is reset, modeling restart recovery.
+
+Focused command:
+
+```bash
+pnpm exec vitest run --config config/vitest.config.ts \
+  src/main/ipc/remote-workspace.test.ts \
+  src/renderer/src/runtime/web-session-tabs-sync.test.ts
+```
+
+Result: **2 files, 62 tests passed**, including both new characterizations.
+
+These tests materially improve reproduction without claiming which path occurred on the reporter's machines. The visible-host and `serve` parity argues against treating legacy relay writeback as the only cause: the relay characterization is strongest for direct SSH, while the epoch/empty-publication characterization also applies to runtime mirroring and headless transitions. The plan remains aligned by keeping the protocols separate and requiring both event sequences to be fixed.
 
 ## Mandatory gate status
 

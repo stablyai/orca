@@ -35,6 +35,7 @@ vi.mock('./remote-workspace-events', () => ({
 }))
 
 import {
+  _rememberRemoteWorkspaceSnapshotForTests,
   _resetRemoteWorkspaceCachesForTests,
   registerRemoteWorkspaceHandlers,
   remoteWorkspaceSessionMatchesSnapshot
@@ -262,6 +263,47 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
       })
     )
     expect(requestByTargetId.get('target-2')).toBeUndefined()
+  })
+
+  it('reproduces a hydrated client replacing a non-empty relay snapshot with its empty local partition', async () => {
+    _rememberRemoteWorkspaceSnapshotForTests(
+      'target-1',
+      snapshot(
+        {
+          activeWorktreePath: '/repo',
+          activeTabId: 'tab-from-host',
+          tabsByWorktreePath: {
+            '/repo': [
+              {
+                id: 'tab-from-host',
+                title: 'Host shell',
+                worktreePath: '/repo'
+              } as never
+            ]
+          },
+          terminalLayoutsByTabId: {}
+        },
+        1
+      )
+    )
+
+    await callSetForConnectedTargets({ hydratedTargetIds: ['target-1'] })
+
+    expect(requestByTargetId.get('target-1')).toHaveBeenCalledWith(
+      'workspace.patch',
+      expect.objectContaining({
+        baseRevision: 1,
+        clientId: expect.any(String),
+        patch: {
+          kind: 'replace-session',
+          session: expect.objectContaining({
+            activeWorktreePath: null,
+            activeTabId: null,
+            tabsByWorktreePath: {}
+          })
+        }
+      })
+    )
   })
 
   it('can export from the persisted store session when no session argument is provided', async () => {
