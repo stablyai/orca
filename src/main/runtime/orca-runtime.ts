@@ -2289,6 +2289,7 @@ export class OrcaRuntimeService {
     string,
     Promise<RuntimeMobileSessionCreateTerminalResult>
   >()
+  private pendingTerminalMaterializationByKey = new Map<string, Promise<void>>()
   // Why: idempotency map for worktree.create — a create interrupted by a mobile
   // connection migration is retried with the same clientMutationId and returns
   // the in-flight (or just-finished) operation instead of a duplicate worktree.
@@ -2400,6 +2401,7 @@ export class OrcaRuntimeService {
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
+  private ptyInventoryMissingSinceById = new Map<string, number>()
   private wslDistroByPtyId = new Map<string, string>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
@@ -4974,53 +4976,77 @@ export class OrcaRuntimeService {
         (!targetsHost ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
+      const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
+      const missingSince = sessionId ? this.ptyInventoryMissingSinceById.get(sessionId) : undefined
+      if (
+        shouldMaterializePendingTerminal &&
+        missingSince !== undefined &&
+        Date.now() - missingSince < PTY_INVENTORY_MISSING_GRACE_MS
+      ) {
+        // Why: activation cannot turn one transient empty daemon inventory into a duplicate process for a session that may still be running.
+        return this.applyMobileSessionTabNavigation(
+          this.getMobileSessionTabsForWorktree(worktreeId),
+          tab.id,
+          navigation,
+          opts.clientNavigationId
+        )
+      }
       if (shouldMaterializePendingTerminal) {
-        const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
-        const targetGroupId = snapshot?.tabGroups?.find((group) =>
-          group.tabOrder.includes(tab.parentTabId)
-        )?.id
-        // Why: a pending agent tab may exist without its startup command ever
-        // having been delivered (the create's renderer stalled, #7587), so a
-        // bare materialize would put a plain shell under the agent icon.
-        // Re-resolve the launch like the create path; providers skip startup
-        // commands when attaching to live sessions, so this cannot double-launch.
-        let agentStartup: Awaited<
-          ReturnType<OrcaRuntimeService['resolveMobileSessionTerminalCommand']>
-        > = {}
-        if (tab.launchAgent) {
-          try {
-            const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-            agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
-              agent: tab.launchAgent
-            })
-          } catch {
-            // Why: a disabled or unresolvable agent must not make the tab
-            // untappable; fall back to the plain-shell materialize.
+        const materializationKey = `${worktreeId}\0${tab.parentTabId}\0${tab.leafId}`
+        let materialization = this.pendingTerminalMaterializationByKey.get(materializationKey)
+        if (!materialization) {
+          materialization = (async () => {
+            const targetGroupId = snapshot?.tabGroups?.find((group) =>
+              group.tabOrder.includes(tab.parentTabId)
+            )?.id
+            let agentStartup: Awaited<
+              ReturnType<OrcaRuntimeService['resolveMobileSessionTerminalCommand']>
+            > = {}
+            if (tab.launchAgent) {
+              try {
+                const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+                agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
+                  agent: tab.launchAgent
+                })
+              } catch {
+                // Why: a disabled or unresolvable agent must not make the tab untappable; fall back to a plain shell.
+              }
+            }
+            try {
+              await this.createHeadlessMobileSessionTerminal(worktreeId, targetsHost, undefined, {
+                identity: {
+                  tabId: tab.parentTabId,
+                  leafId: tab.leafId,
+                  sessionId
+                },
+                cwd: tab.startupCwd,
+                command: agentStartup.command,
+                env: agentStartup.env,
+                startupCommandDelivery: agentStartup.startupCommandDelivery,
+                launchConfig: agentStartup.launchConfig,
+                launchAgent: tab.launchAgent,
+                targetGroupId
+              })
+            } catch (err) {
+              if (sessionId && parseAppSshPtyId(sessionId)) {
+                this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
+                  force: true
+                })
+              }
+              throw err
+            }
+          })()
+          this.pendingTerminalMaterializationByKey.set(materializationKey, materialization)
+          const drop = (): void => {
+            if (
+              this.pendingTerminalMaterializationByKey.get(materializationKey) === materialization
+            ) {
+              this.pendingTerminalMaterializationByKey.delete(materializationKey)
+            }
           }
+          void materialization.then(drop, drop)
         }
-        try {
-          await this.createHeadlessMobileSessionTerminal(worktreeId, targetsHost, undefined, {
-            identity: {
-              tabId: tab.parentTabId,
-              leafId: tab.leafId,
-              sessionId
-            },
-            cwd: tab.startupCwd,
-            command: agentStartup.command,
-            env: agentStartup.env,
-            startupCommandDelivery: agentStartup.startupCommandDelivery,
-            launchConfig: agentStartup.launchConfig,
-            launchAgent: tab.launchAgent,
-            targetGroupId
-          })
-        } catch (err) {
-          if (sessionId && parseAppSshPtyId(sessionId)) {
-            // Why: an expired SSH reattach clears durable bindings in the store,
-            // but this in-memory headless snapshot can still carry the old id.
-            this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
-          }
-          throw err
-        }
+        await materialization
         return this.applyMobileSessionTabNavigation(
           this.getMobileSessionTabsForWorktree(worktreeId),
           tab.id,
@@ -22480,7 +22506,8 @@ export class OrcaRuntimeService {
       PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
     if (!sessionsResult.ok) {
-      // Why: a transient controller failure is not evidence that retained PTYs exited.
+      // Why: unknown liveness breaks the chain of affirmative absence evidence.
+      this.ptyInventoryMissingSinceById.clear()
       return null
     }
     const sessions = sessionsResult.value
@@ -22489,6 +22516,7 @@ export class OrcaRuntimeService {
     )
     const livePtyIds = new Set(sessions.map((session) => session.id))
     for (const session of sessions) {
+      this.ptyInventoryMissingSinceById.delete(session.id)
       this.adoptControllerTerminalHandle(session.id, session.terminalHandle)
       // Why: workspace identity migration rekeys persisted ownership, but a running daemon PTY keeps the worktree id minted into its session id.
       const worktreeId =
@@ -22506,13 +22534,30 @@ export class OrcaRuntimeService {
       // Why: fire-and-forget so this listing hot path doesn't serialize a relay round-trip per session and a throw can't abort the sweep below.
       this.refreshPtyForegroundAgent(session.id)
     }
+    const observedAt = Date.now()
     for (const pty of this.ptysById.values()) {
-      if (!livePtyIds.has(pty.ptyId) && !this.leafExistsForPty(pty.ptyId)) {
-        pty.connected = false
-        pty.disconnectedAt ??= Date.now()
+      if (livePtyIds.has(pty.ptyId) || this.leafExistsForPty(pty.ptyId)) {
+        this.ptyInventoryMissingSinceById.delete(pty.ptyId)
+        continue
       }
+      const missingSince = this.ptyInventoryMissingSinceById.get(pty.ptyId)
+      if (missingSince === undefined) {
+        // Why: a successful empty daemon response can still be a transient reconnect frame; require sustained affirmative absence before restoration may spawn.
+        this.ptyInventoryMissingSinceById.set(pty.ptyId, observedAt)
+        continue
+      }
+      if (observedAt - missingSince < PTY_INVENTORY_MISSING_GRACE_MS) {
+        continue
+      }
+      pty.connected = false
+      pty.disconnectedAt ??= observedAt
     }
     this.pruneDisconnectedPtyRecords()
+    for (const ptyId of this.ptyInventoryMissingSinceById.keys()) {
+      if (!this.ptysById.has(ptyId)) {
+        this.ptyInventoryMissingSinceById.delete(ptyId)
+      }
+    }
     return livePtyIds
   }
 
@@ -27281,6 +27326,7 @@ const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 const WORKTREE_SCAN_CACHE_TTL_MS = 30_000
 const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
 const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
+const PTY_INVENTORY_MISSING_GRACE_MS = 5000
 // Why (§3.3): 30s freshness window reuses a recent fetch for repeat create/dispatch on the same repo+remote; short enough a changed remote is seen next action.
 const FETCH_FRESHNESS_MS = 30_000
 // Why: bound fetches so a Windows credential-manager GUI hang (STA-1292) can't wedge worktree creation; parity with the exact-base refresh sibling.

@@ -11875,7 +11875,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('keeps retained PTY transcript memory when controller refresh omits a record', async () => {
+  it('requires sustained omission before disconnecting a retained PTY and keeps its transcript', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -11890,20 +11890,29 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.listTerminals()
 
-    const pty = (
-      runtime as unknown as {
-        ptysById: Map<
-          string,
-          {
-            connected: boolean
-            tailBuffer: string[]
-            tailPartialLine: string
-            tailLinesTotal: number
-          }
-        >
-      }
-    ).ptysById.get('daemon-pty-1')
-    expect(pty).toMatchObject({
+    const internals = runtime as unknown as {
+      ptysById: Map<
+        string,
+        {
+          connected: boolean
+          tailBuffer: string[]
+          tailPartialLine: string
+          tailLinesTotal: number
+        }
+      >
+      ptyInventoryMissingSinceById: Map<string, number>
+    }
+    expect(internals.ptysById.get('daemon-pty-1')).toMatchObject({
+      connected: true,
+      tailBuffer: ['still live'],
+      tailPartialLine: 'partial',
+      tailLinesTotal: 1
+    })
+
+    internals.ptyInventoryMissingSinceById.set('daemon-pty-1', Date.now() - 5_000)
+    await runtime.listTerminals()
+
+    expect(internals.ptysById.get('daemon-pty-1')).toMatchObject({
       connected: false,
       tailBuffer: ['still live'],
       tailPartialLine: 'partial',
@@ -18990,7 +18999,7 @@ describe('OrcaRuntimeService', () => {
     expect(activated.activeTabId).toBe(`host-tab-2::${HEADLESS_SECOND_LEAF_ID}`)
   })
 
-  it('refreshes stale daemon liveness before phone-local terminal materialization', async () => {
+  it('does not auto-restore a persisted PTY after empty inventory responses', async () => {
     const stalePtyId = `${TEST_WORKTREE_ID}@@stale-mobile-pty`
     const spawn = vi.fn().mockResolvedValue({ id: stalePtyId })
     const listProcesses = vi.fn(async () => [])
@@ -19040,6 +19049,27 @@ describe('OrcaRuntimeService', () => {
       listProcesses
     })
 
+    const firstActivation = await runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      'host-tab',
+      HEADLESS_LEAF_ID,
+      { notifyClients: false }
+    )
+
+    expect(listProcesses).toHaveBeenCalledTimes(1)
+    expect(focusTerminal).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
+    expect(firstActivation.tabs).toEqual([
+      expect.objectContaining({
+        id: `host-tab::${HEADLESS_LEAF_ID}`,
+        status: 'pending-handle'
+      })
+    ])
+
+    const internals = runtime as unknown as {
+      ptyInventoryMissingSinceById: Map<string, number>
+    }
+    internals.ptyInventoryMissingSinceById.set(stalePtyId, Date.now() - 5_000)
     const activated = await runtime.activateMobileSessionTab(
       `id:${TEST_WORKTREE_ID}`,
       'host-tab',
@@ -19047,8 +19077,7 @@ describe('OrcaRuntimeService', () => {
       { notifyClients: false }
     )
 
-    expect(listProcesses).toHaveBeenCalled()
-    expect(focusTerminal).not.toHaveBeenCalled()
+    expect(listProcesses).toHaveBeenCalledTimes(2)
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: stalePtyId,
@@ -20785,6 +20814,37 @@ describe('OrcaRuntimeService', () => {
       launchAgent: 'claude',
       status: 'ready'
     })
+  })
+
+  it('single-flights concurrent materialization of the same pending agent tab', async () => {
+    const { runtime, spawn } = makePendingAgentTabActivationRuntime()
+    let finishSpawn!: (result: { id: string }) => void
+    spawn.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishSpawn = resolve
+        })
+    )
+
+    const first = runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      `host-tab::${HEADLESS_LEAF_ID}`,
+      undefined,
+      { notifyClients: false }
+    )
+    const second = runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      `host-tab::${HEADLESS_LEAF_ID}`,
+      undefined,
+      { notifyClients: false }
+    )
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1))
+    finishSpawn({ id: 'serve-materialized-pty' })
+
+    const [firstResult, secondResult] = await Promise.all([first, second])
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(firstResult.tabs[0]).toMatchObject({ status: 'ready' })
+    expect(secondResult.tabs[0]).toMatchObject({ status: 'ready' })
   })
 
   it('materializes a plain shell when the pending tab has no launch agent', async () => {
