@@ -70,7 +70,7 @@ import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fe
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
-import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
@@ -1422,6 +1422,7 @@ type RuntimeNotifier = {
     startup?: WorktreeStartupLaunch,
     defaultTabs?: CreateWorktreeResult['defaultTabs']
   ): void
+  activateFolderWorkspace?(folderWorkspaceId: string): void
   createTerminal(
     worktreeId: string,
     opts: {
@@ -13331,6 +13332,163 @@ export class OrcaRuntimeService {
     return this.store?.getFolderWorkspaces?.() ?? []
   }
 
+  async openFinderTerminalAtPath(input: {
+    path: string
+    title?: string
+  }): Promise<{ terminal: RuntimeTerminalCreate & { path: string } }> {
+    const folderPath = await this.resolveLocalFinderFolderPath(input.path)
+    const worktree = await this.resolveWorktreeForContainedPath(folderPath)
+    if (worktree) {
+      this.assertFinderWorktreeIsLocal(worktree)
+      const terminal = await this.createTerminal(`id:${worktree.id}`, {
+        cwd: folderPath,
+        activate: true,
+        ...(input.title ? { title: input.title } : {})
+      })
+      return { terminal: { ...terminal, path: folderPath } }
+    }
+    const workspace = await this.resolveOrCreateFinderFolderWorkspace(folderPath)
+    const terminal = await this.createTerminal(folderWorkspaceKey(workspace.id), {
+      cwd: folderPath,
+      activate: true,
+      ...(input.title ? { title: input.title } : {})
+    })
+    return { terminal: { ...terminal, path: folderPath } }
+  }
+
+  async openFinderWorkspaceAtPath(input: {
+    path: string
+    name?: string
+    terminal?: boolean
+  }): Promise<{
+    workspace:
+      | { type: 'worktree'; id: string; path: string; name?: string | null }
+      | { type: 'folder'; id: string; path: string; name?: string | null }
+    terminal?: RuntimeTerminalCreate & { path?: string }
+  }> {
+    const folderPath = await this.resolveLocalFinderFolderPath(input.path)
+    const worktree = await this.resolveWorktreeForContainedPath(folderPath)
+    if (worktree) {
+      this.assertFinderWorktreeIsLocal(worktree)
+      this.notifier?.activateWorktree(worktree.repoId, worktree.id)
+      const terminal =
+        input.terminal === true
+          ? await this.createTerminal(`id:${worktree.id}`, {
+              cwd: folderPath,
+              activate: true,
+              ...(input.name ? { title: input.name } : {})
+            })
+          : undefined
+      return {
+        workspace: {
+          type: 'worktree',
+          id: worktree.id,
+          path: worktree.path,
+          name: worktree.displayName
+        },
+        ...(terminal ? { terminal } : {})
+      }
+    }
+
+    const workspace = await this.resolveOrCreateFinderFolderWorkspace(folderPath, input.name)
+    this.notifier?.activateFolderWorkspace?.(workspace.id)
+    const terminal =
+      input.terminal === true
+        ? await this.createTerminal(folderWorkspaceKey(workspace.id), {
+            cwd: folderPath,
+            activate: true,
+            ...(input.name ? { title: input.name } : {})
+          })
+        : undefined
+    return {
+      workspace: {
+        type: 'folder',
+        id: folderWorkspaceKey(workspace.id),
+        path: workspace.folderPath,
+        name: workspace.name
+      },
+      ...(terminal ? { terminal } : {})
+    }
+  }
+
+  private async resolveLocalFinderFolderPath(pathValue: string): Promise<string> {
+    if (!isAbsolute(pathValue)) {
+      throw new Error('finder_path_must_be_absolute')
+    }
+    return await this.resolveComparableDirectoryPath(pathValue, 'finder_path_must_be_directory')
+  }
+
+  private assertFinderWorktreeIsLocal(worktree: ResolvedWorktree): void {
+    const repo = this.store?.getRepo(worktree.repoId)
+    if (repo?.connectionId) {
+      throw new Error('finder_remote_workspace_unsupported')
+    }
+  }
+
+  private async resolveComparablePath(pathValue: string): Promise<string> {
+    try {
+      return await realpath(pathValue)
+    } catch {
+      return resolve(pathValue)
+    }
+  }
+
+  private async resolveComparableDirectoryPath(
+    pathValue: string,
+    invalidErrorCode: string
+  ): Promise<string> {
+    let entry
+    try {
+      entry = await stat(pathValue)
+    } catch {
+      throw new Error(invalidErrorCode)
+    }
+    if (!entry.isDirectory()) {
+      throw new Error(invalidErrorCode)
+    }
+    try {
+      return await realpath(pathValue)
+    } catch {
+      throw new Error(invalidErrorCode)
+    }
+  }
+
+  private async resolveOrCreateFinderFolderWorkspace(
+    folderPath: string,
+    name?: string
+  ): Promise<FolderWorkspace> {
+    const store = this.requireStore()
+    const existingCandidates = await Promise.all(
+      (store.getFolderWorkspaces?.() ?? []).map(async (workspace) => ({
+        workspace,
+        comparablePath: await this.resolveComparablePath(workspace.folderPath)
+      }))
+    )
+    const existing = existingCandidates
+      .filter(({ comparablePath }) => isPathInsideOrEqual(comparablePath, folderPath))
+      .sort((left, right) => right.comparablePath.length - left.comparablePath.length)[0]?.workspace
+    if (existing) {
+      if (this.resolveFolderWorkspaceConnectionId(existing)) {
+        throw new Error('finder_remote_workspace_unsupported')
+      }
+      return existing
+    }
+
+    const workspaceName = name?.trim() || getRepoName(folderPath)
+    const group = await this.createProjectGroup({
+      name: workspaceName,
+      parentPath: folderPath,
+      connectionId: null,
+      createdFrom: 'manual'
+    })
+    return this.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: workspaceName,
+      folderPath,
+      connectionId: null
+    })
+  }
+
   async createProjectGroup(input: {
     name: string
     parentPath?: string | null
@@ -24916,17 +25074,18 @@ export class OrcaRuntimeService {
   }
 
   private async resolveWorktreeForContainedPath(cwd: string): Promise<ResolvedWorktree | null> {
-    const currentPath = resolve(cwd)
-    let best: ResolvedWorktree | null = null
+    const currentPath = await this.resolveComparablePath(cwd)
+    let best: { worktree: ResolvedWorktree; comparablePath: string } | null = null
     for (const candidate of await this.listResolvedWorktrees()) {
-      if (!isPathInsideOrEqual(candidate.path, currentPath)) {
+      const comparablePath = await this.resolveComparablePath(candidate.path)
+      if (!isPathInsideOrEqual(comparablePath, currentPath)) {
         continue
       }
-      if (!best || candidate.path.length > best.path.length) {
-        best = candidate
+      if (!best || comparablePath.length > best.comparablePath.length) {
+        best = { worktree: candidate, comparablePath }
       }
     }
-    return best
+    return best?.worktree ?? null
   }
 
   linearListIssues(

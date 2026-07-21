@@ -106,6 +106,47 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('packages Finder Services only with the mac artifact contract', () => {
+    const finderServiceResources = electronBuilderConfig.mac.extraResources.filter((resource) =>
+      resource.to?.includes('Finder Services')
+    )
+    const finderServices = electronBuilderConfig.mac.extendInfo?.NSServices ?? []
+
+    expect([...finderServiceResources, ...finderServices]).not.toHaveLength(0)
+    if (finderServices.length > 0) {
+      expect(finderServices.map((service) => service.NSMenuItem.default)).toEqual(
+        expect.arrayContaining(['New Orca Terminal Here', 'New Orca Workspace Here'])
+      )
+      expect(finderServices).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            NSMenuItem: { default: 'New Orca Terminal Here' },
+            NSSendFileTypes: ['public.folder']
+          }),
+          expect.objectContaining({
+            NSMenuItem: { default: 'New Orca Workspace Here' },
+            NSSendFileTypes: ['public.folder']
+          })
+        ])
+      )
+    } else {
+      expect(finderServiceResources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            from: 'resources/darwin/Finder Services',
+            to: 'Finder Services'
+          })
+        ])
+      )
+    }
+    expect(electronBuilderConfig.win.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'Finder Services' })])
+    )
+    expect(electronBuilderConfig.linux.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'Finder Services' })])
+    )
+  })
+
   it('uses the multi-size icon source for Linux packages', () => {
     expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
   })

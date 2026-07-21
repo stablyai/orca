@@ -585,6 +585,7 @@ describe('attachMainWindowServices', () => {
         worktreeId: string,
         setup?: { runnerScriptPath: string; envVars: Record<string, string> }
       ) => void
+      activateFolderWorkspace: (folderWorkspaceId: string) => void
     }
 
     notifier.worktreesChanged('repo-1')
@@ -596,6 +597,7 @@ describe('attachMainWindowServices', () => {
         ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
       }
     })
+    notifier.activateFolderWorkspace('folder-1')
 
     expect(sendMock.mock.calls).toEqual([
       ['worktrees:changed', { repoId: 'repo-1' }],
@@ -613,7 +615,8 @@ describe('attachMainWindowServices', () => {
             }
           }
         }
-      ]
+      ],
+      ['ui:activateFolderWorkspace', { folderWorkspaceId: 'folder-1' }]
     ])
     expect(runWorktreeChangeInvalidatorsMock).toHaveBeenCalledWith('repo-1')
     expect(runWorktreeChangeInvalidatorsMock.mock.invocationCallOrder[0]).toBeLessThan(

@@ -3483,6 +3483,14 @@ const api = {
       ipcRenderer.on('ui:activateWorktree', listener)
       return () => ipcRenderer.removeListener('ui:activateWorktree', listener)
     },
+    onActivateFolderWorkspace: (
+      callback: (data: { folderWorkspaceId: string }) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { folderWorkspaceId: string }) =>
+        callback(data)
+      ipcRenderer.on('ui:activateFolderWorkspace', listener)
+      return () => ipcRenderer.removeListener('ui:activateFolderWorkspace', listener)
+    },
     onCreateTerminal: (
       callback: (data: {
         requestId?: string

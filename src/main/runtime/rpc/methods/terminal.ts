@@ -937,6 +937,7 @@ const TerminalCreateParams = z.object({
     })
     .optional(),
   title: OptionalString,
+  cwd: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
   activate: z.unknown().optional(),
@@ -1378,6 +1379,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
           : {}),
         title: params.title,
+        cwd: params.cwd,
         focus: params.focus === true,
         rendererBacked: params.rendererBacked === true,
         activate: params.activate === true,

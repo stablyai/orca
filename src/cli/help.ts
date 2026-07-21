@@ -84,6 +84,10 @@ Terminals:
   terminal focus            Alias for terminal switch
   terminal close            Close a terminal pane/session, or its whole tab with --tab
 
+Finder:
+  finder terminal           Open a Finder-selected folder in an Orca terminal
+  finder workspace          Open a Finder-selected folder as an Orca workspace
+
 Orchestration:
   orchestration send        Send an inter-agent message
   orchestration check       Check messages for a terminal

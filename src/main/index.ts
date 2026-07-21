@@ -126,6 +126,7 @@ import {
   setTrayAttention,
   type SystemTrayOptions
 } from './tray/system-tray'
+import { installFinderServices } from './finder-services-installer'
 import { focusExistingMainWindow } from './window/focus-existing-window'
 import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
 import { CodexAccountService } from './codex-accounts/service'
@@ -1827,6 +1828,15 @@ app.whenReady().then(async () => {
     await applyElectronProxySettings(store.getSettings())
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings')
+  }
+  if (!isServeMode && app.isPackaged) {
+    void installFinderServices({
+      sourceRoot: join(process.resourcesPath, 'Finder Services')
+    }).catch((error) => {
+      // Why: Finder Services are convenience launchers. A registration/copy
+      // failure must not block the terminal app from starting.
+      console.warn('[finder-services] Failed to install Finder Services:', error)
+    })
   }
   // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
   initializeBrowserSessionsForApp({

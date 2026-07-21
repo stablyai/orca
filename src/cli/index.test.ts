@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   callMock,
   runtimeClientConstructorMock,
+  openOrcaMock,
   serveOrcaAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
@@ -15,6 +16,7 @@ const {
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
   runtimeClientConstructorMock: vi.fn(),
+  openOrcaMock: vi.fn(),
   serveOrcaAppMock: vi.fn(),
   getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
@@ -27,7 +29,7 @@ vi.mock('./runtime-client', () => {
     readonly isRemote: boolean
     call = callMock
     getCliStatus = vi.fn()
-    openOrca = vi.fn()
+    openOrca = openOrcaMock
 
     constructor(
       _userDataPath?: string,
@@ -498,6 +500,7 @@ describe('orca cli worktree awareness', () => {
 
   beforeEach(() => {
     callMock.mockReset()
+    openOrcaMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_USER_DATA_PATH
     delete process.env.ORCA_WORKSPACE_ID
@@ -3012,6 +3015,105 @@ describe('orca cli worktree awareness', () => {
       focus: true,
       presentation: 'focused'
     })
+  })
+
+  it('opens Orca before asking the runtime to open a Finder terminal at an absolute path', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_finder_terminal', {
+        terminal: {
+          handle: 'term_source',
+          path: '/tmp/repo/feature/src',
+          title: 'Source'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['finder', 'terminal', '--path', '/tmp/repo/feature/src', '--title', 'Source', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(openOrcaMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('finder.openTerminalAtPath', {
+      path: '/tmp/repo/feature/src',
+      title: 'Source'
+    })
+    expect(openOrcaMock.mock.invocationCallOrder[0]).toBeLessThan(
+      callMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('opens Orca before asking the runtime to open a Finder workspace at an absolute path', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_finder_workspace', {
+        workspace: {
+          id: 'folder:notes',
+          path: '/tmp/notes',
+          name: 'Notes'
+        },
+        terminal: {
+          handle: 'term_notes'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['finder', 'workspace', '--path', '/tmp/notes', '--name', 'Notes', '--terminal', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(openOrcaMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('finder.openWorkspaceAtPath', {
+      path: '/tmp/notes',
+      name: 'Notes',
+      terminal: true
+    })
+    expect(openOrcaMock.mock.invocationCallOrder[0]).toBeLessThan(
+      callMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('rejects Finder terminal relative paths before contacting the runtime', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['finder', 'terminal', '--path', 'relative', '--json'], '/tmp/repo')
+
+    expect(openOrcaMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Finder terminal requires --path to be an absolute folder path.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects Finder terminal remote runtimes before contacting the runtime', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['finder', 'terminal', '--path', '/tmp/repo', '--pairing-code', 'remote', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(openOrcaMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Finder terminal requires a local Orca runtime.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('prints terminal.read fallback screen lines in json mode', async () => {

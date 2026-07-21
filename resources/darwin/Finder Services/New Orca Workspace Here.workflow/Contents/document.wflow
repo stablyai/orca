@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>actions</key>
+  <array>
+    <dict>
+      <key>action</key>
+      <dict>
+        <key>AMAccepts</key>
+        <dict>
+          <key>Container</key>
+          <string>List</string>
+          <key>Optional</key>
+          <false/>
+          <key>Types</key>
+          <array>
+            <string>public.folder</string>
+          </array>
+        </dict>
+        <key>AMActionVersion</key>
+        <string>2.0.3</string>
+        <key>AMApplication</key>
+        <array>
+          <string>Automator</string>
+        </array>
+        <key>AMParameterProperties</key>
+        <dict/>
+        <key>AMProvides</key>
+        <dict>
+          <key>Container</key>
+          <string>List</string>
+          <key>Types</key>
+          <array>
+            <string>com.apple.cocoa.string</string>
+          </array>
+        </dict>
+        <key>ActionBundlePath</key>
+        <string>/System/Library/Automator/Run Shell Script.action</string>
+        <key>ActionName</key>
+        <string>Run Shell Script</string>
+        <key>ActionParameters</key>
+        <dict>
+          <key>COMMAND_STRING</key>
+          <string>#!/bin/sh
+set -eu
+if [ &quot;$#&quot; -eq 0 ]; then
+  exit 0
+fi
+
+resolve_orca_cli_path() {
+  if [ -n &quot;${ORCA_FINDER_SERVICE_CLI_PATH:-}&quot; ]; then
+    printf &apos;%s\n&apos; &quot;$ORCA_FINDER_SERVICE_CLI_PATH&quot;
+    return 0
+  fi
+
+  service_script_path=${ORCA_FINDER_SERVICE_SCRIPT_PATH:-$0}
+  service_script_dir=$(CDPATH= cd -- &quot;$(dirname -- &quot;$service_script_path&quot;)&quot; &amp;&amp; pwd -P)
+  resources_dir=$(CDPATH= cd -- &quot;$service_script_dir/../../../..&quot; &amp;&amp; pwd -P)
+  candidate=&quot;$resources_dir/bin/orca&quot;
+  if [ -x &quot;$candidate&quot; ]; then
+    printf &apos;%s\n&apos; &quot;$candidate&quot;
+    return 0
+  fi
+
+  if command -v osascript &gt;/dev/null 2&gt;&amp;1; then
+    app_path=$(osascript -e &apos;POSIX path of (path to app id &quot;com.stablyai.orca&quot;)&apos; 2&gt;/dev/null || true)
+    if [ -n &quot;$app_path&quot; ]; then
+      printf &apos;%s\n&apos; &quot;$app_path/Contents/Resources/bin/orca&quot;
+      return 0
+    fi
+  fi
+  printf &apos;%s\n&apos; &apos;Unable to resolve packaged Orca CLI path for Finder Service.&apos; &gt;&amp;2
+  return 1
+}
+
+orca_cli_path=$(resolve_orca_cli_path)
+for selected_folder_path do
+  &quot;$orca_cli_path&quot; finder workspace --path &quot;$selected_folder_path&quot;
+done
+</string>
+          <key>inputMethod</key>
+          <integer>1</integer>
+          <key>shell</key>
+          <string>/bin/sh</string>
+        </dict>
+        <key>BundleIdentifier</key>
+        <string>com.apple.RunShellScript</string>
+      </dict>
+    </dict>
+  </array>
+  <key>connectors</key>
+  <dict/>
+  <key>workflowMetaData</key>
+  <dict>
+    <key>serviceInputTypeIdentifier</key>
+    <string>com.apple.Automator.fileSystemObject</string>
+    <key>serviceOutputTypeIdentifier</key>
+    <string>com.apple.Automator.nothing</string>
+    <key>serviceProcessesInput</key>
+    <integer>0</integer>
+    <key>workflowTypeIdentifier</key>
+    <string>com.apple.Automator.servicesMenu</string>
+  </dict>
+</dict>
+</plist>
