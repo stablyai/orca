@@ -63,6 +63,8 @@ function safeModelConfigExtract(alias: string, path: string): string {
 }
 
 function branchPredicate(schema: HermesSessionSchema): string {
+  // Why: branch continuations are user-visible conversations, unlike delegate
+  // and tool children, so retain both native metadata encodings Hermes has used.
   const predicates: string[] = []
   if (schema.hasModelConfig) {
     predicates.push(`${safeModelConfigExtract('s', '$._branched_from')} IS NOT NULL`)
@@ -77,6 +79,8 @@ function branchPredicate(schema: HermesSessionSchema): string {
 }
 
 function compressionPredicate(schema: HermesSessionSchema): string {
+  // Why: the post-compression continuation is the conversation users resume;
+  // the compacted parent itself is an implementation artifact and stays hidden.
   if (!schema.hasEndReason) {
     return '0'
   }
@@ -88,6 +92,8 @@ function compressionPredicate(schema: HermesSessionSchema): string {
 }
 
 function listablePredicate(schema: HermesSessionSchema): string {
+  // Why: expose root sessions plus resumable branch/compression continuations,
+  // while excluding internal delegate/tool children from the primary history.
   if (!schema.hasParentSessionId) {
     return schema.hasEndReason ? "COALESCE(s.end_reason, '') <> 'compression'" : '1'
   }
@@ -98,13 +104,17 @@ function listablePredicate(schema: HermesSessionSchema): string {
   return `(${rootPredicate} OR (${children}))`
 }
 
-function listQuery(schema: HermesSessionSchema, limit?: number): string {
+export function hermesEffectiveTimeExpr(schema: HermesSessionSchema): string {
   const baseTime = schema.hasEndedAt
     ? 'CASE WHEN s.ended_at IS NOT NULL AND s.ended_at > s.started_at THEN s.ended_at ELSE s.started_at END'
     : 's.started_at'
-  const effectiveTime = schema.hasMessagesTimestamp
+  return schema.hasMessagesTimestamp
     ? `MAX(${baseTime}, COALESCE((SELECT MAX(m.timestamp) FROM messages m WHERE m.session_id = s.id), ${baseTime}))`
     : baseTime
+}
+
+function listQuery(schema: HermesSessionSchema, limit?: number): string {
+  const effectiveTime = hermesEffectiveTimeExpr(schema)
   return `SELECT s.id, s.started_at, ${schema.hasEndedAt ? 's.ended_at' : 'NULL'} AS ended_at,
                  ${effectiveTime} AS effective_at
           FROM sessions s

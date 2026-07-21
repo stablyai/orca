@@ -41,7 +41,8 @@ function hermesSources(
       {
         profileName,
         sessionsDir:
-          options.hermesSessionsDir ?? join(dirname(dbPaths[0] ?? DEFAULT_HERMES_HOME), 'sessions'),
+          options.hermesSessionsDir ??
+          join(dbPaths[0] ? dirname(dbPaths[0]) : DEFAULT_HERMES_HOME, 'sessions'),
         dbPaths,
         reportMissingDb: options.hermesDbPath !== undefined
       }

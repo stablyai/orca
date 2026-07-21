@@ -72,6 +72,7 @@ const aiVaultListResultSchema = z.object({
       sessionSource: z.string().nullable().optional(),
       profileName: z.string().nullable().optional(),
       filePath: z.string(),
+      storage: z.enum(['file', 'sqlite']).optional(),
       codexHome: z.string().nullable(),
       createdAt: z.string().nullable(),
       updatedAt: z.string().nullable(),

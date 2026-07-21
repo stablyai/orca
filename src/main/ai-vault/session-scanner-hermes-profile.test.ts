@@ -24,6 +24,7 @@ let tempRoots: string[] = []
 afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
+  vi.unstubAllEnvs()
 })
 
 describe('Hermes profile provenance', () => {
@@ -174,5 +175,27 @@ describe('Hermes profile provenance', () => {
       profileName: 'work',
       resumeCommand: "cd '/tmp/direct-sqlite' && hermes -p 'work' --resume 'direct-sqlite-session'"
     })
+  })
+
+  it('uses the default Hermes sessions directory when an injected DB path list is empty', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-hermes-empty-db-paths-'))
+    tempRoots.push(root)
+    const hermesHome = join(root, '.hermes')
+    const sessionsDir = join(hermesHome, 'sessions')
+    await mkdir(sessionsDir, { recursive: true })
+    await writeFile(
+      join(sessionsDir, 'session_empty-db-paths.json'),
+      JSON.stringify({ session_id: 'empty-db-paths', messages: [] })
+    )
+    vi.stubEnv('HERMES_HOME', hermesHome)
+    vi.resetModules()
+    const { hermesDiscoveries } = await import('./session-scanner-hermes-sources')
+
+    const discoveries = await Promise.all(hermesDiscoveries({ hermesDbPaths: [] }, [], 10, []))
+
+    expect(discoveries[0]?.rootDir).toBe(sessionsDir)
+    expect(discoveries[0]?.files.map((file) => file.path)).toContain(
+      join(sessionsDir, 'session_empty-db-paths.json')
+    )
   })
 })

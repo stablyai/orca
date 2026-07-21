@@ -12,6 +12,9 @@ export function dedupeSessions(sessions: AiVaultSession[]): AiVaultSession[] {
   const byIdentity = new Map<string, AiVaultSession>()
   for (const session of sessions) {
     const hermesIdentity = hermesSessionIdentity(session)
+    // Why: recognized Hermes stores dedupe by store/profile/session. An anomalous
+    // Hermes path needs filePath as a last-resort discriminator; other agents
+    // retain their established profile/session identity.
     const key = hermesIdentity
       ? `${session.executionHostId}\u0000${session.agent}\u0000${hermesIdentity}`
       : session.agent === 'hermes'
@@ -89,7 +92,8 @@ function hermesStoreRoot(filePath: string, storage?: AiVaultSession['storage']):
 }
 
 function hermesLegacySessionId(filePath: string): string | null {
-  const match = basenamePosix(normalizeHermesPath(filePath)).match(/^session_(.+)\.json$/i)
+  const pathWithPosixSeparators = filePath.replaceAll(String.fromCharCode(92), '/')
+  const match = basenamePosix(pathWithPosixSeparators).match(/^session_(.+)\.json$/i)
   return match?.[1] || null
 }
 

@@ -10,6 +10,7 @@ import { normalizeTitleText } from './session-scanner-text-normalization'
 import { extractString, timestampMs } from './session-scanner-values'
 import {
   detectHermesSessionSchema,
+  hermesEffectiveTimeExpr,
   openHermesReadonlyDatabase,
   type HermesSessionSchema
 } from './session-scanner-hermes-sqlite-list'
@@ -40,12 +41,7 @@ function optionalNumberColumn(db: SyncDatabase, columnName: string): string {
 
 function sessionQuery(db: SyncDatabase, schema: HermesSessionSchema): string {
   const archivedPredicate = schema.hasArchived ? 'AND COALESCE(s.archived, 0) = 0' : ''
-  const baseTime = schema.hasEndedAt
-    ? 'CASE WHEN s.ended_at IS NOT NULL AND s.ended_at > s.started_at THEN s.ended_at ELSE s.started_at END'
-    : 's.started_at'
-  const effectiveTime = schema.hasMessagesTimestamp
-    ? `MAX(${baseTime}, COALESCE((SELECT MAX(m.timestamp) FROM messages m WHERE m.session_id = s.id), ${baseTime}))`
-    : baseTime
+  const effectiveTime = hermesEffectiveTimeExpr(schema)
   return `SELECT s.id,
                  s.started_at,
                  ${schema.hasEndedAt ? 's.ended_at' : 'NULL'} AS ended_at,
@@ -95,7 +91,7 @@ function rowToSession(
   platform: NodeJS.Platform,
   preview: HermesPreviewRow | undefined,
   profileName?: string | null
-): AiVaultSession {
+): AiVaultSession | null {
   const sessionId = row.id.trim()
   const createdAt = timestampIso(row.started_at)
   const updatedAt = timestampIso(rowTimestamp(row))
@@ -133,11 +129,15 @@ function rowToSession(
       timestamp: preview.timestamp
     })
   }
+  const finalized = finalizeSession(accumulator, platform, {
+    executionHostId: LOCAL_EXECUTION_HOST_ID,
+    profileName: profileName ?? extractString(row.profile_name)
+  })
+  if (!finalized) {
+    return null
+  }
   return {
-    ...finalizeSession(accumulator, platform, {
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      profileName: profileName ?? extractString(row.profile_name)
-    })!,
+    ...finalized,
     storage: 'sqlite',
     gitRepoRoot: extractString(row.git_repo_root),
     provider: extractString(row.provider),

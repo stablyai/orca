@@ -147,6 +147,19 @@ describe('runtime AI Vault session scanner', () => {
       })
     ).rejects.toThrow('Invalid aiVault.prepareSessionResume response')
   })
+
+  it('preserves SQLite storage provenance returned by a runtime host', async () => {
+    const remoteSession = session('runtime:env-1', 'session-1')
+    remoteSession.storage = 'sqlite'
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: true,
+      result: result([remoteSession])
+    })
+
+    const scanResult = await scanRuntimeAiVaultSessions('/user-data', 'env-1', {})
+
+    expect(scanResult.sessions[0]?.storage).toBe('sqlite')
+  })
 })
 
 function result(

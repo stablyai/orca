@@ -34,12 +34,9 @@ export function buildAiVaultResumeCommand(args: {
   // home) the file was discovered under, where an id-prefix lookup scoped to
   // the default store would miss it. Falls back to the id if no path is known.
   const resumeTarget = agent === 'omp' && resumeFilePath?.trim() ? resumeFilePath.trim() : sessionId
-  const sessionArg =
-    shell === 'cmd'
-      ? quoteWindowsCmdArg(resumeTarget)
-      : shell
-        ? quoteStartupArg(resumeTarget, shell)
-        : quoteShellArg(resumeTarget, platform)
+  const sessionArg = quoteResumeArg(resumeTarget, platform, shell)
+  // Why: Hermes treats the default profile as implicit; only named profiles
+  // need an explicit selector for resume to reach the correct session store.
   const selectedBaseCommand =
     agent === 'hermes' && profileName?.trim() && profileName.trim() !== 'default'
       ? `${baseCommand} -p ${quoteResumeArg(profileName.trim(), platform, shell)}`

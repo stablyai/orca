@@ -10,7 +10,12 @@ import {
   openHermesReadonlyDatabase
 } from './session-scanner-hermes-sqlite-list'
 import { parseHermesSqliteSession } from './session-scanner-hermes-sqlite'
-import { splitHermesSqliteCandidate } from './session-scanner-hermes-sqlite-paths'
+import { canonicalizeCandidates } from './session-scanner-hermes-canonicalization'
+import {
+  buildHermesSqliteCandidatePath,
+  splitHermesSqliteCandidate
+} from './session-scanner-hermes-sqlite-paths'
+import type { SessionFileCandidate } from './session-scanner-types'
 
 // Source-level scanner integration tests mock only the production worker boundary;
 // direct SQLite behavior is covered below without bypassing production worker use.
@@ -221,6 +226,62 @@ describe('scanAiVaultSessions Hermes state.db history', () => {
       totalTokens: 162,
       filePath: dbPath
     })
+  })
+
+  it('rejects a SQLite row whose session id becomes empty after trimming', async () => {
+    const dbPath = createHermesStateDb([
+      {
+        id: '   ',
+        startedAt: 1_790_000_000_000,
+        endedAt: 1_790_000_001_000,
+        title: 'Invalid empty id',
+        cwd: '/repo/invalid',
+        model: 'model'
+      }
+    ])
+
+    const session = await parseHermesSqliteSession({
+      dbPath,
+      sessionId: '   ',
+      platform: 'linux'
+    })
+
+    expect(session).toBeNull()
+  })
+
+  it('deduplicates mixed-case Windows legacy and SQLite session ids without changing the id', () => {
+    const sqlitePath = buildHermesSqliteCandidatePath(
+      'C:\\Users\\Dev\\.hermes\\state.db',
+      'MixedCaseSession'
+    )
+    const candidates: SessionFileCandidate[] = [
+      {
+        agent: 'hermes',
+        file: {
+          path: 'C:\\Users\\Dev\\.hermes\\sessions\\session_MixedCaseSession.json',
+          mtimeMs: 10,
+          modifiedAt: new Date(10).toISOString()
+        },
+        profileName: 'default',
+        codexHome: null
+      },
+      {
+        agent: 'hermes',
+        file: {
+          path: sqlitePath,
+          mtimeMs: 5,
+          modifiedAt: new Date(5).toISOString()
+        },
+        profileName: 'default',
+        codexHome: null
+      }
+    ]
+
+    const canonical = canonicalizeCandidates(candidates)
+
+    expect(canonical).toHaveLength(1)
+    expect(canonical[0]?.file.path).toBe(sqlitePath)
+    expect(splitHermesSqliteCandidate(canonical[0]!.file.path)?.sessionId).toBe('MixedCaseSession')
   })
 
   it('isolates malformed model_config to its row while valid history remains visible', async () => {
