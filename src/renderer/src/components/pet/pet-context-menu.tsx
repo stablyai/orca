@@ -43,35 +43,49 @@ export function PetContextMenu({
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-        {/* Why no disabled fallback item: with no fresh agent there is nothing to
-            act on, and the pet is a ~48px sprite — an unusable row is pure noise
-            at that size. No target, no menu. */}
-        {agentTarget ? (
-          <ContextMenuContent>
-            <ContextMenuItem onSelect={jumpToAgent}>
-              {translate('auto.components.pet.PetOverlay.jumpToAgent', 'Go to {{value0}}', {
-                value0: agentLabel
-              })}
-            </ContextMenuItem>
-            {/* Same no-dead-rows rule as above: canAsk is false only when the
-                target's paneKey will not resolve to a pane, and an ask that
-                cannot be addressed must not be offered. */}
-            {canAsk ? (
-              <ContextMenuItem
-                onSelect={() => {
-                  // Why deferred to a dialog rather than opened inline: onSelect
-                  // fires as the menu unmounts, and mounting an input in that
-                  // same tick loses the focus race with the menu's restore.
-                  setAskOpen(true)
-                }}
-              >
-                {translate('auto.components.pet.PetOverlay.askAgent', 'Ask {{value0}}…', {
+        {/* The menu ALWAYS renders. An earlier version omitted it entirely when
+            there was no fresh agent, reasoning that an unusable row is noise on a
+            48px sprite. That was wrong in the field: a pet that silently does
+            nothing on right-click is indistinguishable from a pet whose
+            right-click is broken, and it cost a real "the feature is dead" bug
+            report against a working build. A disabled row that says why is the
+            cheapest possible answer to "is this thing on?". */}
+        <ContextMenuContent>
+          {agentTarget ? (
+            <>
+              <ContextMenuItem onSelect={jumpToAgent}>
+                {translate('auto.components.pet.PetOverlay.jumpToAgent', 'Go to {{value0}}', {
                   value0: agentLabel
                 })}
               </ContextMenuItem>
-            ) : null}
-          </ContextMenuContent>
-        ) : null}
+              {canAsk ? (
+                <ContextMenuItem
+                  onSelect={() => {
+                    // Why deferred to a dialog rather than opened inline: onSelect
+                    // fires as the menu unmounts, and mounting an input in that
+                    // same tick loses the focus race with the menu's restore.
+                    setAskOpen(true)
+                  }}
+                >
+                  {translate('auto.components.pet.PetOverlay.askAgent', 'Ask {{value0}}…', {
+                    value0: agentLabel
+                  })}
+                </ContextMenuItem>
+              ) : null}
+            </>
+          ) : (
+            /* Why this exact wording: the overwhelmingly common cause is a
+               freshly-spawned agent that has not been prompted yet — omp panes
+               report no status at all until their first turn — so the honest
+               message names that rather than implying the pet is broken. */
+            <ContextMenuItem disabled>
+              {translate(
+                'auto.components.pet.PetOverlay.noAgentYet',
+                'No agent has reported yet — prompt one first'
+              )}
+            </ContextMenuItem>
+          )}
+        </ContextMenuContent>
       </ContextMenu>
       <PetAskDialog
         open={askOpen}

@@ -10516,7 +10516,8 @@
         },
         "PetOverlay": {
           "jumpToAgent": "Go to {{value0}}",
-          "askAgent": "Ask {{value0}}…"
+          "askAgent": "Ask {{value0}}…",
+          "noAgentYet": "No agent has reported yet — prompt one first"
         }
       },
       "onboarding": {
