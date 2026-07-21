@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { spacing } from '../theme/mobile-theme'
 import { NewWorkspaceFab, FAB_SIZE } from './NewWorkspaceFab'
@@ -34,10 +35,17 @@ export function HostFabRow({
 }: HostFabRowProps): React.JSX.Element {
   const insets = useSafeAreaInsets()
   const voice = useHostVoiceAsk({ client, hostName, worktrees, enabled: connected })
+  // Flattened from the array this screen already has. worktree.ps streams the
+  // per-agent rows here for the voice feature; the pet's bubble reads the same
+  // ones rather than opening a second poller that could disagree.
+  const agents = useMemo(
+    () => worktrees.flatMap((worktree) => worktree.agents ?? []),
+    [worktrees]
+  )
   return (
     <>
       {/* Behind the controls: the pet must never sit over a button. */}
-      <MobilePetOverlay client={client} />
+      <MobilePetOverlay client={client} agents={agents} />
       <NewWorkspaceFab onPress={onNewWorkspace} disabled={!connected} />
       <HostVoiceTranscriptStrip
         question={voice.lastQuestion}

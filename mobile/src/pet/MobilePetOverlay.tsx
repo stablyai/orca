@@ -9,6 +9,9 @@ import {
 } from '../../../src/shared/pet-roam'
 import { edgeAtNormalized } from './pet-edge'
 import { useMobilePetDrag } from './use-mobile-pet-drag'
+import { useMobilePetBubble } from './use-mobile-pet-bubble'
+import { MobilePetBubble } from './MobilePetBubble'
+import type { PetBubbleAgent } from '../../../src/shared/pet-bubble-text'
 import { MobilePetSprite } from './MobilePetSprite'
 import { petSheetFor } from './pet-sheets'
 import petFrames from './pet-frames.generated.json'
@@ -47,12 +50,19 @@ const FRAMES = petFrames as PetFrameManifest
  *  routes a creature here that this bundle cannot draw. */
 const RENDERABLE_PET_IDS = Object.keys(FRAMES)
 
+const NO_AGENTS: readonly PetBubbleAgent[] = []
+
 export function MobilePetOverlay({
   client,
-  enabled = true
+  enabled = true,
+  agents = NO_AGENTS
 }: {
   client: RpcClient | null
   enabled?: boolean
+  /** Live agent rows from the screen's existing `worktree.ps` data, so the pet
+   *  can speak. Passed in rather than fetched here: the host panel already has
+   *  this array, and a second poller would be a second source of truth. */
+  agents?: readonly PetBubbleAgent[]
 }): React.JSX.Element | null {
   const { width, height } = useWindowDimensions()
   const presence = useMobilePetPresence({
@@ -95,6 +105,10 @@ export function MobilePetOverlay({
     excitedUntilRef.current = Date.now() + TAP_REACTION_MS
     setFrameIndex(0)
   }, [])
+
+  // Above every early return: the pet stops rendering when another surface
+  // holds it, and a conditionally-called hook would break the hook order.
+  const bubbleText = useMobilePetBubble(agents)
 
   const drag = useMobilePetDrag({
     position,
@@ -228,6 +242,7 @@ export function MobilePetOverlay({
           // facing cannot know because roam is paused.
           facing={drag.dragFacing ?? facing}
         />
+        <MobilePetBubble text={bubbleText} petSize={PET_SIZE} />
       </View>
     </View>
   )

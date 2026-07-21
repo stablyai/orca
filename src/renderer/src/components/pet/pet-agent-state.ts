@@ -20,8 +20,10 @@ export type { PetDragAnimation }
 
 // Why: mirrors hermes-agent's flashPetActivity(ms = 1600) — a completion/
 // cancellation beat reads as "just happened" for this long before decaying
-// back into the steady-state ladder below.
-export const PET_BEAT_MS = 1600
+// back into the steady-state ladder below. Defined in shared because the
+// phone's bubble applies the same beat window to the same agents.
+export { PET_BEAT_MS } from '../../../../shared/pet-bubble-text'
+import { PET_BEAT_MS } from '../../../../shared/pet-bubble-text'
 
 // Why: Orca has no gateway-reported "error" state (AgentStatusEntry only
 // carries working/blocked/waiting/done). We adapt hermes's error->failed beat
