@@ -272,6 +272,25 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('projectHostSetupId: initialRunSeed.projectHostSetupId')
   })
 
+  it('keeps the selected setup host after reducing composer state to a repo id', () => {
+    const targetSection = sourceBetween(
+      HOOK_SOURCE,
+      'const selectedWorkspaceTarget = useMemo',
+      'const selectedRepoIsGit'
+    )
+    expect(targetSection).toContain('selectedWorkspaceTargetIdentity?.repoId === repoId')
+    expect(targetSection).toContain('hostId: pinnedTarget?.hostId')
+    expect(targetSection).toContain('projectHostSetupId: pinnedTarget?.projectHostSetupId')
+
+    const changeSection = sourceBetween(
+      HOOK_SOURCE,
+      'const handleProjectHostSetupChange = useCallback',
+      'const handleProjectChange = useCallback'
+    )
+    expect(changeSection).toContain('candidate.id === setupId && candidate.hostId === hostId')
+    expect(changeSection).toContain('workspaceTargetIdentity:')
+  })
+
   it('resolves typed GitHub issue/PR input through the selected repo source context', () => {
     expect(HOOK_SOURCE).toContain('const selectedRepoGitHubSourceContext = useMemo')
 
@@ -444,9 +463,8 @@ describe('useComposerState host-context boundaries', () => {
       'const handleProjectChange = useCallback',
       'const handleSmartGitHubItemSelect'
     )
-    expect(handleProjectChange).toContain(
-      'handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })'
-    )
+    expect(handleProjectChange).toContain('handleRepoChange(nextTarget.target.repoId, {')
+    expect(handleProjectChange).toContain('forceResetStartFrom: isProjectGroupTarget')
   })
 
   it('keeps a Linear branch override when its workspace-scoped issue survives a repo change', () => {

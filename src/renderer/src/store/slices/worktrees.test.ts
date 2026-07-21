@@ -6005,6 +6005,83 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     })
   })
 
+  it('refreshes the requested owner when duplicate repo ids span focused hosts', async () => {
+    const store = createTestStore()
+    const remoteWorktree = makeWorktree({
+      id: 'same-repo::/remote/wt',
+      repoId: 'same-repo',
+      path: '/remote/wt',
+      hostId: 'local'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-owner-qualified-refresh',
+      ok: true,
+      result: makeDetectedResult('same-repo', [remoteWorktree]),
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      repos: [
+        {
+          id: 'same-repo',
+          path: '/repos/local',
+          displayName: 'Local',
+          badgeColor: '#000',
+          addedAt: 0
+        },
+        {
+          id: 'same-repo',
+          path: '/repos/remote',
+          displayName: 'Remote',
+          badgeColor: '#111',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('same-repo', { ownerHostId: 'runtime:env-1' })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.detectedList',
+      params: { repo: 'same-repo' },
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([
+      { ...remoteWorktree, hostId: 'runtime:env-1' }
+    ])
+  })
+
+  it('does not fall back to local when the requested owner disappears before refresh', async () => {
+    const store = createTestStore()
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-owner-removed',
+      ok: true,
+      result: makeDetectedResult('same-repo', []),
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'same-repo',
+          path: '/repos/local',
+          displayName: 'Local',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ]
+    } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('same-repo', { ownerHostId: 'runtime:env-1' })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-1', method: 'worktree.detectedList' })
+    )
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+  })
+
   it('bounds concurrent repo scans during hydration-time refresh', async () => {
     const store = createTestStore()
     const repos = Array.from({ length: WORKTREE_REFRESH_CONCURRENCY + 2 }, (_, index) => ({

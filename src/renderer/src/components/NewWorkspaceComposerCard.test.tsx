@@ -523,4 +523,41 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(hostChanges).toEqual(['setup-builder'])
     expect(recipeChanges).toEqual([null])
   })
+
+  it('distinguishes legacy setup ids that collide across hosts', () => {
+    const hostChanges: [string, string][] = []
+    current = renderCard({
+      projectHostSetupOptions: [
+        {
+          kind: 'ready',
+          id: 'same-repo',
+          hostId: 'runtime:env-1',
+          label: 'Builder One',
+          path: '/workspace/one'
+        },
+        {
+          kind: 'ready',
+          id: 'same-repo',
+          hostId: 'runtime:env-2',
+          label: 'Builder Two',
+          path: '/workspace/two'
+        }
+      ] as never,
+      selectedProjectHostSetupId: 'same-repo',
+      selectedProjectHostId: 'runtime:env-2',
+      onProjectHostSetupChange: (setupId, hostId) => hostChanges.push([setupId, hostId])
+    })
+
+    const runTargetButton =
+      current.container.querySelector<HTMLButtonElement>('button[role="combobox"]')
+    expect(runTargetButton?.textContent).toContain('Builder Two')
+    act(() => runTargetButton?.click())
+
+    const builderOneItem = [...document.body.querySelectorAll<HTMLElement>('[cmdk-item]')].find(
+      (item) => item.textContent?.includes('Builder One')
+    )
+    act(() => builderOneItem?.click())
+
+    expect(hostChanges).toEqual([['same-repo', 'runtime:env-1']])
+  })
 })

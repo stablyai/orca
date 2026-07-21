@@ -1,5 +1,6 @@
 import {
   getExecutionHostLabel,
+  getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -109,7 +110,9 @@ function buildReadySetupOptions({
   eligibleRepos,
   hosts
 }: BuildReadySetupOptionsInput): ReadyProjectHostSetupOption[] {
-  const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
+  const eligibleRepoHosts = new Set(
+    eligibleRepos.map((repo) => `${getRepoExecutionHostId(repo)}\0${repo.id}`)
+  )
   const hostById = new Map(hosts.map((host) => [host.id, host]))
   return projectHostSetups
     .filter((setup) => {
@@ -117,7 +120,7 @@ function buildReadySetupOptions({
       return (
         setup.projectId === projectId &&
         setup.setupState === 'ready' &&
-        eligibleRepoIds.has(setup.repoId) &&
+        eligibleRepoHosts.has(`${setup.hostId}\0${setup.repoId}`) &&
         !isEphemeralVmProjectHost(host) &&
         !isRuntimeOwnedSshSetupHost(setup.hostId)
       )

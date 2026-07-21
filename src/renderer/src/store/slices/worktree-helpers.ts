@@ -20,6 +20,7 @@ import type {
   WorktreeMeta,
   WorkspaceKey
 } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type {
@@ -117,7 +118,10 @@ export type WorktreeSlice = {
    */
   hasHydratedWorktreePurge: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
-  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
+  fetchWorktrees: (
+    repoId: string,
+    options?: { requireAuthoritative?: boolean; ownerHostId?: ExecutionHostId }
+  ) => Promise<boolean>
   fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
   updateWorktreeLineage: (

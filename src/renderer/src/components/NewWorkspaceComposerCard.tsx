@@ -61,6 +61,7 @@ import type {
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
@@ -86,7 +87,8 @@ type NewWorkspaceComposerCardProps = {
   onProjectChange: (value: string) => void
   projectHostSetupOptions?: ProjectHostSetupOption[]
   selectedProjectHostSetupId?: string | null
-  onProjectHostSetupChange?: (setupId: string) => void
+  selectedProjectHostId?: ExecutionHostId | null
+  onProjectHostSetupChange?: (setupId: string, hostId: ExecutionHostId) => void
   ephemeralVmRecipes?: EphemeralVmRecipeOption[]
   selectedEphemeralVmRecipeId?: string | null
   onEphemeralVmRecipeChange?: (recipeId: string | null) => void
@@ -225,10 +227,15 @@ function getRecipeDestroyLabel(recipe: EphemeralVmRecipeOption): string {
 type WorkspaceRunTargetComboboxProps = {
   hostOptions: readonly ReadyProjectHostSetupOption[]
   hostValue: string | null
-  onHostChange?: (setupId: string) => void
+  hostId: ExecutionHostId | null
+  onHostChange?: (setupId: string, hostId: ExecutionHostId) => void
   recipes: EphemeralVmRecipeOption[]
   recipeValue: string | null
   onRecipeChange?: (recipeId: string | null) => void
+}
+
+function getHostOptionValue(option: ReadyProjectHostSetupOption): string {
+  return JSON.stringify([option.hostId, option.id])
 }
 
 type HostPathTooltipPosition = {
@@ -314,6 +321,7 @@ function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
 function WorkspaceRunTargetCombobox({
   hostOptions,
   hostValue,
+  hostId,
   onHostChange,
   recipes,
   recipeValue,
@@ -322,12 +330,16 @@ function WorkspaceRunTargetCombobox({
   const [open, setOpen] = React.useState(false)
   const [vmRecipesOpen, setVmRecipesOpen] = React.useState(false)
   const selectedHost =
-    hostOptions.find((option) => option.id === hostValue) ?? hostOptions[0] ?? null
+    hostOptions.find(
+      (option) => option.id === hostValue && (hostId === null || option.hostId === hostId)
+    ) ??
+    hostOptions[0] ??
+    null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
   const selectedValue = selectedRecipe
     ? `recipe:${selectedRecipe.id}`
     : selectedHost
-      ? `host:${selectedHost.id}`
+      ? `host:${getHostOptionValue(selectedHost)}`
       : ''
   const ephemeralVmLabel = translate(
     'auto.components.NewWorkspaceComposerCard.ephemeralVm',
@@ -335,11 +347,12 @@ function WorkspaceRunTargetCombobox({
   )
 
   const handleHostSelect = React.useCallback(
-    (setupId: string): void => {
-      if (!hostOptions.some((candidate) => candidate.id === setupId)) {
+    (optionValue: string): void => {
+      const option = hostOptions.find((candidate) => getHostOptionValue(candidate) === optionValue)
+      if (!option) {
         return
       }
-      onHostChange?.(setupId)
+      onHostChange?.(option.id, option.hostId)
       onRecipeChange?.(null)
       setOpen(false)
     },
@@ -405,9 +418,9 @@ function WorkspaceRunTargetCombobox({
             </CommandEmpty>
             {hostOptions.map((option) => (
               <CommandItem
-                key={option.id}
-                value={`host:${option.id}`}
-                onSelect={() => handleHostSelect(option.id)}
+                key={getHostOptionValue(option)}
+                value={`host:${getHostOptionValue(option)}`}
+                onSelect={() => handleHostSelect(getHostOptionValue(option))}
                 className="items-center gap-2 px-3 py-2"
               >
                 <Check
@@ -621,6 +634,7 @@ export default function NewWorkspaceComposerCard({
   onProjectChange,
   projectHostSetupOptions = EMPTY_PROJECT_HOST_SETUP_OPTIONS,
   selectedProjectHostSetupId = null,
+  selectedProjectHostId = null,
   onProjectHostSetupChange,
   ephemeralVmRecipes = EMPTY_EPHEMERAL_VM_RECIPES,
   selectedEphemeralVmRecipeId = null,
@@ -839,8 +853,8 @@ export default function NewWorkspaceComposerCard({
     [projectHostSetupOptions]
   )
   const handleProjectHostSetupChange = React.useCallback(
-    (setupId: string): void => {
-      onProjectHostSetupChange?.(setupId)
+    (setupId: string, hostId: ExecutionHostId): void => {
+      onProjectHostSetupChange?.(setupId, hostId)
     },
     [onProjectHostSetupChange]
   )
@@ -933,6 +947,7 @@ export default function NewWorkspaceComposerCard({
               <WorkspaceRunTargetCombobox
                 hostOptions={readyProjectHostSetupOptions}
                 hostValue={selectedProjectHostSetupId ?? null}
+                hostId={selectedProjectHostId}
                 onHostChange={handleProjectHostSetupChange}
                 recipes={ephemeralVmRecipes}
                 recipeValue={selectedEphemeralVmRecipeId}

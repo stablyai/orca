@@ -15,13 +15,14 @@ const FULL_HOST_MODEL_RUNTIME_CAPABILITIES = [
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
-function repo(id: string): Repo {
+function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
     id,
     path: `/repos/${id}`,
     displayName: id,
     badgeColor: '#000000',
-    addedAt: 1
+    addedAt: 1,
+    ...overrides
   }
 }
 
@@ -65,7 +66,7 @@ describe('buildProjectHostSetupOptions', () => {
   it('returns ready setup choices for one project sorted with local first', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
-      eligibleRepos: [repo('local-repo'), repo('remote-repo')],
+      eligibleRepos: [repo('local-repo'), repo('remote-repo', { executionHostId: 'ssh:builder' })],
       projectHostSetups: [
         setup('remote', 'project-1', 'ssh:builder', 'remote-repo'),
         setup('local', 'project-1', 'local', 'local-repo')
@@ -80,7 +81,11 @@ describe('buildProjectHostSetupOptions', () => {
   it('uses saved host labels for ready runtime setup choices', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
-      eligibleRepos: [repo('runtime-repo')],
+      eligibleRepos: [
+        repo('runtime-repo', {
+          executionHostId: 'runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3'
+        })
+      ],
       hosts: [
         host('runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3', {
           label: 'dev box',
@@ -104,6 +109,32 @@ describe('buildProjectHostSetupOptions', () => {
         label: 'dev box',
         repoId: 'runtime-repo'
       })
+    ])
+  })
+
+  it('does not expose a setup backed only by a same-id repo on another host', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('same-repo')],
+      projectHostSetups: [setup('remote', 'project-1', 'runtime:env-1', 'same-repo')]
+    })
+
+    expect(options).toEqual([])
+  })
+
+  it('keeps colliding legacy setup ids available on each owning host', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('same-repo'), repo('same-repo', { executionHostId: 'runtime:env-1' })],
+      projectHostSetups: [
+        setup('same-repo', 'project-1', 'local', 'same-repo'),
+        setup('same-repo', 'project-1', 'runtime:env-1', 'same-repo')
+      ]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'same-repo', hostId: 'local' }),
+      expect.objectContaining({ id: 'same-repo', hostId: 'runtime:env-1' })
     ])
   })
 

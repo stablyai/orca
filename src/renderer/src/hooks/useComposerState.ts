@@ -113,8 +113,8 @@ import {
   resolveComposerActiveRepoId
 } from '@/lib/new-workspace-composer-repo'
 import {
-  resolveWorkspaceCreationRepoId,
-  resolveWorkspaceCreationTarget
+  resolveWorkspaceCreationTarget,
+  type WorkspaceCreationTarget
 } from '@/lib/project-host-workspace-target'
 import {
   buildProjectHostSetupOptions,
@@ -243,7 +243,8 @@ export type ComposerCardProps = {
   onProjectChange: (value: string) => void
   projectHostSetupOptions: ProjectHostSetupOption[]
   selectedProjectHostSetupId: string | null
-  onProjectHostSetupChange: (setupId: string) => void
+  selectedProjectHostId: ExecutionHostId | null
+  onProjectHostSetupChange: (setupId: string, hostId: ExecutionHostId) => void
   ephemeralVmRecipes: NonNullable<OrcaHooks['environmentRecipes']>
   selectedEphemeralVmRecipeId: string | null
   onEphemeralVmRecipeChange: (recipeId: string | null) => void
@@ -380,6 +381,16 @@ export type InitialWorkspaceRunSeedInput = {
     TaskSourceContext,
     'projectId' | 'hostId' | 'projectHostSetupId'
   > | null
+}
+
+type WorkspaceTargetIdentity = Pick<
+  WorkspaceCreationTarget,
+  'projectId' | 'hostId' | 'projectHostSetupId' | 'repoId'
+>
+
+function getWorkspaceTargetIdentity(target: WorkspaceCreationTarget): WorkspaceTargetIdentity {
+  const { projectId, hostId, projectHostSetupId, repoId } = target
+  return { projectId, hostId, projectHostSetupId, repoId }
 }
 
 function getRepoSetupAgentStartupPolicy(repo?: {
@@ -613,7 +624,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [initialWorkspaceStatus, workspaceStatuses]
   )
 
-  const resolvedInitialRepoId = resolveWorkspaceCreationRepoId({
+  const resolvedInitialWorkspaceTarget = resolveWorkspaceCreationTarget({
     eligibleRepos,
     projects,
     projectHostSetups,
@@ -625,8 +636,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projectHostSetupId: initialRunSeed.projectHostSetupId,
     focusedHostScope: workspaceHostScope
   })
+  const resolvedInitialRepoId =
+    resolvedInitialWorkspaceTarget.status === 'ready'
+      ? resolvedInitialWorkspaceTarget.target.repoId
+      : ''
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
+  const [selectedWorkspaceTargetIdentity, setSelectedWorkspaceTargetIdentity] =
+    useState<WorkspaceTargetIdentity | null>(() =>
+      resolvedInitialWorkspaceTarget.status === 'ready'
+        ? getWorkspaceTargetIdentity(resolvedInitialWorkspaceTarget.target)
+        : null
+    )
   const initialFolderProjectGroupId = initialProjectGroupId ?? draftProjectGroupId
   const initialFolderProjectGroup = projectGroups.find(
     (group) => group.id === initialFolderProjectGroupId && Boolean(group.parentPath?.trim())
@@ -708,18 +729,31 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     () => (folderDetectedIds ? new Set(folderDetectedIds) : null),
     [folderDetectedIds]
   )
-  const selectedWorkspaceTarget = useMemo(
-    () =>
-      resolveWorkspaceCreationTarget({
-        eligibleRepos,
-        projects,
-        projectHostSetups,
-        draftRepoId: repoId,
-        focusedHostScope: workspaceHostScope
-      }),
-    [eligibleRepos, projectHostSetups, projects, repoId, workspaceHostScope]
-  )
-  const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+  const selectedWorkspaceTarget = useMemo(() => {
+    const pinnedTarget =
+      selectedWorkspaceTargetIdentity?.repoId === repoId ? selectedWorkspaceTargetIdentity : null
+    return resolveWorkspaceCreationTarget({
+      eligibleRepos,
+      projects,
+      projectHostSetups,
+      draftRepoId: repoId,
+      projectId: pinnedTarget?.projectId,
+      hostId: pinnedTarget?.hostId,
+      projectHostSetupId: pinnedTarget?.projectHostSetupId,
+      focusedHostScope: workspaceHostScope
+    })
+  }, [
+    eligibleRepos,
+    projectHostSetups,
+    projects,
+    repoId,
+    selectedWorkspaceTargetIdentity,
+    workspaceHostScope
+  ])
+  const selectedRepo =
+    selectedWorkspaceTarget.status === 'ready'
+      ? selectedWorkspaceTarget.target.repo
+      : eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
   const [ephemeralVmRecipes, setEphemeralVmRecipes] = useState<
     NonNullable<OrcaHooks['environmentRecipes']>
@@ -763,6 +797,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const selectedProjectHostSetupId =
     !selectedProjectGroup && selectedWorkspaceTarget.status === 'ready'
       ? selectedWorkspaceTarget.target.projectHostSetupId
+      : null
+  const selectedProjectHostId =
+    !selectedProjectGroup && selectedWorkspaceTarget.status === 'ready'
+      ? selectedWorkspaceTarget.target.hostId
       : null
   const hostOptions = useMemo(
     () =>
@@ -891,6 +929,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   repoIdRef.current = repoId
   const setRepoId = useCallback(
     (value: string) => {
+      setSelectedWorkspaceTargetIdentity(null)
       if (onRepoIdOverrideChange) {
         onRepoIdOverrideChange(value)
       } else {
@@ -2498,11 +2537,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleRepoChange = useCallback(
     (
       value: string,
-      options: { preserveStartFrom?: boolean; forceResetStartFrom?: boolean } = {}
+      options: {
+        preserveStartFrom?: boolean
+        forceResetStartFrom?: boolean
+        workspaceTargetIdentity?: WorkspaceTargetIdentity
+      } = {}
     ): void => {
       setProjectError(null)
       if (value === repoId && !options.forceResetStartFrom) {
         setRepoId(value)
+        setSelectedWorkspaceTargetIdentity(options.workspaceTargetIdentity ?? null)
         return
       }
       // Why: capture a descriptor of the prior Start-from selection so the field can show an inline reset (e.g. "was PR #8778") after it's wiped.
@@ -2522,6 +2566,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         ? getLinearLinkedWorkItemBranchName(linkedWorkItem)
         : undefined
       setRepoId(value)
+      setSelectedWorkspaceTargetIdentity(options.workspaceTargetIdentity ?? null)
       if (!options.preserveStartFrom) {
         smartGitHubPrStartPointSelectionRef.current = null
         setLinkedIssue('')
@@ -2575,13 +2620,23 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [folderSourceRepos, setRepoId]
   )
   const handleProjectHostSetupChange = useCallback(
-    (setupId: string): void => {
-      const option = projectHostSetupOptions.find((candidate) => candidate.id === setupId)
+    (setupId: string, hostId: ExecutionHostId): void => {
+      const option = projectHostSetupOptions.find(
+        (candidate) => candidate.id === setupId && candidate.hostId === hostId
+      )
       if (!option || option.kind !== 'ready') {
         return
       }
       // Why: switching run host for the same project must not erase the task/PR source the user is starting from.
-      handleRepoChange(option.repoId, { preserveStartFrom: true })
+      handleRepoChange(option.repoId, {
+        preserveStartFrom: true,
+        workspaceTargetIdentity: {
+          projectId: option.projectId,
+          hostId: option.hostId,
+          projectHostSetupId: option.id,
+          repoId: option.repoId
+        }
+      })
     },
     [handleRepoChange, projectHostSetupOptions]
   )
@@ -2633,17 +2688,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
       // Why: pass the current host as a preference (focusedHostScope), not a hard hostId — pinning made selecting a project set up only on another host a silent no-op.
-      const nextRepoId = resolveWorkspaceCreationRepoId({
+      const nextTarget = resolveWorkspaceCreationTarget({
         eligibleRepos,
         projects,
         projectHostSetups,
         projectId,
         focusedHostScope: preferredHostId ?? workspaceHostScope
       })
-      if (!nextRepoId) {
+      if (nextTarget.status !== 'ready') {
         return
       }
-      handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })
+      handleRepoChange(nextTarget.target.repoId, {
+        forceResetStartFrom: isProjectGroupTarget,
+        workspaceTargetIdentity: getWorkspaceTargetIdentity(nextTarget.target)
+      })
     },
     [
       eligibleRepos,
@@ -4121,6 +4179,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onProjectChange: handleProjectChange,
     projectHostSetupOptions: isProjectGroupTarget ? [] : projectHostSetupOptions,
     selectedProjectHostSetupId: isProjectGroupTarget ? null : selectedProjectHostSetupId,
+    selectedProjectHostId: isProjectGroupTarget ? null : selectedProjectHostId,
     onProjectHostSetupChange: handleProjectHostSetupChange,
     ephemeralVmRecipes: isProjectGroupTarget || !ephemeralVmsEnabled ? [] : ephemeralVmRecipes,
     selectedEphemeralVmRecipeId:

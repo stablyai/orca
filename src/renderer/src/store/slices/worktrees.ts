@@ -359,7 +359,10 @@ function repoHostId(
   repoId: string,
   hostId?: ExecutionHostId | null
 ): ExecutionHostId {
-  const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
+  if (hostId) {
+    return hostId
+  }
+  const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
   return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
 }
 
@@ -2282,10 +2285,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       const ownerState = get()
       const requestStartedWorktrees = ownerState.worktreesByRepo[repoId]
-      const hostId = repoHostId(ownerState, repoId)
+      const hostId = repoHostId(ownerState, repoId, options?.ownerHostId)
       const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
-      const settings = settingsForRepoOwner(ownerState, repoId, hostId)
+      const settings = options?.ownerHostId
+        ? settingsForExecutionHostOwner(ownerState.settings, hostId)
+        : settingsForRepoOwner(ownerState, repoId, hostId)
       const detected = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
         executionHostId: hostId,
         requireAuthoritative: options?.requireAuthoritative
