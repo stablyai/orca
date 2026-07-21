@@ -16,6 +16,7 @@ import { PetBubble } from './pet-bubble'
 import { clampPositionToViewport, type Position } from '../../../../shared/pet-roam'
 import { usePetRoam } from './usePetRoam'
 import { usePetPresence, usePetSurfaceSync } from './use-pet-presence'
+import type { PetSurfaceKind } from '../../../../shared/pet-presence'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -302,7 +303,13 @@ function defaultPosition(size: number = SIZE): Position {
 // out of i18n so translated locales cannot invalidate the keyframes.
 const PET_BOB_KEYFRAMES_CSS =
   '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
-export function PetOverlay(): React.JSX.Element | null {
+export function PetOverlay({
+  surfaceKind = 'desktop-window'
+}: {
+  /** Popout windows pass 'popout-window' so they are their own handoff
+   *  destination rather than masquerading as the main window. */
+  surfaceKind?: PetSurfaceKind
+} = {}): React.JSX.Element | null {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
   const { url, sprite, detected } = usePetUrl()
@@ -357,7 +364,7 @@ export function PetOverlay(): React.JSX.Element | null {
   // P2 presence: this window is one surface among several (other windows,
   // popouts, the phone). The authority decides who holds the pet; we only
   // register, report edges, and draw when told.
-  const presence = usePetPresence(true)
+  const presence = usePetPresence(true, surfaceKind)
 
   // Why roam is gated on holding the pet: a window that does not hold it must
   // not be simulating a second pet in the background, or the two would drift

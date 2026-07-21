@@ -1,4 +1,5 @@
 import React from 'react'
+import { PetOverlay } from '../pet/PetOverlay'
 import { PictureInPicture2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
@@ -140,6 +141,10 @@ export function PanelCanvasPopoutRoot(): React.JSX.Element {
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background text-foreground">
+      {/* P5: a popout is its own pet surface, so the pet can walk out of the
+          main window and into a detached canvas. It registers as
+          'popout-window' rather than masquerading as the main window. */}
+      <PetOverlay surfaceKind="popout-window" />
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border px-2">
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-tight">
           {boot.title ??

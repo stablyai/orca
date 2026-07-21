@@ -75,6 +75,34 @@ describe('pickHandoffTarget', () => {
     expect(target?.id).toBe('pop')
   })
 
+  it('lets a pet walk from the main window into a popout (P5)', () => {
+    // Why this ordering matters: a popout shares the operator's desk, a phone
+    // may be in another room. Reaching the nearer screen first is the likelier
+    // intent when both are alive.
+    const surfaces = [
+      surface('desk', 'desktop-window'),
+      surface('pop', 'popout-window'),
+      surface('phone', 'phone')
+    ]
+    const toPopout = applyEdgeExit({ ...initialPresence(NOW), surfaceId: 'desk' }, surfaces, {
+      fromSurfaceId: 'desk',
+      edge: 'right',
+      position: { x: 1, y: 0.3 },
+      now: NOW + 1
+    })
+    expect(toPopout.surfaceId).toBe('pop')
+
+    // And back out again: a popout is a real destination, not a dead end.
+    const backToDesk = applyEdgeExit(toPopout, surfaces, {
+      fromSurfaceId: 'pop',
+      edge: 'left',
+      position: { x: 0, y: 0.3 },
+      now: NOW + 2
+    })
+    expect(backToDesk.surfaceId).toBe('desk')
+    expect(backToDesk.position).toEqual({ x: 1, y: 0.3 })
+  })
+
   it('breaks ties on most recently seen', () => {
     const target = pickHandoffTarget(
       [

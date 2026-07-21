@@ -4,7 +4,8 @@ import {
   initialPresence,
   type PetEdge,
   type PetPoint,
-  type PetPresenceSnapshot
+  type PetPresenceSnapshot,
+  type PetSurfaceKind
 } from '../../../../shared/pet-presence'
 
 /**
@@ -42,10 +43,11 @@ export function edgeAt(position: PetPoint): PetEdge | null {
   return null
 }
 
-function newSurfaceId(): string {
+function newSurfaceId(kind: PetSurfaceKind): string {
   // Per WINDOW, not per app: two Orca windows are two destinations the pet can
-  // move between, which is the whole point of P2.
-  return `desktop-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  // move between, which is the whole point of P2. The kind prefix keeps ids
+  // legible in logs when several surfaces are live.
+  return `${kind}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 export type PetPresenceBinding = {
@@ -65,8 +67,13 @@ export type PetPresenceBinding = {
   acknowledgeEntry: () => void
 }
 
-export function usePetPresence(enabled: boolean): PetPresenceBinding {
-  const surfaceIdRef = useRef<string>(newSurfaceId())
+export function usePetPresence(
+  enabled: boolean,
+  /** What this window is. Popouts are their own destination (P5), so a pet can
+   *  walk from the main window into a detached panel canvas and back. */
+  kind: PetSurfaceKind = 'desktop-window'
+): PetPresenceBinding {
+  const surfaceIdRef = useRef<string>(newSurfaceId(kind))
   const [snapshot, setSnapshot] = useState<PetPresenceSnapshot>(() => ({
     presence: initialPresence(Date.now()),
     surfaces: []
@@ -93,10 +100,10 @@ export function usePetPresence(enabled: boolean): PetPresenceBinding {
       }
     }
 
-    void api.registerSurface(surfaceId, 'desktop-window').then(apply)
+    void api.registerSurface(surfaceId, kind).then(apply)
     const unsubscribe = api.onChanged(apply)
     const heartbeat = setInterval(() => {
-      void api.registerSurface(surfaceId, 'desktop-window').then(apply)
+      void api.registerSurface(surfaceId, kind).then(apply)
     }, HEARTBEAT_MS)
 
     return () => {
@@ -107,7 +114,7 @@ export function usePetPresence(enabled: boolean): PetPresenceBinding {
       // pet on immediately, not strand it for a 30s stale window.
       void api.removeSurface(surfaceId)
     }
-  }, [enabled])
+  }, [enabled, kind])
 
   const reportExit = useCallback((edge: PetEdge, position: PetPoint) => {
     const api = window.api?.petPresence
