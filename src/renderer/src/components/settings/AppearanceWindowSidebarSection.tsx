@@ -329,7 +329,9 @@ export function AppearanceWindowSidebarSection({
                       checked={settings.showPinnedWorktreesInGroups === true}
                       onChange={() =>
                         updateSettings({
-                          showPinnedWorktreesInGroups: !(settings.showPinnedWorktreesInGroups === true)
+                          showPinnedWorktreesInGroups: !(
+                            settings.showPinnedWorktreesInGroups === true
+                          )
                         })
                       }
                     />

@@ -115,6 +115,19 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))
     ).toEqual([])
+    const ephemeralPi = entry({ agentType: 'pi', providerSession: undefined })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [ephemeralPi.paneKey]: ephemeralPi } }))
+    ).toEqual([])
+    const piWithoutTranscript = entry({
+      agentType: 'pi',
+      providerSession: { key: 'session_id', id: 'pi-session-1' }
+    })
+    expect(
+      plannedWorktrees(
+        snapshot({ agentStatusByPaneKey: { [piWithoutTranscript.paneKey]: piWithoutTranscript } })
+      )
+    ).toEqual([])
     const unsupported = entry({ agentType: 'amp' })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [unsupported.paneKey]: unsupported } }))
@@ -353,6 +366,38 @@ describe('agent sleep planner', () => {
         snapshot({ sleepingAgentSessionsByPaneKey: { [`tab-1:${LEAF}`]: {} as never } })
       )
     ).toEqual([])
+  })
+
+  it('still hibernates completed Pi panes that only retain live resume identity', () => {
+    const piEntry = entry({
+      agentType: 'pi',
+      providerSession: {
+        key: 'session_id',
+        id: 'pi-session-1',
+        transcriptPath: '/tmp/pi-session-1.jsonl'
+      }
+    })
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          agentStatusByPaneKey: { [piEntry.paneKey]: piEntry },
+          sleepingAgentSessionsByPaneKey: {
+            [piEntry.paneKey]: {
+              paneKey: piEntry.paneKey,
+              tabId: 'tab-1',
+              worktreeId: 'wt-bg',
+              agent: 'pi',
+              providerSession: piEntry.providerSession!,
+              prompt: '',
+              state: 'working',
+              capturedAt: OLD,
+              updatedAt: OLD,
+              origin: 'live'
+            }
+          }
+        })
+      )
+    ).toEqual([piEntry.paneKey])
   })
 
   it('rejects mobile-driven panes because paired clients can send input outside desktop xterm', () => {

@@ -12,6 +12,7 @@ import {
   resolveZoomTarget
 } from './useIpcEvents'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../shared/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
@@ -4624,6 +4625,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {},
       agentStatusByPaneKey: {},
+      clearTransientAgentStatuses: vi.fn(),
       getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       recentlyClosedAgentStatusTabIds: {},
       repos: [],
@@ -4638,7 +4640,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   function buildWindowApi(args: {
     onSet: (cb: (data: AgentStatusSetData) => void) => () => void
-    onClear?: (cb: (data: { paneKey: string }) => void) => () => void
+    onClear?: (cb: (data: AgentStatusClearIpcPayload) => void) => () => void
     getSnapshot?: () => Promise<AgentStatusSetData[]>
     drop?: (paneKey: string) => void
     remoteWorkspace?: Record<string, unknown>
@@ -5715,7 +5717,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
-    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+    const onClearListenerRef: {
+      current: ((data: AgentStatusClearIpcPayload) => void) | null
+    } = {
       current: null
     }
 
@@ -5805,9 +5809,136 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
   })
 
+  it('blocks cleared snapshots across remount and accepts newer reconnect replay', async () => {
+    let resolveOldSnapshot!: (entries: AgentStatusSetData[]) => void
+    let resolveCurrentSnapshot!: (entries: AgentStatusSetData[]) => void
+    const oldSnapshot = new Promise<AgentStatusSetData[]>((resolve) => {
+      resolveOldSnapshot = resolve
+    })
+    const currentSnapshot = new Promise<AgentStatusSetData[]>((resolve) => {
+      resolveCurrentSnapshot = resolve
+    })
+    const effectCleanups: (() => void)[] = []
+    const setAgentStatus = vi.fn()
+    const clearTransientAgentStatuses = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const onClearListenerRef: {
+      current: ((data: AgentStatusClearIpcPayload) => void) | null
+    } = { current: null }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      clearTransientAgentStatuses,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      repos: [{ id: 'repo-1', connectionId: 'ssh-a' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Remote agent' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': { root: { type: 'leaf', leafId: FUTURE_LEAF_ID } }
+      }
+    })
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          const cleanup = effect()
+          effectCleanups.push(typeof cleanup === 'function' ? cleanup : () => {})
+        }
+      }
+    })
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (callback) => {
+          onSetListenerRef.current = callback
+          return () => {}
+        },
+        onClear: (callback) => {
+          onClearListenerRef.current = callback
+          return () => {}
+        },
+        getSnapshot: vi.fn().mockReturnValueOnce(oldSnapshot).mockReturnValueOnce(currentSnapshot)
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+    effectCleanups[0]?.()
+    useIpcEvents()
+    await Promise.resolve()
+    if (!onSetListenerRef.current || !onClearListenerRef.current) {
+      throw new Error('Expected agent status listeners to be registered')
+    }
+
+    expect(() =>
+      onClearListenerRef.current?.(null as unknown as AgentStatusClearIpcPayload)
+    ).not.toThrow()
+    expect(clearTransientAgentStatuses).not.toHaveBeenCalled()
+
+    onClearListenerRef.current({
+      transient: true,
+      connectionId: 'ssh-a',
+      clearedAt: 100
+    })
+    const staleEntry: AgentStatusSetData = {
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'stale snapshot',
+      agentType: 'codex',
+      worktreeId: 'wt-1',
+      connectionId: 'ssh-a',
+      receivedAt: 100,
+      stateStartedAt: 90
+    }
+    resolveOldSnapshot([staleEntry])
+    resolveCurrentSnapshot([staleEntry])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(clearTransientAgentStatuses).toHaveBeenCalledWith('ssh-a', 100)
+    expect(setAgentStatus).not.toHaveBeenCalled()
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'replayed',
+      agentType: 'codex',
+      worktreeId: 'wt-1',
+      connectionId: 'ssh-a',
+      receivedAt: 101,
+      stateStartedAt: 101
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledOnce()
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({ prompt: 'replayed' }),
+      'Remote agent',
+      { updatedAt: 101, stateStartedAt: 101 },
+      expect.objectContaining({ worktreeId: 'wt-1', connectionId: 'ssh-a' }),
+      undefined
+    )
+  })
+
   it('keeps a completed worktree-attributed row when main reports pane teardown', async () => {
     const removeAgentStatus = vi.fn()
-    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+    const onClearListenerRef: {
+      current: ((data: AgentStatusClearIpcPayload) => void) | null
+    } = {
       current: null
     }
 

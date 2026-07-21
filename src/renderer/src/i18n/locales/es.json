@@ -72,7 +72,8 @@
     "minimizeNotice": {
       "body": "Orca sigue ejecutándose en la bandeja del sistema"
     },
-    "activityWaiting": "Orca: actividad en espera"
+    "activityWaiting": "Orca: actividad en espera",
+    "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -340,7 +341,8 @@
               "2db0bd7515": "El registro de Orca CLI no está disponible",
               "8d6eedf97e": "No se pudo registrar Orca CLI en PATH.",
               "0f116999f1": "Reinicia tu shell o agrega el directorio de Orca CLI a PATH antes de la configuración.",
-              "15cbedc3e3": "Instala la CLI de Orca antes de configurar skills para agentes."
+              "15cbedc3e3": "Instala la CLI de Orca antes de configurar skills para agentes.",
+              "windowsPathUnknown": "Orca could not check your Windows user PATH"
             }
           }
         }
@@ -588,6 +590,27 @@
             "de50bef680": "macOS está bloqueando las notificaciones de Orca"
           }
         }
+      },
+      "linear": {
+        "usage": {
+          "examples": {
+            "readTicket": "Read the linked ticket",
+            "postUpdate": "Post a progress update",
+            "moveState": "Move the ticket forward",
+            "attachPr": "Attach the PR link",
+            "triageFollowups": "Triage and create follow-ups",
+            "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
+            "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
+            "postUpdateSummary": "Comment progress or a completion summary back to the Linear issue.",
+            "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
+            "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
+            "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
+            "attachPrSummary": "Link the pull request to the Linear issue when you open it.",
+            "attachPrPrompt": "Use {{value0}} to attach this PR to the linked Linear issue with a PR link.",
+            "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
+            "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
+          }
+        }
       }
     },
     "hooks": {
@@ -705,7 +728,9 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
-        "projectHostsSummary": "{{value0}} hosts"
+        "projectHostsSummary": "{{value0}} hosts",
+        "linearTitle": "Linear",
+        "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -716,13 +741,12 @@
     },
     "components": {
       "CodexRestartChip": {
-        "9132779820": "Descartar",
         "c72a5fb234": "Reiniciar",
         "9263e75f49": "Codex está usando la cuenta anterior.",
         "a4c8e1b2f7": "Codex sigue conectado como {{value0}}",
         "d3e8a1f4b2": "Cuenta cambiada",
-        "e9b2c7d1a5": "Reinicia esta sesión para usar {{value0}}. Contrae para seguir trabajando con la cuenta actual.",
-        "f1a6c8e3b4": "Contraer"
+        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
+        "6133594b12": "Keep old account"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Descartar aviso",
@@ -1758,7 +1782,8 @@
         "jiraSortAscending": "ascendente",
         "jiraSortDescending": "descendente",
         "jiraSortBy": "Ordenar por",
-        "jiraToggleSortDirection": "Ordenar de forma {{value0}}"
+        "jiraToggleSortDirection": "Ordenar de forma {{value0}}",
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -1820,7 +1845,14 @@
         "a726967bd3": "Descartar",
         "d5253b54af": "error",
         "7ffc08506e": "check",
-        "522df222b9": "spinner"
+        "522df222b9": "spinner",
+        "e944c2de43": "Update Verification Blocked",
+        "5b309b19f3": "Update Wasn't Installed",
+        "092f09fc14": "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version.",
+        "c9ff9b9ec2": "Check official releases",
+        "a05992a26b": "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases.",
+        "5194358929": "Hide details",
+        "8bc9e17d8f": "Show details"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Mover",
@@ -3243,6 +3275,19 @@
             "dismiss": "Dismiss",
             "openSettings": "Open Settings",
             "gotIt": "Got it"
+          },
+          "UsageRosterPanel": {
+            "title": "Usage",
+            "openDetails": "Open usage details",
+            "notSignedIn": "not signed in",
+            "allAgents": "all agents",
+            "usageDetails": "Usage details & history",
+            "loadingUsage": "Loading usage…",
+            "usageUnavailable": "Usage unavailable",
+            "noUsageData": "No usage data",
+            "detailed": "Detailed",
+            "compact": "Compact",
+            "footerDetailAria": "Usage footer detail"
           }
         }
       },
@@ -3870,9 +3915,9 @@
           "c494b3ccb1": "en",
           "79afc6772b": "orca.yaml",
           "531689199b": "Confiar siempre",
-          "bf800b7e04": ". Ejecútalo solo si confías en ",
+          "bf800b7e04": ". Ejecútalo solo si confías en",
           "831f2cd9f0": "se ejecuta en tu máquina",
-          "aa3ffb33fb": "El archivo ",
+          "aa3ffb33fb": "El archivo",
           "c55beddbf8": "cambió desde la última vez que lo aprobaste. Revísalo de nuevo antes de que se ejecute",
           "95bf974a1a": "Script {{value0}}",
           "9e52effffd": "Nuevo script {{value0}}",
@@ -3915,10 +3960,9 @@
         "RemoveFolderDialog": {
           "4dc5b5065b": "Quitar",
           "d36883e046": "Cancelar",
-          "8c097ef04e": "de Orca. Sigue estando en tu disco.",
-          "e62415c3d0": "Esto solo quita",
           "b79b39d865": "Quitar proyecto",
-          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
+          "removeDescriptionSsh": "Esto solo elimina {{name}} de Orca. Sus archivos permanecen en {{host}}; vuelve a añadir ese host SSH para recuperarlo.",
+          "removeDescriptionLocal": "Esto solo elimina {{name}} de Orca. Sigue estando en tu disco."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Mostrar espacio de trabajo activo"
@@ -4934,7 +4978,9 @@
           "remoteScopeAccounts": "Mostrando las cuentas administradas por {{value0}}. Agrega o vuelve a autenticar cuentas en ese servidor.",
           "remoteScopeAuthContext": "Cada cuenta mantiene su propio contexto de inicio de sesión en {{value0}}.",
           "remoteEmptyClaudeAccounts": "No hay cuentas de Claude administradas en {{value0}}. Usa su inicio de sesión de Claude predeterminado del sistema; agrega cuentas en ese servidor.",
-          "remoteEmptyCodexAccounts": "No hay cuentas de Codex administradas en {{value0}}. Usa su inicio de sesión de Codex predeterminado del sistema; agrega cuentas en ese servidor."
+          "remoteEmptyCodexAccounts": "No hay cuentas de Codex administradas en {{value0}}. Usa su inicio de sesión de Codex predeterminado del sistema; agrega cuentas en ese servidor.",
+          "codexSystemDefaultCustomProvider": "Proveedor personalizado — no se registra el uso.",
+          "codexSystemDefaultNeedsSignIn": "No se encontró ningún inicio de sesión de Codex para {{value0}}."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reiniciar",
@@ -5289,7 +5335,8 @@
           "0c9f3cf9da": "Elige dónde Orca comprueba e instala agent skills globales.",
           "f00d6aa9b5": "WSL no está disponible en esta máquina.",
           "7c776ff9d8": "wsl",
-          "fc0fcf72fd": "Registra el comando de shell de WSL antes de configurar el skill."
+          "fc0fcf72fd": "Registra el comando de shell de WSL antes de configurar el skill.",
+          "windowsPathUnknown": "WSL shell command PATH could not be checked"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "Usado por repositorios que no han personalizado Source Control AI.",
@@ -5422,6 +5469,12 @@
             "defaultViewLabel": "Vista predeterminada de chat nativo",
             "defaultViewTerminal": "Chat en terminal",
             "defaultViewNative": "Chat nativo"
+          },
+          "agentDashboard": {
+            "title": "Agent Dashboard",
+            "description": "Pop-out Kanban board for monitoring agents across worktrees.",
+            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.",
+            "toggleLabel": "Toggle Agent Dashboard"
           }
         },
         "FloatingWorkspacePane": {
@@ -5864,7 +5917,8 @@
           "aa1263e881": "Mantener en tamaño de teléfono (predeterminado)",
           "6436e56546": "Código QR para emparejamiento móvil",
           "1b1b70279a": "Aún no hay dispositivos emparejados.",
-          "1592afcc7a": "Aún no hay dispositivos emparejados. Escanea el código QR con la aplicación móvil de Orca."
+          "1592afcc7a": "Aún no hay dispositivos emparejados. Escanea el código QR con la aplicación móvil de Orca.",
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -5875,7 +5929,10 @@
           "174f4a3c6d": "Controla terminales y agentes desde tu teléfono.",
           "1de96ec8a6": "Mostrar botón de Orca Mobile",
           "682293cadf": "Mostrar el botón de Orca Mobile en la parte superior de la barra lateral izquierda.",
-          "d4f2b65f30": "Mostrar el acceso directo de Orca Mobile en la barra lateral."
+          "d4f2b65f30": "Mostrar el acceso directo de Orca Mobile en la barra lateral.",
+          "installIntro": "Instala Orca Mobile desde la",
+          "installOutro": ", luego empareja a continuación.",
+          "androidApkLabel": "Android APK"
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar notificación de prueba",
@@ -5943,13 +6000,6 @@
           "3ebe650f74": "Nombre de la aplicación",
           "3743ed080c": "Establecer comando",
           "f79084947b": "Nueva aplicación"
-        },
-        "OrchestrationExamplesDialog": {
-          "3d1aa105e3": "Copiar prompt",
-          "9b4c004998": "Hecho",
-          "969cec9739": "Copiar prompt de ejemplo {{value0}}",
-          "4e46da1889": "No se pudo copiar el prompt.",
-          "80c6f2feb8": "Prompt de ejemplo copiado."
         },
         "OrchestrationPane": {
           "52e0634e2c": "Pídele a un agente coordinador que use la orquestación para handoffs, handoffs de worktree y agentes secundarios secuenciales o paralelos.",
@@ -6462,7 +6512,9 @@
           "2309068a6f": "destructivo",
           "65358016ea": "Desechar",
           "dev": "Herramientas de desarrollo",
-          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI."
+          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
+          "linearTitle": "Linear",
+          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -6934,7 +6986,6 @@
           "cf4437a2f7": "Color negro ANSI",
           "adfdee23cb": "Negro",
           "68e9f07de0": "ANSI normal",
-          "fb8c6f1967": "Color para texto en negrita. Vuelve al color normal si no se establece.",
           "862e463f7f": "Texto en negrita",
           "b2c0857c49": "Color del texto seleccionado",
           "8b450b5305": "Primer plano de selección",
@@ -6950,7 +7001,8 @@
           "79f6bfb76e": "Primer plano",
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Reiniciar ahora",
-          "907131d741": "Reiniciando…"
+          "907131d741": "Reiniciando…",
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
         },
         "UIZoomControl": {
           "c2c64b24d0": "Restablecer"
@@ -7596,6 +7648,10 @@
               "title": "Chat nativo",
               "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
               "grok": "grok"
+            },
+            "agentDashboard": {
+              "title": "Agent Dashboard",
+              "description": "Pop-out Kanban board for monitoring agents across worktrees."
             }
           }
         },
@@ -7763,7 +7819,9 @@
             "d2d2d929c0": "Corrector ortográfico de Rich Markdown",
             "4497e2e2bb": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
             "e61157e926": "Ajuste de línea en el editor",
-            "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal."
+            "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
+            "editorFontFamily": "Editor Font Family",
+            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
           }
         },
         "git": {
@@ -8014,7 +8072,9 @@
               "671eb4173c": "Controla terminales y agentes desde tu teléfono.",
               "ffd52a96e4": "Móvil",
               "1de96ec8a6": "Mostrar botón de Orca Mobile",
-              "682293cadf": "Mostrar el botón de Orca Mobile en la parte superior de la barra lateral izquierda."
+              "682293cadf": "Mostrar el botón de Orca Mobile en la parte superior de la barra lateral izquierda.",
+              "e4f4daea0e": "relé",
+              "5d5af8e041": "iPhone"
             }
           }
         },
@@ -9088,6 +9148,10 @@
                   "description": "Permite que tus agentes lean y editen tareas de Linear.",
                   "copyCommand": "Copiar comando"
                 }
+              },
+              "search": {
+                "title": "Linear",
+                "description": "Give agents the skill to read and update your linked Linear tickets."
               }
             }
           }
@@ -9139,28 +9203,26 @@
           "available": "Disponible",
           "reconnecting": "Reconectando",
           "unavailable": "No disponible",
-          "title": "¿Cómo debe conectarse el teléfono nuevo?",
-          "anywhere": "Conectar con Orca Relay",
-          "recommended": "Recomendado",
-          "automaticDescription": "Orca usa una conexión directa cuando está disponible y Relay en caso contrario.",
-          "signInDescription": "Inicia sesión en este ordenador para usar Orca Relay.",
           "signIn": "Iniciar sesión",
-          "localOnly": "Solo red local",
-          "localShort": "LAN o Tailscale",
-          "localDescription": "Usa LAN o Tailscale sin conectar este teléfono mediante Orca Relay."
+          "localDescription": "El teléfono debe estar en esta Wi‑Fi o en tu Tailscale. No requiere inicio de sesión.",
+          "pathGroup": "Cómo llega el teléfono a este ordenador",
+          "anywhereTitle": "Orca Relay",
+          "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. Se requiere inicio de sesión.",
+          "signInRequired": "Inicia sesión para usar Orca Mobile Relay.",
+          "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa Red local.",
+          "signInAgain": "Iniciar sesión de nuevo",
+          "localTitle": "Red local"
         },
         "MobilePairingSetupSection": {
           "title": "Vincular un teléfono",
-          "automaticDescription": "El código de vinculación incluye acceso directo y Orca Relay cifrado como respaldo.",
-          "localDescription": "El código de vinculación solo se conecta mediante la dirección de red local indicada abajo.",
           "regenerate": "Regenerar",
           "generate": "Generar código QR",
-          "localSettings": "Configuración de conexión local",
-          "localAddressDescription": "Elige la dirección LAN o de red privada que Orca Mobile puede usar para acceder directamente a este ordenador.",
           "refresh": "Actualizar interfaces de red",
-          "tailnet": "Conectarse con tu propia tailnet",
-          "tailnetDescription": "Instala Tailscale en este ordenador y en tu teléfono, inicia sesión en la misma tailnet y selecciona arriba su dirección 100.x.y.z.",
-          "getTailscale": "Obtener Tailscale"
+          "overview": "Genera un código QR, luego escanéalo en Orca Mobile en Pair Desktop.",
+          "step1Title": "Método de conexión",
+          "step2Title": "Dirección de este ordenador",
+          "step2RelayDescription": "Se usa para una ruta directa más rápida cuando está cerca. Relay cubre el acceso remoto.",
+          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Wi‑Fi o Tailscale."
         },
         "MobileRelayBetaAvailability": {
           "about": "Acerca de la beta de Orca Relay",
@@ -9168,6 +9230,31 @@
           "availability": "Disponible en",
           "testFlight": "TestFlight",
           "androidApk": "APK de Android"
+        },
+        "SkillUsageExampleDialog": {
+          "copiedPrompt": "Prompt de ejemplo copiado.",
+          "copyFailed": "No se pudo copiar el prompt.",
+          "copyExampleAria": "Copiar prompt de ejemplo {{value0}}",
+          "done": "Hecho",
+          "copyPrompt": "Copiar prompt"
+        },
+        "LinearAgentSkillPane": {
+          "title": "Linear",
+          "description": "Give agents the skill to read and update your linked Linear tickets.",
+          "skillTitle": "Linear skill",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
+          "howToUse": "How to use it",
+          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
+          "terminalTitle": "Linear skill setup",
+          "terminalAriaLabel": "Linear skill install terminal"
+        },
+        "MobileRelayBetaNotice": {
+          "notice": "Orca Relay is in beta."
+        },
+        "EditorFontFamilySetting": {
+          "title": "Editor Font Family",
+          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+          "placeholder": "Same as terminal font"
         }
       },
       "right": {
@@ -9215,7 +9302,16 @@
             "f273f2271c": "Agente iniciado. Marcados como resueltos: {{value0}}; omitidos: {{value1}}; con error: {{value2}}.",
             "aa95b81a3a": "Agente iniciado. Marcados como resueltos: {{value0}}; omitidos: {{value1}}; con error: {{value2}}.",
             "495b2f8c4b": "Agente iniciado, pero no se pudieron marcar los comentarios seleccionados como resueltos.",
-            "3c3ad3a1d2": "Agente iniciado. No se puede marcar ningún comentario seleccionado como resuelto en el host."
+            "3c3ad3a1d2": "Agente iniciado. No se puede marcar ningún comentario seleccionado como resuelto en el host.",
+            "review": {
+              "auto_retry": "Orca reintentará a las {{time}}.",
+              "open_review": "Abrir revisión",
+              "retry": "Reintentar"
+            },
+            "sync": {
+              "pending": "Syncing…",
+              "branch": "Sync Branch"
+            }
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancelar",
@@ -9268,14 +9364,17 @@
             "d6a25618aa": "Contraer carpeta",
             "d87a4c42e1": "Abrir vista previa de Markdown",
             "c2112579f6": "Descargar",
+            "7ac885bd2f": "Descargar carpeta",
             "dd112c81d2": "Abrir en Orca Browser",
             "1bb9be455c": "Agregar como proyecto…",
             "0fec99bfd7": "Duplicar",
             "f61af83316": "Nueva carpeta",
             "37c875d827": "Nuevo archivo",
             "b3e288bf41": "No se pudo descargar '{{value0}}'.",
+            "f729bcd97d": "No se pudo descargar la carpeta '{{value0}}'.",
             "1a3df04ae1": "Abrir",
             "bce4d4e44f": "Se descargó '{{value0}}'",
+            "a4029c996b": "Se descargó la carpeta '{{value0}}'",
             "e26010014a": "Ignorado por .gitignore",
             "a06551beee": "Intro",
             "128a99ed5e": "No asignado",
@@ -9598,6 +9697,7 @@
             "hugeRepoIgnorePrompt": "Este repositorio tiene demasiados cambios activos. ¿Agregar \"{{value0}}\" a .gitignore?",
             "hugeRepoIgnoreAction": "Agregar a .gitignore",
             "tooManyChanges": "Se detectaron demasiados cambios. Solo se muestran los primeros {{value0}}.",
+            "submoduleTruncated": "Se omitieron más cambios del submódulo",
             "bf5082de46": "{{value0}} copiado",
             "c06193ef57": "No se pudo copiar {{value0}}",
             "d172a4f068": "Hash del commit",
@@ -9620,6 +9720,7 @@
             "createPrIntentPublishing": "Publicando rama…",
             "createPrIntentForcePushing": "Haciendo force push con lease…",
             "createPrIntentPushing": "Haciendo push de commits…",
+            "createPrIntentFastForwarding": "Actualizando rama…",
             "createPrIntentRemoteFailed": "No se pudo actualizar la rama remota. Vuelve a intentar Crear PR.",
             "createPrIntentGeneratingDetails": "Generando detalles de revisión…",
             "createPrIntentBranchChangedDuringDetails": "La rama cambió mientras se generaban los detalles de la revisión. Vuelve a intentar Crear PR.",
@@ -9652,7 +9753,8 @@
               "a9bf7c171a": "Push fallido",
               "834cb3f23d": "Corregir con AI",
               "783a808870": "Cerrar"
-            }
+            },
+            "97e7124eac": "No se pudo actualizar Source Control. Vuelve a intentarlo."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -9825,6 +9927,136 @@
                   "05e4aec17b": "Los checks de {{value0}} estarán disponibles cuando termine la operación",
                   "d77c513c1e": "{{value0}} en progreso",
                   "b597440265": "Actualiza el estado de GitHub de esta rama para cargar checks y revisión."
+                }
+              },
+              "review": {
+                "detail": {
+                  "positive": "Orca también tiene información de {{reviewLabel}} guardada que no pudo verificar.",
+                  "rate_limited": "Orca también no pudo verificar el estado de {{reviewLabel}} porque {{provider}} está limitando temporalmente las solicitudes.",
+                  "network": "Orca también no pudo verificar el estado de {{reviewLabel}} porque este entorno no pudo conectar con {{provider}}.",
+                  "untyped": "Orca también no pudo confirmar si esta rama ya tiene un {{reviewLabel}}."
+                },
+                "positive": {
+                  "title": "Detalles de {{reviewLabelCap}} no disponibles",
+                  "body": "Orca ha guardado información de {{reviewLabel}} para esta rama pero no pudo confirmar su estado actual."
+                },
+                "no_review": {
+                  "title": "No se encontró ningún {{reviewLabel}}",
+                  "body": "Crea un {{reviewLabel}} para iniciar las verificaciones y la revisión."
+                },
+                "active": {
+                  "title": "Verificando estado de {{reviewLabel}}",
+                  "body": "Orca está verificando {{provider}} para un {{reviewLabel}} en esta rama."
+                },
+                "git_loading": {
+                  "title": "Verificando estado de la rama",
+                  "body": "Orca está verificando esta rama antes de mostrar las acciones de creación o publicación."
+                },
+                "git_error": {
+                  "title": "No se pudo verificar el estado de la rama",
+                  "body": "Orca no pudo confirmar el upstream de esta rama desde este entorno. Reintenta antes de publicar o crear un {{reviewLabel}}."
+                },
+                "unknown": {
+                  "title": "Estado de {{reviewLabelCap}} no disponible",
+                  "body": "Orca no ha confirmado el estado de {{reviewLabel}} para esta rama. Reintenta para verificar de nuevo."
+                },
+                "paused": {
+                  "title": "Actualización de {{provider}} pausada",
+                  "body": "{{provider}} está limitando temporalmente las solicitudes. Esto puede ocurrir incluso cuando la cuota de API mostrada no está agotada."
+                },
+                "network": {
+                  "title": "No se pudo conectar con {{provider}}",
+                  "body": "Este entorno no pudo conectar con {{provider}}. Verifica su conexión y reintenta."
+                },
+                "unknown_error": {
+                  "title": "No se pudo verificar el estado de {{reviewLabel}}",
+                  "body": "La búsqueda falló, por lo que Orca no pudo confirmar si esta rama ya tiene un {{reviewLabel}}."
+                },
+                "untyped": {
+                  "title": "Estado de {{reviewLabelCap}} no disponible",
+                  "body": "Orca no pudo confirmar si esta rama ya tiene un {{reviewLabel}}. Reintenta para verificar de nuevo."
+                },
+                "auth": {
+                  "title": "Autenticación de {{provider}} fallida",
+                  "body": "{{provider}} no pudo autenticar las credenciales disponibles en este entorno. Verifica el inicio de sesión de {{provider}} o el token del entorno y reintenta."
+                },
+                "permission": {
+                  "title": "Acceso denegado por {{provider}}",
+                  "body": "Las credenciales actuales de {{provider}} no pueden leer los {{reviewLabel}} de este repositorio. Verifica la cuenta, los alcances del token y el acceso al repositorio, luego reintenta."
+                },
+                "repo": {
+                  "title": "Repositorio de {{provider}} no disponible",
+                  "body": "{{provider}} no pudo resolver o acceder al repositorio del remote y cuenta actuales. Verifica el remote y el acceso al repositorio, luego reintenta."
+                },
+                "cli": {
+                  "title": "CLI de {{provider}} no disponible",
+                  "body": "Orca no pudo ejecutar la CLI de {{provider}} en este entorno. Configúrala aquí y reintenta."
+                },
+                "skipped": {
+                  "disconnected": {
+                    "title": "Host desconectado",
+                    "body": "El host de ejecución de este repositorio está desconectado, por lo que Orca no puede actualizar el estado de {{reviewLabel}}."
+                  },
+                  "bare": {
+                    "title": "Repositorio bare",
+                    "body": "Este repositorio es bare, por lo que el estado de {{reviewLabel}} no está disponible aquí."
+                  },
+                  "archived": {
+                    "title": "Repositorio archivado",
+                    "body": "Este repositorio está archivado, por lo que Orca no está actualizando el estado de {{reviewLabel}}."
+                  },
+                  "not_git": {
+                    "title": "No es un repositorio Git",
+                    "body": "Orca no pudo tratar esta carpeta como un repositorio Git para el estado de {{reviewLabel}}."
+                  },
+                  "remote": {
+                    "title": "Contexto solo remoto",
+                    "body": "Orca no pudo actualizar el estado de {{reviewLabel}} para este contexto remoto. Reintenta cuando el host esté disponible."
+                  }
+                },
+                "no_upstream": {
+                  "title": "Sin upstream configurado",
+                  "body": "Publica esta rama para configurar su upstream antes de crear un {{reviewLabel}}."
+                },
+                "needs_sync": {
+                  "title": "La rama necesita sincronizarse",
+                  "body": "Sincroniza esta rama con su upstream antes de crear un {{reviewLabel}}."
+                },
+                "auth_required": {
+                  "title": "Conecta {{provider}}",
+                  "body": "{{provider}} debe estar conectado en este entorno antes de que Orca pueda crear un {{reviewLabel}}."
+                },
+                "needs_push": {
+                  "title": "La rama tiene commits sin enviar",
+                  "body": "Envía los últimos commits antes de crear un {{reviewLabel}}."
+                },
+                "existing": {
+                  "title": "{{reviewLabelCap}} ya existe",
+                  "body": "Orca encontró un {{reviewLabel}} existente para esta rama."
+                },
+                "detached": {
+                  "title": "Sin rama actual",
+                  "body": "Selecciona una rama antes de crear un {{reviewLabel}}."
+                },
+                "dirty": {
+                  "title": "Primero confirma los cambios",
+                  "body": "Confirma o guarda tus cambios antes de crear un {{reviewLabel}}."
+                },
+                "default_branch": {
+                  "title": "En la rama por defecto",
+                  "body": "Cambia a una rama de características antes de crear un {{reviewLabel}}."
+                },
+                "fork": {
+                  "title": "Fork head no soportado",
+                  "body": "Orca no puede crear un {{reviewLabel}} desde este fork head aquí."
+                },
+                "base_missing": {
+                  "title": "La rama base no está en el remote",
+                  "body": "La base de esta rama aún no está en el remote, por lo que un {{reviewLabel}} no puede apuntar a ella."
+                },
+                "unsupported": {
+                  "title": "{{reviewLabelCap}} no soportado aquí",
+                  "body": "Este proveedor de repositorio no soporta la creación de un {{reviewLabel}} desde Orca."
                 }
               }
             }
@@ -10275,6 +10507,24 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "github": {
+            "refresh": {
+              "error": {
+                "copy": {
+                  "580025e7b7": "GitHub is unavailable",
+                  "01c85b5770": "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers.",
+                  "d1a9f2b165": "Can't reach GitHub",
+                  "7d01d42a3a": "GitHub is unreachable right now. Check your connection, then try again shortly.",
+                  "e9d681894a": "GitHub rate limit reached",
+                  "8c77434d6f": "GitHub is rate-limiting requests. This panel refreshes once the limit resets.",
+                  "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
+                  "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
+                  "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                }
+              }
+            }
           }
         }
       },
@@ -10601,7 +10851,8 @@
           },
           "ProjectCombobox": {
             "search": "Buscar proyectos...",
-            "empty": "Ningún proyecto coincide con tu búsqueda."
+            "empty": "Ningún proyecto coincide con tu búsqueda.",
+            "addProject": "Add a new project"
           }
         }
       },
@@ -10651,7 +10902,8 @@
             "group": "Canal de versión",
             "preview": "Vista previa",
             "stable": "Estable"
-          }
+          },
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -11936,7 +12188,9 @@
                 "2f9d6b4e10": "Alternar título 3",
                 "8c1a3e7d52": "Cree una sección plegable con un resumen de encabezado pequeño.",
                 "5e0b9c2a71": "Alternar título 4",
-                "d4f16a8b39": "Cree una sección plegable con un resumen de encabezado anidado."
+                "d4f16a8b39": "Cree una sección plegable con un resumen de encabezado anidado.",
+                "21d8c463e5": "Alternar título 5",
+                "dc239b41ad": "Cree una sección plegable con un resumen de encabezado profundo."
               }
             }
           }
@@ -12062,6 +12316,15 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "Selecciona menos contenido o usa el modo de código para cortar citas HTML conservadas."
+        },
+        "editor": {
+          "save": {
+            "failure": {
+              "notice": {
+                "8c59ce5075": "Failed to save the file. Please try again."
+              }
+            }
+          }
         }
       },
       "diff": {
@@ -13194,15 +13457,15 @@
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
         "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…",
         "model": "Modelo",
-        "modelWithValue": "Modelo: {{value0}}",
         "effort": "Esfuerzo",
-        "effortWithValue": "Esfuerzo: {{value0}}",
         "fastMode": "Modo rápido",
         "thinking": "Razonamiento",
         "options": "Opciones",
         "sessionOptions": "Opciones de sesión",
         "chooseInAgentPicker": "Elegir en el selector del agente…",
         "toggleOption": "Alternar {{value0}}",
+        "pillAccessibleName": "{{value0}} {{value1}}",
+        "valueUnknown": "Valor actual desconocido — elige Activado o Desactivado",
         "sentNotConfirmed": "Enviado al agente — sin confirmar",
         "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
@@ -13214,8 +13477,25 @@
           "medium": "Medio",
           "high": "Alto",
           "xhigh": "Muy alto",
-          "max": "Máximo"
-        }
+          "max": "Máximo",
+          "on": "Activado",
+          "off": "Desactivado"
+        },
+        "noCommandsOrSkills": "No hay comandos o habilidades coincidentes",
+        "commands": "Comandos",
+        "skills": "Habilidades",
+        "loadingSkills": "Cargando habilidades…",
+        "skillsUnavailableHost": "Las habilidades no están disponibles para este host",
+        "skillsLoadFailed": "No se pudieron cargar las habilidades de este host",
+        "retrySkills": "Reintentar",
+        "skillCommandCollision": "También es un nombre de habilidad - el agente decide",
+        "skillMultipleSources": "{{sourceCount}} fuentes - el agente resuelve",
+        "skillScopeProject": "Proyecto",
+        "skillScopePersonal": "Personal",
+        "skillScopeBuiltIn": "Integrado",
+        "skillScopePlugin": "Plugin",
+        "skillsLoaded": "Habilidades cargadas",
+        "noCommands": "No hay comandos coincidentes"
       },
       "tool": {
         "running": "Ejecutando…",
@@ -13291,6 +13571,43 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    }
+  },
+  "dashboardPopout": {
+    "placeholder": {
+      "title": "Agent dashboard",
+      "description": "This is where all your agents will show up at a glance. The board is coming soon."
+    },
+    "recoverableError": {
+      "title": "Orca dashboard hit an error.",
+      "description": "The dashboard could not finish rendering. Retry to remount it, or reopen it."
+    },
+    "bucket": {
+      "attention": "Needs You",
+      "working": "Working",
+      "idle": "Idle",
+      "empty": "None"
+    },
+    "title": "Agents",
+    "total": "{{count}} total",
+    "card": {
+      "you": "You",
+      "time": {
+        "justNow": "ahora mismo",
+        "minutes": "{{count}} min",
+        "hours": "{{count}} h",
+        "days": "{{count}} d"
+      }
+    },
+    "terminal": {
+      "closed": "No live terminal — this agent's pane has closed.",
+      "close": "Close",
+      "focusWorktree": "Focus worktree"
+    }
+  },
+  "dashboard": {
+    "sidebar": {
+      "label": "Agent Dashboard"
     }
   },
   "browser": {

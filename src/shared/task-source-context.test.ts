@@ -95,9 +95,22 @@ describe('task source context', () => {
       repoId: 'repo-1',
       providerIdentity: { provider: 'github', owner: 'other', repo: 'orca' }
     })
+    const enterpriseRepo = getTaskSourceCacheScope({
+      provider: 'github',
+      projectId: 'project-1',
+      hostId: 'local',
+      repoId: 'repo-1',
+      providerIdentity: {
+        provider: 'github',
+        owner: 'stablyai',
+        repo: 'orca',
+        host: 'github.acme.test'
+      }
+    })
 
     expect(local).not.toBe(ssh)
     expect(local).not.toBe(differentRepo)
+    expect(local).not.toBe(enterpriseRepo)
   })
 
   it('serializes provider identities for GitLab, Linear, and Jira cache scopes', () => {

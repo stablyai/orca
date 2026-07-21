@@ -327,6 +327,46 @@ describe('WebSocketTransport', () => {
     liveClient.close()
   })
 
+  it('bounds raw TCP sockets above the WebSocket connection budget', async () => {
+    // Why: the WebSocket cap applies only after upgrade, so raw sockets need a
+    // finite independent bound without reducing the 128 legitimate WS slots.
+    const { transport } = await createTransport()
+    await transport.start()
+
+    const httpServer = (transport as unknown as { httpServer: { maxConnections: number } })
+      .httpServer
+    expect(httpServer.maxConnections).toBe(256)
+  })
+
+  it('force-terminates an over-capacity socket that ignores the close frame', async () => {
+    // Why: a backgrounded/half-open phone may never ack the 1013 close, so a
+    // bare ws.close() retains its descriptor until the heartbeat. A reconnect
+    // flood can fill the TCP headroom during that window, so rejection must
+    // hard-close on a short fixed deadline.
+    const { transport } = await createTransport()
+    await transport.start()
+
+    const ws = await connectWs(transport)
+    const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
+    const serverSocket = Array.from(wss.clients)[0]
+    expect(serverSocket).toBeDefined()
+    const terminateSpy = vi.spyOn(serverSocket!, 'terminate')
+
+    vi.useFakeTimers()
+    try {
+      ;(transport as unknown as { rejectOverCapacity(ws: WebSocket): void }).rejectOverCapacity(
+        serverSocket!
+      )
+      vi.advanceTimersByTime(1_000)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(terminateSpy).toHaveBeenCalled()
+    terminateSpy.mockRestore()
+    ws.close()
+  })
+
   it('is idempotent on double start', async () => {
     const { transport } = await createTransport()
 

@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: repo IPC is intentionally centralized so SSH
-routing, clone lifecycle, and store persistence stay behind a single audited
-boundary. Splitting by line count would scatter tightly coupled repo behavior. */
+/* eslint-disable max-lines -- Why: repo IPC is centralized so SSH routing, clone lifecycle, and store persistence stay behind one audited boundary. */
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
@@ -103,31 +101,15 @@ import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-messag
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 
-// Why: `method` answers "which entry point did the user take?", not "what did
-// they add?" — so the IPC the renderer invoked IS the method. We never send
-// the path, URL, or display name. `repos:create` collapses into
-// `folder_picker` because the user's entry was the folder picker, even
-// though main also `git init`s. `drag_drop` is reserved for a future call
-// site; no current renderer surface produces it.
-//
-// Why `isGitRepo`: low-cardinality, non-identifying git-vs-folder signal.
-// Callers pass it because they already have the git-detection result in scope
-// (avoids re-running git I/O here). Pass `undefined` when a call site genuinely
-// can't determine git-ness (e.g. some SSH/remote edges) — never default-guess
-// `false`. This replaced the now-removed `onboarding_completed.is_git_repo`,
-// which became meaningless once repo selection left onboarding (1.4.46).
+// Why: `method` is the IPC entry point the user took, not what they added (never path/URL/name); repos:create → 'folder_picker'.
+// Why: `isGitRepo` is a non-identifying git-vs-folder signal from the caller's detection; pass undefined when unknown, never default false.
+// Why: it replaced onboarding_completed.is_git_repo, which lost meaning once repo selection left onboarding (1.4.46).
 function emitRepoAdded(method: RepoMethod, alreadyExisted: boolean, isGitRepo?: boolean): void {
-  // Why: re-adding an existing repo (matched by path inside the handler)
-  // is not a new activation event. Suppressing the duplicate keeps the
-  // funnel honest and avoids inflating `repo_added` for users who
-  // re-pick the same folder.
+  // Why: re-adding an existing repo isn't a new activation; suppress so re-picking a folder doesn't inflate repo_added.
   if (alreadyExisted) {
     return
   }
-  // Why: cohort must read AFTER `store.addRepo()` lands so the just-added
-  // repo is counted — every call site below already emits post-addRepo, so
-  // `getCohortAtEmit()` here returns the user's Nth `repo_added` as `N`.
-  // See docs/onboarding-funnel-cohort-addendum.md §Read-vs-write ordering.
+  // Why: read cohort AFTER store.addRepo() so the just-added repo is counted (docs/onboarding-funnel-cohort-addendum.md §Read-vs-write ordering).
   const props = {
     method,
     ...(isGitRepo === undefined ? {} : { is_git_repo: isGitRepo }),
@@ -157,13 +139,12 @@ function alignRepoWithRequestedProject(
     if (!project?.providerIdentity || project.providerIdentity.provider !== 'github') {
       throw new Error('Imported folder does not match the selected project identity.')
     }
-    // Why: setup-on-host is an explicit user action for this project. When the
-    // folder lacks upstream metadata but the selected project has provider
-    // identity, stamp that identity so compatibility projection can merge it.
+    // Why: stamp the selected project's provider identity when the folder lacks upstream, so projection can merge it.
     const updated = store.updateRepo(repo.id, {
       upstream: {
         owner: project.providerIdentity.owner,
-        repo: project.providerIdentity.repo
+        repo: project.providerIdentity.repo,
+        ...(project.providerIdentity.host ? { host: project.providerIdentity.host } : {})
       }
     })
     if (!updated) {
@@ -227,8 +208,7 @@ async function addLocalRepoFromPath(
       ? {
           externalWorktreeVisibility: 'hide' as const,
           externalWorktreeVisibilityLegacy: false,
-          // Why: new Add Project imports should become explicit ready host
-          // setups; `legacy-repo` is reserved for older records/projection.
+          // Why: new Add Project imports are explicit ready host setups; 'legacy-repo' is reserved for older records/projection.
           projectHostSetupMethod: 'imported-existing-folder' as const
         }
       : {})
@@ -404,12 +384,9 @@ async function cloneRemoteRepo(
   activeRemoteClone = metadata
   remoteCloneInFlightByPath.add(remoteCloneKey)
   try {
-    // Why: local clone creates the typed parent before spawning git. SSH clone
-    // must match that behavior or a fresh remote parent surfaces as spawn ENOENT.
+    // Why: match local clone by creating the parent first, or a fresh remote parent surfaces as spawn ENOENT.
     await fsProvider.createDir(trimmedDestination)
-    // Why: the SSH relay exposes argv-based git execution, not a shell. Use
-    // the repo folder name as the target so git creates it inside the chosen
-    // parent, and keep the same flag separator safety as local clone.
+    // Why: the SSH relay runs git argv, not a shell; use the repo folder name so git creates it under the chosen parent.
     await gitProvider.clone(
       ['clone', '--progress', '--', args.url.trim(), repoName],
       trimmedDestination,
@@ -615,8 +592,7 @@ async function resolveRemoteHomePath(connectionId: string, path: string): Promis
     const result = (await mux.request('session.resolveHome', { path })) as { resolvedPath: string }
     return result.resolvedPath
   } catch {
-    // Why: older relays may not support this yet; callers will surface the
-    // original path validation error instead of failing during resolution.
+    // Why: older relays may not support this; return the original path so callers surface their own validation error.
     return path
   }
 }
@@ -638,9 +614,7 @@ type ActiveRemoteCloneMetadata = {
   controller: AbortController
 }
 
-// Why: module-scoped so the abort handle survives window re-creation on macOS.
-// registerRepoHandlers is called again when a new BrowserWindow is created,
-// and a function-scoped variable would lose the reference to an in-flight clone.
+// Why: module-scoped so the abort handle survives macOS window re-creation, when registerRepoHandlers re-runs.
 let activeClone: ActiveCloneMetadata | null = null
 let activeRemoteClone: ActiveRemoteCloneMetadata | null = null
 let nextCloneGeneration = 1
@@ -923,8 +897,7 @@ async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<v
   if (latestCloneGenerationByPath.get(metadata.pathKey) !== metadata.generation) {
     return
   }
-  // Why: an immediate retry can attach a newer process to the same target
-  // before the aborted process closes; the old close handler must not delete it.
+  // Why: a fast retry may attach a newer process before the aborted one closes; the old close handler must not delete it.
   if (
     activeClone &&
     activeClone.process !== metadata.process &&
@@ -1120,8 +1093,7 @@ async function runNestedRepoScanForIpc(
 }
 
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
-  // Remove any previously registered handlers so we can re-register them
-  // (e.g. when macOS re-activates the app and creates a new window).
+  // Remove previously registered handlers so we can re-register on macOS app re-activation (new window).
   ipcMain.removeHandler('repos:list')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:remove')
@@ -1172,9 +1144,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     enrichMissingRepoGitRemoteIdentities(store, {
       onChanged: () => notifyReposChanged(mainWindow)
     })
-    // Why: username resolution spawns git/gh and must stay off this handler's
-    // synchronous path (issue #7225); the background pass notifies the
-    // renderer to re-list once values land.
+    // Why: username resolution spawns git/gh, so keep it off this sync handler (issue #7225); it re-lists when values land.
     enrichRepoGitUsernames(store, {
       onChanged: () => notifyReposChanged(mainWindow)
     })
@@ -1614,8 +1584,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           }
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
           results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
-          // Why: nested-repo import only reaches here after the isGitRepo /
-          // isGitRepoAsync guard above confirmed a git repo, so always `true`.
+          // Why: reaches here only after the isGitRepo guard above confirmed a git repo, so always true.
           emitRepoAdded('folder_picker', false, true)
         } catch (error) {
           results.push({
@@ -1708,9 +1677,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     }
   )
 
-  // Creates a new repo or folder from scratch (orca#763). An empty initial
-  // commit is required for git repos so HEAD has a branch ref — Orca's
-  // worktree features all need one.
+  // Create a repo/folder from scratch (orca#763); git repos need an empty initial commit so HEAD has a branch ref for worktrees.
   ipcMain.handle(
     'repos:create',
     async (
@@ -1719,62 +1686,44 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     ): Promise<{ repo: Repo } | { error: string }> => {
       const name = args.name?.trim() ?? ''
       const parentPath = args.parentPath?.trim() ?? ''
-      // Why: IPC input is untrusted — coerce to the narrow union so a bogus
-      // string (e.g. "x") can't skip git init yet persist as kind: "x" in the
-      // store. Mirrors the coercion in repos:add above.
+      // Why: IPC input is untrusted — coerce to the narrow union so a bogus kind can't skip git init yet persist in the store.
       const repoKind: 'git' | 'folder' = args.kind === 'folder' ? 'folder' : 'git'
 
       if (!name) {
         return { error: 'Name cannot be empty' }
       }
-      // Block slashes and ./.. so the name can't escape the chosen parent.
-      // The UI already disables submit in these cases; this guards direct IPC use.
+      // Block slashes and ./.. so the name can't escape the chosen parent (guards direct IPC use).
       if (/[\\/]/.test(name) || name === '.' || name === '..') {
         return { error: 'Name cannot contain slashes or be "." / ".."' }
       }
       if (!parentPath) {
         return { error: 'Parent directory is required' }
       }
-      // Why: blocks CWD-relative paths from slipping through the IPC boundary;
-      // the UI uses pickDirectory which returns absolute paths, this guards
-      // direct IPC use (and keeps targetPath stable across process cwd changes).
+      // Why: block CWD-relative paths at the IPC boundary — keeps targetPath stable across process cwd changes.
       if (!isAbsolute(parentPath)) {
         return { error: 'Parent directory must be an absolute path' }
       }
 
       const targetPath = join(parentPath, name)
 
-      // Dedup by path (same as repos:add) so a double-click on Create doesn't
-      // produce two sidebar entries pointing at the same folder. This is the
-      // first of three dedup checks; see the pre-addRepo check below for why
-      // the race matters even after this one passes.
+      // Dedup by path so a double-click on Create doesn't make two entries for one folder (first of three dedup checks).
       const existing = store.getRepos().find((r) => r.path === targetPath)
       if (existing) {
         emitRepoAdded('folder_picker', true, repoKind === 'git')
         return { repo: existing }
       }
 
-      // Empty pre-existing directories are allowed (e.g. one the user made in
-      // Finder first). Non-empty ones are rejected so we don't overwrite files.
+      // Empty pre-existing dirs are allowed (e.g. made in Finder first); non-empty ones are rejected so we don't overwrite files.
       let createdDir = false
       let targetExists = false
       try {
-        // Why: the name-first default points at ~/orca/projects, which may not
-        // exist yet on a fresh install; create only the parent before probing target.
+        // Why: the default parent (~/orca/projects) may not exist on a fresh install; create only the parent before probing the target.
         await mkdir(parentPath, { recursive: true })
         await access(targetPath)
         targetExists = true
       } catch (err) {
-        // Why: only ENOENT means "the path is free to use". Other codes
-        // (EACCES, ENOTDIR, EPERM, ELOOP, ...) mean something is in the way
-        // that mkdir can't fix — surface a precise error instead of falling
-        // through to mkdir and returning a misleading "Failed to create
-        // directory" message.
-        //
-        // Why the message fallback: fs.promises.access always attaches a
-        // NodeJS.ErrnoException code in production, but plain Error objects
-        // thrown in tests / non-Node contexts won't — treat a message that
-        // reads like ENOENT as one so we don't over-reject.
+        // Why: only ENOENT means the path is free; other codes are something mkdir can't fix, so surface a precise error.
+        // Why: tests/non-Node errors lack a code, so treat an ENOENT-looking message as ENOENT to avoid over-rejecting.
         const code =
           err && typeof err === 'object' && 'code' in err
             ? (err as NodeJS.ErrnoException).code
@@ -1797,9 +1746,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             }
           }
         } catch (err) {
-          // Why: access succeeded but readdir failed — the path exists but we
-          // can't inspect it (e.g. it's a file, not a directory; or perms).
-          // mkdir would definitely fail here too, so return a distinct error.
+          // Why: access ok but readdir failed — path exists but isn't an inspectable dir (file or perms); return a distinct error.
           const message = err instanceof Error ? err.message : String(err)
           return { error: `Failed to read directory: ${message}` }
         }
@@ -1808,11 +1755,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           await mkdir(targetPath, { recursive: false })
           createdDir = true
         } catch (err) {
-          // Why: EEXIST here means another concurrent repos:create for the
-          // same path won the mkdir race. If they already added the repo to
-          // the store, return that entry instead of a confusing error. This
-          // is the second dedup check; see the pre-addRepo check below for
-          // the full race explanation.
+          // Why: EEXIST means a concurrent repos:create won the mkdir race; return its store entry instead of a confusing error.
           const code =
             err && typeof err === 'object' && 'code' in err
               ? (err as NodeJS.ErrnoException).code
@@ -1830,9 +1773,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
 
       if (repoKind === 'git') {
-        // Why: track which git step is running so the catch can attribute the
-        // failure correctly. The identity-hint regex is only meaningful during
-        // commit — git init itself never produces "Please tell me who you are".
+        // Why: track which git step ran so catch can attribute failure; the identity-hint regex only applies during commit.
         let step: 'init' | 'commit' = 'init'
         try {
           await gitExecFileAsync(['init'], { cwd: targetPath })
@@ -1841,12 +1782,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             cwd: targetPath
           })
         } catch (err) {
-          // Only remove the directory if we made it. A pre-existing folder the
-          // user picked must survive so they can retry after fixing git config.
-          // Why: if we didn't make the directory but `git init` created `.git/`
-          // inside it, strip just `.git/` so the user's folder looks the way
-          // they left it. Retrying works either way, but leaving a half-init'd
-          // repo behind is confusing if they choose to skip the retry.
+          // Only rm the dir if we made it (pre-existing folders must survive retry); otherwise strip just the .git/ that git init created.
           if (createdDir) {
             await rm(targetPath, { recursive: true, force: true }).catch(() => {})
           } else if (step === 'commit') {
@@ -1870,16 +1806,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         }
       }
 
-      // Why: ipcMain.handle doesn't serialize concurrent calls; re-running the
-      // dedup lookup here closes the window between the first check and
-      // addRepo. A second repos:create for the same path that raced past the
-      // initial dedup now returns the entry the first call persisted.
+      // Why: ipcMain.handle doesn't serialize calls, so re-check dedup here to close the race between the first check and addRepo.
       const raceWinner = store.getRepos().find((r) => r.path === targetPath)
       if (raceWinner) {
-        // Why: do NOT rm even if this invocation created the directory — the
-        // other invocation is using it. Leaking a freshly-made empty folder on
-        // a rare race is strictly safer than deleting a directory the winning
-        // call (and the user) now owns.
+        // Why: don't rm even if we made the dir — the race winner owns it; leaking an empty folder beats deleting a dir in use.
         emitRepoAdded('folder_picker', true, repoKind === 'git')
         return { repo: raceWinner }
       }
@@ -1906,8 +1836,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       await prepareLocalWorktreeRootForRepo(store, repo)
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
-      // Why: `repos:create` git-inits when kind is 'git', so `repoKind` is the
-      // true git-vs-folder signal for the just-created project.
+      // Why: repos:create git-inits when kind is 'git', so repoKind is the true git-vs-folder signal.
       emitRepoAdded('folder_picker', false, repoKind === 'git')
       return { repo }
     }
@@ -1916,9 +1845,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle(
     'repos:reorder',
     (_event, args: { orderedIds: string[] }): { status: 'applied' | 'rejected' } => {
-      // Why: validate at the IPC boundary — IPC input is untrusted and a
-      // permutation mismatch means the renderer's drag was stale relative to
-      // a concurrent add/remove. Reject so the renderer can resync.
+      // Why: a permutation mismatch means the renderer's drag was stale vs a concurrent add/remove; reject so it can resync.
       const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
       const applied = store.reorderRepos(ids)
       if (applied) {
@@ -1955,9 +1882,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     notifyReposChanged(mainWindow)
   })
 
-  // Why: forget a project on a single execution host without disturbing the
-  // same repo id on other hosts (local or a re-added SSH target). Used by the
-  // SSH-workspace forget flow when a host is removed/disconnected.
+  // Why: forget a project on one execution host without disturbing the same repo id on other hosts (SSH-workspace forget flow).
   ipcMain.handle(
     'repos:removeForHost',
     async (_event, args: { repoId: string; hostId: string }) => {
@@ -2006,12 +1931,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         }
       }
     ) => {
-      // Why: validate the persisted preference string at the IPC boundary
-      // — the TypeScript signature is erased at runtime, and a preload
-      // version skew or renderer bug could otherwise persist a garbage
-      // string that silently collapses to 'auto' in `resolveIssueSource`
-      // (see gh-utils.ts#resolveIssueSource). Strip rather than throw so
-      // other valid fields in the same call still persist.
+      // Why: TS is erased at runtime, so a garbage preference would silently collapse to 'auto' in resolveIssueSource; strip it, keeping other fields.
       const updates = { ...args.updates }
       if (
         'issueSourcePreference' in updates &&
@@ -2031,12 +1951,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       ) {
         delete updates.forkSyncMode
       }
-      // Why: `symlinkPaths` is consumed by worktree path materialization, which
-      // calls `.trim()` on each entry. A renderer bug or preload-version skew
-      // that persists a non-`string[]` value (e.g. `[42, null]`, a bare
-      // string) would throw inside the worktree-create path with no UI
-      // signal. Strip invalid shapes at the boundary the same way
-      // `issueSourcePreference` is validated above.
+      // Why: worktree materialization calls .trim() per entry, so strip non-string[] at the boundary to avoid a silent throw later.
       if ('symlinkPaths' in updates && updates.symlinkPaths !== undefined) {
         const v = updates.symlinkPaths as unknown
         if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
@@ -2115,8 +2030,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           delete updates.importedExternalWorktreePaths
         }
       }
-      // Why: null is the transport sentinel for clearing Source Control AI.
-      // Other invalid fields are deleted; this one must flow as undefined.
+      // Why: null is the transport sentinel for clearing Source Control AI, so flow it through as undefined instead of deleting.
       if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
         updates.sourceControlAi = undefined
       } else if ('sourceControlAi' in updates && updates.sourceControlAi !== undefined) {
@@ -2142,10 +2056,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   )
 
   // ── Sparse presets ─────────────────────────────────────────────
-  // Why: presets are repo-scoped reusable directory lists used by the
-  // new-workspace composer. Persisted via Store and broadcast back to the
-  // renderer so any open composer reflects new/edited/deleted presets
-  // immediately.
+  // Why: repo-scoped reusable directory lists for the new-workspace composer; broadcast on change so open composers refresh.
 
   ipcMain.handle('sparsePresets:list', (_event, args: { repoId: string }) => {
     return store.getSparsePresets(args.repoId)
@@ -2210,13 +2121,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return result.filePaths
   })
 
-  // Why: pickDirectory is a generic "choose a folder" picker, separate from
-  // pickFolder which is specifically the "add project" flow. Clone needs a
-  // destination directory that may not be a git repo yet.
+  // Why: generic folder picker, separate from pickFolder's add-project flow; a clone destination may not be a git repo yet.
   ipcMain.handle('repos:pickDirectory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      // Why: macOS can materialize typed partial paths when directory creation
-      // is enabled; clone/create actions already create the final path on submit.
+      // Why: macOS materializes typed partial paths with directory creation on; clone/create make the final path on submit.
       properties: ['openDirectory']
     })
     if (result.canceled || result.filePaths.length === 0) {
@@ -2242,10 +2150,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle(
     'repos:clone',
     async (_event, args: { url: string; destination: string }): Promise<Repo> => {
-      // Why: the user picks a parent directory (e.g. ~/projects) and we derive
-      // the repo folder name from the URL (e.g. "orca" from .../orca.git).
-      // This matches the default git clone behavior where the last path segment
-      // of the URL becomes the directory name.
+      // Why: derive the repo folder name from the URL's last segment, matching default git clone behavior.
       const clonePath = deriveValidatedClonePath(args)
       const clonePathKey = getClonePathComparisonKey(clonePath)
       return runWithClonePathLock(clonePathKey, async () => {
@@ -2258,35 +2163,21 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           emitRepoAdded('clone_url', true, true)
           return existingAfterPendingClone
         }
-        // Why: gitSpawn uses args.destination as cwd, so it must exist before
-        // spawn — fresh installs may have a defaulted parent dir that does not
-        // exist yet (e.g. ~/orca). recursive: true is a no-op when present.
+        // Why: gitSpawn cwd is args.destination, so it must exist before spawn (fresh installs may lack the defaulted parent).
         await mkdir(args.destination, { recursive: true })
         const claimedTarget = await claimCloneTarget(clonePath)
 
-        // Why: use spawn instead of execFile so there is no maxBuffer limit.
-        // git clone writes progress to stderr which can exceed Node's default
-        // 1 MB buffer on large or submodule-heavy repos. We only keep the tail
-        // of stderr for error reporting and discard stdout entirely.
-        // Why: use --progress to force git to emit progress even when stderr
-        // is not a TTY. Without it, git suppresses progress output when piped.
+        // Why: spawn (not execFile) avoids the maxBuffer limit — clone progress on stderr can exceed Node's 1 MB default.
+        // Why: --progress forces git to emit progress even when stderr isn't a TTY.
         const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
         await new Promise<void>((resolve, reject) => {
-          // Why: clone destination may be a WSL path (e.g. user picks a WSL
-          // directory). Use the parent destination as the cwd so the runner
-          // detects WSL and routes through wsl.exe.
-          // Why: use the '--' separator to isolate the URL argument and prevent
-          // malicious URLs from being interpreted as git flags (command injection).
+          // Why: use the parent destination as cwd so the runner detects a WSL path and routes through wsl.exe.
+          // Why: '--' isolates the URL so a malicious URL can't be read as git flags (command injection).
           let proc: ReturnType<typeof gitSpawn>
           try {
             proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
               cwd: args.destination,
-              // Why: without the non-interactive guard, a clone that needs
-              // GitHub auth makes Git Credential Manager pop its "Connect to
-              // GitHub" OAuth window on Windows; in a network-restricted env the
-              // browser/device flow can never complete and git's credential
-              // retry re-pops it (issue #7652). Fail fast with a clear error and
-              // let Orca's non-intrusive GitHub state stand instead.
+              // Why: without this, an auth-needing clone pops Git Credential Manager's OAuth window on Windows, unclosable in a restricted env (issue #7652).
               env: nonInteractiveGitEnv(),
               stdio: ['ignore', 'ignore', 'pipe']
             })
@@ -2318,8 +2209,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             const text = chunk.toString()
             stderrTail = (stderrTail + text).slice(-4096)
 
-            // Why: git progress lines use \r to overwrite in-place; parse
-            // fragments the same way for local and SSH clone flows.
+            // Why: git progress lines use \r to overwrite in-place; parse fragments the same as SSH clone.
             emitCloneProgressFromText(mainWindow, text)
           })
 
@@ -2332,18 +2222,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               return
             }
             settled = true
-            // Why: only clear the ref if it still points to this process.
-            // A quick abort-and-retry can reassign activeClone to a new
-            // spawn before this handler fires, and nulling it would make the
-            // new clone unabortable.
+            // Why: only null activeClone if it still points to this proc; abort-and-retry may have reassigned it, stranding the new clone.
             if (activeClone?.process === proc) {
               activeClone = null
             }
 
             const cloneSucceeded = !err && code === 0 && !signal
             if (!cloneSucceeded) {
-              // Why: only the process that created this target may remove it,
-              // and only after git reports the clone did not complete.
+              // Why: only the process that created this target may remove it, and only after git reports failure.
               await cleanupOwnedCloneTarget(metadata)
             }
             if (metadata.abortRequested && !cloneSucceeded) {
@@ -2376,10 +2262,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         })
 
         try {
-          // Why: check after clone (not before) because the path didn't exist
-          // before cloning. But if the user somehow had a folder repo at this path
-          // that git clone succeeded into (empty dir), reuse that entry and upgrade
-          // its kind to 'git' instead of creating a duplicate.
+          // Why: check after clone (path didn't exist before); reuse+upgrade a folder repo clone landed into instead of duplicating.
           const existing = store
             .getRepos()
             .find((r) => getClonePathComparisonKey(r.path) === clonePathKey)
@@ -2449,8 +2332,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     if (!repo || isFolderRepo(repo)) {
       return ''
     }
-    // Why: remote repos have their git config on the remote host. Keep this
-    // to explicit username config; user.email/name are author identity.
+    // Why: remote repos keep their git config on the remote host, so resolve the username there.
     if (repo.connectionId) {
       const provider = getSshGitProvider(repo.connectionId)
       if (!provider) {
@@ -2469,30 +2351,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     ): Promise<BaseRefDefaultResult> => {
       const repo = getRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
-        // Why: folder-mode repos have no git state to resolve a base ref from.
-        // Return null + 0 so the renderer can decline to use a fabricated default
-        // and suppress the multi-remote hint.
+        // Why: folder repos have no git state for a base ref; return null + 0 so the renderer skips a fabricated default.
         return { defaultBaseRef: null, remoteCount: 0 }
       }
-      // Why: remote repos need the relay to resolve symbolic-ref on the
-      // remote host where the git data lives.
+      // Why: remote repos need the relay to resolve symbolic-ref where the git data lives.
       if (repo.connectionId) {
         const provider = getSshGitProvider(repo.connectionId)
         if (!provider) {
           return { defaultBaseRef: null, remoteCount: 0 }
         }
-        // Why: run default-ref resolution and remote-count concurrently to
-        // match the local path's latency characteristics (see Promise.all
-        // below). The two lookups are independent — neither depends on the
-        // other's result — so serializing them only adds SSH round-trip
-        // latency on slow relays.
-        //
-        // Why: delegate to the shared resolveDefaultBaseRefViaExec so SSH and
-        // local repos return identical defaults for equivalent states. We
-        // log in the exec callback for the symbolic-ref call to preserve the
-        // SSH-specific transport-failure diagnostic (connection drops,
-        // permission issues) that the shared helper otherwise swallows
-        // together with the expected "origin/HEAD unset" non-zero exit.
+        // Why: delegate to shared resolveDefaultBaseRefViaExec; log symbolic-ref failures here to keep the SSH transport diagnostic it otherwise swallows.
         const resolveDefault = async (): Promise<string | null> => {
           return resolveDefaultBaseRefViaExec(async (argv) => {
             try {
@@ -2514,8 +2382,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             const remotesResult = await provider.exec(['remote'], repo.path)
             return parseRemoteCount(remotesResult.stdout)
           } catch (err) {
-            // Why: fall back to 0 (the "unknown / do not render the multi-remote
-            // hint" sentinel). Log so diagnostic signal isn't lost.
+            // Why: 0 = unknown sentinel that suppresses the multi-remote hint.
             console.warn('[repos:getBaseRefDefault] SSH git remote count failed', {
               path: repo.path,
               err
@@ -2530,9 +2397,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         ])
         return { defaultBaseRef, remoteCount }
       }
-      // Why: compute default and remote count independently. A failure
-      // counting remotes must not break default detection. Run in parallel
-      // since the two lookups don't depend on each other.
+      // Why: run in parallel; a remote-count failure must not break default detection.
       const [defaultBaseRef, remoteCount] = await Promise.all([
         getBaseRefDefault(repo.path),
         getRemoteCount(repo.path)
@@ -2580,13 +2445,10 @@ async function searchBaseRefDetailsForRepo(
     if (!provider) {
       return []
     }
-    // Why: mirror the local path's sanitization (normalizeRefSearchQuery
-    // in ../git/repo.ts) — strip glob metacharacters to prevent glob
-    // injection via the SSH branch while preserving empty-query branch lists.
+    // Why: strip glob metacharacters to prevent glob injection (mirrors local normalizeRefSearchQuery).
     const normalizedQuery = normalizeRefSearchQuery(args.query)
     try {
-      // Why: argv (including the two-remote-glob rationale) lives in
-      // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
+      // Why: argv lives in buildSearchBaseRefsArgv so SSH and local paths cannot drift.
       const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
       const remotes = remotesResult.stdout
         .split('\n')
@@ -2620,10 +2482,7 @@ async function searchBaseRefDetailsForRepo(
           isForEachRefExcludeUnsupportedError
         )
       }
-      // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
-      // to the shared helper so the SSH and local paths cannot diverge.
-      // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
-      // HEAD-filter rationale.
+      // Why: delegate the parse/filter/dedup/limit pipeline to the shared helper so SSH and local paths cannot diverge.
       const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
       if (searchTokens.length > 1) {
         const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
@@ -2652,8 +2511,7 @@ function getRepoForExecutionHost(
   if (!hostId) {
     return store.getRepo(repoId) ?? null
   }
-  // Why: repo ids can collide across local and SSH hosts; base-ref reads must
-  // use the same host selected by the Settings pane as the subsequent write.
+  // Why: repo ids can collide across local and SSH hosts; read must use the same host the Settings pane selected for the write.
   return (
     store
       .getRepos()

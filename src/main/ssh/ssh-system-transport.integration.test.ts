@@ -142,6 +142,7 @@ function createRelayTree(root: string, remoteHome: string): void {
   writeFileSync(join(remoteDir, 'node_modules', 'node-pty', 'index.js'), '')
   writeFileSync(join(remoteDir, 'node_modules', '@parcel', 'watcher', 'index.js'), '')
   writeFileSync(join(remoteDir, '.install-complete'), '')
+  writeFileSync(join(remoteDir, 'managed-hook-runtime.js'), '')
   writeFakeRelay(remoteDir)
 }
 

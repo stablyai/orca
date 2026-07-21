@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: this file contains a multi-line inline
-   JS plugin source emitted into OpenCode's plugins directory as a single
-   file; splitting the plugin source across TS modules would obscure the
-   runtime artifact and scatter tightly coupled string-template logic. */
+/* eslint-disable max-lines -- Why: holds an inline JS plugin source emitted as one file; splitting across TS modules would scatter tightly coupled string-template logic. */
 import { app } from 'electron'
 import { join } from 'node:path'
 import {
@@ -28,33 +25,13 @@ type OpenCodeOverlayManifest = {
   pluginEntries: string[]
 }
 
-// Why: the id passed in by pty.ts's daemon path is a sessionId shaped like
-// "<worktreeId>@@<uuid>" where worktreeId itself contains "::" and a
-// filesystem path (slashes, colons). Earlier the id was a simple numeric
-// counter, so rejecting anything with "/" or ":" was a safe guard against
-// path traversal. After the daemon-parity refactor (#1148) the sessionId
-// shape changed, and the old regex silently rejected every legitimate id,
-// leaving OPENCODE_CONFIG_DIR unset and the plugin never loading.
-//
-// Keep an input-bounds guard (non-empty, bounded length) for defense in
-// depth, and derive the on-disk directory name via hash so any caller's id —
-// including ones containing path separators — produces a short, stable,
-// filesystem-safe name. Hashing also eliminates path-traversal risk at the
-// source: the directory name is always 32 hex chars, never a prefix/suffix
-// of the caller's input.
-// Why: 1024 is a generous sanity cap — daemon-shaped ids embed a worktree
-// filesystem path plus "@@<uuid>", and this bound prevents pathological inputs
-// from burning CPU in the SHA-256 step. Since the id is hashed anyway, 1024
-// is decoupled from PATH_MAX.
+// Why: bounds-check only — the id is a daemon sessionId with path separators, hashed downstream to a filesystem-safe name (an old regex rejecting "/"/":" broke every such id, #1148); 1024 just caps pathological hash input.
 function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
 }
 
 function toSafeDirName(id: string): string {
-  // Why: SHA-256 truncated to 32 hex chars (128 bits) is ample for a
-  // per-session directory name — collisions require ~2^64 concurrent sessions
-  // to become likely, far beyond any real workload. Hex keeps the name
-  // portable across all filesystems (no base64 padding, no `/`).
+  // Why: 32 hex chars (128 bits) makes collisions negligible and stays filesystem-portable (no base64 padding or `/`).
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
@@ -63,13 +40,7 @@ export function getOpenCodePluginSource(): string {
 }
 
 export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
-  // Why: the plugin runs inside the OpenCode Node process and POSTs to the
-  // unified agent-hooks server shared with Claude/Codex/Gemini. It reads the
-  // same ORCA_PANE_KEY / ORCA_TAB_ID / ORCA_WORKTREE_ID / ORCA_AGENT_HOOK_*
-  // env vars that Orca injects into every PTY, so OpenCode panes flow into
-  // agentStatusByPaneKey via the same IPC path as every other agent. Event
-  // mapping is done plugin-side (SessionBusy / SessionIdle / PermissionRequest)
-  // so the server-side normalizer can keep its one-event-per-case switch shape.
+  // Why: plugin runs in OpenCode's Node process and POSTs Orca's ORCA_* PTY env to the shared agent-hooks server; events are mapped plugin-side to fit the server's per-case switch.
   return [
     '// Why: process-lifetime guard so a recurring parse error on a malformed',
     "// endpoint file does not spam OpenCode's stderr once per hook post.",
@@ -404,35 +375,20 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
   ].join('\n')
 }
 
-// Why: OpenCode hooks used to run their own loopback HTTP server + IPC
-// channel (pty:opencode-status). That pathway produced a synthetic terminal
-// title but never entered agentStatusByPaneKey, so the unified dashboard
-// never saw OpenCode sessions. The service now only installs the plugin
-// file into OPENCODE_CONFIG_DIR — the plugin POSTs directly to the shared
-// agent-hooks server (/hook/opencode), so OpenCode rides the same status
-// pipeline as Claude/Codex/Gemini.
+// Why: installs the plugin into OPENCODE_CONFIG_DIR so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini (the old loopback-IPC path never reached agentStatusByPaneKey).
 export class OpenCodeHookService {
   clearPty(_ptyId: string): void {
-    // Why: OpenCode can materialize thousands of plugin runtime files under
-    // OPENCODE_CONFIG_DIR. This teardown runs on Electron's main process hot
-    // path, so recursive deletion here can freeze the whole app on Windows
-    // while Node, antivirus, or indexing still holds file handles.
-    //
-    // Current builds use app/source-scoped config dirs, not PTY-scoped dirs,
-    // so there is no live PTY-owned OpenCode filesystem state to remove.
+    // Why: no-op — config dirs are app/source-scoped now, and recursive delete on the main-process hot path could freeze on Windows.
   }
 
   buildPtyEnv(ptyId: string, existingConfigDir?: string | undefined): Record<string, string> {
     if (!isUsableId(ptyId)) {
-      // Why: defense-in-depth. If the id fails the bounds guard, a user-set
-      // OPENCODE_CONFIG_DIR should still be preserved so OpenCode loads the
-      // user's own config — only the Orca status plugin is forfeited.
+      // Why: on a bad id, still preserve a user-set OPENCODE_CONFIG_DIR; only the Orca status plugin is forfeited.
       return existingConfigDir ? { OPENCODE_CONFIG_DIR: existingConfigDir } : {}
     }
 
     if (!existingConfigDir) {
-      // Why: OpenCode may install plugin dependencies under this root. Sharing
-      // it prevents per-terminal node_modules churn and teardown freezes.
+      // Why: share one config root so OpenCode's plugin deps don't churn node_modules per terminal.
       const configDir = this.writeSharedPluginConfig()
       if (!configDir) {
         return {}
@@ -440,10 +396,7 @@ export class OpenCodeHookService {
       return { OPENCODE_CONFIG_DIR: configDir }
     }
 
-    // Why: do NOT `mkdir -p` the user's typoed path — overriding it with an
-    // Orca-owned dir is the exact config-replacement failure mode documented in
-    // docs/opencode-config-dir-collision.md. Let OpenCode surface the typo on
-    // its own; we only forfeit our status plugin for this pane.
+    // Why: don't mkdir the user's (possibly typoed) path — that's the config-replacement failure mode in docs/opencode-config-dir-collision.md; let OpenCode surface it.
     if (!existsSync(existingConfigDir)) {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
@@ -455,11 +408,7 @@ export class OpenCodeHookService {
       this.mirrorUserConfig(existingConfigDir, overlayDir)
       this.writePluginIntoOverlay(overlayDir)
     } catch {
-      // Why: overlay creation is best-effort. Symlink-creation can fail on
-      // Windows without developer mode (EPERM), userData can be read-only on
-      // locked-down corporate machines, etc. In every case, preserve the
-      // user's OPENCODE_CONFIG_DIR — a missing status plugin is a vastly
-      // smaller harm than silently dropping the user's auth/models/keymap.
+      // Why: best-effort — symlink creation needs Windows developer mode (else EPERM) and userData may be read-only; preserve the user's config over dropping their auth/models/keymap.
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
 
@@ -513,17 +462,10 @@ export class OpenCodeHookService {
     }
   }
 
-  // Why: walks the user's OPENCODE_CONFIG_DIR top-level entries. The
-  // `plugins/` subdirectory gets created as a real directory in the overlay
-  // so Orca can drop a sibling file alongside the user's plugins; everything
-  // else (opencode.json, auth.json, themes/, etc.) is mirrored as a single
-  // top-level entry via symlink/junction so user edits propagate live on
-  // POSIX (and on Windows-with-developer-mode) without copying files.
+  // Why: mirror user config entries as symlinks so edits propagate live; only plugins/ becomes a real overlay dir so Orca can drop a sibling plugin file.
   private mirrorUserConfig(sourceDir: string, overlayDir: string): void {
     const previousManifest = this.readOverlayManifest(overlayDir)
-    // Why: source-scoped overlays persist across terminals. Only remove paths
-    // Orca previously mirrored, so deleted/replaced user config cannot stay
-    // stale while OpenCode-owned runtime dirs such as node_modules survive.
+    // Why: overlays persist across terminals; remove only Orca-mirrored paths so stale user config clears but OpenCode runtime dirs (node_modules) survive.
     this.clearManifestEntries(overlayDir, previousManifest)
 
     const nextManifest: OpenCodeOverlayManifest = { topLevelEntries: [], pluginEntries: [] }
@@ -532,43 +474,25 @@ export class OpenCodeHookService {
       const sourcePath = join(sourceDir, entry.name)
 
       if (entry.name === 'plugins') {
-        // Why: check isSymbolicLink BEFORE isDirectory — a Windows junction
-        // can report both as true on a Dirent, and we must take the symlink
-        // branch so the per-entry mirroring (not a single mirrorEntry call
-        // that would create a symlink at <overlay>/plugins) handles it.
+        // Why: check isSymbolicLink before isDirectory — a Windows junction reports both, and the symlink branch must win.
         const isSymlink = entry.isSymbolicLink()
         let isLinkPointingToDir = false
         if (isSymlink) {
           try {
             isLinkPointingToDir = statSync(sourcePath).isDirectory()
           } catch {
-            // Why: broken symlink (target missing) or permission error — fall
-            // through to the default mirrorEntry path so the dangling link is
-            // mirrored verbatim rather than write-through-resolved.
+            // Why: broken/inaccessible symlink — mirror the dangling link verbatim instead of resolving through it.
             isLinkPointingToDir = false
           }
         }
 
         if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          // Why: when the user's plugins/ is a symlink-to-dir, resolve to the
-          // real target so readdir returns the actual entries and child paths
-          // join against the resolved root. mirrorEntry then creates symlinks
-          // pointing into the resolved real plugins (not back through the
-          // user's link), and <overlay>/plugins itself stays a real dir so
-          // writePluginIntoOverlay can never write through to the user's FS.
+          // Why: resolve a symlinked plugins/ to its real target so <overlay>/plugins stays a real dir and writePluginIntoOverlay can't write through the user's link.
           const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
           const overlayPluginsDir = join(overlayDir, 'plugins')
           mkdirSync(overlayPluginsDir, { recursive: true })
           for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            // Why: skip a user file with the same filename as Orca's plugin —
-            // mirroring it here would either resolve a same-named target via
-            // symlink (writePluginIntoOverlay then clobbers the user's file
-            // through the link) or collide on Windows with the directory entry
-            // about to be created by writePluginIntoOverlay. Either way the
-            // user's plugin would be lost. Skipping yields the desired
-            // semantics: Orca's status plugin runs and the user's same-named
-            // plugin is shadowed for this PTY only — their source file on disk
-            // is untouched.
+            // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
             if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
               continue
             }
@@ -589,13 +513,7 @@ export class OpenCodeHookService {
     this.writeOverlayManifest(overlayDir, nextManifest)
   }
 
-  // Why: write Orca's status plugin into the overlay's plugins/ dir. The
-  // pre-write unlink is the load-bearing part — POSIX writeFileSync over a
-  // symlink writes through to the link target, so without it a user-owned
-  // plugin with this filename would be clobbered through a mirrored link.
-  // Skipping the same-named user file in mirrorUserConfig already prevents
-  // the link from being created, but the unlink keeps this function safe
-  // even if a stale overlay slips through with the link still in place.
+  // Why: pre-write unlink guards against POSIX writeFileSync writing through a mirrored symlink and clobbering a same-named user plugin.
   private writePluginIntoOverlay(overlayDir: string): void {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
@@ -603,8 +521,7 @@ export class OpenCodeHookService {
     try {
       unlinkSync(pluginPath)
     } catch {
-      // No-op: file may not exist on a fresh overlay. Any persistent failure
-      // (e.g. permissions) will surface on the writeFileSync below.
+      // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
     }
     writeFileSync(pluginPath, getOpenCodePluginSource())
   }
@@ -616,9 +533,7 @@ export class OpenCodeHookService {
       mkdirSync(pluginsDir, { recursive: true })
       writeFileSync(join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE), getOpenCodePluginSource())
     } catch {
-      // Why: on Windows, userData directories can be locked by antivirus or
-      // indexers (EPERM/EBUSY). Plugin config is non-critical — the PTY should
-      // still spawn without the OpenCode status plugin.
+      // Why: userData can be locked on Windows (EPERM/EBUSY); plugin is non-critical, so spawn without it.
       return null
     }
     return configDir

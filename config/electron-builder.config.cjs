@@ -35,24 +35,15 @@ const relayExtraResource = {
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
-const packagedRuntimeNodeModuleResources = createPackagedRuntimeNodeModuleResources()
-
-// Why: git-native is optional — contributors without cargo produce no artifact
-// and the runtime falls back to CLI git, so packaging must not hard-fail on it.
-// `to` lands the addon at process.resourcesPath/git-native/git-native.node,
-// exactly where git-native-module.ts's loader looks.
+// Why: native Git is optional, so packaging includes it only when built and otherwise preserves CLI fallback.
+// Keep the resource path aligned with git-native-module.ts's packaged lookup.
 const gitNativeResources = existsSync(
   join(__dirname, '..', 'native', 'git-native', '.build', 'git-native.node')
 )
   ? [{ from: 'native/git-native/.build/git-native.node', to: 'git-native/git-native.node' }]
   : []
 
-const commonExtraResources = [
-  relayExtraResource,
-  ...packagedRuntimeNodeModuleResources,
-  ...gitNativeResources,
-  skillFreshnessResources
-]
+const commonExtraResources = [relayExtraResource, ...gitNativeResources, skillFreshnessResources]
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
@@ -209,6 +200,7 @@ module.exports = {
     },
     extraResources: [
       ...commonExtraResources,
+      ...createPackagedRuntimeNodeModuleResources('win32'),
       winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
@@ -272,6 +264,7 @@ module.exports = {
     notarize: isMacRelease,
     extraResources: [
       ...commonExtraResources,
+      ...createPackagedRuntimeNodeModuleResources('darwin'),
       macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
@@ -335,6 +328,7 @@ module.exports = {
     },
     extraResources: [
       ...commonExtraResources,
+      ...createPackagedRuntimeNodeModuleResources('linux'),
       linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/orca-ide',

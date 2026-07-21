@@ -3,16 +3,16 @@
 </h1>
 
 <p align="center">
-  <a href="https://github.com/stablyai/orca/stargazers"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="GitHub Star 数" /></a>
+  <a href="https://github.com/stablyai/orca"><img src="https://img.shields.io/github/stars/stablyai/orca?style=flat&amp;label=%E2%98%85&amp;color=08C" alt="GitHub Star 数" /></a>
   <a href="https://github.com/stablyai/orca/releases"><img src="../assets/readme-downloads.svg" alt="所有版本的总下载量" /></a>
-  <img src="https://badgen.net/github/license/stablyai/orca" alt="许可证" />
+  <img src="https://img.shields.io/badge/license-MIT-08C?style=flat" alt="许可证: MIT" />
   <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="加入 Orca Discord" /></a>
   <a href="https://x.com/orca_build"><img src="https://img.shields.io/badge/X-000000?logo=x&logoColor=white" alt="在 X 上关注 Orca" /></a>
   <img src="https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-4493F8?style=flat-square" alt="支持的平台：macOS、Windows 和 Linux" />
 </p>
 
 <p align="center">
-  <sub><a href="../../README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.pt.md">Português</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></sub>
+  <sub><a href="../../README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a></sub>
 </p>
 
 <p align="center">
@@ -235,7 +235,7 @@ yay -S stably-orca-bin
 
 - **Discord:** 加入 **[Discord](https://discord.gg/fzjDKHxv8Q)** 社区。
 - **Twitter / X:** 关注 **[@orca_build](https://x.com/orca_build)** 获取更新和公告。
-- **微信:** 第一个微信群已满，现在可以加入第二个群。
+- **微信:** 第一、二个微信群均已满，现在可以加入第三个群。
 
   <img src="../assets/wechat-qr.jpg" alt="Orca 社区微信群二维码" width="160" />
 

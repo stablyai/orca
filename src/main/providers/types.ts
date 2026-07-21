@@ -18,27 +18,22 @@ import type {
   SearchResult
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
-import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
+import type { PtyBackgroundStreamEvent, PtyDataEvent } from './pty-provider-events'
+import type { PtySpawnResult } from './pty-spawn-result'
+
+export type {
+  PtyBackgroundStreamEvent,
+  PtyDataEvent,
+  PtyTransientFact
+} from './pty-provider-events'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
-
-/** Notification-bearing fact a thinning transport detected while it held
- *  scan authority for a backgrounded PTY (see onBackgroundStreamEvent). */
-export type PtyTransientFact =
-  | { kind: 'bell' }
-  | { kind: 'command-finished'; exitCode: number | null }
-  | { kind: 'pr-link'; link: TerminalGitHubPRLink }
-  | { kind: '2031-subscribe' }
-
-export type PtyBackgroundStreamEvent =
-  | { id: string; kind: 'backgroundMarker'; background: boolean; scanSeedAnsi?: string }
-  | { id: string; kind: 'dataGap'; droppedChars: number; sequenceChars?: number }
-  | { id: string; kind: 'transientFact'; fact: PtyTransientFact }
 
 export type PtyProviderBufferSnapshot = {
   data: string
@@ -97,59 +92,11 @@ export type PtySpawnOptions = {
    *  through spawn options keeps local PTY and daemon PTY semantics aligned
    *  without promoting pwsh into a separate shell family. */
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  /** Fresh-spawn-only source authority installed before any PTY output is released. */
+  startupIngress?: PtyStartupIngressIntent
 }
 
-export type PtySpawnResult = {
-  /** App-facing PTY id. Remote providers must return globally routable ids,
-   *  not relay-local handles, because renderer/runtime IPC routes by this key. */
-  id: string
-  /** OS-level pid of the shell process, when available at spawn time.
-   *  Why: the memory collector needs this to walk each PTY's process
-   *  subtree. Daemon-backed providers return it from the RPC result;
-   *  local providers read it from node-pty. Null when the underlying
-   *  provider could not publish a pid (e.g., race during spawn). */
-  pid?: number | null
-  /** Minimal allowlisted launch ownership returned by daemon reattach. */
-  launchAgent?: TuiAgent
-  /** ANSI snapshot of the terminal screen, present when reattaching to an
-   *  existing daemon session. Write this to xterm.js to restore visual state. */
-  snapshot?: string
-  /** Dimensions the snapshot was captured at. Resize xterm.js to these before
-   *  writing the snapshot so ANSI cursor positions land correctly. */
-  snapshotCols?: number
-  snapshotRows?: number
-  /** Provider sequence at the attach boundary. `reset` starts a new provider
-   *  generation; `continued` resumes the existing absolute domain. */
-  providerSequence?: {
-    value: number
-    generation: 'continued' | 'reset'
-  }
-  /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
-   *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
-   *  (terminal-query-authority.md §kitty). Never replayed into a renderer
-   *  xterm — POST_REPLAY_REATTACH_RESET's kitty reset stays authoritative. */
-  snapshotKittyKeyboardFlags?: number
-  /** True when the spawn reattached to an existing daemon session. */
-  isReattach?: boolean
-  /** True when the reattached session uses the alternate screen buffer
-   *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
-  isAlternateScreen?: boolean
-  /** Buffered output returned by relay pty.attach. Unlike snapshot, this is
-   *  incremental scrollback and must not clear the terminal before replay. */
-  replay?: string
-  /** True when the caller requested reattach (sessionId was provided) but the
-   *  relay PTY was gone (grace window elapsed). The renderer uses this to show
-   *  a brief "Session expired — new shell started" message. */
-  sessionExpired?: boolean
-  /** Present when cold-restoring from disk history after a daemon crash.
-   *  Contains the saved scrollback and CWD. The new shell spawns in the
-   *  saved CWD; the scrollback is written to xterm.js as read-only history. */
-  coldRestore?: {
-    scrollback: string
-    cwd: string
-    oscLinks?: TerminalOscLinkRange[]
-  }
-}
+export type { PtySpawnResult }
 
 export type PtyProcessInfo = {
   id: string
@@ -214,11 +161,19 @@ export type IPtyProvider = {
    */
   getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
 
-  shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void>
+  // Why: deadlineMs (absolute epoch ms) bounds the underlying RPCs so destructive
+  // teardown fails fast inside its sweep budget instead of tripping the outer sweep
+  // deadline; each RPC leaf converts to a relative timeout when it actually issues.
+  shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>
   getInitialCwd(id: string): Promise<string>
   clearBuffer(id: string): Promise<void>
+  /** Ordered handoff from startup source authority to the live/hidden view authority. */
+  closeStartupQueryAuthority?: (id: string) => Promise<number> | number
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
   getForegroundProcess(id: string): Promise<string | null>
@@ -226,12 +181,11 @@ export type IPtyProvider = {
   confirmForegroundProcess?: (id: string) => Promise<string | null>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
-  listProcesses(): Promise<PtyProcessInfo[]>
+  // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
+  listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
-  onData(
-    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
-  ): () => void
+  onData(callback: (payload: PtyDataEvent) => void): () => void
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void
   onExit(callback: (payload: { id: string; code: number }) => void): () => void
 }
@@ -263,6 +217,7 @@ export type IFilesystemProvider = {
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult>
   downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
+  downloadFolder?: (src: string, dest: string, options?: { signal?: AbortSignal }) => Promise<void>
   openFileUploadSession?(): Promise<FileUploadSession>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>

@@ -37,6 +37,8 @@ const profileDir =
   fixedProfileDir ?? mkdtempSync(path.join(tmpdir(), 'orca-headless-pairing-profile-'))
 const ownsProfileDir = !fixedProfileDir
 mkdirSync(profileDir, { recursive: true })
+const isolatedHome = path.join(profileDir, 'home')
+mkdirSync(isolatedHome, { recursive: true })
 
 let cleanedUp = false
 let child = null
@@ -44,13 +46,20 @@ let sawPairingUrl = false
 let stopAttempts = 0
 // Why: temp dev worktrees do not have a root-owned chrome-sandbox; this script
 // is only for local headless testing, not packaged production.
-const childEnv = {
-  ...process.env,
+const childEnv = { ...process.env }
+delete childEnv.CODEX_HOME
+delete childEnv.ORCA_CODEX_HOME
+Object.assign(childEnv, {
+  // Why: a fresh temporary Orca profile must not make the default Codex lane
+  // read or mutate the developer profile during a pairing smoke test.
   ORCA_DEV_USER_DATA_PATH: profileDir,
+  HOME: isolatedHome,
+  USERPROFILE: isolatedHome,
+  ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
   ...(process.platform === 'linux'
     ? { ELECTRON_DISABLE_SANDBOX: process.env.ELECTRON_DISABLE_SANDBOX ?? '1' }
     : {})
-}
+})
 
 console.error(`[headless-pairing] userData=${profileDir}`)
 console.error(`[headless-pairing] starting: orca-dev serve --json${formatForwardedArgs(serveArgs)}`)

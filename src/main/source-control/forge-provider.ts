@@ -6,24 +6,23 @@ import type {
 } from '../../shared/hosted-review'
 import {
   getAzureDevOpsPullRequest,
-  getAzureDevOpsPullRequestForBranch,
+  getAzureDevOpsPullRequestForBranchOrThrow,
   getAzureDevOpsRepoSlug
 } from '../azure-devops/client'
 import { createAzureDevOpsPullRequest } from '../azure-devops/pull-request-creation'
 import {
   getBitbucketPullRequest,
-  getBitbucketPullRequestForBranch,
+  getBitbucketPullRequestForBranchOrThrow,
   getBitbucketRepoSlug
 } from '../bitbucket/client'
 import {
   getGiteaPullRequest,
-  getGiteaPullRequestForBranch,
+  getGiteaPullRequestForBranchOrThrow,
   getGiteaRepoSlug
 } from '../gitea/client'
 import { createGiteaPullRequest } from '../gitea/pull-request-creation'
 import { createGitHubPullRequest, getPRForBranchOutcome, getRepoSlug } from '../github/client'
-import { getEnterpriseGitHubRepoSlug } from '../github/github-enterprise-repository'
-import { getMergeRequest, getMergeRequestForBranch, getProjectSlug } from '../gitlab/client'
+import { getMergeRequest, getMergeRequestForBranchOrThrow, getProjectSlug } from '../gitlab/client'
 import { createGitLabMergeRequest } from '../gitlab/merge-request-creation'
 import {
   mapAzureDevOpsReview,
@@ -86,7 +85,10 @@ const gitLabForgeProvider = {
   resolveRepository: (context) =>
     getProjectSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
   async getReviewForBranch(input) {
-    const mr = await getMergeRequestForBranch(
+    // Why: throw (not null) on a real lookup failure so eligibility records
+    // `unavailable`, never a false "No merge request found" — same contract the
+    // GitHub adapter uses so hosted-review callers preserve last-known state.
+    const mr = await getMergeRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,
@@ -123,25 +125,11 @@ function unwrapGitHubPRForBranchOutcome(
 const gitHubForgeProvider = {
   id: 'github',
   supportsReviewCreation: true,
-  resolveRepository: async (context) => {
-    const slug = await getRepoSlug(
-      context.repoPath,
-      context.connectionId,
-      ...hostedReviewExecutionArgs(context)
-    )
-    if (slug) {
-      return slug
-    }
-    // Why: GHES remotes live on a custom host, so github.com-only slug parsing
-    // misses them and detection would otherwise fall through to Gitea (#8312).
-    // Claim the repo when gh is authenticated to its host — the same signal
-    // GitLab uses for self-hosted instances.
-    return getEnterpriseGitHubRepoSlug(
-      context.repoPath,
-      context.connectionId,
-      ...hostedReviewExecutionArgs(context)
-    )
-  },
+  // Why: getRepoSlug resolves hosted identities — GHES remotes are claimed when
+  // gh is authenticated to their host (the same signal GitLab uses for
+  // self-hosted instances), so detection never falls through to Gitea (#8312).
+  resolveRepository: async (context) =>
+    getRepoSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
   async getReviewForBranch(input) {
     const fallbackReviewNumber =
       input.linkedReviewNumber == null ? (input.fallbackReviewNumber ?? null) : null
@@ -188,7 +176,9 @@ const bitbucketForgeProvider = {
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
-    const pr = await getBitbucketPullRequestForBranch(
+    // Why: surface a real lookup failure so eligibility records `unavailable`
+    // instead of a false "No pull request found".
+    const pr = await getBitbucketPullRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,
@@ -218,7 +208,9 @@ const azureDevOpsForgeProvider = {
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
-    const pr = await getAzureDevOpsPullRequestForBranch(
+    // Why: surface a real lookup failure so eligibility records `unavailable`
+    // instead of a false "No pull request found".
+    const pr = await getAzureDevOpsPullRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,
@@ -245,7 +237,9 @@ const giteaForgeProvider = {
   resolveRepository: (context) =>
     getGiteaRepoSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
   async getReviewForBranch(input) {
-    const pr = await getGiteaPullRequestForBranch(
+    // Why: surface a real lookup failure so eligibility records `unavailable`
+    // instead of a false "No pull request found".
+    const pr = await getGiteaPullRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,

@@ -5,16 +5,53 @@ import type { RpcContext } from '../core'
 // Stub the bounded tail reader so the handler returns a deterministic transcript with
 // one oversized tool-result block; the test then asserts clip behavior per client.
 const OVERSIZED = 'x'.repeat(5000)
-const cachedResult = vi.hoisted(() => ({ value: { messages: [] as NativeChatMessage[] } }))
+const cachedResult = vi.hoisted(() => ({
+  value: {
+    messages: [] as NativeChatMessage[],
+    // Optional so truncation-gating fixtures can omit it; lifecycle tests set it explicitly.
+    lifecycle: undefined as
+      | { state: 'working' | 'completed' | 'interrupted'; turnId: string; timestamp: number | null }
+      | undefined
+  } as {
+    messages: NativeChatMessage[]
+    lifecycle?: {
+      state: 'working' | 'completed' | 'interrupted'
+      turnId: string
+      timestamp: number | null
+    }
+  }
+}))
 const watcher = vi.hoisted(() => ({
   args: null as null | {
     onInitialSnapshot?: (
       messages: NativeChatMessage[],
       hasMore: boolean,
       beforeOffset: number,
-      error?: string
+      error?: string,
+      lifecycle?: {
+        state: 'working' | 'completed' | 'interrupted'
+        turnId: string
+        timestamp: number | null
+      }
     ) => void
-    onAppend: (messages: NativeChatMessage[]) => void
+    onReplace?: (
+      messages: NativeChatMessage[],
+      hasMore: boolean,
+      beforeOffset: number,
+      lifecycle?: {
+        state: 'working' | 'completed' | 'interrupted'
+        turnId: string
+        timestamp: number | null
+      }
+    ) => void
+    onAppend: (
+      messages: NativeChatMessage[],
+      lifecycle?: {
+        state: 'working' | 'completed' | 'interrupted'
+        turnId: string
+        timestamp: number | null
+      }
+    ) => void
   },
   watching: true
 }))
@@ -24,7 +61,8 @@ vi.mock('../../../native-chat/transcript-watch', () => ({
     return Promise.resolve({
       messages: messages.slice(-limit),
       hasMore: messages.length > limit,
-      beforeOffset: 123
+      beforeOffset: 123,
+      ...(cachedResult.value.lifecycle ? { lifecycle: cachedResult.value.lifecycle } : {})
     })
   },
   subscribeNativeChatTranscript: (args: NonNullable<typeof watcher.args>) => {
@@ -331,7 +369,12 @@ describe('nativeChat.subscribe initial snapshot', () => {
     )
 
     expect(emitted).toEqual([
-      { type: 'snapshot', messages: [], hasMore: false, error: 'Transcript unavailable' }
+      {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        error: 'Transcript unavailable'
+      }
     ])
   })
 
@@ -378,5 +421,69 @@ describe('nativeChat.subscribe initial snapshot', () => {
         beforeOffset: 7
       }
     ])
+  })
+
+  it('forwards lifecycle on snapshot, append, and replacement frames', async () => {
+    watcher.watching = true
+    watcher.args = null
+    const emitted: unknown[] = []
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's' },
+      streamingContext('runtime'),
+      (value) => emitted.push(value)
+    )
+
+    const completed = {
+      state: 'completed' as const,
+      turnId: 'turn-rpc-1',
+      timestamp: 1_720_000_000_000
+    }
+    const callbacks = activeWatcherArgs()
+    callbacks.onInitialSnapshot?.([makeMessage('snap')], false, 3, undefined, completed)
+    callbacks.onAppend([], completed)
+    callbacks.onReplace?.([makeMessage('repl')], false, 9, completed)
+
+    expect(emitted).toEqual([
+      {
+        type: 'snapshot',
+        messages: [expect.objectContaining({ id: 'a-1' })],
+        hasMore: false,
+        beforeOffset: 3,
+        lifecycle: completed
+      },
+      {
+        type: 'appended',
+        messages: [],
+        lifecycle: completed
+      },
+      {
+        type: 'replacement',
+        messages: [expect.objectContaining({ id: 'a-1' })],
+        hasMore: false,
+        beforeOffset: 9,
+        lifecycle: completed
+      }
+    ])
+  })
+})
+
+describe('nativeChat.readSession lifecycle payload', () => {
+  it('forwards lifecycle from the tail reader on success', async () => {
+    const lifecycle = {
+      state: 'interrupted' as const,
+      turnId: 'turn-read-1',
+      timestamp: 1_720_000_000_100
+    }
+    cachedResult.value = { messages: [makeMessage('done')], lifecycle }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('runtime')
+    )
+    expect(result).toMatchObject({
+      hasMore: false,
+      beforeOffset: 123,
+      lifecycle
+    })
+    expect((result as { messages: NativeChatMessage[] }).messages).toHaveLength(1)
   })
 })

@@ -1,8 +1,4 @@
-/* eslint-disable max-lines -- Why: this file groups all repos IPC handler
-tests (addRemote, getBaseRefDefault envelope, searchBaseRefs SSH relay) so
-fixture setup and mock plumbing can be shared. Splitting by line count would
-duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
-setup. */
+/* eslint-disable max-lines -- groups all repos IPC handler tests so shared fixture setup and hoisted mocks aren't duplicated */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
@@ -88,10 +84,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../git/repo', async () => {
-  // Why: pull real implementations of pure helpers so SSH parity tests
-  // exercise the actual probe list and query sanitizer, not frozen copies.
-  // Drift in DEFAULT_BASE_REF_PROBES or normalizeRefSearchQuery now surfaces
-  // as test failure, not silent test-passes against stale behavior.
+  // Why: use real pure helpers so SSH parity tests catch drift in DEFAULT_BASE_REF_PROBES / normalizeRefSearchQuery.
   const actual = await vi.importActual<typeof RepoModule>('../git/repo')
   return {
     ...actual,
@@ -106,9 +99,7 @@ vi.mock('../git/repo', async () => {
 })
 
 vi.mock('../git/runner', async () => ({
-  // Why: keep the real env builders (nonInteractiveGitEnv,
-  // gitOptionalLocksDisabledEnv) so the clone regression test (#7652) asserts
-  // the actual guard's markers, not a mock echoing itself.
+  // Why: keep the real env builders so the clone regression test (#7652) asserts real markers, not a mock echoing itself.
   ...(await vi.importActual<typeof GitRunner>('../git/runner')),
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileAsyncBuffer: vi.fn(),
@@ -1890,6 +1881,61 @@ describe('repos:add + repos:clone', () => {
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
+  it('preserves the selected Enterprise host when aligning an existing folder', async () => {
+    const existing = {
+      id: 'repo-setup-enterprise',
+      path: '/tmp/from-setup-enterprise',
+      displayName: 'from-setup-enterprise',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const existingProject = { id: 'repo:repo-setup-enterprise', displayName: 'Existing' }
+    const selectedProject = {
+      id: 'github:github.acme-corp.com/acme/orca',
+      displayName: 'Enterprise project',
+      providerIdentity: {
+        provider: 'github',
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme-corp.com'
+      }
+    }
+    const setup = {
+      id: existing.id,
+      projectId: existingProject.id,
+      repoId: existing.id,
+      hostId: 'local',
+      path: existing.path,
+      displayName: existing.displayName,
+      setupState: 'ready',
+      setupMethod: 'legacy-repo'
+    }
+    let updatedRepo = existing
+    mockStore.getRepos.mockReturnValue([existing])
+    mockStore.getProjects.mockReturnValue([existingProject, selectedProject])
+    mockStore.getProjectHostSetups.mockReturnValue([setup])
+    mockStore.updateRepo.mockImplementation((_repoId, updates) => {
+      updatedRepo = { ...updatedRepo, ...updates }
+      return updatedRepo
+    })
+
+    await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: selectedProject.id,
+      hostId: 'local',
+      path: existing.path,
+      kind: 'git',
+      setupMethod: 'imported-existing-folder'
+    })
+
+    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, existing.id, {
+      upstream: {
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme-corp.com'
+      }
+    })
+  })
+
   it('prepares and invalidates roots when repos:update changes worktree base path', () => {
     const updated = {
       id: 'repo-update-root',
@@ -2127,9 +2173,7 @@ describe('repos:add + repos:clone', () => {
       destination
     })
 
-    // Without this env, a clone that needs GitHub auth makes Git Credential
-    // Manager pop its "Connect to GitHub" OAuth window on Windows and loop it
-    // when the network cannot complete the flow.
+    // Without this env, a clone needing auth makes Git Credential Manager pop and loop its OAuth window on Windows.
     expect(gitSpawnMock).toHaveBeenCalledWith(
       ['clone', '--progress', '--', 'https://example.com/orca.git', join(destination, 'orca')],
       expect.objectContaining({
@@ -2437,9 +2481,7 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
-    // Reset exec to default: later SSH tests replace this with custom mocks, and
-    // without this reset any future test added to this block would inherit the
-    // last test's exec mock — latent fragility we guard against here.
+    // Reset exec so a newly added test doesn't inherit the previous test's exec mock.
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -2481,10 +2523,7 @@ describe('repos:getBaseRefDefault envelope', () => {
     expect(result.remoteCount).toBe(1)
   })
 
-  // Why: the SSH handler resolves default-ref and remote-count in parallel
-  // (Promise.all) so the order of calls into provider.exec is not stable.
-  // Dispatch on argv instead of `mockResolvedValueOnce` chains so tests remain
-  // independent of which Promise in the Promise.all resolves first.
+  // Why: the handler resolves default-ref and remote-count in parallel, so dispatch on argv (not call order) to stay stable.
   type ExecResponse = { stdout: string; stderr: string }
   type ExecRule = {
     matches: (argv: string[]) => boolean
@@ -2515,8 +2554,7 @@ describe('repos:getBaseRefDefault envelope', () => {
           matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
-        // The origin/HEAD target is verified before it is trusted, so the
-        // symbolic-ref result must also resolve via rev-parse.
+        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
         {
           matches: isRevParseFor('refs/remotes/origin/main'),
           respond: () => Promise.resolve({ stdout: '', stderr: '' })
@@ -2551,8 +2589,7 @@ describe('repos:getBaseRefDefault envelope', () => {
           matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
-        // The origin/HEAD target is verified before it is trusted, so the
-        // symbolic-ref result must also resolve via rev-parse.
+        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
         {
           matches: isRevParseFor('refs/remotes/origin/main'),
           respond: () => Promise.resolve({ stdout: '', stderr: '' })
@@ -2576,8 +2613,7 @@ describe('repos:getBaseRefDefault envelope', () => {
       remoteCount: number
     }
 
-    // Why: default detection must be independent of remote-count lookup.
-    // A failing count falls back to 0, but the default still resolves.
+    // Why: default detection is independent of remote-count; a failing count falls back to 0 while the default still resolves.
     expect(result.defaultBaseRef).toBe('origin/main')
     expect(result.remoteCount).toBe(0)
   })
@@ -2616,9 +2652,7 @@ describe('repos:getBaseRefDefault envelope', () => {
       remoteCount: number
     }
 
-    // Why: when symbolic-ref fails, the probe chain should find
-    // refs/remotes/origin/master and return 'origin/master', matching
-    // the local path's getDefaultBaseRefAsync behavior.
+    // Why: when symbolic-ref fails, the probe chain resolves origin/master, matching the local path.
     expect(result.defaultBaseRef).toBe('origin/master')
     expect(result.remoteCount).toBe(1)
   })
@@ -2711,8 +2745,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: '***'
     })
 
-    // Why: normalizeRefSearchQuery still strips glob metacharacters before
-    // building argv; the resulting empty query now intentionally lists refs.
+    // Why: glob metacharacters are stripped, so the empty query intentionally lists refs.
     const [argv] = mockGitProvider.exec.mock.calls.find(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )!
@@ -2791,10 +2824,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {
-    // Why: this is the core issue-624 behavior — the SSH path must glob all
-    // remotes, not just origin. The `**` globs additionally span ref segments
-    // so slash-named branches (`user/feature`) are found by a single-word
-    // query; a single `*` would not cross `/`.
+    // Why: SSH globs all remotes and `**` crosses `/` so slash-named branches match a single-word query (issue #624).
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
     mockStore.getRepo.mockReturnValue({
@@ -2822,11 +2852,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
   })
 
   it('sends segmented argv for display-format queries like `upstream/main`', async () => {
-    // Why: guards against the SSH path drifting from the local path for
-    // multi-segment queries. The picker shows results as `<remote>/<branch>`
-    // and users retype that format; if the SSH argv reverts to a single
-    // `*<q>*` glob containing the literal `/`, SSH users silently see no
-    // matches for valid refs — the same shape of bug as issue #624.
+    // Why: a single `*<q>*` glob with a literal `/` makes SSH multi-segment queries silently match nothing (issue #624 shape).
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
     mockStore.getRepo.mockReturnValue({
@@ -2849,18 +2875,14 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(segmentedArgv).toContain('refs/heads/*upstream*/*main*')
     expect(branchRootArgv).toContain('refs/remotes/*/upstream/main*')
     expect(branchRootArgv).toContain('refs/heads/upstream/main*')
-    // Regression guard: the literal slash must never appear inside a
-    // single segmented glob (would be `refs/remotes/*upstream/main*`),
-    // which fnmatch cannot match because `*` doesn't cross `/`.
+    // Regression guard: a literal slash must never appear inside a single segmented glob (`*` doesn't cross `/`).
     expect(segmentedArgv).not.toContain('refs/remotes/*upstream/main*/*')
     expect(segmentedArgv).not.toContain('refs/remotes/*/*upstream/main*')
     expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 
   it('parses NUL-delimited stdout and filters <remote>/HEAD pseudo-refs', async () => {
-    // Why: exercises the shared parseAndFilterSearchRefs pipeline end-to-end
-    // on the SSH path — confirms the HEAD filter works for any remote (not
-    // just origin) when results come from the relay.
+    // Why: confirms the HEAD filter works for any remote, not just origin, on the SSH path.
     const stdout = [
       'refs/remotes/origin/main\0origin/main',
       'refs/remotes/upstream/main\0upstream/main',
@@ -2901,9 +2923,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: 'main'
     })
 
-    // Why: transport failure must fall back to an empty result set — mirrors
-    // the local path's catch, so SSH users see "no matches" instead of a
-    // crashed picker when the relay drops.
+    // Why: transport failure falls back to an empty result set so the picker doesn't crash.
     expect(result).toEqual([])
   })
 

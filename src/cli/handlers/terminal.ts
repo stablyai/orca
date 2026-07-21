@@ -45,7 +45,8 @@ const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
-    terminal: await getTerminalHandle(flags, cwd, client)
+    terminal: await getTerminalHandle(flags, cwd, client),
+    navigation: 'host'
   })
   printResult(result, json, formatTerminalFocus)
 }

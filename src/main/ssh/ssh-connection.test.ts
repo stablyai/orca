@@ -60,6 +60,9 @@ vi.mock('ssh2', () => {
     }
     connect(config?: unknown) {
       this.lastConnectConfig = config
+      const hostVerifier = (config as { hostVerifier?: (key: Buffer) => boolean } | undefined)
+        ?.hostVerifier
+      hostVerifier?.(Buffer.from('mock-ssh-host-key'))
       setTimeout(() => {
         const next = connectSequence.shift()
         if (next instanceof Error) {
@@ -305,6 +308,7 @@ describe('SshConnection', () => {
     await conn.connect()
 
     expect(conn.getState().status).toBe('connected')
+    expect(conn.getState().supportsFolderDownload).toBe(true)
     expect(callbacks.onStateChange).toHaveBeenCalledWith(
       'target-1',
       expect.objectContaining({ status: 'connected' })
@@ -317,6 +321,35 @@ describe('SshConnection', () => {
 
     expect(clientInstances).toHaveLength(1)
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+  })
+
+  it('captures the negotiated SSH server key fingerprint', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    expect(conn.getHostKeyFingerprint()).toMatch(/^SHA256:[A-Za-z\d+/]{43}$/)
+  })
+
+  it('ignores a late host fingerprint from an obsolete connect generation', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    const firstVerifier = (
+      clientInstances[0].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+    ).hostVerifier
+
+    const privateConn = conn as unknown as { attemptConnect: () => Promise<void> }
+    await privateConn.attemptConnect()
+    const secondVerifier = (
+      clientInstances[1].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+    ).hostVerifier
+    expect(firstVerifier).toBeTypeOf('function')
+    expect(secondVerifier).toBeTypeOf('function')
+
+    secondVerifier?.(Buffer.from('newer-ssh-host-key'))
+    const currentFingerprint = conn.getHostKeyFingerprint()
+    firstVerifier?.(Buffer.from('obsolete-ssh-host-key'))
+
+    expect(conn.getHostKeyFingerprint()).toBe(currentFingerprint)
   })
 
   it('allows concurrent exec commands for ssh2 transport', async () => {
@@ -972,6 +1005,55 @@ describe('SshConnection', () => {
     }
   })
 
+  it('cancels a pending SFTP channel open and ends the late channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = { end: vi.fn() }
+
+    const outcomePromise = conn
+      .sftp({ signal: controller.signal })
+      .then(() => 'opened')
+      .catch((error: Error) => error.name)
+
+    await Promise.resolve()
+    controller.abort()
+    pendingSftpCallback?.(undefined, lateSftp)
+
+    await expect(outcomePromise).resolves.toBe('AbortError')
+    expect(lateSftp.end).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes the late SFTP close listener when the bounded grace expires', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .sftp({ signal: controller.signal })
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+
+      await Promise.resolve()
+      controller.abort()
+      pendingSftpCallback?.(undefined, lateSftp)
+      expect(lateSftp.listenerCount('close')).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(lateSftp.listenerCount('close')).toBe(0)
+      expect(lateSftp.end).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
@@ -980,6 +1062,7 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.getState().supportsFolderDownload).toBe(false)
     expect(clientInstances).toHaveLength(0)
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
@@ -1197,6 +1280,7 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.getHostKeyFingerprint()).toBeUndefined()
     expect(onCredentialRequest).not.toHaveBeenCalled()
   })
 

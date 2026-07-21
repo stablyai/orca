@@ -34,7 +34,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'octopus' })
@@ -45,7 +46,10 @@ describe('createBlankWorkspace', () => {
         repo: 'id:repo-1',
         startupCommand: undefined,
         setupDecision: 'inherit',
-        name: 'octopus'
+        name: 'octopus',
+        // Idempotency key so a create interrupted by a connection migration can be
+        // safely retried without the host spawning a duplicate worktree.
+        clientMutationId: expect.any(String)
       }
     })
     const params = calls[0]?.params as Record<string, unknown>
@@ -64,7 +68,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: 'claude',
       createdWithAgentId: 'claude',
       comment: 'spike',
-      setupDecision: 'run'
+      setupDecision: 'run',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(calls[0]?.params).toMatchObject({
@@ -93,7 +98,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ worktreeId: 'wt-3', name: 'octopus-2' })
@@ -118,7 +124,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ worktreeId: 'wt-4', name: 'octopus-2' })
@@ -136,7 +143,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'skip'
+      setupDecision: 'skip',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ error: 'SSH connection is not available' })

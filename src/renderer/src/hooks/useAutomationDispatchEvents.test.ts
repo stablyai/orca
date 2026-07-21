@@ -10,6 +10,8 @@ const mockCreateWorktree = vi.fn()
 const mockMarkDispatchResult = vi.fn()
 const mockOnDispatchRequested = vi.fn()
 const mockRendererReady = vi.fn()
+const mockFinalizeTerminalOwnership = vi.fn()
+const mockReleaseTerminalOwnership = vi.fn()
 
 const setupLaunch = {
   runnerScriptPath: '/tmp/setup.sh',
@@ -151,8 +153,13 @@ describe('useAutomationDispatchEvents setup launch', () => {
     mockLaunchWorktreeBackgroundTerminals.mockResolvedValue(undefined)
     mockLaunchAgentBackgroundSession.mockResolvedValue({
       tabId: 'agent-tab',
+      paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
       ptyId: 'agent-pty',
-      startupPlan: {}
+      startupPlan: {},
+      terminalOwnership: {
+        finalize: mockFinalizeTerminalOwnership,
+        release: mockReleaseTerminalOwnership
+      }
     })
     mockOnDispatchRequested.mockReturnValue(() => {})
     vi.stubGlobal('window', {
@@ -310,5 +317,205 @@ describe('useAutomationDispatchEvents setup launch', () => {
         prompt: 'run this'
       })
     )
+  })
+
+  it('finalizes a fresh non-reuse terminal only after completed result persistence', async () => {
+    const order: string[] = []
+    let launchArgs: { onAgentStatus?: (payload: { state: string }) => void } = {}
+    mockMarkDispatchResult.mockImplementation(
+      async (result: { status: string; terminalPaneKey?: string | null }) => {
+        // The retirement clear reuses status 'completed' but nulls the terminal
+        // identity; label it distinctly so ordering stays legible.
+        order.push(
+          result.status === 'completed' && result.terminalPaneKey === null
+            ? 'clear-terminal-identity'
+            : `persist:${result.status}`
+        )
+      }
+    )
+    mockFinalizeTerminalOwnership.mockImplementation(() => {
+      order.push('finalize')
+      return true
+    })
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      launchArgs = args
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
+
+    expect(order).toEqual([
+      'persist:dispatched',
+      'persist:completed',
+      'finalize',
+      'clear-terminal-identity'
+    ])
+    expect(mockReleaseTerminalOwnership).not.toHaveBeenCalled()
+    // Why: the retired terminal is gone; the run must drop its pane/pty pointers
+    // so "View run" resolves to the workspace/snapshot, not an unavailable terminal.
+    expect(mockMarkDispatchResult).toHaveBeenLastCalledWith({
+      runId: expect.any(String),
+      status: 'completed',
+      terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null
+    })
+  })
+
+  it('consumes duplicate done and zero-exit completion through one finalizer', async () => {
+    let launchArgs: {
+      onAgentStatus?: (payload: { state: string }) => void
+      onExit?: (ptyId: string, code: number) => void
+    } = {}
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      launchArgs = args
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    launchArgs.onExit?.('agent-pty', 0)
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
+
+    expect(
+      mockMarkDispatchResult.mock.calls.filter(
+        ([result]) => result.status === 'completed' && result.terminalPaneKey !== null
+      )
+    ).toHaveLength(1)
+    expect(mockReleaseTerminalOwnership).not.toHaveBeenCalled()
+  })
+
+  it('releases ownership on nonzero exit without finalizing the tab', async () => {
+    let onExit: ((ptyId: string, code: number) => void) | undefined
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      onExit = args.onExit
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+    onExit?.('agent-pty', 9)
+    await vi.waitFor(() => expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce())
+
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'dispatch_failed' })
+    )
+  })
+
+  it('releases ownership when dispatched result persistence rejects', async () => {
+    mockMarkDispatchResult.mockRejectedValueOnce(new Error('persistence unavailable'))
+
+    await registerAndDispatch()
+
+    expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    expect(mockMarkDispatchResult).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'dispatch_failed' })
+    )
+  })
+
+  it('releases ownership when completed result persistence rejects', async () => {
+    mockMarkDispatchResult
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('completion persistence unavailable'))
+      .mockResolvedValueOnce(undefined)
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      args.onAgentStatus?.({ state: 'done' })
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+
+    expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    expect(mockMarkDispatchResult).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'dispatch_failed' })
+    )
+  })
+
+  it('diagnoses a late completed-persistence rejection once without terminal cleanup', async () => {
+    let onAgentStatus: ((payload: { state: string }) => void) | undefined
+    const persistenceError = new Error('late completion persistence unavailable')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    mockMarkDispatchResult.mockResolvedValueOnce(undefined).mockRejectedValueOnce(persistenceError)
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      onAgentStatus = args.onAgentStatus
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+    onAgentStatus?.({ state: 'done' })
+    onAgentStatus?.({ state: 'done' })
+    await vi.waitFor(() => expect(errorSpy).toHaveBeenCalledOnce())
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[automations] Failed to persist late automation result:',
+      persistenceError
+    )
+    expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    expect(
+      mockMarkDispatchResult.mock.calls.filter(
+        ([result]) => result.status === 'completed' && result.terminalPaneKey !== null
+      )
+    ).toHaveLength(1)
+    errorSpy.mockRestore()
+  })
+
+  it('preserves a fresh reuse-enabled session as the future reuse seed', async () => {
+    mockFindReusableAutomationSession.mockReturnValue(null)
+
+    await registerAndDispatch(makeAutomation({ reuseSession: true }))
+
+    expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
   })
 })

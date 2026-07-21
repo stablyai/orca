@@ -6,7 +6,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
 
 type HookContext = {
-  isIdle: () => boolean
+  isIdle?: () => boolean
+  sessionManager?: {
+    getSessionId?: () => unknown
+    getSessionFile?: () => unknown
+  }
 }
 
 type HookHandler = (event?: unknown, context?: HookContext) => Promise<void> | void
@@ -177,6 +181,150 @@ function createHarness(args: {
 }
 
 describe('getPiAgentStatusExtensionSource', () => {
+  it('includes the session id and file path in Pi status posts after session_start', async () => {
+    const harness = createHarness({
+      kind: 'pi',
+      existsSync: (path) => path === '/tmp/pi-session-1.jsonl'
+    })
+
+    await harness.callHook(
+      'session_start',
+      {},
+      {
+        sessionManager: {
+          getSessionId: () => 'pi-session-1',
+          getSessionFile: () => '/tmp/pi-session-1.jsonl'
+        }
+      }
+    )
+
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'session_start',
+      session_id: 'pi-session-1',
+      session_file: '/tmp/pi-session-1.jsonl'
+    })
+
+    await harness.callHook('before_agent_start', { prompt: 'resume this task' })
+
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    const body = JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body))
+    expect(body.payload).toEqual({
+      hook_event_name: 'before_agent_start',
+      prompt: 'resume this task',
+      session_id: 'pi-session-1',
+      session_file: '/tmp/pi-session-1.jsonl'
+    })
+  })
+
+  it('waits until Pi creates its planned session file before advertising resume identity', async () => {
+    let sessionFileExists = false
+    const harness = createHarness({
+      kind: 'pi',
+      existsSync: (path) => path === '/tmp/pi-session-1.jsonl' && sessionFileExists
+    })
+
+    await harness.callHook(
+      'session_start',
+      { reason: 'startup' },
+      {
+        sessionManager: {
+          getSessionId: () => 'pi-session-1',
+          getSessionFile: () => '/tmp/pi-session-1.jsonl'
+        }
+      }
+    )
+
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'session_start'
+    })
+
+    sessionFileExists = true
+    await harness.callHook('agent_end')
+
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'agent_end',
+      session_id: 'pi-session-1',
+      session_file: '/tmp/pi-session-1.jsonl'
+    })
+  })
+
+  it('refreshes Pi session metadata on reload without posting a replacement status', async () => {
+    const harness = createHarness({
+      kind: 'pi',
+      existsSync: (path) => path === '/tmp/pi-reloaded.jsonl'
+    })
+
+    await harness.callHook(
+      'session_start',
+      { reason: 'reload' },
+      {
+        sessionManager: {
+          getSessionId: () => 'pi-reloaded',
+          getSessionFile: () => '/tmp/pi-reloaded.jsonl'
+        }
+      }
+    )
+    expect(harness.fetchMock).not.toHaveBeenCalled()
+
+    await harness.callHook('agent_start')
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'agent_start',
+      session_id: 'pi-reloaded',
+      session_file: '/tmp/pi-reloaded.jsonl'
+    })
+  })
+
+  it('omits absent or empty Pi session metadata from status posts', async () => {
+    for (const sessionManager of [
+      { getSessionId: () => '', getSessionFile: () => undefined },
+      { getSessionFile: () => '/tmp/pi-session.jsonl' }
+    ]) {
+      const harness = createHarness({ kind: 'pi' })
+      await harness.callHook('session_start', {}, { sessionManager })
+      await harness.callHook('agent_start')
+
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+      const payloads = harness.fetchMock.mock.calls.map(
+        ([_, init]) => JSON.parse(String(init?.body)).payload
+      )
+      expect(payloads).toEqual([
+        { hook_event_name: 'session_start' },
+        { hook_event_name: 'agent_start' }
+      ])
+    }
+  })
+
+  it('keeps OMP runtime status payloads unchanged by Pi session metadata', async () => {
+    const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook(
+      'session_start',
+      {},
+      {
+        sessionManager: {
+          getSessionId: () => 'omp-session-1',
+          getSessionFile: () => '/tmp/omp-session-1.jsonl'
+        }
+      }
+    )
+    await harness.callHook('agent_start')
+
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    expect(harness.fetchMock.mock.calls[0]?.[1]?.body).toBe(
+      JSON.stringify({
+        paneKey: 'pane-1',
+        launchToken: 'launch-1',
+        tabId: 'tab-1',
+        worktreeId: 'tree-1',
+        env: 'env-1',
+        version: '1.2.3',
+        payload: { hook_event_name: 'agent_start' }
+      })
+    )
+  })
+
   it('routes an OMP executable through /hook/omp', async () => {
     const harness = createHarness({
       kind: 'pi',

@@ -21,7 +21,9 @@ export function buildNativeChatSessionOptionCommand(args: {
   if (midSession?.kind === 'command') {
     return midSession.build(args.value)
   }
-  if (midSession?.kind === 'toggle-command' || midSession?.kind === 'agent-picker') {
+  // Why: a known flip has an absolute target only for local tracking; the
+  // command itself always performs one inversion.
+  if (midSession?.kind === 'toggle-command') {
     return midSession.command
   }
   if (!args.apply.composedIntoModel || !args.modelId || !args.catalog.composeModelValue) {

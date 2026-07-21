@@ -226,7 +226,7 @@ export function RepositoryPane({
               )}
             </p>
             <p className="text-xs text-muted-foreground">
-              {translate('auto.components.settings.RepositoryPane.323debba71', 'Type:')}
+              {translate('auto.components.settings.RepositoryPane.323debba71', 'Type:')}{' '}
               <span className="text-foreground">{getRepoKindLabel(repo)}</span>
             </p>
             {isFolder ? (

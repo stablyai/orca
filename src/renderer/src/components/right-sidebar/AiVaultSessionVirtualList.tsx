@@ -327,6 +327,10 @@ function AiVaultVirtualRow({
           session={row.session}
           liveState={getSessionLiveState(row.session)}
           resumeStartup={buildResumeStartup(row.session, resumeState?.worktreeId)}
+          realHomeResumeStartup={buildResumeStartup(
+            { ...row.session, codexHome: null },
+            resumeState?.worktreeId
+          )}
           worktreeInfo={worktreeInfo}
           vaultScope={vaultScope}
           detailsExpanded={expandedSessionIds.has(row.session.id)}

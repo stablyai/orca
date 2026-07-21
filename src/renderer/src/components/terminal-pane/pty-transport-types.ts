@@ -49,7 +49,7 @@ export type PtyConnectResult = {
   snapshotRows?: number
   isAlternateScreen?: boolean
   sessionExpired?: boolean
-  coldRestore?: { scrollback: string; cwd: string }
+  coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   replay?: string
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
   /** Trailing partial escape the daemon emulator held mid-parse; the reattach
@@ -84,6 +84,7 @@ export type PtyTransport = {
     initiallyHidden?: boolean
     command?: string
     env?: Record<string, string>
+    envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     launchToken?: string
     launchAgent?: TuiAgent
@@ -140,6 +141,7 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   cwdFallback?: 'worktree'
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
@@ -157,6 +159,8 @@ export type IpcPtyTransportOptions = {
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
+  /** Rebind an existing pane after its provider replaces the PTY identity. */
+  onPtyRebind?: (ptyId: string, replacedPtyId: string) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void
   onAgentBecameWorking?: () => void

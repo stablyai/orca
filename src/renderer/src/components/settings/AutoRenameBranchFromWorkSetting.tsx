@@ -159,7 +159,7 @@ export function AutoRenameBranchFromWorkSetting({
             {translate(
               'auto.components.settings.AutoRenameBranchFromWorkSetting.12ea4a408d',
               'When an agent starts working in a new workspace, Orca renames its auto-generated branch (e.g.'
-            )}
+            )}{' '}
             <code>
               {translate(
                 'auto.components.settings.AutoRenameBranchFromWorkSetting.1626524572',
@@ -223,7 +223,7 @@ export function AutoRenameBranchFromWorkSetting({
                   {translate(
                     'auto.components.settings.AutoRenameBranchFromWorkSetting.9241b59bf5',
                     'Use'
-                  )}
+                  )}{' '}
                   <code className="font-mono">
                     {translate(
                       'auto.components.settings.AutoRenameBranchFromWorkSetting.c71770c455',
@@ -261,7 +261,7 @@ export function AutoRenameBranchFromWorkSetting({
                   {translate(
                     'auto.components.settings.AutoRenameBranchFromWorkSetting.56580dcf60',
                     '. You can also reference'
-                  )}
+                  )}{' '}
                   <code className="font-mono">
                     {translate(
                       'auto.components.settings.AutoRenameBranchFromWorkSetting.2ee2779c05',
@@ -281,7 +281,7 @@ export function AutoRenameBranchFromWorkSetting({
                   {translate(
                     'auto.components.settings.AutoRenameBranchFromWorkSetting.5d569f5199',
                     '. Orca generates only the final segment, like'
-                  )}
+                  )}{' '}
                   <code className="font-mono">
                     {translate(
                       'auto.components.settings.AutoRenameBranchFromWorkSetting.800edb1e54',

@@ -31,6 +31,13 @@ const GUIDE_ALIASES = {
   orchestration: []
 }
 
+// Why: a stubbed topic ships a hybrid discovery stub as its installable projection while
+// `orca skills get <topic>` still serves the full version-matched guide from the binary.
+// Migrating a topic here is effectively one-way — earlier fat installs rely on the stub
+// landing to converge — so entries are added as skills convert, never removed. The stub
+// body lives in skill-stubs/<topic>.md; the projection reuses the guide's own frontmatter.
+const STUB_TOPICS = ['orca-cli']
+
 function normalizeMarkdown(markdown) {
   return markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 }
@@ -61,6 +68,24 @@ function parseFrontmatter(markdown, sourcePath) {
     name: values.name,
     description: values.description.replace(/\s+/g, ' ').trim()
   }
+}
+
+function frontmatterBlock(markdown, sourcePath) {
+  const normalized = normalizeMarkdown(markdown)
+  const match = /^---[ \t]*\n[\s\S]*?\n---[ \t]*\n/.exec(normalized)
+  if (!match) {
+    throw new Error(`Guide source has no YAML frontmatter block: ${sourcePath}`)
+  }
+  return match[0]
+}
+
+// Why: the stub's routing frontmatter (name + description) must stay byte-identical to the
+// guide's — it is the unchanged discovery surface — so we reuse the guide's own block and
+// replace only the body. Body normalized to LF with exactly one trailing newline.
+function composeStubProjection(guideMarkdown, stubBody, sourcePath) {
+  const block = frontmatterBlock(guideMarkdown, sourcePath)
+  const body = normalizeMarkdown(stubBody).replace(/^\n+/, '').replace(/\n*$/, '\n')
+  return `${block}\n${body}`
 }
 
 function constantName(name) {
@@ -108,6 +133,33 @@ function assertAliasContract(guides) {
   }
 }
 
+async function assertStubSourcesMatchTopics(repoRoot) {
+  const stubRoot = path.join(repoRoot, 'skill-stubs')
+  let names = []
+  try {
+    names = (await readdir(stubRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+      .map((entry) => entry.name.slice(0, -3))
+  } catch (error) {
+    // Why: a repo state with no stubbed topics yet has no skill-stubs directory at all.
+    if (error.code !== 'ENOENT') {
+      throw error
+    }
+  }
+  const found = names.sort((left, right) => left.localeCompare(right, 'en'))
+  const expected = [...STUB_TOPICS].sort((left, right) => left.localeCompare(right, 'en'))
+  if (JSON.stringify(found) !== JSON.stringify(expected)) {
+    throw new Error(
+      `skill-stubs sources must match STUB_TOPICS.\nExpected: ${expected.join(', ') || '(none)'}\nFound: ${found.join(', ') || '(none)'}`
+    )
+  }
+  for (const name of STUB_TOPICS) {
+    if (!CANONICAL_GUIDE_NAMES.includes(name)) {
+      throw new Error(`Stub topic is not a canonical guide: ${name}`)
+    }
+  }
+}
+
 async function buildArtifacts(repoRoot = REPO_ROOT) {
   const guideRoot = path.join(repoRoot, 'skill-guides')
   const sourceFiles = (await readdir(guideRoot, { withFileTypes: true }))
@@ -122,7 +174,9 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
       `Guide sources must match the canonical topic list.\nExpected: ${expectedNames.join(', ')}\nFound: ${sourceFiles.join(', ')}`
     )
   }
+  await assertStubSourcesMatchTopics(repoRoot)
 
+  const stubTopics = new Set(STUB_TOPICS)
   const guides = []
   const projections = []
   for (const name of expectedNames) {
@@ -135,10 +189,16 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
       throw new Error(`Guide source ${name}.md declares mismatched name ${frontmatter.name}`)
     }
     const aliases = GUIDE_ALIASES[name]
+    // Why: the embedded table always carries the full guide (served by `skills get`);
+    // only the installable projection thins to a stub once a topic is in STUB_TOPICS.
     guides.push({ name, description: frontmatter.description, markdown, aliases })
+    const stubPath = path.join(repoRoot, 'skill-stubs', `${name}.md`)
+    const content = stubTopics.has(name)
+      ? composeStubProjection(markdown, await readFile(stubPath, 'utf8'), `skill-stubs/${name}.md`)
+      : markdown
     projections.push({
       path: path.join(repoRoot, 'skills', name, 'SKILL.md'),
-      content: markdown
+      content
     })
   }
   assertAliasContract(guides)
@@ -195,8 +255,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
 export {
   CANONICAL_GUIDE_NAMES,
   GUIDE_ALIASES,
+  STUB_TOPICS,
   assertAliasContract,
   buildArtifacts,
+  composeStubProjection,
+  frontmatterBlock,
   normalizeMarkdown,
   parseFrontmatter,
   serializeEmbeddedModule,

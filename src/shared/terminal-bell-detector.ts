@@ -3,8 +3,8 @@
  * occurring inside OSC escape sequences.
  *
  * Shared between the renderer transport processor and main's per-PTY
- * side-effect tracker (docs/reference/terminal-side-effect-authority.md):
- * bell semantics must not drift between the two parsing authorities.
+ * side-effect tracker: bell semantics must not drift between the two parsing
+ * authorities.
  *
  * Why stateful: PTY data arrives in arbitrary chunks, so an OSC sequence
  * may span multiple calls. The detector tracks in-progress escape state

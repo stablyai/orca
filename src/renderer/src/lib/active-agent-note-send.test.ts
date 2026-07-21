@@ -993,8 +993,11 @@ describe('active agent note send', () => {
     )
   })
 
-  it('refuses explicit targets that are not recognized agents before writing', async () => {
-    testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
+  it('lets guarded sends decide after transient no-agent snapshots for explicit targets', async () => {
+    const methods: string[] = []
+    let guardedSendAccepted = true
+    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+      methods.push(method)
       if (method === 'terminal.list') {
         return {
           terminals: [
@@ -1005,7 +1008,7 @@ describe('active agent note send', () => {
               branch: 'main',
               tabId: 'tab-9',
               leafId: OTHER_LEAF_ID,
-              title: 'zsh',
+              title: 'Codex',
               connected: true,
               writable: true,
               lastOutputAt: 1,
@@ -1019,6 +1022,24 @@ describe('active agent note send', () => {
       if (method === 'terminal.agentStatus') {
         return { agentStatus: { handle: 'term-2', isRunningAgent: false, status: null } }
       }
+      if (method === 'terminal.send') {
+        expect(params).toMatchObject({
+          terminal: 'term-2',
+          requireAgentStatus: 'sendable'
+        })
+        return {
+          send: {
+            handle: 'term-2',
+            accepted: guardedSendAccepted,
+            bytesWritten: guardedSendAccepted
+              ? typeof params.text === 'string'
+                ? params.text.length
+                : 1
+              : 0,
+            ...(guardedSendAccepted ? {} : { refusedReason: 'no-agent' })
+          }
+        }
+      }
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -1028,14 +1049,26 @@ describe('active agent note send', () => {
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'no-agent' })
+    ).resolves.toEqual({ status: 'sent' })
 
-    expect(testState.callRuntimeRpc).not.toHaveBeenCalledWith(
-      expect.anything(),
+    expect(methods).toEqual([
+      'terminal.list',
+      'terminal.agentStatus',
       'terminal.send',
-      expect.anything(),
-      expect.anything()
-    )
+      'terminal.agentStatus',
+      'terminal.send'
+    ])
+
+    methods.length = 0
+    guardedSendAccepted = false
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: 'notes',
+        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
+      })
+    ).resolves.toEqual({ status: 'no-agent' })
+    expect(methods).toEqual(['terminal.list', 'terminal.agentStatus', 'terminal.send'])
   })
 
   it('maps explicit target first-write refusal to not-writable', async () => {

@@ -7,5 +7,6 @@
 /config/scripts/verify-cli-bin.mjs text eol=lf
 /config/scripts/verify-release-required-assets.mjs text eol=lf
 /skill-guides/*.md text eol=lf
+/skill-stubs/*.md text eol=lf
 /skills/*/SKILL.md text eol=lf
 /src/cli/bundled-skill-guides.ts text eol=lf
