@@ -4911,14 +4911,14 @@ export class OrcaRuntimeService {
 
   private async refreshMobileSessionPtyRecords(
     targetWorktreeId: string | null = null
-  ): Promise<void> {
+  ): Promise<Set<string> | null> {
     if (!this.ptyController?.listProcesses && !this.ptyController?.hasPty) {
-      return
+      return null
     }
     // Why: floating PTY identity is explicit, so polling must not resolve every Git/SSH worktree.
     const isFloatingWorkspace = targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
     const resolvedWorktrees = isFloatingWorkspace ? [] : await this.listResolvedWorktrees()
-    await this.refreshPtyWorktreeRecordsFromController(
+    return await this.refreshPtyWorktreeRecordsFromController(
       resolvedWorktrees,
       isFloatingWorkspace ? targetWorktreeId : null
     )
@@ -4940,7 +4940,10 @@ export class OrcaRuntimeService {
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    await this.refreshMobileSessionPtyRecords(worktreeId)
+    const canCheckPtyLiveness = Boolean(
+      this.ptyController?.listProcesses || this.ptyController?.hasPty
+    )
+    const refreshedPtyLiveness = await this.refreshMobileSessionPtyRecords(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId
@@ -4978,6 +4981,20 @@ export class OrcaRuntimeService {
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
       const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
       const missingSince = sessionId ? this.ptyInventoryMissingSinceById.get(sessionId) : undefined
+      if (
+        shouldMaterializePendingTerminal &&
+        sessionId &&
+        canCheckPtyLiveness &&
+        (refreshedPtyLiveness === null || refreshedPtyLiveness.has(sessionId))
+      ) {
+        // Why: unavailable or affirmative-live inventory cannot justify replacing a persisted session; wait for its handle to attach.
+        return this.applyMobileSessionTabNavigation(
+          this.getMobileSessionTabsForWorktree(worktreeId),
+          tab.id,
+          navigation,
+          opts.clientNavigationId
+        )
+      }
       if (
         shouldMaterializePendingTerminal &&
         missingSince !== undefined &&

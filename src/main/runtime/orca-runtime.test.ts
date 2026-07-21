@@ -1980,6 +1980,38 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().authoritativeWindowId).toBe(TEST_WINDOW_ID)
   })
 
+  it('rejects a later runtime publisher without replacing the authoritative snapshot', () => {
+    const runtime = createRuntime()
+    const snapshot = (publicationEpoch: string) => ({
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch,
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    })
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [snapshot('runtime-a')]
+    })
+    runtime.attachWindow(2)
+
+    expect(() =>
+      runtime.syncWindowGraph(2, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [snapshot('runtime-b')]
+      })
+    ).toThrow('Runtime graph publisher does not match the authoritative window')
+    expect(runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)?.publicationEpoch).toBe(
+      'runtime-a'
+    )
+  })
+
   it('transfers authority from the headless sentinel to the first real window', () => {
     const runtime = createRuntime()
     electronMocks.BrowserWindow.fromId.mockImplementation((windowId: number) =>
@@ -18999,10 +19031,18 @@ describe('OrcaRuntimeService', () => {
     expect(activated.activeTabId).toBe(`host-tab-2::${HEADLESS_SECOND_LEAF_ID}`)
   })
 
-  it('does not auto-restore a persisted PTY after empty inventory responses', async () => {
+  it('waits for host liveness before any runtime client can restore a persisted PTY', async () => {
     const stalePtyId = `${TEST_WORKTREE_ID}@@stale-mobile-pty`
     const spawn = vi.fn().mockResolvedValue({ id: stalePtyId })
-    const listProcesses = vi.fn(async () => [])
+    let inventoryState: 'unavailable' | 'live' | 'empty' = 'unavailable'
+    const listProcesses = vi.fn(async () => {
+      if (inventoryState === 'unavailable') {
+        throw new Error('remote host reconnecting')
+      }
+      return inventoryState === 'live'
+        ? [{ id: stalePtyId, cwd: TEST_WORKTREE_PATH, title: 'Persisted Terminal' }]
+        : []
+    })
     const focusTerminal = vi.fn()
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
@@ -19066,6 +19106,24 @@ describe('OrcaRuntimeService', () => {
       })
     ])
 
+    inventoryState = 'live'
+    const runningActivation = await runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      'host-tab',
+      HEADLESS_LEAF_ID,
+      { notifyClients: false }
+    )
+    expect(listProcesses).toHaveBeenCalledTimes(2)
+    expect(spawn).not.toHaveBeenCalled()
+    expect(runningActivation.tabs[0]).toMatchObject({ status: 'pending-handle' })
+
+    inventoryState = 'empty'
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', HEADLESS_LEAF_ID, {
+      notifyClients: false
+    })
+    expect(listProcesses).toHaveBeenCalledTimes(3)
+    expect(spawn).not.toHaveBeenCalled()
+
     const internals = runtime as unknown as {
       ptyInventoryMissingSinceById: Map<string, number>
     }
@@ -19077,7 +19135,7 @@ describe('OrcaRuntimeService', () => {
       { notifyClients: false }
     )
 
-    expect(listProcesses).toHaveBeenCalledTimes(2)
+    expect(listProcesses).toHaveBeenCalledTimes(4)
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: stalePtyId,
