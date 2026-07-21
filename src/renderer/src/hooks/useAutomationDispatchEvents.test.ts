@@ -322,9 +322,17 @@ describe('useAutomationDispatchEvents setup launch', () => {
   it('finalizes a fresh non-reuse terminal only after completed result persistence', async () => {
     const order: string[] = []
     let launchArgs: { onAgentStatus?: (payload: { state: string }) => void } = {}
-    mockMarkDispatchResult.mockImplementation(async (result: { status: string }) => {
-      order.push(`persist:${result.status}`)
-    })
+    mockMarkDispatchResult.mockImplementation(
+      async (result: { status: string; terminalPaneKey?: string | null }) => {
+        // The retirement clear reuses status 'completed' but nulls the terminal
+        // identity; label it distinctly so ordering stays legible.
+        order.push(
+          result.status === 'completed' && result.terminalPaneKey === null
+            ? 'clear-terminal-identity'
+            : `persist:${result.status}`
+        )
+      }
+    )
     mockFinalizeTerminalOwnership.mockImplementation(() => {
       order.push('finalize')
       return true
@@ -347,8 +355,22 @@ describe('useAutomationDispatchEvents setup launch', () => {
     launchArgs.onAgentStatus?.({ state: 'done' })
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
 
-    expect(order).toEqual(['persist:dispatched', 'persist:completed', 'finalize'])
+    expect(order).toEqual([
+      'persist:dispatched',
+      'persist:completed',
+      'finalize',
+      'clear-terminal-identity'
+    ])
     expect(mockReleaseTerminalOwnership).not.toHaveBeenCalled()
+    // Why: the retired terminal is gone; the run must drop its pane/pty pointers
+    // so "View run" resolves to the workspace/snapshot, not an unavailable terminal.
+    expect(mockMarkDispatchResult).toHaveBeenLastCalledWith({
+      runId: expect.any(String),
+      status: 'completed',
+      terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null
+    })
   })
 
   it('consumes duplicate done and zero-exit completion through one finalizer', async () => {
@@ -377,7 +399,9 @@ describe('useAutomationDispatchEvents setup launch', () => {
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
 
     expect(
-      mockMarkDispatchResult.mock.calls.filter(([result]) => result.status === 'completed')
+      mockMarkDispatchResult.mock.calls.filter(
+        ([result]) => result.status === 'completed' && result.terminalPaneKey !== null
+      )
     ).toHaveLength(1)
     expect(mockReleaseTerminalOwnership).not.toHaveBeenCalled()
   })
@@ -479,7 +503,9 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
     expect(
-      mockMarkDispatchResult.mock.calls.filter(([result]) => result.status === 'completed')
+      mockMarkDispatchResult.mock.calls.filter(
+        ([result]) => result.status === 'completed' && result.terminalPaneKey !== null
+      )
     ).toHaveLength(1)
     errorSpy.mockRestore()
   })

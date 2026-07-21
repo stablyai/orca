@@ -76,10 +76,10 @@ export function useAutomationDispatchEvents(): void {
           terminalOwnership = null
           ownership?.release()
         }
-        const finalizeTerminalOwnership = (): void => {
+        const finalizeTerminalOwnership = (): boolean => {
           const ownership = terminalOwnership
           terminalOwnership = null
-          ownership?.finalize()
+          return ownership?.finalize() ?? false
         }
 
         if (!repo) {
@@ -301,7 +301,26 @@ export function useAutomationDispatchEvents(): void {
               releaseTerminalOwnership()
               throw error
             }
-            finalizeTerminalOwnership()
+            if (finalizeTerminalOwnership()) {
+              await clearRetiredRunTerminalIdentity()
+            }
+          }
+          const clearRetiredRunTerminalIdentity = async (): Promise<void> => {
+            // Why: the owned terminal was just retired, so the run's pane/pty
+            // pointers now reference a closed tab. Drop them (best-effort) so
+            // "View run" resolves to the workspace/snapshot instead of dead-ending
+            // on an unavailable terminal.
+            try {
+              await markDispatchResult({
+                runId: run.id,
+                status: 'completed',
+                terminalSessionId: null,
+                terminalPaneKey: null,
+                terminalPtyId: null
+              })
+            } catch (error) {
+              console.error('[automations] Failed to clear retired terminal identity:', error)
+            }
           }
           const markExitResult = async (code: number): Promise<void> => {
             if (completionMarked) {
@@ -324,7 +343,9 @@ export function useAutomationDispatchEvents(): void {
               throw error
             }
             if (code === 0) {
-              finalizeTerminalOwnership()
+              if (finalizeTerminalOwnership()) {
+                await clearRetiredRunTerminalIdentity()
+              }
             } else {
               releaseTerminalOwnership()
             }

@@ -114,9 +114,16 @@ export function createAutomationTerminalOwnership(
       if (!isOwnedTabIdentityCurrent(state, args)) {
         return false
       }
-      // Why: closeTab centrally owns provider shutdown and pane removal; a
-      // direct kill here would create a second teardown authority.
-      state.closeTab(args.tabId, { recordInteraction: false, reason: 'cleanup' })
+      try {
+        // Why: closeTab centrally owns provider shutdown and pane removal; a
+        // direct kill here would create a second teardown authority.
+        state.closeTab(args.tabId, { recordInteraction: false, reason: 'cleanup' })
+      } catch (error) {
+        // Why: a throwing close leaves the terminal alive; report not-closed so
+        // the run keeps its (still-valid) terminal identity and no stale clear runs.
+        console.error('[automations] Failed to close owned automation terminal:', error)
+        return false
+      }
       return true
     }
   }
