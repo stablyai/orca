@@ -4,7 +4,6 @@ import {
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
   createMobileAiVaultResumeMutationRegistry,
-  prepareMobileAiVaultSessionResume,
   readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
@@ -175,59 +174,6 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     })
     expect(launch.command).toContain("CODEX_HOME='/Users/ada/.orca/codex-runtime-home/home'")
     expect(launch.envToDelete).toBeUndefined()
-  })
-})
-
-describe('prepareMobileAiVaultSessionResume', () => {
-  it('materializes legacy shared-home sessions before building a real-home launch', async () => {
-    const legacy = session({
-      agent: 'codex',
-      filePath:
-        '/Users/ada/Library/Application Support/orca/codex-runtime-home/home/sessions/2026/07/20/rollout-a.jsonl',
-      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
-    })
-    const sendRequest = vi.fn().mockResolvedValue({
-      ok: true,
-      result: { useRealCodexHome: true }
-    })
-
-    const prepared = await prepareMobileAiVaultSessionResume({ sendRequest }, legacy)
-    const launch = buildMobileAiVaultResumeLaunch({ session: prepared, hostPlatform: 'darwin' })
-
-    expect(sendRequest).toHaveBeenCalledWith(
-      'aiVault.prepareSessionResume',
-      expect.objectContaining({ filePath: legacy.filePath, codexHome: legacy.codexHome }),
-      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
-    )
-    expect(launch.command).not.toContain('CODEX_HOME=')
-    expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
-  })
-
-  it('fails before terminal creation when targeted materialization fails', async () => {
-    const legacy = session({
-      agent: 'codex',
-      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
-    })
-    const sendRequest = vi.fn().mockResolvedValue({
-      ok: false,
-      error: { message: 'Retry resume after checking session folder permissions.' }
-    })
-
-    await expect(prepareMobileAiVaultSessionResume({ sendRequest }, legacy)).rejects.toThrow(
-      /Retry resume/
-    )
-  })
-
-  it.each([
-    '/Users/ada/.config/codex',
-    '/Users/ada/Library/Application Support/orca/codex-accounts/a/home',
-    '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex'
-  ])('preserves a non-legacy Codex home without an RPC: %s', async (codexHome) => {
-    const current = session({ agent: 'codex', codexHome })
-    const sendRequest = vi.fn()
-
-    await expect(prepareMobileAiVaultSessionResume({ sendRequest }, current)).resolves.toBe(current)
-    expect(sendRequest).not.toHaveBeenCalled()
   })
 })
 
