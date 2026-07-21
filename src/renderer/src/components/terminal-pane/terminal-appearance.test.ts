@@ -405,6 +405,80 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.theme).not.toBe(firstTheme)
     expect(pane.terminal.options.theme?.background).toBe('#102030')
   })
+
+  // #7934: contrast correction rescues invisible white text on light backgrounds but over-corrects on dark;
+  // gate by the composed theme's background luminance (either theme slot can hold either kind of theme).
+  it('keeps xterm contrast correction on light themes', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'light' })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(4.5)
+  })
+
+  it('disables xterm contrast correction on dark themes', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark' })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+  })
+
+  it('re-gates contrast correction when the theme flips live', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'light' })
+    expect(pane.terminal.options.minimumContrastRatio).toBe(4.5)
+
+    apply(pane, { ...settings, theme: 'dark' })
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+  })
+
+  it('disables contrast correction in light mode when the terminal matches dark mode', () => {
+    // terminalUseSeparateLightTheme=false keeps the dark terminal theme in light app mode; the gate must follow the background.
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'light', terminalUseSeparateLightTheme: false })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+  })
+
+  it('keeps contrast correction in dark mode when a light theme fills the dark slot', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalThemeDark: 'Builtin Tango Light' })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(4.5)
+  })
+
+  it('skips the minimumContrastRatio write on a no-op re-apply (preserves xterm contrast cache)', () => {
+    const pane = makePane(1)
+    let writes = 0
+    let stored: number | undefined
+    Object.defineProperty(pane.terminal.options, 'minimumContrastRatio', {
+      configurable: true,
+      enumerable: true,
+      get: () => stored,
+      set: (value: number) => {
+        stored = value
+        writes += 1
+      }
+    })
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark' })
+    const writesAfterFirst = writes
+
+    apply(pane, { ...settings, theme: 'dark' })
+
+    // The value-gate must not rewrite an unchanged ratio — each write clears xterm's contrast cache.
+    expect(writes).toBe(writesAfterFirst)
+  })
 })
 
 describe('publishTerminalViewAttributesAtAppStart', () => {

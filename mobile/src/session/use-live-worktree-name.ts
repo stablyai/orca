@@ -5,6 +5,7 @@ import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree-id'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
 import { getLiveWorktreeDisplayName, type WorktreeDisplayNameSource } from './worktree-display-name'
+import { FLOATING_WORKSPACE_TITLE, isFloatingWorkspaceWorktreeId } from './floating-workspace'
 
 const WORKTREE_NAME_FALLBACK_POLL_MS = 3000
 
@@ -16,15 +17,26 @@ type Params = {
 }
 
 export function useLiveWorktreeName({ client, connState, routeName, worktreeId }: Params): string {
-  const [worktreeName, setWorktreeName] = useState(() => routeName?.trim() ?? '')
+  // Why: the floating sentinel has no worktree record, so worktree.show would
+  // fail forever and keep the 3s fallback poll alive; its title is fixed.
+  const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
+  const routeNameHint = routeName?.trim() ?? ''
+  const [worktreeName, setWorktreeName] = useState(() => ({
+    worktreeId,
+    name: routeNameHint
+  }))
 
   useEffect(() => {
-    setWorktreeName(routeName?.trim() ?? '')
-  }, [routeName, worktreeId])
+    setWorktreeName((current) =>
+      current.worktreeId === worktreeId && current.name === routeNameHint
+        ? current
+        : { worktreeId, name: routeNameHint }
+    )
+  }, [routeNameHint, worktreeId])
 
   useFocusEffect(
     useCallback(() => {
-      if (!client || connState !== 'connected') {
+      if (isFloatingWorkspace || !client || connState !== 'connected') {
         return
       }
       let stale = false
@@ -58,7 +70,11 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
             ? getLiveWorktreeDisplayName([result.worktree], worktreeId)
             : null
           if (liveName) {
-            setWorktreeName((current) => (current === liveName ? current : liveName))
+            setWorktreeName((current) =>
+              current.worktreeId === worktreeId && current.name === liveName
+                ? current
+                : { worktreeId, name: liveName }
+            )
           }
           hasSuccessfulRefresh = true
           if (eventStreamReady) {
@@ -128,8 +144,11 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
         stopFallbackPoll()
         unsubscribe()
       }
-    }, [client, connState, worktreeId])
+    }, [client, connState, worktreeId, isFloatingWorkspace])
   )
 
-  return worktreeName
+  if (isFloatingWorkspace) {
+    return FLOATING_WORKSPACE_TITLE
+  }
+  return worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint
 }

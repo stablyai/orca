@@ -217,6 +217,23 @@ describe('Electron runtime package contract', () => {
     )
   })
 
+  it('packages and verifies the Windows SSH node-pty console-list fallback', () => {
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const relayDeploy = readFileSync(join(projectDir, 'src/main/ssh/ssh-relay-deploy.ts'), 'utf8')
+    const patchAsset = readFileSync(
+      join(projectDir, 'config/relay-assets/node-pty-1.1.0-console-list-agent-patch.cjs'),
+      'utf8'
+    )
+
+    expect(relayBuild).toContain('copyFileSync(')
+    expect(relayBuild).toContain('hash.update(readFileSync')
+    expect(relayBuild).toContain('node-pty-1.1.0-console-list-agent-patch.cjs')
+    expect(relayDeploy).toContain('assertPatchedNodePtyConsoleListAgent')
+    expect(relayDeploy.match(/\$\{windowsNodePtyPatchCommand\(nodePath\)\}/g)).toHaveLength(2)
+    expect(patchAsset).toContain('consoleProcessList = [shellPid];')
+    expect(patchAsset).toContain('packageJson.version !== EXPECTED_NODE_PTY_VERSION')
+  })
+
   it('pins the Windows release builder to the VS 2022 runner image', () => {
     const releaseWorkflow = parse(
       readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')

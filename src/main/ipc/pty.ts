@@ -2849,6 +2849,13 @@ export function registerPtyHandlers(
         env,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
+      const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
+      if (startupTerminalColorQueryReplyColors) {
+        spawnOptions.startupIngress = {
+          colors: startupTerminalColorQueryReplyColors,
+          deadlineMs: 5_000
+        }
+      }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
         isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
@@ -3322,6 +3329,13 @@ export function registerPtyHandlers(
         await getProviderForPty(ptyId).clearBuffer(ptyId)
       } catch {
         /* best effort: renderer clear still handles local PTYs */
+      }
+    },
+    hasPty: (ptyId) => {
+      try {
+        return getProviderForPty(ptyId).hasPty?.(ptyId) ?? null
+      } catch {
+        return null
       }
     },
     listProcesses: async () => {
@@ -3831,10 +3845,7 @@ export function registerPtyHandlers(
       if (startupTerminalColorQueryReplyColors) {
         spawnOptions.startupIngress = {
           colors: startupTerminalColorQueryReplyColors,
-          deadlineMs: 5_000,
-          ...(nativeWindowsConptySpawn
-            ? { echoProjection: 'windows-conpty-esc-stripped' as const }
-            : {})
+          deadlineMs: 5_000
         }
       }
       const existingPaneSpawn = reservationPaneKey
@@ -4814,10 +4825,13 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:getSize',
     async (_event, args: { id: string }): Promise<{ cols: number; rows: number } | null> => {
+      const provider = tryGetProviderForPty(args.id)
       try {
-        const applied = await tryGetProviderForPty(args.id)?.getAppliedSize?.(args.id)
-        if (applied) {
-          return applied
+        if (provider?.getAppliedSize) {
+          // Why: a provider-owned null means it could not verify the applied
+          // grid; preserve null so the renderer re-forwards instead of trusting
+          // the requested-size cache that may describe a dropped resize.
+          return await provider.getAppliedSize(args.id)
         }
       } catch {
         // Fall through to the requested-size cache so a dead daemon/relay can't throw across the IPC boundary.

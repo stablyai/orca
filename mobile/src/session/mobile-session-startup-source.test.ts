@@ -36,6 +36,8 @@ describe('mobile session startup', () => {
     )
 
     expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
+    expect(startupEffect).toContain("if (client && created !== '1' && !isFloatingWorkspaceRoute)")
+    expect(startupEffect).toContain("if (client && created === '1' && !isFloatingWorkspaceRoute)")
     expect(startupEffect).toContain('notifyClients: false')
     expect(startupEffect).toContain("navigation: 'caller'")
     expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")

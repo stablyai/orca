@@ -1720,6 +1720,7 @@ export default function TerminalPane({
     managerRef,
     containerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     isActiveRef,
     isVisibleRef,
     toggleExpandPane

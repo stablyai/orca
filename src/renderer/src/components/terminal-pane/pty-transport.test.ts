@@ -79,6 +79,17 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('does not create a second kill authority when a mounted pane detaches', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+
+    transport.detach?.()
+
+    expect(kill).not.toHaveBeenCalled()
+  })
+
   it('forwards requested environment deletions to the PTY spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

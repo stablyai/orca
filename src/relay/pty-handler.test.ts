@@ -1010,29 +1010,131 @@ describe('PtyHandler', () => {
   })
 
   it('leaves startup queries untouched for an unsupported relay capability version', async () => {
-    let dataCallback: ((data: string) => void) | undefined
-    const term = {
-      ...mockPtyInstance,
-      onData: vi.fn((cb: (data: string) => void) => {
-        dataCallback = cb
-      }),
-      onExit: vi.fn()
-    }
-    mockPtySpawn.mockReturnValue(term)
-    await dispatcher.callRequest('pty.spawn', {
-      startupIngressVersion: PTY_STARTUP_INGRESS_VERSION - 1,
-      startupIngress: {
-        colors: { foreground: '#2e3434', background: '#ffffff' },
-        deadlineMs: 5_000
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
       }
-    })
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', {
+        startupIngressVersion: PTY_STARTUP_INGRESS_VERSION - 1,
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
 
-    const query = '\x1b]10;?\x07'
-    dataCallback!(query)
-    vi.advanceTimersByTime(8)
+      const query = '\x1b]10;?\x07'
+      dataCallback!(query)
+      vi.advanceTimersByTime(8)
 
-    expect(term.write).not.toHaveBeenCalled()
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+      expect(term.write).not.toHaveBeenCalled()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('consumes a color query at a native Windows SSH relay owner', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', { shellOverride: 'powershell.exe' })
+
+      dataCallback!('\x1b]10;?\x07')
+      vi.advanceTimersByTime(8)
+
+      expect(term.write).not.toHaveBeenCalled()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '',
+        rawLength: '\x1b]10;?\x07'.length,
+        seq: '\x1b]10;?\x07'.length,
+        transformed: true
+      })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('forwards color queries from a POSIX SSH relay owner', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      })
+      await dispatcher.callRequest('pty.spawn', { shellOverride: '/bin/bash' })
+      const query = '\x1b]10;?\x07'
+
+      dataCallback!(query)
+      vi.advanceTimersByTime(8)
+
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('keeps renderer color replies for a Windows SSH relay that owns WSL', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', {
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+      const reply = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
+
+      dataCallback!('\x1b]11;?\x07')
+      vi.advanceTimersByTime(8)
+      dispatcher.callNotification('pty.data', { id: 'pty-1', data: reply })
+
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]11;?\x07'
+      })
+      expect(term.write).toHaveBeenCalledWith(reply)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
   })
 
   it('coalesces background PTY output before notifying the client', async () => {
@@ -1272,6 +1374,24 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
     dispatcher.callNotification('pty.resize', { id: 'pty-1', cols: 120, rows: 40 })
     expect(mockResize).toHaveBeenCalledWith(120, 40)
+  })
+
+  it('reports the PTY grid actually applied by node-pty', async () => {
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      cols: 132,
+      rows: 43,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    })
+
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    await expect(dispatcher.callRequest('pty.getSize', { id: spawned.id })).resolves.toEqual({
+      cols: 132,
+      rows: 43
+    })
+    await expect(dispatcher.callRequest('pty.getSize', { id: 'missing' })).resolves.toBeNull()
   })
 
   it('kills PTY on shutdown with SIGTERM by default', async () => {

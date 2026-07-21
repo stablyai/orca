@@ -625,6 +625,7 @@ let inactiveForegroundImmediateBudgetWindowStart = 0
 type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
   noteVisibilityResume: () => void
+  reassertPtySizeAfterWindowWake: () => void
   /** Navigation-free hibernation wake: fires the armed cold-restore --resume
    *  without the size-reassert/foreground-sample side effects of a real reveal.
    *  Used by the mobile wake fanout so a hidden hibernated pane resumes with no
@@ -8036,6 +8037,9 @@ export function connectPanePty(
       consumeHibernatedAgentWake()
       requestKnownDroidReconfirmation()
       sampleVisiblePaneForegroundAgent()
+    },
+    reassertPtySizeAfterWindowWake() {
+      ptySizeReassertion.request({ fit: false })
     },
     // Why: mobile wake reaches this pane while it's hidden on the desktop, so consume only the armed hibernation wake — no size/foreground reads.
     wakeHibernatedAgentIfArmed(claimedProviderSessions) {

@@ -24,6 +24,7 @@ import type { TerminalViewAttributes } from '../../../../shared/terminal-view-at
 import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
+import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 
 // Why Pick over a hand-rolled type: stays tied to xterm's canonical signature so upstream tightening surfaces here.
 type Mode2031Parser = Pick<IParser, 'registerCsiHandler'>
@@ -206,6 +207,16 @@ export function applyTerminalAppearance(
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
     if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
       pane.terminal.options.theme = theme
+    }
+    // Gate off the configured theme background; the live OSC-11 background is deliberately preserved by the
+    // theme write above, so a TUI that repaints its background at runtime won't re-gate (known limitation).
+    // Why value-gated: writing minimumContrastRatio clears xterm's contrast cache, so skip on no-op re-applies.
+    const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
+      theme?.background,
+      appearance.mode
+    )
+    if (pane.terminal.options.minimumContrastRatio !== minimumContrastRatio) {
+      pane.terminal.options.minimumContrastRatio = minimumContrastRatio
     }
     // Why clear explicitly: allowTransparency has rendering cost and a stale `true` could bleed in from a prior opacity.
     pane.terminal.options.allowTransparency =

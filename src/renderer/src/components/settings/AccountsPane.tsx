@@ -10,6 +10,8 @@ import type {
   CodexSystemDefaultIdentity,
   GlobalSettings
 } from '../../../../shared/types'
+import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
+import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -290,14 +292,16 @@ function getSelectedAccountRuntime(
   wslDistros: string[],
   wslCapabilitiesLoading: boolean
 ): LocalAccountRuntime {
-  if (wslSupportedPlatform && settings.localAccountRuntime === 'wsl') {
+  // Why: the two-option control displays the concrete target behind the persisted auto policy.
+  const resolvedRuntime = resolveLocalAccountRuntimeTarget(settings, getRendererAppPlatform())
+  if (wslSupportedPlatform && resolvedRuntime.runtime === 'wsl') {
     if (!wslAvailable && !wslCapabilitiesLoading) {
       return {
         runtime: 'wsl',
         label: translate('auto.components.settings.AccountsPane.8619f9afa9', 'WSL')
       }
     }
-    const configuredDistro = settings.localAccountWslDistro?.trim() || null
+    const configuredDistro = resolvedRuntime.wslDistro?.trim() || null
     const selectedDistro =
       configuredDistro && (wslCapabilitiesLoading || wslDistros.includes(configuredDistro))
         ? configuredDistro

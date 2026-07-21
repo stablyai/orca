@@ -124,6 +124,7 @@ import {
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
 import { parseTaskQuery, stripRepoQualifiers, withQualifier } from '../../../shared/task-query'
+import { githubProjectHost } from '../../../shared/github-project-identity'
 import {
   buildLinearTeamUrl,
   getLinearOrganizationUrlKeyFromIssueUrl
@@ -1180,6 +1181,7 @@ function GHStatusCell({
               {
                 owner: parsedOwnerRepo.owner,
                 repo: parsedOwnerRepo.repo,
+                host: githubProjectHost(parsedOwnerRepo.host),
                 number: item.number,
                 updates
               },
@@ -1188,6 +1190,7 @@ function GHStatusCell({
           : window.api.gh.updateIssueBySlug({
               owner: parsedOwnerRepo.owner,
               repo: parsedOwnerRepo.repo,
+              host: githubProjectHost(parsedOwnerRepo.host),
               number: item.number,
               updates
             })
@@ -1505,17 +1508,21 @@ function formatPRDelta(item: GitHubWorkItem): string | null {
 }
 
 function ReviewChipAvatar({
-  reviewer
+  reviewer,
+  avatarHost
 }: {
   reviewer: GitHubPRPrimaryReviewer | null
+  avatarHost?: string
 }): React.JSX.Element {
   if (reviewer?.login) {
-    // Why: gh pr list --json reviewRequests can return only logins; prefer API avatar_url so GHE renders (falls back to login URL, then initials). See #8784.
+    // Why: review requests may contain only logins; use the PR host before falling back to initials.
+    const avatarUrl =
+      reviewer.avatarUrl || `https://${avatarHost ?? 'github.com'}/${reviewer.login}.png?size=40`
     return (
       <GitHubUserAvatar
         login={reviewer.login}
         name={reviewer.name}
-        avatarUrl={reviewer.avatarUrl}
+        avatarUrl={avatarUrl}
         title={reviewer.name ? `${reviewer.name} (${reviewer.login})` : reviewer.login}
         className="size-5"
       />
@@ -1791,7 +1798,8 @@ function GHAssigneesCell({
     open ? owner : null,
     open ? repoName : null,
     seedLogins,
-    sourceSettings
+    sourceSettings,
+    parsed?.slug.host
   )
 
   const toggleAssignee = useCallback(
@@ -1815,6 +1823,7 @@ function GHAssigneesCell({
           const args = {
             owner,
             repo: repoName,
+            host: githubProjectHost(parsed?.slug.host),
             number: item.number,
             updates
           }
@@ -1874,6 +1883,7 @@ function GHAssigneesCell({
       item.type,
       owner,
       patchWorkItem,
+      parsed?.slug.host,
       pendingLogin,
       repo,
       repoName,
@@ -2042,6 +2052,15 @@ function sameOptionalGitHubOwnerRepo(
     : sameGitHubOwnerRepo(leftValue, rightValue)
 }
 
+// Why: Task grid PR actions must keep the URL's host when list data has not
+// hydrated prRepo yet, while still pinning host-less github.com identities.
+function resolveTaskPullRequestRepo(
+  item: Pick<GitHubWorkItem, 'prRepo' | 'url'>
+): GitHubOwnerRepo | null {
+  const repo = item.prRepo ?? parseGitHubIssueOrPRLink(item.url)?.slug ?? null
+  return repo ? { ...repo, host: githubProjectHost(repo.host) } : null
+}
+
 function mergeReviewerSuggestions(
   users: GitHubAssignableUser[],
   seedUsers: GitHubAssignableUser[]
@@ -2179,12 +2198,13 @@ function PRReviewCell({
     return Array.from(byLogin.values())
   }, [item.author, item.latestReviews, localReviewRequests])
 
-  const reviewSlug = useMemo(() => parseGitHubIssueOrPRLink(item.url)?.slug ?? null, [item.url])
+  const reviewRepo = useMemo(() => resolveTaskPullRequestRepo(item), [item])
   const reviewerMetadata = useRepoAssigneesBySlug(
-    open && reviewSlug ? reviewSlug.owner : null,
-    open && reviewSlug ? reviewSlug.repo : null,
+    open && reviewRepo ? reviewRepo.owner : null,
+    open && reviewRepo ? reviewRepo.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    sourceSettings
+    sourceSettings,
+    reviewRepo?.host
   )
 
   const authorLogin = item.author?.toLowerCase() ?? null
@@ -2313,7 +2333,12 @@ function PRReviewCell({
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.requestPRReviewers',
-              { repo: runtimeRepoId, prNumber: item.number, reviewers: logins },
+              {
+                repo: runtimeRepoId,
+                prNumber: item.number,
+                reviewers: logins,
+                prRepo: reviewRepo
+              },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.requestPRReviewers({
@@ -2321,7 +2346,8 @@ function PRReviewCell({
               repoId: repo.id,
               sourceContext,
               prNumber: item.number,
-              reviewers: logins
+              reviewers: logins,
+              prRepo: reviewRepo
             })
       if (result.ok) {
         toast.success(translate('auto.components.TaskPage.8f06dbb9e5', 'Reviewer requested'))
@@ -2367,7 +2393,12 @@ function PRReviewCell({
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.removePRReviewers',
-              { repo: runtimeRepoId, prNumber: item.number, reviewers: logins },
+              {
+                repo: runtimeRepoId,
+                prNumber: item.number,
+                reviewers: logins,
+                prRepo: reviewRepo
+              },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.removePRReviewers({
@@ -2375,7 +2406,8 @@ function PRReviewCell({
               repoId: repo.id,
               sourceContext,
               prNumber: item.number,
-              reviewers: logins
+              reviewers: logins,
+              prRepo: reviewRepo
             })
       if (result.ok) {
         toast.success(
@@ -2508,7 +2540,7 @@ function PRReviewCell({
         >
           {primaryReviewer ? (
             <>
-              <ReviewChipAvatar reviewer={primaryReviewer} />
+              <ReviewChipAvatar reviewer={primaryReviewer} avatarHost={reviewRepo?.host} />
               {extraReviewerCount > 0 ? (
                 <span className="text-[10px] tabular-nums text-muted-foreground">
                   +{extraReviewerCount}
@@ -2744,6 +2776,7 @@ function PRMergeCell({
   }
   const mergePresentation = presentGitHubPRMergeState(item)
   const mergeMethods = resolveGitHubPRMergeMethods(item.mergeMethodSettings)
+  const prRepo = resolveTaskPullRequestRepo(item)
   const mergeDisabled = !repo || merging || !mergePresentation.directMergeAvailable
 
   const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
@@ -2779,7 +2812,7 @@ function PRMergeCell({
                 repo: runtimeRepoId,
                 prNumber: item.number,
                 method,
-                prRepo: item.prRepo ?? null
+                prRepo
               },
               { timeoutMs: 30_000 }
             )
@@ -2789,7 +2822,7 @@ function PRMergeCell({
               sourceContext,
               prNumber: item.number,
               method,
-              prRepo: item.prRepo ?? null
+              prRepo
             })
       if (result.ok) {
         useAppStore.getState().recordFeatureInteraction('github-tasks')
@@ -2825,7 +2858,7 @@ function PRMergeCell({
                 prNumber: item.number,
                 enabled,
                 method: enabled ? mergeMethods.defaultMethod : undefined,
-                prRepo: item.prRepo ?? null
+                prRepo
               },
               { timeoutMs: 30_000 }
             )
@@ -2836,7 +2869,7 @@ function PRMergeCell({
               prNumber: item.number,
               enabled,
               method: enabled ? mergeMethods.defaultMethod : undefined,
-              prRepo: item.prRepo ?? null
+              prRepo
             })
       if (result.ok) {
         useAppStore.getState().recordFeatureInteraction('github-tasks')

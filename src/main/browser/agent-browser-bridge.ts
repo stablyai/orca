@@ -48,6 +48,7 @@ import type {
   BrowserCookie
 } from '../../shared/runtime-types'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
+import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
@@ -55,6 +56,7 @@ const EXEC_TIMEOUT_MS = 90_000
 const CONSECUTIVE_TIMEOUT_LIMIT = 3
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
 const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
+const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
 
@@ -766,9 +768,53 @@ export class AgentBrowserBridge {
   }
 
   async goto(url: string, worktreeId?: string, browserPageId?: string): Promise<BrowserGotoResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['goto', url])) as BrowserGotoResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const wc = this.requireTargetWebContents(target)
+        const navigationUrl = normalizeBrowserNavigationUrl(url)
+        if (!navigationUrl) {
+          throw new BrowserError('invalid_argument', `Unsupported browser URL: ${url}`)
+        }
+        let navigationTimeout: ReturnType<typeof setTimeout> | null = null
+        try {
+          await Promise.race([
+            wc.loadURL(navigationUrl),
+            new Promise<never>((_resolve, reject) => {
+              navigationTimeout = setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      `Browser navigation timed out after ${EMBEDDED_NAVIGATION_TIMEOUT_MS}ms`
+                    )
+                  ),
+                EMBEDDED_NAVIGATION_TIMEOUT_MS
+              )
+              navigationTimeout.unref?.()
+            })
+          ])
+        } catch (error) {
+          if (!this.getWebContents(target.webContentsId)) {
+            throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+          }
+          throw new BrowserError(
+            'browser_error',
+            `Failed to navigate browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        } finally {
+          if (navigationTimeout) {
+            clearTimeout(navigationTimeout)
+          }
+        }
+
+        // Why: cross-process navigation can replace the guest while retaining the same authoritative page id.
+        const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+        const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
+        return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
+      },
+      { ensureSession: false }
+    )
   }
 
   async fill(
@@ -1403,9 +1449,62 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserEvalResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['eval', expression])) as BrowserEvalResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const wc = this.requireTargetWebContents(target)
+        let releaseDebugger = (): void => {}
+        try {
+          releaseDebugger = acquireElectronDebugger(wc).release
+          const { result, exceptionDetails } = (await wc.debugger.sendCommand('Runtime.evaluate', {
+            expression,
+            returnByValue: true,
+            awaitPromise: true
+          })) as {
+            result: { value?: unknown; description?: string }
+            exceptionDetails?: { text: string; exception?: { description?: string } }
+          }
+          if (exceptionDetails) {
+            throw new BrowserError(
+              'browser_eval_error',
+              exceptionDetails.exception?.description ?? exceptionDetails.text
+            )
+          }
+
+          const currentTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+          if (currentTarget.webContentsId !== target.webContentsId) {
+            throw new BrowserError(
+              'browser_tab_changed',
+              `Browser page ${target.browserPageId} changed while evaluating; retry the command`
+            )
+          }
+          return {
+            result:
+              result.value !== undefined
+                ? typeof result.value === 'object' && result.value !== null
+                  ? JSON.stringify(result.value)
+                  : String(result.value)
+                : (result.description ?? ''),
+            origin: wc.getURL()
+          }
+        } catch (error) {
+          if (error instanceof BrowserError) {
+            throw error
+          }
+          if (!this.getWebContents(target.webContentsId)) {
+            throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+          }
+          throw new BrowserError(
+            'browser_error',
+            `Failed to evaluate in browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        } finally {
+          releaseDebugger()
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   async hover(
@@ -2283,12 +2382,9 @@ export class AgentBrowserBridge {
     const managesInterceptRoutes =
       commandArgs[0] === 'network' && (commandArgs[1] === 'route' || commandArgs[1] === 'unroute')
 
-    // Why: --cdp is init-only; pass the port (not a ws:// URL) so agent-browser's /json discovery sees only the proxy's webview, not the host renderer page.
     const needsInit = !session.initialized
-    if (needsInit) {
-      const port = session.proxy.getPort()
-      args.push('--cdp', String(port))
-    }
+    // Why: a restarted named daemon auto-launches Chrome unless every invocation reasserts Orca's CDP owner.
+    args.push('--cdp', String(session.proxy.getPort()))
 
     // Why: exec passthrough can produce a large argv; spreading into push risks V8 argument limits.
     for (const commandArg of commandArgs) {
@@ -2323,6 +2419,8 @@ export class AgentBrowserBridge {
           await this.runAgentBrowserRaw(sessionName, [
             '--session',
             sessionName,
+            '--cdp',
+            String(session.proxy.getPort()),
             'network',
             'route',
             urlPattern,
@@ -2368,23 +2466,32 @@ export class AgentBrowserBridge {
   }
 
   private closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let child: ReturnType<typeof execFile> | null = null
       let settled = false
 
-      const finish = (): void => {
+      const finish = (error?: Error): void => {
         if (settled) {
           return
         }
         settled = true
         clearTimeout(timeout)
-        resolve()
+        if (error) {
+          reject(error)
+        } else {
+          resolve()
+        }
       }
 
-      // Why: best-effort daemon cleanup — a wedged close must not block the real browser action.
+      // Why: proceeding after an unverified close can reuse a daemon that owns an unrelated browser.
       const timeout = setTimeout(() => {
         child?.kill()
-        finish()
+        finish(
+          new BrowserError(
+            'browser_owner_unavailable',
+            `Could not reset stale helper session ${sessionName}; retry after agent-browser exits`
+          )
+        )
       }, STALE_SESSION_CLOSE_TIMEOUT_MS)
 
       try {
@@ -2392,10 +2499,23 @@ export class AgentBrowserBridge {
           this.agentBrowserBin,
           ['--session', sessionName, 'close'],
           { timeout: STALE_SESSION_CLOSE_TIMEOUT_MS },
-          finish
+          (error) =>
+            finish(
+              error
+                ? new BrowserError(
+                    'browser_owner_unavailable',
+                    `Could not reset stale helper session ${sessionName}: ${error.message}`
+                  )
+                : undefined
+            )
         )
-      } catch {
-        finish()
+      } catch (error) {
+        finish(
+          new BrowserError(
+            'browser_owner_unavailable',
+            `Could not reset stale helper session ${sessionName}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        )
       }
     })
   }
@@ -2525,10 +2645,19 @@ export class AgentBrowserBridge {
     return null
   }
 
+  private requireTargetWebContents(target: ResolvedBrowserCommandTarget): WebContents {
+    const wc = this.getWebContents(target.webContentsId)
+    if (!wc || wc.isDestroyed()) {
+      throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+    }
+    return wc
+  }
+
   private getWebContents(webContentsId: number): Electron.WebContents | null {
     try {
       const { webContents } = require('electron')
-      return webContents.fromId(webContentsId) ?? null
+      const target = webContents.fromId(webContentsId)
+      return target && !target.isDestroyed() ? target : null
     } catch {
       return null
     }

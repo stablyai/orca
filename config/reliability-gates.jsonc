@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-19",
+  "updatedAt": "2026-07-20",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -1224,7 +1224,8 @@
         "PTY sizing",
         "split layout",
         "restore",
-        "hidden-to-visible transitions"
+        "hidden-to-visible transitions",
+        "window wake"
       ],
       "platforms": [
         "macos",
@@ -1241,7 +1242,7 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Shell-visible size, SSH/remote geometry, Windows ConPTY readback, and resume-time reassertion coverage arrive with the pending stack and #7006.",
+      "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Deterministic provider-contract coverage now includes settled window-wake reassertion and SSH relay applied-size readback. Live shell-visible SSH/remote geometry and Windows ConPTY readback remain non-blocking gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6644",
         "https://github.com/stablyai/orca/pull/6649",
@@ -1252,15 +1253,19 @@
         "https://github.com/stablyai/orca/pull/7192"
       ],
       "invariant": "A visible desktop-owned terminal cannot trust 0x0, stale requested size, or renderer-only size; xterm, fit/proposed size, applied PTY size, shell-visible size, and the runtime mirror's parse dimensions must converge or enter explicit degraded state, and mirror resize reflow must stay ordered with queued output writes.",
-      "oracle": "The current executable slice uses deterministic frame schedulers and fake providers to force 0x0 first fit, delayed layout settle, dropped resize/readback drift, and hidden-to-visible activation, then asserts the renderer forwards a usable size, pty:getSize reports applied rather than merely requested size where available, and visibility resume reasserts real drift without hot listSessions. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
+      "oracle": "The current executable slice uses deterministic frame schedulers and fake providers to force 0x0 first fit, delayed layout settle, dropped resize/readback drift, hidden-to-visible activation, and window wake. It asserts the renderer forwards a usable size, pty:getSize reports applied rather than merely requested size where available, visibility resume reasserts real drift without hot listSessions, one settled wake produces one geometry-only readback, and SSH relay readback is authoritative with bounded fallback. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts",
         "src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts",
+        "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
         "src/main/ipc/pty.test.ts",
-        "src/main/runtime/orca-runtime.test.ts"
+        "src/main/providers/ssh-pty-provider.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/relay/pty-handler.test.ts"
       ],
       "assertionRefs": [
         {
@@ -1272,6 +1277,13 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts",
+          "assertions": [
+            "only one applied-size read stays in flight while the grid changes",
+            "stale in-flight targets never resize the PTY back to an older grid"
+          ]
+        },
+        {
           "file": "src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts",
           "assertions": [
             "0x0 split-right spawn recovers when the container becomes measurable",
@@ -1280,10 +1292,25 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+          "assertions": [
+            "window focus reasserts PTY size after fitting",
+            "the immediate and settled wake fits produce exactly one geometry-only reassertion"
+          ]
+        },
+        {
           "file": "src/main/ipc/pty.test.ts",
           "assertions": [
             "accepted desktop resizes fan out to the runtime after provider resize",
-            "rejected desktop resizes do not fan out to the runtime"
+            "rejected desktop resizes do not fan out to the runtime",
+            "provider-owned null remains unverified instead of falling back to requested size"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-pty-provider.test.ts",
+          "assertions": [
+            "SSH applied-size readback uses the relay with a one-second timeout",
+            "old-relay method-not-found is cached while transient failures remain retryable"
           ]
         },
         {
@@ -1292,17 +1319,24 @@
             "the headless mirror resizes after an accepted desktop PTY resize (#7192)",
             "headless mirror resizes are ordered behind queued PTY writes (#7192)"
           ]
+        },
+        {
+          "file": "src/relay/pty-handler.test.ts",
+          "assertions": [
+            "relay readback reports the grid actually applied by node-pty",
+            "missing relay PTYs return an unverified null size"
+          ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-03",
+          "date": "2026-07-20",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler.test.ts",
           "result": "passed",
-          "durationSeconds": 8.4,
-          "summary": "4 test file(s) passed, 777 tests passed on main@1282f5c2d in a clean checkout."
+          "durationSeconds": 18.54,
+          "summary": "8 test files passed, 1,272 tests passed on the PR branch."
         }
       ],
       "runtimeBudget": {
@@ -1319,16 +1353,15 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Must include resize/throughput budget so convergence loops do not add frame or SIGWINCH churn."
+        "evidence": "The wake hook count test permits two visual fits but exactly one applied-size read per visible pane and no broad visibility/agent lifecycle call. SSH readback has a one-second timeout, caches stable method-not-found, and retries only transient failures. No polling, listSessions scan, subprocess, or unbounded retry was added."
       },
       "promotionCriteria": [
         "Build deterministic fault hooks before adding broad E2E coverage.",
         "Keep stress variants non-blocking until runtime and flake history are known."
       ],
       "knownGaps": [
-        "No live Electron geometry command yet beyond the local live PTY resize slice.",
-        "The runtime mirror geometry slice is unregistered: #7192's red tests (orca-runtime.test.ts headless-mirror resize and ordering, pty.test.ts desktop resize fan-out) exist on fresh main but not at this branch's merge-base, so they can only be registered during the rebase.",
-        "Does not yet prove shell-visible size, provider-applied size, and xterm size converge across SSH/remote paths.",
+        "Local and Docker-backed SSH Electron wake specs exist but remain manual/non-blocking pending runtime and flake history.",
+        "The deterministic gate proves the SSH provider/relay readback contract, not live shell-visible convergence across every remote path.",
         "Does not yet prove Windows ConPTY geometry/readback.",
         "Current command uses deterministic fake providers for the main/renderer contracts, not a real remote PTY."
       ],

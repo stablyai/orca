@@ -24,6 +24,7 @@ import type {
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
+import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
 // Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
@@ -85,6 +86,7 @@ export type SessionOptions = {
   // a reaper, dead sessions and their scrollback emulators accumulate for the daemon's lifetime.
   onExit?: (code: number) => void
   startupIngress?: PtyStartupIngressIntent
+  ownerBackend?: PtyOwnerBackend
 }
 
 type AttachedClient = {
@@ -158,6 +160,7 @@ export class Session {
     this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
+      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.emitSubprocessOutput(emission)
     })
