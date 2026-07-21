@@ -5831,7 +5831,11 @@ const WorktreeList = React.memo(function WorktreeList({
     return buildWorktreeComparator('smart', repoMap, now, mergedAttention)
   }, [sortBy, repoMap, settledSmartSortIds, visibleFolderWorkspacesForRows])
   const folderWorkspaceSortComparatorRef = useRef(folderWorkspaceSortComparator)
-  folderWorkspaceSortComparatorRef.current = folderWorkspaceSortComparator
+  // Why: only read in the keyboard-nav callback (post-commit), so update after commit
+  // instead of mutating the ref during render (React purity).
+  useLayoutEffect(() => {
+    folderWorkspaceSortComparatorRef.current = folderWorkspaceSortComparator
+  }, [folderWorkspaceSortComparator])
 
   // Build flat row list for rendering
   const rows: Row[] = useMemo(
