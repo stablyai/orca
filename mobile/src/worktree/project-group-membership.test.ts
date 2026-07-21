@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { buildProjectGroupByRepoId } from './project-group-membership'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  buildProjectGroupByRepoId,
+  loadRepoProjectGroupResponses
+} from './project-group-membership'
 import { folderWorkspaceRepoId } from '../../../src/shared/folder-workspace-worktree'
 import type { RepoSummary } from './host-worktree-rpc-types'
 import type { ProjectGroup } from '../../../src/shared/types'
+import type { RpcClient } from '../transport/rpc-client'
 
 function group(overrides: Partial<ProjectGroup> & { id: string }): ProjectGroup {
   return {
@@ -23,6 +27,31 @@ function group(overrides: Partial<ProjectGroup> & { id: string }): ProjectGroup 
 function repo(id: string, projectGroupId?: string | null): RepoSummary {
   return { id, displayName: id, projectGroupId }
 }
+
+describe('loadRepoProjectGroupResponses', () => {
+  it('keeps repo metadata when the project-group request rejects', async () => {
+    const repoResponse = {
+      id: 'repo-list',
+      ok: true as const,
+      result: { repos: [repo('r', 'child')] },
+      _meta: { runtimeId: 'runtime' }
+    }
+    const client: Pick<RpcClient, 'sendRequest'> = {
+      sendRequest: vi.fn(async (method: string) => {
+        if (method === 'repo.list') {
+          return repoResponse
+        }
+        throw new Error('Request timed out: projectGroup.list')
+      })
+    }
+
+    await expect(loadRepoProjectGroupResponses(client)).resolves.toEqual([
+      repoResponse,
+      { ok: false }
+    ])
+    expect(client.sendRequest).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('buildProjectGroupByRepoId', () => {
   it('maps a repo to its top-level project group, collapsing nested subgroups', () => {

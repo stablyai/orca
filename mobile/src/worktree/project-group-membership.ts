@@ -1,12 +1,26 @@
 import { resolveTopLevelProjectGroupId } from '../../../src/shared/project-groups'
 import { folderWorkspaceRepoId } from '../../../src/shared/folder-workspace-worktree'
 import type { ProjectGroup } from '../../../src/shared/types'
+import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import type { RepoSummary } from './host-worktree-rpc-types'
 import type { ProjectGroupBucket } from './workspace-list-sections'
 
+type ProjectGroupResponse = { ok: boolean; result?: unknown }
+
+export async function loadRepoProjectGroupResponses(
+  client: Pick<RpcClient, 'sendRequest'>
+): Promise<[RpcResponse, ProjectGroupResponse]> {
+  // Why: group labels are decorative; transport failure must not discard successful repo metadata.
+  return Promise.all([
+    client.sendRequest('repo.list'),
+    client.sendRequest('projectGroup.list').catch(() => ({ ok: false as const }))
+  ])
+}
+
 // Extract the ProjectGroup list from a projectGroup.list RPC response, degrading
 // to empty when the call failed so the list falls back to "all ungrouped".
-function parseProjectGroupsResponse(response: { ok: boolean; result?: unknown }): ProjectGroup[] {
+function parseProjectGroupsResponse(response: ProjectGroupResponse): ProjectGroup[] {
   return response.ok
     ? ((response.result as { groups?: ProjectGroup[] } | undefined)?.groups ?? [])
     : []
@@ -17,7 +31,7 @@ function parseProjectGroupsResponse(response: { ok: boolean; result?: unknown })
 // mode. Nested subgroups collapse to their root so a repo renders under one folder.
 export function buildProjectGroupByRepoId(
   repos: readonly RepoSummary[],
-  groupResponse: { ok: boolean; result?: unknown }
+  groupResponse: ProjectGroupResponse
 ): Map<string, ProjectGroupBucket | null> {
   const groups = parseProjectGroupsResponse(groupResponse)
   const groupsById = new Map(groups.map((group) => [group.id, group]))
