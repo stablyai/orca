@@ -161,4 +161,19 @@ describe('patched node-pty Windows Job Object contract', () => {
       )
     }
   })
+
+  it('disables the node-gyp delay-load hook only for non-Node winpty targets', () => {
+    const winpty = patchedLines(patchSection('deps/winpty/src/winpty.gyp'))
+    const optOut = "'win_delay_load_hook' : 'false'"
+
+    expect(winpty.match(new RegExp(optOut, 'g')) ?? []).toHaveLength(3)
+    for (const target of ['winpty-agent', 'winpty', 'winpty-debugserver']) {
+      const targetStart = winpty.indexOf(`'target_name' : '${target}'`)
+      const nextTarget = winpty.indexOf("'target_name' :", targetStart + 1)
+      const targetSource = winpty.slice(targetStart, nextTarget === -1 ? undefined : nextTarget)
+
+      expect(targetStart).toBeGreaterThanOrEqual(0)
+      expect(targetSource).toContain(optOut)
+    }
+  })
 })
