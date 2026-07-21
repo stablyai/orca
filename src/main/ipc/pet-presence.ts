@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { petPresenceAuthority, type PetPresenceSnapshot } from '../pet/pet-presence-authority'
+import { resolveTravellingPetId } from '../pet/pet-identity'
 import type { PetEdge, PetPoint, PetSurfaceKind } from '../../shared/pet-presence'
 
 /**
@@ -68,7 +69,9 @@ export function registerPetPresenceHandlers(): void {
   ipcMain.handle(
     'petPresence:setPetId',
     async (_event, petId: string): Promise<PetPresenceSnapshot> =>
-      petPresenceAuthority.setPetId(petId)
+      // Normalized to the slug: the renderer knows this pet by a per-install
+      // UUID, which means nothing to a phone.
+      petPresenceAuthority.setPetId(resolveTravellingPetId(petId))
   )
 
   ipcMain.handle(

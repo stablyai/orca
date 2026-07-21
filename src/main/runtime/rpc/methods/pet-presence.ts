@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { petPresenceAuthority } from '../../../pet/pet-presence-authority'
+import { resolveTravellingPetId } from '../../../pet/pet-identity'
 
 /**
  * Pet presence RPC (P1) — how desktop renderers, popouts and phones read and
@@ -68,7 +69,8 @@ export const PET_PRESENCE_METHODS: readonly RpcAnyMethod[] = [
     // surface that owns the operator's selection.
     name: 'pet.setPetId',
     params: SetPetIdParams,
-    handler: async (params) => petPresenceAuthority.setPetId(params.petId)
+    handler: async (params) =>
+      petPresenceAuthority.setPetId(resolveTravellingPetId(params.petId))
   }),
   defineMethod({
     name: 'pet.removeSurface',
