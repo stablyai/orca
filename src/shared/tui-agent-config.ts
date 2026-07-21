@@ -130,7 +130,9 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'pi',
     promptInjectionMode: 'argv',
     // Why: pi has no `--prefill` and paste-after-ready races its long startup; the orca-prefill extension seeds this env var instead.
-    draftPromptEnvVar: 'ORCA_PI_PREFILL'
+    draftPromptEnvVar: 'ORCA_PI_PREFILL',
+    // Why: Pi 在 Windows 上解码 CSI-u；Esc+CR 会被当成普通 Enter 并直接提交。
+    windowsShiftEnterEncoding: 'csi-u'
   },
   omp: {
     detectCmd: 'omp',

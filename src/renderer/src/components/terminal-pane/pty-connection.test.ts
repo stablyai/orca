@@ -6893,44 +6893,48 @@ describe('connectPanePty', () => {
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
   })
 
-  it('confirms an Orca-launched Droid fresh spawn in a no-OSC shell (Git Bash)', async () => {
-    // Why: no-OSC shells (Git Bash/cmd) emit no command boundary, so without a fresh-spawn sample the pane never earns routing trust and Shift+Enter regresses to Esc+CR (#7620).
-    vi.useFakeTimers()
-    const { connectPanePty } = await import('./pty-connection')
-    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
-    const pane = createPane(1)
-    const ptyId = 'pty-launched-droid-no-osc'
-    const tabId = 'tab-launched-droid-no-osc'
-    const paneKey = makePaneKey(tabId, LEAF_1)
-    transportFactoryQueue.push(createMockTransport(ptyId))
+  it.each(['droid', 'pi'] as const)(
+    'confirms an Orca-launched %s fresh spawn in a no-OSC shell (Git Bash)',
+    async (agent) => {
+      // Why: Git Bash/cmd 没有 OSC 命令边界，启动后的前台进程采样是获得可信 CSI-u 路由的唯一入口。
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue(agent)
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(agent)
+      const pane = createPane(1)
+      const ptyId = `pty-launched-${agent}-no-osc`
+      const tabId = `tab-launched-${agent}-no-osc`
+      const paneKey = makePaneKey(tabId, LEAF_1)
+      transportFactoryQueue.push(createMockTransport(ptyId))
 
-    connectPanePty(
-      pane as never,
-      createManager(1) as never,
-      createDeps({
-        tabId,
-        startup: { command: 'droid', launchAgent: 'droid' }
-      }) as never
-    )
-    await vi.advanceTimersByTimeAsync(20)
-    await flushAsyncTicks()
-    // The transport reports the fresh spawn; no OSC 133, no typed inference.
-    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as ((id: string) => void) | undefined
-    expect(onPtySpawn).toBeTypeOf('function')
-    onPtySpawn?.(ptyId)
-    // Span the bounded confirmation retry ladder while Droid boots.
-    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-    await flushAsyncTicks()
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        createDeps({
+          tabId,
+          startup: { command: agent, launchAgent: agent }
+        }) as never
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((id: string) => void)
+        | undefined
+      expect(onPtySpawn).toBeTypeOf('function')
+      onPtySpawn?.(ptyId)
+      // Why: 有界重试阶梯需要覆盖 agent 尚未成为前台进程的启动窗口。
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+      await flushAsyncTicks()
 
-    expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
-    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-      agent: 'droid',
-      routingTrusted: true,
-      shellForeground: false
-    })
-    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
-  })
+      expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        agent,
+        routingTrusted: true,
+        shellForeground: false
+      })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+    }
+  )
 
   it('trusts a launched Droid whose no-OSC boot only becomes foreground after retries', async () => {
     // Why: the confirmation ladder must span Droid's boot — the shell is still foreground on the first read(s) before Droid takes over.
@@ -7012,42 +7016,45 @@ describe('connectPanePty', () => {
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
   })
 
-  it('revokes trusted Droid after accepted no-OSC exit input until shell confirmation', async () => {
-    vi.useFakeTimers()
-    const { connectPanePty } = await import('./pty-connection')
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('cmd.exe')
-    const pane = createPane(1)
-    const ptyId = 'pty-droid-exit-no-osc'
-    const tabId = 'tab-droid-exit-no-osc'
-    const paneKey = makePaneKey(tabId, LEAF_1)
-    transportFactoryQueue.push(createMockTransport(ptyId))
+  it.each(['droid', 'pi'] as const)(
+    'revokes trusted %s after accepted no-OSC exit input until shell confirmation',
+    async (agent) => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('cmd.exe')
+      const pane = createPane(1)
+      const ptyId = `pty-${agent}-exit-no-osc`
+      const tabId = `tab-${agent}-exit-no-osc`
+      const paneKey = makePaneKey(tabId, LEAF_1)
+      transportFactoryQueue.push(createMockTransport(ptyId))
 
-    connectPanePty(pane as never, createManager(1) as never, createDeps({ tabId }) as never)
-    await vi.advanceTimersByTimeAsync(20)
-    await flushAsyncTicks()
-    mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
-      agent: 'droid',
-      routingTrusted: true,
-      shellForeground: false
+      connectPanePty(pane as never, createManager(1) as never, createDeps({ tabId }) as never)
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
+        agent,
+        routingTrusted: true,
+        shellForeground: false
+      }
+
+      sendTerminalInputThroughPane(pane, '\x03')
+      await flushAsyncTicks()
+
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        agent,
+        shellForeground: false
+      })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        agent: null,
+        shellForeground: true
+      })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
     }
-
-    sendTerminalInputThroughPane(pane, '\x03')
-    await flushAsyncTicks()
-
-    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-      agent: 'droid',
-      shellForeground: false
-    })
-    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
-
-    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-
-    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-      agent: null,
-      shellForeground: true
-    })
-    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
-  })
+  )
 
   it('never promotes typed Droid text when foreground enrichment is unavailable', async () => {
     vi.useFakeTimers()
@@ -22165,7 +22172,7 @@ describe('connectPanePty', () => {
       binding: {
         noteVisibilityResume: () => void
         sampleForegroundAgentOnFocus: () => void
-        requestDroidReconfirmation: () => void
+        requestWindowsCsiUReconfirmation: () => void
       }
       deps: ReturnType<typeof createDeps>
       transport: MockTransport
@@ -22202,7 +22209,7 @@ describe('connectPanePty', () => {
       ) as unknown as {
         noteVisibilityResume: () => void
         sampleForegroundAgentOnFocus: () => void
-        requestDroidReconfirmation: () => void
+        requestWindowsCsiUReconfirmation: () => void
       }
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
@@ -22318,60 +22325,63 @@ describe('connectPanePty', () => {
       }
     })
 
-    it('keeps trusted Droid routing through a rapid Shift+Enter burst', async () => {
-      vi.useFakeTimers()
-      const ptyId = 'pty-droid-shift-enter-burst'
-      const tabId = `tab-${ptyId}`
-      const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
-        ptyId,
-        tabId
-      })
-      mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
-        agent: 'droid',
-        routingTrusted: true,
-        shellForeground: false
+    it.each(['droid', 'pi'] as const)(
+      'keeps trusted %s routing through a rapid Shift+Enter burst',
+      async (agent) => {
+        vi.useFakeTimers()
+        const ptyId = `pty-${agent}-shift-enter-burst`
+        const tabId = `tab-${ptyId}`
+        const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
+          ptyId,
+          tabId
+        })
+        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+          agent,
+          routingTrusted: true,
+          shellForeground: false
+        }
+        mockStoreState.agentStatusByPaneKey[cacheKey] = {
+          state: 'working',
+          agentType: agent
+        }
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(agent)
+
+        binding.requestWindowsCsiUReconfirmation()
+        await vi.advanceTimersByTimeAsync(200)
+        binding.requestWindowsCsiUReconfirmation()
+        await vi.advanceTimersByTimeAsync(349)
+
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          agent,
+          routingTrusted: true,
+          shellForeground: false
+        })
+
+        await vi.advanceTimersByTimeAsync(1)
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          agent,
+          shellForeground: false
+        })
+
+        await vi.advanceTimersByTimeAsync(350)
+        await flushAsyncTicks()
+        expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          agent,
+          routingTrusted: true,
+          shellForeground: false
+        })
+
+        binding.requestWindowsCsiUReconfirmation()
+        await vi.advanceTimersByTimeAsync(700)
+        await flushAsyncTicks()
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          agent,
+          routingTrusted: true,
+          shellForeground: false
+        })
       }
-      mockStoreState.agentStatusByPaneKey[cacheKey] = {
-        state: 'working',
-        agentType: 'droid'
-      }
-      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
-
-      binding.requestDroidReconfirmation()
-      await vi.advanceTimersByTimeAsync(200)
-      binding.requestDroidReconfirmation()
-      await vi.advanceTimersByTimeAsync(349)
-
-      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
-        agent: 'droid',
-        routingTrusted: true,
-        shellForeground: false
-      })
-
-      await vi.advanceTimersByTimeAsync(1)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
-        agent: 'droid',
-        shellForeground: false
-      })
-
-      await vi.advanceTimersByTimeAsync(350)
-      await flushAsyncTicks()
-      expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
-        agent: 'droid',
-        routingTrusted: true,
-        shellForeground: false
-      })
-
-      binding.requestDroidReconfirmation()
-      await vi.advanceTimersByTimeAsync(700)
-      await flushAsyncTicks()
-      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
-        agent: 'droid',
-        routingTrusted: true,
-        shellForeground: false
-      })
-    })
+    )
 
     it('samples once when an identityless hidden pane resumes visible', async () => {
       vi.useFakeTimers()

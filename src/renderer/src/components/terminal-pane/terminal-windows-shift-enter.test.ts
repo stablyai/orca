@@ -5,13 +5,13 @@ import {
 } from './terminal-windows-shift-enter'
 
 describe('resolveWindowsShiftEnterEncoding', () => {
-  it('uses CSI-u only for trusted Droid process evidence', () => {
+  it.each(['droid', 'pi'] as const)('uses CSI-u only for trusted %s process evidence', (agent) => {
     expect(
       resolveWindowsShiftEnterEncoding({
-        foreground: { agent: 'droid', routingTrusted: true, shellForeground: false }
+        foreground: { agent, routingTrusted: true, shellForeground: false }
       })
     ).toBe('csi-u')
-    expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'droid' })).toBe('alt-enter')
+    expect(resolveWindowsShiftEnterEncoding({ launchAgentType: agent })).toBe('alt-enter')
   })
 
   it('does not let hook or OSC-derived status forge Droid input routing', () => {

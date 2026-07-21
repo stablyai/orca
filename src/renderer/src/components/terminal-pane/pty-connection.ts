@@ -684,7 +684,7 @@ type PanePtyBinding = IDisposable & {
    *  agent pane has no OSC boundary left to correct it. */
   sampleForegroundAgentOnFocus: () => void
   /** Reconfirm after direct shortcut input, which bypasses PTY onData. */
-  requestDroidReconfirmation: () => void
+  requestWindowsCsiUReconfirmation: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
@@ -1303,7 +1303,7 @@ export function connectPanePty(
   let commandInferredPaneAgentGeneration = 0
   let shellCommandInferenceSuspendedUntilCommandEnd = false
   let startAcceptedInferredCommand = (_agent: TuiAgent): void => {}
-  let requestKnownDroidReconfirmation = (): void => {}
+  let requestWindowsCsiUAgentReconfirmation = (): void => {}
   const resetPendingShellCommandLine = (): void => {
     pendingShellCommandLine = ''
     pendingShellCommandCursor = 0
@@ -1551,9 +1551,8 @@ export function connectPanePty(
       data.includes('\x03') ||
       data.includes('\x04')
     ) {
-      // Why: shells without OSC 133 give no command/exit boundary. An accepted
-      // submit or interrupt revokes only stale Droid routing and confirms once.
-      requestKnownDroidReconfirmation()
+      // Why: 无 OSC 133 的 shell 没有命令/退出边界；提交或中断后先撤销旧的 CSI-u 路由再确认。
+      requestWindowsCsiUAgentReconfirmation()
     }
     if (commandInferredPaneAgent) {
       return
@@ -2130,25 +2129,24 @@ export function connectPanePty(
   startAcceptedInferredCommand = (agent) => {
     paneForegroundAgentTracker.onCommandStarted(agent)
   }
-  requestKnownDroidReconfirmation = () => {
+  requestWindowsCsiUAgentReconfirmation = () => {
     const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey]
-    // Why: daemon reattach/launch metadata is display-only until a live
-    // provider read confirms it. Submit/interrupt/title-exit evidence must
-    // revoke that launch-only hint too, otherwise Shift+Enter can route bytes
-    // to a Droid that already exited before confirmation ever ran.
-    if (foreground?.agent !== 'droid') {
+    const foregroundAgent = foreground?.agent
+    // Why: 只撤销声明了 Windows CSI-u 的 agent，普通 agent 无需为输入字节触发额外进程扫描。
+    if (
+      !foregroundAgent ||
+      TUI_AGENT_CONFIG[foregroundAgent].windowsShiftEnterEncoding !== 'csi-u'
+    ) {
       return
     }
-    // Why: cmd.exe and Git Bash have no OSC command boundaries. Keep the icon
-    // as a hint, but revoke bytes until one current provider confirmation lands.
+    // Why: cmd.exe 与 Git Bash 没有 OSC 命令边界；保留图标提示，但在当前进程确认前撤销字节路由权限。
     useAppStore.getState().setPaneForegroundAgent(cacheKey, {
-      agent: 'droid',
+      agent: foregroundAgent,
       shellForeground: false
     })
     visibleForegroundSamplePending = false
     visibleForegroundSampleSettled = false
-    // Why: hook rows can suppress display-only sampling, but cannot restore
-    // byte authority after this function explicitly revoked routing trust.
+    // Why: hook 状态只能提供展示身份，不能在这里显式撤销信任后恢复字节路由权限。
     sampleVisiblePaneForegroundAgent(true)
   }
   const commandLifecycle = createTerminalCommandLifecycle({
@@ -3228,7 +3226,7 @@ export function connectPanePty(
     deps.onAgentExitedRef.current(pane.leafId)
     clearSuppressedTitleSideEffects()
     clearCommandInferredPaneAgent()
-    requestKnownDroidReconfirmation()
+    requestWindowsCsiUAgentReconfirmation()
     // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
     // the agent has exited. Clear any running cache timer so the sidebar doesn't
     // show a stale countdown for a tab that no longer has an active Claude session.
@@ -8616,7 +8614,7 @@ export function connectPanePty(
     noteVisibilityResume() {
       ptySizeReassertion.request({ fit: false })
       consumeHibernatedAgentWake()
-      requestKnownDroidReconfirmation()
+      requestWindowsCsiUAgentReconfirmation()
       sampleVisiblePaneForegroundAgent()
     },
     reassertPtySizeAfterWindowWake() {
@@ -8661,17 +8659,17 @@ export function connectPanePty(
       return null
     },
     sampleForegroundAgentOnFocus() {
-      requestKnownDroidReconfirmation()
+      requestWindowsCsiUAgentReconfirmation()
       sampleVisiblePaneForegroundAgent()
     },
-    requestDroidReconfirmation() {
+    requestWindowsCsiUReconfirmation() {
       if (shiftEnterReconfirmTimer !== null) {
         clearTimeout(shiftEnterReconfirmTimer)
       }
-      // Why: confirm the Droid composer only after the Shift+Enter burst goes idle, to preserve rapid multiline input.
+      // Why: 等连续 Shift+Enter 输入停止后再确认前台进程，避免快速多行输入期间反复撤销路由。
       shiftEnterReconfirmTimer = setTimeout(() => {
         shiftEnterReconfirmTimer = null
-        requestKnownDroidReconfirmation()
+        requestWindowsCsiUAgentReconfirmation()
         sampleVisiblePaneForegroundAgent()
       }, SHIFT_ENTER_RECONFIRM_IDLE_MS)
     },
