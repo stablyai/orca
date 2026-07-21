@@ -29,7 +29,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import type { GitHubWorkItem, SetupDecision } from '../../../shared/types'
+import type { GitHubWorkItem, SetupDecision, TuiAgent } from '../../../shared/types'
 import type { Repo } from '../../../shared/types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
@@ -68,6 +68,7 @@ type BackgroundGitHubWorkItemCreateDeps = {
 export type BackgroundGitHubWorkItemCreateArgs = {
   item: GitHubWorkItem
   repoId: string
+  agentOverride?: TuiAgent
   taskSourceContext?: TaskSourceContext | null
   workspaceRunContext?: WorkspaceRunContext | null
   telemetrySource?: WorktreeCreationRequest['telemetrySource']
@@ -238,7 +239,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
     }
     const setupDecision: SetupDecision =
       trustDecision === 'skip' ? 'skip' : setupResolution.decision
-    const agent = await resolvePreferredQuickAgentForGitHubWorkItem(store, repo)
+    const agent = await resolvePreferredQuickAgentForGitHubWorkItem(store, repo, args.agentOverride)
     if (!deps.hasPendingCreate(creationId)) {
       return { kind: 'background-started' }
     }

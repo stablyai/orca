@@ -124,7 +124,8 @@ function getWorkspaceRunContextForRepo(
 
 export async function resolvePreferredQuickAgentForGitHubWorkItem(
   store: GitHubWorkItemBackgroundStoreSnapshot,
-  repo: Repo
+  repo: Repo,
+  agentOverride?: TuiAgent
 ): Promise<TuiAgent | null> {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   const detectedAgents =
@@ -134,7 +135,7 @@ export async function resolvePreferredQuickAgentForGitHubWorkItem(
         ? await store.ensureRuntimeDetectedAgents(host.environmentId)
         : await store.ensureDetectedAgents()
   return pickQuickWorkspaceAgent(
-    store.settings?.defaultTuiAgent,
+    agentOverride ?? store.settings?.defaultTuiAgent,
     detectedAgents,
     store.settings?.disabledTuiAgents
   )

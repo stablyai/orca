@@ -13920,6 +13920,15 @@
           "undo": "元に戻す",
           "widthOption": "{{value0}} px"
         }
+      },
+      "GitHubIssueWorkspaceLaunchButton": {
+        "f20e260a05": "Start workspace from issue",
+        "e4bb9f1ece": "Start",
+        "c8a6bec97e": "Choose an agent for this workspace",
+        "01be61ba14": "Start with agent",
+        "cf532aff14": "Detecting agents…",
+        "9635bbe266": "Unable to load agents",
+        "9f82809820": "No enabled agents detected"
       }
     },
     "i18n": {

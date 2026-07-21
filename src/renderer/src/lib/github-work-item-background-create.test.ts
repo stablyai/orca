@@ -397,6 +397,26 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(buildAgentStartupPlan).toHaveBeenCalled()
   })
 
+  it('uses an explicitly selected agent instead of the default agent', async () => {
+    const deps = makeDeps(
+      makeStore({ ensureDetectedAgents: vi.fn().mockResolvedValue(['codex', 'claude']) })
+    )
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        agentOverride: 'claude',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    expect(
+      (deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined)?.[1]
+    ).toMatchObject({ agent: 'claude' })
+  })
+
   it('uses runtime-owned detection and indeterminate progress for runtime repos', async () => {
     const runtimeRepo: Repo = {
       ...repo,

@@ -7,6 +7,7 @@ const PROJECT_VIEW_SOURCE = readFileSync(
   join(__dirname, 'github-project', 'ProjectViewWrapper.tsx'),
   'utf8'
 )
+const COMPOSER_MODAL_SOURCE = readFileSync(join(__dirname, 'NewWorkspaceComposerModal.tsx'), 'utf8')
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -25,8 +26,24 @@ describe('GitHub workspace creation source boundaries', () => {
     )
 
     expect(section).toContain('createGitHubWorkItemWorkspaceInBackground({')
-    expect(section).toContain('openModalFallback: () => openComposerForItem(item)')
+    expect(section).toContain('openModalFallback: () => openComposerForItem(item, agentOverride)')
     expect(section).not.toContain("openModal('new-workspace-composer'")
+  })
+
+  it('threads an explicitly selected issue agent into background creation', () => {
+    const section = sourceBetween(
+      TASK_PAGE_SOURCE,
+      'const handleUseWorkItem = useCallback(',
+      'const handleOpenOrUseGitHubWorkItem = useCallback('
+    )
+
+    expect(TASK_PAGE_SOURCE).toContain('GitHubIssueWorkspaceLaunchButton')
+    expect(section).toContain('agentOverride?: TuiAgent')
+    expect(section).toContain('agentOverride,')
+    expect(section).toContain('openComposerForItem(item, agentOverride)')
+    expect(TASK_PAGE_SOURCE).toContain('onStartWithAgent={(agent) =>')
+    expect(COMPOSER_MODAL_SOURCE).toContain('initialAgent?: TuiAgent')
+    expect(COMPOSER_MODAL_SOURCE).toContain('modalData.initialAgent')
   })
 
   it('keeps project-view GitHub actions on the direct start-work path for issue #4756', () => {
