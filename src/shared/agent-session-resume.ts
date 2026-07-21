@@ -9,6 +9,9 @@ export const RESUMABLE_TUI_AGENTS = [
   'antigravity',
   'opencode',
   'pi',
+  // omp resumes exactly like pi (same @oh-my-pi runtime): it reports a
+  // session_id + session_file and cold-restores by transcript path.
+  'omp',
   'mimo-code',
   'droid',
   'grok',
@@ -197,7 +200,11 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['sessionID'])
       return id ? { key: 'session_id', id } : null
     }
-    case 'pi': {
+    // omp shares pi's shape exactly: session_id from the hook, authoritative
+    // transcript path from session_file. Requiring the transcriptPath (as pi
+    // does) means a session only becomes resumable once its file exists on disk.
+    case 'pi':
+    case 'omp': {
       const id = readSessionId(payload, ['session_id'])
       const providerSession = id
         ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
@@ -214,7 +221,6 @@ export function extractAgentProviderSession(
     }
     case 'amp':
     case 'cursor':
-    case 'omp':
     case 'command-code':
     case 'copilot':
     case 'hermes':
@@ -241,6 +247,13 @@ export function getAgentResumeArgv(
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
+        : null
+    // omp resumes a specific session by path via --resume (pi uses --session for
+    // the same thing). Path, not id: the transcript file is authoritative and
+    // avoids the id-prefix picker.
+    case 'omp':
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['omp', '--resume', providerSession.transcriptPath]
         : null
     case 'mimo-code':
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null

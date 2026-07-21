@@ -296,8 +296,14 @@ describe('getPiAgentStatusExtensionSource', () => {
     }
   })
 
-  it('keeps OMP runtime status payloads unchanged by Pi session metadata', async () => {
-    const harness = createHarness({ kind: 'omp' })
+  it('reports OMP session id and file path so its panes can be resumed', async () => {
+    // OMP now joins native resume (RESUMABLE_TUI_AGENTS): the extension reports
+    // its session metadata exactly like Pi. It used to be silent here, which is
+    // why omp panes could never be cold-restored.
+    const harness = createHarness({
+      kind: 'omp',
+      existsSync: (path) => path === '/tmp/omp-session-1.jsonl'
+    })
 
     await harness.callHook(
       'session_start',
@@ -309,20 +315,21 @@ describe('getPiAgentStatusExtensionSource', () => {
         }
       }
     )
-    await harness.callHook('agent_start')
 
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.fetchMock.mock.calls[0]?.[1]?.body).toBe(
-      JSON.stringify({
-        paneKey: 'pane-1',
-        launchToken: 'launch-1',
-        tabId: 'tab-1',
-        worktreeId: 'tree-1',
-        env: 'env-1',
-        version: '1.2.3',
-        payload: { hook_event_name: 'agent_start' }
-      })
-    )
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'session_start',
+      session_id: 'omp-session-1',
+      session_file: '/tmp/omp-session-1.jsonl'
+    })
+
+    await harness.callHook('agent_start')
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'agent_start',
+      session_id: 'omp-session-1',
+      session_file: '/tmp/omp-session-1.jsonl'
+    })
   })
 
   it('routes an OMP executable through /hook/omp', async () => {

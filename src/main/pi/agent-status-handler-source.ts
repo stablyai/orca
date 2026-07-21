@@ -3,8 +3,11 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
+  // Why omp too: it registers updateSessionMetadata (defined only when session
+  // metadata is reported) on session_start so an omp pane publishes its
+  // session_id/session_file — the prerequisite for native resume.
   const sessionStartHandler =
-    kind === 'pi'
+    kind === 'pi' || kind === 'omp'
       ? [
           "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',

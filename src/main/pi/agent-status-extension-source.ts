@@ -16,9 +16,13 @@ import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-sourc
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
 export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
-  const sessionMetadataSourceLines =
-    kind === 'pi'
-      ? [
+  // Why omp too, not just pi: omp is the same @oh-my-pi runtime and exposes the
+  // same sessionManager.getSessionId/getSessionFile, so reporting its session
+  // metadata is what lets omp panes join Orca's native resume. Without it an omp
+  // pane never publishes a session_id and can never be cold-restored.
+  const reportsSessionMetadata = kind === 'pi' || kind === 'omp'
+  const sessionMetadataSourceLines = reportsSessionMetadata
+    ? [
           'let sessionMetadata: Record<string, unknown> = {}',
           '',
           'function updateSessionMetadata(ctx: unknown): void {',
@@ -46,10 +50,9 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           ''
         ]
       : []
-  const payloadLine =
-    kind === 'pi'
-      ? '    payload: { hook_event_name: hookEventName, ...getPersistedSessionMetadata(), ...extra },'
-      : '    payload: { hook_event_name: hookEventName, ...extra },'
+  const payloadLine = reportsSessionMetadata
+    ? '    payload: { hook_event_name: hookEventName, ...getPersistedSessionMetadata(), ...extra },'
+    : '    payload: { hook_event_name: hookEventName, ...extra },'
 
   // Why: keep this string self-contained — it runs inside the pi process,
   // so it cannot import from Orca's main bundle. fs/http coords come from
