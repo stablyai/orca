@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { isStreamingMethod } from '../core'
 import { ACCOUNT_METHODS } from './accounts'
@@ -12,6 +14,57 @@ function method(name: string) {
 }
 
 describe('account RPC methods', () => {
+  it.each([
+    {
+      methodName: 'accounts.addClaudeFromConfigDir',
+      params: { configDir: join(tmpdir(), 'claude-login') },
+      runtimeMethod: 'addClaudeAccountFromConfigDir',
+      expectedSource: join(tmpdir(), 'claude-login')
+    },
+    {
+      methodName: 'accounts.addCodexFromHome',
+      params: { sourceHome: join(tmpdir(), 'codex-login') },
+      runtimeMethod: 'addCodexAccountFromHome',
+      expectedSource: join(tmpdir(), 'codex-login')
+    }
+  ])('allows local-socket $methodName calls', async (testCase) => {
+    const add = vi.fn().mockResolvedValue({ accounts: [] })
+    const runtime = { [testCase.runtimeMethod]: add } as unknown as OrcaRuntimeService
+    const addMethod = method(testCase.methodName)
+    if (isStreamingMethod(addMethod)) {
+      throw new Error(`${testCase.methodName} must be a request method`)
+    }
+
+    await addMethod.handler(testCase.params, { runtime })
+
+    expect(add).toHaveBeenCalledWith(testCase.expectedSource, {
+      runtime: undefined,
+      wslDistro: null
+    })
+  })
+
+  it.each([
+    ['accounts.addClaudeFromConfigDir', { configDir: join(tmpdir(), 'claude-login') }],
+    ['accounts.addCodexFromHome', { sourceHome: join(tmpdir(), 'codex-login') }]
+  ])('rejects paired-device calls to %s', async (methodName, params) => {
+    const runtime = {
+      addClaudeAccountFromConfigDir: vi.fn(),
+      addCodexAccountFromHome: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const addMethod = method(methodName)
+    if (isStreamingMethod(addMethod)) {
+      throw new Error(`${methodName} must be a request method`)
+    }
+
+    for (const clientKind of ['mobile', 'runtime'] as const) {
+      await expect(addMethod.handler(params, { runtime, clientKind })).rejects.toThrow(
+        /only available on the Orca host runtime/
+      )
+    }
+    expect(runtime.addClaudeAccountFromConfigDir).not.toHaveBeenCalled()
+    expect(runtime.addCodexAccountFromHome).not.toHaveBeenCalled()
+  })
+
   it('keeps explicit account-list refreshes on the forced refresh lane', async () => {
     const snapshot = { claude: null, codex: null }
     const runtime = {

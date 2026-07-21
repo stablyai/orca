@@ -5,6 +5,14 @@ import { join } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
+import { stripElectronRunAsNode } from '../runtime/launch'
+import {
+  deleteActiveClaudeKeychainCredentialsStrict,
+  readActiveClaudeKeychainCredentialsStrict,
+  writeActiveClaudeKeychainCredentials
+} from '../../main/claude-accounts/keychain'
+import { resolveCliCommand } from '../../main/codex-cli/command'
+import { getSpawnArgsForWindows } from '../../main/win32-utils'
 import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
 
 // Why: add returns just that provider's state; list returns the full snapshot.
@@ -18,6 +26,10 @@ type AccountsListSnapshot = {
 type AccountsBlock = {
   accounts: readonly { id: string; email: string }[]
   activeAccountId: string | null
+  activeAccountIdsByRuntime?: {
+    host: string | null
+    wsl: Record<string, string | null>
+  }
 }
 
 /** Renders a provider's managed-account list as a human-readable block, marking the active account. */
@@ -25,8 +37,13 @@ function formatAccountsBlock(label: string, block: AccountsBlock): string {
   if (block.accounts.length === 0) {
     return `No managed ${label} accounts.`
   }
+  const activeAccountIds = new Set([
+    block.activeAccountId,
+    block.activeAccountIdsByRuntime?.host,
+    ...Object.values(block.activeAccountIdsByRuntime?.wsl ?? {})
+  ])
   const lines = block.accounts.map(
-    (account) => `  ${account.email}${account.id === block.activeAccountId ? ' (active)' : ''}`
+    (account) => `  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}`
   )
   return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
@@ -39,18 +56,20 @@ function formatAccountsBlock(label: string, block: AccountsBlock): string {
 async function runAgentLoginInTerminal(
   command: string,
   args: string[],
-  extraEnv: Record<string, string>
+  extraEnv: Record<string, string>,
+  json: boolean
 ): Promise<void> {
   await new Promise<void>((resolvePromise, rejectPromise) => {
-    const child = spawn(command, args, {
-      stdio: 'inherit',
-      env: { ...process.env, ...extraEnv },
-      // Why: on Windows the agent CLIs are `.cmd` shims that Node's spawn cannot
-      // execute without a shell; args here are fixed literals, so there is no
-      // interpolation/injection risk from enabling the shell.
-      shell: process.platform === 'win32'
+    const resolvedCommand = resolveCliCommand(command)
+    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args)
+    const env = { ...stripElectronRunAsNode(process.env), ...extraEnv }
+    const child = spawn(spawnCmd, spawnArgs, {
+      // Why: JSON mode reserves stdout for the response envelope while keeping
+      // the interactive login attached to the user's terminal via stderr.
+      stdio: ['inherit', json ? process.stderr : 'inherit', 'inherit'],
+      env
     })
-    child.on('error', (error) =>
+    child.once('error', (error) =>
       rejectPromise(
         new RuntimeClientError(
           'internal',
@@ -60,7 +79,7 @@ async function runAgentLoginInTerminal(
         )
       )
     )
-    child.on('exit', (code) =>
+    child.once('exit', (code) =>
       code === 0
         ? resolvePromise()
         : rejectPromise(
@@ -73,19 +92,56 @@ async function runAgentLoginInTerminal(
   })
 }
 
+async function cleanupClaudeLoginKeychain(
+  configDir: string,
+  legacyCredentials: string | null,
+  restoreLegacyCredentials: boolean
+): Promise<void> {
+  if (process.platform !== 'darwin') {
+    return
+  }
+  try {
+    await deleteActiveClaudeKeychainCredentialsStrict(configDir)
+  } catch (error) {
+    console.warn('[account] Failed to remove temporary Claude Keychain credentials:', error)
+  }
+  if (!restoreLegacyCredentials) {
+    return
+  }
+  try {
+    await (legacyCredentials
+      ? writeActiveClaudeKeychainCredentials(legacyCredentials)
+      : deleteActiveClaudeKeychainCredentialsStrict())
+  } catch (error) {
+    console.warn('[account] Failed to restore Claude Keychain credentials:', error)
+  }
+}
+
 /** Logs into a Claude account in a temp config dir, then registers it with the local runtime. */
 async function addClaudeAccount({ client, json }: HandlerContext): Promise<void> {
   const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
+  let legacyCredentials: string | null = null
+  let restoreLegacyCredentials = false
   try {
-    await runAgentLoginInTerminal('claude', ['auth', 'login', '--claudeai'], {
-      CLAUDE_CONFIG_DIR: configDir
-    })
+    if (process.platform === 'darwin') {
+      legacyCredentials = await readActiveClaudeKeychainCredentialsStrict()
+      restoreLegacyCredentials = true
+    }
+    await runAgentLoginInTerminal(
+      'claude',
+      ['auth', 'login', '--claudeai'],
+      {
+        CLAUDE_CONFIG_DIR: configDir
+      },
+      json
+    )
     const result = await client.call<ClaudeRateLimitAccountsState>(
       'accounts.addClaudeFromConfigDir',
       { configDir }
     )
     printResult(result, json, (state) => formatAccountsBlock('Claude', state))
   } finally {
+    await cleanupClaudeLoginKeychain(configDir, legacyCredentials, restoreLegacyCredentials)
     rmSync(configDir, { recursive: true, force: true })
   }
 }
@@ -94,7 +150,14 @@ async function addClaudeAccount({ client, json }: HandlerContext): Promise<void>
 async function addCodexAccount({ client, json }: HandlerContext): Promise<void> {
   const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
   try {
-    await runAgentLoginInTerminal('codex', ['login'], { CODEX_HOME: codexHome })
+    // Why: plain OAuth binds a loopback callback the user's browser cannot reach
+    // on a headless/SSH host; device auth is explicitly designed for this flow.
+    await runAgentLoginInTerminal(
+      'codex',
+      ['login', '--device-auth'],
+      { CODEX_HOME: codexHome },
+      json
+    )
     const result = await client.call<CodexRateLimitAccountsState>('accounts.addCodexFromHome', {
       sourceHome: codexHome
     })

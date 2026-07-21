@@ -165,13 +165,7 @@ export class ClaudeAccountService {
         captured
       )
     } catch (error) {
-      if (error instanceof DuplicateClaudeAccountError) {
-        // Why: duplicate detection precedes credential/settings writes, so rollback I/O
-        // would only add latency and could mask the useful duplicate-account error.
-        await this.safeRemoveManagedAuth(accountId, managedAuth.managedAuthPath)
-      } else {
-        await this.rollbackAddAccount(accountId, managedAuth.managedAuthPath, previousSettings)
-      }
+      await this.cleanupFailedAdd(accountId, managedAuth.managedAuthPath, previousSettings, error)
       throw error
     }
   }
@@ -192,7 +186,7 @@ export class ClaudeAccountService {
         captured
       )
     } catch (error) {
-      await this.rollbackAddAccount(accountId, managedAuth.managedAuthPath, previousSettings)
+      await this.cleanupFailedAdd(accountId, managedAuth.managedAuthPath, previousSettings, error)
       throw error
     }
   }
@@ -221,7 +215,10 @@ export class ClaudeAccountService {
       STATUS_TIMEOUT_MS,
       { allowFailure: true }
     )
-    return this.captureAuthFromConfigDir(resolvedDir, status, null)
+    // Why: this post-login RPC did not observe the legacy Keychain value before
+    // login, so only a config-scoped credential can be attributed to this flow.
+    const currentLegacyKeychain = await readActiveClaudeKeychainCredentialsStrict()
+    return this.captureAuthFromConfigDir(resolvedDir, status, currentLegacyKeychain)
   }
 
   private async persistCapturedClaudeAccount(
@@ -288,6 +285,21 @@ export class ClaudeAccountService {
       console.warn('[claude-accounts] Rollback rematerialization failed:', rollbackError)
     }
     await this.safeRemoveManagedAuth(accountId, managedAuthPath)
+  }
+
+  private async cleanupFailedAdd(
+    accountId: string,
+    managedAuthPath: string,
+    previousSettings: ReturnType<Store['getSettings']>,
+    error: unknown
+  ): Promise<void> {
+    if (error instanceof DuplicateClaudeAccountError) {
+      // Why: duplicate detection precedes writes; rollback I/O could only mask
+      // the useful duplicate-account error.
+      await this.safeRemoveManagedAuth(accountId, managedAuthPath)
+      return
+    }
+    await this.rollbackAddAccount(accountId, managedAuthPath, previousSettings)
   }
 
   private async doReauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {

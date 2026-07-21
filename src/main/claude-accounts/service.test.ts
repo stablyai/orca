@@ -15,9 +15,11 @@ import {
   writeManagedClaudeKeychainCredentials
 } from './keychain'
 
+const CLAUDE_SERVICE_TEST_ROOT = join(tmpdir(), 'orca-claude-service-test')
+
 vi.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/orca-claude-service-test'
+    getPath: () => CLAUDE_SERVICE_TEST_ROOT
   }
 }))
 
@@ -171,7 +173,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('restores previous managed auth when reauth materialization fails', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const managedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
@@ -241,7 +243,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('restores settings without rematerializing when managed-auth rollback write fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const managedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
@@ -315,7 +317,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('restores oauth metadata when new credential write and credential rollback fail', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const managedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
@@ -393,7 +395,7 @@ describe('ClaudeAccountService credential capture', () => {
   it('restores old metadata when rollback restores credentials but oauth restore fails', async () => {
     setPlatform('linux')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const managedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
     const oauthPath = join(managedAuthPath, 'oauth-account.json')
@@ -465,7 +467,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('refreshes rate limits without recaching a removed active account', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const managedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
@@ -523,7 +525,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('evicts inactive rate-limit cache after successful reauth', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const managedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
@@ -593,7 +595,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('adds an account without switching the active Claude auth while PTYs are live', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const hostAuthPath = join(tempDir, 'claude-accounts', 'host-account', 'auth')
     mkdirSync(hostAuthPath, { recursive: true })
@@ -677,7 +679,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('rejects adding a Claude account whose identity already exists', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const existingAuthPath = join(tempDir, 'claude-accounts', 'existing-account', 'auth')
     mkdirSync(existingAuthPath, { recursive: true })
@@ -756,7 +758,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('adds a Claude account with the same email under a different organization', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const existingAuthPath = join(tempDir, 'claude-accounts', 'existing-account', 'auth')
     mkdirSync(existingAuthPath, { recursive: true })
@@ -830,7 +832,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('switches the active Claude account while PTYs are live', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const firstAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
     const secondAuthPath = join(tempDir, 'claude-accounts', 'account-2', 'auth')
@@ -912,7 +914,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('restores the previous selection when a Claude account switch fails', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const firstAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
     const secondAuthPath = join(tempDir, 'claude-accounts', 'account-2', 'auth')
@@ -988,7 +990,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('selects a WSL account without changing the Windows active account', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const hostAuthPath = join(tempDir, 'claude-accounts', 'host-account', 'auth')
     const wslAuthPath = join(tempDir, 'claude-accounts', 'wsl-account', 'auth')
@@ -1075,7 +1077,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('rejects selecting a WSL account for the Windows target', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const wslAuthPath = join(tempDir, 'claude-accounts', 'wsl-account', 'auth')
     mkdirSync(wslAuthPath, { recursive: true })
@@ -1126,7 +1128,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('removes a WSL account without clearing the Windows active account', async () => {
     setPlatform('linux')
-    tempDir = '/tmp/orca-claude-service-test'
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
     rmSync(tempDir, { recursive: true, force: true })
     const hostAuthPath = join(tempDir, 'claude-accounts', 'host-account', 'auth')
     const wslAuthPath = join(tempDir, 'claude-accounts', 'wsl-account', 'auth')
@@ -1732,13 +1734,15 @@ describe('ClaudeAccountService credential capture', () => {
 })
 
 describe('ClaudeAccountService.addAccountFromConfigDir', () => {
-  const managedRoot = '/tmp/orca-claude-service-test'
+  const managedRoot = CLAUDE_SERVICE_TEST_ROOT
   let sourceDir: string | null = null
 
   beforeEach(() => {
     setPlatform('linux')
     rmSync(managedRoot, { recursive: true, force: true })
     sourceDir = null
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockReset()
+    vi.mocked(writeManagedClaudeKeychainCredentials).mockReset().mockResolvedValue()
   })
 
   afterEach(() => {
@@ -1807,6 +1811,55 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
       '{"claudeAiOauth":{"accessToken":"tok"}}\n'
     )
     expect(deps.runtimeAuth.clearLastWrittenCredentialsJson).toHaveBeenCalledWith(accounts[0].id)
+  })
+
+  it('captures only the config-scoped macOS Keychain credential', async () => {
+    setPlatform('darwin')
+    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-keychain-'))
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (configDir) =>
+      configDir ? '{"claudeAiOauth":{"accessToken":"scoped"}}' : 'legacy-credentials'
+    )
+    const deps = makeDeps()
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      deps.store as never,
+      deps.rateLimits as never,
+      deps.runtimeAuth as never
+    )
+    ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand = vi.fn(
+      async () => '{"email":"new@example.com"}'
+    )
+
+    await service.addAccountFromConfigDir(sourceDir)
+
+    expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(sourceDir)
+    expect(writeManagedClaudeKeychainCredentials).toHaveBeenCalledWith(
+      expect.any(String),
+      '{"claudeAiOauth":{"accessToken":"scoped"}}'
+    )
+  })
+
+  it('does not mistake an unchanged legacy Keychain credential for the temp login', async () => {
+    setPlatform('darwin')
+    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-keychain-empty-'))
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (configDir) =>
+      configDir ? null : 'legacy-credentials'
+    )
+    const deps = makeDeps()
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      deps.store as never,
+      deps.rateLimits as never,
+      deps.runtimeAuth as never
+    )
+    ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand = vi.fn(
+      async () => '{"email":"existing@example.com"}'
+    )
+
+    await expect(service.addAccountFromConfigDir(sourceDir)).rejects.toThrow(
+      'no OAuth credentials were captured'
+    )
+    expect(deps.getSettings().claudeManagedAccounts).toHaveLength(0)
   })
 
   it('rejects and rolls back when the config dir has no credentials', async () => {

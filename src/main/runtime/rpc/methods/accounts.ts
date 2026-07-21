@@ -134,9 +134,9 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
     name: 'accounts.addClaudeFromConfigDir',
     params: AddClaudeFromConfigDirParams,
     handler: async (params, { runtime, clientKind }) => {
-      // Why: capturing a host filesystem path is a host-local operation; a mobile
-      // device token must never register accounts against the desktop's storage.
-      if (clientKind === 'mobile') {
+      // Why: capturing a host filesystem path is local-socket-only; paired
+      // mobile and remote-runtime tokens must never read host credential paths.
+      if (clientKind !== undefined) {
         throw new Error('Adding Claude accounts is only available on the Orca host runtime.')
       }
       return runtime.addClaudeAccountFromConfigDir(params.configDir, {
@@ -149,7 +149,7 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
     name: 'accounts.addCodexFromHome',
     params: AddCodexFromHomeParams,
     handler: async (params, { runtime, clientKind }) => {
-      if (clientKind === 'mobile') {
+      if (clientKind !== undefined) {
         throw new Error('Adding Codex accounts is only available on the Orca host runtime.')
       }
       return runtime.addCodexAccountFromHome(params.sourceHome, {
