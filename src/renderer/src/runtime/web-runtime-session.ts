@@ -88,7 +88,10 @@ export async function createWebRuntimeSessionTerminal(args: {
         agent: args.agent,
         ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
         ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-        activate: args.activate !== false
+        // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
+        activate: false,
+        select: args.activate !== false,
+        navigation: 'caller'
       },
       timeoutMs: 15_000
     })
@@ -277,7 +280,6 @@ async function refreshWebRuntimeSessionTabsSnapshot(
 export async function activateWebRuntimeSessionWorktree(args: {
   worktreeId: string
   environmentId?: string | null
-  notifyDesktop?: boolean
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -293,7 +295,9 @@ export async function activateWebRuntimeSessionWorktree(args: {
       method: 'worktree.activate',
       params: {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
-        notifyClients: args.notifyDesktop !== false
+        // Why: notifyClients:false keeps navigation local when this client reaches an older host.
+        notifyClients: false,
+        navigation: 'caller'
       },
       timeoutMs: 15_000
     })
@@ -458,7 +462,14 @@ async function callWebRuntimeSessionTabMethod(
       method,
       params: {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
-        tabId: hostTabId
+        tabId: hostTabId,
+        ...(method === 'session.tabs.activate'
+          ? {
+              // Why: the additive intent protects new hosts while notifyClients:false protects old hosts.
+              notifyClients: false,
+              navigation: 'caller' as const
+            }
+          : {})
       },
       timeoutMs: 15_000
     })

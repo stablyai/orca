@@ -97,8 +97,7 @@ describe('activateWebRuntimeSessionWorktree', () => {
 
     await expect(
       activateWebRuntimeSessionWorktree({
-        worktreeId: WORKTREE_ID,
-        notifyDesktop: false
+        worktreeId: WORKTREE_ID
       })
     ).resolves.toBe(true)
 
@@ -107,7 +106,8 @@ describe('activateWebRuntimeSessionWorktree', () => {
       method: 'worktree.activate',
       params: {
         worktree: `id:${WORKTREE_ID}`,
-        notifyClients: false
+        notifyClients: false,
+        navigation: 'caller'
       },
       timeoutMs: 15_000
     })
@@ -514,7 +514,9 @@ describe('createWebRuntimeSessionTerminal', () => {
         },
         launchAgent: 'codex',
         viewMode: 'chat',
-        activate: true
+        activate: false,
+        select: true,
+        navigation: 'caller'
       },
       timeoutMs: 15_000
     })
@@ -853,7 +855,9 @@ describe('web runtime session tab actions', () => {
       method: 'session.tabs.activate',
       params: {
         worktree: `id:${WORKTREE_ID}`,
-        tabId: 'host-browser-unified'
+        tabId: 'host-browser-unified',
+        notifyClients: false,
+        navigation: 'caller'
       },
       timeoutMs: 15_000
     })

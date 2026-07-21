@@ -540,6 +540,7 @@ export class OrcaRuntimeRpcServer {
       return false
     }
     this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+    this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
@@ -549,6 +550,7 @@ export class OrcaRuntimeRpcServer {
     if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
       return false
     }
+    this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
@@ -1094,6 +1096,7 @@ export class OrcaRuntimeRpcServer {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {
         connectionId,
         clientId: token,
+        pairedDeviceId: device.deviceId,
         // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
         clientKind: device.scope,
         pairing: pairingContext,

@@ -695,7 +695,8 @@ export function HostScreen({
         void client
           .sendRequest('worktree.activate', {
             worktree: `id:${item.worktreeId}`,
-            notifyClients: false
+            notifyClients: false,
+            navigation: 'caller'
           })
           .catch(() => null)
       }

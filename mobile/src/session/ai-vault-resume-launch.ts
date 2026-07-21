@@ -194,7 +194,10 @@ export async function resumeAiVaultSessionInTerminal(
       ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
       ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
-      ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {})
+      ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
+      activate: false,
+      select: true,
+      navigation: 'caller'
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )

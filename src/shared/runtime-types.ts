@@ -283,6 +283,8 @@ export type RuntimeMobileSessionTabsResult = {
   worktree: string
   publicationEpoch: string
   snapshotVersion: number
+  /** Live-only targeted command; omitted from durable/list snapshots so reconnect cannot replay navigation. */
+  navigationIntent?: 'follow'
   activeGroupId: string | null
   activeTabId: string | null
   activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null

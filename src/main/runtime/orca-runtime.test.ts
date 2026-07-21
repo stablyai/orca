@@ -18856,6 +18856,62 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('selects a created terminal only for the paired caller', async () => {
+    let spawnIndex = 0
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: `pty-headless-${++spawnIndex}` })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    const hostTerminal = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`)
+
+    const callerTerminal = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      clientNavigationId: 'device-a',
+      navigation: 'caller'
+    })
+
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).activeTabId).toBe(
+      hostTerminal.tab.id
+    )
+    expect(
+      (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-a')).activeTabId
+    ).toBe(callerTerminal.tab.id)
+    expect(
+      (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-b')).activeTabId
+    ).toBe(hostTerminal.tab.id)
+  })
+
+  it('scopes terminal-create idempotency to the paired caller', async () => {
+    let spawnIndex = 0
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: `pty-headless-${++spawnIndex}` })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    const [createdA, createdB] = await Promise.all([
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        clientNavigationId: 'device-a',
+        navigation: 'caller',
+        clientMutationId: 'same-mutation'
+      }),
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        clientNavigationId: 'device-b',
+        navigation: 'caller',
+        clientMutationId: 'same-mutation'
+      })
+    ])
+
+    expect(createdA.tab.id).not.toBe(createdB.tab.id)
+    expect(spawnIndex).toBe(2)
+  })
+
   it('creates mobile session terminals for folder workspaces in a headless runtime server', async () => {
     const folderPath = await mkdtemp(join(tmpdir(), 'orca-mobile-folder-workspace-'))
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-mobile-folder' })

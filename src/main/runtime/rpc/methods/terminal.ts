@@ -38,6 +38,7 @@ import {
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../scrollback-limits'
 import { assertTerminalAgentSendable } from '../terminal-agent-send-guard'
+import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
@@ -820,6 +821,10 @@ const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
 
+const TerminalFocus = TerminalHandle.extend({
+  navigation: z.enum(['caller', 'host']).optional()
+})
+
 const TerminalListParams = z.object({
   worktree: OptionalString,
   limit: OptionalFiniteNumber,
@@ -1412,9 +1417,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.focus',
-    params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      focus: await runtime.focusTerminal(params.terminal)
+    params: TerminalFocus,
+    handler: async (params, { runtime, clientKind }) => ({
+      focus: await runtime.focusTerminal(params.terminal, {
+        // Why: legacy mobile used focus as an implicit tap side effect; runtime/local callers use it as an explicit CLI reveal.
+        navigateHost: navigationTargetsHost(
+          params.navigation ?? (clientKind === 'mobile' ? 'caller' : 'host')
+        )
+      })
     })
   }),
   defineMethod({

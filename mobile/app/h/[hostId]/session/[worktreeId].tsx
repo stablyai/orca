@@ -211,10 +211,7 @@ import { getMobileTerminalActionSheetActions } from '../../../../src/session/mob
 import * as nativeChatTerminalStream from '../../../../src/session/mobile-native-chat-terminal-stream'
 import { useMobileNativeChatTerminalStream } from '../../../../src/session/use-mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from '../../../../src/session/mobile-terminal-stream-subscribe'
-import {
-  activateMobileSessionTab,
-  focusMobileTerminal
-} from '../../../../src/session/mobile-session-tab-activation'
+import { activateMobileSessionTab } from '../../../../src/session/mobile-session-tab-activation'
 import { MobileTerminalDiagnostics } from '../../../../src/session/mobile-terminal-diagnostics'
 import {
   getRepoIdFromMobileWorktreeId,
@@ -2626,7 +2623,8 @@ export default function SessionScreen() {
         void client
           .sendRequest('worktree.activate', {
             worktree: `id:${worktreeId}`,
-            notifyClients: false
+            notifyClients: false,
+            navigation: 'caller'
           })
           .then((response) => reportActivationOutcome(response.ok ? response : null))
           .catch(() => null)
@@ -2653,7 +2651,8 @@ export default function SessionScreen() {
             const activationResponse = await client
               .sendRequest('worktree.activate', {
                 worktree: `id:${worktreeId}`,
-                notifyClients: false
+                notifyClients: false,
+                navigation: 'caller'
               })
               .catch(() => null)
             reportActivationOutcome(activationResponse?.ok ? activationResponse : null)
@@ -2767,7 +2766,7 @@ export default function SessionScreen() {
     }, [])
   )
 
-  // Why: unsubscribe restores old dims (clears phone-fit banner); resubscribe phone-fits the new one; terminal.focus makes desktop follow.
+  // Why: unsubscribe restores old dims (clears phone-fit banner); resubscribe phone-fits the new one.
   const switchTab = useCallback(
     (handle: string) => {
       triggerSelection()
@@ -2795,13 +2794,12 @@ export default function SessionScreen() {
       }
       subscribeToTerminal(handle)
       if (client) {
-        void focusMobileTerminal(client, handle).catch(() => {})
         if (matchingTab) {
-          // Why: persist selection for headless hosts; snapshot gate stops this phone-local ack from impersonating desktop focus.
           void activateMobileSessionTab(client, {
             worktree: `id:${worktreeId}`,
             tabId: matchingTab.id,
-            notifyClients: false
+            notifyClients: false,
+            navigation: 'caller'
           }).catch(() => {})
         }
       }
@@ -2840,7 +2838,8 @@ export default function SessionScreen() {
           void activateMobileSessionTab(client, {
             worktree: `id:${worktreeId}`,
             tabId: tab.id,
-            notifyClients: false
+            notifyClients: false,
+            navigation: 'caller'
           }).catch(() => {})
         }
         return
@@ -2863,7 +2862,8 @@ export default function SessionScreen() {
         void activateMobileSessionTab(client, {
           worktree: `id:${worktreeId}`,
           tabId: tab.id,
-          notifyClients: false
+          notifyClients: false,
+          navigation: 'caller'
         }).catch(() => {})
       }
       if (tab.type === 'browser') {
@@ -3763,7 +3763,10 @@ export default function SessionScreen() {
           ? { startupCommandDelivery: options.startupCommandDelivery }
           : {}),
         ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
-        ...(agent ? { agent } : {})
+        ...(agent ? { agent } : {}),
+        activate: false,
+        select: true,
+        navigation: 'caller'
       })
       if (response.ok) {
         const result = (response as RpcSuccess).result as TerminalCreateResult
@@ -4158,7 +4161,8 @@ export default function SessionScreen() {
       worktree: `id:${worktreeId}`,
       tabId: activePendingTerminalTab.id,
       leafId: activePendingTerminalTab.leafId,
-      notifyClients: false
+      notifyClients: false,
+      navigation: 'caller'
     })
       .then((response) => {
         if (!response.ok) {
