@@ -783,7 +783,11 @@ export class OrchestrationDb {
       .all(thresholdIso, thresholdIso) as DispatchContextRow[]
   }
 
-  failDispatch(ctxId: string, error: string): DispatchContextRow | undefined {
+  failDispatch(
+    ctxId: string,
+    error: string,
+    options: { requeueTask?: boolean } = {}
+  ): DispatchContextRow | undefined {
     const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined
@@ -794,15 +798,29 @@ export class OrchestrationDb {
     const newFailureCount = ctx.failure_count + 1
     const newStatus: DispatchStatus = newFailureCount >= 3 ? 'circuit_broken' : 'failed'
 
-    this.db
-      .prepare(
-        'UPDATE dispatch_contexts SET status = ?, failure_count = ?, last_failure = ? WHERE id = ?'
-      )
-      .run(newStatus, newFailureCount, error, ctxId)
+    // Why: the dispatch and its task are one lifecycle transition; committing
+    // only one row would leave the ledger contradictory after an interruption.
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          'UPDATE dispatch_contexts SET status = ?, failure_count = ?, last_failure = ? WHERE id = ?'
+        )
+        .run(newStatus, newFailureCount, error, ctxId)
 
-    // Why: back to 'ready' not 'pending' — 'pending' would strand it since promoteReadyTasks only runs when a dep completes.
-    const taskStatus: TaskStatus = newStatus === 'circuit_broken' ? 'failed' : 'ready'
-    this.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(taskStatus, ctx.task_id)
+      const shouldRetry = options.requeueTask !== false && newStatus !== 'circuit_broken'
+      if (shouldRetry) {
+        // Why: 'pending' would strand a retry because dependency promotion only
+        // runs when a dependency completes; this task is already unblocked.
+        this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(ctx.task_id)
+      } else {
+        this.updateTaskStatus(ctx.task_id, 'failed', error)
+      }
+      this.db.exec('COMMIT')
+    } catch (cause) {
+      this.db.exec('ROLLBACK')
+      throw cause
+    }
 
     return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
