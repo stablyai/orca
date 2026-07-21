@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipcEmitter = new EventEmitter()
 const ipcMainMock = {
@@ -18,6 +18,10 @@ describe('requestTerminalTabCloseFromRenderer', () => {
     ipcEmitter.removeAllListeners()
     ipcMainMock.on.mockClear()
     ipcMainMock.removeListener.mockClear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('waits for the targeted renderer durability acknowledgement', async () => {
@@ -73,6 +77,27 @@ describe('requestTerminalTabCloseFromRenderer', () => {
     )
 
     await expect(pending).resolves.toBe('already-absent')
+  })
+
+  it('removes the response listener when the renderer does not acknowledge', async () => {
+    vi.useFakeTimers()
+    const { requestSessionTabCloseFromRenderer } =
+      await import('./renderer-tab-close-request-relay')
+    const webContents = { isDestroyed: () => false, send: vi.fn() }
+    const pending = requestSessionTabCloseFromRenderer(
+      { isDestroyed: () => false, webContents } as never,
+      'file-tab-1',
+      'wt-1'
+    )
+    const rejected = expect(pending).rejects.toThrow('session_tab_close_timeout')
+
+    await vi.advanceTimersByTimeAsync(20_000)
+
+    await rejected
+    expect(ipcMainMock.removeListener).toHaveBeenCalledWith(
+      'ui:sessionTabCloseResponse',
+      expect.any(Function)
+    )
   })
 
   it('propagates renderer cancellation instead of reporting success', async () => {

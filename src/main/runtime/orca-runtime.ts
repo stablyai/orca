@@ -165,7 +165,7 @@ import {
 } from '../../shared/runtime-navigation'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
-import type { SessionTabCloseResult } from '../../shared/terminal-tab-close'
+import type { SessionTabCloseResult } from '../../shared/renderer-tab-close'
 import type {
   LinearCurrentIssueContextHints,
   LinearAttachResult,

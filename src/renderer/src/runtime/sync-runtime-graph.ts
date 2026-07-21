@@ -380,6 +380,7 @@ function getBrowserTabsByWorktree(state: AppState): AppState['browserTabsByWorkt
 }
 
 function isRuntimeMirroredBrowserWorkspace(state: AppState, workspaceId: string): boolean {
+  // Why: host-backed browser mirrors must not be echoed back as this consumer's authoritative tabs.
   return (state.browserPagesByWorkspace?.[workspaceId] ?? []).some(
     (page) => state.remoteBrowserPageHandlesByPageId?.[page.id] !== undefined
   )

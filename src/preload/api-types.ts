@@ -19,7 +19,7 @@ import type {
   SessionTabCloseResponse,
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
-} from '../shared/terminal-tab-close'
+} from '../shared/renderer-tab-close'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
