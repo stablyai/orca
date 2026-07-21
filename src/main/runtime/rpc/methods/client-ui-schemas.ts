@@ -111,7 +111,8 @@ const GitHubProjectRef = z
   .object({
     owner: z.string(),
     ownerType: z.enum(['organization', 'user']),
-    number: z.number().int()
+    number: z.number().int(),
+    host: z.string().optional()
   })
   .strict()
 const GitHubProjectSettings = z

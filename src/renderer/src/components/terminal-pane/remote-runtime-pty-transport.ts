@@ -68,8 +68,10 @@ export function createRemoteRuntimePtyTransport(
     env,
     envToDelete,
     launchConfig,
+    resumeProviderSession,
     launchToken,
     launchAgent,
+    terminalColorQueryReplies,
     worktreeId,
     tabId,
     leafId,
@@ -172,7 +174,9 @@ export function createRemoteRuntimePtyTransport(
     const activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
       worktree,
       tabId: hostTabId,
-      ...(leafId ? { leafId } : {})
+      ...(leafId ? { leafId } : {}),
+      notifyClients: false,
+      navigation: 'caller'
     })
     const immediate = findReadyHostSessionHandle(activated, hostTabId)
     if (immediate) {
@@ -778,6 +782,7 @@ export function createRemoteRuntimePtyTransport(
         const envToSend = options.env ?? env
         const envToDeleteToSend = options.envToDelete ?? envToDelete
         const launchConfigToSend = options.launchConfig ?? launchConfig
+        const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
         const launchTokenToSend = options.launchToken ?? launchToken
         const launchAgentToSend = options.launchAgent ?? launchAgent
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
@@ -789,8 +794,12 @@ export function createRemoteRuntimePtyTransport(
           ...(envToSend !== undefined ? { env: envToSend } : {}),
           ...(envToDeleteToSend !== undefined ? { envToDelete: envToDeleteToSend } : {}),
           ...(launchConfigToSend !== undefined ? { launchConfig: launchConfigToSend } : {}),
+          ...(resumeProviderSessionToSend !== undefined
+            ? { resumeProviderSession: resumeProviderSessionToSend }
+            : {}),
           ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
           ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
+          ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
           tabId,
           leafId,
           focus: false,

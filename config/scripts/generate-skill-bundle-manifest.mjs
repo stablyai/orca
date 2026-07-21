@@ -423,20 +423,38 @@ async function buildArtifacts() {
 // Why: released snapshots are the detection ground truth for existing installs,
 // so a generation-logic change must not rewrite them silently. Only the one
 // unreleased working-tree append per skill may change between runs.
-function assertReleasedHistoryPreserved(committedRegistry, artifacts) {
+function releasedSnapshotCountsFromMapping(releaseMapping) {
+  if (!releaseMapping || releaseMapping.schemaVersion !== RELEASE_MAPPING_SCHEMA_VERSION) {
+    return null
+  }
+  const counts = {}
+  for (const release of releaseMapping.releases ?? []) {
+    for (const [name, revision] of Object.entries(release.skills ?? {})) {
+      counts[name] = Math.max(counts[name] ?? 0, revision)
+    }
+  }
+  return counts
+}
+
+function assertReleasedHistoryPreserved(committedRegistry, artifacts, committedReleaseMapping) {
   if (!committedRegistry || committedRegistry.schemaVersion !== SNAPSHOT_REGISTRY_SCHEMA_VERSION) {
     return
   }
+  const committedReleasedCounts = releasedSnapshotCountsFromMapping(committedReleaseMapping)
   for (const [name, committedSnapshots] of Object.entries(committedRegistry.skills ?? {})) {
     const releasedCount = artifacts.releasedSnapshotCounts[name] ?? 0
     const regenerated = artifacts.snapshotRegistry.skills[name] ?? []
-    if (releasedCount < Math.max(0, committedSnapshots.length - 1)) {
+    const minimumReleasedCount =
+      committedReleasedCounts?.[name] ?? Math.max(0, committedSnapshots.length - 1)
+    if (releasedCount < minimumReleasedCount) {
       throw new Error(
         `Released snapshot history is incomplete for ${name}. ` +
           'Fetch all release tags before regenerating skill artifacts.'
       )
     }
-    const protectedCount = Math.min(committedSnapshots.length, releasedCount)
+    const protectedCount = committedReleasedCounts
+      ? (committedReleasedCounts[name] ?? 0)
+      : Math.min(committedSnapshots.length, releasedCount)
     for (let index = 0; index < protectedCount; index += 1) {
       const committed = committedSnapshots[index]
       const rebuilt = regenerated[index]
@@ -453,6 +471,14 @@ function assertReleasedHistoryPreserved(committedRegistry, artifacts) {
 async function readCommittedRegistry() {
   try {
     return JSON.parse(await readFile(SNAPSHOT_REGISTRY_PATH, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+async function readCommittedReleaseMapping() {
+  try {
+    return JSON.parse(await readFile(RELEASE_MAPPING_PATH, 'utf8'))
   } catch {
     return null
   }
@@ -532,7 +558,11 @@ async function verifyArtifacts(artifacts) {
 
 async function main() {
   const artifacts = await buildArtifacts()
-  assertReleasedHistoryPreserved(await readCommittedRegistry(), artifacts)
+  assertReleasedHistoryPreserved(
+    await readCommittedRegistry(),
+    artifacts,
+    await readCommittedReleaseMapping()
+  )
   await (process.argv.includes('--write') ? writeArtifacts : verifyArtifacts)(artifacts)
 }
 

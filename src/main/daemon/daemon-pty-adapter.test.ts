@@ -151,10 +151,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         rows: 24,
         startupIngress: {
           colors: { foreground: '#2e3434', background: '#ffffff' },
-          deadlineMs: 5_000,
-          ...(process.platform === 'win32'
-            ? { echoProjection: 'windows-conpty-esc-stripped' as const }
-            : {})
+          deadlineMs: 5_000
         }
       })
       const query = '\x1b]10;?\x07'

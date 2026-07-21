@@ -79,6 +79,17 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('does not create a second kill authority when a mounted pane detaches', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+
+    transport.detach?.()
+
+    expect(kill).not.toHaveBeenCalled()
+  })
+
   it('forwards requested environment deletions to the PTY spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -91,6 +102,21 @@ describe('createIpcPtyTransport', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] })
     )
+  })
+
+  it('forwards automatic resume provenance to the PTY spawn', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const resumeProviderSession = {
+      key: 'session_id' as const,
+      id: 'session-a',
+      transcriptPath: '/Users/example/.codex/sessions/2026/07/20/rollout-a.jsonl'
+    }
+    const transport = createIpcPtyTransport({ resumeProviderSession })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ resumeProviderSession }))
   })
 
   it('leaves the transport silently unbound after a failed connect — sendInput drops with no write IPC (frozen-terminal repro)', async () => {

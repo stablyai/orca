@@ -1290,6 +1290,8 @@ function Settings(): React.JSX.Element {
                     <GeneralPane
                       settings={settings}
                       updateSettings={updateSettings}
+                      fontSuggestions={terminalFontSuggestions}
+                      onRequestFontSuggestions={requestFontSuggestions}
                       wslSupportedPlatform={wslSupportedPlatform}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}

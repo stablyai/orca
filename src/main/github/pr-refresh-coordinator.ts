@@ -9,7 +9,14 @@ import type {
   PRRefreshOutcome
 } from '../../shared/types'
 import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './client'
-import { getRateLimit, noteRateLimitSpend, rateLimitGuard } from './rate-limit'
+import { getOriginGitHubApiRepository } from './github-api-repository'
+import { ghRepoExecOptions, githubRepoContext } from './gh-utils'
+import {
+  getRateLimit,
+  noteRepositoryRateLimitSpend,
+  repositoryRateLimitGuard,
+  spendsSharedGitHubComQuota
+} from './rate-limit'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 
@@ -728,11 +735,26 @@ async function drainQueue(): Promise<void> {
       )
 
       if (isBackground(next.reason)) {
-        // Why: the probe only warms rateLimitGuard's cache, so it must fail open — GHES with rate limiting disabled 404s every probe (#7553).
-        await getRateLimit()
+        const executionOptions = ghRepoExecOptions(
+          githubRepoContext(
+            next.candidate.repoPath,
+            next.candidate.connectionId,
+            next.candidate.localGitOptions
+          )
+        )
+        const repository = await getOriginGitHubApiRepository(
+          next.candidate.repoPath,
+          next.candidate.connectionId,
+          executionOptions
+        )
+        // Why: only native github.com uses the singleton snapshot; scoped breakers protect GHES and WSL.
+        if (spendsSharedGitHubComQuota(repository, executionOptions)) {
+          // Why: the probe only warms the cache, so failures must fail open (#7553).
+          await getRateLimit()
+        }
         const buckets = backgroundRefreshBuckets()
         const blockedGuard = buckets
-          .map((bucket) => rateLimitGuard(bucket))
+          .map((bucket) => repositoryRateLimitGuard(repository, bucket, executionOptions))
           .find((guard) => guard.blocked)
         if (blockedGuard?.blocked) {
           const retryAt = blockedGuard.resetAt * 1000
@@ -755,7 +777,7 @@ async function drainQueue(): Promise<void> {
           noteActiveStart(next)
         }
         for (const bucket of buckets) {
-          noteRateLimitSpend(bucket)
+          noteRepositoryRateLimitSpend(repository, bucket, 1, executionOptions)
         }
       }
 
@@ -922,8 +944,16 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
   }
 
   // Why: enforce the rate-limit gate so a stale renderer can't bypass it; refuse without spending quota until the later of the two cooldowns.
+  const manualExecutionOptions = ghRepoExecOptions(
+    githubRepoContext(candidate.repoPath, candidate.connectionId, candidate.localGitOptions)
+  )
+  const manualRepository = await getOriginGitHubApiRepository(
+    candidate.repoPath,
+    candidate.connectionId,
+    manualExecutionOptions
+  )
   const manualBlockedGuard = backgroundRefreshBuckets()
-    .map((bucket) => rateLimitGuard(bucket))
+    .map((bucket) => repositoryRateLimitGuard(manualRepository, bucket, manualExecutionOptions))
     .find((guard) => guard.blocked)
   const secondaryGateUntil = manualRetryGates.get(key)
   const gateUntil = Math.max(

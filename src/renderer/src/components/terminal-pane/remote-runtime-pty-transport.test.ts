@@ -1140,7 +1140,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       leafId: 'pane:1',
       command: "codex 'linked issue context'",
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
-      startupCommandDelivery: 'shell-ready'
+      startupCommandDelivery: 'shell-ready',
+      terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
     })
 
     await transport.connect({ url: '', callbacks: {} })
@@ -1152,7 +1153,8 @@ describe('createRemoteRuntimePtyTransport', () => {
         params: expect.objectContaining({
           command: "codex 'linked issue context'",
           envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
-          startupCommandDelivery: 'shell-ready'
+          startupCommandDelivery: 'shell-ready',
+          terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
         })
       })
     )
@@ -1180,6 +1182,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       },
       launchToken: 'fresh-token',
       launchAgent: 'codex',
+      resumeProviderSession: {
+        key: 'session_id',
+        id: 'session-1',
+        transcriptPath: '/home/example/.codex/sessions/2026/07/20/rollout-a.jsonl'
+      },
       callbacks: {}
     })
 
@@ -1195,7 +1202,12 @@ describe('createRemoteRuntimePtyTransport', () => {
             agentEnv: { CODEX_PROFILE: 'captured' }
           },
           launchToken: 'fresh-token',
-          launchAgent: 'codex'
+          launchAgent: 'codex',
+          resumeProviderSession: {
+            key: 'session_id',
+            id: 'session-1',
+            transcriptPath: '/home/example/.codex/sessions/2026/07/20/rollout-a.jsonl'
+          }
         })
       })
     )
@@ -1268,7 +1280,13 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'session.tabs.activate',
-        params: { worktree: 'id:wt-1', tabId: 'host-tab-1', leafId: 'leaf-1' }
+        params: {
+          worktree: 'id:wt-1',
+          tabId: 'host-tab-1',
+          leafId: 'leaf-1',
+          notifyClients: false,
+          navigation: 'caller'
+        }
       })
     )
     expect(runtimeCall).not.toHaveBeenCalledWith(
@@ -1370,7 +1388,13 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'session.tabs.activate',
-        params: { worktree: 'id:wt-1', tabId: 'host-tab-1', leafId: 'leaf-2' }
+        params: {
+          worktree: 'id:wt-1',
+          tabId: 'host-tab-1',
+          leafId: 'leaf-2',
+          notifyClients: false,
+          navigation: 'caller'
+        }
       })
     )
     expect(runtimeCall).not.toHaveBeenCalledWith(

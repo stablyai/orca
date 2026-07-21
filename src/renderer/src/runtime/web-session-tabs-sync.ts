@@ -1643,19 +1643,23 @@ export function applyWebSessionTabsSnapshot(
         )
       }
     : rawSnapshot
-  // Why: follow the snapshot's active tab over the user's focus only when this client initiated the activation; unsolicited server-active must not steal focus (#5435).
+  // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
   const focusIntentHostTabId = peekWebSessionFocusIntent(worktreeId)
-  const honorSnapshotActiveFocus =
-    focusIntentHostTabId !== null &&
-    snapshot.activeTabId !== null &&
-    (snapshot.activeTabId === focusIntentHostTabId ||
-      snapshot.tabs.some(
-        (tab) =>
-          tab.id === snapshot.activeTabId &&
-          tab.type === 'browser' &&
-          tab.browserPageId === focusIntentHostTabId
-      ))
-  if (honorSnapshotActiveFocus) {
+  const callerFocusIntentTab =
+    focusIntentHostTabId === null
+      ? null
+      : (snapshot.tabs.find(
+          (tab) =>
+            tab.id === focusIntentHostTabId ||
+            (tab.type === 'browser' && tab.browserPageId === focusIntentHostTabId)
+        ) ?? null)
+  const followIntentTab =
+    snapshot.navigationIntent === 'follow'
+      ? (snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ?? null)
+      : null
+  const navigationIntentTab = callerFocusIntentTab ?? followIntentTab
+  const honorSnapshotActiveFocus = navigationIntentTab !== null
+  if (callerFocusIntentTab) {
     clearWebSessionFocusIntent(worktreeId)
   }
   const currentTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
@@ -1860,15 +1864,31 @@ export function applyWebSessionTabsSnapshot(
     : null
   const activeMirroredEditorFileId = activeMirroredEditor?.file.id ?? null
   const activeMirroredEditorTabId = activeMirroredEditor?.unifiedTab.id ?? null
+  const intentMirroredTerminalId =
+    navigationIntentTab?.type === 'terminal'
+      ? toWebTerminalSurfaceTabId(navigationIntentTab.parentTabId)
+      : null
+  const intentMirroredBrowser =
+    navigationIntentTab?.type === 'browser'
+      ? (mirroredBrowserTabs.find(
+          (entry) =>
+            entry.hostTabId === navigationIntentTab.id ||
+            entry.remotePageId === navigationIntentTab.browserPageId
+        ) ?? null)
+      : null
+  const intentMirroredEditor =
+    navigationIntentTab?.type === 'markdown' || navigationIntentTab?.type === 'file'
+      ? (mirroredEditorTabs.find((entry) => entry.hostTabId === navigationIntentTab.id) ?? null)
+      : null
   const currentActiveTerminalStillExists =
     state.activeTabIdByWorktree[worktreeId] &&
     (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabIdByWorktree[worktreeId])
       ? state.activeTabIdByWorktree[worktreeId]
       : null
-  // Why: on a client-initiated activation (honorSnapshotActiveFocus), the snapshot's active terminal wins over sticky current focus.
+  // Why: caller intent targets the requested tab even when an older host leaves its own active tab unchanged.
   const intentTerminalId =
-    honorSnapshotActiveFocus && snapshot.activeTabType === 'terminal'
-      ? activeMirroredTerminalId
+    honorSnapshotActiveFocus && navigationIntentTab?.type === 'terminal'
+      ? intentMirroredTerminalId
       : null
   const nextActiveTerminalId =
     intentTerminalId ??
@@ -1883,8 +1903,8 @@ export function applyWebSessionTabsSnapshot(
       ? state.activeBrowserTabIdByWorktree[worktreeId]
       : null
   const intentBrowserWorkspaceId =
-    honorSnapshotActiveFocus && snapshot.activeTabType === 'browser'
-      ? activeMirroredBrowserWorkspaceId
+    honorSnapshotActiveFocus && navigationIntentTab?.type === 'browser'
+      ? (intentMirroredBrowser?.workspace.id ?? null)
       : null
   const nextActiveBrowserWorkspaceId =
     intentBrowserWorkspaceId ??
@@ -1901,7 +1921,11 @@ export function applyWebSessionTabsSnapshot(
     )
       ? state.activeFileIdByWorktree[worktreeId]
       : null
+  const intentEditorFileId = honorSnapshotActiveFocus
+    ? (intentMirroredEditor?.file.id ?? null)
+    : null
   const nextActiveEditorFileId =
+    intentEditorFileId ??
     currentActiveEditorStillExists ??
     (snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
       ? (activeMirroredEditorFileId ?? mirroredEditorTabs[0]?.file.id)
@@ -1914,12 +1938,12 @@ export function applyWebSessionTabsSnapshot(
   })
   // Why: a client-initiated activation also drives the visible unified tab, overriding the sticky current-visible tab.
   const intentUnifiedTabId = honorSnapshotActiveFocus
-    ? snapshot.activeTabType === 'browser'
-      ? activeMirroredBrowserTabId
-      : snapshot.activeTabType === 'terminal'
+    ? navigationIntentTab?.type === 'browser'
+      ? (intentMirroredBrowser?.unifiedTab.id ?? null)
+      : navigationIntentTab?.type === 'terminal'
         ? intentTerminalId
-        : snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
-          ? activeMirroredEditorTabId
+        : navigationIntentTab?.type === 'markdown' || navigationIntentTab?.type === 'file'
+          ? (intentMirroredEditor?.unifiedTab.id ?? null)
           : null
     : null
   const nextActiveUnifiedTabId =
@@ -2255,6 +2279,14 @@ export function applyWebSessionTabsSnapshot(
       ? { ...state.activeFileIdByWorktree, [worktreeId]: nextActiveEditorFileId }
       : state.activeFileIdByWorktree
   const isActiveWorktree = state.activeWorktreeId === worktreeId
+  const focusIntentVisibleTabType =
+    navigationIntentTab?.type === 'browser' && intentBrowserWorkspaceId
+      ? ('browser' as const)
+      : navigationIntentTab?.type === 'terminal' && intentTerminalId
+        ? ('terminal' as const)
+        : intentEditorFileId
+          ? ('editor' as const)
+          : null
   const snapshotVisibleTabType =
     snapshot.activeTabType === 'browser' && nextActiveBrowserWorkspaceId
       ? ('browser' as const)
@@ -2290,7 +2322,10 @@ export function applyWebSessionTabsSnapshot(
             : ('terminal' as const)
   // Why: don't keep pointing shortcuts at a removed browser/editor; a client-initiated activation lets the snapshot's type switch the visible pane.
   const nextVisibleTabType = honorSnapshotActiveFocus
-    ? (snapshotVisibleTabType ?? currentVisibleTabTypeStillValid ?? fallbackVisibleTabType)
+    ? (focusIntentVisibleTabType ??
+      currentVisibleTabTypeStillValid ??
+      snapshotVisibleTabType ??
+      fallbackVisibleTabType)
     : (currentVisibleTabTypeStillValid ?? snapshotVisibleTabType ?? fallbackVisibleTabType)
   const currentActiveTerminalStillValid =
     state.activeTabId && (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabId)

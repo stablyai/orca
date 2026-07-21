@@ -38,6 +38,10 @@ import {
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../scrollback-limits'
 import { assertTerminalAgentSendable } from '../terminal-agent-send-guard'
+import {
+  navigationTargetsHost,
+  resolveRuntimeNavigationTarget
+} from '../../../../shared/runtime-navigation'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
@@ -820,6 +824,10 @@ const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
 
+const TerminalFocus = TerminalHandle.extend({
+  navigation: z.enum(['caller', 'host']).optional()
+})
+
 const TerminalListParams = z.object({
   worktree: OptionalString,
   limit: OptionalFiniteNumber,
@@ -913,8 +921,21 @@ const TerminalCreateParams = z.object({
       agentEnv: z.record(z.string(), z.string())
     })
     .optional(),
+  resumeProviderSession: z
+    .object({
+      key: z.enum(['session_id', 'conversation_id']),
+      id: z.string().min(1).max(512),
+      transcriptPath: z.string().min(1).max(32_768).optional()
+    })
+    .optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
+  terminalColorQueryReplies: z
+    .object({
+      foreground: z.string().max(128).optional(),
+      background: z.string().max(128).optional()
+    })
+    .optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
@@ -1348,8 +1369,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         env: params.env,
         envToDelete: params.envToDelete,
         ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+        ...(params.resumeProviderSession
+          ? { resumeProviderSession: params.resumeProviderSession }
+          : {}),
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+        ...(params.terminalColorQueryReplies
+          ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
+          : {}),
         title: params.title,
         focus: params.focus === true,
         rendererBacked: params.rendererBacked === true,
@@ -1412,9 +1439,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.focus',
-    params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      focus: await runtime.focusTerminal(params.terminal)
+    params: TerminalFocus,
+    handler: async (params, { runtime, clientKind }) => ({
+      focus: await runtime.focusTerminal(params.terminal, {
+        navigateHost: navigationTargetsHost(
+          resolveRuntimeNavigationTarget({ navigation: params.navigation, clientKind })
+        )
+      })
     })
   }),
   defineMethod({

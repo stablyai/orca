@@ -13,6 +13,7 @@
     "../src/main/antigravity/hook-service.ts",
     "../src/main/claude/hook-settings.ts",
     "../src/main/claude/hook-service.ts",
+    "../src/main/claude/statusline-script.ts",
     "../src/main/codex/codex-app-server-capability-cache.ts",
     "../src/main/codex/codex-app-server-capability-signal.ts",
     "../src/main/codex/codex-app-server-client.ts",

@@ -35,7 +35,35 @@ describe('session tab RPC methods', () => {
 
     expect(response.ok).toBe(true)
     expect(runtime.activateMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', 'leaf-1', {
-      notifyClients: false
+      notifyClients: false,
+      clientNavigationId: undefined,
+      navigation: 'caller'
+    })
+  })
+
+  it('defaults legacy paired activation to the authenticated caller identity', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.activate', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1',
+        notifyClients: true
+      }),
+      (response) => replies.push(response),
+      { clientKind: 'runtime', pairedDeviceId: 'device-a' }
+    )
+
+    expect(replies).toHaveLength(1)
+    expect(runtime.activateMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', undefined, {
+      notifyClients: true,
+      clientNavigationId: 'device-a',
+      navigation: 'caller'
     })
   })
 
@@ -171,8 +199,43 @@ describe('session tab RPC methods', () => {
       },
       launchAgent: 'codex',
       viewMode: 'chat',
-      activate: true
+      activate: true,
+      select: undefined,
+      clientNavigationId: undefined,
+      navigation: 'all'
     })
+  })
+
+  it('defaults legacy paired terminal creation to caller-owned selection', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal: vi.fn().mockResolvedValue({
+        tab: { type: 'terminal', id: 'tab-1::leaf-1' },
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        activate: true,
+        clientMutationId: 'create-1'
+      }),
+      () => {},
+      { clientKind: 'runtime', pairedDeviceId: 'device-a' }
+    )
+
+    expect(runtime.createMobileSessionTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        activate: true,
+        clientMutationId: 'create-1',
+        clientNavigationId: 'device-a',
+        navigation: 'caller'
+      })
+    )
   })
 
   it('dispatches terminal creation with a requested agent preset', async () => {
@@ -211,7 +274,10 @@ describe('session tab RPC methods', () => {
       startupCommandDelivery: undefined,
       agent: 'codex',
       agentPrompt: 'Review this diff',
-      activate: undefined
+      activate: undefined,
+      select: undefined,
+      clientNavigationId: undefined,
+      navigation: 'all'
     })
   })
 
@@ -271,7 +337,10 @@ describe('session tab RPC methods', () => {
       command: "codex 'linked issue context'",
       startupCommandDelivery: 'shell-ready',
       agent: undefined,
-      activate: undefined
+      activate: undefined,
+      select: undefined,
+      clientNavigationId: undefined,
+      navigation: 'all'
     })
   })
 

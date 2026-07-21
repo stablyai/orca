@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { WorktreeCreate } from './worktree-schemas'
+import { WorktreeActivate, WorktreeCreate } from './worktree-schemas'
 
 describe('worktree RPC schemas', () => {
+  it('validates additive navigation intent', () => {
+    expect(WorktreeActivate.parse({ worktree: 'id:wt-1', navigation: 'clients' }).navigation).toBe(
+      'clients'
+    )
+    expect(
+      WorktreeActivate.safeParse({ worktree: 'id:wt-1', navigation: 'everyone' }).success
+    ).toBe(false)
+  })
+
   it('rejects invalid startup agent values', () => {
     const parsed = WorktreeCreate.safeParse({
       repo: 'repo-1',

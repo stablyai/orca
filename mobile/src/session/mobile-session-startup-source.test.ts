@@ -36,7 +36,10 @@ describe('mobile session startup', () => {
     )
 
     expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
+    expect(startupEffect).toContain("if (client && created !== '1' && !isFloatingWorkspaceRoute)")
+    expect(startupEffect).toContain("if (client && created === '1' && !isFloatingWorkspaceRoute)")
     expect(startupEffect).toContain('notifyClients: false')
+    expect(startupEffect).toContain("navigation: 'caller'")
     expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
     expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
       startupEffect.indexOf('await fetchSessionTabs()')
@@ -62,21 +65,23 @@ describe('mobile session startup', () => {
     expect(pendingActivationEffect).toContain('tabId: activePendingTerminalTab.id')
     expect(pendingActivationEffect).toContain('leafId: activePendingTerminalTab.leafId')
     expect(pendingActivationEffect).toContain('notifyClients: false')
+    expect(pendingActivationEffect).toContain("navigation: 'caller'")
     expect(pendingActivationEffect).toContain(
       'applySessionTabs((response as RpcSuccess).result as SessionTabsResult)'
     )
     expect(pendingActivationEffect).toContain('scheduleDelayedAction(() => void fetchSessionTabs()')
   })
 
-  it('mirrors ready terminal taps while persisting them for headless hosts', () => {
+  it('keeps ready terminal taps local while publishing caller selection', () => {
     const readyTerminalSwitch = sliceBetween(
       'const switchTab = useCallback(',
       'const switchSessionTab = useCallback('
     )
 
-    expect(readyTerminalSwitch).toContain('focusMobileTerminal(client, handle)')
+    expect(readyTerminalSwitch).not.toContain('focusMobileTerminal(client, handle)')
     expect(readyTerminalSwitch).toContain('activateMobileSessionTab(client,')
     expect(readyTerminalSwitch).toContain('notifyClients: false')
+    expect(readyTerminalSwitch).toContain("navigation: 'caller'")
   })
 
   it('keeps background and pending session-tab activation local to the phone', () => {
@@ -85,6 +90,7 @@ describe('mobile session startup', () => {
     expect(activationRequests).toHaveLength(4)
     for (const request of activationRequests) {
       expect(request.slice(0, request.indexOf('})'))).toContain('notifyClients: false')
+      expect(request.slice(0, request.indexOf('})'))).toContain("navigation: 'caller'")
     }
   })
 

@@ -3,6 +3,7 @@ import { MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/termin
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import { OptionalBoolean } from '../schemas'
 
 export const WorktreeTabSelector = z.object({
@@ -22,7 +23,8 @@ export const ActivateTab = WorktreeTabSelector.extend({
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing tab id')),
   leafId: z.string().max(128).optional(),
-  notifyClients: OptionalBoolean
+  notifyClients: OptionalBoolean,
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
 
 export type TerminalPaneLayoutNodeInput =
@@ -141,6 +143,8 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     .optional(),
   viewMode: z.enum(['terminal', 'chat']).optional(),
   activate: z.boolean().optional(),
+  select: z.boolean().optional(),
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
   // Why: idempotency key so a retried create (double-tap, reconnect replay)
   // returns the in-flight operation instead of spawning a duplicate terminal.
   clientMutationId: z.string().min(1).max(128).optional()

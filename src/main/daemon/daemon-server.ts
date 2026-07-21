@@ -22,7 +22,6 @@ import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
-import { isNativeWindowsLocalPtySpawn } from '../runtime/terminal-model-query-authority'
 import { unlinkOwnedDaemonPidFile, unlinkOwnedDaemonTokenFile } from './daemon-spawner'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
@@ -699,13 +698,7 @@ export class DaemonServer {
             terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
             shellReadySupported: p.shellReadySupported,
             historySeed: p.historySeed,
-            startupIngress: parsePtyStartupIngressIntent(p.startupIngress, {
-              allowWindowsEchoProjection: isNativeWindowsLocalPtySpawn({
-                connectionId: null,
-                cwd: p.cwd,
-                shellOverride: p.shellOverride
-              })
-            }),
+            startupIngress: parsePtyStartupIngressIntent(p.startupIngress),
             ...(p.shellReadyTimeoutMs !== undefined
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
               : {}),
@@ -778,6 +771,11 @@ export class DaemonServer {
       case 'cancelCreateOrAttach':
         this.cancelPendingPtySpawnPreparations(request.payload.sessionId)
         return {}
+
+      case 'closeStartupQueryAuthority':
+        return {
+          appliedSeq: this.host.closeStartupQueryAuthority(request.payload.sessionId)
+        }
 
       case 'write':
         try {

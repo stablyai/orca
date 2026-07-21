@@ -60,6 +60,7 @@ function card(overrides: Partial<DashboardCard>): DashboardCard {
     repoName: 'Repo',
     worktreeName: 'wt',
     startedAt: 0,
+    finishedAt: null,
     stateChangedAt: 0,
     unseen: false,
     ...overrides

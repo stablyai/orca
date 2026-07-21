@@ -2024,85 +2024,87 @@ describe('applyWebSessionTabsSnapshot', () => {
       isPinned: false
     }
 
-    const patch = applyWebSessionTabsSnapshot(
-      makeState({
-        activeTabId: shellTabId,
-        activeTabIdByWorktree: { [WT]: shellTabId },
-        activeTabType: 'terminal',
-        activeTabTypeByWorktree: { [WT]: 'terminal' },
-        tabsByWorktree: {
-          [WT]: [
-            {
-              id: agentTabId,
-              ptyId: 'remote:web-env-1@@terminal-1',
-              worktreeId: WT,
-              title: 'codex [working]',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: NOW
-            },
-            {
-              id: shellTabId,
-              ptyId: 'remote:web-env-1@@terminal-2',
-              worktreeId: WT,
-              title: 'shell',
-              customTitle: null,
-              color: null,
-              sortOrder: 1,
-              createdAt: NOW + 1
-            }
-          ]
-        },
-        unifiedTabsByWorktree: { [WT]: [agentUnifiedTab, shellUnifiedTab] },
-        tabBarOrderByWorktree: { [WT]: [agentTabId, shellTabId] },
-        groupsByWorktree: {
-          [WT]: [
-            {
-              id: 'host-group-1',
-              worktreeId: WT,
-              activeTabId: shellTabId,
-              tabOrder: [agentTabId, shellTabId],
-              recentTabIds: [agentTabId, shellTabId]
-            }
-          ]
-        }
-      }),
-      makeSnapshot(
-        [
+    const state = makeState({
+      activeTabId: shellTabId,
+      activeTabIdByWorktree: { [WT]: shellTabId },
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [WT]: 'terminal' },
+      tabsByWorktree: {
+        [WT]: [
           {
-            type: 'terminal',
-            id: `host-tab-1::${LEAF_ID}`,
-            title: 'codex [thinking]',
-            parentTabId: 'host-tab-1',
-            leafId: LEAF_ID,
-            isActive: true,
-            status: 'ready',
-            terminal: 'terminal-1'
+            id: agentTabId,
+            ptyId: 'remote:web-env-1@@terminal-1',
+            worktreeId: WT,
+            title: 'codex [working]',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: NOW
           },
           {
-            type: 'terminal',
-            id: `host-tab-2::${SECOND_LEAF_ID}`,
+            id: shellTabId,
+            ptyId: 'remote:web-env-1@@terminal-2',
+            worktreeId: WT,
             title: 'shell',
-            parentTabId: 'host-tab-2',
-            leafId: SECOND_LEAF_ID,
-            isActive: false,
-            status: 'ready',
-            terminal: 'terminal-2'
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: NOW + 1
           }
-        ],
+        ]
+      },
+      unifiedTabsByWorktree: { [WT]: [agentUnifiedTab, shellUnifiedTab] },
+      tabBarOrderByWorktree: { [WT]: [agentTabId, shellTabId] },
+      groupsByWorktree: {
+        [WT]: [
+          {
+            id: 'host-group-1',
+            worktreeId: WT,
+            activeTabId: shellTabId,
+            tabOrder: [agentTabId, shellTabId],
+            recentTabIds: [agentTabId, shellTabId]
+          }
+        ]
+      }
+    })
+    const remoteActiveSnapshot = makeSnapshot(
+      [
         {
-          activeTabId: `host-tab-1::${LEAF_ID}`,
-          activeTabType: 'terminal',
-          tabGroups: [
-            {
-              id: 'host-group-1',
-              activeTabId: 'host-tab-1',
-              tabOrder: ['host-tab-1', 'host-tab-2']
-            }
-          ]
+          type: 'terminal',
+          id: `host-tab-1::${LEAF_ID}`,
+          title: 'codex [thinking]',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        },
+        {
+          type: 'terminal',
+          id: `host-tab-2::${SECOND_LEAF_ID}`,
+          title: 'shell',
+          parentTabId: 'host-tab-2',
+          leafId: SECOND_LEAF_ID,
+          isActive: false,
+          status: 'ready',
+          terminal: 'terminal-2'
         }
-      ),
+      ],
+      {
+        activeTabId: `host-tab-1::${LEAF_ID}`,
+        activeTabType: 'terminal',
+        tabGroups: [
+          {
+            id: 'host-group-1',
+            activeTabId: 'host-tab-1',
+            tabOrder: ['host-tab-1', 'host-tab-2']
+          }
+        ]
+      }
+    )
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      remoteActiveSnapshot,
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
@@ -2113,11 +2115,18 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabId: shellTabId,
       tabOrder: [agentTabId, shellTabId]
     })
+
+    const followed = applyWebSessionTabsSnapshot(
+      state,
+      { ...remoteActiveSnapshot, navigationIntent: 'follow' },
+      ENV,
+      NOW + 10
+    ) as Partial<WebSessionTabsSyncState>
+    expect(followed.activeTabIdByWorktree?.[WT]).toBe(agentTabId)
+    expect(followed.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe(agentTabId)
   })
 
-  it('focuses a brand-new remote terminal that the snapshot marks active', () => {
-    // Why: opening a new terminal must take focus. Distinct from the #5435 case
-    // above (existing tab echoed active = keep focus); here the active tab is new.
+  it('focuses a caller-created terminal even when an older host leaves it inactive', () => {
     const existingTabId = toWebTerminalSurfaceTabId('host-tab-1')
     const newTabId = toWebTerminalSurfaceTabId('host-tab-2')
     // Simulate createWebRuntimeSessionTerminal recording focus intent for the new tab.
@@ -2179,7 +2188,7 @@ describe('applyWebSessionTabsSnapshot', () => {
             title: 'shell',
             parentTabId: 'host-tab-1',
             leafId: LEAF_ID,
-            isActive: false,
+            isActive: true,
             status: 'ready',
             terminal: 'terminal-1'
           },
@@ -2189,18 +2198,18 @@ describe('applyWebSessionTabsSnapshot', () => {
             title: 'new shell',
             parentTabId: 'host-tab-2',
             leafId: SECOND_LEAF_ID,
-            isActive: true,
+            isActive: false,
             status: 'ready',
             terminal: 'terminal-2'
           }
         ],
         {
-          activeTabId: `host-tab-2::${SECOND_LEAF_ID}`,
+          activeTabId: `host-tab-1::${LEAF_ID}`,
           activeTabType: 'terminal',
           tabGroups: [
             {
               id: 'host-group-1',
-              activeTabId: 'host-tab-2',
+              activeTabId: 'host-tab-1',
               tabOrder: ['host-tab-1', 'host-tab-2']
             }
           ]

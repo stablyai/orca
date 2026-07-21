@@ -344,13 +344,16 @@ export function useHostClient(hostId: string | undefined): {
     hostId ? ctx.getState(hostId) : 'disconnected'
   )
   const clientRef = useRef<RpcClient | null>(null)
+  const clientHostIdRef = useRef<string | undefined>(hostId)
 
   useEffect(() => {
     if (!hostId) {
       clientRef.current = null
+      clientHostIdRef.current = undefined
       setState('disconnected')
       return
     }
+    clientHostIdRef.current = hostId
     let cancelled = false
     // Subscribe before acquire so any state change during open is captured.
     const unsub = ctx.subscribeHostState(hostId, (next) => {
@@ -370,28 +373,29 @@ export function useHostClient(hostId: string | undefined): {
       }
     })
     const initial = ctx.acquire(hostId)
+    clientRef.current = initial
+    setState(ctx.getState(hostId))
     if (initial) {
-      clientRef.current = initial
-      setState(ctx.getState(hostId))
+      // Why: two cached hosts can both be connected, so equal state values cannot reveal the replacement client.
+      force((n) => n + 1)
     }
     return () => {
       cancelled = true
       unsub()
       ctx.release(hostId)
       clientRef.current = null
+      clientHostIdRef.current = undefined
     }
   }, [ctx, hostId])
 
-  return { client: clientRef.current, state }
+  // Why: Expo can reuse the screen before effects bind the next host; never expose the prior host's client or state in that render.
+  const bound = clientHostIdRef.current === hostId
+  const boundState = bound ? state : hostId ? ctx.getState(hostId) : 'disconnected'
+  return { client: bound ? clientRef.current : null, state: boundState }
 }
 
 // Why: refcounting prevents a double-open when a host-detail screen shares one of these hosts.
-export function useAllHostClients(hostIds: string[]): Array<{
-  hostId: string
-  client: RpcClient
-  state: ConnectionState
-  path: MobileConnectionPath
-}> {
+export function useAllHostClients(hostIds: string[]) {
   const ctx = useRpcClientContext()
   // Stable key so we don't tear down on every render of the array.
   const key = useMemo(() => [...hostIds].sort().join(','), [hostIds])

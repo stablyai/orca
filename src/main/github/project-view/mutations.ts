@@ -6,16 +6,18 @@ import {
   release,
   extractExecError,
   ghExecFileAsync,
-  rateLimitGuard,
-  noteRateLimitSpend,
-  classifyProjectError,
-  rateLimitedError,
+  repositoryRateLimitGuard,
+  noteRepositoryRateLimitSpend,
   runGraphql,
   runRest,
   validateSlugArgs,
   assertPositiveInt,
+  projectHostAuthenticationError,
+  projectGhExecOptions,
   type GraphqlVars
 } from './internals'
+import { classifyProjectError, rateLimitedError } from './project-error-classification'
+import { githubProjectHost } from '../../../shared/github-project-identity'
 import type { GitHubAssignableUser, GitHubWorkItemDetails, PRComment } from '../../../shared/types'
 import type {
   AddIssueCommentBySlugArgs,
@@ -38,6 +40,10 @@ import type {
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
 } from '../../../shared/github-project-types'
+
+function githubHostExecOptions(args: { host?: string }): { host: string } {
+  return { host: githubProjectHost(args.host) }
+}
 
 // ─── Project field mutations ──────────────────────────────────────────
 
@@ -122,7 +128,7 @@ export async function updateProjectItemFieldValue(
     fieldId: args.fieldId,
     value: valVar.val
   }
-  const res = await runGraphql<unknown>(query, vars)
+  const res = await runGraphql<unknown>(query, vars, projectGhExecOptions(args.host))
   if (!res.ok) {
     return { ok: false, error: res.error }
   }
@@ -144,11 +150,15 @@ export async function clearProjectItemFieldValue(
       }) { projectV2Item { id } }
     }
   `
-  const res = await runGraphql<unknown>(query, {
-    projectId: args.projectId,
-    itemId: args.itemId,
-    fieldId: args.fieldId
-  })
+  const res = await runGraphql<unknown>(
+    query,
+    {
+      projectId: args.projectId,
+      itemId: args.itemId,
+      fieldId: args.fieldId
+    },
+    projectGhExecOptions(args.host)
+  )
   if (!res.ok) {
     return { ok: false, error: res.error }
   }
@@ -207,6 +217,10 @@ export async function updateIssueBySlug(
       return { ok: false, error: duplicate.error }
     }
   }
+  const authError = await projectHostAuthenticationError(args.host)
+  if (authError) {
+    return { ok: false, error: authError }
+  }
 
   // Title/body go through PATCH /repos/{owner}/{repo}/issues/{n}.
   // State uses gh issue close/reopen so duplicate closes can record a target.
@@ -214,6 +228,10 @@ export async function updateIssueBySlug(
   const base = `repos/${args.owner}/${args.repo}/issues/${args.number}`
 
   if (state !== undefined) {
+    const guard = repositoryRateLimitGuard(args, 'core')
+    if (guard.blocked) {
+      return { ok: false, error: rateLimitedError(guard) }
+    }
     const stateArgs =
       state === 'closed'
         ? ['issue', 'close', String(args.number), '--repo', `${args.owner}/${args.repo}`]
@@ -228,11 +246,12 @@ export async function updateIssueBySlug(
       }
     }
     await acquire()
+    noteRepositoryRateLimitSpend(args, 'core')
     try {
-      await ghExecFileAsync(stateArgs, { encoding: 'utf-8' })
+      await ghExecFileAsync(stateArgs, { encoding: 'utf-8', ...githubHostExecOptions(args) })
     } catch (err) {
       const { stderr, stdout } = extractExecError(err)
-      return { ok: false, error: classifyProjectError(stderr, stdout) }
+      return { ok: false, error: classifyProjectError(stderr, stdout, args.host) }
     } finally {
       release()
     }
@@ -247,7 +266,7 @@ export async function updateIssueBySlug(
     if (body !== undefined) {
       patchArgs.push('--raw-field', `body=${body}`)
     }
-    const r = await runRest<unknown>(patchArgs)
+    const r = await runRest<unknown>(patchArgs, undefined, 'core', githubHostExecOptions(args))
     if (!r.ok) {
       return { ok: false, error: r.error }
     }
@@ -263,7 +282,12 @@ export async function updateIssueBySlug(
   const addCount = addLabels?.length ?? 0
   if (removeCount > 1) {
     type RawLabelResp = { name?: string }[]
-    const fetched = await runRest<RawLabelResp>(['-X', 'GET', `${base}/labels`])
+    const fetched = await runRest<RawLabelResp>(
+      ['-X', 'GET', `${base}/labels`],
+      undefined,
+      'core',
+      githubHostExecOptions(args)
+    )
     if (!fetched.ok) {
       return { ok: false, error: fetched.error }
     }
@@ -282,7 +306,8 @@ export async function updateIssueBySlug(
       // dedicated DELETE endpoint is the documented way to remove all
       // labels in a single call.
       const r = await runRest<unknown>(['-X', 'DELETE', `${base}/labels`], undefined, 'core', {
-        expectEmpty: true
+        expectEmpty: true,
+        ...githubHostExecOptions(args)
       })
       if (!r.ok && r.error.type !== 'not_found') {
         return { ok: false, error: r.error }
@@ -292,7 +317,7 @@ export async function updateIssueBySlug(
       for (const name of currentNames) {
         putArgs.push('--raw-field', `labels[]=${name}`)
       }
-      const r = await runRest<unknown>(putArgs)
+      const r = await runRest<unknown>(putArgs, undefined, 'core', githubHostExecOptions(args))
       if (!r.ok) {
         return { ok: false, error: r.error }
       }
@@ -303,7 +328,7 @@ export async function updateIssueBySlug(
       for (const l of addLabels ?? []) {
         restArgs.push('--raw-field', `labels[]=${l}`)
       }
-      const r = await runRest<unknown>(restArgs)
+      const r = await runRest<unknown>(restArgs, undefined, 'core', githubHostExecOptions(args))
       if (!r.ok) {
         return { ok: false, error: r.error }
       }
@@ -313,7 +338,7 @@ export async function updateIssueBySlug(
         ['-X', 'DELETE', `${base}/labels/${encodeURIComponent(removeLabels![0])}`],
         undefined,
         'core',
-        { expectEmpty: true }
+        { expectEmpty: true, ...githubHostExecOptions(args) }
       )
       if (!r.ok && r.error.type !== 'not_found') {
         return { ok: false, error: r.error }
@@ -328,7 +353,7 @@ export async function updateIssueBySlug(
     for (const u of addAssignees) {
       restArgs.push('--raw-field', `assignees[]=${u}`)
     }
-    const r = await runRest<unknown>(restArgs)
+    const r = await runRest<unknown>(restArgs, undefined, 'core', githubHostExecOptions(args))
     if (!r.ok) {
       return { ok: false, error: r.error }
     }
@@ -338,7 +363,7 @@ export async function updateIssueBySlug(
     for (const u of removeAssignees) {
       restArgs.push('--raw-field', `assignees[]=${u}`)
     }
-    const r = await runRest<unknown>(restArgs)
+    const r = await runRest<unknown>(restArgs, undefined, 'core', githubHostExecOptions(args))
     if (!r.ok) {
       return { ok: false, error: r.error }
     }
@@ -384,7 +409,7 @@ export async function updatePullRequestBySlug(
     // No fields to update — nothing to do.
     return { ok: true }
   }
-  const r = await runRest<unknown>(patchArgs)
+  const r = await runRest<unknown>(patchArgs, undefined, 'core', githubHostExecOptions(args))
   if (!r.ok) {
     return { ok: false, error: r.error }
   }
@@ -425,13 +450,18 @@ export async function addIssueCommentBySlug(
   if (typeof args.body !== 'string' || !args.body.trim()) {
     return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
   }
-  const r = await runRest<RawIssueCommentResponse>([
-    '-X',
-    'POST',
-    `repos/${args.owner}/${args.repo}/issues/${args.number}/comments`,
-    '--raw-field',
-    `body=${args.body}`
-  ])
+  const r = await runRest<RawIssueCommentResponse>(
+    [
+      '-X',
+      'POST',
+      `repos/${args.owner}/${args.repo}/issues/${args.number}/comments`,
+      '--raw-field',
+      `body=${args.body}`
+    ],
+    undefined,
+    'core',
+    githubHostExecOptions(args)
+  )
   if (!r.ok) {
     return { ok: false, error: r.error }
   }
@@ -452,13 +482,18 @@ export async function updateIssueCommentBySlug(
   if (typeof args.body !== 'string' || !args.body.trim()) {
     return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
   }
-  const r = await runRest<unknown>([
-    '-X',
-    'PATCH',
-    `repos/${args.owner}/${args.repo}/issues/comments/${args.commentId}`,
-    '--raw-field',
-    `body=${args.body}`
-  ])
+  const r = await runRest<unknown>(
+    [
+      '-X',
+      'PATCH',
+      `repos/${args.owner}/${args.repo}/issues/comments/${args.commentId}`,
+      '--raw-field',
+      `body=${args.body}`
+    ],
+    undefined,
+    'core',
+    githubHostExecOptions(args)
+  )
   if (!r.ok) {
     return { ok: false, error: r.error }
   }
@@ -480,7 +515,7 @@ export async function deleteIssueCommentBySlug(
     ['-X', 'DELETE', `repos/${args.owner}/${args.repo}/issues/comments/${args.commentId}`],
     undefined,
     'core',
-    { expectEmpty: true }
+    { expectEmpty: true, ...githubHostExecOptions(args) }
   )
   if (!r.ok) {
     return { ok: false, error: r.error }
@@ -497,18 +532,22 @@ export async function listLabelsBySlug(
   if (!v.ok) {
     return v
   }
-  const guard = rateLimitGuard('core')
+  const authError = await projectHostAuthenticationError(args.host)
+  if (authError) {
+    return { ok: false, error: authError }
+  }
+  const guard = repositoryRateLimitGuard(args, 'core')
   if (guard.blocked) {
     return { ok: false, error: rateLimitedError(guard) }
   }
   await acquire()
   // Why: `--paginate` may fan out to multiple pages; we can only reasonably
   // estimate a 1-call spend up front. The next probe will reconcile.
-  noteRateLimitSpend('core')
+  noteRepositoryRateLimitSpend(args, 'core')
   try {
     const { stdout } = await ghExecFileAsync(
       ['api', '--paginate', `repos/${args.owner}/${args.repo}/labels`, '--jq', '.[].name'],
-      { encoding: 'utf-8' }
+      { encoding: 'utf-8', ...githubHostExecOptions(args) }
     )
     return {
       ok: true,
@@ -519,7 +558,7 @@ export async function listLabelsBySlug(
     }
   } catch (err) {
     const { stderr, stdout: maybeStdout } = extractExecError(err)
-    return { ok: false, error: classifyProjectError(stderr, maybeStdout) }
+    return { ok: false, error: classifyProjectError(stderr, maybeStdout, args.host) }
   } finally {
     release()
   }
@@ -532,15 +571,19 @@ export async function listAssignableUsersBySlug(
   if (!v.ok) {
     return v
   }
+  const authError = await projectHostAuthenticationError(args.host)
+  if (authError) {
+    return { ok: false, error: authError }
+  }
   // Seed logins merge after the fetch so callers can include currently-visible
   // assignees even if the repo participant search is sparse.
   const result: GitHubAssignableUser[] = []
-  const guard = rateLimitGuard('core')
+  const guard = repositoryRateLimitGuard(args, 'core')
   if (guard.blocked) {
     return { ok: false, error: rateLimitedError(guard) }
   }
   await acquire()
-  noteRateLimitSpend('core')
+  noteRepositoryRateLimitSpend(args, 'core')
   try {
     const { stdout } = await ghExecFileAsync(
       [
@@ -550,7 +593,7 @@ export async function listAssignableUsersBySlug(
         '--jq',
         '.[] | {login: .login, name: null, avatarUrl: .avatar_url}'
       ],
-      { encoding: 'utf-8' }
+      { encoding: 'utf-8', ...githubHostExecOptions(args) }
     )
     for (const line of stdout
       .trim()
@@ -567,7 +610,7 @@ export async function listAssignableUsersBySlug(
     }
   } catch (err) {
     const { stderr } = extractExecError(err)
-    return { ok: false, error: classifyProjectError(stderr, '') }
+    return { ok: false, error: classifyProjectError(stderr, '', args.host) }
   } finally {
     release()
   }
@@ -614,7 +657,7 @@ export async function listIssueTypesBySlug(
         } | null)[]
       } | null
     } | null
-  }>(query, { owner: args.owner, repo: args.repo })
+  }>(query, { owner: args.owner, repo: args.repo }, githubHostExecOptions(args))
   if (!res.ok) {
     // Why: repos without issue types respond with a GraphQL error claiming the
     // `issueTypes` field is unknown. Map that to an empty list so the UI shows
@@ -659,7 +702,8 @@ export async function updateIssueTypeBySlug(
     `query($owner:String!, $repo:String!, $num:Int!) {
        repository(owner:$owner, name:$repo) { issue(number:$num) { id } }
      }`,
-    { owner: args.owner, repo: args.repo, num: args.number }
+    { owner: args.owner, repo: args.repo, num: args.number },
+    githubHostExecOptions(args)
   )
   if (!lookup.ok) {
     return { ok: false, error: lookup.error }
@@ -689,7 +733,7 @@ export async function updateIssueTypeBySlug(
   const vars: GraphqlVars = args.issueTypeId
     ? { issueId, issueTypeId: args.issueTypeId }
     : { issueId }
-  const res = await runGraphql<unknown>(query, vars)
+  const res = await runGraphql<unknown>(query, vars, githubHostExecOptions(args))
   if (!res.ok) {
     return { ok: false, error: res.error }
   }
@@ -810,7 +854,7 @@ export async function getWorkItemDetailsBySlug(
           })
         | null
     } | null
-  }>(query, { owner: args.owner, repo: args.repo, num: args.number })
+  }>(query, { owner: args.owner, repo: args.repo, num: args.number }, githubHostExecOptions(args))
   if (!res.ok) {
     return { ok: false, error: res.error }
   }

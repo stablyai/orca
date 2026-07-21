@@ -32,7 +32,14 @@ describe('client UI RPC methods', () => {
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
       githubProjects: {
-        pinned: [],
+        pinned: [
+          {
+            owner: 'stablyai',
+            ownerType: 'organization' as const,
+            number: 1,
+            host: 'ghe.example:8443'
+          }
+        ],
         recent: [],
         lastViewByProject: {},
         activeProject: null
@@ -68,7 +75,12 @@ describe('client UI RPC methods', () => {
         lastViewByProject: {
           'organization:stablyai:1': { viewId: 'view-1' }
         },
-        activeProject: { owner: 'stablyai', ownerType: 'organization', number: 1 }
+        activeProject: {
+          owner: 'stablyai',
+          ownerType: 'organization' as const,
+          number: 1,
+          host: 'ghe.example:8443'
+        }
       }
     }
     const runtime = {

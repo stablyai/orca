@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { githubProjectHost } from '../../../../shared/github-project-identity'
 import HostedReviewActions from './HostedReviewActions'
 import {
   PullRequestIcon,
@@ -2758,6 +2759,7 @@ export default function ChecksPanel(): React.JSX.Element {
       const result = await window.api.gh.updateIssueCommentBySlug({
         owner: pr.prRepo.owner,
         repo: pr.prRepo.repo,
+        host: githubProjectHost(pr.prRepo.host),
         commentId: comment.id,
         body
       })
@@ -2793,6 +2795,7 @@ export default function ChecksPanel(): React.JSX.Element {
       const result = await window.api.gh.deleteIssueCommentBySlug({
         owner: pr.prRepo.owner,
         repo: pr.prRepo.repo,
+        host: githubProjectHost(pr.prRepo.host),
         commentId: comment.id
       })
       if (!result.ok) {

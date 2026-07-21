@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { MessageCircleQuestion } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { AgentStateDot } from '@/components/AgentStateDot'
@@ -26,6 +27,12 @@ function formatStartedAgo(startedAt: number, now: number): string {
   })
 }
 
+/** The timestamp the card's time column counts from: since it finished when the
+ *  agent has completed, else since it started — parity with the worktree sidebar. */
+function displayTimestamp(card: DashboardCard): number {
+  return card.finishedAt ?? card.startedAt
+}
+
 function sameCard(a: DashboardCard, b: DashboardCard): boolean {
   return (
     a.paneKey === b.paneKey &&
@@ -43,6 +50,7 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.repoName === b.repoName &&
     a.worktreeName === b.worktreeName &&
     a.startedAt === b.startedAt &&
+    a.finishedAt === b.finishedAt &&
     a.stateChangedAt === b.stateChangedAt &&
     a.unseen === b.unseen &&
     a.askSummary === b.askSummary
@@ -118,16 +126,16 @@ export const AgentKanbanCard = memo(
 
         {card.askSummary ? (
           <div className="flex items-start gap-1 rounded-md bg-amber-500/10 px-1.5 py-1 text-[11px] text-amber-600 dark:text-amber-400">
-            <span aria-hidden>✋</span>
+            <MessageCircleQuestion className="mt-px size-3 shrink-0" aria-hidden />
             <span className="line-clamp-2">{card.askSummary}</span>
           </div>
         ) : null}
 
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           <span className="truncate font-mono">{card.repoName}</span>
-          {card.startedAt > 0 ? (
+          {displayTimestamp(card) > 0 ? (
             <span className="ml-auto shrink-0 tabular-nums">
-              {formatStartedAgo(card.startedAt, now)}
+              {formatStartedAgo(displayTimestamp(card), now)}
             </span>
           ) : null}
         </div>
@@ -137,7 +145,7 @@ export const AgentKanbanCard = memo(
   (previous, next) =>
     previous.onOpenTerminal === next.onOpenTerminal &&
     sameCard(previous.card, next.card) &&
-    (previous.card.startedAt <= 0 ||
-      formatStartedAgo(previous.card.startedAt, previous.now) ===
-        formatStartedAgo(next.card.startedAt, next.now))
+    (displayTimestamp(previous.card) <= 0 ||
+      formatStartedAgo(displayTimestamp(previous.card), previous.now) ===
+        formatStartedAgo(displayTimestamp(next.card), next.now))
 )

@@ -39,12 +39,14 @@ import {
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
+import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import {
   PTY_STARTUP_INGRESS_VERSION,
   PtyStartupIngress,
   parsePtyStartupIngressIntent,
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
+import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
   return (
@@ -80,6 +82,7 @@ type ManagedPty = {
   gracefulKillSent?: boolean
   startupIngress?: PtyStartupIngress
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
+  ownerBackend: PtyOwnerBackend
 }
 
 type PendingPtyOutput = {
@@ -387,7 +390,7 @@ export class PtyHandler {
   ): Record<string, string> {
     const baseEnv = mergeGitConfigEnvProtocol(
       {
-        ...process.env,
+        ...stripInheritedBuildModeEnv(process.env),
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         TERM_PROGRAM: 'Orca',
@@ -500,6 +503,7 @@ export class PtyHandler {
     }
     managed.startupIngress ??= new PtyStartupIngress({
       ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
+      ownerBackend: managed.ownerBackend,
       write: (data) => managed.pty.write(data),
       onEmission: emitIngressData
     })
@@ -575,6 +579,7 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.sendSignal', (p) => this.sendSignal(p))
     this.dispatcher.onRequest('pty.getCwd', (p) => this.getCwd(p))
     this.dispatcher.onRequest('pty.getInitialCwd', (p) => this.getInitialCwd(p))
+    this.dispatcher.onRequest('pty.getSize', (p) => this.getSize(p))
     this.dispatcher.onRequest('pty.clearBuffer', (p) => this.clearBuffer(p))
     this.dispatcher.onRequest('pty.hasChildProcesses', (p) => this.hasChildProcesses(p))
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
@@ -900,9 +905,7 @@ export class PtyHandler {
     const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const startupIngressIntent =
       params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
-        ? parsePtyStartupIngressIntent(params.startupIngress, {
-            allowWindowsEchoProjection: false
-          })
+        ? parsePtyStartupIngressIntent(params.startupIngress)
         : undefined
     const managed: ManagedPty = {
       id,
@@ -916,6 +919,11 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ownerBackend: resolvePtyOwnerBackend({
+        platform: process.platform,
+        shellPath: shell,
+        wslDistro: terminalWindowsWslDistro
+      }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(shouldProviderDeliverCommand
@@ -1019,6 +1027,16 @@ export class PtyHandler {
     if (managed && !managed.disposed) {
       managed.pty.resize(cols, rows)
     }
+  }
+
+  private async getSize(
+    params: Record<string, unknown>
+  ): Promise<{ cols: number; rows: number } | null> {
+    const managed = this.ptys.get(params.id as string)
+    if (!managed || managed.disposed) {
+      return null
+    }
+    return { cols: managed.pty.cols, rows: managed.pty.rows }
   }
 
   private async shutdown(params: Record<string, unknown>): Promise<void> {
@@ -1313,6 +1331,10 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ownerBackend: resolvePtyOwnerBackend({
+        platform: process.platform,
+        shellPath: shell
+      }),
       ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
     })
 

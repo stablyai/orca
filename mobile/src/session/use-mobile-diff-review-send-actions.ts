@@ -99,7 +99,10 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         throw new Error('Waiting for desktop...')
       }
       const response = await client.sendRequest('session.tabs.createTerminal', {
-        worktree: `id:${worktreeId}`
+        worktree: `id:${worktreeId}`,
+        activate: false,
+        select: true,
+        navigation: 'caller'
       })
       if (!response.ok) {
         throw new Error(response.error?.message || 'Failed to create terminal')

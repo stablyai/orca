@@ -104,6 +104,7 @@ export type ProjectProviderIdentity = {
   provider: 'github'
   owner: string
   repo: string
+  host?: string
 }
 
 export type Project = {
@@ -1155,7 +1156,9 @@ export type PRConflictSummary = {
   localMergeState?: 'clean'
 }
 
-export type GitHubRepositoryIdentity = { owner: string; repo: string }
+// Why: host must survive renderer/RPC boundaries so Enterprise review actions
+// cannot silently fall back to a same-named repository on github.com.
+export type GitHubRepositoryIdentity = { owner: string; repo: string; host?: string }
 
 export type GitHubPRMergeMethod = 'merge' | 'squash' | 'rebase'
 
@@ -1572,6 +1575,7 @@ export type GitHubPRFileContents = {
 
 export type GitHubPRReviewCommentInput = {
   repoPath: string
+  prRepo?: GitHubRepositoryIdentity | null
   prNumber: number
   commitId: string
   path: string
@@ -1683,6 +1687,7 @@ export type LinearIssue = {
 
 export type LinearProjectSummary = {
   id: string
+  slugId?: string
   workspaceId?: string
   workspaceName?: string
   name: string
@@ -1847,6 +1852,7 @@ export type LinearIssueUpdate = {
   dueDate?: string | null
   labelIds?: string[]
   projectId?: string | null
+  parentId?: string | null
 }
 
 export type ClassifiedError = {
@@ -2022,6 +2028,8 @@ export type LinearLabel = {
 export type LinearMember = {
   id: string
   displayName: string
+  name?: string
+  email?: string
   avatarUrl?: string
 }
 
@@ -2598,6 +2606,8 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Opt-in code-editor font; empty (the default) keeps following `terminalFontFamily`. */
+  editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */

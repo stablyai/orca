@@ -1881,6 +1881,61 @@ describe('repos:add + repos:clone', () => {
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
+  it('preserves the selected Enterprise host when aligning an existing folder', async () => {
+    const existing = {
+      id: 'repo-setup-enterprise',
+      path: '/tmp/from-setup-enterprise',
+      displayName: 'from-setup-enterprise',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const existingProject = { id: 'repo:repo-setup-enterprise', displayName: 'Existing' }
+    const selectedProject = {
+      id: 'github:github.acme-corp.com/acme/orca',
+      displayName: 'Enterprise project',
+      providerIdentity: {
+        provider: 'github',
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme-corp.com'
+      }
+    }
+    const setup = {
+      id: existing.id,
+      projectId: existingProject.id,
+      repoId: existing.id,
+      hostId: 'local',
+      path: existing.path,
+      displayName: existing.displayName,
+      setupState: 'ready',
+      setupMethod: 'legacy-repo'
+    }
+    let updatedRepo = existing
+    mockStore.getRepos.mockReturnValue([existing])
+    mockStore.getProjects.mockReturnValue([existingProject, selectedProject])
+    mockStore.getProjectHostSetups.mockReturnValue([setup])
+    mockStore.updateRepo.mockImplementation((_repoId, updates) => {
+      updatedRepo = { ...updatedRepo, ...updates }
+      return updatedRepo
+    })
+
+    await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: selectedProject.id,
+      hostId: 'local',
+      path: existing.path,
+      kind: 'git',
+      setupMethod: 'imported-existing-folder'
+    })
+
+    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, existing.id, {
+      upstream: {
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme-corp.com'
+      }
+    })
+  })
+
   it('prepares and invalidates roots when repos:update changes worktree base path', () => {
     const updated = {
       id: 'repo-update-root',

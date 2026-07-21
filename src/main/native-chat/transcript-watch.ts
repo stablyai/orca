@@ -15,9 +15,8 @@ export type {
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 
-/** One resolve+install attempt. Returns null when the file isn't resolvable
- *  yet, or vanished between resolve and `watch()` — either case is retried by
- *  the resolve-poll rather than treated as a hard failure. */
+/** One resolve+install attempt. Returns null while the transcript file itself
+ *  is unresolved; native-watch failure degrades to reconciliation-only mode. */
 async function attemptInstall(
   args: SubscribeNativeChatTranscriptArgs,
   decode: (line: string, fallbackId: string) => NativeChatMessage | null

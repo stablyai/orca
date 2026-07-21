@@ -35,6 +35,7 @@ import {
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import type {
+  GitHubRepositoryIdentity,
   GitHubWorkItem,
   GitHubPrStartPoint,
   GitPushTarget,
@@ -52,6 +53,7 @@ import type {
   WorkspaceCreateTelemetrySource,
   ProjectGroup
 } from '../../../shared/types'
+import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
 import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
   CLIENT_PLATFORM,
@@ -1185,10 +1187,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const selectedRepoConnectionIdRef = useRef(selectedRepoConnectionId)
   selectedRepoConnectionIdRef.current = selectedRepoConnectionId
 
-  // Why: the selected repo's slug, used to confirm a pasted PR URL belongs to this repo before linking (else a same-numbered foreign PR mislinks).
-  const [selectedRepoSlug, setSelectedRepoSlug] = useState<{ owner: string; repo: string } | null>(
-    null
-  )
+  // Why: compare the full host-aware identity before linking a pasted PR URL to this repo.
+  const [selectedRepoSlug, setSelectedRepoSlug] = useState<GitHubRepositoryIdentity | null>(null)
   const selectedRepoPath = selectedRepo?.path
   const selectedRepoPathRef = useRef<string | undefined>(selectedRepoPath)
   selectedRepoPathRef.current = selectedRepoPath
@@ -1334,7 +1334,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     const target = getActiveRuntimeTarget(selectedRepoSettings)
     const slugRequest =
       target.kind === 'environment'
-        ? callRuntimeRpc<{ owner: string; repo: string } | null>(
+        ? callRuntimeRpc<GitHubRepositoryIdentity | null>(
             target,
             'github.repoSlug',
             { repo: repoId },
@@ -1414,8 +1414,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // Why: adopt the number only when the URL slug matches the selected repo (and the slug has resolved), else a foreign PR URL mislinks to a same-numbered PR here.
       if (
         selectedRepoSlug &&
-        fromName.slug.owner.toLowerCase() === selectedRepoSlug.owner.toLowerCase() &&
-        fromName.slug.repo.toLowerCase() === selectedRepoSlug.repo.toLowerCase()
+        githubRepoIdentityKey(fromName.slug) === githubRepoIdentityKey(selectedRepoSlug)
       ) {
         return fromName.number
       }
@@ -1891,6 +1890,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             sourceContext: selectedRepoGitHubSourceContext,
             owner: normalizedLinkQuery.directLink.slug.owner,
             repo: normalizedLinkQuery.directLink.slug.repo,
+            ...(normalizedLinkQuery.directLink.slug.host
+              ? { host: normalizedLinkQuery.directLink.slug.host }
+              : {}),
             number: normalizedLinkQuery.directLink.number,
             type: normalizedLinkQuery.directLink.type
           })

@@ -503,8 +503,10 @@ async function writeRemoteFile(
   }
 }
 
+const NODE_PTY_VERSION = '1.1.0'
+const NODE_PTY_CONSOLE_LIST_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-patch.cjs'
 const RELAY_NATIVE_DEPS = {
-  'node-pty': '1.1.0',
+  'node-pty': NODE_PTY_VERSION,
   '@parcel/watcher': '2.5.6'
 } as const
 
@@ -520,7 +522,8 @@ const RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST = Object.fromEntries(
 function nativeDepsProbeJs(successToken: string): string {
   // Why: node-pty's Windows wrapper defers conpty.node until first spawn, so require("node-pty") alone can't prove the binding is healthy.
   const loadNodePty =
-    'require("node-pty"); require("node-pty/lib/utils").loadNativeModule(process.platform==="win32"&&Number(require("os").release().split(".")[2])>=18309?"conpty":"pty")'
+    'require("node-pty"); require("node-pty/lib/utils").loadNativeModule(process.platform==="win32"&&Number(require("os").release().split(".")[2])>=18309?"conpty":"pty");' +
+    `if(process.platform==="win32"){require("./${NODE_PTY_CONSOLE_LIST_PATCH_FILENAME}").assertPatchedNodePtyConsoleListAgent(process.cwd())}`
   return `(()=>{const missing=[];try{${loadNodePty}}catch{missing.push("node-pty")}try{require("@parcel/watcher")}catch{missing.push("@parcel/watcher")}if(missing.length){console.log("${NATIVE_DEPS_MISSING_PREFIX}"+missing.join(","));process.exitCode=1}else{console.log(${JSON.stringify(successToken)})}})()`
 }
 
@@ -723,7 +726,9 @@ async function installNativeDeps(
             RELAY_NATIVE_DEPS
           )
             .map(([dep, version]) => powerShellLiteral(`${dep}@${version}`))
-            .join(' ')}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`
+            .join(
+              ' '
+            )}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ${windowsNodePtyPatchCommand(nodePath)}`
         )
       : commandWithNodePath(
           hostPlatform,
@@ -840,7 +845,7 @@ async function rebuildNativeDeps(
         hostPlatform,
         nodePath,
         remoteDir,
-        `npm rebuild --ignore-scripts=false ${depNames.map(powerShellLiteral).join(' ')}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`
+        `npm rebuild --ignore-scripts=false ${depNames.map(powerShellLiteral).join(' ')}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ${windowsNodePtyPatchCommand(nodePath)}`
       )
     : commandWithNodePath(
         hostPlatform,
@@ -852,6 +857,11 @@ async function rebuildNativeDeps(
     timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS,
     signal
   })
+}
+
+function windowsNodePtyPatchCommand(nodePath: string): string {
+  // Why: pnpm patches do not cross the SSH boundary; apply the version-checked fallback to the remote npm package.
+  return `& ${powerShellLiteral(nodePath)} ${powerShellLiteral(NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`
 }
 
 async function makeNodePtySpawnHelperExecutable(

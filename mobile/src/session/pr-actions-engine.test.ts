@@ -198,4 +198,43 @@ describe('PrActionsEngine — PR identity changes', () => {
     await action
     expect(refetch).not.toHaveBeenCalled()
   })
+
+  it('clears in-flight state when only the GitHub host changes', async () => {
+    const slow = deferred<GitHubPrMutationOutcome>()
+    const mutations: PrActionMutations = {
+      mergePR: async () => ({ ok: true }),
+      setPRAutoMerge: async () => slow.promise,
+      updatePRState: async () => ({ ok: true }),
+      requestReviewers: async () => ({ ok: true }),
+      removeReviewers: async () => ({ ok: true }),
+      rerunChecks: async () => ({ ok: true })
+    }
+    const refetch = vi.fn()
+    const onChange = vi.fn()
+    const baseConfig = {
+      mutations,
+      prNumber: 1,
+      refetch,
+      onChange
+    }
+    const engine = new PrActionsEngine({
+      ...baseConfig,
+      prRepo: { owner: 'acme', repo: 'widgets' }
+    })
+
+    const action = engine.setAutoMerge(true)
+    expect(engine.resolveAutoMerge(false)).toBe(true)
+    expect(engine.isBusy({ kind: 'autoMerge' })).toBe(true)
+
+    engine.updateConfig({
+      ...baseConfig,
+      prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
+    })
+    expect(engine.resolveAutoMerge(false)).toBe(false)
+    expect(engine.busy).toBeNull()
+
+    slow.resolve({ ok: true })
+    await action
+    expect(refetch).not.toHaveBeenCalled()
+  })
 })

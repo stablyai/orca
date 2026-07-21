@@ -8,6 +8,7 @@ import type {
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { applyAgentRowLineage } from './agent-row-lineage'
+import { lastEnteredDoneAt } from './agent-finished-timestamp'
 import type { DashboardAgentRow } from './useDashboardData'
 import { buildWorktreeAgentRows } from '../sidebar/worktree-agent-rows'
 import {
@@ -155,6 +156,7 @@ export function buildDashboardSnapshot(
           lastUserMessage: isTitleDerived ? undefined : nonEmpty(row.entry.prompt),
           lastAgentMessage: isTitleDerived ? undefined : nonEmpty(row.entry.lastAssistantMessage),
           startedAt: row.startedAt,
+          finishedAt: lastEnteredDoneAt(row),
           stateChangedAt: row.entry.stateStartedAt || row.startedAt,
           // Same derivation as WorktreeCardAgents' unvisitedByPaneKey, so the
           // board and the sidebar bold/mute the same agents at the same time.

@@ -1205,7 +1205,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
             identityOrder="branch-first"
             detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
             openDelay={100}
-            hoverControl={detailsHoverControl}
+            // Why: compact mode also renders the plug/badge hover root; sharing one open-state made hovering the
+            // plug force-open the wider title card and race it closed (#9304), so let this title hover own its state.
             onEditIssue={affiliateListMode ? undefined : handleEditIssue}
             onEditComment={affiliateListMode ? undefined : handleEditComment}
             onOpenGitHubIssueInOrca={

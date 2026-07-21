@@ -42,7 +42,7 @@ export function getCodexSessionBackfillStateDirPath(): string {
   return join(getOrcaUserDataPath(), 'codex-session-backfill')
 }
 
-function getOrcaUserDataPath(): string {
+export function getOrcaUserDataPath(): string {
   if (process.env.ORCA_USER_DATA_PATH) {
     return process.env.ORCA_USER_DATA_PATH
   }

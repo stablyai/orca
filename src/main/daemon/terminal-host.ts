@@ -1,6 +1,7 @@
 import { Session } from './session'
 import { normalizePtySize } from './daemon-pty-size'
 import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
+import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { resolveProcessCwd } from '../providers/process-cwd'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import {
@@ -111,6 +112,11 @@ export class TerminalHost {
       terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
       launchAgent: opts.launchAgent,
       subprocess,
+      ownerBackend: resolvePtyOwnerBackend({
+        platform: process.platform,
+        shellPath: subprocess.shellPath,
+        wslDistro
+      }),
       shellReadySupported,
       historySeed: opts.historySeed,
       ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),

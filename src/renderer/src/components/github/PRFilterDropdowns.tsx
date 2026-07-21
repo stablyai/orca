@@ -86,13 +86,15 @@ export default function PRFilterDropdowns({
   const labelsState = useRepoLabelsBySlug(
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
-    settings
+    settings,
+    primarySlug?.host
   )
   const assigneesState = useRepoAssigneesBySlug(
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
     undefined,
-    settings
+    settings,
+    primarySlug?.host
   )
 
   // Why: surface @me as a first-class option even though it's not a real

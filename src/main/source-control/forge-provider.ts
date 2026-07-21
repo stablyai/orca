@@ -22,7 +22,6 @@ import {
 } from '../gitea/client'
 import { createGiteaPullRequest } from '../gitea/pull-request-creation'
 import { createGitHubPullRequest, getPRForBranchOutcome, getRepoSlug } from '../github/client'
-import { getEnterpriseGitHubRepoSlug } from '../github/github-enterprise-repository'
 import { getMergeRequest, getMergeRequestForBranchOrThrow, getProjectSlug } from '../gitlab/client'
 import { createGitLabMergeRequest } from '../gitlab/merge-request-creation'
 import {
@@ -126,25 +125,11 @@ function unwrapGitHubPRForBranchOutcome(
 const gitHubForgeProvider = {
   id: 'github',
   supportsReviewCreation: true,
-  resolveRepository: async (context) => {
-    const slug = await getRepoSlug(
-      context.repoPath,
-      context.connectionId,
-      ...hostedReviewExecutionArgs(context)
-    )
-    if (slug) {
-      return slug
-    }
-    // Why: GHES remotes live on a custom host, so github.com-only slug parsing
-    // misses them and detection would otherwise fall through to Gitea (#8312).
-    // Claim the repo when gh is authenticated to its host — the same signal
-    // GitLab uses for self-hosted instances.
-    return getEnterpriseGitHubRepoSlug(
-      context.repoPath,
-      context.connectionId,
-      ...hostedReviewExecutionArgs(context)
-    )
-  },
+  // Why: getRepoSlug resolves hosted identities — GHES remotes are claimed when
+  // gh is authenticated to their host (the same signal GitLab uses for
+  // self-hosted instances), so detection never falls through to Gitea (#8312).
+  resolveRepository: async (context) =>
+    getRepoSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
   async getReviewForBranch(input) {
     const fallbackReviewNumber =
       input.linkedReviewNumber == null ? (input.fallbackReviewNumber ?? null) : null

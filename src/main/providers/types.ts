@@ -56,6 +56,8 @@ export type PtySpawnOptions = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  /** Main-validated home provenance for an automatic Codex session resume. */
+  codexHomePathOverride?: { value: string | null }
   command?: string
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery

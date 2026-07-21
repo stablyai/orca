@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { SquareArrowOutUpRight } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { agentStateLabel } from '@/components/AgentStateDot'
@@ -41,7 +42,6 @@ export function AgentTerminalDialog({
     <Dialog open={card !== null} onOpenChange={onOpenChange}>
       {card ? (
         <DialogContent
-          showCloseButton={false}
           aria-describedby={undefined}
           // Why: sm:max-w-lg in DialogContent's base classes would defeat a bare
           // max-w-*, so the full-width override must carry the same breakpoint.
@@ -81,15 +81,11 @@ export function AgentTerminalDialog({
               )}
             </div>
           )}
-          <div className="flex items-center justify-end gap-2 px-2.5 py-1.5">
-            <DialogClose asChild>
-              <Button type="button" variant="outline" size="xs">
-                {translate('dashboardPopout.terminal.close', 'Close')}
-              </Button>
-            </DialogClose>
+          <div className="flex items-center justify-end px-2.5 py-1.5">
             <DialogClose asChild>
               <Button type="button" variant="outline" size="xs" onClick={reveal}>
-                {translate('dashboardPopout.terminal.focusWorktree', 'Focus worktree')}
+                <SquareArrowOutUpRight className="size-3" />
+                {translate('dashboardPopout.terminal.focusWorktree', 'Open worktree')}
               </Button>
             </DialogClose>
           </div>

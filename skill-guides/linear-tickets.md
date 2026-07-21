@@ -71,12 +71,17 @@ Do not use `orca linear attach` to read screenshots. That command creates link a
 ## Common Commands
 
 ```bash
-orca linear issue [<id>] [--current] [--comments] [--children] [--depth <n>] [--attachments] [--relations] [--full] [--workspace <id>] [--json]
+orca linear save-issue [<id>] [--current] [--team <key|id>] [--title <title>] [--description <text> | --body-file <path|->] [--state <state>] [--assignee me|<user>|null] [--priority none|low|medium|high|urgent] [--estimate <number>|null] [--due-date <yyyy-mm-dd>|null] [--label <label>]... [--project <project>|null] [--parent-id <issue>|null] [--write-id <uuid>] [--workspace <id>] [--json]
+orca linear issue [<id>] [--current] [--comments] [--children] [--depth <n>] [--attachments] [--relations] [--activity] [--full] [--workspace <id>] [--json]
+orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]
+orca linear relation add [<id>] [--current] --related <issue> --type blocks|blocked-by|related|duplicate-of [--workspace <id>] [--json]
+orca linear relation remove [<id>] [--current] --related <issue> --type blocks|blocked-by|related|duplicate-of [--workspace <id>] [--json]
 orca linear search <query> [--limit <n>] [--workspace <id>|all] [--json]
 orca linear team list [--workspace <id>|all] [--json]
 orca linear team members --team <key|id> [--workspace <id>] [--json]
 orca linear team states --team <key|id> [--workspace <id>] [--json]
 orca linear team labels --team <key|id> [--workspace <id>] [--json]
+orca linear project list [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
 orca linear list [--filter assigned|created|all|completed|open] [--team <key|id>] [--limit <n>] [--workspace <id>|all] [--json]
 orca linear status set [<id>] [--current] --to <state> [--workspace <id>] [--json]
 orca linear assignee set [<id>] [--current] (--me | --to-id <userId>) [--workspace <id>] [--json]
@@ -92,21 +97,24 @@ orca linear label remove [<id>] [--current] --label <labelId-or-exact-name>... [
 orca linear label set [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]
 orca linear comment add [<id>] [--current] (--body <text> | --body-file <path|->) [--reply-to <commentId>] [--write-id <uuid>] [--workspace <id>] [--json]
 orca linear attach [<id>] [--current] --url <url> [--title <title>] [--write-id <uuid>] [--workspace <id>] [--json]
-orca linear create --title <title> [--body <text> | --body-file <path|->] [--team <key|id>] [--state <stateId|exact-name>] [--assignee me|<userId>] [--priority none|low|medium|high|urgent] [--estimate <number>] [--due-date <yyyy-mm-dd>] [--label <labelId-or-exact-name>]... [--parent <id> | --parent-current] [--write-id <uuid>] [--workspace <id>] [--json]
+orca linear create --title <title> [--body <text> | --body-file <path|->] [--team <key|id>] [--project <projectId-or-exact-name>] [--state <stateId|exact-name>] [--assignee me|<userId>] [--priority none|low|medium|high|urgent] [--estimate <number>] [--due-date <yyyy-mm-dd>] [--label <labelId-or-exact-name>]... [--parent <id> | --parent-current] [--write-id <uuid>] [--workspace <id>] [--json]
 ```
 
 ## Discovery And Triage
 
-Use discovery before mutating fields when you do not already have stable IDs:
+Use discovery before mutating fields when you do not already have stable IDs. Run only the command for the metadata you need; do not execute the entire block:
 
 ```bash
 orca linear team list --workspace all --json
 orca linear team states --team <key-or-id> --workspace <workspaceId> --json
 orca linear team labels --team <key-or-id> --workspace <workspaceId> --json
 orca linear team members --team <key-or-id> --workspace <workspaceId> --json
+orca linear project list --query <project-name> --workspace <workspaceId> --json
 ```
 
-Prefer IDs for automation. Names are accepted only when they exactly and uniquely match in the issue's team.
+Prefer IDs for automation. Names are accepted only when they exactly and uniquely match in the relevant team or workspace.
+
+`save-issue` matches Linear MCP's create-or-update shape: omit an issue target to create, or pass an id/`--current` to update. Repeated labels replace the complete label set. Use the literal `null` to clear assignee, estimate, due date, project, or parent.
 
 SSH/remoting note: when running through an SSH-backed remote Orca CLI, body files are only supported via stdin (`--body-file -`), not arbitrary remote file paths. Pipe or redirect the body content explicitly.
 
@@ -116,6 +124,8 @@ Use task listing for queue-style work:
 orca linear list --filter assigned --limit 10 --workspace all --json
 orca linear list --filter open --team <key-or-id> --workspace <workspaceId> --json
 ```
+
+Use `list-issues` when MCP-compatible filters or cursor pagination are needed. A cursor is workspace-specific, so combine `--cursor` with a concrete `--workspace` rather than `all`.
 
 Prefer `label add` and `label remove` for incremental edits. `label set` replaces the full label set and should be used only when deliberate cleanup is intended.
 

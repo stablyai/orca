@@ -35,6 +35,7 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
     repoName: 'Orca',
     worktreeName: 'dashboard-review',
     startedAt: 1_000,
+    finishedAt: null,
     stateChangedAt: 1_000,
     unseen: false,
     ...overrides

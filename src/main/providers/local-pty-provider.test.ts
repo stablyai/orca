@@ -441,6 +441,44 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('does not inherit NODE_ENV from the Orca process env', async () => {
+      // Why: NODE_ENV in Orca's process is Orca's build mode (electron-vite sets
+      // `development` in dev runs); leaking it breaks `next build` and Vitest.
+      const previous = process.env.NODE_ENV
+      process.env.NODE_ENV = 'development'
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.NODE_ENV
+        } else {
+          process.env.NODE_ENV = previous
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.NODE_ENV).toBeUndefined()
+      expect(spawnCall[2].env.PATH).toBe(process.env.PATH)
+    })
+
+    it('keeps an explicitly requested NODE_ENV for spawned terminals', async () => {
+      // Why: only the ambient value is stripped; a caller-supplied NODE_ENV still wins.
+      const previous = process.env.NODE_ENV
+      process.env.NODE_ENV = 'development'
+      try {
+        await provider.spawn({ cols: 80, rows: 24, env: { NODE_ENV: 'production' } })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.NODE_ENV
+        } else {
+          process.env.NODE_ENV = previous
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.NODE_ENV).toBe('production')
+    })
+
     it('suppresses the first-run Powerlevel10k wizard for spawned terminals', async () => {
       await provider.spawn({ cols: 80, rows: 24 })
 
@@ -1612,6 +1650,7 @@ describe('LocalPtyProvider', () => {
     })
 
     it('classifies startup queries before runtime and public data listeners', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const runtimeData = vi.fn()
       const dataHandler = vi.fn()
       provider.configure({ onData: runtimeData })
@@ -1621,8 +1660,7 @@ describe('LocalPtyProvider', () => {
         rows: 24,
         startupIngress: {
           colors: { foreground: '#2e3434', background: '#ffffff' },
-          deadlineMs: 5_000,
-          echoProjection: 'windows-conpty-esc-stripped'
+          deadlineMs: 5_000
         }
       })
       const onDataCb = mockProc.onData.mock.calls[0][0]
@@ -1650,6 +1688,47 @@ describe('LocalPtyProvider', () => {
         },
         { id, data: 'prompt' }
       ])
+    })
+
+    it('consumes a native Windows OSC color query before renderer delivery', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const dataHandler = vi.fn()
+      provider.onData(dataHandler)
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+      const onDataCb = mockProc.onData.mock.calls[0][0]
+      const query = '\x1b]10;?\x07'
+
+      onDataCb(query)
+
+      expect(dataHandler).toHaveBeenCalledWith({
+        id,
+        data: '',
+        sequenceChars: query.length,
+        seq: query.length,
+        transformed: true
+      })
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('keeps forwarded OSC color replies for a Windows-owned WSL PTY', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+      const onDataCb = mockProc.onData.mock.calls[0][0]
+      const reply = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
+
+      onDataCb('\x1b]11;?\x07')
+      provider.write(id, reply)
+
+      expect(mockProc.write).toHaveBeenCalledWith(reply)
     })
 
     it('notifies exit listeners when PTY exits', async () => {

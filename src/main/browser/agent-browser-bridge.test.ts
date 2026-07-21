@@ -67,7 +67,8 @@ import {
 // inside a try/catch. Override the private method to inject our mock.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ;(AgentBrowserBridge.prototype as any).getWebContents = function (id: number) {
-  return webContentsFromIdMock(id) ?? null
+  const target = webContentsFromIdMock(id)
+  return target && !target.isDestroyed() ? target : null
 }
 
 function mockBrowserManager(
@@ -89,10 +90,14 @@ function mockBrowserManager(
 }
 
 function mockWebContents(id: number, url = 'https://example.com', title = 'Example') {
+  let currentUrl = url
   return {
     id,
-    getURL: () => url,
+    getURL: () => currentUrl,
     getTitle: () => title,
+    loadURL: vi.fn(async (nextUrl: string) => {
+      currentUrl = nextUrl
+    }),
     isDestroyed: () => false,
     invalidate: vi.fn(),
     focus: vi.fn(),
@@ -308,9 +313,9 @@ describe('AgentBrowserBridge', () => {
     expect(args[args.indexOf('--session') + 1]).toBe('orca-tab-tab-1')
   })
 
-  // ── --cdp first-use only ──
+  // ── Embedded CDP ownership ──
 
-  it('passes --cdp only on first command for a session', async () => {
+  it('passes --cdp on every helper command family so a restarted daemon cannot launch Chrome', async () => {
     succeedWith({ snapshot: '...' })
     await bridge.snapshot()
 
@@ -322,16 +327,24 @@ describe('AgentBrowserBridge', () => {
     const cdpIdx = (snapshotCall![1] as string[]).indexOf('--cdp')
     expect((snapshotCall![1] as string[])[cdpIdx + 1]).toBe('9222')
 
-    succeedWith({ clicked: '@e1' })
     await bridge.click('@e1')
+    await bridge.mouseMove(10, 20)
+    await bridge.setOffline('on')
+    await bridge.consoleLog()
+    await bridge.exec('get title')
 
-    const clickCall = execFileMock.mock.calls.find((c: unknown[]) =>
-      (c[1] as string[]).includes('click')
-    )
-    expect(clickCall![1]).not.toContain('--cdp')
+    for (const command of ['click', 'mouse', 'set', 'console', 'get']) {
+      const call = execFileMock.mock.calls.find((candidate: unknown[]) =>
+        (candidate[1] as string[]).includes(command)
+      )
+      expect(call).toBeDefined()
+      const args = call![1] as string[]
+      expect(args).toContain('--cdp')
+      expect(args[args.indexOf('--cdp') + 1]).toBe('9222')
+    }
   })
 
-  it('continues when stale agent-browser session close hangs during session creation', async () => {
+  it('fails closed when stale agent-browser session ownership cannot be reset', async () => {
     vi.useFakeTimers()
     try {
       const closeKill = vi.fn()
@@ -349,17 +362,17 @@ describe('AgentBrowserBridge', () => {
       )
 
       const promise = bridge.snapshot()
-      let settled = false
-      void promise.finally(() => {
-        settled = true
+      const rejection = expect(promise).rejects.toMatchObject({
+        code: 'browser_owner_unavailable',
+        message:
+          'Could not reset stale helper session orca-tab-tab-1; retry after agent-browser exits'
       })
 
       await vi.advanceTimersByTimeAsync(3_000)
-      await Promise.resolve()
 
-      expect(settled).toBe(true)
-      await expect(promise).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'ready' })
+      await rejection
       expect(closeKill).toHaveBeenCalled()
+      expect(execFileMock.mock.calls.some((call) => call[1].includes('snapshot'))).toBe(false)
     } finally {
       vi.useRealTimers()
     }
@@ -876,6 +889,8 @@ describe('AgentBrowserBridge', () => {
     )
     expect(routeCalls).toHaveLength(2)
     expect(routeCalls.at(-1)).toContain('https://old.example/**')
+    expect(routeCalls.at(-1)).toContain('--cdp')
+    expect(routeCalls.at(-1)).toContain('9222')
   })
 
   it('clears stale sessions after direct CDP visibility re-registration', async () => {
@@ -1119,7 +1134,11 @@ describe('AgentBrowserBridge', () => {
     const killedError = Object.assign(new Error('timeout'), { killed: true })
 
     execFileMock.mockImplementation(
-      (_bin: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        if (args.includes('close')) {
+          cb(null, JSON.stringify({ success: true, data: null }), '')
+          return
+        }
         cb(killedError, '', '')
       }
     )
@@ -1588,13 +1607,282 @@ describe('AgentBrowserBridge', () => {
 
   // ── goto command ──
 
-  it('passes url to goto command', async () => {
-    succeedWith({ url: 'https://example.com', title: 'Example' })
-    await bridge.goto('https://example.com')
+  it('navigates the registered webContents without spawning agent-browser', async () => {
+    const wc = mockWebContents(100, 'https://example.com/start', 'Example')
+    webContentsFromIdMock.mockReturnValue(wc)
 
-    const args = execFileMock.mock.calls.at(-1)![1] as string[]
-    expect(args).toContain('goto')
-    expect(args).toContain('https://example.com')
+    await expect(bridge.goto('https://example.com/next')).resolves.toEqual({
+      url: 'https://example.com/next',
+      title: 'Example'
+    })
+
+    expect(wc.loadURL).toHaveBeenCalledWith('https://example.com/next')
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves scheme-less navigation semantics at the direct WebContents boundary', async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(bridge.goto('example.com')).resolves.toEqual({
+      url: 'https://example.com/',
+      title: 'Example'
+    })
+    expect(wc.loadURL).toHaveBeenCalledWith('https://example.com/')
+  })
+
+  it('rejects unsupported direct navigation URLs without falling back to agent-browser', async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(bridge.goto('javascript:alert(1)')).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: 'Unsupported browser URL: javascript:alert(1)'
+    })
+    expect(wc.loadURL).not.toHaveBeenCalled()
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed and releases the command queue when direct navigation never settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const wc = mockWebContents(100)
+      wc.loadURL.mockReturnValue(new Promise<void>(() => {}))
+      webContentsFromIdMock.mockReturnValue(wc)
+
+      const navigation = bridge.goto('https://example.com/hangs')
+      const rejection = expect(navigation).rejects.toMatchObject({
+        code: 'browser_error',
+        message: 'Failed to navigate browser page tab-1: Browser navigation timed out after 30000ms'
+      })
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      await rejection
+      expect(execFileMock).not.toHaveBeenCalled()
+      expect(
+        (bridge as unknown as { commandQueues: Map<string, unknown[]> }).commandQueues.size
+      ).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails closed when direct navigation is aborted', async () => {
+    const wc = mockWebContents(100, 'https://example.com/current', 'Current')
+    wc.loadURL.mockRejectedValue(
+      Object.assign(new Error('ERR_ABORTED (-3)'), { code: 'ERR_ABORTED' })
+    )
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(bridge.goto('https://example.com/download')).rejects.toMatchObject({
+      code: 'browser_error',
+      message: 'Failed to navigate browser page tab-1: ERR_ABORTED (-3)'
+    })
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      command: 'goto',
+      run: (b: AgentBrowserBridge) => b.goto('https://embedded.example/next'),
+      helperArg: 'goto',
+      directMethod: 'loadURL'
+    },
+    {
+      command: 'evaluate',
+      run: (b: AgentBrowserBridge) => b.evaluate('document.title'),
+      helperArg: 'eval',
+      directMethod: 'Runtime.evaluate'
+    }
+  ])(
+    'does not route $command to another browser when the helper session is stale',
+    async ({ run, helperArg, directMethod }) => {
+      const wc = mockWebContents(100, 'https://embedded.example/current', 'Embedded')
+      wc.debugger.sendCommand.mockImplementation(async (_method: string, params?: unknown) => ({
+        result: {
+          value:
+            (params as { expression?: string } | undefined)?.expression === 'location.origin'
+              ? 'https://embedded.example'
+              : 'Embedded'
+        }
+      }))
+      webContentsFromIdMock.mockReturnValue(wc)
+      const wrongOwnerCalls: string[][] = []
+      let helperSessionIsStale = false
+
+      execFileMock.mockImplementation(
+        (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+          if (args.includes('close')) {
+            cb(null, JSON.stringify({ success: true, data: null }), '')
+          } else if (args.includes('snapshot')) {
+            cb(null, JSON.stringify({ success: true, data: { snapshot: 'ready' } }), '')
+          } else {
+            if (helperSessionIsStale && !args.includes('--cdp')) {
+              wrongOwnerCalls.push(args)
+            }
+            cb(
+              null,
+              JSON.stringify({
+                success: true,
+                data: { url: 'https://external.example', title: 'External', result: 'external' }
+              }),
+              ''
+            )
+          }
+          return { kill: vi.fn() }
+        }
+      )
+
+      await bridge.snapshot()
+      helperSessionIsStale = true
+      await run(bridge)
+
+      expect(wrongOwnerCalls).toEqual([])
+      expect(
+        execFileMock.mock.calls.some((call) => (call[1] as string[]).includes(helperArg))
+      ).toBe(false)
+      if (directMethod === 'loadURL') {
+        expect(wc.loadURL).toHaveBeenCalledWith('https://embedded.example/next')
+      } else {
+        expect(wc.debugger.sendCommand).toHaveBeenCalledWith(
+          'Runtime.evaluate',
+          expect.objectContaining({ expression: 'document.title' })
+        )
+      }
+    }
+  )
+
+  it('returns direct evaluation value and full page URL semantics without spawning agent-browser', async () => {
+    const wc = mockWebContents(100, 'https://example.com/path?query=1')
+    wc.debugger.sendCommand.mockResolvedValue({ result: { value: 42 } })
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(bridge.evaluate('6 * 7')).resolves.toEqual({
+      result: '42',
+      origin: 'https://example.com/path?query=1'
+    })
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{ answer: 42 }, '{"answer":42}'],
+    [['a', 'b'], '["a","b"]']
+  ])('preserves structured direct evaluation values as JSON text', async (value, expected) => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({ result: { value } })
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(bridge.evaluate('structuredValue')).resolves.toMatchObject({ result: expected })
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces direct evaluation exceptions without falling back to agent-browser', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({
+      result: { type: 'object' },
+      exceptionDetails: {
+        text: 'Uncaught',
+        exception: { description: 'ReferenceError: missingValue is not defined' }
+      }
+    })
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(bridge.evaluate('missingValue')).rejects.toMatchObject({
+      code: 'browser_eval_error',
+      message: 'ReferenceError: missingValue is not defined'
+    })
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the registered webContents debugger is stale', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockRejectedValue(new Error('Debugger is detached'))
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(bridge.evaluate('document.title')).rejects.toMatchObject({
+      code: 'browser_error',
+      message: 'Failed to evaluate in browser page tab-1: Debugger is detached'
+    })
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['goto', (b: AgentBrowserBridge) => b.goto('https://example.com/next', undefined, 'tab-1')],
+    ['evaluate', (b: AgentBrowserBridge) => b.evaluate('document.title', undefined, 'tab-1')]
+  ])('fails closed when direct %s targets a destroyed webContents', async (_command, run) => {
+    const wc = mockWebContents(100)
+    wc.isDestroyed = () => true
+    webContentsFromIdMock.mockReturnValue(wc)
+    const unregisterGuest = vi.fn()
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(new Map([['tab-1', 100]]), new Map(), { unregisterGuest })
+    )
+    b.setActiveTab(100)
+
+    await expect(run(b)).rejects.toMatchObject({
+      code: 'browser_tab_not_found',
+      message: 'Browser page tab-1 is no longer available'
+    })
+    expect(unregisterGuest).toHaveBeenCalledWith('tab-1')
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('returns navigation state from a replacement registered during load', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const oldWc = mockWebContents(100, 'https://example.com/start', 'Old')
+    const replacementWc = mockWebContents(200, 'https://example.com/final', 'Replacement')
+    oldWc.loadURL.mockImplementation(async () => {
+      tabs.set('tab-1', 200)
+    })
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === 100 ? oldWc : id === 200 ? replacementWc : null
+    )
+    const b = new AgentBrowserBridge(mockBrowserManager(tabs))
+    b.setActiveTab(100)
+
+    await expect(b.goto('https://example.com/next')).resolves.toEqual({
+      url: 'https://example.com/final',
+      title: 'Replacement'
+    })
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('routes direct commands to the replacement registration, not the stale session owner', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const oldWc = mockWebContents(100, 'https://old.example', 'Old')
+    const replacementWc = mockWebContents(200, 'https://new.example', 'New')
+    replacementWc.debugger.sendCommand.mockImplementation(
+      async (_method: string, params?: unknown) => ({
+        result: {
+          value:
+            (params as { expression?: string } | undefined)?.expression === 'location.origin'
+              ? 'https://new.example'
+              : 'New'
+        }
+      })
+    )
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === 100 ? oldWc : id === 200 ? replacementWc : null
+    )
+    const b = new AgentBrowserBridge(mockBrowserManager(tabs))
+    b.setActiveTab(100)
+
+    succeedWith({ snapshot: 'ready' })
+    await b.snapshot()
+    tabs.set('tab-1', 200)
+    await b.onProcessSwap('tab-1', 200, 100)
+    execFileMock.mockClear()
+
+    await expect(b.evaluate('document.title', undefined, 'tab-1')).resolves.toEqual({
+      result: 'New',
+      origin: 'https://new.example'
+    })
+    expect(replacementWc.debugger.sendCommand).toHaveBeenCalledWith(
+      'Runtime.evaluate',
+      expect.objectContaining({ expression: 'document.title' })
+    )
+    expect(oldWc.debugger.sendCommand).not.toHaveBeenCalled()
+    expect(execFileMock).not.toHaveBeenCalled()
   })
 
   it('rejects oversized browser clipboard writes before spawning agent-browser', async () => {
@@ -2121,7 +2409,11 @@ describe('AgentBrowserBridge', () => {
 
   it('passes stderr through as error message on execFile failure', async () => {
     execFileMock.mockImplementation(
-      (_bin: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        if (args.includes('close')) {
+          cb(null, JSON.stringify({ success: true, data: null }), '')
+          return
+        }
         cb(new Error('exit code 1'), '', 'daemon crashed: segfault')
       }
     )
@@ -2130,7 +2422,11 @@ describe('AgentBrowserBridge', () => {
 
   it('falls back to error.message when stderr is empty', async () => {
     execFileMock.mockImplementation(
-      (_bin: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        if (args.includes('close')) {
+          cb(null, JSON.stringify({ success: true, data: null }), '')
+          return
+        }
         cb(new Error('Command failed'), '', '')
       }
     )
