@@ -212,6 +212,31 @@ describe('readNativeChatTranscript (claude)', () => {
     }
     expect(result.messages[0].role).toBe('assistant')
   })
+
+  it('keeps thinking with a redacted sibling on the reasoning role', async () => {
+    const filePath = await writeFixture('orca-native-chat-claude-redacted-thinking-', [
+      {
+        type: 'assistant',
+        uuid: 'a-redacted-thinking',
+        timestamp: '2026-06-01T10:00:00.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'pondering' },
+            { type: 'redacted_thinking', data: 'opaque' }
+          ]
+        }
+      }
+    ])
+    const result = await readNativeChatTranscript('claude', 'sess', { filePath })
+    if (!('messages' in result)) {
+      throw new Error('expected messages')
+    }
+    expect(result.messages[0]).toMatchObject({
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'pondering' }]
+    })
+  })
 })
 
 describe('readNativeChatTranscript (codex)', () => {

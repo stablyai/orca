@@ -13341,7 +13341,10 @@
         "allow": "허용하다",
         "deny": "부인하다"
       },
-      "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요"
+      "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요",
+      "reasoning": {
+        "label": "생각 중"
+      }
     },
     "tab": {
       "bar": {

@@ -1,10 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+
+function firstNonEmptyLinePreview(markdown: string): string {
+  let start = 0
+  while (start < markdown.length) {
+    const newline = markdown.indexOf('\n', start)
+    const end = newline === -1 ? markdown.length : newline
+    const line = markdown.slice(start, end)
+    if (line.trim()) {
+      return line.slice(0, 80)
+    }
+    start = end + 1
+  }
+  return ''
+}
 
 /** Reasoning folds to a one-line disclosure like a tool run — thinking is
  *  process, not answer, so it stays out of the way until asked for. */
@@ -21,22 +36,15 @@ export function NativeChatReasoningRow({
   allowFileUriLinks?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(expandSignal)
-  // Re-sync when the global toolbar toggle flips.
   useEffect(() => setOpen(expandSignal), [expandSignal])
 
-  const preview =
-    markdown
-      .split('\n')
-      .find((line) => line.trim())
-      ?.slice(0, 80) ?? ''
+  const preview = useMemo(() => firstNonEmptyLinePreview(markdown), [markdown])
 
   return (
-    <div>
-      <button
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="group flex w-full items-center gap-1.5 py-0.5 text-left"
+        className="group flex w-full items-center gap-1.5 rounded-sm py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="shrink-0 font-mono text-[11px] font-bold text-muted-foreground transition-colors group-hover:text-foreground/80">
           {translate('components.native-chat.reasoning.label', 'Thinking')}
@@ -59,8 +67,8 @@ export function NativeChatReasoningRow({
               : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
           )}
         />
-      </button>
-      {open ? (
+      </CollapsibleTrigger>
+      <CollapsibleContent>
         <div className="mt-1 border-l-2 border-border/60 pl-3 italic text-muted-foreground">
           <CommentMarkdown
             content={markdown}
@@ -70,7 +78,7 @@ export function NativeChatReasoningRow({
             allowFileUriLinks={allowFileUriLinks}
           />
         </div>
-      ) : null}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

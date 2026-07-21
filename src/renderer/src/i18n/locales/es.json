@@ -13341,7 +13341,10 @@
         "allow": "Permitir",
         "deny": "Denegar"
       },
-      "launchPromptNotDelivered": "No entregado — revisa la terminal"
+      "launchPromptNotDelivered": "No entregado — revisa la terminal",
+      "reasoning": {
+        "label": "Pensando"
+      }
     },
     "tab": {
       "bar": {

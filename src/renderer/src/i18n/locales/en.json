@@ -13364,7 +13364,10 @@
         "allow": "Allow",
         "deny": "Deny"
       },
-      "launchPromptNotDelivered": "Not delivered — check the terminal"
+      "launchPromptNotDelivered": "Not delivered — check the terminal",
+      "reasoning": {
+        "label": "Thinking"
+      }
     },
     "tab": {
       "bar": {
