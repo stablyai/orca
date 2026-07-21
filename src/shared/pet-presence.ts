@@ -57,6 +57,31 @@ export type PetPresence = {
  */
 export const SURFACE_STALE_AFTER_MS = 30_000
 
+/**
+ * A surface must have checked in this recently to be a valid handoff TARGET.
+ *
+ * Deliberately much stricter than SURFACE_STALE_AFTER_MS, because eviction and
+ * target-eligibility are different questions that used to share one threshold.
+ * A killed app never gets to call removeSurface, so its surface stays evictable-
+ * but-not-yet-evicted for a full stale window — and the pet would happily walk
+ * onto that corpse, where nothing can draw it.
+ *
+ * Observed 2026-07-21: with a single real phone surface the pet still recorded a
+ * handoff (enteredFromEdge 'left', x 0) — it had crossed to its own dead
+ * predecessor. The operator saw the pet flicker in and out on the phone and sit
+ * frozen on the desktop, both because `holdsPet` was oscillating between a live
+ * surface and a zombie, restarting the roam loop before it could travel.
+ *
+ * ~2.5 heartbeats (8s each) tolerates one dropped beat without letting a dead
+ * surface look alive.
+ */
+export const HANDOFF_TARGET_MAX_AGE_MS = 20_000
+
+/** Stricter liveness used only when choosing where the pet may GO. */
+export function isSurfaceHandoffEligible(surface: PetSurface, now: number): boolean {
+  return now - surface.seenAt < HANDOFF_TARGET_MAX_AGE_MS
+}
+
 /** Order handoff destinations are considered in. Earlier kinds win, so a pet
  *  leaving a desktop window prefers a popout on the same machine over a phone
  *  in another room — the nearer screen is the likelier intent. */
@@ -134,7 +159,7 @@ export function pickHandoffTarget(
   now: number
 ): PetSurface | null {
   const candidates = surfaces.filter(
-    (surface) => surface.id !== fromSurfaceId && isSurfaceAlive(surface, now)
+    (surface) => surface.id !== fromSurfaceId && isSurfaceHandoffEligible(surface, now)
   )
   if (candidates.length === 0) {
     return null

@@ -11,6 +11,7 @@ import {
   reconcileSurfaces,
   surfaceHoldsPet,
   SURFACE_STALE_AFTER_MS,
+  HANDOFF_TARGET_MAX_AGE_MS,
   type PetPresence,
   type PetSurface
 } from './pet-presence'
@@ -64,6 +65,22 @@ describe('pickHandoffTarget', () => {
       NOW
     )
     expect(target).toBeNull()
+  })
+
+  it('refuses to hand the pet to a surface that has stopped heartbeating', () => {
+    // A killed app never calls removeSurface, so its surface is still within the
+    // 30s eviction window. The pet must not walk onto that corpse — nothing can
+    // draw it there, and holdsPet oscillates as it is evicted and re-adopted.
+    const zombie = surface('dead-phone', 'phone', NOW - (HANDOFF_TARGET_MAX_AGE_MS + 1))
+    expect(isSurfaceAlive(zombie, NOW)).toBe(true)
+    expect(pickHandoffTarget([surface('desk', 'desktop-window'), zombie], 'desk', NOW)).toBeNull()
+  })
+
+  it('still hands off to a surface that merely missed a beat', () => {
+    const laggy = surface('phone', 'phone', NOW - 9_000)
+    expect(pickHandoffTarget([surface('desk', 'desktop-window'), laggy], 'desk', NOW)?.id).toBe(
+      'phone'
+    )
   })
 
   it('prefers a nearer surface kind over a phone', () => {
