@@ -1,11 +1,19 @@
 // src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { useEffect } from 'react'
+import type * as React from 'react'
 import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
+
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof React>()
+  return { ...actual, useEffect: vi.fn() }
+})
 import {
   matchFileSearchShortcut,
   matchSearchNavigate,
   resolveTerminalKeyboardShortcutAction,
-  runTerminalSearchNavigation
+  runTerminalSearchNavigation,
+  useTerminalKeyboardShortcuts
 } from './keyboard-handlers'
 
 function makeKeyEvent(
@@ -219,5 +227,189 @@ describe('matchFileSearchShortcut', () => {
         'sidebar.search.toggle': []
       })
     ).toBe(false)
+  })
+})
+
+describe('useTerminalKeyboardShortcuts copy selection', () => {
+  function CopyShortcutHarness(deps: Parameters<typeof useTerminalKeyboardShortcuts>[0]): null {
+    useTerminalKeyboardShortcuts(deps)
+    return null
+  }
+
+  function installCopyShortcutHarness(options: {
+    selection: string
+    mouseTrackingMode: 'none' | 'normal' | 'drag' | 'any'
+    altKey?: boolean
+    keybindings?: { 'terminal.copySelection': string[] }
+    repeat?: boolean
+    shiftKey?: boolean
+  }): {
+    input: ReturnType<typeof vi.fn>
+    writeClipboardText: ReturnType<typeof vi.fn>
+    event: Pick<
+      KeyboardEvent,
+      'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'repeat'
+    > & {
+      target: null
+      preventDefault: ReturnType<typeof vi.fn>
+      stopImmediatePropagation: ReturnType<typeof vi.fn>
+    }
+    dispose: () => void
+  } {
+    const listeners = new Map<string, EventListener>()
+    const input = vi.fn()
+    const writeClipboardText = vi.fn(() => Promise.resolve())
+    const pane = {
+      id: 1,
+      leafId: 'leaf-1',
+      terminal: {
+        getSelection: vi.fn(() => options.selection),
+        clearSelection: vi.fn(),
+        input,
+        modes: { mouseTrackingMode: options.mouseTrackingMode }
+      }
+    }
+    const manager = {
+      getActivePane: vi.fn(() => pane),
+      getPanes: vi.fn(() => [pane])
+    }
+
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh)' })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    vi.stubGlobal('window', {
+      navigator: globalThis.navigator,
+      api: { ui: { writeTerminalClipboardText: writeClipboardText } },
+      addEventListener: (type: string, listener: EventListener) => listeners.set(type, listener),
+      removeEventListener: (type: string) => listeners.delete(type)
+    })
+
+    let disposeEffect: (() => void) | undefined
+    vi.mocked(useEffect).mockImplementation((effect) => {
+      disposeEffect = effect() as (() => void) | undefined
+    })
+    CopyShortcutHarness({
+      tabId: 'tab-1',
+      worktreeId: 'worktree-1',
+      isActive: true,
+      keyboardScopeRef: { current: null },
+      managerRef: { current: manager } as never,
+      paneTransportsRef: { current: new Map() },
+      panePtyBindingsRef: { current: new Map() },
+      paneCwdRef: { current: new Map() },
+      fallbackCwd: '/workspace',
+      expandedPaneIdRef: { current: null },
+      setExpandedPane: vi.fn(),
+      restoreExpandedLayout: vi.fn(),
+      refreshPaneSizes: vi.fn(),
+      persistLayoutSnapshot: vi.fn(),
+      toggleExpandPane: vi.fn(),
+      setSearchOpen: vi.fn(),
+      onSearchSelectedText: vi.fn(),
+      onRequestClosePane: vi.fn(),
+      onClearPaneScrollback: vi.fn(),
+      onSetTitle: vi.fn(),
+      onClearPaneTitle: vi.fn(),
+      searchOpenRef: { current: false },
+      searchStateRef: { current: { query: '', caseSensitive: false, regex: false } },
+      macOptionAsAltRef: { current: 'false' },
+      keybindings: options.keybindings
+    })
+
+    const event = {
+      key: 'c',
+      code: 'KeyC',
+      metaKey: true,
+      ctrlKey: false,
+      altKey: options.altKey ?? false,
+      shiftKey: options.shiftKey ?? false,
+      repeat: options.repeat ?? false,
+      target: null,
+      preventDefault: vi.fn(),
+      stopImmediatePropagation: vi.fn()
+    }
+    const onKeyDown = listeners.get('keydown')
+    expect(onKeyDown).toBeDefined()
+    onKeyDown?.(event as unknown as Event)
+
+    return {
+      input,
+      writeClipboardText,
+      event,
+      dispose: () => {
+        disposeEffect?.()
+      }
+    }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('forwards an empty selection from the configured terminal copy chord to a mouse-capturing TUI', () => {
+    const harness = installCopyShortcutHarness({
+      selection: '',
+      mouseTrackingMode: 'any',
+      altKey: true,
+      keybindings: { 'terminal.copySelection': ['Mod+Alt+C'] }
+    })
+
+    expect(harness.input).toHaveBeenCalledWith('\x03')
+    expect(harness.writeClipboardText).not.toHaveBeenCalled()
+    expect(harness.event.preventDefault).toHaveBeenCalledOnce()
+    expect(harness.event.stopImmediatePropagation).toHaveBeenCalledOnce()
+    harness.dispose()
+  })
+
+  it('forwards macOS Cmd+C from an empty mouse-capturing TUI selection', () => {
+    const harness = installCopyShortcutHarness({ selection: '', mouseTrackingMode: 'any' })
+
+    expect(harness.input).toHaveBeenCalledWith('\x03')
+    expect(harness.writeClipboardText).not.toHaveBeenCalled()
+    expect(harness.event.preventDefault).toHaveBeenCalledOnce()
+    expect(harness.event.stopImmediatePropagation).toHaveBeenCalledOnce()
+    harness.dispose()
+  })
+
+  it('ignores repeated macOS Cmd+C from a mouse-capturing TUI selection', () => {
+    const harness = installCopyShortcutHarness({
+      selection: '',
+      mouseTrackingMode: 'any',
+      repeat: true
+    })
+
+    expect(harness.input).not.toHaveBeenCalled()
+    expect(harness.writeClipboardText).not.toHaveBeenCalled()
+    expect(harness.event.preventDefault).not.toHaveBeenCalled()
+    expect(harness.event.stopImmediatePropagation).not.toHaveBeenCalled()
+    harness.dispose()
+  })
+
+  it('copies a non-empty selection without forwarding ETX', () => {
+    const harness = installCopyShortcutHarness({
+      selection: 'selected',
+      mouseTrackingMode: 'any',
+      shiftKey: true
+    })
+
+    expect(harness.writeClipboardText).toHaveBeenCalledWith('selected')
+    expect(harness.input).not.toHaveBeenCalled()
+    expect(harness.event.preventDefault).toHaveBeenCalledOnce()
+    expect(harness.event.stopImmediatePropagation).toHaveBeenCalledOnce()
+    harness.dispose()
+  })
+
+  it('leaves an empty normal-shell selection unhandled', () => {
+    const harness = installCopyShortcutHarness({
+      selection: '',
+      mouseTrackingMode: 'none',
+      shiftKey: true
+    })
+
+    expect(harness.input).not.toHaveBeenCalled()
+    expect(harness.writeClipboardText).not.toHaveBeenCalled()
+    expect(harness.event.preventDefault).not.toHaveBeenCalled()
+    expect(harness.event.stopImmediatePropagation).not.toHaveBeenCalled()
+    harness.dispose()
   })
 })
