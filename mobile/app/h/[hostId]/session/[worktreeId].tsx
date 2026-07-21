@@ -74,6 +74,7 @@ import {
 import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
 import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
+import { SessionSpeakRepliesToggle } from '../../../../src/voice/SessionSpeakRepliesToggle'
 import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../../../../src/agent-history/agent-history-capability'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
@@ -4599,6 +4600,15 @@ export default function SessionScreen() {
                 </Text>
               </Pressable>
             </View>
+            {/* Speak replies: folds this session's finished agent turns into
+                two or three spoken sentences. Off by default, per workspace. */}
+            {worktreeId ? (
+              <SessionSpeakRepliesToggle
+                client={client}
+                hostId={hostId}
+                worktreeId={worktreeId}
+              />
+            ) : null}
             <MobileSessionHeaderIconButton
               active={activePanel === 'files'}
               accessibilityLabel="Open file explorer"
