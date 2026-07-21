@@ -1148,7 +1148,8 @@ async function listRecentWorkItems(
   if (noCache && issueRequest) {
     issueRequest.args.splice(1, 2)
   }
-  // 原因：无法解析来源时必须保持空结果；无仓库限定的 Search API 会返回其他公开仓库的数据（#9660）。
+  // Why: unresolved sources must stay empty — an unscoped Search API would return other public repos' issues (#9660).
+  // Why: allSettled so a 403 on the issue side doesn't zero the PR half (partial results + banner).
   const [issuesSettled, prsSettled] = await Promise.allSettled([
     issueRequest && issueOwnerRepo
       ? ghExecFileAsync(issueRequest.args, {
