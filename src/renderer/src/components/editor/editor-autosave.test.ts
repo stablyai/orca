@@ -148,14 +148,14 @@ describe('requestEditorFileSave', () => {
 })
 
 describe('requestEditorFileClose', () => {
-  it('dispatches a close request event with the file id', () => {
+  it('dispatches a close request event with the file id and worktree id', () => {
     const listener = vi.fn()
     window.addEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, listener as EventListener)
     try {
-      requestEditorFileClose('file-1')
+      requestEditorFileClose('file-1', 'wt-1')
       expect(listener).toHaveBeenCalledTimes(1)
-      const event = listener.mock.calls[0][0] as CustomEvent<{ fileId: string }>
-      expect(event.detail).toEqual({ fileId: 'file-1' })
+      const event = listener.mock.calls[0][0] as CustomEvent<{ fileId: string; worktreeId: string }>
+      expect(event.detail).toEqual({ fileId: 'file-1', worktreeId: 'wt-1' })
     } finally {
       window.removeEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, listener as EventListener)
     }

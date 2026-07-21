@@ -13,6 +13,9 @@ export default defineConfig({
     ORCA_FEATURE_WALL_ENABLED: 'true'
   },
   resolve: {
+    // Why: accidental tsc emits (*.js next to *.ts) must never shadow the real
+    // source — Vite resolves .js before .ts by default. Prefer TS extensions.
+    extensions: ['.ts', '.tsx', '.mts', '.mjs', '.js', '.jsx', '.json'],
     alias: {
       '@renderer': resolve('src/renderer/src'),
       '@': resolve('src/renderer/src')

@@ -28,6 +28,13 @@ import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-sim
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { toast } from 'sonner'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { detectLanguage } from '@/lib/language-detect'
+import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
+import { getConnectionId } from '@/lib/connection-context'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { translate } from '@/i18n/i18n'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -199,7 +206,7 @@ export function useTabGroupWorkspaceModel({
         const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === entityId)
         if (file?.isDirty) {
           // Why: route through Terminal.tsx so the unsaved-confirmation save/discard queue stays centralized across all close paths.
-          requestEditorFileClose(entityId)
+          requestEditorFileClose(entityId, worktreeId)
           return false
         }
         closeFile(entityId)
@@ -354,7 +361,7 @@ export function useTabGroupWorkspaceModel({
         })
       }
       setActiveTab(terminalId)
-      setActiveTabType('terminal')
+      setActiveTabType('terminal', worktreeId)
       const activeLeafId = worktreeState.terminalLayoutsByTabId[terminalId]?.activeLeafId ?? null
       // Why: restore xterm focus to the store-active leaf so keyboard input can't drift to a sibling pane.
       focusTerminalTabSurface(terminalId, activeLeafId)
@@ -401,11 +408,11 @@ export function useTabGroupWorkspaceModel({
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
       if (item.contentType === 'simulator') {
-        setActiveTabType('simulator')
+        setActiveTabType('simulator', worktreeId)
         // simulator has no editor file entity
       } else {
         setActiveFile(item.entityId)
-        setActiveTabType('editor')
+        setActiveTabType('editor', worktreeId)
       }
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveFile, setActiveTabType, worktreeId]
@@ -436,7 +443,7 @@ export function useTabGroupWorkspaceModel({
         })
       }
       setActiveBrowserTab(browserTabId)
-      setActiveTabType('browser')
+      setActiveTabType('browser', worktreeId)
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]
   )
@@ -560,7 +567,23 @@ export function useTabGroupWorkspaceModel({
       closeToRight,
       createSplitGroup,
       newBrowserTab: () => {
-        void openNewBrowserTabInActiveWorkspace(groupId)
+        if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+          // Why: the floating workspace is a local scratchpad; a focused remote
+          // runtime must not own tabs users keep there for manual SSH/tmux work.
+          const state = useAppStore.getState()
+          const url = state.browserDefaultUrl ?? 'about:blank'
+          state.createBrowserTab(worktreeId, url, {
+            title: translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.8b14ba6c17',
+              'New Browser Tab'
+            ),
+            focusAddressBar: true,
+            targetGroupId: groupId,
+            browserRuntimeEnvironmentId: null
+          })
+        } else {
+          void openNewBrowserTabInActiveWorkspace(groupId, worktreeId)
+        }
       },
       newSimulatorTab: worktreeState.mobileEmulatorEnabled
         ? () => {
@@ -578,6 +601,34 @@ export function useTabGroupWorkspaceModel({
       openEntry: async (args: TabCreateEntryArgs) => {
         await openTabBarEntry(args)
       },
+      openFileTab:
+        worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+          ? async () => {
+              try {
+                const document = await window.api.app.pickFloatingMarkdownDocument()
+                if (!document) {
+                  return
+                }
+                useAppStore.getState().openFile(
+                  {
+                    filePath: document.filePath,
+                    relativePath: document.relativePath,
+                    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+                    language: detectLanguage(document.relativePath),
+                    mode: 'edit',
+                    runtimeEnvironmentId: null
+                  },
+                  {
+                    preview: false,
+                    targetGroupId: groupId,
+                    suppressActiveRuntimeFallback: true
+                  }
+                )
+              } catch (err) {
+                toast.error(extractIpcErrorMessage(err, 'Failed to open markdown file.'))
+              }
+            }
+          : undefined,
       duplicateBrowserTab: (browserTabId: string) => {
         void (async () => {
           const state = useAppStore.getState()
@@ -607,27 +658,65 @@ export function useTabGroupWorkspaceModel({
       },
       // Why: target the owning group explicitly; the "+" menu can fire from an unfocused panel without updating global group focus.
       newFileTab: async () => {
-        await openNewMarkdownInActiveWorkspace(groupId)
+        if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+          try {
+            const markdownCwd = await window.api.app.getFloatingMarkdownDirectory()
+            if (!markdownCwd) {
+              return
+            }
+            const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
+              markdownCwd,
+              worktreeId,
+              getConnectionId(worktreeId) ?? undefined,
+              { activeRuntimeEnvironmentId: null }
+            )
+            if (!fileInfo) {
+              return
+            }
+            useAppStore.getState().openFile(fileInfo, {
+              preview: false,
+              targetGroupId: groupId,
+              suppressActiveRuntimeFallback: true
+            })
+          } catch (err) {
+            toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
+          }
+        } else {
+          await openNewMarkdownInActiveWorkspace(groupId, worktreeId)
+        }
       },
       newTerminalTab: () => {
-        void openNewTerminalTabInActiveWorkspace(groupId)
+        if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+          // Why: the floating workspace is a local scratchpad; a focused remote
+          // runtime must not own tabs users keep there for manual SSH/tmux work.
+          const state = useAppStore.getState()
+          const tab = state.createTab(worktreeId, groupId)
+          state.setActiveTab(tab.id)
+          state.setActiveTabType('terminal', worktreeId)
+          focusTerminalTabSurface(tab.id)
+        } else {
+          void openNewTerminalTabInActiveWorkspace(groupId, worktreeId)
+        }
       },
       newTerminalWithShell: (shellOverride: string) => {
         void (async () => {
           if (
-            await createWebRuntimeSessionTerminal({
+            // Why: keep floating-scratchpad terminals local even when a remote
+            // runtime session is active; it must not own floating tabs.
+            worktreeId !== FLOATING_TERMINAL_WORKTREE_ID &&
+            (await createWebRuntimeSessionTerminal({
               worktreeId,
               environmentId: getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId),
               targetGroupId: groupId,
               command: shellOverride,
               activate: true
-            })
+            }))
           ) {
             return
           }
           const terminal = createTab(worktreeId, groupId, shellOverride)
           setActiveTab(terminal.id)
-          setActiveTabType('terminal')
+          setActiveTabType('terminal', worktreeId)
           focusTerminalTabSurface(terminal.id)
         })()
       },

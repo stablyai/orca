@@ -37,6 +37,7 @@ import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { Tab, TabContentType, TabGroupLayoutNode, TuiAgent } from '../../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
@@ -687,7 +688,10 @@ function Terminal(): React.JSX.Element | null {
     const onRequestEditorClose = (event: Event): void => {
       const customEvent = event as CustomEvent<EditorRequestFileCloseDetail>
       const fileId = customEvent.detail?.fileId
-      if (!fileId) {
+      // Why: the floating terminal owns its own save-dialog queue; ignore its
+      // close requests so we don't pop the main-workspace dialog for a file the
+      // user is closing from the floating panel.
+      if (!fileId || customEvent.detail?.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
         return
       }
       queueEditorCloseRequests([fileId])

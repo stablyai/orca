@@ -158,9 +158,9 @@ export function useTabDragSplit({
   enabled = true
 }: {
   worktreeId: string
-  /** When false (e.g. for hidden worktrees), returns empty sensors so no
-   *  DndContext pointer listeners are registered on the document. Multiple
-   *  simultaneous DndContext instances with active sensors can interfere. */
+  /** When false (e.g. for hidden worktrees), the pointer sensor uses an
+   *  impossible activation distance so drags never activate while the surface
+   *  is hidden, without changing the sensors array length between renders. */
   enabled?: boolean
 }): {
   activeDrag: TabDragItemData | null

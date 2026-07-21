@@ -29,21 +29,25 @@ vi.mock('./TabGroupPanel', () => ({
   default: (props: unknown) => ({ __mock: 'TabGroupPanel', props })
 }))
 
+const dragSplitValue = {
+  activeDrag: null,
+  collisionDetection: vi.fn(),
+  hoveredDropTarget: null,
+  hoveredTabInsertion: null,
+  isTabDragActiveRef: { current: false },
+  onDragCancel: vi.fn(),
+  onDragEnd: vi.fn(),
+  onDragMove: vi.fn(),
+  onDragOver: vi.fn(),
+  onDragStart: vi.fn(),
+  sensors: [],
+  setDragRootNode: setDragRootNodeMock
+}
+const useTabDragSplitMock = vi.fn(
+  (_args: { worktreeId: string; enabled: boolean }) => dragSplitValue
+)
 vi.mock('./useTabDragSplit', () => ({
-  useTabDragSplit: () => ({
-    activeDrag: null,
-    collisionDetection: vi.fn(),
-    hoveredDropTarget: null,
-    hoveredTabInsertion: null,
-    isTabDragActiveRef: { current: false },
-    onDragCancel: vi.fn(),
-    onDragEnd: vi.fn(),
-    onDragMove: vi.fn(),
-    onDragOver: vi.fn(),
-    onDragStart: vi.fn(),
-    sensors: [],
-    setDragRootNode: setDragRootNodeMock
-  })
+  useTabDragSplit: (args: { worktreeId: string; enabled: boolean }) => useTabDragSplitMock(args)
 }))
 
 import TabGroupSplitLayout from './TabGroupSplitLayout'
@@ -70,6 +74,7 @@ describe('TabGroupSplitLayout', () => {
     recordFeatureInteractionMock.mockClear()
     setDragRootNodeMock.mockClear()
     useAppStoreMock.mockClear()
+    useTabDragSplitMock.mockClear()
   })
 
   function getLayoutWrapper(element: ReturnType<typeof TabGroupSplitLayout>) {
@@ -205,5 +210,49 @@ describe('TabGroupSplitLayout', () => {
     ;(resizeHandle.props.onResizeStart as () => void)()
 
     expect(recordFeatureInteractionMock).toHaveBeenCalledWith('terminal-panes')
+  })
+
+  it('keys the shared drag/reorder engine to the worktree and active state', () => {
+    TabGroupSplitLayout({
+      layout: { type: 'leaf', groupId: 'group-1' },
+      worktreeId: 'wt-1',
+      focusedGroupId: 'group-1',
+      isWorktreeActive: true
+    })
+
+    expect(useTabDragSplitMock).toHaveBeenCalledWith({ worktreeId: 'wt-1', enabled: true })
+  })
+
+  it('disables drag activation when the worktree is offscreen', () => {
+    TabGroupSplitLayout({
+      layout: { type: 'leaf', groupId: 'group-1' },
+      worktreeId: 'wt-1',
+      focusedGroupId: 'group-1',
+      isWorktreeActive: false
+    })
+
+    expect(useTabDragSplitMock).toHaveBeenCalledWith({ worktreeId: 'wt-1', enabled: false })
+  })
+
+  it('passes the exact hook handlers to DndContext without rewrapping', () => {
+    const element = TabGroupSplitLayout({
+      layout: { type: 'leaf', groupId: 'group-1' },
+      worktreeId: 'wt-1',
+      focusedGroupId: 'group-1',
+      isWorktreeActive: true
+    })
+
+    // Why: reordering/splitting is driven entirely by the hook's handlers, so
+    // DndContext must receive the exact references — not rewrapped copies that
+    // could drop drag events.
+    const dndContext = asElement(element.props.children)
+    expect(dndContext.props.sensors).toBe(dragSplitValue.sensors)
+    expect(dndContext.props.collisionDetection).toBe(dragSplitValue.collisionDetection)
+    expect(dndContext.props.onDragStart).toBe(dragSplitValue.onDragStart)
+    expect(dndContext.props.onDragMove).toBe(dragSplitValue.onDragMove)
+    expect(dndContext.props.onDragOver).toBe(dragSplitValue.onDragOver)
+    expect(dndContext.props.onDragEnd).toBe(dragSplitValue.onDragEnd)
+    expect(dndContext.props.onDragCancel).toBe(dragSplitValue.onDragCancel)
+    expect(dndContext.props.autoScroll).toBe(false)
   })
 })

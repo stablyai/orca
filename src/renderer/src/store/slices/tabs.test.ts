@@ -1217,6 +1217,42 @@ describe('TabsSlice', () => {
         store.getState().unifiedTabsByWorktree[WT].find((tab) => tab.id === right.id)?.groupId
       ).toBe(rightGroupId)
     })
+
+    it('allows a split drop for the floating worktree, creating a new group and split layout', () => {
+      const first = store.getState().createUnifiedTab(FLOATING_TERMINAL_WORKTREE_ID, 'terminal', {
+        id: 'floating-a',
+        label: 'A'
+      })
+      const second = store.getState().createUnifiedTab(FLOATING_TERMINAL_WORKTREE_ID, 'terminal', {
+        id: 'floating-b',
+        label: 'B'
+      })
+      const groupId = store.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID][0].id
+
+      const moved = store.getState().dropUnifiedTab(second.id, {
+        groupId,
+        splitDirection: 'right'
+      })
+
+      expect(moved).toBe(true)
+      const state = store.getState()
+      expect(state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(2)
+      const newGroupId = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID].find(
+        (g) => g.id !== groupId
+      )?.id
+      expect(newGroupId).toBeTruthy()
+      const sourceGroup = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID].find(
+        (g) => g.id === groupId
+      )
+      expect(sourceGroup?.tabOrder).toEqual([first.id])
+      expect(state.layoutByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual({
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.5,
+        first: { type: 'leaf', groupId },
+        second: { type: 'leaf', groupId: newGroupId }
+      })
+    })
   })
 
   // ─── setTabLabel / setTabCustomLabel / setUnifiedTabColor ─────────

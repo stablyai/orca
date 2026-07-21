@@ -553,7 +553,7 @@ export type TerminalSlice = {
       startupCwd?: string
     }
   ) => TerminalTab
-  openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewTerminalTabInActiveWorkspace: (groupId: string, worktreeId?: string) => Promise<void>
   closeTab: (
     tabId: string,
     opts?: {
@@ -1076,31 +1076,31 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     return tab
   },
 
-  openNewTerminalTabInActiveWorkspace: async (groupId) => {
+  openNewTerminalTabInActiveWorkspace: async (groupId, worktreeId) => {
     const state = get()
-    const worktreeId = state.activeWorktreeId
-    if (!worktreeId) {
+    const targetWorktreeId = worktreeId ?? state.activeWorktreeId
+    if (!targetWorktreeId) {
       return
     }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, targetWorktreeId)
     if (runtimeEnvironmentId) {
       const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
       await createWebRuntimeSessionTerminal({
-        worktreeId,
+        worktreeId: targetWorktreeId,
         environmentId: runtimeEnvironmentId,
         targetGroupId: groupId,
         activate: true
       })
       return
     }
-    const terminal = get().createTab(worktreeId, groupId)
+    const terminal = get().createTab(targetWorktreeId, groupId)
     get().setActiveTab(terminal.id)
-    get().setActiveTabType('terminal')
+    get().setActiveTabType('terminal', targetWorktreeId)
     const latest = get()
-    const currentTerminals = latest.tabsByWorktree[worktreeId] ?? []
-    const currentEditors = latest.openFiles.filter((file) => file.worktreeId === worktreeId)
-    const currentBrowsers = latest.browserTabsByWorktree[worktreeId] ?? []
-    const stored = latest.tabBarOrderByWorktree[worktreeId]
+    const currentTerminals = latest.tabsByWorktree[targetWorktreeId] ?? []
+    const currentEditors = latest.openFiles.filter((file) => file.worktreeId === targetWorktreeId)
+    const currentBrowsers = latest.browserTabsByWorktree[targetWorktreeId] ?? []
+    const stored = latest.tabBarOrderByWorktree[targetWorktreeId]
     const validIds = new Set([
       ...currentTerminals.map((tab) => tab.id),
       ...currentEditors.map((file) => file.id),
@@ -1114,7 +1114,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     }
     // Why: Cmd+J shares the titlebar-button creation path, so append the new terminal after mixed editor/browser tabs, not first.
-    get().setTabBarOrder(worktreeId, [...base.filter((id) => id !== terminal.id), terminal.id])
+    get().setTabBarOrder(targetWorktreeId, [
+      ...base.filter((id) => id !== terminal.id),
+      terminal.id
+    ])
     focusTerminalTabSurface(terminal.id)
   },
 

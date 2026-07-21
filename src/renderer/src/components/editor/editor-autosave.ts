@@ -47,6 +47,7 @@ export type EditorFileSavedDetail = {
 
 export type EditorRequestFileCloseDetail = {
   fileId: string
+  worktreeId: string
 }
 
 export function isExternalReloadableEditorTab(file: OpenFile): boolean {
@@ -183,10 +184,10 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
   })
 }
 
-export function requestEditorFileClose(fileId: string): void {
+export function requestEditorFileClose(fileId: string, worktreeId: string): void {
   window.dispatchEvent(
     new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {
-      detail: { fileId }
+      detail: { fileId, worktreeId }
     })
   )
 }

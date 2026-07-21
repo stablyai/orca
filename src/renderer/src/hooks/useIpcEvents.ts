@@ -201,6 +201,16 @@ function findBrowserPageWorktreeId(store: AppState, browserPageId: string): stri
   return null
 }
 
+function findBrowserTabWorktreeId(store: AppState, browserTabId: string): string | null {
+  for (const [worktreeId, browserTabs] of Object.entries(store.browserTabsByWorktree)) {
+    if (browserTabs.some((tab) => tab.id === browserTabId)) {
+      return worktreeId
+    }
+  }
+
+  return null
+}
+
 function acquireBrowserAutomationBootstrapLease(
   worktreeId: string | null | undefined,
   browserPageId?: string | null
@@ -2467,42 +2477,71 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onCloseActiveTab(() => {
+      window.api.ui.onCloseActiveTab((payload) => {
         if (isEmptyFloatingWorkspacePanelVisible()) {
           window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
           return
         }
         const store = useAppStore.getState()
-        if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
-          const tabId = store.activeBrowserTabId
-          const worktreeId = store.activeWorktreeId
-          const closeActiveBrowserTab = (): void => {
-            const currentStore = useAppStore.getState()
-            const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
-            if (environmentId && worktreeId) {
-              if (!isWebRuntimeSessionActive(environmentId)) {
-                currentStore.closeBrowserTab(tabId)
-                return
-              }
-              void closeWebRuntimeSessionTab({
-                worktreeId,
-                tabId,
-                environmentId
-              })
+        const payloadBrowserTabId =
+          payload && typeof payload.browserTabId === 'string' ? payload.browserTabId : null
+        let tabId =
+          payloadBrowserTabId ??
+          (store.activeTabType === 'browser' && store.activeBrowserTabId
+            ? store.activeBrowserTabId
+            : null)
+        if (!tabId) {
+          return
+        }
+        let worktreeId = payloadBrowserTabId
+          ? findBrowserTabWorktreeId(store, payloadBrowserTabId)
+          : store.activeWorktreeId
+        // Why: the incoming browserTabId may be a browser page id rather than a
+        // workspace tab id. Mirror onRequestTabClose by resolving the page id to
+        // its owning workspace tab via browserPagesByWorkspace before closing,
+        // otherwise findBrowserTabWorktreeId yields no match and we silently no-op.
+        if (payloadBrowserTabId && !worktreeId) {
+          const owningWorkspaceId =
+            Object.entries(store.browserPagesByWorkspace).find(([, pages]) =>
+              pages.some((p) => p.id === payloadBrowserTabId)
+            )?.[0] ?? null
+          if (owningWorkspaceId) {
+            const owningWorktreeId = findBrowserTabWorktreeId(store, owningWorkspaceId)
+            if (owningWorktreeId) {
+              tabId = owningWorkspaceId
+              worktreeId = owningWorktreeId
+            }
+          }
+        }
+        if (!worktreeId) {
+          return
+        }
+        const closeBrowserTab = (): void => {
+          const currentStore = useAppStore.getState()
+          const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
+          if (environmentId) {
+            if (!isWebRuntimeSessionActive(environmentId)) {
+              currentStore.closeBrowserTab(tabId)
               return
             }
-            currentStore.closeBrowserTab(tabId)
-          }
-          if (worktreeId && isPinnedSessionTab(store, worktreeId, tabId)) {
-            guardPinnedTabClose({
-              isPinned: true,
-              tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
-              onClose: closeActiveBrowserTab
+            void closeWebRuntimeSessionTab({
+              worktreeId,
+              tabId,
+              environmentId
             })
             return
           }
-          closeActiveBrowserTab()
+          currentStore.closeBrowserTab(tabId)
         }
+        if (isPinnedSessionTab(store, worktreeId, tabId)) {
+          guardPinnedTabClose({
+            isPinned: true,
+            tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
+            onClose: closeBrowserTab
+          })
+          return
+        }
+        closeBrowserTab()
       })
     )
 

@@ -8,6 +8,10 @@ export default defineConfig({
     ORCA_FEATURE_WALL_ENABLED: 'true'
   },
   resolve: {
+    // Why: accidental tsc emits (*.js/*.d.ts) can land next to .ts sources and,
+    // because Vite resolves .js before .ts by default, silently shadow the real
+    // source in tests. Prefer TS extensions so emits can never mask sources.
+    extensions: ['.ts', '.tsx', '.mts', '.mjs', '.js', '.jsx', '.json'],
     alias: {
       '@renderer': resolve('src/renderer/src'),
       '@': resolve('src/renderer/src')

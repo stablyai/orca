@@ -9,7 +9,6 @@ src/**/*.d.ts
 /electron.vite.config.js
 /electron.vite.config.d.ts
 !src/main/types/hosted-git-info.d.ts
-!src/preload/api-types.d.ts
 !src/preload/index.d.ts
 !src/renderer/src/env.d.ts
 !src/renderer/src/mermaid.d.ts

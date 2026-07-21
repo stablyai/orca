@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import type { Tab } from '../../../../shared/types'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const WT = 'wt-1'
 
@@ -114,5 +115,70 @@ describe('tab-move-to-pane-column', () => {
       moveTabToNewPaneColumn({ unifiedTabId: 'tab-b', groupId: 'group-1', direction: 'right' })
     ).toBe(false)
     expect(mocks.mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
+  })
+
+  it('allows moving a floating-terminal tab into a sibling split pane', () => {
+    const dropUnifiedTab = vi.fn(() => true)
+    useAppStore.setState({
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: 'float-a',
+            tabOrder: ['float-a', 'float-b']
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'float-a',
+            groupId: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            contentType: 'terminal',
+            entityId: 'term-fa',
+            label: 'A',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          } satisfies Tab,
+          {
+            id: 'float-b',
+            groupId: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            contentType: 'terminal',
+            entityId: 'term-fb',
+            label: 'B',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1
+          } satisfies Tab
+        ]
+      },
+      dropUnifiedTab
+    } as Partial<ReturnType<typeof useAppStore.getState>>)
+
+    expect(canMoveTabToNewPaneColumn('float-b', 'floating-group')).toBe(true)
+    expect(
+      moveTabToNewPaneColumn({
+        unifiedTabId: 'float-b',
+        groupId: 'floating-group',
+        direction: 'right'
+      })
+    ).toBe(true)
+    expect(dropUnifiedTab).toHaveBeenCalledWith('float-b', {
+      groupId: 'floating-group',
+      splitDirection: 'right'
+    })
+    expect(mocks.mirrorWebRuntimeTabMove).toHaveBeenCalledWith({
+      kind: 'split',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      tabId: 'float-b',
+      targetGroupId: 'floating-group',
+      splitDirection: 'right'
+    })
   })
 })

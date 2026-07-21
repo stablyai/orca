@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   activateTab: vi.fn(),
@@ -13,6 +14,11 @@ const mocks = vi.hoisted(() => ({
   createBrowserTab: vi.fn(),
   createEmptySplitGroup: vi.fn(),
   createTab: vi.fn(),
+  createWebRuntimeSessionBrowserTab: vi.fn(() => Promise.resolve(false)),
+  createWebRuntimeSessionTerminal: vi.fn(() => Promise.resolve(false)),
+  createUntitledMarkdownFile: vi.fn(),
+  getFloatingMarkdownDirectory: vi.fn(),
+  pickFloatingMarkdownDocument: vi.fn(),
   destroyWorkspaceWebviews: vi.fn(),
   dispatchEvent: vi.fn(),
   dropUnifiedTab: vi.fn(),
@@ -23,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   openFile: vi.fn(),
   pinFile: vi.fn(),
   recordFeatureInteraction: vi.fn(),
+  requestEditorFileClose: vi.fn(),
   setActiveBrowserTab: vi.fn(),
   setActiveFile: vi.fn(),
   setActiveTab: vi.fn(),
@@ -70,8 +77,8 @@ vi.mock('../../lib/focus-terminal-tab-surface', () => ({
 vi.mock('../../runtime/web-runtime-session', () => ({
   activateWebRuntimeSessionTab: mocks.activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab: mocks.closeWebRuntimeSessionTab,
-  createWebRuntimeSessionBrowserTab: vi.fn(),
-  createWebRuntimeSessionTerminal: vi.fn(),
+  createWebRuntimeSessionBrowserTab: mocks.createWebRuntimeSessionBrowserTab,
+  createWebRuntimeSessionTerminal: mocks.createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive,
   toHostSessionTabId: (tabId: string) => tabId
 }))
@@ -81,7 +88,15 @@ vi.mock('../../store/slices/browser-webview-cleanup', () => ({
 }))
 
 vi.mock('../../lib/create-untitled-markdown', () => ({
-  createUntitledMarkdownFileWithTemplateSelection: vi.fn()
+  createUntitledMarkdownFileWithTemplateSelection: mocks.createUntitledMarkdownFile
+}))
+
+vi.mock('../../lib/connection-context', () => ({
+  getConnectionId: () => null
+}))
+
+vi.mock('../editor/editor-autosave', () => ({
+  requestEditorFileClose: mocks.requestEditorFileClose
 }))
 
 vi.mock('../../lib/ipc-error', () => ({
@@ -187,7 +202,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mocks.activateTab).toHaveBeenCalledWith('unified-terminal-1')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
   })
 
@@ -216,6 +231,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
 
     model.commands.activateTerminal('terminal-1')
 
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', 'right-leaf')
   })
 
@@ -228,7 +244,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mocks.activateTab).toHaveBeenCalledWith('unified-terminal-1')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     const event = mocks.dispatchEvent.mock.calls[0]?.[0] as CustomEvent<{ tabId: string }>
     expect(event.type).toBe(TOGGLE_TERMINAL_PANE_EXPAND_EVENT)
     expect(event.detail).toEqual({ tabId: 'terminal-1' })
@@ -527,5 +543,307 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       expect.objectContaining({ worktreeId: 'wt-1', tabId: 'browser-unified-1' })
     )
     expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1')
+  })
+})
+
+describe('useTabGroupWorkspaceModel dirty editor bulk closes', () => {
+  function makeEditorTab(id: string, sortOrder: number) {
+    return {
+      id: `tab-${id}`,
+      entityId: id,
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'editor' as const,
+      label: id,
+      customLabel: null,
+      color: null,
+      sortOrder,
+      createdAt: sortOrder
+    }
+  }
+
+  function seedDirtyEditors(): void {
+    const tabs = [
+      makeEditorTab('file-a', 0),
+      makeEditorTab('file-b', 1),
+      makeEditorTab('file-c', 2)
+    ]
+    const state = storeBox.state as Record<string, unknown>
+    ;(state.groupsByWorktree as Record<string, unknown>)['wt-1'] = [
+      {
+        id: 'group-1',
+        worktreeId: 'wt-1',
+        activeTabId: 'tab-file-b',
+        tabOrder: ['tab-file-a', 'tab-file-b', 'tab-file-c']
+      }
+    ]
+    ;(state.unifiedTabsByWorktree as Record<string, unknown>)['wt-1'] = tabs
+    state.openFiles = [
+      { id: 'file-a', isDirty: true },
+      { id: 'file-b', isDirty: true },
+      { id: 'file-c', isDirty: true }
+    ]
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStore()
+    seedDirtyEditors()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    vi.stubGlobal('window', { dispatchEvent: mocks.dispatchEvent })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('routes close-others dirty editors through the centralized save queue', async () => {
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeOthers('tab-file-b')
+
+    // Why: dirty siblings must defer to the save dialog (requestEditorFileClose)
+    // instead of being force-closed, so the unified tab is not removed yet.
+    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('file-a', 'wt-1')
+    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('file-c', 'wt-1')
+    expect(mocks.requestEditorFileClose).not.toHaveBeenCalledWith('file-b', 'wt-1')
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('routes close-to-right dirty editors through the centralized save queue', async () => {
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeToRight('tab-file-a')
+
+    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('file-b', 'wt-1')
+    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('file-c', 'wt-1')
+    expect(mocks.requestEditorFileClose).not.toHaveBeenCalledWith('file-a', 'wt-1')
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('routes close-all dirty editors through the centralized save queue', async () => {
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeAllEditorTabsInGroup()
+
+    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('file-a', 'wt-1')
+    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('file-b', 'wt-1')
+    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('file-c', 'wt-1')
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
+  })
+})
+
+describe('useTabGroupWorkspaceModel floating worktree commands', () => {
+  const FLOATING_GROUP_ID = 'floating-group'
+
+  function seedFloatingWorktree(): void {
+    const state = storeBox.state as Record<string, unknown>
+    ;(state.groupsByWorktree as Record<string, unknown>)[FLOATING_TERMINAL_WORKTREE_ID] = [
+      {
+        id: FLOATING_GROUP_ID,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        activeTabId: null,
+        tabOrder: []
+      }
+    ]
+    ;(state.unifiedTabsByWorktree as Record<string, unknown>)[FLOATING_TERMINAL_WORKTREE_ID] = []
+    ;(state.tabsByWorktree as Record<string, unknown>)[FLOATING_TERMINAL_WORKTREE_ID] = []
+    state.openFile = mocks.openFile
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStore()
+    seedFloatingWorktree()
+    // Why: vi.clearAllMocks() wipes implementations too, so re-seed the async
+    // gates to their default "no remote owner" resolution for each test.
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue(false)
+    mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(false)
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    vi.stubGlobal('window', {
+      dispatchEvent: mocks.dispatchEvent,
+      api: {
+        app: {
+          getFloatingMarkdownDirectory: mocks.getFloatingMarkdownDirectory,
+          pickFloatingMarkdownDocument: mocks.pickFloatingMarkdownDocument
+        }
+      }
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function flushMicrotasks(): Promise<void> {
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+
+  // Why: floating commands fire async IIFEs without returning the promise, so
+  // tests flush microtasks instead of awaiting the command result directly.
+  it('creates a local floating terminal without consulting the web runtime session', async () => {
+    mocks.createTab.mockReturnValue({ id: 'floating-terminal-1' })
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({
+      groupId: FLOATING_GROUP_ID,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    model.commands.newTerminalTab()
+    await flushMicrotasks()
+
+    expect(mocks.createTab).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, FLOATING_GROUP_ID)
+    expect(mocks.setActiveTab).toHaveBeenCalledWith('floating-terminal-1')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal', FLOATING_TERMINAL_WORKTREE_ID)
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('floating-terminal-1')
+  })
+
+  it('keeps floating terminal creates local while a web runtime session is active', async () => {
+    // Why: the floating workspace is a local scratchpad; a focused remote
+    // runtime must never own its tabs even when it would accept the create.
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue(true)
+    mocks.createTab.mockReturnValue({ id: 'floating-terminal-1' })
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({
+      groupId: FLOATING_GROUP_ID,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    model.commands.newTerminalTab()
+    await flushMicrotasks()
+
+    expect(mocks.createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
+    expect(mocks.createTab).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, FLOATING_GROUP_ID)
+  })
+
+  it('creates a floating markdown file in the floating markdown directory', async () => {
+    mocks.getFloatingMarkdownDirectory.mockResolvedValue('/tmp/orca/floating-notes')
+    mocks.createUntitledMarkdownFile.mockResolvedValue({
+      filePath: '/tmp/orca/floating-notes/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({
+      groupId: FLOATING_GROUP_ID,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    await model.commands.newFileTab()
+    await flushMicrotasks()
+
+    expect(mocks.createUntitledMarkdownFile).toHaveBeenCalledWith(
+      '/tmp/orca/floating-notes',
+      FLOATING_TERMINAL_WORKTREE_ID,
+      undefined,
+      { activeRuntimeEnvironmentId: null }
+    )
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/orca/floating-notes/untitled.md' }),
+      expect.objectContaining({
+        preview: false,
+        targetGroupId: FLOATING_GROUP_ID,
+        suppressActiveRuntimeFallback: true
+      })
+    )
+  })
+
+  it('skips markdown creation when no floating markdown directory is available', async () => {
+    mocks.getFloatingMarkdownDirectory.mockResolvedValue(null)
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({
+      groupId: FLOATING_GROUP_ID,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    await model.commands.newFileTab()
+    await flushMicrotasks()
+
+    expect(mocks.createUntitledMarkdownFile).not.toHaveBeenCalled()
+    expect(mocks.openFile).not.toHaveBeenCalled()
+  })
+
+  it('opens an existing markdown document through the floating picker', async () => {
+    mocks.pickFloatingMarkdownDocument.mockResolvedValue({
+      filePath: '/tmp/orca/floating-notes/readme.md',
+      relativePath: 'readme.md'
+    })
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({
+      groupId: FLOATING_GROUP_ID,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    await model.commands.openFileTab?.()
+    await flushMicrotasks()
+
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/orca/floating-notes/readme.md',
+        relativePath: 'readme.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        mode: 'edit'
+      }),
+      expect.objectContaining({
+        preview: false,
+        targetGroupId: FLOATING_GROUP_ID,
+        suppressActiveRuntimeFallback: true
+      })
+    )
+  })
+
+  it('does nothing when the floating markdown picker is dismissed', async () => {
+    mocks.pickFloatingMarkdownDocument.mockResolvedValue(null)
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({
+      groupId: FLOATING_GROUP_ID,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    await model.commands.openFileTab?.()
+    await flushMicrotasks()
+
+    expect(mocks.openFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps floating browser creates local while a web runtime session is active', async () => {
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(true)
+    const state = storeBox.state as Record<string, unknown>
+    state.browserDefaultUrl = 'https://example.com'
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({
+      groupId: FLOATING_GROUP_ID,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    model.commands.newBrowserTab()
+    await flushMicrotasks()
+
+    expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'https://example.com',
+      expect.objectContaining({
+        focusAddressBar: true,
+        targetGroupId: FLOATING_GROUP_ID,
+        browserRuntimeEnvironmentId: null
+      })
+    )
   })
 })
