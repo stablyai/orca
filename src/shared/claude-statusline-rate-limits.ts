@@ -5,9 +5,11 @@
 export const CLAUDE_STATUSLINE_PATHNAME = '/statusline/claude'
 
 export type ClaudeStatusLineWindow = {
-  used_percentage: number
-  /** Unix epoch seconds when the window resets, if known. */
-  resets_at?: number
+  used_percentage?: number
+  /** OAuth-usage-shaped sibling field (0-100); accepted so a CLI schema drift degrades instead of going dark. */
+  utilization?: number
+  /** Unix epoch seconds when the window resets, if known; tolerates an ISO/date string if the schema drifts. */
+  resets_at?: number | string
 }
 
 export type ClaudeStatusLineRateLimits = {
@@ -17,20 +19,32 @@ export type ClaudeStatusLineRateLimits = {
   sevenDay: ClaudeStatusLineWindow | null
 }
 
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
-  const raw = value as { used_percentage?: unknown; resets_at?: unknown }
-  if (typeof raw.used_percentage !== 'number' || !Number.isFinite(raw.used_percentage)) {
+  const raw = value as { used_percentage?: unknown; utilization?: unknown; resets_at?: unknown }
+  const usedPercentage = finiteNumber(raw.used_percentage)
+  // Why: mirror mapClaudeUsageWindow's OAuth-shape tolerance (utilization, 0-100) so a statusline field rename degrades instead of silently darkening the feed.
+  const utilization = usedPercentage === undefined ? finiteNumber(raw.utilization) : undefined
+  if (usedPercentage === undefined && utilization === undefined) {
     return null
   }
-  return {
-    used_percentage: raw.used_percentage,
-    resets_at:
-      typeof raw.resets_at === 'number' && Number.isFinite(raw.resets_at)
+  // Why: resets_at is epoch seconds today, but pass a string/ISO value through so schema drift degrades to a parseable timestamp (see parseClaudeUsageResetTimestamp) instead of silently dropping it.
+  const resetsAt =
+    typeof raw.resets_at === 'number' && Number.isFinite(raw.resets_at)
+      ? raw.resets_at
+      : typeof raw.resets_at === 'string' && raw.resets_at.trim()
         ? raw.resets_at
         : undefined
+  return {
+    ...(usedPercentage !== undefined ? { used_percentage: usedPercentage } : {}),
+    ...(utilization !== undefined ? { utilization } : {}),
+    resets_at: resetsAt
   }
 }
 

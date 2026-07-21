@@ -1,10 +1,12 @@
+import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   writeHooksJson,
-  writeManagedScript
+  writeManagedScript,
+  type HooksConfig
 } from '../agent-hooks/installer-utils'
 import {
   readHooksJsonRemote,
@@ -28,11 +30,12 @@ import {
   getManagedCommand,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
-  getPosixStatusLineScriptFileName,
   getRemoteConfigPath,
   getRemoteManagedCommand,
+  getStatusLineInstallMarkerPath,
   getStatusLineScriptFileName,
   getStatusLineScriptPath,
+  getStatusLineSlotState,
   removeManagedHooks,
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
@@ -192,16 +195,34 @@ export class ClaudeHookService {
     )
     // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
     if (this.options.agent === 'claude') {
-      const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
-      writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
-      nextConfig = applyManagedStatusLine(
-        nextConfig,
-        getManagedCommand(statusLineScriptPath),
-        getStatusLineScriptFileName(this.options.settings)
-      )
+      nextConfig = this.installManagedStatusLine(nextConfig)
     }
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
+  }
+
+  // Why: the statusline feed is opportunistic (usage display, not agent status); a user who deleted the
+  // managed entry has opted out, and the marker distinguishes that deletion from a first install.
+  private installManagedStatusLine(config: HooksConfig): HooksConfig {
+    const scriptFileName = getStatusLineScriptFileName(this.options.settings)
+    const markerPath = getStatusLineInstallMarkerPath(this.options.settings)
+    const slot = getStatusLineSlotState(config, scriptFileName)
+    if (slot === 'user' || (slot === 'empty' && existsSync(markerPath))) {
+      return config
+    }
+    const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
+    writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
+    const next = applyManagedStatusLine(
+      config,
+      getManagedCommand(statusLineScriptPath),
+      scriptFileName
+    )
+    try {
+      writeFileSync(markerPath, '')
+    } catch {
+      // Best-effort: a missing marker only means one future user deletion gets re-installed once.
+    }
+    return next
   }
 
   // Why: install the Claude hook on the remote box (via SFTP); POSIX-only by design (Windows-remote deferred).
@@ -225,7 +246,7 @@ export class ClaudeHookService {
 
       // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
       const command = getRemoteManagedCommand(remoteScriptPath)
-      let nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
+      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
 
       // Why: write script before settings — a mid-install failure then leaves a harmless orphan script, not settings.json pointing at a missing one.
       // Why: SSH remotes use POSIX `.sh` paths even when Orca runs on Windows; never derive remote script syntax from the local OS.
@@ -234,21 +255,9 @@ export class ClaudeHookService {
         remoteScriptPath,
         getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
       )
-      // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
-      if (this.options.agent === 'claude') {
-        const remoteStatusLineFileName = getPosixStatusLineScriptFileName(this.options.settings)
-        const remoteStatusLinePath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteStatusLineFileName}`
-        await writeManagedScriptRemote(
-          sftp,
-          remoteStatusLinePath,
-          getManagedStatusLineScript('posix')
-        )
-        nextConfig = applyManagedStatusLine(
-          nextConfig,
-          getRemoteManagedCommand(remoteStatusLinePath),
-          remoteStatusLineFileName
-        )
-      }
+      // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
+      // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different
+      // account than the locally selected one, so its usage must not feed the local bar (live feed is host-local only).
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {
@@ -291,6 +300,14 @@ export class ClaudeHookService {
     )
     if (hooksChanged || statusLineChanged) {
       writeHooksJson(configPath, nextConfig)
+    }
+    if (this.options.agent === 'claude') {
+      try {
+        // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
+        rmSync(getStatusLineInstallMarkerPath(this.options.settings), { force: true })
+      } catch {
+        // ignore — marker cleanup is best-effort
+      }
     }
     return this.getStatus()
   }

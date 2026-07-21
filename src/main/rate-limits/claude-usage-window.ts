@@ -12,6 +12,7 @@ export function parseClaudeUsageResetTimestamp(value: string | number | undefine
     if (!Number.isFinite(value)) {
       return null
     }
+    // Why: 1e10 splits epoch seconds from epoch ms — seconds stay below it until year 2286, ms passed it in 1970.
     return value > 10_000_000_000 ? value : value * 1000
   }
 

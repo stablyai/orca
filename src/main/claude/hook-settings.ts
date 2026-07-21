@@ -132,6 +132,29 @@ export function applyManagedHooks(
   return { ...config, hooks: nextHooks }
 }
 
+export type StatusLineSlotState = 'managed' | 'user' | 'empty'
+
+// Why: install policy needs "user owns the slot" vs "slot is empty" vs "ours" — an empty slot
+// after a prior install means the user deleted the managed entry, which install must respect.
+export function getStatusLineSlotState(
+  config: HooksConfig,
+  scriptFileName = getStatusLineScriptFileName()
+): StatusLineSlotState {
+  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+  const current = config.statusLine
+  const currentCommand =
+    isPlainObject(current) && typeof current.command === 'string' ? current.command : null
+  if (!currentCommand) {
+    return 'empty'
+  }
+  return isManagedCommand(currentCommand) ? 'managed' : 'user'
+}
+
+// Why: records that the managed statusline was installed once, so a later empty slot reads as user opt-out.
+export function getStatusLineInstallMarkerPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return getSharedManagedScriptPath(`${getStatusLineScriptBaseName(settings)}.installed`)
+}
+
 // Why: statusLine is a single settings slot, not a hooks array — never overwrite a
 // user-owned status line; the usage feed then simply falls back to the OAuth poll.
 export function applyManagedStatusLine(
@@ -139,11 +162,7 @@ export function applyManagedStatusLine(
   command: string,
   scriptFileName = getStatusLineScriptFileName()
 ): HooksConfig {
-  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
-  const current = config.statusLine
-  const currentCommand =
-    isPlainObject(current) && typeof current.command === 'string' ? current.command : null
-  if (currentCommand && !isManagedCommand(currentCommand)) {
+  if (getStatusLineSlotState(config, scriptFileName) === 'user') {
     return config
   }
   return { ...config, statusLine: { type: 'command', command } }

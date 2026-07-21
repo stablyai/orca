@@ -779,6 +779,140 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('does not roll back a live-session snapshot that arrived while a claude fetch was in flight', async () => {
+    vi.useFakeTimers()
+    try {
+      const parkedClaudeFetch = deferred<ProviderRateLimits>()
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => okProvider('claude', 18))
+        .mockImplementationOnce(() => parkedClaudeFetch.promise)
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+
+      const secondRefresh = service.refresh()
+      await flushMicrotasks()
+
+      // A live statusline post lands while the second fetch is parked in flight.
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 41 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(41)
+
+      parkedClaudeFetch.resolve({
+        provider: 'claude',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'boom',
+        status: 'error'
+      })
+      await secondRefresh
+
+      // The failed fetch must not roll the bar back to the pre-cycle snapshot or flip it to error.
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('ok')
+      expect(claude?.session?.usedPercent).toBe(41)
+      expect(claude?.usageMetadata?.source).toBe('live-session')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a populated weekly bar when a live post carries only the five-hour window', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue({
+        ...okProvider('claude', 18),
+        weekly: { usedPercent: 62, windowMinutes: 10080, resetsAt: null, resetDescription: null }
+      })
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+      expect(service.getState().claude?.weekly?.usedPercent).toBe(62)
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 23.5 },
+        sevenDay: null
+      })
+
+      const claude = service.getState().claude
+      expect(claude?.session?.usedPercent).toBe(23.5)
+      expect(claude?.weekly?.usedPercent).toBe(62)
+      expect(claude?.usageMetadata?.source).toBe('live-session')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not restore the outgoing account auth snapshot when the account switches mid-resolve', async () => {
+    vi.useFakeTimers()
+    try {
+      const staleClaudeFetch = deferred<ProviderRateLimits>()
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(() => staleClaudeFetch.promise)
+        .mockImplementation(async () => okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const authGate = deferred<void>()
+      let resolverCalls = 0
+      const service = new RateLimitService()
+      service.setClaudeAuthPreparationResolver(async () => {
+        resolverCalls += 1
+        const outgoing = resolverCalls === 1
+        if (outgoing) {
+          await authGate.promise
+        }
+        return {
+          configDir: outgoing ? '/outgoing/.claude' : '/incoming/.claude',
+          runtime: 'host',
+          wslDistro: null,
+          wslLinuxConfigDir: null,
+          envPatch: {
+            CLAUDE_CONFIG_DIR: outgoing ? '/outgoing/.claude' : '/incoming/.claude'
+          },
+          stripAuthEnv: false,
+          provenance: outgoing ? 'managed:outgoing' : 'managed:incoming'
+        }
+      })
+
+      // The first cycle is parked inside the outgoing account's resolver await when the switch lands.
+      const firstRefresh = service.refresh()
+      await flushMicrotasks()
+      const switchPromise = service.refreshForClaudeAccountChange('outgoing-account')
+      await flushMicrotasks()
+      authGate.resolve()
+      await flushMicrotasks(8)
+
+      // The stale cycle resumed after the switch; while its Claude fetch is still in flight,
+      // a live post from the outgoing session must not land on the incoming account's bar.
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/outgoing/.claude',
+        fiveHour: { used_percentage: 99 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).not.toBe(99)
+
+      staleClaudeFetch.resolve(okProvider('claude', 18))
+      await Promise.all([firstRefresh, switchPromise])
+
+      // The incoming account's own sessions still attribute correctly.
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/incoming/.claude',
+        fiveHour: { used_percentage: 55 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(55)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps a settled error chip settled during background refetches instead of flashing fetching', async () => {
     vi.useFakeTimers()
     try {

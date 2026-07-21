@@ -37,6 +37,33 @@ describe('parseClaudeStatusLineBody', () => {
     expect(parsed?.sevenDay).toBeNull()
   })
 
+  it('passes through a string resets_at so schema drift degrades gracefully', () => {
+    const parsed = parseClaudeStatusLineBody(
+      formBody({
+        rate_limits: {
+          five_hour: { used_percentage: 12, resets_at: '2026-07-20T10:00:00Z' },
+          seven_day: { used_percentage: 3, resets_at: '   ' }
+        }
+      })
+    )
+    expect(parsed?.fiveHour).toEqual({ used_percentage: 12, resets_at: '2026-07-20T10:00:00Z' })
+    expect(parsed?.sevenDay).toEqual({ used_percentage: 3, resets_at: undefined })
+  })
+
+  it('falls back to the OAuth-shaped utilization field so schema drift degrades gracefully', () => {
+    const parsed = parseClaudeStatusLineBody(
+      formBody({
+        rate_limits: {
+          five_hour: { utilization: 37, resets_at: 1_750_000_000 },
+          seven_day: { used_percentage: 8, utilization: 99 }
+        }
+      })
+    )
+    expect(parsed?.fiveHour).toEqual({ utilization: 37, resets_at: 1_750_000_000 })
+    // used_percentage wins when both are present — it is the documented statusline field.
+    expect(parsed?.sevenDay).toEqual({ used_percentage: 8, resets_at: undefined })
+  })
+
   it('returns null when rate_limits is absent or empty', () => {
     expect(
       parseClaudeStatusLineBody(formBody({ context_window: { used_percentage: 8 } }))

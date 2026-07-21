@@ -127,7 +127,8 @@ function toErrorMessage(error: unknown): string {
 }
 
 function normalizeClaudeConfigDir(dir: string | null | undefined): string | null {
-  const trimmed = dir?.trim().replace(/[/\\]+$/, '')
+  // Why: the same dir can arrive with mixed separators (Windows env vs statusline JSON); unify them so attribution compares paths, not spellings. Case is left alone — Linux paths are case-sensitive.
+  const trimmed = dir?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
   return trimmed || null
 }
 
@@ -1303,9 +1304,31 @@ export class RateLimitService {
     return this.isRetryAfterActive(limits) || this.isLiveClaudeUsageFresh(limits)
   }
 
+  private resolveClaudeFetchApply(
+    fresh: ProviderRateLimits,
+    previous: ProviderRateLimits | null
+  ): ProviderRateLimits {
+    // Why: a live statusline post can land while an OAuth cycle is in flight; a failed fetch must not
+    // roll the bar back to the pre-cycle snapshot or flip the just-refreshed live data to error.
+    const current = this.state.claude
+    if (fresh.status !== 'ok' && current && this.isLiveClaudeUsageFresh(current)) {
+      return current
+    }
+    return this.applyStalePolicy(fresh, previous)
+  }
+
   private rememberClaudeAuthSnapshot(
-    authPreparation: ClaudeRuntimeAuthPreparation | undefined
+    authPreparation: ClaudeRuntimeAuthPreparation | undefined,
+    claudeGeneration: number,
+    claudeTarget: NormalizedClaudeAccountSelectionTarget
   ): void {
+    // Why: an account switch during the resolver await already cleared the snapshot; restoring the outgoing account's configDir here would cross-attribute its live posts to the new bar.
+    if (
+      claudeGeneration !== this.claudeFetchGeneration ||
+      !this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
+    ) {
+      return
+    }
     this.lastClaudeAuthSnapshot = {
       configDir: normalizeClaudeConfigDir(authPreparation?.envPatch.CLAUDE_CONFIG_DIR),
       provenance: authPreparation?.provenance ?? 'system'
@@ -1317,18 +1340,29 @@ export class RateLimitService {
     // Why: attribution needs the selected account's config dir; until a fetch cycle captures it, drop posts rather than guess the account.
     const snapshot = this.lastClaudeAuthSnapshot
     if (!snapshot) {
+      // Why: breadcrumbs make a silently dark live feed diagnosable — dropped posts are otherwise invisible.
+      console.debug('[rate-limits] dropped live Claude usage: no auth snapshot yet', {
+        eventConfigDir: event.configDir
+      })
       return
     }
     // Why: sessions of other accounts (or other runtimes) report their own quota; mixing them into the active account's bar would lie.
     if (normalizeClaudeConfigDir(event.configDir) !== snapshot.configDir) {
+      console.debug('[rate-limits] dropped live Claude usage: configDir mismatch', {
+        eventConfigDir: event.configDir,
+        snapshotConfigDir: snapshot.configDir
+      })
       return
     }
-    const session = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
-    const weekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
-    if (!session && !weekly) {
+    const freshSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
+    const freshWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
+    if (!freshSession && !freshWeekly) {
       return
     }
     const previous = this.state.claude
+    // Why: statusline payloads can carry a single window; an absent one means "no update", not "cleared" — keep the other bar populated.
+    const session = freshSession ?? previous?.session ?? null
+    const weekly = freshWeekly ?? previous?.weekly ?? null
     if (
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&
@@ -1346,6 +1380,7 @@ export class RateLimitService {
         session,
         weekly,
         // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible.
+        // Tradeoff: while live posts keep the OAuth poll gated, fableWeekly stays frozen until the session idles past the freshness window.
         fableWeekly: previous?.fableWeekly ?? null,
         updatedAt: Date.now(),
         error: null,
@@ -1413,13 +1448,14 @@ export class RateLimitService {
       return
     }
     const claudeTarget = this.claudeFetchTarget
+    // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
+    const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
-    this.rememberClaudeAuthSnapshot(claudeAuthPreparation)
+    this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
-    const claudeGeneration = this.claudeFetchGeneration
     const codexTarget = this.codexFetchTarget
     const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
@@ -1645,7 +1681,7 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.applyStalePolicy(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(claude, previousState.claude)
         : this.state.claude,
       codex: shouldApplyCodex
         ? this.applyStalePolicy(codex, previousState.codex)
@@ -1754,13 +1790,14 @@ export class RateLimitService {
       return
     }
     const claudeTarget = this.claudeFetchTarget
+    // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
+    const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
-    this.rememberClaudeAuthSnapshot(claudeAuthPreparation)
+    this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
-    const claudeGeneration = this.claudeFetchGeneration
     const previousState = this.state
 
     this.updateState({
@@ -1805,7 +1842,7 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.applyStalePolicy(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(claude, previousState.claude)
         : this.state.claude
     })
   }

@@ -201,10 +201,13 @@ describe('ClaudeHookService.install', () => {
         'utf-8'
       )
       expect(script).toContain('/statusline/claude')
-      expect(script).toContain('--data-urlencode "payload@-"')
-      if (process.platform !== 'win32') {
-        // Why: non-subscriber sessions never carry rate_limits; the script must exit before spawning curl.
+      // Why: non-subscriber sessions never carry rate_limits; both branches must guard before spawning curl.
+      if (process.platform === 'win32') {
+        expect(script).toContain('findstr.exe" /c:\\"rate_limits\\"')
+        expect(script).toContain('--data-urlencode "payload@%ORCA_STATUSLINE_PAYLOAD_FILE%"')
+      } else {
         expect(script).toContain('"rate_limits"')
+        expect(script).toContain('--data-urlencode "payload@-"')
       }
     } finally {
       vi.unstubAllEnvs()
@@ -254,6 +257,50 @@ describe('ClaudeHookService.install', () => {
       new ClaudeHookService().remove()
       const settings = JSON.parse(readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8'))
       expect(settings.statusLine).toBeUndefined()
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('does not re-install a managed statusLine the user deleted, until remove() resets the opt-out', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-optout-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const settingsPath = join(tmpHome, '.claude', 'settings.json')
+      new ClaudeHookService().install()
+      expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).statusLine).toBeTruthy()
+
+      // The user deletes the managed statusLine from settings.json (e.g. via /statusline or an editor).
+      const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+      delete settings.statusLine
+      writeFileSync(settingsPath, JSON.stringify(settings))
+
+      // A later install (app restart) must respect the deletion — statusLine is opportunistic, not required.
+      new ClaudeHookService().install()
+      expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).statusLine).toBeUndefined()
+
+      // An Orca-level remove() resets the opt-out memory, so a fresh install re-adds it.
+      new ClaudeHookService().remove()
+      new ClaudeHookService().install()
+      expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).statusLine).toBeTruthy()
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps refreshing a still-managed statusLine across installs', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-refresh-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const settingsPath = join(tmpHome, '.claude', 'settings.json')
+      new ClaudeHookService().install()
+      new ClaudeHookService().install()
+      const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+      expect(settings.statusLine?.command).toContain('claude-statusline')
     } finally {
       vi.unstubAllEnvs()
       rmSync(tmpHome, { recursive: true, force: true })
@@ -358,12 +405,10 @@ describe('ClaudeHookService.installRemote', () => {
     expect(script).toContain('--data-urlencode "payload@-"')
     expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
-    // Managed statusLine (POSIX on remotes regardless of the local OS)
-    expect(parsed.statusLine.type).toBe('command')
-    expect(parsed.statusLine.command).toContain('/home/dev/.orca/agent-hooks/claude-statusline.sh')
-    const statusLineScript = fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')
-    expect(statusLineScript).toContain('/statusline/claude')
-    expect(statusLineScript).toContain('"rate_limits"')
+    // Why: no remote statusLine — this path serves SSH remotes and WSL guests, whose relay
+    // listener doesn't route /statusline/claude and whose accounts aren't attributable locally.
+    expect(parsed.statusLine).toBeUndefined()
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toBeUndefined()
   })
 
   it('reports parse error when remote settings.json cannot be parsed', async () => {
