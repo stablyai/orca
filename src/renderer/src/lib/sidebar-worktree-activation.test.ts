@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   activateAndRevealFolderWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
-  resumeWorkspace: vi.fn()
+  resumeWorkspace: vi.fn(),
+  toastError: vi.fn()
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
@@ -11,14 +12,21 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+
 import { activateWorktreeFromSidebar } from './sidebar-worktree-activation'
 
 describe('sidebar worktree activation', () => {
   beforeEach(() => {
     mocks.activateAndRevealWorktree.mockClear()
     mocks.activateAndRevealFolderWorkspace.mockClear()
+    mocks.toastError.mockClear()
     mocks.resumeWorkspace.mockReset().mockResolvedValue(null)
     vi.stubGlobal('window', { api: { ephemeralVm: { resumeWorkspace: mocks.resumeWorkspace } } })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('activates a clicked worktree without sidebar reveal', async () => {
@@ -61,6 +69,40 @@ describe('sidebar worktree activation', () => {
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-local', {
       revealInSidebar: false
     })
+  })
+
+  it('does not toast a wake failure once a newer workspace click has taken over', async () => {
+    let rejectResume = (_error: Error) => {}
+    mocks.resumeWorkspace
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectResume = (error: Error) => reject(error)
+          })
+      )
+      .mockResolvedValueOnce(null)
+
+    const staleActivation = activateWorktreeFromSidebar('wt-vm')
+    await activateWorktreeFromSidebar('wt-local')
+    rejectResume(new Error('vm wake failed'))
+    await staleActivation
+
+    // Why: the stale wake failure belongs to a superseded click; surfacing it
+    // would blame the workspace the user has already navigated away from.
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-local', {
+      revealInSidebar: false
+    })
+  })
+
+  it('toasts a wake failure for the current workspace click', async () => {
+    mocks.resumeWorkspace.mockRejectedValueOnce(new Error('vm wake failed'))
+
+    await activateWorktreeFromSidebar('wt-vm')
+
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('routes folder workspace activation through the guarded folder path', async () => {
