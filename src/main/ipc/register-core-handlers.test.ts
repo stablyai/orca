@@ -54,6 +54,8 @@ const {
   registerHostedReviewHandlersMock,
   registerExportHandlersMock,
   registerOnboardingHandlersMock,
+  registerDashboardPopoutHandlersMock,
+  registerTerminalPreviewHandlersMock,
   registerSpeechHandlersMock,
   registerSkillsHandlersMock,
   registerWorkspaceSpaceHandlersMock,
@@ -116,6 +118,8 @@ const {
   registerHostedReviewHandlersMock: vi.fn(),
   registerExportHandlersMock: vi.fn(),
   registerOnboardingHandlersMock: vi.fn(),
+  registerDashboardPopoutHandlersMock: vi.fn(),
+  registerTerminalPreviewHandlersMock: vi.fn(),
   registerSpeechHandlersMock: vi.fn(),
   registerSkillsHandlersMock: vi.fn(),
   registerWorkspaceSpaceHandlersMock: vi.fn(),
@@ -142,6 +146,14 @@ vi.mock('./runtime-environment-transport-routing', () => ({
 
 vi.mock('./onboarding', () => ({
   registerOnboardingHandlers: registerOnboardingHandlersMock
+}))
+
+vi.mock('./dashboard-popout', () => ({
+  registerDashboardPopoutHandlers: registerDashboardPopoutHandlersMock
+}))
+
+vi.mock('./terminal-preview', () => ({
+  registerTerminalPreviewHandlers: registerTerminalPreviewHandlersMock
 }))
 
 vi.mock('./speech', () => ({
@@ -417,6 +429,8 @@ describe('registerCoreHandlers', () => {
     registerGitLabHandlersMock.mockReset()
     registerHostedReviewHandlersMock.mockReset()
     registerExportHandlersMock.mockReset()
+    registerDashboardPopoutHandlersMock.mockReset()
+    registerTerminalPreviewHandlersMock.mockReset()
     registerSpeechHandlersMock.mockReset()
     registerSkillsHandlersMock.mockReset()
     registerWorkspaceSpaceHandlersMock.mockReset()
@@ -493,6 +507,8 @@ describe('registerCoreHandlers', () => {
     expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store, runtime)
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()
+    expect(registerDashboardPopoutHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerTerminalPreviewHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store, agentAwakeService)
     expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspaceSpaceHandlersMock).toHaveBeenCalledWith(store)
@@ -512,7 +528,8 @@ describe('registerCoreHandlers', () => {
       expect.objectContaining({
         getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths,
         getActiveRuntimeAiVaultHostInfos: expect.any(Function),
-        scanRuntimeAiVaultSessions: expect.any(Function)
+        scanRuntimeAiVaultSessions: expect.any(Function),
+        prepareRuntimeSessionResume: expect.any(Function)
       })
     )
     expect(aiVaultOptions.getActiveRuntimeAiVaultHostInfos()).toEqual([])
@@ -561,6 +578,26 @@ describe('registerCoreHandlers', () => {
         executionHostId: 'runtime:env-123'
       },
       3000
+    )
+
+    callRuntimeEnvironmentMock.mockResolvedValueOnce({
+      ok: true,
+      result: { useRealCodexHome: true }
+    })
+    const prepareArgs = {
+      agent: 'codex',
+      filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'runtime:env-123'
+    }
+    await expect(
+      aiVaultOptions.prepareRuntimeSessionResume('env-123', prepareArgs)
+    ).resolves.toEqual({ useRealCodexHome: true })
+    expect(callRuntimeEnvironmentMock).toHaveBeenLastCalledWith(
+      '/test/user-data',
+      'env-123',
+      'aiVault.prepareSessionResume',
+      prepareArgs
     )
   })
 

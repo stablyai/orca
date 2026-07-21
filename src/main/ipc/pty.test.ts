@@ -741,7 +741,11 @@ describe('registerPtyHandlers', () => {
   async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
     processEnvOverrides?: Record<string, string | undefined>,
-    getSelectedCodexHomePath?: () => string | null,
+    getSelectedCodexHomePath?: (
+      target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
+      launchEnv?: NodeJS.ProcessEnv,
+      launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+    ) => string | null,
     getSettings?: () => {
       enableGitHubAttribution?: boolean
       agentStatusHooksEnabled?: boolean
@@ -750,7 +754,9 @@ describe('registerPtyHandlers', () => {
     },
     // Why: PR #2662 finding 2 — accept an optional `command` so callers can exercise OMP target resolution (was untested).
     command?: string,
-    launchAgent?: TuiAgent
+    launchAgent?: TuiAgent,
+    cwd?: string,
+    worktreeId?: string
   ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
@@ -778,7 +784,9 @@ describe('registerPtyHandlers', () => {
         rows: 24,
         ...(argsEnv ? { env: argsEnv } : {}),
         ...(command ? { command } : {}),
-        ...(launchAgent ? { launchAgent } : {})
+        ...(launchAgent ? { launchAgent } : {}),
+        ...(cwd ? { cwd } : {}),
+        ...(worktreeId ? { worktreeId } : {})
       })
       const spawnCall = spawnMock.mock.calls.at(-1)!
       return spawnCall[2].env as Record<string, string>
@@ -921,6 +929,34 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME)
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
+    })
+
+    it('prepares Codex launch state for the workspace before spawning an interactive tab', async () => {
+      const workspacePath = '/repo/worktrees/new-feature'
+      const resolveHome = vi.fn(
+        (
+          _target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
+          _launchEnv?: NodeJS.ProcessEnv,
+          _launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+        ) => null
+      )
+
+      await spawnAndGetEnv(
+        undefined,
+        undefined,
+        resolveHome,
+        undefined,
+        'codex',
+        'codex',
+        workspacePath,
+        `repo-id::${workspacePath}`
+      )
+
+      expect(resolveHome.mock.calls[0]?.[0]).toEqual({ runtime: 'host' })
+      expect(resolveHome.mock.calls[0]?.[2]).toEqual({ workspacePath, launchAgent: 'codex' })
+      expect(resolveHome.mock.invocationCallOrder[0]).toBeLessThan(
+        spawnMock.mock.invocationCallOrder[0]!
+      )
     })
 
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
@@ -1352,6 +1388,62 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })
 
+    it('leaves an inherited CODEX_HOME untouched for system default when the flag is OFF', async () => {
+      // Why: flag OFF must stay byte-identical to today. With no managed home
+      // selected (resolver null) and the real-home flag off, no CODEX_HOME
+      // injection or strip happens; an inherited value survives as before.
+      const env = await spawnAndGetEnv(
+        undefined,
+        { CODEX_HOME: '/tmp/system-codex-home' },
+        () => null
+      )
+      expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
+    })
+
+    it('strips a nested-Orca override for system default when the real-home flag is ON', async () => {
+      const env = await spawnAndGetEnv(
+        { CODEX_HOME: '/managed/home', ORCA_CODEX_HOME: '/managed/home' },
+        undefined,
+        () => null,
+        () => ({ codexSystemDefaultRealHomeEnabled: true }) as never
+      )
+      expect(env.CODEX_HOME).toBeUndefined()
+      expect(env.ORCA_CODEX_HOME).toBeUndefined()
+    })
+
+    it('preserves a user-owned CODEX_HOME for system default when the real-home flag is ON', async () => {
+      const env = await spawnAndGetEnv(
+        { CODEX_HOME: '/home/me/.config/codex' },
+        { ORCA_CODEX_HOME: undefined },
+        () => null,
+        () => ({ codexSystemDefaultRealHomeEnabled: true }) as never
+      )
+      expect(env.CODEX_HOME).toBe('/home/me/.config/codex')
+      expect(env.ORCA_CODEX_HOME).toBeUndefined()
+    })
+
+    it('lets the resolver keep a per-spawn custom CODEX_HOME on the managed lane', async () => {
+      const customHome = '/home/me/.config/codex'
+      let resolvedCodexHome: string | undefined
+      const resolveHome = vi.fn((_target: unknown, launchEnv?: NodeJS.ProcessEnv) => {
+        resolvedCodexHome = launchEnv?.CODEX_HOME
+        return launchEnv?.CODEX_HOME === customHome ? TEST_CODEX_HOME : null
+      })
+
+      const env = await spawnAndGetEnv(
+        { CODEX_HOME: customHome },
+        { CODEX_HOME: undefined, ORCA_CODEX_HOME: undefined },
+        resolveHome,
+        () => ({ codexSystemDefaultRealHomeEnabled: true }) as never
+      )
+
+      expect(resolveHome).toHaveBeenCalledTimes(1)
+      expect(resolveHome.mock.calls[0]?.[0]).toEqual({ runtime: 'host' })
+      expect(resolvedCodexHome).toBe(customHome)
+      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
+    })
+
     it('injects explicit proxy settings into local PTY env', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
         httpProxyUrl: 'http://proxy.example:8080',
@@ -1445,7 +1537,11 @@ describe('registerPtyHandlers', () => {
 
       async function daemonSpawnAndGetOptions(
         argsEnv?: Record<string, string>,
-        getSelectedCodexHomePath?: () => string | null,
+        getSelectedCodexHomePath?: (
+          target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
+          launchEnv?: NodeJS.ProcessEnv,
+          launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+        ) => string | null,
         getSettings?: () => {
           enableGitHubAttribution?: boolean
           httpProxyUrl?: string
@@ -1458,6 +1554,7 @@ describe('registerPtyHandlers', () => {
           worktreeId?: string
           shellOverride?: string
           command?: string
+          launchAgent?: TuiAgent
           envToDelete?: string[]
         },
         supportsGitCredentialGuardHost = true
@@ -1502,14 +1599,23 @@ describe('registerPtyHandlers', () => {
 
       async function daemonSpawnAndGetEnv(
         argsEnv?: Record<string, string>,
-        getSelectedCodexHomePath?: () => string | null,
+        getSelectedCodexHomePath?: (
+          target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
+          launchEnv?: NodeJS.ProcessEnv,
+          launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+        ) => string | null,
         getSettings?: () => {
           enableGitHubAttribution?: boolean
           httpProxyUrl?: string
           httpProxyBypassRules?: string
         },
         processEnvOverrides?: Record<string, string | undefined>,
-        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string },
+        spawnArgs?: {
+          cwd?: string
+          shellOverride?: string
+          command?: string
+          launchAgent?: TuiAgent
+        },
         supportsGitCredentialGuardHost = true
       ): Promise<Record<string, string>> {
         return (
@@ -1623,6 +1729,27 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
       })
 
+      it('prepares Codex project trust before a daemon-backed interactive launch', async () => {
+        const workspacePath = '/repo/worktrees/new-feature'
+        const resolveHome = vi.fn(
+          (
+            _target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
+            _launchEnv?: NodeJS.ProcessEnv,
+            _launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+          ) => null
+        )
+
+        await daemonSpawnAndGetOptions({}, resolveHome, undefined, undefined, {
+          cwd: workspacePath,
+          worktreeId: `repo-id::${workspacePath}`,
+          command: 'codex',
+          launchAgent: 'codex'
+        })
+
+        expect(resolveHome.mock.calls[0]?.[0]).toEqual({ runtime: 'host' })
+        expect(resolveHome.mock.calls[0]?.[2]).toEqual({ workspacePath, launchAgent: 'codex' })
+      })
+
       it('injects explicit proxy settings on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, () => ({
           httpProxyUrl: 'http://proxy.example:8080',
@@ -1696,6 +1823,39 @@ describe('registerPtyHandlers', () => {
             value: originalPlatform
           })
         }
+      })
+
+      it('strips the daemon-inherited Orca-owned CODEX_HOME for real-home routing', async () => {
+        const spawnOptions = await daemonSpawnAndGetOptions(
+          {},
+          () => null,
+          () => ({ codexSystemDefaultRealHomeEnabled: true }) as never,
+          { CODEX_HOME: '/managed/home', ORCA_CODEX_HOME: '/managed/home' }
+        )
+        expect(spawnOptions.env.CODEX_HOME).toBeUndefined()
+        expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
+        expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['ORCA_CODEX_HOME']))
+        // The daemon compares its own merged values before deleting CODEX_HOME.
+        expect(spawnOptions.envToDelete).not.toContain('CODEX_HOME')
+      })
+
+      it('preserves a daemon-inherited user CODEX_HOME for real-home routing', async () => {
+        const spawnOptions = await daemonSpawnAndGetOptions(
+          {},
+          () => null,
+          () => ({ codexSystemDefaultRealHomeEnabled: true }) as never,
+          { CODEX_HOME: '/home/me/.config/codex', ORCA_CODEX_HOME: undefined }
+        )
+        expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['ORCA_CODEX_HOME']))
+        expect(spawnOptions.envToDelete).not.toEqual(expect.arrayContaining(['CODEX_HOME']))
+      })
+
+      it('does not strip the daemon-inherited CODEX_HOME when the flag is OFF', async () => {
+        const spawnOptions = await daemonSpawnAndGetOptions({}, () => null, undefined, {
+          CODEX_HOME: '/managed/home',
+          ORCA_CODEX_HOME: '/managed/home'
+        })
+        expect(spawnOptions.envToDelete ?? []).not.toEqual(expect.arrayContaining(['CODEX_HOME']))
       })
 
       it('prepends the bare-orca CLI shim dir to PATH for packaged Linux spawns', async () => {
@@ -2357,7 +2517,12 @@ describe('registerPtyHandlers', () => {
 
       it('does NOT inject host-local env on SSH spawns (connectionId set)', async () => {
         const sshSpawn = vi.fn(
-          async (_opts: { env: Record<string, string>; paneKey?: string; tabId?: string }) => ({
+          async (_opts: {
+            env: Record<string, string>
+            envToDelete?: string[]
+            paneKey?: string
+            tabId?: string
+          }) => ({
             id: 'ssh-pty'
           })
         )
@@ -2394,7 +2559,8 @@ describe('registerPtyHandlers', () => {
           undefined,
           (() => ({
             httpProxyUrl: 'http://proxy.example:8080',
-            httpProxyBypassRules: 'localhost'
+            httpProxyBypassRules: 'localhost',
+            codexSystemDefaultRealHomeEnabled: true
           })) as never,
           undefined,
           store as never
@@ -2429,6 +2595,10 @@ describe('registerPtyHandlers', () => {
         expect(env.HTTPS_PROXY).toBeUndefined()
         expect(env.NO_PROXY).toBeUndefined()
         expect(env.FOO).toBe('bar')
+        // Why: real-home routing is host-only. A null local-home resolver on
+        // SSH must not become a request to alter the remote Codex environment.
+        expect(spawnOptions.envToDelete ?? []).not.toContain('CODEX_HOME')
+        expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
         expect(spawnOptions.paneKey).toBe(makePaneKey('tab-1', leafId))
         expect(spawnOptions.tabId).toBe('tab-1')
         expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
@@ -5782,9 +5952,11 @@ describe('registerPtyHandlers', () => {
     }
     const savedRemoteHooks = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '0'
-    const remoteSpawn = vi.fn(async (_opts: { env?: Record<string, string> }) => ({
-      id: 'ssh:ssh-runtime-env@@relay-pty'
-    }))
+    const remoteSpawn = vi.fn(
+      async (_opts: { env?: Record<string, string>; envToDelete?: string[] }) => ({
+        id: 'ssh:ssh-runtime-env@@relay-pty'
+      })
+    )
     registerSshPtyProvider('ssh-runtime-env', {
       spawn: remoteSpawn,
       write: vi.fn(),
@@ -5830,7 +6002,10 @@ describe('registerPtyHandlers', () => {
         mainWindow as never,
         runtime as never,
         undefined,
-        undefined,
+        (() => ({
+          agentStatusHooksEnabled: false,
+          codexSystemDefaultRealHomeEnabled: true
+        })) as never,
         undefined,
         store as never
       )
@@ -5852,11 +6027,14 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding: true
       })
 
-      const env = remoteSpawn.mock.calls[0]?.[0].env
+      const spawnOptions = remoteSpawn.mock.calls[0]?.[0]
+      const env = spawnOptions.env
       expect(env).toMatchObject({ FOO: 'bar' })
       expect(env?.ORCA_PANE_KEY).toBeUndefined()
       expect(env?.ORCA_TAB_ID).toBeUndefined()
       expect(env?.ORCA_WORKTREE_ID).toBeUndefined()
+      expect(spawnOptions.envToDelete ?? []).not.toContain('CODEX_HOME')
+      expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
       expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
         expect.objectContaining({
           targetId: 'ssh-runtime-env',

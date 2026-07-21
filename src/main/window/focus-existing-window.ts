@@ -25,7 +25,7 @@ function safelyFocusApp(app: Pick<App, 'focus'>): void {
   }
 }
 
-function safelyRevealWindow(window: BrowserWindow): void {
+export function safelyRevealWindow(window: BrowserWindow): void {
   if (window.isDestroyed()) {
     return
   }

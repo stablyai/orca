@@ -3,10 +3,12 @@ import type { CheckStatus } from '../../shared/types'
 import {
   deriveBitbucketBuildStatus,
   mapBitbucketPullRequest,
+  mapBitbucketPullRequestState,
   type BitbucketPullRequestInfo,
   type RawBitbucketBuildStatus,
   type RawBitbucketPullRequest
 } from './pull-request-mappers'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { getBitbucketRepoRef, type BitbucketRepoRef } from './repository-ref'
 import {
   getHostedReviewLocalGitOptions,
@@ -233,7 +235,20 @@ export async function getBitbucketPullRequestForBranch(
     )
     const raw = list?.values?.[0]
     if (raw) {
-      return normalizePullRequest(repo, raw)
+      // Why (#9171): discard a non-open implicit branch match on the repo
+      // default branch and fall through to the linked-number fallback below.
+      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+        state: mapBitbucketPullRequestState(raw.state),
+        reviewNumber: raw.id ?? null,
+        linkedReviewNumber: linkedPRNumber,
+        branchName,
+        repoPath,
+        connectionId,
+        localGitOptions: getHostedReviewLocalGitOptions(options)
+      })
+      if (!hideOnDefaultBranch) {
+        return normalizePullRequest(repo, raw)
+      }
     }
   }
 

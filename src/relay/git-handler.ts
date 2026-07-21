@@ -15,7 +15,8 @@ import {
   computeDiff,
   branchCompare as branchCompareOp,
   branchDiffEntries,
-  validateGitExecArgs
+  validateGitExecArgs,
+  type GitExec
 } from './git-handler-ops'
 import {
   buildSubmoduleInnerCommitRangeDiff,
@@ -42,6 +43,7 @@ import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { gitExecMutatesRepository } from '../shared/git-exec-mutation'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
+import { capGitStatusEntries, resolveGitStatusLimit } from '../shared/git-status-limit'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import {
@@ -78,6 +80,7 @@ import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
+import { streamRelayGitStdout } from './git-stdout-stream'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -189,7 +192,9 @@ export class GitHandler {
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('git.status', (p, context) => this.getStatus(p, context))
-    this.dispatcher.onRequest('git.submoduleStatus', (p) => this.getSubmoduleStatus(p))
+    this.dispatcher.onRequest('git.submoduleStatus', (p, context) =>
+      this.getSubmoduleStatus(p, context)
+    )
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
@@ -330,43 +335,55 @@ export class GitHandler {
 
   private async getStatus(params: Record<string, unknown>, context: RequestContext) {
     this.gitDiffReadDedupe.clear()
-    return getStatusOp(this.git.bind(this), params, { signal: context.signal })
+    return getStatusOp(this.git.bind(this), streamRelayGitStdout, params, {
+      signal: context.signal
+    })
   }
 
   // Why: parent status lists one gitlink row per submodule; fetch inner per-file changes by running status inside the submodule's own worktree.
-  private async getSubmoduleStatus(params: Record<string, unknown>) {
+  private async getSubmoduleStatus(params: Record<string, unknown>, context: RequestContext) {
     const worktreePath = params.worktreePath as string
     const submodulePath = params.submodulePath as string
     const area = resolveSubmoduleStatusArea(params)
     const staged = area === 'staged'
     const resolved = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
-    const workingResult = await getStatusOp(this.git.bind(this), {
-      ...params,
-      worktreePath: resolved
-    })
+    const limit = resolveGitStatusLimit(params.limit)
+    // Why: staged expansion only represents HEAD→index; scanning the submodule worktree is wasted work.
+    const workingResult = staged
+      ? { entries: [], conflictOperation: 'unknown' }
+      : await getStatusOp(
+          this.git.bind(this),
+          streamRelayGitStdout,
+          {
+            ...params,
+            worktreePath: resolved
+          },
+          { signal: context.signal }
+        )
+    // Why: pointer/range probes are part of the same SSH request and must not outlive its cancellation.
+    const requestGit: GitExec = (args, cwd, options) =>
+      this.git(args, cwd, { ...options, signal: context.signal })
     // Why: a moved gitlink (clean worktree) has no uncommitted rows; surface files changed between recorded and checked-out commits so it isn't empty.
     const { fromOid, toOid } = await resolveSubmoduleCommitRange(
-      this.git.bind(this),
+      requestGit,
       worktreePath,
       submodulePath,
       staged
     )
     if (fromOid && toOid && fromOid !== toOid) {
-      const rangeEntries = await computeSubmoduleRangeEntries(
-        this.git.bind(this),
-        resolved,
-        fromOid,
-        toOid
-      )
+      const rangeEntries = await computeSubmoduleRangeEntries(requestGit, resolved, fromOid, toOid)
       if (staged) {
-        return { ...workingResult, entries: rangeEntries }
+        return { ...workingResult, ...capGitStatusEntries(rangeEntries, limit) }
       }
       const rangePaths = new Set(rangeEntries.map((entry) => entry.path))
       const entries = [
         ...rangeEntries,
         ...workingResult.entries.filter((entry) => !rangePaths.has(entry.path))
       ]
-      return { ...workingResult, entries }
+      return {
+        ...workingResult,
+        ...capGitStatusEntries(entries, limit, workingResult)
+      }
     }
     if (staged) {
       return { ...workingResult, entries: [] }

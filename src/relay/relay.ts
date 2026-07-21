@@ -52,6 +52,7 @@ import { pickRemoteCliEnv } from './remote-cli-env'
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
+import { registerManagedHookInstaller } from './managed-hook-installer'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -539,6 +540,9 @@ async function main(): Promise<void> {
     const replayed = hookServer.replayCachedPayloadsForPanes()
     return { replayed }
   })
+
+  // Why: relay-local installers collapse hundreds of SFTP request/response RTTs to one RPC.
+  registerManagedHookInstaller(dispatcher)
 
   // Why: plugin sources ship over the wire so an Orca update doesn't force a relay redeploy; cache them per spawn. See docs/design/agent-status-over-ssh.md §4.
   // Why: bound per-source size so a buggy/hostile Orca can't OOM the relay by pushing a giant string.

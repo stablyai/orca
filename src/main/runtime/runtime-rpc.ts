@@ -146,6 +146,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.subscribe',
   'accounts.unsubscribe',
   'aiVault.listSessions',
+  'aiVault.prepareSessionResume',
   'browser.back',
   'browser.dialogAccept',
   'browser.dialogDismiss',

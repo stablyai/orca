@@ -36,7 +36,10 @@ import {
 } from '../src/transport/client-context'
 import { classifyConnection } from '../src/transport/connection-health'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
-import { shouldPresentNotificationOptIn } from '../src/notifications/notification-opt-in-gate'
+import {
+  loadMobileOnboardingSteps,
+  mobileOnboardingDestination
+} from '../src/onboarding/mobile-onboarding-plan'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
@@ -306,7 +309,9 @@ export default function HomeScreen() {
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
-  const notificationOptInCheckedRef = useRef(false)
+  // Why: focus can fire repeatedly while an async gate is pending; one probe per
+  // mount avoids duplicate storage/permission reads and competing navigation.
+  const onboardingOptInCheckedRef = useRef(false)
 
   // Why: shared clients from the per-host store, not N independent WebSockets. See docs/mobile-shared-client-per-host.md.
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
@@ -378,13 +383,16 @@ export default function HomeScreen() {
           return
         }
         setHosts(h)
-        if (h.length === 0 || notificationOptInCheckedRef.current) {
+        if (h.length === 0 || onboardingOptInCheckedRef.current) {
           return
         }
-        notificationOptInCheckedRef.current = true
-        const showNotificationOptIn = await shouldPresentNotificationOptIn()
-        if (!stale && showNotificationOptIn) {
-          router.replace('/notification-opt-in')
+        onboardingOptInCheckedRef.current = true
+        const onboardingSteps = await loadMobileOnboardingSteps()
+        if (stale) {
+          return
+        }
+        if (onboardingSteps.length > 0) {
+          router.replace(mobileOnboardingDestination(onboardingSteps))
         }
       })
       void AsyncStorage.getItem('orca:last-visited-worktree').then((raw) => {

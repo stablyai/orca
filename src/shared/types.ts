@@ -641,7 +641,7 @@ export type WorktreeMeta = {
   automationProvenance?: AutomationWorkspaceProvenance
 }
 
-export type WorktreeOwnership = 'orca-managed' | 'external' | 'unknown-legacy'
+export type WorktreeOwnership = 'orca-managed' | 'external' | 'unknown-legacy' | 'agent-scratch'
 
 export type DetectedWorktreeListSource = 'git' | 'metadata-fallback' | 'session-fallback'
 
@@ -2360,10 +2360,28 @@ export type CodexManagedAccountSummary = {
   lastAuthenticatedAt: number
 }
 
+/** Live, read-only identity of the user's real ~/.codex used by the
+ *  system-default (activeAccountId:null) Codex account. Orca reads this to
+ *  display and attribute the system default; it never writes ~/.codex. */
+export type CodexSystemDefaultIdentity = {
+  /** True when ~/.codex/auth.json exists (signed in via a token file). */
+  hasAuth: boolean
+  /** 'oauth' = ChatGPT sign-in with an id token (has ChatGPT usage);
+   *  'api-key' = env-key/custom provider (no ChatGPT usage);
+   *  'none' = signed out or identity could not be resolved. */
+  authKind: 'oauth' | 'api-key' | 'none'
+  email: string | null
+  providerAccountId: string | null
+  workspaceLabel: string | null
+}
+
 export type CodexRateLimitAccountsState = {
   accounts: CodexManagedAccountSummary[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
+  /** Resolved identity of the host system-default (real ~/.codex) account.
+   *  Omitted for runtimes where it is not resolved (e.g. per-distro WSL). */
+  systemDefault?: CodexSystemDefaultIdentity
 }
 
 export type CodexManagedAccountRuntimeSelection = {
@@ -2856,6 +2874,8 @@ export type GlobalSettings = {
   experimentalSidekick?: boolean
   /** Experimental: left-sidebar Agents view — threaded feed of agent completions, blocking/unread state, worktree creation. */
   experimentalActivity: boolean
+  /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
+  experimentalAgentDashboardPopout?: boolean
   /** One-shot migration guard for defaulting the Agents view off; later explicit opt-ins persist normally. */
   experimentalActivityDefaultedOffForAllUsers?: boolean
   /** Experimental: persistent terminal-pane attention ring for bell + agent-completion events. Opt-in while tuning signal/noise. */
@@ -3254,6 +3274,9 @@ export type PersistedUIState = {
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
   windowMaximized?: boolean
+  /** Saved bounds for the pop-out dashboard window so it restores to its last
+   *  position/size. Independent of the main window's bounds. */
+  dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
   /** One-shot flag: 'recent' once meant the smart sort (v1→v2 rename), migrated to 'smart' once so the new last-activity 'recent' isn't re-clobbered. */
   _sortBySmartMigrated?: boolean
   /** LEGACY inline-agents flag, stamped unconditionally every load so it can't gate migration; kept only for rollback forward-compat (real gate: _inlineAgentsDefaultedForAllUsers). */

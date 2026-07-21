@@ -20,17 +20,28 @@ export function sendToTrustedUIRenderer(
   payload: unknown,
   excludedWebContentsId?: number
 ): void {
+  const renderer = getTrustedUIRendererWebContents(excludedWebContentsId)
+  renderer?.send(channel, payload)
+}
+
+export function getTrustedUIRendererWebContents(
+  excludedWebContentsId?: number
+): WebContents | null {
+  // Why: exact targeting avoids waking retained browser/utility windows that cannot consume app UI events.
   const rendererId = trustedUIRendererWebContentsId
   if (rendererId == null || rendererId === excludedWebContentsId) {
-    return
+    return null
   }
   const renderer = webContents.fromId(rendererId)
   if (!renderer || renderer.isDestroyed()) {
-    return
+    return null
   }
-  // Why: app events belong to the registered UI renderer; enumerating every
-  // WebContents wakes retained browser guests that cannot consume the channel.
-  renderer.send(channel, payload)
+  return renderer
+}
+
+export function getTrustedUIRendererWindow(): BrowserWindow | null {
+  const renderer = getTrustedUIRendererWebContents()
+  return renderer ? BrowserWindow.fromWebContents(renderer) : null
 }
 
 export function registerUIHandlers(store: Store): void {

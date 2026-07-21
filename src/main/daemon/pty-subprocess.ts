@@ -53,6 +53,7 @@ import {
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from '../../shared/agent-process-recognition'
+import { shouldInspectOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
 import {
   shouldUseShellReadyStartupDelivery,
   type StartupCommandDelivery
@@ -81,6 +82,11 @@ const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 // Why: retry once so a transient slow spawn doesn't route every terminal to the local fallback, losing daemon persistence.
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
+
+function shouldInspectOuterWrapperFallback(processName: string | null): boolean {
+  const recognized = recognizeAgentProcess(processName)
+  return recognized !== null && shouldInspectOuterWrapperForegroundProcess(recognized)
+}
 
 function composeGuardedDaemonGitConfigEnv(
   env: Record<string, string>,
@@ -112,6 +118,25 @@ export type PtySubprocessOptions = {
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+}
+
+function deleteRequestedDaemonEnvKeys(
+  env: Record<string, string>,
+  keys: readonly string[] | undefined
+): void {
+  // Why: the persistent daemon's inherited env can differ from Electron's.
+  // Compare ownership here so real-home routing neither leaks an Orca overlay
+  // nor deletes a user-owned CODEX_HOME chosen by the daemon's host context.
+  const deleteOrcaOwnedCodexHome =
+    keys?.includes('ORCA_CODEX_HOME') === true &&
+    env.ORCA_CODEX_HOME !== undefined &&
+    env.CODEX_HOME === env.ORCA_CODEX_HOME
+  for (const key of keys ?? []) {
+    delete env[key]
+  }
+  if (deleteOrcaOwnedCodexHome) {
+    delete env.CODEX_HOME
+  }
 }
 
 /**
@@ -544,9 +569,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
-  for (const key of opts.envToDelete ?? []) {
-    delete env[key]
-  }
+  deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
   if (opts.env?.TERM) {
     env.TERM = opts.env.TERM
   }
@@ -690,10 +713,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       addOrcaWslInteropEnv(env)
     }
   } else {
-    // Why: relay-side launch modes can ask for host defaults to stay scrubbed even after normalization above.
-    for (const key of opts.envToDelete ?? []) {
-      delete env[key]
-    }
+    // Why: relay-side launch modes can ask for host defaults to stay scrubbed
+    // even after environment normalization above.
+    deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
     if (opts.env?.TERM) {
       env.TERM = opts.env.TERM
     }
@@ -867,6 +889,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     fallbackProcess !== null &&
     (isShellProcess(fallbackProcess) ||
       isAgentForegroundWrapperProcess(fallbackProcess) ||
+      shouldInspectOuterWrapperFallback(fallbackProcess) ||
       // Why: agent-spawned helpers can become the PTY foreground child, but the Unix process tree still identifies the parent agent.
       process.platform !== 'win32')
   const scheduleAgentForegroundRefresh = (fallbackProcess: string | null): void => {
@@ -874,9 +897,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       return
     }
     const fallbackIsShell = fallbackProcess !== null && isShellProcess(fallbackProcess)
+    const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
     if (
       !fallbackProcess ||
-      recognizeAgentProcess(fallbackProcess) ||
+      (fallbackRecognition !== null &&
+        !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
       !shouldInspectFallbackForegroundProcess(fallbackProcess)
     ) {
       return
@@ -974,7 +999,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       }
       try {
         const fallbackProcess = getFallbackForegroundProcess()
-        if (fallbackProcess && recognizeAgentProcess(fallbackProcess)) {
+        const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
+        const inspectOuterWrapper =
+          fallbackRecognition !== null &&
+          shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)
+        if (fallbackProcess && fallbackRecognition && !inspectOuterWrapper) {
           cachedAgentForeground = { processName: fallbackProcess, refreshedAt: Date.now() }
           startupAgentForeground = null
           return fallbackProcess
@@ -993,6 +1022,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           cachedAgentForeground &&
           fallbackProcess !== null &&
           (isAgentForegroundWrapperProcess(fallbackProcess) ||
+            inspectOuterWrapper ||
             (process.platform === 'win32' && isShellProcess(fallbackProcess)))
         ) {
           return cachedAgentForeground.processName
@@ -1012,9 +1042,12 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       }
       try {
         const fallbackProcess = getFallbackForegroundProcess()
+        const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
         if (
           !fallbackProcess ||
-          (recognizeAgentProcess(fallbackProcess) && process.platform !== 'win32') ||
+          (fallbackRecognition !== null &&
+            process.platform !== 'win32' &&
+            !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
           (process.platform !== 'win32' && !shouldInspectFallbackForegroundProcess(fallbackProcess))
         ) {
           return fallbackProcess

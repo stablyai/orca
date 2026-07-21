@@ -17803,6 +17803,8 @@ describe('connectPanePty', () => {
         stateHistory: []
       }
       releaseConfirmingNullSample?.()
+      // Ignore cursor resets from setup so this assertion only covers the replacement idle event.
+      pane.terminal.write.mockClear()
       idleHandler('Claude done')
       await vi.advanceTimersByTimeAsync(800)
       await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)

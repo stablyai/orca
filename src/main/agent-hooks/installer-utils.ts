@@ -2,9 +2,9 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
   chmodSync,
-  copyFileSync,
   renameSync,
   unlinkSync
 } from 'node:fs'
@@ -14,6 +14,8 @@ import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
+import { resolveHooksJsonWritePath } from './hook-config-write-path'
+import { writeRollingFileBackup } from '../rolling-file-backup'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -55,22 +57,12 @@ export function buildManagedCommandDefinition(command: string): HookDefinition {
   return { command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-export function readHooksJson(configPath: string): HooksConfig | null {
-  if (!existsSync(configPath)) {
-    return {}
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
-    return isPlainObject(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
+export {
+  isPlainObject,
+  readHooksJson,
+  readHooksJsonWithRaw,
+  type HooksJsonSnapshot
+} from './hooks-json-read'
 
 // Why: match by script file name, not exact command, so a fresh install sweeps stale entries from old/parallel installs.
 export function createManagedCommandMatcher(
@@ -314,19 +306,29 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
   }
 }
 
-export function writeHooksJson(configPath: string, config: HooksConfig): void {
-  const dir = dirname(configPath)
+export function writeHooksJson(
+  configPath: string,
+  config: HooksConfig,
+  options?: { preserveMode?: boolean }
+): void {
+  const writePath = resolveHooksJsonWritePath(configPath)
+  const dir = dirname(writePath)
   mkdirSync(dir, { recursive: true })
 
   // Why: temp+rename leaves the original untouched on a crash/disk-full mid-write.
   // Why randomUUID: avoids tmp-path collisions when two install() calls fire in the same millisecond.
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   const serialized = `${JSON.stringify(config, null, 2)}\n`
+  const existingMode =
+    options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
 
-  // Why: skip identical writes so repeated install() calls don't roll the .bak forward and destroy the last recoverable copy.
-  if (existsSync(configPath)) {
+  // Why: skip the write (and therefore the .bak rotation) when the on-disk
+  // content is already identical. Without this, every install() rewrites the
+  // file and rolls the backup forward, which can silently destroy the last
+  // recoverable copy if install() is called repeatedly (e.g. on app start).
+  if (existsSync(writePath)) {
     try {
-      if (readFileSync(configPath, 'utf-8') === serialized) {
+      if (readFileSync(writePath, 'utf-8') === serialized) {
         return
       }
     } catch {
@@ -335,12 +337,14 @@ export function writeHooksJson(configPath: string, config: HooksConfig): void {
   }
 
   try {
-    writeFileSync(tmpPath, serialized, 'utf-8')
-    // Why: single rolling backup so a merge-logic bug producing bad JSON stays recoverable from <configPath>.bak until the next write.
-    if (existsSync(configPath)) {
-      copyFileSync(configPath, `${configPath}.bak`)
+    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode })
+    // Why: single rolling backup — one file, no accumulation in ~/.claude.
+    // Protects against a merge-logic bug producing bad JSON; the original is
+    // always recoverable from <configPath>.bak until the next write.
+    if (existsSync(writePath)) {
+      writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
-    renameSync(tmpPath, configPath)
+    renameSync(tmpPath, writePath)
   } finally {
     // Clean up temp file if rename failed.
     if (existsSync(tmpPath)) {

@@ -3,11 +3,15 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const skillPath = join(projectDir, 'skills', 'orca-cli', 'SKILL.md')
+// Why: orca-cli now ships a hybrid discovery stub, so its version-sensitive command
+// guidance lives in the authoritative guide source — assert that content there. The
+// installable stub projection is checked separately below.
+const guidePath = join(projectDir, 'skill-guides', 'orca-cli.md')
+const stubPath = join(projectDir, 'skills', 'orca-cli', 'SKILL.md')
 const orchestrationSkillPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
 const emulatorSkillPath = join(projectDir, 'skills', 'orca-emulator', 'SKILL.md')
 
-function readSkill(path = skillPath) {
+function readSkill(path = guidePath) {
   return readFileSync(path, 'utf8')
 }
 
@@ -97,5 +101,53 @@ describe('orca CLI skill guidance', () => {
     expect(skill).not.toContain('password123')
     expect(skill).not.toContain('sk_live_')
     expect(skill).not.toContain('live_sk_')
+  })
+})
+
+describe('orca CLI install stub', () => {
+  it('points at the version-matched guide and preserves the safe resolver', () => {
+    const stub = readSkill(stubPath)
+
+    expect(stub).toContain('discovery stub')
+    expect(stub).toContain('ORCA skills get orca-cli')
+    // The safe CLI-resolution contract must survive in the stub, never a bare `orca`.
+    expect(stub).toContain('ORCA_CLI_COMMAND')
+    expect(stub).toContain('orca-dev')
+    expect(stub).toContain('orca-ide')
+    expect(stub).toContain('GNOME Orca screen reader')
+    expect(stub).not.toMatch(/^orca /mu)
+  })
+
+  it('gives older binaries a bounded fallback instead of a dead end', () => {
+    const stub = readSkill(stubPath).replace(/\s+/gu, ' ')
+
+    expect(stub).toContain('explicitly reports that `skills get` is an unknown command')
+    expect(stub).toContain('do not invent commands')
+    expect(stub).toContain('ask the user rather than guessing')
+  })
+
+  it('does not mistake resolution or execution failures for an older binary', () => {
+    const stub = readSkill(stubPath).replace(/\s+/gu, ' ')
+
+    // Falling through can silently pair a version-matched guide with the wrong Orca build.
+    expect(stub).toContain('report its exact error and stop')
+    expect(stub).toContain('Do not fall through to another executable')
+    expect(stub).toContain('Another failure is not proof of an older binary')
+  })
+
+  it('drops the changing command reference from the installable file', () => {
+    const stub = readSkill(stubPath)
+
+    // Version-sensitive command detail lives in the binary-served guide now, not here.
+    expect(stub).not.toContain('Prefer agent-first create for agent workers')
+    expect(stub).not.toContain('--parent-worktree')
+    expect(stub).not.toContain('ORCA automations create')
+    expect(stub.length).toBeLessThan(readSkill(guidePath).length)
+  })
+
+  it('keeps the routing frontmatter identical to the guide', () => {
+    const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
+
+    expect(frontmatter(readSkill(stubPath))).toBe(frontmatter(readSkill(guidePath)))
   })
 })

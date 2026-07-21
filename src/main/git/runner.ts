@@ -1035,6 +1035,10 @@ export async function gitStreamStdout(
         finish(new Error(`git exited with ${code}: ${stderr}`))
       }
       function onAbort(): void {
+        if (!child.pid) {
+          // Why: failed spawn reports ENOENT after abort cleanup; retain a listener so it cannot crash main.
+          child.once('error', () => {})
+        }
         void killSpawnedCommandTree(child)
         finish(createAbortError())
       }

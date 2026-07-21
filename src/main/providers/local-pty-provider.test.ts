@@ -327,6 +327,35 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).toHaveBeenCalledOnce()
     })
 
+    it('coalesces a concurrent same-session-id spawn before launching a redundant shell (F3)', async () => {
+      spawnMock.mockClear()
+      const procA = { ...mockProc, pid: 1001 }
+      spawnMock.mockReturnValueOnce(procA)
+
+      // Hold both spawns past the existence check and inside the preflight so they
+      // race to register the same id; release only after both are parked.
+      let releasePreflight!: () => void
+      prepareMacosTccLoginShellMock.mockReturnValue(
+        new Promise<void>((resolve) => {
+          releasePreflight = resolve
+        })
+      )
+
+      const spawnA = provider.spawn({ cols: 80, rows: 24, sessionId: 'race-session' })
+      const spawnB = provider.spawn({ cols: 132, rows: 44, sessionId: 'race-session' })
+      await vi.waitFor(() => expect(prepareMacosTccLoginShellMock).toHaveBeenCalledTimes(2))
+      releasePreflight()
+
+      const [a, b] = await Promise.all([spawnA, spawnB])
+      // The winner owns the tracked PTY; the loser attaches to it, not a second one.
+      expect(a.isReattach).toBeUndefined()
+      expect(b.isReattach).toBe(true)
+      expect(b.pid).toBe(procA.pid)
+      expect(provider.getPtyProcess('race-session')).toBe(procA)
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(procA.resize).toHaveBeenCalledWith(132, 44)
+    })
+
     it('calls node-pty spawn with correct args', async () => {
       await provider.spawn({ cols: 120, rows: 40, cwd: '/tmp' })
       expect(spawnMock).toHaveBeenCalledWith(

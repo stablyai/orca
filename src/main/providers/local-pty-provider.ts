@@ -365,6 +365,24 @@ function normalizeLocalCallerSessionId(sessionId: string | undefined): string | 
   return requested
 }
 
+function reattachLocalPty(id: string, cols: number, rows: number): PtySpawnResult | null {
+  const existing = ptyProcesses.get(id)
+  if (!existing) {
+    return null
+  }
+  try {
+    existing.resize(cols, rows)
+  } catch {
+    /* Existing PTY may reject resize during teardown; still return the live handle. */
+  }
+  return {
+    id,
+    pid: existing.pid,
+    ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {}),
+    isReattach: true
+  }
+}
+
 /**
  * Normalizes node-pty foreground process strings to executable basenames.
  */
@@ -453,6 +471,7 @@ export type LocalPtyProviderOptions = {
     ctx?: {
       command?: string
       launchAgent?: PtySpawnOptions['launchAgent']
+      cwd?: string
       shellPath?: string
       isWsl?: boolean
       wslDistro?: string | null
@@ -499,20 +518,9 @@ export class LocalPtyProvider implements IPtyProvider {
       if (pendingShutdown) {
         await pendingShutdown.promise
       }
-      const existing = ptyProcesses.get(reattachId)
+      const existing = reattachLocalPty(reattachId, args.cols, args.rows)
       if (existing) {
-        const existingWslDistro = ptyWslDistroById.get(reattachId)
-        try {
-          existing.resize(args.cols, args.rows)
-        } catch {
-          /* Existing PTY may reject resize during teardown; still return the live handle. */
-        }
-        return {
-          id: reattachId,
-          pid: existing.pid,
-          ...(ptyWslDistroById.has(reattachId) ? { wslDistro: existingWslDistro ?? null } : {}),
-          isReattach: true
-        }
+        return existing
       }
     }
     const id = allocatePtyId(reattachId ?? undefined)
@@ -665,6 +673,7 @@ export class LocalPtyProvider implements IPtyProvider {
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
           launchAgent: args.launchAgent,
+          cwd,
           shellPath,
           isWsl: isWslShell,
           wslDistro: launchWslDistro
@@ -787,6 +796,11 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     await prepareLocalPtySpawn(id)
+    // Why: another same-id request can win while this one awaits preflight; attach before launching a redundant shell.
+    const concurrentWinner = reattachId ? reattachLocalPty(id, args.cols, args.rows) : null
+    if (concurrentWinner) {
+      return concurrentWinner
+    }
     const spawnResult = spawnShellWithFallback({
       shellPath,
       shellArgs,

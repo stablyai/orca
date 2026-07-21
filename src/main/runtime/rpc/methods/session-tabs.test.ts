@@ -142,6 +142,7 @@ describe('session tab RPC methods', () => {
         command: 'zsh',
         cwd: '/repo/packages/app',
         env: { CODEX_PROFILE: 'captured' },
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
         launchToken: 'launch-token-123',
         launchConfig: {
           agentArgs: '--model gpt-5',
@@ -160,6 +161,7 @@ describe('session tab RPC methods', () => {
       command: 'zsh',
       cwd: '/repo/packages/app',
       env: { CODEX_PROFILE: 'captured' },
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       startupCommandDelivery: undefined,
       agent: undefined,
       launchToken: 'launch-token-123',

@@ -905,6 +905,7 @@ const TerminalCreateParams = z.object({
   command: OptionalString,
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
+  envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
   launchConfig: z
     .object({
       agentCommand: z.string().optional(),
@@ -1345,6 +1346,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         command: params.command,
         startupCommandDelivery: params.startupCommandDelivery,
         env: params.env,
+        envToDelete: params.envToDelete,
         ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),

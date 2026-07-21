@@ -45,6 +45,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 
 // Why: glab REST addresses projects by URL-encoded path; escapes slashes for nested groups.
 function encodedProject(projectPath: string): string {
@@ -327,7 +328,21 @@ export async function getMergeRequestForBranch(
         const raw = data[0]
         // Why: older GitLab list payloads expose `pipeline` instead of `head_pipeline`.
         const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-        return mapMRInfo(raw, pipelineStatus)
+        const info = mapMRInfo(raw, pipelineStatus)
+        // Why (#9171): discard a non-open implicit branch match on the repo
+        // default branch and fall through to the linked-iid fallback below.
+        const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+          state: info.state,
+          reviewNumber: info.number,
+          linkedReviewNumber: linkedMRIid,
+          branchName,
+          repoPath,
+          connectionId,
+          localGitOptions
+        })
+        if (!hideOnDefaultBranch) {
+          return info
+        }
       }
     }
     if (typeof linkedMRIid !== 'number') {

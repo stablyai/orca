@@ -104,9 +104,8 @@ export function computeRemoteRelayDir(
 }
 
 /**
- * Probe whether a fully-installed relay exists at remoteRelayDir — meaning
- * relay.js, its relay-watcher.js child, and the .install-complete sentinel are
- * all present. Missing artifacts force a complete re-deploy.
+ * Probe for relay.js, its watcher, the managed-hook runtime, and the
+ * completion sentinel. Any missing artifact forces a complete re-deploy.
  */
 export async function isRelayAlreadyInstalled(
   conn: SshConnection,

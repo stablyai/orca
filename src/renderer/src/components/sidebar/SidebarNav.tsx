@@ -1,9 +1,11 @@
 import React from 'react'
-import { Bell, CalendarClock, EyeOff, Search, Smartphone } from 'lucide-react'
+import { Bell, CalendarClock, EyeOff, LayoutDashboard, Search, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { GlobalSettings } from '../../../../shared/types'
+import { DASHBOARD_BUCKET_ORDER, type DashboardBucket } from '../../../../shared/dashboard-snapshot'
+import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
 import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -24,6 +26,12 @@ export function shouldShowAgentsButton(
   return settings?.experimentalActivity === true
 }
 
+export function shouldShowAgentDashboardButton(
+  settings: Pick<GlobalSettings, 'experimentalAgentDashboardPopout'> | null | undefined
+): boolean {
+  return settings?.experimentalAgentDashboardPopout === true
+}
+
 export function shouldShowMobileButton(
   settings: Pick<GlobalSettings, 'showMobileButton'> | null | undefined
 ): boolean {
@@ -34,6 +42,76 @@ export function shouldShowAutomationsButton(
   settings: Pick<GlobalSettings, 'showAutomationsButton'> | null | undefined
 ): boolean {
   return settings?.showAutomationsButton !== false
+}
+
+// Per-state dot colors mirror AgentStateDot so the sidebar counts read the same
+// as the board (amber = needs you, yellow = working, neutral = idle, emerald = done).
+const DASHBOARD_BUCKET_DOT_CLASS: Record<DashboardBucket, string> = {
+  attention: 'bg-amber-500',
+  working: 'bg-yellow-500',
+  idle: 'bg-neutral-500/50'
+}
+
+function dashboardBucketLabel(bucket: DashboardBucket): string {
+  switch (bucket) {
+    case 'attention':
+      return translate('dashboardPopout.bucket.attention', 'Needs You')
+    case 'working':
+      return translate('dashboardPopout.bucket.working', 'Working')
+    case 'idle':
+      return translate('dashboardPopout.bucket.idle', 'Idle')
+  }
+}
+
+function DashboardBucketCounts({
+  counts
+}: {
+  counts: Record<DashboardBucket, number>
+}): React.JSX.Element | null {
+  const active = DASHBOARD_BUCKET_ORDER.filter((bucket) => counts[bucket] > 0)
+  if (active.length === 0) {
+    return null
+  }
+  return (
+    <span className="flex items-center gap-1.5">
+      {active.map((bucket) => (
+        <span
+          key={bucket}
+          aria-label={`${dashboardBucketLabel(bucket)}: ${counts[bucket]}`}
+          className="inline-flex items-center gap-1 text-[10px] tabular-nums text-worktree-sidebar-foreground/55"
+        >
+          <span className={cn('size-1.5 rounded-full', DASHBOARD_BUCKET_DOT_CLASS[bucket])} />
+          {counts[bucket]}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+// Why: keep the dashboard's broad aggregate subscriptions out of SidebarNav so
+// agent-status churn only updates this opt-in row, not the full navigation.
+function AgentDashboardSidebarEntry(): React.JSX.Element {
+  const dashboardBucketCounts = useAgentBucketCounts()
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void window.api.dashboard.openPopout()
+      }}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+        'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+      )}
+    >
+      <LayoutDashboard
+        className="size-4 shrink-0 text-worktree-sidebar-foreground/30"
+        strokeWidth={1.75}
+      />
+      <span className="flex-1">{translate('dashboard.sidebar.label', 'Agent Dashboard')}</span>
+      <DashboardBucketCounts counts={dashboardBucketCounts} />
+    </button>
+  )
 }
 
 const SidebarNav = React.memo(function SidebarNav() {
@@ -48,6 +126,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
   const showAgentsButton = useAppStore((s) => shouldShowAgentsButton(s.settings))
+  const showAgentDashboardButton = useAppStore((s) => shouldShowAgentDashboardButton(s.settings))
   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
   const automationsActive = activeView === 'automations'
@@ -98,6 +177,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideAutomationsButton} />
         </ContextMenu>
       ) : null}
+      {showAgentDashboardButton ? <AgentDashboardSidebarEntry /> : null}
       {showAgentsButton ? (
         <button
           type="button"

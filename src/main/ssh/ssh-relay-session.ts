@@ -16,9 +16,9 @@ import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
-import { installRemoteManagedAgentHooks } from '../agent-hooks/remote-managed-hook-installers'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
+  AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
@@ -68,7 +68,6 @@ import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
-import { shellEscape } from './ssh-connection-utils'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
@@ -83,67 +82,6 @@ type RemoteCliBridgeEnv = {
 }
 
 type ExpectedPtyIdentity = { paneKey?: string; tabId?: string }
-
-const REMOTE_GROK_HOME_MAX_LENGTH = 4096
-const REMOTE_GROK_HOME_PROBE_TIMEOUT_MS = 8_000
-
-function defaultRemoteGrokHome(remoteHome: string): string {
-  const home = remoteHome.replace(/\/+$/, '') || remoteHome
-  return `${home}/.grok`
-}
-
-function normalizeRemoteGrokHome(candidate: string): string | null {
-  if (
-    candidate.length === 0 ||
-    candidate.length > REMOTE_GROK_HOME_MAX_LENGTH ||
-    candidate !== candidate.trim() ||
-    !candidate.startsWith('/') ||
-    candidate.includes('\\') ||
-    hasControlCharacter(candidate)
-  ) {
-    return null
-  }
-  return candidate.replace(/\/+$/, '') || '/'
-}
-
-function hasControlCharacter(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 0x1f || code === 0x7f
-  })
-}
-
-function loginShellCommand(shell: string, command: string): string {
-  const shellName = shell.split('/').at(-1)
-  const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
-  return `${shellEscape(shell)} ${mode} ${shellEscape(command)}`
-}
-
-async function resolveRemoteGrokHome(
-  connection: SshConnection,
-  remoteHome: string
-): Promise<string> {
-  const fallback = defaultRemoteGrokHome(remoteHome)
-  try {
-    // Why: remote PTYs start login shells, so probe that profile-derived env, not the relay service or local Electron env.
-    const shellOutput = await execCommand(connection, "printenv SHELL || printf '/bin/sh\\n'", {
-      timeoutMs: REMOTE_GROK_HOME_PROBE_TIMEOUT_MS
-    })
-    const shell = shellOutput.trim().split(/\r?\n/, 1)[0]
-    if (!shell?.startsWith('/') || hasControlCharacter(shell)) {
-      return fallback
-    }
-    // Why: runs in the user's login shell (maybe fish/tcsh), so use external commands to avoid shell-specific syntax.
-    const probe = `printenv GROK_HOME | head -c ${REMOTE_GROK_HOME_MAX_LENGTH + 1}`
-    const output = await execCommand(connection, loginShellCommand(shell, probe), {
-      wrapCommand: false,
-      timeoutMs: REMOTE_GROK_HOME_PROBE_TIMEOUT_MS
-    })
-    return normalizeRemoteGrokHome(output.split(/\r?\n/, 1)[0] ?? '') ?? fallback
-  } catch {
-    return fallback
-  }
-}
 
 function expectedIdentityForLease(lease: {
   tabId?: string
@@ -646,7 +584,7 @@ export class SshRelaySession {
     })
   }
 
-  // Why: hook-script agents need remote config files (relay env alone isn't enough); install before the PTY provider so first prompts report status.
+  // Why: hooks must exist before PTY spawn; relay-local work keeps all managed installs to one SSH round trip.
   private async installManagedHooksOnRemote(mux: SshChannelMultiplexer): Promise<void> {
     if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       return
@@ -659,41 +597,34 @@ export class SshRelaySession {
       return
     }
 
-    let remoteHome: string
     try {
-      const result = (await mux.request('session.resolveHome', { path: '~' })) as {
-        resolvedPath?: unknown
+      const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()
+      const params = hostKeyFingerprint ? { hostKeyFingerprint } : {}
+      const result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
+        errors?: unknown
       }
-      if (typeof result.resolvedPath !== 'string' || result.resolvedPath.length === 0) {
+      if (typeof result.errors === 'number' && result.errors > 0) {
         console.warn(
-          `[ssh-relay-session] skipped remote managed hook install for ${this.targetId}: could not resolve remote home`
+          `[ssh-relay-session] ${result.errors} remote managed hook installers failed for ${this.targetId}`
         )
+      }
+    } catch (error) {
+      // Why: teardown routinely cancels this best-effort request; only warn for
+      // installer failures that survive the connection lifecycle.
+      const code = (error as { code?: unknown })?.code
+      if (
+        code === -32601 ||
+        code === 'CONNECTION_LOST' ||
+        code === 'DISPOSED' ||
+        mux.isDisposed()
+      ) {
         return
       }
-      remoteHome = result.resolvedPath
-    } catch (error) {
       console.warn(
-        `[ssh-relay-session] skipped remote managed hook install for ${this.targetId}: ${
+        `[ssh-relay-session] relay managed hook install failed for ${this.targetId}: ${
           error instanceof Error ? error.message : String(error)
         }`
       )
-      return
-    }
-
-    let sftp: Awaited<ReturnType<SshConnection['sftp']>> | null = null
-    try {
-      const connection = this.requireReadyConnection()
-      const remoteGrokHome = await resolveRemoteGrokHome(connection, remoteHome)
-      sftp = await connection.sftp()
-      await installRemoteManagedAgentHooks(sftp, remoteHome, { grokHomeDir: remoteGrokHome })
-    } catch (error) {
-      console.warn(
-        `[ssh-relay-session] remote managed hook install failed for ${this.targetId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      )
-    } finally {
-      ;(sftp as { end?: () => void } | null)?.end?.()
     }
   }
 

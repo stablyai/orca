@@ -141,6 +141,7 @@ import { setTerminalViewAttributes } from '../runtime/terminal-view-attribute-st
 import { validateTerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../shared/setup-agent-sequencing'
@@ -460,9 +461,9 @@ async function isProviderPtyLive(
 ): Promise<boolean> {
   // Why: bound the liveness list RPC by the teardown deadline so a wedged daemon
   // fails fast; undefined keeps the provider default for all other callers.
-  return (
-    await provider.listProcesses(deadlineMs !== undefined ? { deadlineMs } : undefined)
-  ).some((session) => session.id === ptyId)
+  return (await provider.listProcesses(deadlineMs !== undefined ? { deadlineMs } : undefined)).some(
+    (session) => session.id === ptyId
+  )
 }
 
 async function verifyPtyStopped(
@@ -507,6 +508,10 @@ export type BuildPtyHostEnvOptions = {
   userDataPath: string
   selectedCodexHomePath: string | null
   skipCodexHomeEnv?: boolean
+  /** System-default real-home routing (flag ON): inject no managed CODEX_HOME,
+   *  and strip only an inherited Orca-owned override so nested Orca panes do not
+   *  leak the parent's managed home. A user-set CODEX_HOME is preserved. */
+  stripInheritedOrcaCodexHome?: boolean
   githubAttributionEnabled: boolean
   /** Launch command the renderer chose (e.g. 'pi', 'omp', 'claude'); resolves the per-agent
    *  extension target for Pi/OMP. Undefined for bare shells → defaults to Pi. NEVER infer from
@@ -572,8 +577,53 @@ function shouldSkipCodexHomeEnvForWindowsShell(
   return isWslShellName(shellPath) || (typeof cwd === 'string' && parseWslPath(cwd) !== null)
 }
 
+// Why: with the real-home flag ON, a host system-default launch resolves to a
+// null managed home. Signal the env builder to strip a nested-Orca-inherited
+// override instead of injecting one, so Codex runs on the user's own ~/.codex.
+function shouldStripInheritedOrcaCodexHome(args: {
+  target: CodexAccountSelectionTarget
+  selectedCodexHomePath: string | null
+  skipCodexHomeEnv: boolean
+  settings: GlobalSettings | undefined
+}): boolean {
+  return (
+    args.target.runtime === 'host' &&
+    args.selectedCodexHomePath === null &&
+    !args.skipCodexHomeEnv &&
+    isCodexSystemDefaultRealHomeEnabled()
+  )
+}
+
 const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'ORCA_CODEX_HOME'] as const
-type GetSelectedCodexHomePath = (target?: CodexAccountSelectionTarget) => string | null
+
+// Why: system-default real-home routing runs Codex on the user's own ~/.codex.
+// Nested Orca panes inherit the parent's Orca-owned override; strip only that
+// (CODEX_HOME matching Orca's private ORCA_CODEX_HOME marker), and always drop
+// the marker so a shell-ready wrapper cannot restore the managed home. A
+// user-set CODEX_HOME with no Orca marker is preserved untouched (see #8606).
+function stripInheritedOrcaCodexHomeOverride(baseEnv: Record<string, string>): void {
+  for (const key of getLocalOrcaCodexHomeEnvKeysToDelete(baseEnv)) {
+    delete baseEnv[key]
+  }
+}
+
+// Why: in-process spawns share main's inherited environment, so equality with
+// the private marker is authoritative here. Persistent daemons compare locally.
+function getLocalOrcaCodexHomeEnvKeysToDelete(env: Record<string, string>): string[] {
+  const inheritedOrcaOverride = env.ORCA_CODEX_HOME ?? process.env.ORCA_CODEX_HOME
+  const inheritedCodexHome = env.CODEX_HOME ?? process.env.CODEX_HOME
+  const keysToDelete = ['ORCA_CODEX_HOME']
+  if (inheritedOrcaOverride && inheritedCodexHome === inheritedOrcaOverride) {
+    keysToDelete.push('CODEX_HOME')
+  }
+  return keysToDelete
+}
+
+export type GetSelectedCodexHomePath = (
+  target?: CodexAccountSelectionTarget,
+  launchEnv?: NodeJS.ProcessEnv,
+  launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+) => string | null
 type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -898,6 +948,8 @@ export function buildPtyHostEnv(
     baseEnv.CODEX_HOME = opts.selectedCodexHomePath
     // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers restore this runtime home before Codex launches.
     baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
+  } else if (opts.stripInheritedOrcaCodexHome) {
+    stripInheritedOrcaCodexHomeOverride(baseEnv)
   }
 
   // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
@@ -1401,13 +1453,23 @@ export function registerPtyHandlers(
             : { runtime: 'host' }
         const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
           codexSelectionTarget,
-          getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
+          getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+            workspacePath: ctx?.cwd,
+            launchAgent: ctx?.launchAgent
+          }) ?? null
         )
+        const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
-          skipCodexHomeEnv: ctx?.isWsl === true && !selectedCodexHomePath,
+          skipCodexHomeEnv,
+          stripInheritedOrcaCodexHome: shouldStripInheritedOrcaCodexHome({
+            target: codexSelectionTarget,
+            selectedCodexHomePath,
+            skipCodexHomeEnv,
+            settings: getSettings?.()
+          }),
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: ctx?.command,
           launchAgent: ctx?.launchAgent,
@@ -1543,7 +1605,7 @@ export function registerPtyHandlers(
   const backgroundedDeliverySyncByPty = new Map<string, boolean>()
   function syncPtyBackgroundedDelivery(id: string, caller: string): void {
     const background =
-      rendererPtyIsKnownHidden(id) && !(runtime?.hasRemoteTerminalViewSubscriber(id) ?? false)
+      rendererPtyIsKnownHidden(id) && !(runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
     if ((backgroundedDeliverySyncByPty.get(id) ?? false) === background) {
       return
     }
@@ -2736,13 +2798,24 @@ export function registerPtyHandlers(
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
-            getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
+            getSelectedCodexHomePath?.(codexSelectionTarget, env, {
+              workspacePath: cwd,
+              launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+            }) ?? null
           )
         : null
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
         shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd) &&
         !selectedCodexHomePath
+      const stripInheritedOrcaCodexHome =
+        isDaemonHostSpawn &&
+        shouldStripInheritedOrcaCodexHome({
+          target: codexSelectionTarget,
+          selectedCodexHomePath,
+          skipCodexHomeEnv,
+          settings: getSettings?.()
+        })
       if (isDaemonHostSpawn && sessionId) {
         if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
           throw new Error('Invalid PTY session id')
@@ -2752,6 +2825,7 @@ export function registerPtyHandlers(
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
+          stripInheritedOrcaCodexHome,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: args.command,
           launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
@@ -2784,6 +2858,12 @@ export function registerPtyHandlers(
           spawnOptions.envToDelete,
           CODEX_HOME_ENV_KEYS
         )
+      } else if (stripInheritedOrcaCodexHome) {
+        // Why: the daemon owns a persistent inherited environment that may
+        // differ from main. ORCA_CODEX_HOME asks it to compare/delete the pair.
+        spawnOptions.envToDelete = mergePtyEnvDeletions(spawnOptions.envToDelete, [
+          'ORCA_CODEX_HOME'
+        ])
       }
       deleteRequestedEnvKeys(env, spawnOptions.envToDelete)
       promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
@@ -3609,13 +3689,24 @@ export function registerPtyHandlers(
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
-            getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
+            getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+              workspacePath: cwd,
+              launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+            }) ?? null
           )
         : null
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
         shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd) &&
         !selectedCodexHomePath
+      const stripInheritedOrcaCodexHome =
+        isDaemonHostSpawn &&
+        shouldStripInheritedOrcaCodexHome({
+          target: codexSelectionTarget,
+          selectedCodexHomePath,
+          skipCodexHomeEnv,
+          settings: getSettings?.()
+        })
       if (isDaemonHostSpawn) {
         if (effectiveSessionId === undefined) {
           // Should be unreachable: effectiveSessionId is a string when isDaemonHostSpawn; defense-in-depth.
@@ -3634,6 +3725,7 @@ export function registerPtyHandlers(
             userDataPath: app.getPath('userData'),
             selectedCodexHomePath,
             skipCodexHomeEnv,
+            stripInheritedOrcaCodexHome,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
             launchCommand: args.command,
             launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
@@ -3665,12 +3757,17 @@ export function registerPtyHandlers(
       const combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
           mergePtyEnvDeletions(
-            mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
-            agentTeamsEnvToDelete ?? []
+            mergePtyEnvDeletions(
+              mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+              agentTeamsEnvToDelete ?? []
+            ),
+            isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
           ),
-          isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
+          skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
         ),
-        skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
+        // Why: the persistent daemon compares its own merged CODEX_HOME pair;
+        // main cannot safely decide ownership for a process it may not parent.
+        stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
       )
       deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
       promoteAgentTeamsShimPath(spawnEnv, requestedAgentTeamsPath)

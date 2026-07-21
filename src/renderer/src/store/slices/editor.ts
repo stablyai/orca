@@ -3341,10 +3341,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         (entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind
       )
       const unresolvedByPath = new Map(unresolvedEntries.map((entry) => [entry.path, entry]))
+      const statusIsComplete = status.didHitLimit !== true
+      // Why: a capped snapshot cannot prove that an omitted conflict operation ended.
+      const nextOperation =
+        !statusIsComplete && status.conflictOperation === 'unknown'
+          ? prevOperation
+          : status.conflictOperation
 
       // Why: operation → 'unknown' with zero unresolved means an abort (git merge --abort), not resolution; clear tracked paths instead of marking each "Resolved locally".
       if (
-        status.conflictOperation === 'unknown' &&
+        statusIsComplete &&
+        nextOperation === 'unknown' &&
         prevOperation !== 'unknown' &&
         unresolvedByPath.size === 0
       ) {
@@ -3369,21 +3376,28 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       })
 
-      const visiblePaths = new Set(nextEntries.map((entry) => entry.path))
-      for (const path of Object.keys(currentTracked)) {
-        if (!visiblePaths.has(path) && !unresolvedByPath.has(path)) {
-          delete currentTracked[path]
+      if (statusIsComplete) {
+        const visiblePaths = new Set(nextEntries.map((entry) => entry.path))
+        for (const path of Object.keys(currentTracked)) {
+          if (!visiblePaths.has(path) && !unresolvedByPath.has(path)) {
+            delete currentTracked[path]
+          }
         }
       }
 
-      const nextOpenFiles = reconcileOpenFilesForStatus(s.openFiles, worktreeId, nextEntries)
+      const nextOpenFiles = reconcileOpenFilesForStatus(
+        s.openFiles,
+        worktreeId,
+        nextEntries,
+        statusIsComplete
+      )
       const statusUnchanged = hadStatusEntry && areGitStatusEntriesEqual(prevEntries, nextEntries)
       const trackedUnchanged = areTrackedConflictMapsEqual(
         s.trackedConflictPathsByWorktree[worktreeId] ?? {},
         currentTracked
       )
       const openFilesUnchanged = nextOpenFiles === s.openFiles
-      const operationUnchanged = prevOperation === status.conflictOperation
+      const operationUnchanged = prevOperation === nextOperation
 
       const prevIgnored = s.gitIgnoredPathsByWorktree[worktreeId]
       const nextIgnored = status.ignoredPaths ?? []
@@ -3461,7 +3475,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : { ...s.gitIgnoredPathsByWorktree, [worktreeId]: nextIgnored },
         gitConflictOperationByWorktree: operationUnchanged
           ? s.gitConflictOperationByWorktree
-          : { ...s.gitConflictOperationByWorktree, [worktreeId]: status.conflictOperation },
+          : { ...s.gitConflictOperationByWorktree, [worktreeId]: nextOperation },
         trackedConflictPathsByWorktree: trackedUnchanged
           ? s.trackedConflictPathsByWorktree
           : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked },
@@ -4411,7 +4425,8 @@ function areUpstreamStatusesEqual(
 function reconcileOpenFilesForStatus(
   openFiles: OpenFile[],
   worktreeId: string,
-  nextEntries: GitStatusEntry[]
+  nextEntries: GitStatusEntry[],
+  statusIsComplete: boolean
 ): OpenFile[] {
   const entriesByPath = new Map(nextEntries.map((entry) => [entry.path, entry]))
   let changed = false
@@ -4427,6 +4442,11 @@ function reconcileOpenFilesForStatus(
 
     const entry = entriesByPath.get(file.relativePath)
     if (!file.conflict) {
+      return [file]
+    }
+
+    // Why: a capped snapshot cannot prove that an omitted conflict was resolved.
+    if (!entry && !statusIsComplete) {
       return [file]
     }
 

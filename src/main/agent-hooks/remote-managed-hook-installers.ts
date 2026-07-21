@@ -23,6 +23,9 @@ export type RemoteManagedHookInstallOptions = {
   codexHomeDir?: string
   /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
+  /** Stops before starting the next installer when the owning relay request
+   *  is cancelled. Individual filesystem mutations remain atomic. */
+  signal?: AbortSignal
 }
 
 type RemoteManagedHookInstaller = readonly [
@@ -78,6 +81,9 @@ export async function installRemoteManagedAgentHooks(
 ): Promise<AgentHookInstallStatus[]> {
   const results: AgentHookInstallStatus[] = []
   for (const [agent, install] of REMOTE_MANAGED_HOOK_INSTALLERS) {
+    // Why: relay requests can disappear during reconnect; do not start more
+    // user-config mutations after their client has gone away.
+    options?.signal?.throwIfAborted()
     try {
       const result = await install(sftp, remoteHome, options)
       results.push(result)
