@@ -22,6 +22,7 @@ import type {
 } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
+import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
 import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
 import {
@@ -155,7 +156,12 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-rec
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
+import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
+import {
+  updateTerminalRemoteRuntimeRecoveryUiState,
+  type VisiblePtyRecoveryState
+} from './terminal-remote-runtime-recovery-ui-state'
 
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
@@ -376,6 +382,9 @@ export default function TerminalPane({
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
+    Record<number, VisiblePtyRecoveryState>
+  >({})
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   const daemonActions = useDaemonActions()
   // Why: override state lives in a Map for perf; this counter forces a re-render on override change so the mobile-fit banner toggles.
@@ -558,6 +567,13 @@ export default function TerminalPane({
     }
     setTerminalError((prev) => (prev ? `${prev}\n${message}` : message))
   })
+  const onPtyRecoveryStateRef = useRef(
+    (paneId: number, state: PtyTransportRecoveryState | null) => {
+      setPtyRecoveryStatesByPaneId((previous) =>
+        updateTerminalRemoteRuntimeRecoveryUiState(previous, paneId, state)
+      )
+    }
+  )
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
@@ -1406,6 +1422,7 @@ export default function TerminalPane({
     onPtyExitRef,
     onAgentExitedRef,
     onPtyErrorRef,
+    onPtyRecoveryStateRef,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
     updateTabTitle,
@@ -1608,6 +1625,7 @@ export default function TerminalPane({
         onPtyExitRef,
         onAgentExitedRef,
         onPtyErrorRef,
+        onPtyRecoveryStateRef,
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
         updateTabTitle,
@@ -3014,6 +3032,25 @@ export default function TerminalPane({
         onRenameCancel={handleRenameCancel}
         onRenameBlur={handleRenameBlur}
       />
+      {!showSshReconnectOverlay
+        ? managedPanes.map((pane) => {
+            const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
+            if (!recoveryState) {
+              return null
+            }
+            return createPortal(
+              <TerminalRemoteRuntimeReconnectBanner
+                key={`remote-runtime-reconnect-${pane.id}-${recoveryState.epoch}`}
+                phase={recoveryState.phase}
+                onReconnect={() => {
+                  paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
+                }}
+              />,
+              pane.container,
+              `remote-runtime-reconnect-${pane.id}`
+            )
+          })
+        : null}
       {managedPanes.map((pane) => {
         // Why: pane IDs collide across tabs, so key overlays by the transport's actual ptyId to avoid wrong-pane banners.
         const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()

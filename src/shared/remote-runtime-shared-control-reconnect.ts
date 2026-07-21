@@ -1,26 +1,50 @@
-import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
-import {
-  finishSharedControlSubscription,
-  scheduleSharedControlReconnect
-} from './remote-runtime-shared-control-state'
-import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'
+import { scheduleSharedControlReconnect } from './remote-runtime-shared-control-state'
 
-export function scheduleSharedControlReconnectOrFinish(args: {
-  current: ReturnType<typeof setTimeout> | null
-  intentionallyClosed: boolean
-  reconnectAttempt: number
-  delaysMs: readonly number[]
-  subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
-  open: () => void
-}): { timer: ReturnType<typeof setTimeout> | null; reconnectAttempt: number } {
-  if (args.reconnectAttempt >= args.delaysMs.length) {
-    const error = remoteRuntimeUnavailableError(
-      'Remote Orca runtime connection could not be restored.'
-    )
-    for (const subscription of Array.from(args.subscriptions.values())) {
-      finishSharedControlSubscription(args.subscriptions, subscription, true, error)
-    }
-    return { timer: null, reconnectAttempt: args.reconnectAttempt }
+export class SharedControlReconnectScheduler {
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private attempt = 0
+
+  get isScheduled(): boolean {
+    return this.timer !== null
   }
-  return scheduleSharedControlReconnect(args)
+
+  get attemptCount(): number {
+    return this.attempt
+  }
+
+  schedule(args: {
+    intentionallyClosed: boolean
+    delaysMs: readonly number[]
+    open: () => void
+  }): void {
+    // Why: a passive subscription owns recovery until its caller closes it; roaming outages are unbounded.
+    const scheduled = scheduleSharedControlReconnect({
+      ...args,
+      current: this.timer,
+      reconnectAttempt: this.attempt,
+      open: () => {
+        this.timer = null
+        args.open()
+      }
+    })
+    this.timer = scheduled.timer
+    this.attempt = scheduled.reconnectAttempt
+  }
+
+  clear(): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+  }
+
+  clearWhenIdle(isIdle: boolean): void {
+    if (isIdle) {
+      this.clear()
+    }
+  }
+
+  resetAttempt(): void {
+    this.attempt = 0
+  }
 }
