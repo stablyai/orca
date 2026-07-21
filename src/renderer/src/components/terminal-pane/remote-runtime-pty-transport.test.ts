@@ -1213,6 +1213,79 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
   })
 
+  it('does not close a reused provider-session owner when reconciliation destroys the provisional pane', async () => {
+    let resolveCreate: (value: unknown) => void = () => {}
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return new Promise((resolve) => {
+          resolveCreate = resolve
+        })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'provisional-tab',
+      leafId: 'pane:1'
+    })
+
+    const connect = transport.connect({ url: '', callbacks: {} })
+    transport.destroy?.()
+    resolveCreate({
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'owner-handle',
+          existingAgentSessionOwner: {
+            ptyId: 'owner-pty',
+            paneKey: 'owner-tab:11111111-1111-4111-8111-111111111111',
+            tabId: 'owner-tab',
+            leafId: '11111111-1111-4111-8111-111111111111'
+          }
+        }
+      }
+    })
+    await connect
+
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.close' })
+    )
+  })
+
+  it('maps reused host owners to their mirrored client tab identity', async () => {
+    runtimeCall.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'owner-handle',
+          existingAgentSessionOwner: {
+            ptyId: 'owner-pty',
+            paneKey: 'owner-tab:11111111-1111-4111-8111-111111111111',
+            tabId: 'owner-tab',
+            leafId: '11111111-1111-4111-8111-111111111111'
+          }
+        }
+      }
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'provisional-tab',
+      leafId: 'pane:1'
+    })
+
+    await expect(transport.connect({ url: '', callbacks: {} })).resolves.toMatchObject({
+      id: 'remote:env-1@@owner-handle',
+      existingAgentSessionOwner: {
+        ptyId: 'owner-pty',
+        tabId: 'web-terminal-owner-tab',
+        paneKey: 'web-terminal-owner-tab:11111111-1111-4111-8111-111111111111'
+      }
+    })
+    expect(runtimeSubscribe).not.toHaveBeenCalled()
+  })
+
   it('passes activation intent when creating the remote runtime terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {

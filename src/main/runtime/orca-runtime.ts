@@ -19743,7 +19743,8 @@ export class OrcaRuntimeService {
           ptyId: owner.ptyId,
           worktreeId: ownerPty.worktreeId,
           title: this.tabs.get(owner.tabId)?.title ?? ownerPty.title,
-          surface: 'visible'
+          surface: 'visible',
+          existingAgentSessionOwner: owner
         }
       }
       this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)

@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
+import type { LiveAgentSessionOwner } from './agent-session-resume'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -536,6 +537,7 @@ export type RuntimeTerminalCreate = {
   worktreeId: string
   title: string | null
   surface?: 'background' | 'visible'
+  existingAgentSessionOwner?: LiveAgentSessionOwner
   warning?: string
 }
 

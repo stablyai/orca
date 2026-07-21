@@ -10607,7 +10607,13 @@ describe('OrcaRuntimeService', () => {
       paneKey: ownerPaneKey,
       ptyId: 'pty-owner',
       worktreeId: TEST_WORKTREE_ID,
-      title: 'Owner agent'
+      title: 'Owner agent',
+      existingAgentSessionOwner: {
+        ptyId: 'pty-owner',
+        paneKey: ownerPaneKey,
+        tabId: 'owner-tab',
+        leafId: ownerLeafId
+      }
     })
     expect(revealTerminalSession).not.toHaveBeenCalled()
     expect((await runtime.listTerminals()).terminals).toHaveLength(1)

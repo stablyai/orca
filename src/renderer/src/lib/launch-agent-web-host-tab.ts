@@ -1,31 +1,16 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import {
-  createWebRuntimeSessionTerminal,
-  isWebTerminalSurfaceTabId
-} from '@/runtime/web-runtime-session'
+import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import type { Tab, TuiAgent } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
-
-function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
-  const state = useAppStore.getState()
-  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id)) {
-      // Why: pruning a stale local agent tab is a system close — keep it out of
-      // the Cmd+Shift+T reopen stack.
-      state.closeTab(tab.id, { reason: 'cleanup' })
-    }
-  }
-}
 
 /**
  * Launch an agent terminal on the web runtime host instead of a local tab.
  *
  * Why: paired web tabs are host-owned, so this path never creates a local tab
- * (callers return tabId: null). Local-only agent tabs cannot be closed because
- * close routes through session.tabs.close on the host, so prune them before
- * the host snapshot.
+ * (callers return tabId: null). The host's provider-session claim reuses an
+ * existing owner; its authoritative snapshot replaces any stale client row.
  */
 export function launchAgentInWebHostTab(args: {
   agent: TuiAgent
@@ -47,7 +32,6 @@ export function launchAgentInWebHostTab(args: {
     viewMode,
     onPromptDelivered
   } = args
-  removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
   void createWebRuntimeSessionTerminal({
     worktreeId,
     environmentId,
@@ -66,9 +50,6 @@ export function launchAgentInWebHostTab(args: {
         }
       : { agent })
   }).then((created) => {
-    // Why: created means the host accepted the launch, not that a local tab
-    // exists; keep pruning stale local rows until the snapshot mirrors.
-    removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
     if (!created) {
       toast.error(
         translate(

@@ -59,7 +59,7 @@ const store = {
   },
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1']),
   tabsByWorktree: {
-    'wt-1': [{ id: 'tab-1' }]
+    'wt-1': [{ id: 'tab-1' }] as { id: string; launchAgent?: string; ptyId?: string }[]
   },
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
@@ -277,7 +277,7 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
-  it('delegates agent quick launch to the host runtime in paired web clients', async () => {
+  it('delegates agent launch without killing a restored host owner from the client', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     store.settings = {
       agentCmdOverrides: {},
@@ -288,7 +288,7 @@ describe('launchAgentInNewTab', () => {
     store.tabsByWorktree = {
       'wt-1': [
         { id: 'tab-1' },
-        { id: 'stale-agent-tab', launchAgent: 'claude' } as { id: string; launchAgent: string }
+        { id: 'restored-owner', launchAgent: 'claude', ptyId: 'remote:web@@owner' }
       ]
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -317,9 +317,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab', {
-      reason: 'cleanup'
-    })
+    // The host claim decides whether this is a resume or a new launch; client cleanup must never close the live owner first.
+    expect(store.closeTab).not.toHaveBeenCalled()
   })
 
   it('forwards prompt launch env and captured config to paired web runtime hosts', async () => {

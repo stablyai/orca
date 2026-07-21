@@ -33,9 +33,14 @@ import {
   createRemoteRuntimeViewportBatcher
 } from './remote-runtime-pty-batching'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId,
+  toWebTerminalSurfaceTabId
+} from '@/runtime/web-terminal-surface-id'
 import { listRemoteRuntimeSessionTabsDeduped } from '@/runtime/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
 
@@ -931,9 +936,24 @@ export function createRemoteRuntimePtyTransport(
           presentation: 'background',
           ...(activate === true ? { activate: true } : {})
         })
+        const existingOwner = created.terminal.existingAgentSessionOwner
+        if (existingOwner) {
+          if (destroyed) {
+            return
+          }
+          const localOwnerTabId = toWebTerminalSurfaceTabId(existingOwner.tabId)
+          return {
+            id: toRemoteRuntimePtyId(created.terminal.handle, currentRuntimeEnvironmentId),
+            existingAgentSessionOwner: {
+              ...existingOwner,
+              tabId: localOwnerTabId,
+              paneKey: makePaneKey(localOwnerTabId, existingOwner.leafId)
+            }
+          }
+        }
         handle = created.terminal.handle
         if (destroyed) {
-          // Why: cancelled launch, not a shared session; close the server PTY so rapid tab-open/close does not leak.
+          // Why: only a newly created terminal is safe to retire here; reused provider-session owners return above.
           await closeRemoteTerminal(created.terminal.handle)
           return
         }
