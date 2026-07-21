@@ -4,14 +4,16 @@ import { NewWorkspaceFab, FAB_SIZE } from './NewWorkspaceFab'
 import { HostVoiceFab } from './HostVoiceFab'
 import { HostVoiceTranscriptStrip } from './HostVoiceTranscriptStrip'
 import { useHostVoiceAsk } from '../voice/use-host-voice-ask'
+import { MobilePetOverlay } from '../pet/MobilePetOverlay'
 import type { RpcClient } from '../transport/rpc-client'
 import type { Worktree } from '../worktree/workspace-list-types'
 
-// The host panel's floating action row — phone only; embedded sidebars keep the
-// toolbar "+" instead. Operator layout (2026-07-21): "+" bottom-LEFT, hold-to-
-// talk mic bottom-RIGHT so the mic owns the thumb corner and a mis-grab while
-// reaching to speak can't create a workspace. Transcript strip floats above
-// both.
+// The host panel's floating overlay layer — phone only; embedded sidebars keep
+// the toolbar "+" instead. Operator layout (2026-07-21): "+" bottom-LEFT,
+// hold-to-talk mic bottom-RIGHT so the mic owns the thumb corner and a mis-grab
+// while reaching to speak can't create a workspace. Transcript strip floats
+// above both, and the pet roams the whole layer when presence says this phone
+// holds it.
 
 type HostFabRowProps = {
   client: RpcClient | null
@@ -34,6 +36,8 @@ export function HostFabRow({
   const voice = useHostVoiceAsk({ client, hostName, worktrees, enabled: connected })
   return (
     <>
+      {/* Behind the controls: the pet must never sit over a button. */}
+      <MobilePetOverlay client={client} />
       <NewWorkspaceFab onPress={onNewWorkspace} disabled={!connected} />
       <HostVoiceTranscriptStrip
         question={voice.lastQuestion}
