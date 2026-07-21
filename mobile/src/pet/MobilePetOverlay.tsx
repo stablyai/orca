@@ -1,8 +1,14 @@
 import React from 'react'
 import { View, StyleSheet, useWindowDimensions } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
-import { clampPositionToViewport, tickRoam, type Position } from '../../../src/shared/pet-roam'
+import {
+  clampPositionToViewport,
+  isRoamPaused,
+  tickRoam,
+  type Position
+} from '../../../src/shared/pet-roam'
 import { edgeAtNormalized } from './pet-edge'
+import { useMobilePetDrag } from './use-mobile-pet-drag'
 import { MobilePetSprite } from './MobilePetSprite'
 import { petSheetFor } from './pet-sheets'
 import petFrames from './pet-frames.generated.json'
@@ -20,6 +26,9 @@ const FRAME_MS = 140
 /** Roam ticks at ~30fps rather than 60: the pet is decoration, and on a phone
  *  the battery cost of a 60fps timer is not worth motion nobody can perceive. */
 const TICK_MS = 33
+/** How long the pet stays visibly excited after a tap. Long enough to read as a
+ *  reaction, short enough that it is back to normal before you look away. */
+const TAP_REACTION_MS = 900
 
 type PetFrameManifest = Record<
   string,
@@ -76,6 +85,37 @@ export function MobilePetOverlay({
   const positionRef = React.useRef(position)
   positionRef.current = position
 
+  // A tap makes the pet visibly notice you: it restarts its walk cycle and runs
+  // it at double speed briefly. Held in a ref, not state, because the roam timer
+  // reads it every tick and a state dep would tear the interval down and rebuild
+  // it on every tap — the same remount churn that froze the pet in bug 2.
+  const excitedUntilRef = React.useRef(0)
+
+  const handleTap = React.useCallback(() => {
+    excitedUntilRef.current = Date.now() + TAP_REACTION_MS
+    setFrameIndex(0)
+  }, [])
+
+  const drag = useMobilePetDrag({
+    position,
+    size: PET_SIZE,
+    viewport,
+    setPosition,
+    onTap: handleTap
+  })
+
+  // Read by the roam timer, which must NOT list `dragging` as a dep: a grab
+  // would tear the interval down and rebuild it, and a roam loop that restarts
+  // on every interaction never accumulates travel (bug 2, the frozen pet).
+  const draggingRef = React.useRef(drag.dragging)
+  draggingRef.current = drag.dragging
+
+  // Grabbing the pet restarts its walk cycle, so it visibly reacts to being
+  // picked up instead of continuing mid-stride from wherever it was.
+  React.useEffect(() => {
+    setFrameIndex(0)
+  }, [drag.dragGeneration])
+
   // Adopt the authority's arrival position so the pet walks in from the edge it
   // crossed rather than appearing mid-screen.
   React.useEffect(() => {
@@ -110,22 +150,30 @@ export function MobilePetOverlay({
       const dt = Math.min(64, now - last)
       last = now
 
+      // A held pet does not walk itself out from under your finger. The drag
+      // owns the position while it lasts; roam resumes from wherever you let go.
+      const dragging = draggingRef.current
       const result = tickRoam({
         position: positionRef.current,
         target: targetRef.current,
         size: PET_SIZE,
         viewport,
         dtMs: dt,
-        paused: false
+        paused: isRoamPaused({ dragging, agentBusy: false })
       })
       targetRef.current = result.target
-      if (result.position.x !== positionRef.current.x) {
-        setFacing(result.position.x > positionRef.current.x ? 'right' : 'left')
+      if (!dragging) {
+        if (result.position.x !== positionRef.current.x) {
+          setFacing(result.position.x > positionRef.current.x ? 'right' : 'left')
+        }
+        setPosition(result.position)
       }
-      setPosition(result.position)
 
+      // Legs keep moving while dragged — a carried pet running in the air reads
+      // as alive — and briefly run double-time after a tap.
       sinceFrame += dt
-      if (sinceFrame >= FRAME_MS) {
+      const frameMs = now < excitedUntilRef.current ? FRAME_MS / 2 : FRAME_MS
+      if (sinceFrame >= frameMs) {
         sinceFrame = 0
         setFrameIndex((current) => (current + 1) % frameCount)
       }
@@ -136,7 +184,10 @@ export function MobilePetOverlay({
   // Walk-off: reaching an edge with somewhere to go asks the authority to hand
   // the pet on. The authority ignores it unless this phone holds the pet.
   React.useEffect(() => {
-    if (!presence.holdsPet || !presence.canHandOff) {
+    // Never while dragging: leaving is a walk across an edge, not a throw.
+    // Dragging the pet against the screen edge holds it there; it hands off
+    // only if it walks out on its own after you let go.
+    if (!presence.holdsPet || !presence.canHandOff || drag.dragging) {
       return
     }
     const normalized = {
@@ -147,7 +198,7 @@ export function MobilePetOverlay({
     if (edge) {
       presence.reportExit(edge, normalized)
     }
-  }, [presence, position, viewport])
+  }, [presence, position, viewport, drag.dragging])
 
   // Exclusive: when the pet is on another surface, this phone draws nothing.
   if (!presence.holdsPet || !entry || !sheet) {
@@ -159,17 +210,23 @@ export function MobilePetOverlay({
   }
 
   return (
-    // pointerEvents none throughout: the pet floats over real UI and must never
-    // eat a tap meant for a workspace row.
-    <View style={styles.layer} pointerEvents="none">
-      <View style={[styles.pet, { left: position.x, top: position.y }]}>
+    // box-none, not none: the layer itself stays transparent to touches so it
+    // never eats a tap meant for a workspace row, but its pet child can still
+    // receive one. Only the PET_SIZE square is interactive.
+    <View style={styles.layer} pointerEvents="box-none">
+      <View
+        style={[styles.pet, { left: position.x, top: position.y }]}
+        {...drag.panHandlers}
+      >
         <MobilePetSprite
           source={sheet}
           frame={frame}
           sheetWidth={entry.width}
           sheetHeight={entry.height}
           size={PET_SIZE}
-          facing={facing}
+          // A dragged pet faces the way you are pulling it, which the roam
+          // facing cannot know because roam is paused.
+          facing={drag.dragFacing ?? facing}
         />
       </View>
     </View>

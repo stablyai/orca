@@ -12,7 +12,11 @@ export type PetAnimationName =
   | 'waving'
   | 'failed'
 
-export type PetDragAnimation = 'running-right' | 'running-left' | null
+// Drag direction is a SHARED rule — the phone drags the same pet. Re-exported
+// here so existing renderer imports keep working; the definition lives in
+// shared/pet-drag.ts.
+import type { PetDragAnimation } from '../../../../shared/pet-drag'
+export type { PetDragAnimation }
 
 // Why: mirrors hermes-agent's flashPetActivity(ms = 1600) — a completion/
 // cancellation beat reads as "just happened" for this long before decaying
@@ -25,20 +29,7 @@ export const PET_BEAT_MS = 1600
 // says the user cancelled the turn rather than the agent finishing it. A
 // clean `done` fires the `waving` celebration beat instead.
 
-// Why: direction tracks horizontal travel only; `accepted` (advance the baseline)
-// fires only on a >=4px horizontal move so slow diagonal drags still accumulate.
-export function nextPetDragAnimation(
-  current: PetDragAnimation,
-  deltaX: number
-): { animation: PetDragAnimation; accepted: boolean } {
-  if (deltaX >= 4) {
-    return { animation: 'running-right', accepted: true }
-  }
-  if (deltaX <= -4) {
-    return { animation: 'running-left', accepted: true }
-  }
-  return { animation: current, accepted: false }
-}
+export { nextPetDragAnimation } from '../../../../shared/pet-drag'
 
 export type PetAnimationInput = {
   entries: AgentStatusEntry[]
