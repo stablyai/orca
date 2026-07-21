@@ -42,6 +42,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { useAppStore } from './store'
+import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
@@ -133,7 +134,7 @@ import {
 } from './lib/shutdown-checkpoint-guard'
 import {
   collectFolderWorkspaceKeysFromSession,
-  collectWorktreeRecoveryRepoIdsFromSession
+  collectWorktreeHydrationRepoIdsFromSession
 } from './lib/workspace-session-hydration-keys'
 import {
   getStartupErrorFallbackUI,
@@ -187,6 +188,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -875,7 +877,7 @@ function App(): React.JSX.Element {
         await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
           actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
         )
-        // Why: only repos with persisted terminals need worktree enumeration before reconnect; include saved runtime hosts so their session slices restore without waiting on network reachability.
+        // Why: only repos referenced by persisted workspace state need enumeration before hydration; unrelated repos can wait until after reconnect.
         const sessionRead = await timeRendererStartupStep('session-get', () =>
           fetchWorkspaceSessionWithRuntimeHostOwners(
             window.api.session,
@@ -883,20 +885,22 @@ function App(): React.JSX.Element {
             startupRuntimeHostIds
           )
         )
-        const recoveryRepoIds = collectWorktreeRecoveryRepoIdsFromSession(
+        const hydrationRepoIds = collectWorktreeHydrationRepoIdsFromSession(
           sessionRead.session,
           sessionRead.runtimeHostIdByWorkspaceSessionKey
         )
-        const recoveryRepoIdSet = new Set(recoveryRepoIds)
-        const recoveryRepos = useAppStore
+        const hydrationRepoIdSet = new Set(hydrationRepoIds)
+        const hydrationRepos = useAppStore
           .getState()
           .repos.filter(
             (repo) =>
-              recoveryRepoIdSet.has(repo.id) &&
+              hydrationRepoIdSet.has(repo.id) &&
               getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
           )
-        await timeRendererStartupStep('fetch-recovery-worktrees', () =>
-          Promise.all(recoveryRepos.map((repo) => actions.fetchWorktrees(repo.id)))
+        await timeRendererStartupStep('fetch-hydration-worktrees', () =>
+          mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY, (repo) =>
+            actions.fetchWorktrees(repo.id)
+          )
         )
         await keybindingsPromise
         if (!cancelled) {
@@ -1031,8 +1035,7 @@ function App(): React.JSX.Element {
               })
               if (!cancelled) {
                 await timeRendererStartupStep('remote-worktree-refresh', async () => {
-                  // The first full scan runs after session hydration and
-                  // terminal reconnect, outside the startup-critical path.
+                  // Why: the full scan is not required for session recovery, so keep it off the startup-critical path.
                   await actions.fetchAllWorktrees()
                   await actions.fetchWorktreeLineage()
                 })

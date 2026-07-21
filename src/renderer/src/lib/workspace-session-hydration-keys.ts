@@ -38,93 +38,81 @@ function addFolderWorkspaceKey(keys: Set<WorkspaceKey>, value: unknown): void {
   }
 }
 
-export function collectFolderWorkspaceKeysFromSession(
-  session: WorkspaceSessionState
-): WorkspaceKey[] {
-  const keys = new Set<WorkspaceKey>()
+function collectWorkspaceSessionKeys(session: WorkspaceSessionState): string[] {
+  const keys = new Set<string>()
+  const addKey = (value: unknown): void => {
+    if (typeof value === 'string') {
+      keys.add(value)
+    }
+  }
 
-  addFolderWorkspaceKey(keys, session.activeWorkspaceKey)
-  addFolderWorkspaceKey(keys, session.activeWorktreeId)
-
+  addKey(session.activeWorkspaceKey)
+  addKey(session.activeWorktreeId)
   for (const field of WORKSPACE_KEYED_SESSION_FIELDS) {
     const value = session[field]
     if (!isPlainRecord(value)) {
       continue
     }
     for (const key of Object.keys(value)) {
-      addFolderWorkspaceKey(keys, key)
+      addKey(key)
     }
   }
-
   for (const worktreeId of session.activeWorktreeIdsOnShutdown ?? []) {
-    addFolderWorkspaceKey(keys, worktreeId)
+    addKey(worktreeId)
   }
   for (const pages of Object.values(session.browserPagesByWorkspace ?? {})) {
     if (!Array.isArray(pages)) {
       continue
     }
     for (const page of pages) {
-      addFolderWorkspaceKey(keys, page.worktreeId)
+      addKey(page.worktreeId)
     }
   }
   for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
-    addFolderWorkspaceKey(keys, record.worktreeId)
+    addKey(record.worktreeId)
   }
 
   return [...keys]
 }
 
-export function collectWorktreeRecoveryRepoIdsFromSession(
+export function collectFolderWorkspaceKeysFromSession(
+  session: WorkspaceSessionState
+): WorkspaceKey[] {
+  const keys = new Set<WorkspaceKey>()
+  for (const key of collectWorkspaceSessionKeys(session)) {
+    addFolderWorkspaceKey(keys, key)
+  }
+
+  return [...keys]
+}
+
+export function collectWorktreeHydrationRepoIdsFromSession(
   session: WorkspaceSessionState,
   runtimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
 ): string[] {
-  const rawWorktreeIdFromSessionKey = (value: string): string | null => {
+  const repoIds = new Set<string>()
+  const addWorktreeRepoId = (value: unknown): void => {
+    if (typeof value !== 'string') {
+      return
+    }
     const scope = parseWorkspaceKey(value)
     if (scope?.type === 'folder') {
-      return null
+      return
     }
-    return scope?.type === 'worktree' ? scope.worktreeId : value
-  }
-  const isRuntimeOwned = (sessionKey: string, rawWorktreeId: string): boolean =>
-    [sessionKey, rawWorktreeId].some(
+    const rawWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : value
+    const isRuntimeOwned = [value, rawWorktreeId].some(
       (key) => parseExecutionHostId(runtimeHostIdByWorkspaceSessionKey?.[key])?.kind === 'runtime'
     )
-
-  const shutdownIds = session.activeWorktreeIdsOnShutdown
-  const candidateWorktreeIds = shutdownIds
-    ? new Set(
-        shutdownIds.map(rawWorktreeIdFromSessionKey).filter((id): id is string => Boolean(id))
-      )
-    : null
-  const remoteTabIds = new Set(Object.keys(session.remoteSessionIdsByTabId ?? {}))
-  const terminalLayoutsByTabId = session.terminalLayoutsByTabId ?? {}
-  const repoIds = new Set<string>()
-
-  for (const [sessionKey, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-    const rawWorktreeId = rawWorktreeIdFromSessionKey(sessionKey)
-    if (
-      !rawWorktreeId ||
-      (candidateWorktreeIds && !candidateWorktreeIds.has(rawWorktreeId)) ||
-      isRuntimeOwned(sessionKey, rawWorktreeId)
-    ) {
-      continue
-    }
-    const hasPersistedSession = tabs.some((tab) => {
-      if (tab.ptyId || remoteTabIds.has(tab.id)) {
-        return true
-      }
-      const layout = terminalLayoutsByTabId[tab.id]
-      return Object.values(layout?.ptyIdsByLeafId ?? {}).some(Boolean)
-    })
-    if (hasPersistedSession) {
-      const repoId = getRepoIdFromWorktreeId(rawWorktreeId)
-      if (repoId) {
-        repoIds.add(repoId)
-      }
+    if (!isRuntimeOwned) {
+      repoIds.add(getRepoIdFromWorktreeId(rawWorktreeId))
     }
   }
 
-  return [...repoIds].sort()
+  for (const key of collectWorkspaceSessionKeys(session)) {
+    addWorktreeRepoId(key)
+  }
+
+  return [...repoIds].filter(Boolean).sort()
 }
 
 export function addAdditionalValidWorkspaceKeys(

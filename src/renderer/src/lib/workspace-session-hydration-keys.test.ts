@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSessionState } from '../../../shared/types'
-import { collectWorktreeRecoveryRepoIdsFromSession } from './workspace-session-hydration-keys'
+import { collectWorktreeHydrationRepoIdsFromSession } from './workspace-session-hydration-keys'
 
-describe('collectWorktreeRecoveryRepoIdsFromSession', () => {
-  it('ignores folder workspaces and worktrees without persisted terminal sessions', () => {
+describe('collectWorktreeHydrationRepoIdsFromSession', () => {
+  it('includes persisted terminal tabs and ignores folder workspaces', () => {
     const session = {
       activeWorktreeIdsOnShutdown: [
         'repo-a::/worktree-a',
@@ -17,7 +17,7 @@ describe('collectWorktreeRecoveryRepoIdsFromSession', () => {
       }
     } as unknown as WorkspaceSessionState
 
-    expect(collectWorktreeRecoveryRepoIdsFromSession(session)).toEqual(['repo-a'])
+    expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-a', 'repo-b'])
   })
 
   it('recognizes split-pane and remote persisted sessions', () => {
@@ -35,7 +35,7 @@ describe('collectWorktreeRecoveryRepoIdsFromSession', () => {
       remoteSessionIdsByTabId: { 'tab-b': 'remote-session' }
     } as unknown as WorkspaceSessionState
 
-    expect(collectWorktreeRecoveryRepoIdsFromSession(session)).toEqual(['repo-a', 'repo-b'])
+    expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-a', 'repo-b'])
   })
 
   it('matches canonical session keys against raw shutdown worktree IDs', () => {
@@ -50,7 +50,7 @@ describe('collectWorktreeRecoveryRepoIdsFromSession', () => {
       }
     } as unknown as WorkspaceSessionState
 
-    expect(collectWorktreeRecoveryRepoIdsFromSession(session)).toEqual(['repo-a'])
+    expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-a'])
   })
 
   it('excludes runtime-owned session worktrees for raw and canonical owner keys', () => {
@@ -66,12 +66,12 @@ describe('collectWorktreeRecoveryRepoIdsFromSession', () => {
     } as unknown as WorkspaceSessionState
 
     expect(
-      collectWorktreeRecoveryRepoIdsFromSession(session, {
+      collectWorktreeHydrationRepoIdsFromSession(session, {
         [rawWorktreeId]: 'runtime:env-1'
       })
     ).toEqual([])
     expect(
-      collectWorktreeRecoveryRepoIdsFromSession(session, {
+      collectWorktreeHydrationRepoIdsFromSession(session, {
         [canonicalWorktreeKey]: 'runtime:env-1'
       })
     ).toEqual([])
@@ -89,7 +89,7 @@ describe('collectWorktreeRecoveryRepoIdsFromSession', () => {
     } as unknown as WorkspaceSessionState
 
     expect(
-      collectWorktreeRecoveryRepoIdsFromSession(session, {
+      collectWorktreeHydrationRepoIdsFromSession(session, {
         [rawWorktreeId]: 'ssh:ssh-target'
       })
     ).toEqual(['repo-a'])
@@ -106,6 +106,28 @@ describe('collectWorktreeRecoveryRepoIdsFromSession', () => {
       }
     } as unknown as WorkspaceSessionState
 
-    expect(collectWorktreeRecoveryRepoIdsFromSession(session)).toEqual(['repo-a', 'repo-b'])
+    expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-a', 'repo-b'])
+  })
+
+  it('includes repositories referenced only by active, editor, browser, or sleeping-agent state', () => {
+    const session = {
+      activeRepoId: null,
+      activeWorktreeId: 'repo-active::/active',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: { 'repo-editor::/editor': [] },
+      browserTabsByWorktree: { 'repo-browser::/browser': [] },
+      sleepingAgentSessionsByPaneKey: {
+        'tab:leaf': { worktreeId: 'repo-agent::/agent' }
+      }
+    } as unknown as WorkspaceSessionState
+
+    expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual([
+      'repo-active',
+      'repo-agent',
+      'repo-browser',
+      'repo-editor'
+    ])
   })
 })
