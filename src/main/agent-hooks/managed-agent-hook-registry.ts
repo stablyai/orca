@@ -4,10 +4,11 @@ import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import {
+  aggregateClaudeHookRemovalStatus,
   aggregateClaudeHookStatusWithConfigDirs,
-  getLedgeredClaudeConfigDirHookStatuses,
+  getDiscoveredClaudeConfigDirHookStatuses,
   installDiscoveredClaudeConfigDirHooks,
-  removeLedgeredClaudeConfigDirHooks
+  removeDiscoveredClaudeConfigDirHooks
 } from '../claude/claude-config-dir-hook-controls'
 import { codexHookService } from '../codex/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
@@ -56,10 +57,9 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   [
     'claude',
     () => {
-      // Why: ledger-driven — cleans exactly the dirs Orca installed into,
-      // then reports the primary .claude removal like before.
-      removeLedgeredClaudeConfigDirHooks()
-      return claudeHookService.remove()
+      // Why: each successful install leaves settings.json as a discovery marker, so removal needs no separate ownership ledger.
+      const configDirStatuses = removeDiscoveredClaudeConfigDirHooks()
+      return aggregateClaudeHookRemovalStatus(claudeHookService.remove(), configDirStatuses)
     }
   ],
   ['openclaude', () => openClaudeHookService.remove()],
@@ -83,7 +83,7 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
     () =>
       aggregateClaudeHookStatusWithConfigDirs(
         claudeHookService.getStatus(),
-        getLedgeredClaudeConfigDirHookStatuses()
+        getDiscoveredClaudeConfigDirHookStatuses()
       )
   ],
   ['openclaude', () => openClaudeHookService.getStatus()],

@@ -498,6 +498,12 @@ describe('ClaudeHookService Devin import guard', () => {
       rmSync(tmpHome, { recursive: true, force: true })
     }
   })
+
+  it('rejects unsafe config-dir names at the service boundary', () => {
+    expect(() => createClaudeConfigDirHookService('.claude-foo/../../escape')).toThrow(
+      'Invalid Claude config-dir name'
+    )
+  })
 })
 
 describe('ClaudeHookService.installRemote', () => {

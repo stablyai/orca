@@ -35,7 +35,7 @@ function createFakeHome(entries: string[], markerPaths: string[]): FakeHome {
         readdirCalls.push(dirPath)
         return [...entries]
       },
-      pathExists: (path) => {
+      pathIsFile: (path) => {
         probedPaths.push(path)
         return markers.has(path)
       }
@@ -101,7 +101,7 @@ describe('discoverLocalClaudeConfigDirNames', () => {
       readdirNames: () => {
         throw new Error('EACCES')
       },
-      pathExists: () => {
+      pathIsFile: () => {
         throw new Error('should not probe when listing fails')
       }
     }
@@ -114,7 +114,7 @@ describe('discoverLocalClaudeConfigDirNames', () => {
   it('treats marker probe errors as marker-absent', () => {
     const fs: LocalClaudeConfigDirFs = {
       readdirNames: () => ['.claude-grok'],
-      pathExists: () => {
+      pathIsFile: () => {
         throw new Error('EPERM')
       }
     }
@@ -139,7 +139,10 @@ describe('discoverRemoteClaudeConfigDirNames', () => {
           ),
         stat: (path, callback) => {
           statCalls.push(path)
-          callback(markers.has(path) ? null : { code: 2, message: `ENOENT ${path}` })
+          callback(
+            markers.has(path) ? null : { code: 2, message: `ENOENT ${path}` },
+            markers.has(path) ? { mode: 0o100644 } : undefined
+          )
         }
       }
     }

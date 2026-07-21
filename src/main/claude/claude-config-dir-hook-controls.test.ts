@@ -1,10 +1,3 @@
-// Why: the multi-dir lifecycle must (1) write the SAME managed hooks into
-// every discovered flavor config dir, (2) uninstall from exactly the dirs the
-// ledger says Orca touched — even when discovery results changed since — and
-// (3) never log dir names (privacy: these dirs hold credentials). All against
-// a temp HOME; the real ~/.claude* is never touched.
-// The module is electron-free (it is compiled into the standalone `orca` CLI
-// build), so no electron mock is needed here; every test injects ledgerPath.
 import {
   existsSync,
   mkdirSync,
@@ -17,21 +10,20 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 import {
+  aggregateClaudeHookRemovalStatus,
   aggregateClaudeHookStatusWithConfigDirs,
+  getDiscoveredClaudeConfigDirHookStatuses,
   installDiscoveredClaudeConfigDirHooks,
-  getLedgeredClaudeConfigDirHookStatuses,
-  readClaudeConfigDirLedger,
-  removeLedgeredClaudeConfigDirHooks
+  removeDiscoveredClaudeConfigDirHooks
 } from './claude-config-dir-hook-controls'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
 const isClaudeManagedCommand = createManagedCommandMatcher(CLAUDE_SCRIPT_FILE_NAME)
 
 let tmpHome: string
-let ledgerPath: string
 
 function seedConfigDir(name: string, marker = 'settings.json', content = '{}'): string {
   const dir = join(tmpHome, name)
@@ -41,22 +33,17 @@ function seedConfigDir(name: string, marker = 'settings.json', content = '{}'): 
   return markerPath
 }
 
-function readSettings(name: string): {
-  hooks?: Record<string, { hooks?: { command?: string }[] }[]>
-} {
-  return JSON.parse(readFileSync(join(tmpHome, name, 'settings.json'), 'utf-8'))
-}
-
 function settingsCommands(name: string): string[] {
-  const parsed = readSettings(name)
+  const parsed = JSON.parse(readFileSync(join(tmpHome, name, 'settings.json'), 'utf-8')) as {
+    hooks?: Record<string, { hooks?: { command?: string }[] }[]>
+  }
   return Object.values(parsed.hooks ?? {}).flatMap((definitions) =>
-    definitions.flatMap((definition) => (definition.hooks ?? []).map((h) => h.command ?? ''))
+    definitions.flatMap((definition) => (definition.hooks ?? []).map((hook) => hook.command ?? ''))
   )
 }
 
 beforeEach(() => {
   tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-config-dirs-'))
-  ledgerPath = join(tmpHome, 'user-data', 'agent-hooks', 'claude-config-dirs.json')
   vi.stubEnv('HOME', tmpHome)
   vi.stubEnv('USERPROFILE', tmpHome)
 })
@@ -67,241 +54,128 @@ afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true })
 })
 
-describe('installDiscoveredClaudeConfigDirHooks', () => {
-  it('installs the same managed hooks into every discovered dir and records the ledger', () => {
+describe('discovered Claude config-dir hook lifecycle', () => {
+  it('installs the same managed hooks into every marker-backed config dir', () => {
     seedConfigDir('.claude-grok')
     seedConfigDir('.claude.vertex', '.credentials.json')
-    seedConfigDir('.claude-empty', 'unrelated.txt') // no marker — not discovered
+    seedConfigDir('.claude-empty', 'unrelated.txt')
     const consoleSpies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((level) =>
       vi.spyOn(console, level).mockImplementation(() => {})
     )
 
-    const statuses = installDiscoveredClaudeConfigDirHooks({ ledgerPath })
+    const statuses = installDiscoveredClaudeConfigDirHooks({ homeDir: tmpHome })
 
-    expect(statuses.map((s) => [s.agent, s.state])).toEqual([
-      ['claude', 'installed'],
-      ['claude', 'installed']
-    ])
+    expect(statuses.map((status) => status.state)).toEqual(['installed', 'installed'])
     for (const dirName of ['.claude-grok', '.claude.vertex']) {
       const commands = settingsCommands(dirName)
       expect(commands.length).toBeGreaterThan(0)
-      expect(commands.every((command) => isClaudeManagedCommand(command))).toBe(true)
+      expect(commands.every(isClaudeManagedCommand)).toBe(true)
     }
-    // Both dirs point at the ONE shared script — no per-dir script copies.
     expect(new Set(settingsCommands('.claude-grok'))).toEqual(
       new Set(settingsCommands('.claude.vertex'))
     )
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude-grok', '.claude.vertex'])
-    // Privacy: no dir names in logs.
+    expect(existsSync(join(tmpHome, '.claude-empty', 'settings.json'))).toBe(false)
     for (const spy of consoleSpies) {
       expect(spy).not.toHaveBeenCalled()
     }
   })
 
-  it('keeps previously ledgered dirs tracked when discovery no longer returns them', () => {
-    const grokMarker = seedConfigDir('.claude-grok')
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude-grok'])
+  it('removes hooks using live discovery after the original marker disappears', () => {
+    const credentialMarker = seedConfigDir('.claude-grok', '.credentials.json')
+    installDiscoveredClaudeConfigDirHooks({ homeDir: tmpHome })
+    unlinkSync(credentialMarker)
 
-    // Marker disappears — the dir (and Orca's managed entries) still exist.
-    unlinkSync(grokMarker)
-    seedConfigDir('.claude.vertex')
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
+    const statuses = removeDiscoveredClaudeConfigDirHooks({ homeDir: tmpHome })
 
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude-grok', '.claude.vertex'])
+    expect(statuses.map((status) => status.state)).toEqual(['not_installed'])
+    expect(settingsCommands('.claude-grok').some(isClaudeManagedCommand)).toBe(false)
   })
 
-  it('prunes a ledgered dir the user deleted entirely', () => {
+  it('does not recreate a config dir the user deleted', () => {
     seedConfigDir('.claude-grok')
-    seedConfigDir('.claude.vertex')
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
+    installDiscoveredClaudeConfigDirHooks({ homeDir: tmpHome })
     rmSync(join(tmpHome, '.claude-grok'), { recursive: true, force: true })
 
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
-
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude.vertex'])
-    // Pruning must not resurrect the deleted dir.
+    expect(removeDiscoveredClaudeConfigDirHooks({ homeDir: tmpHome })).toEqual([])
     expect(existsSync(join(tmpHome, '.claude-grok'))).toBe(false)
   })
 
-  it('warns once, name-free, when a discovered dir install fails', () => {
-    seedConfigDir('.claude-grok', 'settings.json', 'not json {{')
+  it('keeps install failures diagnosable without logging private directory names', () => {
+    seedConfigDir('.claude-private-name', 'settings.json', 'not json {{')
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    const statuses = installDiscoveredClaudeConfigDirHooks({ ledgerPath })
+    const statuses = installDiscoveredClaudeConfigDirHooks({ homeDir: tmpHome })
 
-    expect(statuses.map((s) => s.state)).toEqual(['error'])
+    expect(statuses.map((status) => status.state)).toEqual(['error'])
     expect(warnSpy).toHaveBeenCalledTimes(1)
-    // Privacy: dir names must not leak into the warning.
-    expect(warnSpy.mock.calls[0].join(' ')).not.toContain('grok')
-  })
-})
-
-describe('removeLedgeredClaudeConfigDirHooks', () => {
-  it('removes managed entries from exactly the ledgered dirs and clears the ledger', () => {
-    const grokMarker = seedConfigDir('.claude-grok')
-    seedConfigDir('.claude.vertex')
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
-    // .claude-grok loses its marker AFTER install: discovery would miss it,
-    // but the ledger still knows Orca wrote hooks there.
-    unlinkSync(grokMarker)
-    // An untracked dir must NOT be touched by remove.
-    seedConfigDir('.claude-untouched')
-    writeFileSync(
-      join(tmpHome, '.claude-untouched', 'settings.json'),
-      JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'user-hook' }] }] } })
-    )
-
-    const statuses = removeLedgeredClaudeConfigDirHooks({ ledgerPath })
-
-    expect(statuses).toHaveLength(2)
-    // .claude-grok's settings.json is gone — remove() must treat that as
-    // "nothing to clean" without recreating the file.
-    expect(existsSync(join(tmpHome, '.claude-grok', 'settings.json'))).toBe(false)
-    expect(settingsCommands('.claude.vertex').some((c) => isClaudeManagedCommand(c))).toBe(false)
-    expect(settingsCommands('.claude-untouched')).toEqual(['user-hook'])
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual([])
+    expect(warnSpy.mock.calls[0].join(' ')).not.toContain('private-name')
   })
 
-  it('does not recreate a dir the user deleted entirely', () => {
+  it('converts service exceptions into per-dir error statuses', () => {
     seedConfigDir('.claude-grok')
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
-    rmSync(join(tmpHome, '.claude-grok'), { recursive: true, force: true })
-
-    removeLedgeredClaudeConfigDirHooks({ ledgerPath })
-
-    // Why: the old unconditional write resurrected the deleted dir with an
-    // empty {"hooks": {}} settings.json.
-    expect(existsSync(join(tmpHome, '.claude-grok'))).toBe(false)
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual([])
-  })
-
-  it('keeps a dir ledgered when its removal fails', () => {
-    seedConfigDir('.claude-grok')
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
-    // Unparseable settings.json → remove reports error → dir stays tracked.
-    writeFileSync(join(tmpHome, '.claude-grok', 'settings.json'), 'not json {{')
-
-    const statuses = removeLedgeredClaudeConfigDirHooks({ ledgerPath })
-
-    expect(statuses.map((s) => s.state)).toEqual(['error'])
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude-grok'])
-  })
-
-  it('preserves a concurrently installed dir when removal updates the ledger', () => {
-    seedConfigDir('.claude-old')
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
-
-    const installedStatus: AgentHookInstallStatus = {
-      agent: 'claude',
-      state: 'installed',
-      configPath: '',
-      managedHooksPresent: true,
-      detail: null
-    }
-    const removedStatus: AgentHookInstallStatus = {
-      agent: 'claude',
-      state: 'not_installed',
-      configPath: '',
-      managedHooksPresent: false,
-      detail: null
-    }
-
-    removeLedgeredClaudeConfigDirHooks({
-      ledgerPath,
+    const statuses = getDiscoveredClaudeConfigDirHookStatuses({
+      homeDir: tmpHome,
       createService: () => ({
-        install: () => installedStatus,
-        getStatus: () => installedStatus,
+        install: () => {
+          throw new Error('install failed')
+        },
         remove: () => {
-          installDiscoveredClaudeConfigDirHooks({
-            homeDir: tmpHome,
-            ledgerPath,
-            discoveryFs: {
-              readdirNames: () => ['.claude-new'],
-              pathExists: () => true
-            },
-            createService: () => ({
-              install: () => installedStatus,
-              getStatus: () => installedStatus,
-              remove: () => removedStatus
-            })
-          })
-          return removedStatus
+          throw new Error('remove failed')
+        },
+        getStatus: () => {
+          throw new Error('status failed')
         }
       })
     })
 
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude-new'])
+    expect(statuses).toEqual([
+      expect.objectContaining({ agent: 'claude', state: 'error', detail: 'status failed' })
+    ])
   })
 })
 
-describe('readClaudeConfigDirLedger', () => {
-  it('returns empty for a missing or corrupt ledger', () => {
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual([])
-    mkdirSync(join(tmpHome, 'user-data', 'agent-hooks'), { recursive: true })
-    writeFileSync(ledgerPath, 'not json {{')
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual([])
-  })
+describe('aggregateClaudeHookStatusWithConfigDirs', () => {
+  const primary: AgentHookInstallStatus = {
+    agent: 'claude',
+    state: 'installed',
+    configPath: '/home/dev/.claude/settings.json',
+    managedHooksPresent: true,
+    detail: null
+  }
 
-  it('drops entries that violate the flavor-dir naming convention', () => {
-    mkdirSync(join(tmpHome, 'user-data', 'agent-hooks'), { recursive: true })
-    writeFileSync(
-      ledgerPath,
-      JSON.stringify({
-        version: 1,
-        configDirNames: [
-          '.claude',
-          '.openclaude',
-          'evil',
-          '../escape',
-          '.claude-foo/../../escape',
-          '.claude-foo\\..\\escape',
-          '.claude-..',
-          '.claude-ok'
-        ]
-      })
-    )
-    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude-ok'])
-  })
-})
+  it('folds unhealthy discovered dirs into the primary status without exposing names', () => {
+    const aggregated = aggregateClaudeHookStatusWithConfigDirs(primary, [
+      { ...primary, state: 'not_installed', configPath: '/home/dev/.claude-private-name' }
+    ])
 
-describe('getLedgeredClaudeConfigDirHookStatuses / aggregate', () => {
-  it('reports per-dir statuses for ledgered dirs and folds them into the primary status', () => {
-    seedConfigDir('.claude-grok')
-    seedConfigDir('.claude.vertex')
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
-    // Break one dir: user wipes its hooks.
-    writeFileSync(join(tmpHome, '.claude-grok', 'settings.json'), JSON.stringify({ hooks: {} }))
-
-    const statuses = getLedgeredClaudeConfigDirHookStatuses({ ledgerPath })
-    expect(statuses.map((s) => s.state).sort()).toEqual(['installed', 'not_installed'])
-
-    const primary: AgentHookInstallStatus = {
-      agent: 'claude',
-      state: 'installed',
-      configPath: join(tmpHome, '.claude', 'settings.json'),
-      managedHooksPresent: true,
-      detail: null
-    }
-    const aggregated = aggregateClaudeHookStatusWithConfigDirs(primary, statuses)
     expect(aggregated.state).toBe('partial')
-    // Count only — dir names must not leak into status text.
     expect(aggregated.detail).toContain('1 discovered Claude config dir')
-    expect(aggregated.detail).not.toContain('grok')
-
-    // All healthy → primary unchanged.
-    const healthy = statuses.map((s) => ({ ...s, state: 'installed' as const }))
-    expect(aggregateClaudeHookStatusWithConfigDirs(primary, healthy)).toEqual(primary)
+    expect(aggregated.detail).not.toContain('private-name')
   })
 
-  it('skips ledgered dirs the user deleted so the claude row cannot stay degraded', () => {
-    seedConfigDir('.claude-grok')
-    seedConfigDir('.claude.vertex')
-    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
-    rmSync(join(tmpHome, '.claude-grok'), { recursive: true, force: true })
+  it('leaves the primary status unchanged when every discovered dir is healthy', () => {
+    expect(aggregateClaudeHookStatusWithConfigDirs(primary, [{ ...primary }])).toEqual(primary)
+  })
 
-    const statuses = getLedgeredClaudeConfigDirHookStatuses({ ledgerPath })
+  it('leaves a disabled primary status unchanged when discovered hooks are absent', () => {
+    const disabled = { ...primary, state: 'not_installed' as const, managedHooksPresent: false }
+    const absent = { ...disabled, configPath: '/home/dev/.claude-flavor' }
 
-    expect(statuses.map((s) => s.state)).toEqual(['installed'])
+    expect(aggregateClaudeHookStatusWithConfigDirs(disabled, [absent])).toEqual(disabled)
+  })
+
+  it('reports a partial removal when a discovered config dir could not be cleaned', () => {
+    const removed = { ...primary, state: 'not_installed' as const, managedHooksPresent: false }
+    const failed = {
+      ...primary,
+      state: 'error' as const,
+      configPath: '/home/dev/.claude-private-name'
+    }
+
+    const aggregated = aggregateClaudeHookRemovalStatus(removed, [failed])
+
+    expect(aggregated.state).toBe('partial')
+    expect(aggregated.detail).toContain('1 discovered Claude config dir')
+    expect(aggregated.detail).not.toContain('private-name')
   })
 })

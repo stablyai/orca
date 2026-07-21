@@ -40,6 +40,7 @@ import {
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
+import { isClaudeFlavorConfigDirName } from './claude-config-dir-discovery'
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
@@ -354,6 +355,10 @@ export const claudeHookService = new ClaudeHookService()
  *  dir. Same agent id and shared claude-hook script — these dirs run genuine
  *  claude posting to /hook/claude; only the settings.json location differs. */
 export function createClaudeConfigDirHookService(configDirName: string): ClaudeHookService {
+  if (!isClaudeFlavorConfigDirName(configDirName)) {
+    // Why: this value becomes a home-relative write path, so validate it again at the factory boundary.
+    throw new Error('Invalid Claude config-dir name')
+  }
   return new ClaudeHookService({
     agent: 'claude',
     displayName: 'Claude',

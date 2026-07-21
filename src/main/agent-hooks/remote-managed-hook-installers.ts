@@ -83,15 +83,29 @@ export const REMOTE_MANAGED_HOOK_INSTALLER_AGENTS: readonly AgentHookInstallStat
 /** Install managed hooks into every discovered `~/.claude-<name>` flavor dir
  *  on the remote. Mirrors the local discovered-dir flow; runs over the same
  *  SFTP-shaped transport (SSH or the WSL fs bridge), so both hosts inherit it.
- *  No remote ledger: the remote flow is install-only today (no managed remote
- *  uninstall exists to consume one). */
+ *  Remote hook management is install-only today. */
 async function installRemoteDiscoveredClaudeConfigDirHooks(
   sftp: SFTPWrapper,
-  remoteHome: string
+  remoteHome: string,
+  signal?: AbortSignal
 ): Promise<AgentHookInstallStatus[]> {
   const results: AgentHookInstallStatus[] = []
   for (const dirName of await discoverRemoteClaudeConfigDirNames(sftp, remoteHome)) {
-    const result = await createClaudeConfigDirHookService(dirName).installRemote(sftp, remoteHome)
+    // Why: discovery may outlive a cancelled relay request; do not begin another config mutation afterward.
+    signal?.throwIfAborted()
+    let result: AgentHookInstallStatus
+    try {
+      result = await createClaudeConfigDirHookService(dirName).installRemote(sftp, remoteHome)
+    } catch (error) {
+      signal?.throwIfAborted()
+      result = {
+        agent: 'claude',
+        state: 'error',
+        configPath: dirName,
+        managedHooksPresent: false,
+        detail: error instanceof Error ? error.message : String(error)
+      }
+    }
     results.push(result)
     if (result.state === 'error') {
       // Why: name-free warn — discovered dir names/paths are user-private
@@ -101,6 +115,7 @@ async function installRemoteDiscoveredClaudeConfigDirHooks(
       )
     }
   }
+  signal?.throwIfAborted()
   return results
 }
 
@@ -143,9 +158,13 @@ export async function installRemoteManagedAgentHooks(
       })
     }
   }
+  options?.signal?.throwIfAborted()
   try {
-    results.push(...(await installRemoteDiscoveredClaudeConfigDirHooks(sftp, remoteHome)))
+    results.push(
+      ...(await installRemoteDiscoveredClaudeConfigDirHooks(sftp, remoteHome, options?.signal))
+    )
   } catch (error) {
+    options?.signal?.throwIfAborted()
     // Why: same fail-open contract as the static loop — discovery problems
     // degrade status reporting only, never SSH/WSL workspace startup.
     const detail = error instanceof Error ? error.message : String(error)

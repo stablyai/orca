@@ -158,6 +158,25 @@ describe('agent status routing attribution', () => {
       terminalHandle: 'term-child'
     })
   })
+
+  it('clears config-dir identity when a reused pane reports the default Claude config', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+
+    store.getState().setAgentStatus('tab-1:1', {
+      state: 'working',
+      prompt: 'first task',
+      agentType: 'claude',
+      configDir: '/home/dev/.claude-flavor'
+    })
+    store.getState().setAgentStatus('tab-1:1', {
+      state: 'working',
+      prompt: 'second task',
+      agentType: 'claude'
+    })
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].configDir).toBeUndefined()
+  })
 })
 
 describe('agent status runtime orchestration metadata', () => {

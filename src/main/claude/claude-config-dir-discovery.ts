@@ -7,7 +7,7 @@
 // file contents are never read, and dir listings / entry names are never
 // logged.
 
-import { existsSync, readdirSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { CLAUDE_FLAVOR_CONFIG_DIR_PATTERN } from '../../shared/claude-config-dir-label'
@@ -37,13 +37,13 @@ export function isClaudeFlavorConfigDirName(name: string): boolean {
 export type LocalClaudeConfigDirFs = {
   /** Entry names of a directory. Callers must never log the result. */
   readdirNames(dirPath: string): string[]
-  /** stat-based existence probe; must not read file contents. */
-  pathExists(path: string): boolean
+  /** stat-based regular-file probe; must not read file contents. */
+  pathIsFile(path: string): boolean
 }
 
 const localNodeFs: LocalClaudeConfigDirFs = {
   readdirNames: (dirPath) => readdirSync(dirPath),
-  pathExists: (path) => existsSync(path)
+  pathIsFile: (path) => statSync(path).isFile()
 }
 
 /** Discover flavor config dirs in the local home dir. Returns sorted dir
@@ -74,7 +74,7 @@ function hasLocalConfigDirMarker(
   // actually populated it.
   return CLAUDE_CONFIG_DIR_MARKERS.some((marker) => {
     try {
-      return fs.pathExists(join(homeDir, name, marker))
+      return fs.pathIsFile(join(homeDir, name, marker))
     } catch {
       return false
     }
@@ -85,7 +85,23 @@ function hasLocalConfigDirMarker(
  *  adapter — structural so discovery runs over either transport unchanged. */
 export type SftpShapedClaudeConfigDirFs = {
   readdir(path: string, callback: (err: unknown, entries?: { filename: string }[]) => void): void
-  stat(path: string, callback: (err: unknown, stats?: unknown) => void): void
+  stat(
+    path: string,
+    callback: (err: unknown, stats?: { mode?: number; isFile?: () => boolean }) => void
+  ): void
+}
+
+function isRemoteRegularFile(
+  stats: { mode?: number; isFile?: () => boolean } | undefined
+): boolean {
+  if (!stats) {
+    return false
+  }
+  if (typeof stats.isFile === 'function') {
+    return stats.isFile()
+  }
+  // Why: the WSL bridge serializes only POSIX mode bits, while ssh2 exposes isFile().
+  return typeof stats.mode === 'number' && (stats.mode & 0o170000) === 0o100000
 }
 
 // Why: mirror installer-utils-remote's per-operation timeout — a wedged SFTP
@@ -150,7 +166,9 @@ export async function discoverRemoteClaudeConfigDirNames(
     const dirPath = home === '/' ? `/${name}` : `${home}/${name}`
     for (const marker of CLAUDE_CONFIG_DIR_MARKERS) {
       const present = await remoteOperation<boolean>((callback) => {
-        sftp.stat(`${dirPath}/${marker}`, (err) => callback(null, !err))
+        sftp.stat(`${dirPath}/${marker}`, (err, stats) =>
+          callback(null, !err && isRemoteRegularFile(stats))
+        )
       }).catch(() => false)
       if (present) {
         discovered.push(name)
