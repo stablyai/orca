@@ -20537,7 +20537,10 @@ describe('OrcaRuntimeService', () => {
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
     const closeTerminalTab = vi.fn()
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const dropAgentStatusEntriesByTabPrefix = vi.fn()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      dropAgentStatusEntriesByTabPrefix
+    })
     runtime.setPtyController({
       write: () => true,
       kill,
@@ -20578,6 +20581,7 @@ describe('OrcaRuntimeService', () => {
     // Best-effort renderer notify so no adopted pane is left dead.
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
     expect(closeTerminalTab).not.toHaveBeenCalled()
+    expect(dropAgentStatusEntriesByTabPrefix).toHaveBeenCalledWith('host-tab')
   })
 
   it('delegates a renderer-owned daemon-session (worktreeId@@uuid) local terminal to the renderer', async () => {
@@ -22991,6 +22995,76 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('does not count a saved final tab as live after the provider confirms its PTY closed', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => null),
+      listProcesses: vi.fn(async () => [])
+    })
+
+    const terminals = await runtime.listTerminals(undefined, 100, {
+      requireFreshPtyLiveness: true
+    })
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(terminals.terminals).toEqual([])
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      liveTerminalCount: 0,
+      hasAttachedPty: false,
+      status: 'inactive'
+    })
+  })
+
+  it('does not count a retained graph leaf after fresh provider liveness excludes its PTY', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'stale-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Stale',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'stale-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'stale-pty'
+        }
+      ]
+    })
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => null),
+      listProcesses: vi.fn(async () => [])
+    })
+
+    const terminals = await runtime.listTerminals(undefined, 100, {
+      requireFreshPtyLiveness: true
+    })
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(terminals.terminals).toEqual([])
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      liveTerminalCount: 0,
+      hasAttachedPty: false,
+      status: 'inactive'
+    })
+  })
+
   it('marks saved session tabs with live PTYs as host sidebar activity', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
@@ -23090,7 +23164,10 @@ describe('OrcaRuntimeService', () => {
 
     expect(worktrees[0]).toMatchObject({
       worktreeId: TEST_WORKTREE_ID,
-      hasHostSidebarActivity: true
+      hasHostSidebarActivity: true,
+      liveTerminalCount: 0,
+      hasAttachedPty: false,
+      status: 'inactive'
     })
   })
 
@@ -23470,6 +23547,50 @@ describe('OrcaRuntimeService', () => {
       })
     }
   )
+
+  it('omits a retained done hook row after its terminal tab is no longer live', async () => {
+    const now = Date.now()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'closed-tab',
+              ptyId: null,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Completed',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {}
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'closed-tab:33333333-3333-4333-8333-333333333333',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'closed-tab',
+          state: 'done',
+          prompt: 'completed before close',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.agents).toEqual(
+      []
+    )
+  })
 
   it('marks the desktop-active worktree as isActive', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
