@@ -21,6 +21,7 @@ export function ProjectDefaultPathSetting({
   const value = settings.projectDefaultPath ?? ''
   const [draft, setDraft] = useState(value)
   const draftRef = useRef(value)
+  const skipNextBlurCommitRef = useRef(false)
 
   useEffect(() => {
     setDraft(value)
@@ -39,16 +40,25 @@ export function ProjectDefaultPathSetting({
     updateSettings({ projectDefaultPath: next })
   }
 
+  const handleBlur = (): void => {
+    if (skipNextBlurCommitRef.current) {
+      skipNextBlurCommitRef.current = false
+      return
+    }
+    commit(draftRef.current)
+  }
+
   const handleBrowse = async (): Promise<void> => {
-    // Why: seed the picker with the current draft so re-browsing starts near the
-    // in-progress edit. When the draft is empty, the main-process handler falls
-    // back to the saved projectDefaultPath setting on its own.
-    const picked = await window.api.repos.pickFolder(
-      draftRef.current ? { defaultPath: draftRef.current } : undefined
-    )
-    if (picked) {
-      setDraftValue(picked)
-      commit(picked)
+    try {
+      // Why: seed the picker from the in-progress edit instead of an older
+      // persisted value when the user browses before leaving the field.
+      const picked = await window.api.repos.pickFolder({ defaultPath: draftRef.current })
+      if (picked) {
+        setDraftValue(picked)
+        commit(picked)
+      }
+    } finally {
+      skipNextBlurCommitRef.current = false
     }
   }
 
@@ -56,10 +66,17 @@ export function ProjectDefaultPathSetting({
     'auto.components.settings.ProjectDefaultPathSetting.title',
     'Project default directory'
   )
+  // Why: native pickers browse the client filesystem; SSH/runtime project
+  // paths remain typed host paths and never inherit this local directory.
   const description = translate(
     'auto.components.settings.ProjectDefaultPathSetting.description',
-    'Where the folder pickers for adding or cloning a project open. Leave empty to use the last-used location.'
+    "Starting directory for local project folder pickers. Leave empty to use the system's last-used location."
   )
+  const browseLabel = translate(
+    'auto.components.settings.ProjectDefaultPathSetting.browse',
+    'Browse'
+  )
+  const resetLabel = translate('auto.components.settings.ProjectDefaultPathSetting.reset', 'Reset')
   // Why: show a path example that matches the user's OS so the placeholder reads
   // naturally on Windows as well as macOS/Linux.
   const placeholder =
@@ -79,39 +96,55 @@ export function ProjectDefaultPathSetting({
           value={draft}
           placeholder={placeholder}
           onChange={(e) => setDraftValue(e.target.value)}
-          onBlur={() => commit(draftRef.current)}
+          onBlur={handleBlur}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !isImeCompositionKeyDown(e)) {
+            if (isImeCompositionKeyDown(e)) {
+              return
+            }
+            if (e.key === 'Enter') {
+              skipNextBlurCommitRef.current = true
               commit(draftRef.current)
+              e.currentTarget.blur()
+              return
+            }
+            if (e.key === 'Escape') {
+              skipNextBlurCommitRef.current = true
+              setDraftValue(value)
+              e.currentTarget.blur()
             }
           }}
+          className="flex-1 text-xs"
         />
         <Button
           type="button"
           variant="outline"
-          size="icon"
-          aria-label={translate(
-            'auto.components.settings.ProjectDefaultPathSetting.browse',
-            'Browse'
-          )}
+          size="sm"
+          onPointerDown={() => {
+            skipNextBlurCommitRef.current = true
+          }}
           onClick={() => void handleBrowse()}
+          className="shrink-0 gap-1.5"
         >
-          <FolderOpen className="size-4" />
+          <FolderOpen className="size-3.5" />
+          {browseLabel}
         </Button>
         <Button
           type="button"
-          variant="outline"
-          size="icon"
-          aria-label={translate(
-            'auto.components.settings.ProjectDefaultPathSetting.reset',
-            'Reset'
-          )}
+          variant="ghost"
+          size="sm"
+          disabled={!draft && !value}
+          onPointerDown={() => {
+            skipNextBlurCommitRef.current = true
+          }}
           onClick={() => {
             setDraftValue('')
             commit('')
+            skipNextBlurCommitRef.current = false
           }}
+          className="shrink-0 gap-1.5"
         >
-          <RotateCcw className="size-4" />
+          <RotateCcw className="size-3.5" />
+          {resetLabel}
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">{description}</p>

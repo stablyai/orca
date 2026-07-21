@@ -2102,10 +2102,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('repos:pickFolder', async (_event, args?: { defaultPath?: string }) => {
-    const defaultPath = resolvePickerDefaultPath(
-      args?.defaultPath,
-      store.getSettings().projectDefaultPath
-    )
+    const defaultPath = resolvePickerDefaultPath(args?.defaultPath)
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
       ...(defaultPath ? { defaultPath } : {})
@@ -2117,10 +2114,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('repos:pickFolders', async (_event, args?: { defaultPath?: string }) => {
-    const defaultPath = resolvePickerDefaultPath(
-      args?.defaultPath,
-      store.getSettings().projectDefaultPath
-    )
+    const defaultPath = resolvePickerDefaultPath(args?.defaultPath)
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory', 'multiSelections'],
       ...(defaultPath ? { defaultPath } : {})
@@ -2133,10 +2127,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   // Why: generic folder picker, separate from pickFolder's add-project flow; a clone destination may not be a git repo yet.
   ipcMain.handle('repos:pickDirectory', async (_event, args?: { defaultPath?: string }) => {
-    const defaultPath = resolvePickerDefaultPath(
-      args?.defaultPath,
-      store.getSettings().projectDefaultPath
-    )
+    const defaultPath = resolvePickerDefaultPath(args?.defaultPath)
     const result = await dialog.showOpenDialog(mainWindow, {
       // Why: macOS materializes typed partial paths with directory creation on; clone/create make the final path on submit.
       properties: ['openDirectory'],

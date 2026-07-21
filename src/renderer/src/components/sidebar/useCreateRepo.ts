@@ -72,7 +72,9 @@ export function useCreateRepo(
       return null
     }
     const gen = createGenRef.current
-    const dir = await window.api.repos.pickDirectory()
+    const dir = await window.api.repos.pickDirectory({
+      defaultPath: useAppStore.getState().settings?.projectDefaultPath
+    })
     if (dir && gen === createGenRef.current && mountedRef.current) {
       setCreateParent(dir)
       setCreateError(null)

@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
   stateSetters: [] as ReturnType<typeof vi.fn>[],
   stateIndex: 0,
   storeState: {
-    settings: { activeRuntimeEnvironmentId: null as string | null },
+    settings: {
+      activeRuntimeEnvironmentId: null as string | null,
+      projectDefaultPath: undefined as string | undefined
+    },
     repos: [] as Repo[],
     projects: [],
     projectHostSetups: [],
@@ -115,6 +118,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     mocks.createRepo.mockReset()
     mocks.createRemoteRepo.mockReset()
     mocks.storeState.settings.activeRuntimeEnvironmentId = null
+    mocks.storeState.settings.projectDefaultPath = undefined
     vi.stubGlobal('window', {
       api: {
         repos: {
@@ -155,11 +159,15 @@ describe('useCreateRepo default-checkout handoff', () => {
   it('returns the selected parent directory after the local picker applies it', async () => {
     const pickedDir = '/Users/alice/custom-projects'
     vi.mocked(window.api.repos.pickDirectory).mockResolvedValue(pickedDir)
+    mocks.storeState.settings.projectDefaultPath = '/Users/alice/projects'
     const { useCreateRepo } = await import('./useCreateRepo')
 
     const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
     await expect(result.handlePickParent()).resolves.toBe(pickedDir)
 
+    expect(window.api.repos.pickDirectory).toHaveBeenCalledWith({
+      defaultPath: '/Users/alice/projects'
+    })
     expect(mocks.stateSetters[STATE_PARENT_PATH]).toHaveBeenCalledWith(pickedDir)
   })
 

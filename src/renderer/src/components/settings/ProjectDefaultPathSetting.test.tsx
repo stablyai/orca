@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectDefaultPathSetting } from './ProjectDefaultPathSetting'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -48,7 +48,7 @@ describe('ProjectDefaultPathSetting', () => {
     expect(updateSettings).toHaveBeenCalledWith({ projectDefaultPath: '/Users/me/code' })
   })
 
-  it('clears the setting when Reset is pressed', () => {
+  it('resets without committing the edited draft during button focus', () => {
     const updateSettings = vi.fn()
     render(
       <ProjectDefaultPathSetting
@@ -56,12 +56,35 @@ describe('ProjectDefaultPathSetting', () => {
         updateSettings={updateSettings}
       />
     )
-    fireEvent.click(screen.getByRole('button', { name: /reset/i }))
+    const input = screen.getByRole('textbox')
+    const reset = screen.getByRole('button', { name: /reset/i })
+    fireEvent.change(input, { target: { value: '/Users/me/edited' } })
+    fireEvent.pointerDown(reset)
+    fireEvent.blur(input)
+    fireEvent.click(reset)
+    expect(updateSettings).toHaveBeenCalledOnce()
     expect(updateSettings).toHaveBeenCalledWith({ projectDefaultPath: '' })
   })
 
-  it('exposes an accessible name on the Browse button', () => {
-    render(<ProjectDefaultPathSetting settings={settingsWith('')} updateSettings={vi.fn()} />)
-    expect(screen.getByRole('button', { name: /browse/i })).toBeInTheDocument()
+  it('seeds Browse from the draft and commits the selected directory', async () => {
+    const updateSettings = vi.fn()
+    vi.mocked(window.api.repos.pickFolder).mockResolvedValue('/Users/me/selected')
+    render(
+      <ProjectDefaultPathSetting settings={settingsWith('')} updateSettings={updateSettings} />
+    )
+    const input = screen.getByRole('textbox')
+    const browse = screen.getByRole('button', { name: /browse/i })
+    fireEvent.change(input, { target: { value: '/Users/me/draft' } })
+    fireEvent.pointerDown(browse)
+    fireEvent.blur(input)
+    fireEvent.click(browse)
+
+    expect(window.api.repos.pickFolder).toHaveBeenCalledWith({
+      defaultPath: '/Users/me/draft'
+    })
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledOnce()
+      expect(updateSettings).toHaveBeenCalledWith({ projectDefaultPath: '/Users/me/selected' })
+    })
   })
 })

@@ -764,7 +764,9 @@ export function useOnboardingFlow(
         return
       }
       track('onboarding_step4_path_clicked', { path: 'open_folder' })
-      const path = await window.api.repos.pickFolder()
+      const path = await window.api.repos.pickFolder({
+        defaultPath: settings?.projectDefaultPath
+      })
       if (!path) {
         track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'cancelled' })
         return
@@ -831,7 +833,8 @@ export function useOnboardingFlow(
       scanNestedRepos,
       serverPath,
       showNestedRepoReview,
-      settings?.activeRuntimeEnvironmentId
+      settings?.activeRuntimeEnvironmentId,
+      settings?.projectDefaultPath
     ]
   )
 

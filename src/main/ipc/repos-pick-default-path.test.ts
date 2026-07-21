@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { resolvePickerDefaultPath } from './repos-pick-default-path'
 
 describe('resolvePickerDefaultPath', () => {
-  it('uses the explicit arg when provided', () => {
-    expect(resolvePickerDefaultPath('/arg/path', '/setting/path')).toBe('/arg/path')
+  it('returns the provided path', () => {
+    expect(resolvePickerDefaultPath('/projects')).toBe('/projects')
   })
 
-  it('falls back to the saved setting when no arg', () => {
-    expect(resolvePickerDefaultPath(undefined, '/setting/path')).toBe('/setting/path')
+  it('trims surrounding whitespace', () => {
+    expect(resolvePickerDefaultPath('  /projects  ')).toBe('/projects')
   })
 
-  it('returns undefined when neither is set (preserves OS default)', () => {
-    expect(resolvePickerDefaultPath(undefined, undefined)).toBeUndefined()
+  it('returns undefined when absent', () => {
+    expect(resolvePickerDefaultPath(undefined)).toBeUndefined()
   })
 
-  it('treats an empty saved setting as unset', () => {
-    expect(resolvePickerDefaultPath(undefined, '')).toBeUndefined()
+  it('treats whitespace as unset', () => {
+    expect(resolvePickerDefaultPath('  ')).toBeUndefined()
   })
 })

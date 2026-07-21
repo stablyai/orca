@@ -99,7 +99,9 @@ export function useAddRepoCloneFlow({
       return
     }
     const gen = cloneGenRef.current
-    const dir = await window.api.repos.pickDirectory()
+    const dir = await window.api.repos.pickDirectory({
+      defaultPath: useAppStore.getState().settings?.projectDefaultPath
+    })
     if (dir && gen === cloneGenRef.current) {
       setCloneDestination(dir)
       setCloneError(null)

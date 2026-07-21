@@ -9251,7 +9251,7 @@
         },
         "ProjectDefaultPathSetting": {
           "title": "Project default directory",
-          "description": "Where the add-project and clone folder pickers open. Leave empty to use the last-used location.",
+          "description": "Starting directory for local project folder pickers. Leave empty to use the system's last-used location.",
           "reset": "Reset",
           "browse": "Browse"
         }

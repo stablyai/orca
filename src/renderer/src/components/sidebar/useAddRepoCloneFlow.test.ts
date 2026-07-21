@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
   refValues: [] as unknown[],
   refIndex: 0,
   storeState: {
-    settings: { activeRuntimeEnvironmentId: null as string | null },
+    settings: {
+      activeRuntimeEnvironmentId: null as string | null,
+      projectDefaultPath: undefined as string | undefined
+    },
     repos: [] as Repo[],
     projects: [],
     projectHostSetups: []
@@ -100,6 +103,7 @@ describe('useAddRepoCloneFlow', () => {
     mocks.storeState.repos = []
     mocks.storeState.projects = []
     mocks.storeState.projectHostSetups = []
+    mocks.storeState.settings.projectDefaultPath = undefined
     vi.stubGlobal('window', {
       api: {
         repos: {
@@ -162,6 +166,25 @@ describe('useAddRepoCloneFlow', () => {
 
     expect(result.cloneDestination).toBe('')
     expect(mocks.stateSetters[1]).not.toHaveBeenCalledWith('/private/tmp/orca-setup-e2e.hOWO1f')
+  })
+
+  it('opens the local destination picker at the project default directory', async () => {
+    mocks.pickDirectory.mockResolvedValue('/projects')
+    mocks.storeState.settings.projectDefaultPath = '/Users/alice/projects'
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      workspaceDir: '/local/workspace',
+      fetchWorktrees: mocks.fetchWorktrees,
+      onGitRepoReady: mocks.onGitRepoReady
+    })
+    await result.handlePickDestination()
+
+    expect(mocks.pickDirectory).toHaveBeenCalledWith({
+      defaultPath: '/Users/alice/projects'
+    })
   })
 
   it('strips Electron IPC wrappers from clone errors', async () => {
