@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-17",
+  "updatedAt": "2026-07-20",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -1224,7 +1224,8 @@
         "PTY sizing",
         "split layout",
         "restore",
-        "hidden-to-visible transitions"
+        "hidden-to-visible transitions",
+        "window wake"
       ],
       "platforms": [
         "macos",
@@ -1241,7 +1242,7 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Shell-visible size, SSH/remote geometry, Windows ConPTY readback, and resume-time reassertion coverage arrive with the pending stack and #7006.",
+      "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Deterministic provider-contract coverage now includes settled window-wake reassertion and SSH relay applied-size readback. Live shell-visible SSH/remote geometry and Windows ConPTY readback remain non-blocking gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6644",
         "https://github.com/stablyai/orca/pull/6649",
@@ -1252,15 +1253,19 @@
         "https://github.com/stablyai/orca/pull/7192"
       ],
       "invariant": "A visible desktop-owned terminal cannot trust 0x0, stale requested size, or renderer-only size; xterm, fit/proposed size, applied PTY size, shell-visible size, and the runtime mirror's parse dimensions must converge or enter explicit degraded state, and mirror resize reflow must stay ordered with queued output writes.",
-      "oracle": "The current executable slice uses deterministic frame schedulers and fake providers to force 0x0 first fit, delayed layout settle, dropped resize/readback drift, and hidden-to-visible activation, then asserts the renderer forwards a usable size, pty:getSize reports applied rather than merely requested size where available, and visibility resume reasserts real drift without hot listSessions. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
+      "oracle": "The current executable slice uses deterministic frame schedulers and fake providers to force 0x0 first fit, delayed layout settle, dropped resize/readback drift, hidden-to-visible activation, and window wake. It asserts the renderer forwards a usable size, pty:getSize reports applied rather than merely requested size where available, visibility resume reasserts real drift without hot listSessions, one settled wake produces one geometry-only readback, and SSH relay readback is authoritative with bounded fallback. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts",
         "src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts",
+        "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
         "src/main/ipc/pty.test.ts",
-        "src/main/runtime/orca-runtime.test.ts"
+        "src/main/providers/ssh-pty-provider.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/relay/pty-handler.test.ts"
       ],
       "assertionRefs": [
         {
@@ -1272,6 +1277,13 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts",
+          "assertions": [
+            "only one applied-size read stays in flight while the grid changes",
+            "stale in-flight targets never resize the PTY back to an older grid"
+          ]
+        },
+        {
           "file": "src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts",
           "assertions": [
             "0x0 split-right spawn recovers when the container becomes measurable",
@@ -1280,10 +1292,25 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+          "assertions": [
+            "window focus reasserts PTY size after fitting",
+            "the immediate and settled wake fits produce exactly one geometry-only reassertion"
+          ]
+        },
+        {
           "file": "src/main/ipc/pty.test.ts",
           "assertions": [
             "accepted desktop resizes fan out to the runtime after provider resize",
-            "rejected desktop resizes do not fan out to the runtime"
+            "rejected desktop resizes do not fan out to the runtime",
+            "provider-owned null remains unverified instead of falling back to requested size"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-pty-provider.test.ts",
+          "assertions": [
+            "SSH applied-size readback uses the relay with a one-second timeout",
+            "old-relay method-not-found is cached while transient failures remain retryable"
           ]
         },
         {
@@ -1292,17 +1319,24 @@
             "the headless mirror resizes after an accepted desktop PTY resize (#7192)",
             "headless mirror resizes are ordered behind queued PTY writes (#7192)"
           ]
+        },
+        {
+          "file": "src/relay/pty-handler.test.ts",
+          "assertions": [
+            "relay readback reports the grid actually applied by node-pty",
+            "missing relay PTYs return an unverified null size"
+          ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-03",
+          "date": "2026-07-20",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler.test.ts",
           "result": "passed",
-          "durationSeconds": 8.4,
-          "summary": "4 test file(s) passed, 777 tests passed on main@1282f5c2d in a clean checkout."
+          "durationSeconds": 18.54,
+          "summary": "8 test files passed, 1,272 tests passed on the PR branch."
         }
       ],
       "runtimeBudget": {
@@ -1319,16 +1353,15 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Must include resize/throughput budget so convergence loops do not add frame or SIGWINCH churn."
+        "evidence": "The wake hook count test permits two visual fits but exactly one applied-size read per visible pane and no broad visibility/agent lifecycle call. SSH readback has a one-second timeout, caches stable method-not-found, and retries only transient failures. No polling, listSessions scan, subprocess, or unbounded retry was added."
       },
       "promotionCriteria": [
         "Build deterministic fault hooks before adding broad E2E coverage.",
         "Keep stress variants non-blocking until runtime and flake history are known."
       ],
       "knownGaps": [
-        "No live Electron geometry command yet beyond the local live PTY resize slice.",
-        "The runtime mirror geometry slice is unregistered: #7192's red tests (orca-runtime.test.ts headless-mirror resize and ordering, pty.test.ts desktop resize fan-out) exist on fresh main but not at this branch's merge-base, so they can only be registered during the rebase.",
-        "Does not yet prove shell-visible size, provider-applied size, and xterm size converge across SSH/remote paths.",
+        "Local and Docker-backed SSH Electron wake specs exist but remain manual/non-blocking pending runtime and flake history.",
+        "The deterministic gate proves the SSH provider/relay readback contract, not live shell-visible convergence across every remote path.",
         "Does not yet prove Windows ConPTY geometry/readback.",
         "Current command uses deterministic fake providers for the main/renderer contracts, not a real remote PTY."
       ],
@@ -1692,6 +1725,98 @@
         "Does not cover Windows ConPTY, SSH, WSL, daemon, or remote-runtime providers."
       ],
       "demotionRule": "Cannot promote without deterministic user-visible oracle, failure artifacts, and stable runtime history."
+    },
+    {
+      "id": "terminal-session.windows-main-crash-survival",
+      "title": "A Windows main-process crash preserves and reattaches daemon terminals",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-platform",
+      "layer": "windows-packaged-electron-daemon",
+      "surfaces": [
+        "Electron main-process crash",
+        "detached terminal daemon",
+        "ConPTY shell survival",
+        "packaged relaunch reattach"
+      ],
+      "platforms": ["windows"],
+      "providers": ["daemon"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["daemon"],
+      "coverageNotes": "A packaged Windows CI run force-kills the launched instance's real Electron main without tree-killing, then proves the same scoped daemon and interactive PowerShell survive, no FailFast event is observed, and relaunch input reaches the same shell. Focused cross-platform unit tests fail closed on unavailable event-log or PID-liveness evidence, stale or ambiguous daemon identity, and incomplete reattach assertions.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7742",
+        "https://github.com/stablyai/orca/pull/9311"
+      ],
+      "invariant": "On packaged Windows, abrupt death of Orca's Electron main process must not terminate or replace the userData-scoped terminal daemon or its live ConPTY shell, and a relaunch must adopt that exact daemon and route terminal input to that exact surviving shell without a PowerShell 0xE9 FailFast.",
+      "oracle": "Resolve the launched instance's real main PID from inside Electron, force-kill only that PID, require it to die, require one command-line-scoped daemon PID and the stamped interactive shell PID to remain live, relaunch with persisted state, require the daemon PID to remain identical, read the exact shell PID and a per-shell environment sentinel back through the exact restored tab, then require a successful Windows Application event-log query with zero matching pwsh FailFast events across the full crash-to-input window.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/win-crash-survival-e2e.test.mjs",
+        "node tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8"
+      ],
+      "testFiles": [
+        "config/scripts/win-crash-survival-e2e.test.mjs",
+        "tools/win-crash-survival-e2e/run.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/win-crash-survival-e2e.test.mjs",
+          "assertions": [
+            "survival requires the crash antecedent, daemon and shell liveness, unchanged daemon identity, zero FailFast events, and same-shell reattach",
+            "event-log query failure cannot be converted into zero FailFast events",
+            "malformed event-log and PID-liveness evidence fails closed",
+            "stale, missing, or ambiguous userData-scoped daemon identity fails closed",
+            "the packaged survival proof remains wired to targeted pull requests without a duplicate branch-push run"
+          ]
+        },
+        {
+          "file": "tools/win-crash-survival-e2e/run.mjs",
+          "assertions": [
+            "force-killing only the real Electron main leaves the exact scoped daemon and stamped interactive shell alive",
+            "packaged relaunch adopts the unchanged daemon and reads the survivor shell's environment sentinel through the restored terminal"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-18",
+          "runner": "ci",
+          "platform": "windows",
+          "command": "node tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8",
+          "result": "passed",
+          "durationSeconds": 61,
+          "summary": "The packaged branch build's real main died; the same daemon and shell PIDs survived; the event-log scan found zero FailFast events; relaunch adopted the unchanged daemon; and terminal input read the survivor shell sentinel back."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "installed-app crash/relaunch harness, excluding installer build and dependency setup"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One green packaged Windows CI run is recorded; the durable pull-request trigger must accumulate repeated history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The inverse orphaned profile failed against the fixed packaged build because the daemon stayed live and no FailFast occurred. A genuinely pre-relocation packaged build has not yet been retained as a CI red fixture."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Production code is unchanged. The harness has bounded 500ms liveness polls, one 8-second crash soak, two scoped daemon identity scans plus teardown rediscovery, a 60-second cap on every synchronous PowerShell probe, a 5-second cap on Electron main-PID resolution, cleared and unreferenced close deadlines, a 50-minute job timeout, concurrency cancellation, and targeted production-path filtering that excludes source tests and benchmarks. The installer cache is keyed by every production build input; the job also restores the pnpm store and restores Electron/NSIS downloads only when an installer rebuild is required. The measured packaged harness completed in 61 seconds."
+      },
+      "promotionCriteria": [
+        "Collect at least 100 consecutive targeted Windows PR or soak passes over 14 days with zero unexplained flakes.",
+        "Retain a pre-relocation packaged red fixture or equivalent fault injection that makes the survival profile fail for daemon death and shell loss.",
+        "Keep the live oracle fail-closed for crash delivery, event-log access, daemon identity, and same-shell reattach."
+      ],
+      "knownGaps": [
+        "The packaged journey proves one terminal end to end; concurrent restoration across the user's multi-terminal, multi-worktree layout is not exercised live.",
+        "The gate covers a Windows local daemon-backed PowerShell terminal; WSL-backed shells are not exercised.",
+        "SSH, remote-runtime, relay, mobile, macOS, and Linux paths are unaffected by the Windows relocated ConPTY host contract and are not exercised here.",
+        "The Application event-log query is machine-wide, so an unrelated PowerShell crash on a non-isolated runner can false-fail the gate.",
+        "Standalone daemon self-crash and renderer-only crash containment remain separate invariants."
+      ],
+      "demotionRule": "Keep experimental or quarantine with a linked harness defect if the Windows job flakes; never weaken the crash, identity, event-log, or same-shell reattach oracle to obtain a pass."
     },
     {
       "id": "terminal-platform.windows-conpty-liveness",

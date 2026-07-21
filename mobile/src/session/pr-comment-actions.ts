@@ -1,4 +1,4 @@
-import type { PRComment, PRState } from '../../../src/shared/types'
+import type { GitHubOwnerRepo, PRComment, PRState } from '../../../src/shared/types'
 
 // Pure helpers for the interactive PR comment timeline (reply / resolve / add
 // root comment). Kept free of React/native imports so they unit-test under the
@@ -87,35 +87,46 @@ export function isMutablePRConversationComment(
 // can hide the affordance rather than firing a doomed request.
 export function canEditComment(
   comment: Pick<PRComment, 'id' | 'threadId' | 'path' | 'url'>,
-  prRepo: { owner: string; repo: string } | null | undefined
+  prRepo: GitHubOwnerRepo | null | undefined
 ): boolean {
   return Boolean(prRepo) && isMutablePRConversationComment(comment)
 }
 
 export function canDeleteComment(
   comment: Pick<PRComment, 'id' | 'threadId' | 'path' | 'url'>,
-  prRepo: { owner: string; repo: string } | null | undefined
+  prRepo: GitHubOwnerRepo | null | undefined
 ): boolean {
   return Boolean(prRepo) && isMutablePRConversationComment(comment)
 }
 
-export type EditCommentParams = { owner: string; repo: string; commentId: number; body: string }
+export type EditCommentParams = GitHubOwnerRepo & { commentId: number; body: string }
 
 export function buildEditCommentParams(
-  prRepo: { owner: string; repo: string },
+  prRepo: GitHubOwnerRepo,
   commentId: number,
   body: string
 ): EditCommentParams {
-  return { owner: prRepo.owner, repo: prRepo.repo, commentId, body }
+  return {
+    owner: prRepo.owner,
+    repo: prRepo.repo,
+    ...(prRepo.host ? { host: prRepo.host } : {}),
+    commentId,
+    body
+  }
 }
 
-export type DeleteCommentParams = { owner: string; repo: string; commentId: number }
+export type DeleteCommentParams = GitHubOwnerRepo & { commentId: number }
 
 export function buildDeleteCommentParams(
-  prRepo: { owner: string; repo: string },
+  prRepo: GitHubOwnerRepo,
   commentId: number
 ): DeleteCommentParams {
-  return { owner: prRepo.owner, repo: prRepo.repo, commentId }
+  return {
+    owner: prRepo.owner,
+    repo: prRepo.repo,
+    ...(prRepo.host ? { host: prRepo.host } : {}),
+    commentId
+  }
 }
 
 // The composer disables submit on empty/whitespace input (host rejects empty body).

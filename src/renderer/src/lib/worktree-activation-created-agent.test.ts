@@ -365,7 +365,11 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(callRuntimeEnvironment).toHaveBeenCalledWith({
       selector: 'web-runtime-1',
       method: 'worktree.activate',
-      params: { worktree: `id:${worktree.id}`, notifyClients: false },
+      params: {
+        worktree: `id:${worktree.id}`,
+        notifyClients: false,
+        navigation: 'caller'
+      },
       timeoutMs: 15_000
     })
   })

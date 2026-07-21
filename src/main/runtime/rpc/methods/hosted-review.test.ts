@@ -58,6 +58,7 @@ describe('hosted review RPC methods', () => {
         canCreate: true,
         blockedReason: null,
         nextAction: null,
+        reviewLookupOutcome: 'not_found',
         defaultBaseRef: 'main',
         head: 'feature/create-pr',
         title: 'Create PR'

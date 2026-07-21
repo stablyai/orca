@@ -1,5 +1,8 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
@@ -84,7 +87,9 @@ export type PtyTransport = {
     initiallyHidden?: boolean
     command?: string
     env?: Record<string, string>
+    envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
+    resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -140,8 +145,10 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   cwdFallback?: 'worktree'
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery

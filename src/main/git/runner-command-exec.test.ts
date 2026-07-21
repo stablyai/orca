@@ -661,6 +661,22 @@ describe('gitStreamStdout', () => {
     await rejection
     expect(child.kill).toHaveBeenCalled()
   })
+
+  it('handles a late spawn error after cancellation', async () => {
+    const child = createMockChildProcess(0)
+    spawnMock.mockReturnValue(child)
+    const controller = new AbortController()
+
+    const promise = gitStreamStdout(['status'], {
+      cwd: '/repo',
+      signal: controller.signal,
+      onStdout: () => {}
+    })
+    controller.abort()
+
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(() => child.emit('error', new Error('spawn ENOENT'))).not.toThrow()
+  })
 })
 
 describe('translateWslOutputPaths', () => {

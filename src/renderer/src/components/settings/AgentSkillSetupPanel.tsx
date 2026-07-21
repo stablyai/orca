@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from 'react'
 import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
@@ -44,6 +44,9 @@ type AgentSkillSetupPanelProps = {
   showRecheckWhenInstalled?: boolean
   installLabel?: string
   installedInstallLabel?: string
+  // Why: defaults to 'outline' so settings panels stay unchanged; modals that make
+  // Install the sole footer CTA pass 'default' for a filled primary hierarchy.
+  installVariant?: ComponentProps<typeof Button>['variant']
   actionHint?: ReactNode
   openingHint?: ReactNode
   footer?: ReactNode
@@ -81,6 +84,7 @@ export function AgentSkillSetupPanel({
   showRecheckWhenInstalled = true,
   installLabel = 'Install',
   installedInstallLabel = 'Update',
+  installVariant = 'outline',
   actionHint,
   openingHint,
   footer,
@@ -170,7 +174,7 @@ export function AgentSkillSetupPanel({
       {!installed || showInstallWhenInstalled ? (
         <Button
           type="button"
-          variant="outline"
+          variant={installVariant}
           size="sm"
           onClick={() => {
             if (terminalOpening) {

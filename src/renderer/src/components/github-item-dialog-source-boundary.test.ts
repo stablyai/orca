@@ -41,7 +41,8 @@ describe('GitHubItemDialog source host boundaries', () => {
     )
     expect(section).toContain("'github.requestPRReviewers'")
     expect(section).toContain("'github.removePRReviewers'")
-    expect(section).toContain('{ repo: runtimeRepo, prNumber: item.number, reviewers: logins }')
+    expect(section).toContain('resolvePullRequestRepo(item, projectOrigin)')
+    expect(section.match(/prRepo: reviewRepo/g)).toHaveLength(4)
     expect(section).toContain('notifyWorkItemDetailsMutation(')
     expect(section).toContain('{ local: false }')
   })
@@ -57,7 +58,8 @@ describe('GitHubItemDialog source host boundaries', () => {
 
     expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
     expect(section).toContain('useRepoLabels(')
-    expect(section).toContain('useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)')
+    expect(section).toContain('useRepoLabelsBySlug(')
+    expect(section).toContain('projectOrigin?.host')
     expect(section).toContain('useRepoAssignees(')
     expect(section).toContain('useRepoAssigneesBySlug(')
     expect(section).toContain('sourceSettings')
@@ -202,6 +204,8 @@ describe('GitHubItemDialog source host boundaries', () => {
     )
     expect(actionsSection).toContain("'github.mergePR'")
     expect(actionsSection).toContain("'github.setPRAutoMerge'")
+    expect(actionsSection).toContain('const prRepo = resolvePullRequestRepo(item, projectOrigin)')
+    expect(actionsSection).not.toContain('prRepo: item.prRepo ?? null')
     expect(actionsSection).toContain(
       'repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId)'
     )
@@ -229,5 +233,16 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(checksSection).toContain('window.api.gh.prChecks({')
     expect(checksSection).toContain('window.api.gh.rerunPRChecks({')
     expect(checksSection).toContain('prCheckDetails({')
+  })
+
+  it('uses hydrated work item details for the page checks tab', () => {
+    const source = componentSource('GitHubItemDialog.tsx')
+    const checksTab = sourceBetween(
+      source,
+      '<TabsContent value="checks"',
+      '<TabsContent value="files"'
+    )
+
+    expect(checksTab).toContain('item={displayWorkItem ?? workItem}')
   })
 })

@@ -3,7 +3,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   getMarkdownAnnotationBlockKeyForSelection,
-  isMarkdownPreviewAddReviewNoteShortcut
+  isMarkdownPreviewAddReviewNoteShortcut,
+  previewHasAnnotationBlockKey,
+  resolveMarkdownPreviewAddReviewNoteKey
 } from './markdown-preview-annotation-shortcut'
 
 function createPreviewFixture(): {
@@ -103,5 +105,117 @@ describe('isMarkdownPreviewAddReviewNoteShortcut', () => {
         'editor.addReviewNote': ['Mod+Shift+K']
       })
     ).toBe(false)
+  })
+})
+
+describe('resolveMarkdownPreviewAddReviewNoteKey', () => {
+  const chord = {
+    key: 'a',
+    code: 'KeyA',
+    metaKey: true,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: true,
+    repeat: false
+  }
+
+  it('consumes the chord while a mounted draft block is open (product B)', () => {
+    const { root } = createPreviewFixture()
+
+    expect(
+      resolveMarkdownPreviewAddReviewNoteKey({
+        event: chord,
+        platform: 'darwin',
+        targetInsidePreview: true,
+        markdownAnnotationsEnabled: true,
+        activeAnnotationBlockKey: 'p:3-5',
+        root,
+        selection: null
+      })
+    ).toEqual({ action: 'consume' })
+  })
+
+  it('consumes OS key-repeat while a mounted draft is open', () => {
+    const { root } = createPreviewFixture()
+
+    expect(
+      resolveMarkdownPreviewAddReviewNoteKey({
+        event: { ...chord, repeat: true },
+        platform: 'darwin',
+        targetInsidePreview: true,
+        markdownAnnotationsEnabled: true,
+        activeAnnotationBlockKey: 'p:3-5',
+        root,
+        selection: null
+      })
+    ).toEqual({ action: 'consume' })
+  })
+
+  it('ignores OS key-repeat when no draft is open', () => {
+    const { root, paragraph } = createPreviewFixture()
+    const selection = selectTextIn(paragraph)
+
+    expect(
+      resolveMarkdownPreviewAddReviewNoteKey({
+        event: { ...chord, repeat: true },
+        platform: 'darwin',
+        targetInsidePreview: true,
+        markdownAnnotationsEnabled: true,
+        activeAnnotationBlockKey: null,
+        root,
+        selection
+      })
+    ).toEqual({ action: 'ignore' })
+  })
+
+  it('opens the composer for a live selection when no draft is open', () => {
+    const { root, paragraph } = createPreviewFixture()
+    const selection = selectTextIn(paragraph)
+
+    expect(
+      resolveMarkdownPreviewAddReviewNoteKey({
+        event: chord,
+        platform: 'darwin',
+        targetInsidePreview: true,
+        markdownAnnotationsEnabled: true,
+        activeAnnotationBlockKey: null,
+        root,
+        selection
+      })
+    ).toEqual({ action: 'open', blockKey: 'p:3-5' })
+  })
+
+  it('clears a stale block key that no longer mounts a composer', () => {
+    const { root, paragraph } = createPreviewFixture()
+    const selection = selectTextIn(paragraph)
+
+    expect(previewHasAnnotationBlockKey(root, 'p:9-9')).toBe(false)
+    expect(
+      resolveMarkdownPreviewAddReviewNoteKey({
+        event: chord,
+        platform: 'darwin',
+        targetInsidePreview: true,
+        markdownAnnotationsEnabled: true,
+        activeAnnotationBlockKey: 'p:9-9',
+        root,
+        selection
+      })
+    ).toEqual({ action: 'open', blockKey: 'p:3-5' })
+  })
+
+  it('clears a stale key on repeat without opening', () => {
+    const { root } = createPreviewFixture()
+
+    expect(
+      resolveMarkdownPreviewAddReviewNoteKey({
+        event: { ...chord, repeat: true },
+        platform: 'darwin',
+        targetInsidePreview: true,
+        markdownAnnotationsEnabled: true,
+        activeAnnotationBlockKey: 'p:9-9',
+        root,
+        selection: null
+      })
+    ).toEqual({ action: 'clear-stale-and-ignore' })
   })
 })

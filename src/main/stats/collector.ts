@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'node:fs'
+import { writeFile, mkdir, rm } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import type { StatsSummary } from '../../shared/types'
 import type { StatsEvent, StatsAggregates, StatsFile } from './types'
@@ -55,6 +56,10 @@ export class StatsCollector {
   private aggregates: StatsAggregates
   private liveAgents = new Map<string, number>() // ptyId → startTimestamp
   private writeTimer: ReturnType<typeof setTimeout> | null = null
+  // Monotonic id stamped on each prepared payload; the highest committed one
+  // wins so a slow in-flight async write can't clobber a newer sync flush.
+  private writeGeneration = 0
+  private lastCommittedGeneration = 0
   // Why: star-nag lives in its own service but needs to observe the running
   // agent-spawned counter. A lightweight listener avoids cyclic imports and
   // keeps StatsCollector unaware of how the counter is consumed.
@@ -226,11 +231,15 @@ export class StatsCollector {
     }
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
-      try {
-        this.writeToDiskSync()
-      } catch (err) {
+      // Why: the debounced save is fun-stats telemetry, not crash-critical
+      // state, so it uses the async writer to move the ~900KB tmp-file write
+      // off the main thread (the stringify stays sync — see prepareWritePayload).
+      // A chatty multi-agent session re-arms this every 5s; a fully-sync write
+      // is a recurring main-thread stall. Shutdown flush() stays synchronous;
+      // the generation guard keeps the two paths race-safe.
+      void this.writeToDiskAsync().catch((err) => {
         console.error('[stats] Failed to write stats:', err)
-      }
+      })
     }, DEBOUNCE_MS)
   }
 
@@ -241,12 +250,18 @@ export class StatsCollector {
     }
   }
 
-  private writeToDiskSync(): void {
+  // Serialize the current state and pick a unique temp path. Trimming mutates
+  // in-memory state and JSON.stringify must see a consistent snapshot, so both
+  // writers call this synchronously before any await to avoid a torn snapshot.
+  // The monotonic generation lets a later write veto an earlier, still-in-flight
+  // one so a stale rename can never win (see writeToDiskAsync).
+  private prepareWritePayload(): {
+    statsFile: string
+    tmpFile: string
+    json: string
+    generation: number
+  } {
     const statsFile = getStatsFile()
-    const dir = dirname(statsFile)
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
 
     // Trim events to bounded size before writing
     if (this.events.length > MAX_EVENTS) {
@@ -259,10 +274,44 @@ export class StatsCollector {
       aggregates: this.aggregates
     }
 
-    // Why unique temp file: same race-safe pattern as persistence.ts:120 —
-    // synchronous flushes can race the debounced writer during shutdown.
+    const generation = ++this.writeGeneration
+    // Unique temp file so the async debounced writer and the sync shutdown
+    // flush never write the same temp path (same pattern as persistence.ts).
     const tmpFile = `${statsFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(data), 'utf-8')
+    return { statsFile, tmpFile, json: JSON.stringify(data), generation }
+  }
+
+  private writeToDiskSync(): void {
+    const dir = dirname(getStatsFile())
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+    const { statsFile, tmpFile, json, generation } = this.prepareWritePayload()
+    writeFileSync(tmpFile, json, 'utf-8')
     renameSync(tmpFile, statsFile)
+    this.lastCommittedGeneration = Math.max(this.lastCommittedGeneration, generation)
+  }
+
+  private async writeToDiskAsync(): Promise<void> {
+    const dir = dirname(getStatsFile())
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true })
+    }
+    const { statsFile, tmpFile, json, generation } = this.prepareWritePayload()
+    // Only the ~900KB tmp write moves off the main thread; stringify stayed sync
+    // above (torn-snapshot constraint). The rename is a trivial metadata op done
+    // SYNCHRONOUSLY so it stays ordered with the shutdown flush's renameSync —
+    // an async rename could land after flush and clobber the more-complete
+    // shutdown data. The generation guard vetoes this write if a newer one (a
+    // later debounce OR the shutdown flush) already committed while we were
+    // writing; the check + rename run with no await between them, so the sync
+    // flush cannot interleave.
+    await writeFile(tmpFile, json, 'utf-8')
+    if (this.lastCommittedGeneration >= generation) {
+      await rm(tmpFile, { force: true }).catch(() => {})
+      return
+    }
+    renameSync(tmpFile, statsFile)
+    this.lastCommittedGeneration = generation
   }
 }

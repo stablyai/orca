@@ -3,8 +3,7 @@
  * agent-status rows are seeded from its rendered status words and idle
  * composer. Shared because main runs this per-PTY under side-effect authority
  * (emitting command-code facts) while the renderer keeps the byte path for
- * remote-runtime PTYs and the kill switch
- * (docs/reference/terminal-side-effect-authority.md).
+ * remote-runtime PTYs and the kill switch.
  */
 import {
   cleanCommandCodePromptCandidate,

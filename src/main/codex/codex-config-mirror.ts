@@ -275,7 +275,10 @@ function isRuntimePreservedTomlSection(header: string): boolean {
 }
 
 function isRuntimeHookTrustTomlSection(header: string): boolean {
-  return header.trimStart().startsWith('[hooks.state.')
+  const trimmed = header.trim()
+  // Why: Codex's config writer materializes the parent table on Windows. It is
+  // part of runtime-owned trust and must survive the next config mirror too.
+  return trimmed === '[hooks.state]' || trimmed.startsWith('[hooks.state.')
 }
 
 function isRuntimeProjectTomlSection(header: string): boolean {

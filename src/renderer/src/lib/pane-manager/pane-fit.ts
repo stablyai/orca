@@ -1,6 +1,10 @@
 import type { ManagedPane, ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import {
+  armPaneFitContinuationRetry,
+  clearPaneFitContinuationRetry
+} from './pane-fit-continuation-retry'
+import {
   captureTerminalStructuralScrollIntent,
   isTerminalStructuralScrollIntentCurrent,
   markTerminalPinnedViewport,
@@ -163,6 +167,7 @@ function settlePendingSafeFitContinuation(
   operations.delete(operationKey)
   if (operations.size === 0) {
     pendingSafeFitContinuations.delete(pane)
+    clearPaneFitContinuationRetry(pane)
   }
   pending.resolve(completed)
 }
@@ -192,11 +197,52 @@ export function safeFit(pane: ManagedPane): boolean {
     // Why: replay transactions may be waiting for renderer dimensions; any
     // successful ordinary fit is the event that makes their PTY grid authoritative.
     flushPendingSafeFitContinuations(pane)
+    clearPaneFitContinuationRetry(pane)
   }
   return completed
 }
 
+function pruneStaleSafeFitContinuations(pane: ManagedPane): void {
+  const operations = pendingSafeFitContinuations.get(pane)
+  if (!operations) {
+    return
+  }
+  for (const [operationKey, pending] of operations) {
+    if (!pending.shouldContinue()) {
+      settlePendingSafeFitContinuation(pane, operationKey, pending, false)
+    }
+  }
+}
+
+function failPendingSafeFitContinuations(pane: ManagedPane): void {
+  const operations = pendingSafeFitContinuations.get(pane)
+  if (!operations) {
+    return
+  }
+  for (const [operationKey, pending] of Array.from(operations.entries())) {
+    settlePendingSafeFitContinuation(pane, operationKey, pending, false)
+  }
+}
+
+function armSafeFitContinuationRetry(pane: ManagedPane): void {
+  armPaneFitContinuationRetry(pane, {
+    retry: () => {
+      pruneStaleSafeFitContinuations(pane)
+      if (!pendingSafeFitContinuations.get(pane)?.size) {
+        return true
+      }
+      return safeFit(pane)
+    },
+    onExhausted: () => {
+      // Why: a reveal transaction must degrade after its bounded layout wait;
+      // leaving completion pending forever blocks deferred output release.
+      failPendingSafeFitContinuations(pane)
+    }
+  })
+}
+
 export function cancelPendingSafeFitContinuations(pane: ManagedPane): void {
+  clearPaneFitContinuationRetry(pane)
   const operations = pendingSafeFitContinuations.get(pane)
   if (!operations) {
     return
@@ -213,7 +259,7 @@ export function safeFitAndThen(
   pane: ManagedPane,
   operationKey: string,
   continuation: () => void,
-  options: { shouldContinue?: () => boolean } = {}
+  options: { shouldContinue?: () => boolean; retryIfUnmeasurable?: boolean } = {}
 ): SafeFitContinuationHandle {
   const operations = pendingSafeFitContinuations.get(pane) ?? new Map()
   const replaced = operations.get(operationKey)
@@ -245,13 +291,17 @@ export function safeFitAndThen(
       `safe-fit-and-then:${operationKey}`,
       () => {
         if (pendingSafeFitContinuations.get(pane)?.get(operationKey) === pending) {
-          safeFit(pane)
+          if (!safeFit(pane) && options.retryIfUnmeasurable) {
+            armSafeFitContinuationRetry(pane)
+          }
         }
       }
     )
   ) {
     return { completion, cancel }
   }
-  safeFit(pane)
+  if (!safeFit(pane) && options.retryIfUnmeasurable) {
+    armSafeFitContinuationRetry(pane)
+  }
   return { completion, cancel }
 }

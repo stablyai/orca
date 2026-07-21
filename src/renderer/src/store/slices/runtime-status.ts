@@ -23,7 +23,14 @@ export type RuntimeStatusSlice = {
   /** Keyed by runtime environment id. Fed into buildExecutionHostRegistry so
    * compat verdicts/blocked health show live in the sidebar host pickers. */
   runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus>
-  /** Replaces the saved-environment list and trims stale status entries. */
+  /** Tombstones of runtime environment ids that were removed from the saved list
+   * this session and not yet re-added. Distinct from "absent from
+   * `runtimeEnvironments`", which also matches not-yet-hydrated envs — a
+   * catalog-merge guard keyed on mere absence would drop legitimate runtime repos
+   * during boot before the saved list hydrates (#8881). */
+  removedRuntimeEnvironmentIds: ReadonlySet<string>
+  /** Replaces the saved-environment list, trims stale status entries, and
+   * retires state owned by any environment that just left the saved list. */
   setRuntimeEnvironments: (environments: PublicKnownRuntimeEnvironment[]) => void
   /** Merges one environment's status. Replaces the prior entry for that id. */
   setRuntimeEnvironmentStatus: (environmentId: string, status: RuntimeEnvironmentStatus) => void
@@ -44,8 +51,16 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
 ) => ({
   runtimeEnvironments: [],
   runtimeStatusByEnvironmentId: new Map(),
+  removedRuntimeEnvironmentIds: new Set(),
 
   setRuntimeEnvironments: (environments) => {
+    // Why: diff against the accumulated in-memory saved list (not a second disk
+    // read) so a main-initiated removal that never calls setRuntimeEnvironments
+    // still enters the diff on the next list read. #8881.
+    const nextIds = new Set(environments.map((environment) => environment.id))
+    const removedIds = get()
+      .runtimeEnvironments.map((environment) => environment.id)
+      .filter((id) => !nextIds.has(id))
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))
       const nextStatuses = new Map(s.runtimeStatusByEnvironmentId)
@@ -56,9 +71,26 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           statusesChanged = true
         }
       }
+      // Add just-removed ids as tombstones and clear any that were re-added, so an
+      // in-flight catalog merge for a removed env can be dropped without mistaking a
+      // not-yet-hydrated env for a removed one (#8881).
+      const nextRemoved = new Set(s.removedRuntimeEnvironmentIds)
+      let removedChanged = false
+      for (const id of removedIds) {
+        if (!nextRemoved.has(id)) {
+          nextRemoved.add(id)
+          removedChanged = true
+        }
+      }
+      for (const id of nextIds) {
+        if (nextRemoved.delete(id)) {
+          removedChanged = true
+        }
+      }
       return {
         runtimeEnvironments: environments,
-        ...(statusesChanged ? { runtimeStatusByEnvironmentId: nextStatuses } : {})
+        ...(statusesChanged ? { runtimeStatusByEnvironmentId: nextStatuses } : {}),
+        ...(removedChanged ? { removedRuntimeEnvironmentIds: nextRemoved } : {})
       }
     })
     // Why: evict detected-agent caches for environments that no longer exist so
@@ -68,6 +100,13 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
     // A detached environment's mirrored SSH state must not outlive it.
     get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
+    // Retire repos/setups/worktree rows owned by a just-removed runtime identity so
+    // the same checkout stops duplicating in the sidebar. Scoped to the removal diff
+    // (not an absolute keep-set) to spare a serving instance's local runtime-stamped
+    // repos, whose env id was never in this instance's saved list.
+    if (removedIds.length > 0) {
+      get().purgeStaleRuntimeHostState?.(removedIds)
+    }
   },
 
   setRuntimeEnvironmentStatus: (environmentId, status) => {

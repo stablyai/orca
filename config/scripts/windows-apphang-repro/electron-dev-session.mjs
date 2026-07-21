@@ -1,6 +1,6 @@
 import { chromium } from '@playwright/test'
 import { spawn } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -50,11 +50,20 @@ export function createGpuUserDataDirectory(gpuMode) {
 export function launchDevApp({ cdpPort, userDataDir }) {
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
+  delete env.CODEX_HOME
+  delete env.ORCA_CODEX_HOME
+  const isolatedHome = path.join(userDataDir, 'home')
+  mkdirSync(isolatedHome, { recursive: true })
   Object.assign(env, {
     ELECTRON_ENABLE_LOGGING: '1',
     ELECTRON_ENABLE_STACK_DUMPING: '1',
     NODE_ENV: 'development',
+    // Why: this disposable repro profile must not add real-home Codex work to
+    // app-hang measurements or expose the developer's Codex state.
     ORCA_DEV_USER_DATA_PATH: userDataDir,
+    HOME: isolatedHome,
+    USERPROFILE: isolatedHome,
+    ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
     ORCA_SKIP_DEV_WEB_PREPARE: '1',
     ORCA_STARTUP_DIAGNOSTICS: '1',
     REMOTE_DEBUGGING_PORT: String(cdpPort),

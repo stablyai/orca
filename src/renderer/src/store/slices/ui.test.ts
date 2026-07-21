@@ -1452,6 +1452,34 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().usagePercentageDisplay).toBe('used')
   })
 
+  it('persists and hydrates the status bar usage mode', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    expect(store.getState().statusBarUsageMode).toBe('verbose')
+
+    store.getState().setStatusBarUsageMode('compact')
+
+    expect(store.getState().statusBarUsageMode).toBe('compact')
+    expect(setUI).toHaveBeenCalledWith({ statusBarUsageMode: 'compact' })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ statusBarUsageMode: 'verbose' }))
+    expect(store.getState().statusBarUsageMode).toBe('verbose')
+  })
+
+  it('defaults invalid status bar usage modes to verbose', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarUsageMode: 'expanded' as PersistedUIState['statusBarUsageMode']
+      })
+    )
+
+    expect(store.getState().statusBarUsageMode).toBe('verbose')
+  })
+
   it('clamps persisted workspace board column width', () => {
     const store = createUIStore()
 

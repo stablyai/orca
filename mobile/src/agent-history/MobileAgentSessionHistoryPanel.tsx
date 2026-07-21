@@ -10,6 +10,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
+  prepareMobileAiVaultSessionResume,
   createMobileAiVaultResumeMutationRegistry,
   readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
@@ -197,8 +198,9 @@ export function MobileAgentSessionHistoryPanel({
           return
         }
 
+        const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
         const launch = buildMobileAiVaultResumeLaunch({
-          session,
+          session: preparedSession,
           hostPlatform: platform,
           hostTerminalWindowsShell,
           settings
