@@ -4,10 +4,26 @@
  * Hermes desktop roam is a full platformer (ledges, hop, RAF DOM writes).
  * Here we only need: pick a viewport target, step toward it, clamp, and
  * pause while the agent is busy or the operator is dragging the pet.
+ *
+ * Lives in shared/ so the desktop renderer and the phone run the SAME motion.
+ * Two implementations would drift, and a pet that strolls differently either
+ * side of a handoff stops reading as one creature.
  */
 
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import type { AgentStatusEntry } from './agent-status-types'
+
+// Inlined rather than imported from the renderer: this module is shared with
+// React Native (the phone runs the identical roam so the pet moves the same way
+// on every surface), and mobile cannot reach renderer-only modules. The rule is
+// one comparison; duplicating it is cheaper than exporting a renderer barrel
+// into the mobile bundle. Mirrors lib/pane-agent-evidence.isExplicitAgentStatusFresh.
+function isExplicitAgentStatusFresh(
+  entry: Pick<AgentStatusEntry, 'updatedAt'>,
+  now: number,
+  staleAfterMs: number
+): boolean {
+  return now - entry.updatedAt <= staleAfterMs
+}
 
 export type Rng = () => number
 

@@ -13,7 +13,7 @@ import {
 import { usePetPointerInteraction } from './usePetPointerInteraction'
 import { buildSpriteAnimationCss } from './sprite-animation-css'
 import { PetBubble } from './pet-bubble'
-import { clampPositionToViewport, type Position } from './pet-roam'
+import { clampPositionToViewport, type Position } from '../../../../shared/pet-roam'
 import { usePetRoam } from './usePetRoam'
 import { usePetPresence, usePetSurfaceSync } from './use-pet-presence'
 

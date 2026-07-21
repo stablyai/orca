@@ -5,7 +5,7 @@ import {
   isRoamPaused,
   tickRoam,
   type Position
-} from './pet-roam'
+} from '../../../../shared/pet-roam'
 
 type UsePetRoamArgs = {
   enabled: boolean

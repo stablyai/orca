@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from './agent-status-types'
 import {
   isAgentBusyForRoam,
   isRoamPaused,
