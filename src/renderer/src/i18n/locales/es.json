@@ -13571,7 +13571,7 @@
       "modeFocused": "Traspaso enfocado (recomendado)",
       "modeFocusedDescription": "Usa el estado más reciente y el espacio de trabajo actual, y consulta detalles anteriores solo cuando hacen falta.",
       "modeFull": "Transcripción completa de la sesión",
-      "modeFullDescription": "Pide al nuevo agente que lea toda la sesión guardada antes de continuar.",
+      "modeFullDescription": "Pide al nuevo agente que lea toda la sesión guardada antes de continuar. Puede tardar más y consumir una cantidad considerable de contexto, uso del plan o créditos de API.",
       "startsIn": "Se inicia en:",
       "startSession": "Iniciar sesión nueva",
       "starting": "Iniciando…",

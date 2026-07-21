@@ -269,7 +269,7 @@ export function AgentSessionContinuationDialog({
                   )
                 : translate(
                     'components.agentSessionContinuation.modeFullDescription',
-                    'Asks the new Agent to read the complete saved session before continuing.'
+                    'Asks the new Agent to read the complete saved session before continuing. This can take longer and use significant context, plan usage, or API credits.'
                   )}
             </p>
           </div>

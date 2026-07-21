@@ -13571,7 +13571,7 @@
       "modeFocused": "핵심 컨텍스트 전달(권장)",
       "modeFocusedDescription": "최신 상태와 현재 워크스페이스를 사용하고 필요한 경우에만 이전 세부 정보를 읽습니다.",
       "modeFull": "전체 세션 기록",
-      "modeFullDescription": "계속하기 전에 새 에이전트가 저장된 전체 세션을 읽도록 합니다.",
+      "modeFullDescription": "계속하기 전에 새 에이전트가 저장된 전체 세션을 읽도록 합니다. 시간이 더 오래 걸리고 상당한 컨텍스트, 요금제 사용량 또는 API 크레딧을 소모할 수 있습니다.",
       "startsIn": "시작 위치:",
       "startSession": "새 세션 시작",
       "starting": "시작 중…",

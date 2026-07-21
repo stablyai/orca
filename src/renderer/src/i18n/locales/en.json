@@ -13594,7 +13594,7 @@
       "modeFocused": "Focused handoff (Recommended)",
       "modeFocusedDescription": "Uses the latest status and current workspace, reading older transcript details only when needed.",
       "modeFull": "Full session transcript",
-      "modeFullDescription": "Asks the new Agent to read the complete saved session before continuing.",
+      "modeFullDescription": "Asks the new Agent to read the complete saved session before continuing. This can take longer and use significant context, plan usage, or API credits.",
       "startsIn": "Starts in:",
       "startSession": "Start New Session",
       "starting": "Starting…",

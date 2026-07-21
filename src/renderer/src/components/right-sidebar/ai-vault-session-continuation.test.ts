@@ -23,9 +23,11 @@ function session(agent: AiVaultSession['agent'] = 'claude'): AiVaultSession {
     modifiedAt: '2026-07-15T02:00:00.000Z',
     messageCount: 3,
     totalTokens: 1200,
+    lastUserPrompt: 'Finish the editor refactor',
     previewMessages: [
       { role: 'user', text: 'Finish the editor refactor', timestamp: null },
-      { role: 'assistant', text: 'The component tests still need work.', timestamp: null }
+      { role: 'assistant', text: 'The component tests still need work.', timestamp: null },
+      { role: 'user', text: 'Tool output that is not a user request', timestamp: null }
     ],
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
@@ -61,5 +63,19 @@ describe('AI Vault session continuation', () => {
     })
     expect(request.source.transcriptPath).toContain('session.jsonl')
     expect(request.source.capturedText).toContain('assistant: The component tests still need work.')
+  })
+
+  it('never treats a preview tool result as the user prompt', () => {
+    const sourceSession = session()
+    sourceSession.lastUserPrompt = null
+
+    const request = prepareAiVaultSessionContinuation({
+      session: sourceSession,
+      targetWorktreeId: 'worktree-1',
+      targetWorkspacePath: '/Users/ada/Desktop/current-worktree'
+    })
+
+    expect(request.source.lastPrompt).toBeNull()
+    expect(request.source.lastAssistantMessage).toBe('The component tests still need work.')
   })
 })

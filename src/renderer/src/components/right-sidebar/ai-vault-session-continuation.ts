@@ -24,8 +24,9 @@ export function prepareAiVaultSessionContinuation(args: {
       sourceTitle: session.title,
       sourceWorkingDirectory: session.cwd,
       transcriptPath: session.filePath.trim() || null,
-      lastPrompt: latestPreview(session, 'user'),
-      lastAssistantMessage: latestPreview(session, 'assistant')
+      // Why: preview user entries can be tool results or injected skill text; only provider-authenticated prompts are safe hints.
+      lastPrompt: session.lastUserPrompt ?? null,
+      lastAssistantMessage: latestAssistantPreview(session)
     },
     worktreeId: targetWorktreeId,
     workspacePath: targetWorkspacePath,
@@ -35,8 +36,8 @@ export function prepareAiVaultSessionContinuation(args: {
   }
 }
 
-function latestPreview(session: AiVaultSession, role: 'user' | 'assistant'): string | null {
-  return session.previewMessages.findLast((message) => message.role === role)?.text ?? null
+function latestAssistantPreview(session: AiVaultSession): string | null {
+  return session.previewMessages.findLast((message) => message.role === 'assistant')?.text ?? null
 }
 
 function previewTranscript(session: AiVaultSession): string {

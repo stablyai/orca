@@ -43,6 +43,10 @@ describe('buildAgentSessionContinuationPrompt', () => {
     const focused = buildAgentSessionContinuationPrompt(source, 'focused')
     const full = buildAgentSessionContinuationPrompt(source, 'full')
 
+    expect(focused).toContain('Continue work from the prior Orca session')
+    expect(focused).toContain('The prior provider session is read-only context')
+    expect(focused).not.toContain('Start a fresh, independent agent session')
+    expect(focused).toContain('If the prior task appears complete, say so and wait')
     expect(focused).toContain('Read only the transcript sections needed')
     expect(full).toContain('Read the complete original session transcript')
     expect(full).toContain('/home/u/.claude/projects/repo/session.jsonl')
