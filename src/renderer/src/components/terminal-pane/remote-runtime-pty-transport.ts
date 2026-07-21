@@ -81,6 +81,7 @@ export function createRemoteRuntimePtyTransport(
     env,
     envToDelete,
     launchConfig,
+    resumeProviderSession,
     launchToken,
     launchAgent,
     terminalColorQueryReplies,
@@ -1045,6 +1046,7 @@ export function createRemoteRuntimePtyTransport(
         const envToSend = options.env ?? env
         const envToDeleteToSend = options.envToDelete ?? envToDelete
         const launchConfigToSend = options.launchConfig ?? launchConfig
+        const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
         const launchTokenToSend = options.launchToken ?? launchToken
         const launchAgentToSend = options.launchAgent ?? launchAgent
         const created = await createTerminalWithUnknownOutcomeRecovery({
@@ -1057,6 +1059,9 @@ export function createRemoteRuntimePtyTransport(
           ...(envToSend !== undefined ? { env: envToSend } : {}),
           ...(envToDeleteToSend !== undefined ? { envToDelete: envToDeleteToSend } : {}),
           ...(launchConfigToSend !== undefined ? { launchConfig: launchConfigToSend } : {}),
+          ...(resumeProviderSessionToSend !== undefined
+            ? { resumeProviderSession: resumeProviderSessionToSend }
+            : {}),
           ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
           ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
           ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),

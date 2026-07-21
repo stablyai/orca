@@ -12,7 +12,12 @@ import type {
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
-import { getLocalPtyProvider, registerPtyHandlers, type GetSelectedCodexHomePath } from '../ipc/pty'
+import {
+  getLocalPtyProvider,
+  registerPtyHandlers,
+  type GetSelectedCodexHomePath,
+  type PrepareCodexSessionResume
+} from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
@@ -70,6 +75,7 @@ export function attachMainWindowServices(
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    prepareCodexSessionResume?: PrepareCodexSessionResume
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
@@ -93,6 +99,7 @@ export function attachMainWindowServices(
     prepareClaudeAuth,
     store,
     {
+      prepareCodexSessionResume: options?.prepareCodexSessionResume,
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
       awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight

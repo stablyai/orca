@@ -384,6 +384,7 @@ describe('orca root help', () => {
     expect(issueHelp).toContain('orca linear issue [<id>]')
     expect(issueHelp).toContain('--comments             Include threaded Linear comments')
     expect(issueHelp).toContain('--attachments          Include attachment metadata and URLs')
+    expect(issueHelp).toContain('--activity             Include issue field-change history')
     expect(issueHelp).toContain('--workspace <id>      Connected Linear workspace id')
     expect(issueHelp).toContain('--id <id>             Linear issue key, id, or URL')
 
@@ -394,6 +395,16 @@ describe('orca root help', () => {
     expect(searchHelp).toContain('orca linear search <query>')
     expect(searchHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
     expect(searchHelp).toContain('--query <text>        Text to search across Linear issues')
+
+    logSpy.mockClear()
+    await main(['linear', 'list-issues', '--help'], '/tmp/repo')
+
+    const listIssuesHelp = String(logSpy.mock.calls[0][0])
+    expect(listIssuesHelp).toContain(
+      '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+    )
+    expect(listIssuesHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
+    expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()
   })
 

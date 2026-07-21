@@ -13,7 +13,10 @@ export function buildPosixHookPayloadCapture(
 }
 
 export const WINDOWS_HOOK_STDIN_DRAIN_LABEL = 'orca_agent_hook_drain_stdin'
-export const WINDOWS_HOOK_STDIN_DRAIN_COMMAND = '"%SystemRoot%\\System32\\more.com" >nul 2>nul'
+// Why: qualify the stdin reader because Windows searches the worktree for
+// executables before PATH and hook payloads must not reach repo-local code.
+export const WINDOWS_HOOK_STDIN_READER = '"%SystemRoot%\\System32\\more.com"'
+export const WINDOWS_HOOK_STDIN_DRAIN_COMMAND = `${WINDOWS_HOOK_STDIN_READER} >nul 2>nul`
 
 // Why: batch payloads stream directly to curl and cannot be buffered safely in
 // environment variables, so guard failures share one EOF-draining epilogue.
@@ -27,11 +30,5 @@ export function buildWindowsHookEnvironmentGuardLines(): string[] {
 }
 
 export function buildWindowsHookStdinDrainEpilogue(): string[] {
-  return [
-    `:${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
-    // Why: qualify the inbox reader because Windows searches the worktree for
-    // executables before PATH and hook payloads must not reach repo-local code.
-    WINDOWS_HOOK_STDIN_DRAIN_COMMAND,
-    'exit /b 0'
-  ]
+  return [`:${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`, WINDOWS_HOOK_STDIN_DRAIN_COMMAND, 'exit /b 0']
 }

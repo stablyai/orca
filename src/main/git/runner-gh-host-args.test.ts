@@ -21,10 +21,10 @@ describe('applyGhHostToArgs', () => {
       'github.com',
       'rate_limit'
     ])
-    expect(applyGhHostToArgs(['api', 'repos/a/b/pulls'], 'github.acme-corp.com')).toEqual([
+    expect(applyGhHostToArgs(['api', 'repos/a/b/pulls'], 'github.acme-corp.com:8443')).toEqual([
       'api',
       '--hostname',
-      'github.acme-corp.com',
+      'github.acme-corp.com:8443',
       'repos/a/b/pulls'
     ])
   })

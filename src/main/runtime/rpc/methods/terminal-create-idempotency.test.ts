@@ -24,7 +24,12 @@ describe('terminal.create RPC idempotency', () => {
       {
         worktree: 'id:worktree-1',
         clientMutationId: 'mutation-1',
-        command: 'pwsh'
+        command: 'pwsh',
+        resumeProviderSession: {
+          key: 'session_id',
+          id: 'session-1',
+          transcriptPath: 'C:\\Users\\example\\.codex\\sessions\\rollout.jsonl'
+        }
       },
       {
         runtime: { createTerminal, dedupeTerminalCreate },
@@ -43,7 +48,15 @@ describe('terminal.create RPC idempotency', () => {
     )
     expect(createTerminal).toHaveBeenCalledWith(
       'id:worktree-1',
-      expect.objectContaining({ command: 'pwsh', preAllocatedHandle: 'term_stable' })
+      expect.objectContaining({
+        command: 'pwsh',
+        preAllocatedHandle: 'term_stable',
+        resumeProviderSession: {
+          key: 'session_id',
+          id: 'session-1',
+          transcriptPath: 'C:\\Users\\example\\.codex\\sessions\\rollout.jsonl'
+        }
+      })
     )
     expect(result).toEqual({ terminal })
   })

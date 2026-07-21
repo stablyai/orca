@@ -104,6 +104,21 @@ describe('createIpcPtyTransport', () => {
     )
   })
 
+  it('forwards automatic resume provenance to the PTY spawn', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const resumeProviderSession = {
+      key: 'session_id' as const,
+      id: 'session-a',
+      transcriptPath: '/Users/example/.codex/sessions/2026/07/20/rollout-a.jsonl'
+    }
+    const transport = createIpcPtyTransport({ resumeProviderSession })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ resumeProviderSession }))
+  })
+
   it('leaves the transport silently unbound after a failed connect — sendInput drops with no write IPC (frozen-terminal repro)', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -1990,6 +2005,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       method: 'terminal.create',
       params: {
         worktree: 'id:repo1::/remote/wt',
+        clientMutationId: expect.any(String),
         command: 'claude',
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',

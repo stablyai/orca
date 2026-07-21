@@ -1873,8 +1873,8 @@ export function AccountsPane({
             </DialogTitle>
             <DialogDescription>
               {translate(
-                'auto.components.settings.AccountsPane.99c8f9e498',
-                'Orca will delete the managed Codex home for this saved account. If it is currently active, Orca falls back to the system default Codex login.'
+                'auto.components.settings.AccountsPane.380a7736cc',
+                'Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.'
               )}
             </DialogDescription>
           </DialogHeader>

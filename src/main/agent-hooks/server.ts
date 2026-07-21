@@ -33,6 +33,11 @@ import {
 } from '../../shared/agent-hook-listener'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import {
+  CLAUDE_STATUSLINE_PATHNAME,
+  parseClaudeStatusLineBody,
+  type ClaudeStatusLineRateLimits
+} from '../../shared/claude-statusline-rate-limits'
+import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusClearIpcPayload,
   type AgentStatusIpcPayload,
@@ -445,6 +450,7 @@ export class AgentHookServer {
   // Why: identifies this Orca instance so the server can detect dev vs. prod cross-talk; set at start() from packaged-build knowledge.
   private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
+  private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
   private onPaneStatusCleared: PaneStatusClearListener | null = null
   private statusChangeListeners = new Set<StatusChangeListener>()
   // Why: set via start()'s userDataPath so the class has no direct Electron dependency (mockable in vitest node env).
@@ -484,6 +490,13 @@ export class AgentHookServer {
         console.error('[agent-hooks] replay listener threw', err)
       }
     }
+  }
+
+  // Why: statusline posts carry live Claude usage windows, not agent status; they feed RateLimitService directly.
+  setClaudeStatusLineListener(
+    listener: ((event: ClaudeStatusLineRateLimits) => void) | null
+  ): void {
+    this.onClaudeStatusLine = listener
   }
 
   subscribeStatusChanges(listener: StatusChangeListener): () => void {
@@ -1472,6 +1485,15 @@ export class AgentHookServer {
       try {
         const body = await readRequestBody(req)
         const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+        if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
+          const statusLineEvent = parseClaudeStatusLineBody(body)
+          if (statusLineEvent) {
+            this.onClaudeStatusLine?.(statusLineEvent)
+          }
+          res.writeHead(204)
+          res.end()
+          return
+        }
         const source = resolveHookSource(pathname)
         if (!source) {
           res.writeHead(404)

@@ -15,7 +15,7 @@ export type RateLimitBucket = RateLimitWindow & {
   name: string
 }
 
-export type UsageRateLimitSource = 'oauth' | 'cli' | 'web'
+export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
 
 export type UsageRateLimitFailureKind =
   | 'missing-credentials'
@@ -41,6 +41,8 @@ export type UsageRateLimitMetadata = {
   authProvenance?: string
   deferredByLiveClaudeSession?: boolean
   lastSuccessfulSource?: UsageRateLimitSource
+  /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
+  retryAtMs?: number
 }
 
 export type ProviderRateLimits = {

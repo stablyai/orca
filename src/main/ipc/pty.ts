@@ -32,7 +32,11 @@ import {
 } from '../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { isTuiAgent } from '../../shared/tui-agent-config'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import {
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../shared/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
   isWslShellName,
@@ -624,6 +628,12 @@ export type GetSelectedCodexHomePath = (
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
 ) => string | null
+export type PrepareCodexSessionResume = (args: {
+  providerSession: AgentProviderSessionMetadata
+  target: CodexAccountSelectionTarget
+  launchEnv?: NodeJS.ProcessEnv
+  workspacePath?: string
+}) => Promise<{ codexHomePath: string | null } | null>
 type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -745,6 +755,12 @@ function mergePtyEnvDeletions(
     return undefined
   }
   return Array.from(new Set([...(existingKeys ?? []), ...additionalKeys]))
+}
+
+function removeCodexHomeDeletionRequests(keys: string[] | undefined): string[] | undefined {
+  // Why: resume provenance is launch-authoritative; late deletions must not fall back to the current account.
+  const filtered = keys?.filter((key) => key !== 'CODEX_HOME' && key !== 'ORCA_CODEX_HOME')
+  return filtered?.length ? filtered : undefined
 }
 
 function getInheritedAgentHookEnvKeysToDelete(
@@ -1381,6 +1397,7 @@ export function registerPtyHandlers(
   prepareClaudeAuth?: PrepareClaudeAuth,
   store?: Store,
   options?: {
+    prepareCodexSessionResume?: PrepareCodexSessionResume
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
@@ -1453,10 +1470,12 @@ export function registerPtyHandlers(
             : { runtime: 'host' }
         const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
           codexSelectionTarget,
-          getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
-            workspacePath: ctx?.cwd,
-            launchAgent: ctx?.launchAgent
-          }) ?? null
+          ctx?.codexHomePathOverride
+            ? ctx.codexHomePathOverride.value
+            : (getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                workspacePath: ctx?.cwd,
+                launchAgent: ctx?.launchAgent
+              }) ?? null)
         )
         const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
         const env = buildPtyHostEnv(id, baseEnv, {
@@ -2699,6 +2718,29 @@ export function registerPtyHandlers(
     }
   }
 
+  const prepareCodexResumeHome = (args: {
+    connectionId?: string | null
+    launchAgent?: TuiAgent
+    providerSession?: AgentProviderSessionMetadata
+    target: CodexAccountSelectionTarget
+    launchEnv?: NodeJS.ProcessEnv
+    workspacePath?: string
+  }): Promise<{ codexHomePath: string | null } | null> | null => {
+    if (args.connectionId || args.launchAgent !== 'codex' || !options?.prepareCodexSessionResume) {
+      return null
+    }
+    const providerSession = normalizeAgentProviderSession(args.providerSession)
+    if (!providerSession) {
+      return null
+    }
+    return options.prepareCodexSessionResume({
+      providerSession,
+      target: args.target,
+      launchEnv: args.launchEnv,
+      workspacePath: args.workspacePath
+    })
+  }
+
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   runtime?.setPtyController({
     spawn: async (args) => {
@@ -2729,6 +2771,15 @@ export function registerPtyHandlers(
         cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
+      const codexResumePreparation = prepareCodexResumeHome({
+        connectionId: args.connectionId,
+        launchAgent: args.launchAgent,
+        providerSession: args.resumeProviderSession,
+        target: codexSelectionTarget,
+        launchEnv: args.env,
+        workspacePath: cwd
+      })
+      const codexResumeHome = codexResumePreparation ? await codexResumePreparation : null
       const claudeAuth =
         isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -2798,10 +2849,12 @@ export function registerPtyHandlers(
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
-            getSelectedCodexHomePath?.(codexSelectionTarget, env, {
-              workspacePath: cwd,
-              launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-            }) ?? null
+            codexResumeHome
+              ? codexResumeHome.codexHomePath
+              : (getSelectedCodexHomePath?.(codexSelectionTarget, env, {
+                  workspacePath: cwd,
+                  launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                }) ?? null)
           )
         : null
       const skipCodexHomeEnv =
@@ -2849,6 +2902,9 @@ export function registerPtyHandlers(
         env,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
+      if (!isDaemonHostSpawn && codexResumeHome) {
+        spawnOptions.codexHomePathOverride = { value: codexResumeHome.codexHomePath }
+      }
       const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
       if (startupTerminalColorQueryReplyColors) {
         spawnOptions.startupIngress = {
@@ -2871,6 +2927,9 @@ export function registerPtyHandlers(
         spawnOptions.envToDelete = mergePtyEnvDeletions(spawnOptions.envToDelete, [
           'ORCA_CODEX_HOME'
         ])
+      }
+      if (codexResumeHome?.codexHomePath) {
+        spawnOptions.envToDelete = removeCodexHomeDeletionRequests(spawnOptions.envToDelete)
       }
       deleteRequestedEnvKeys(env, spawnOptions.envToDelete)
       promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
@@ -3480,6 +3539,7 @@ export function registerPtyHandlers(
         command?: string
         commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
+        resumeProviderSession?: AgentProviderSessionMetadata
         launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
@@ -3700,13 +3760,24 @@ export function registerPtyHandlers(
         cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
+      const codexResumePreparation = prepareCodexResumeHome({
+        connectionId: args.connectionId,
+        launchAgent: args.launchAgent,
+        providerSession: args.resumeProviderSession,
+        target: codexSelectionTarget,
+        launchEnv: baseEnv,
+        workspacePath: cwd
+      })
+      const codexResumeHome = codexResumePreparation ? await codexResumePreparation : null
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
-            getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
-              workspacePath: cwd,
-              launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-            }) ?? null
+            codexResumeHome
+              ? codexResumeHome.codexHomePath
+              : (getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                  workspacePath: cwd,
+                  launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                }) ?? null)
           )
         : null
       const skipCodexHomeEnv =
@@ -3768,7 +3839,7 @@ export function registerPtyHandlers(
       const envToDelete = claudeAuth?.stripAuthEnv
         ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
         : undefined
-      const combinedEnvToDelete = mergePtyEnvDeletions(
+      let combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
           mergePtyEnvDeletions(
             mergePtyEnvDeletions(
@@ -3783,6 +3854,9 @@ export function registerPtyHandlers(
         // main cannot safely decide ownership for a process it may not parent.
         stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
       )
+      if (codexResumeHome?.codexHomePath) {
+        combinedEnvToDelete = removeCodexHomeDeletionRequests(combinedEnvToDelete)
+      }
       deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
       promoteAgentTeamsShimPath(spawnEnv, requestedAgentTeamsPath)
       const spawnOptions: PtySpawnOptions = {
@@ -3791,6 +3865,9 @@ export function registerPtyHandlers(
         cwd,
         env: spawnEnv,
         ...(isMintedSessionId ? { isNewSession: true } : {})
+      }
+      if (!isDaemonHostSpawn && codexResumeHome) {
+        spawnOptions.codexHomePathOverride = { value: codexResumeHome.codexHomePath }
       }
       if (combinedEnvToDelete) {
         spawnOptions.envToDelete = combinedEnvToDelete
@@ -4899,7 +4976,8 @@ export function registerHeadlessPtyRuntime(
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: PrepareClaudeAuth,
-  store?: Store
+  store?: Store,
+  prepareCodexSessionResume?: PrepareCodexSessionResume
 ): void {
   // Why: headless `orca serve` has no renderer window but still needs the same PTY handlers so remote clients can drive terminals.
   const headlessWindow = {
@@ -4916,7 +4994,8 @@ export function registerHeadlessPtyRuntime(
     getSelectedCodexHomePath,
     getSettings,
     prepareClaudeAuth,
-    store
+    store,
+    { prepareCodexSessionResume }
   )
 }
 

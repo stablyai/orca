@@ -3296,7 +3296,9 @@
             "noUsageData": "No usage data",
             "detailed": "Detailed",
             "compact": "Compact",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "detailedTooltip": "막대, 레이블, 백분율을 포함한 전체 사용량",
+            "compactTooltip": "압축된 사용: 가장 좁은 창만 사용"
           }
         }
       },
@@ -4593,7 +4595,6 @@
           "modalDescription": "terminal에서 Linear 스킬을 설치합니다.",
           "modalPrompt": "agents가 첨부된 Linear 티켓을 읽고 편집할 수 있게 합니다.",
           "dontShowAgain": "다시 표시하지 않음",
-          "notNow": "나중에",
           "missingBoth": "Orca CLI와 Linear agent 스킬이 없습니다.",
           "missingCli": "Orca CLI가 없습니다.",
           "missingSkill": "Linear agent 스킬이 없습니다.",
@@ -4855,7 +4856,7 @@
           "dbb9626ed1": "취소",
           "854ebbcc45": "Orca는 저장된 계정에 대해 관리되는 Claude 인증을 삭제합니다. 현재 활성화된 경우 Orca는 시스템 기본 Claude 로그인으로 대체됩니다.",
           "63843e37e2": "Claude 계정을 삭제하시겠습니까?",
-          "99c8f9e498": "Orca는 저장된 계정에 대해 관리되는 Codex 홈을 삭제합니다. 현재 활성화된 경우 Orca는 시스템 기본 Codex 로그인으로 대체됩니다.",
+          "380a7736cc": "이 계정을 제거하면 관리되는 Codex 홈과 그 안에 저장된 모든 Codex 세션 기록 및 MCP 로그인이 영구적으로 삭제됩니다. 이 작업은 실행 취소할 수 없습니다. 계정이 현재 활성 상태인 경우 Orca는 시스템 기본 Codex 로그인으로 전환됩니다.",
           "0d47394635": "Codex 계정을 제거하시겠습니까?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "opencode.ai에 로그인한 후 URL에서 이를 찾으세요(예:",
@@ -9255,7 +9256,9 @@
           "howToUse": "How to use it",
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
-          "terminalAriaLabel": "Linear skill install terminal"
+          "terminalAriaLabel": "Linear skill install terminal",
+          "manageConnectionHint": "Review connected Linear workspaces and API keys in",
+          "manageConnectionLink": "Integrations settings"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."

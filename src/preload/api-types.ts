@@ -63,7 +63,10 @@ import type { TaskSourceContext } from '../shared/task-source-context'
 import type { LinearIssueAttributeFilter } from '../shared/linear-issue-attribute-filter'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
-import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../shared/agent-session-resume'
 import type {
   LocalhostWorktreeLabelResult,
   LocalhostWorktreeLabelRoute
@@ -1290,6 +1293,7 @@ export type PreloadApi = {
       envToDelete?: string[]
       command?: string
       launchConfig?: SleepingAgentLaunchConfig
+      resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
       startupCommandDelivery?: StartupCommandDelivery
@@ -2878,6 +2882,7 @@ export type PreloadApi = {
         cwd?: string
         env?: Record<string, string>
         launchConfig?: SleepingAgentLaunchConfig
+        resumeProviderSession?: AgentProviderSessionMetadata
         launchToken?: string
         launchAgent?: TuiAgent
         viewMode?: 'terminal' | 'chat'

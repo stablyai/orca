@@ -6,7 +6,10 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 
@@ -23,6 +26,7 @@ export type PtyConnectionDeps = {
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
+    resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
     draftPrompt?: string

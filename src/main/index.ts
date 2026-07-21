@@ -147,6 +147,10 @@ import { startCodexSessionIndexHealInBackground } from './codex/codex-session-in
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
 import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
+import { findTrustedCodexSessionResume } from './codex/codex-session-resume-home'
+import { getSystemCodexHomePath } from './codex/codex-home-paths'
+import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
+import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
 import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -784,6 +788,84 @@ function prepareCodexRuntimeHomeForLaunch(
   return runtimeHomePath
 }
 
+async function prepareCodexSessionResumeForLaunch(args: {
+  providerSession: AgentProviderSessionMetadata
+  target: CodexAccountSelectionTarget
+  launchEnv?: NodeJS.ProcessEnv
+  workspacePath?: string
+}): Promise<{ codexHomePath: string | null } | null> {
+  if (args.target.runtime === 'wsl' || !codexRuntimeHome || !store) {
+    return null
+  }
+  const systemHomePath = getSystemCodexHomePath()
+  // Why: codexSessionSourceHome is import-only; treating it as CODEX_HOME would mutate history sources and bypass account auth.
+  const trustedHomes = [
+    systemHomePath,
+    ...codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery()
+  ]
+  const sessionSource = await findTrustedCodexSessionResume({
+    sessionId: args.providerSession.id,
+    transcriptPath: args.providerSession.transcriptPath,
+    trustedCodexHomes: trustedHomes
+  })
+  if (!sessionSource) {
+    if (args.providerSession.transcriptPath) {
+      throw new Error(
+        'Orca could not verify the originating Codex session file, so automatic resume was stopped to avoid using a different account.'
+      )
+    }
+    return null
+  }
+
+  let migrated = { useRealCodexHome: false }
+  try {
+    migrated = await prepareLegacySharedCodexSessionResume(
+      {
+        agent: 'codex',
+        executionHostId: 'local',
+        filePath: sessionSource.transcriptPath,
+        codexHome: sessionSource.homePath
+      },
+      {
+        isHostSystemDefaultRealHome: () => codexRuntimeHome!.isHostSystemDefaultRealHome(),
+        systemCodexHomePath: systemHomePath
+      }
+    )
+  } catch (error) {
+    // Why: migration is a compatibility repair; its failure must not prevent the PTY from resuming from its trusted origin home.
+    console.warn(
+      '[codex-session-resume] Legacy rollout migration failed; using origin home:',
+      error
+    )
+  }
+  const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+
+  if (args.workspacePath) {
+    try {
+      markCodexProjectTrusted(args.workspacePath)
+    } catch (error) {
+      console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
+    }
+  }
+  const isSystemHome =
+    normalizeRuntimePathForComparison(resumeHome) ===
+    normalizeRuntimePathForComparison(systemHomePath)
+  const hooksEnabled = isAgentStatusHooksEnabled(store.getSettings())
+  try {
+    if (isSystemHome) {
+      ensureRealHomeCodexHookState({ hooksEnabled, userDataPath: app.getPath('userData') })
+    } else if (hooksEnabled) {
+      codexHookService.install(resumeHome)
+    } else {
+      codexHookService.refreshRuntimeUserHooks(resumeHome)
+    }
+  } catch (error) {
+    // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
+    console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
+  }
+  return { codexHomePath: resumeHome }
+}
+
 // Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.
 function showMainWindowFromTray(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1050,6 +1132,7 @@ function openMainWindow(): BrowserWindow {
     prepareCodexRuntimeHomeForLaunch,
     (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
+      prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
       awaitLocalPtyStartup: () => localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -1839,6 +1922,10 @@ app.whenReady().then(async () => {
   rateLimits.setClaudeAuthPreparationResolver((target) =>
     claudeRuntimeAuth!.prepareForRateLimitFetch(target)
   )
+  // Why: live Claude sessions stream usage windows through their statusLine command; feeding them here avoids OAuth usage-endpoint polling (and its 429s).
+  agentHookServer.setClaudeStatusLineListener((event) => {
+    rateLimits?.ingestLiveClaudeRateLimits(event)
+  })
   rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store!.getSettings()
     return {
@@ -2200,7 +2287,8 @@ app.whenReady().then(async () => {
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
       (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
-      store
+      store,
+      prepareCodexSessionResumeForLaunch
     )
     // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
     if (headlessBrowserDisplayAvailable) {

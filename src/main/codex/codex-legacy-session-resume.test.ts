@@ -9,7 +9,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'
 
 describe('prepareLegacySharedCodexSessionResume', () => {
@@ -45,6 +45,16 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     expect(result).toEqual({ useRealCodexHome: true })
     expect(readFileSync(targetPath, 'utf-8')).toBe('{"type":"session_meta"}\n')
     expect(statSync(targetPath).ino).toBe(statSync(rolloutPath).ino)
+  })
+
+  it('materializes a compressed legacy rollout without changing its representation', async () => {
+    const compressedPath = `${rolloutPath}.zst`
+    rmSync(rolloutPath)
+    rolloutPath = compressedPath
+    writeFileSync(rolloutPath, 'compressed-rollout', 'utf-8')
+
+    await expect(prepare()).resolves.toEqual({ useRealCodexHome: true })
+    expect(readFileSync(targetRolloutPath(), 'utf-8')).toBe('compressed-rollout')
   })
 
   it('coalesces concurrent resumes of the same legacy rollout', async () => {
@@ -129,14 +139,7 @@ describe('prepareLegacySharedCodexSessionResume', () => {
   }
 
   function targetRolloutPath(): string {
-    return join(
-      systemHome,
-      'sessions',
-      '2026',
-      '07',
-      '20',
-      'rollout-2026-07-20T12-00-00-session.jsonl'
-    )
+    return join(systemHome, 'sessions', '2026', '07', '20', basename(rolloutPath))
   }
 })
 

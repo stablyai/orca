@@ -236,6 +236,7 @@ import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
   type ResumableTuiAgent,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
@@ -482,6 +483,7 @@ type FreshSpawnOptions = {
 
 type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   agent: ResumableTuiAgent
+  resumeProviderSession: AgentProviderSessionMetadata
   launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
   launchToken: string
   useLiveEntry: boolean
@@ -3350,6 +3352,9 @@ export function connectPanePty(
     ...(projectRuntime ? { projectRuntime } : {}),
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
     ...(paneStartup?.launchConfig ? { launchConfig: paneStartup.launchConfig } : {}),
+    ...(paneStartup?.resumeProviderSession
+      ? { resumeProviderSession: paneStartup.resumeProviderSession }
+      : {}),
     ...(launchToken ? { launchToken } : {}),
     ...(paneStartup?.launchAgent ? { launchAgent: paneStartup.launchAgent } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
@@ -4489,6 +4494,7 @@ export function connectPanePty(
           ORCA_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken
         },
         launchConfig: startupPlan.launchConfig,
+        resumeProviderSession: providerSession,
         launchToken: coldRestoreLaunchToken,
         useLiveEntry: Boolean(useLiveEntry),
         hasSleepingRecord: Boolean(sleepingRecord),
@@ -4702,6 +4708,9 @@ export function connectPanePty(
           ? { env: mergeStartupEnvWithPaneIdentity(startupOverride.env) }
           : {}),
         ...(coldRestoreOverride ? { launchConfig: coldRestoreOverride.launchConfig } : {}),
+        ...(coldRestoreOverride
+          ? { resumeProviderSession: coldRestoreOverride.resumeProviderSession }
+          : {}),
         ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
         ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
         ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
@@ -7561,6 +7570,9 @@ export function connectPanePty(
               ...(coldRestoreStartup?.launchConfig
                 ? { launchConfig: coldRestoreStartup.launchConfig }
                 : {}),
+              ...(coldRestoreStartup?.resumeProviderSession
+                ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
+                : {}),
               ...(coldRestoreStartup?.launchToken
                 ? { launchToken: coldRestoreStartup.launchToken }
                 : {}),
@@ -7771,6 +7783,9 @@ export function connectPanePty(
           : {}),
         ...(coldRestoreStartup?.launchConfig
           ? { launchConfig: coldRestoreStartup.launchConfig }
+          : {}),
+        ...(coldRestoreStartup?.resumeProviderSession
+          ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
           : {}),
         ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
         ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),

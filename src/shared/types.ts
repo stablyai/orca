@@ -1687,6 +1687,7 @@ export type LinearIssue = {
 
 export type LinearProjectSummary = {
   id: string
+  slugId?: string
   workspaceId?: string
   workspaceName?: string
   name: string
@@ -1851,6 +1852,7 @@ export type LinearIssueUpdate = {
   dueDate?: string | null
   labelIds?: string[]
   projectId?: string | null
+  parentId?: string | null
 }
 
 export type ClassifiedError = {
@@ -2026,6 +2028,8 @@ export type LinearLabel = {
 export type LinearMember = {
   id: string
   displayName: string
+  name?: string
+  email?: string
   avatarUrl?: string
 }
 

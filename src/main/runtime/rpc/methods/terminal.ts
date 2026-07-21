@@ -923,6 +923,13 @@ const TerminalCreateParams = z.object({
       agentEnv: z.record(z.string(), z.string())
     })
     .optional(),
+  resumeProviderSession: z
+    .object({
+      key: z.enum(['session_id', 'conversation_id']),
+      id: z.string().min(1).max(512),
+      transcriptPath: z.string().min(1).max(32_768).optional()
+    })
+    .optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalColorQueryReplies: z
@@ -1370,6 +1377,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             env: params.env,
             envToDelete: params.envToDelete,
             ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+            ...(params.resumeProviderSession
+              ? { resumeProviderSession: params.resumeProviderSession }
+              : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
             ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
             ...(params.terminalColorQueryReplies

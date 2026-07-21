@@ -32,7 +32,10 @@ import type {
 } from './mobile-markdown-document'
 import type { RuntimeCapability } from './protocol-version'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
-import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
@@ -506,6 +509,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
