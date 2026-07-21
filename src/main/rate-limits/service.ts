@@ -1323,12 +1323,15 @@ export class RateLimitService {
     if (normalizeClaudeConfigDir(event.configDir) !== snapshot.configDir) {
       return
     }
-    const session = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
-    const weekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
+    const previous = this.state.claude
+    // Why: statusline posts may carry only one window; fall back to the last-known value instead of wiping the other bar to null.
+    const session =
+      mapClaudeUsageWindow(event.fiveHour ?? undefined, 300) ?? previous?.session ?? null
+    const weekly =
+      mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080) ?? previous?.weekly ?? null
     if (!session && !weekly) {
       return
     }
-    const previous = this.state.claude
     if (
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&

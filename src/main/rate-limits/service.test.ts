@@ -747,6 +747,37 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('keeps the other window when a statusline post carries only one', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 20 },
+        sevenDay: { used_percentage: 41 }
+      })
+      expect(service.getState().claude?.weekly?.usedPercent).toBe(41)
+
+      // A later post reporting only the 5h window must not wipe the weekly bar.
+      await vi.advanceTimersByTimeAsync(1000)
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 25 },
+        sevenDay: null
+      })
+      const claude = service.getState().claude
+      expect(claude?.session?.usedPercent).toBe(25)
+      expect(claude?.weekly?.usedPercent).toBe(41)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('dedupes identical statusline posts within the throttle window', async () => {
     vi.useFakeTimers()
     try {

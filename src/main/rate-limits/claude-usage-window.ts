@@ -7,6 +7,7 @@ export type ClaudeUsageWindowInput = {
   resets_at?: string | number
 }
 
+// Why: 1e10 sits between any plausible seconds epoch (<2286) and any millisecond epoch (>2001), so it distinguishes the two units without extra metadata.
 export function parseClaudeUsageResetTimestamp(value: string | number | undefined): number | null {
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
