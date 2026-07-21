@@ -97,9 +97,14 @@ export function createRemoteRuntimePtyTransport(
   let claimViewportOnSubscribe = true
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribing = false
+  let activeResubscribeRequiresReplacement = false
+  let resolveAuthoritativeResubscribe: ((handle: string) => void) | null = null
   let resubscribeRequestedHandle: string | null = null
   let resubscribeRequestedRequiresReplacement = false
+  let resubscribeRequestedHasAuthoritativeHandle = false
   let stopWaitingForPublishedHandle: (() => void) | null = null
+  let subscriptionInstallPromise: Promise<void> | null = null
+  let subscriptionInstallHandle: string | null = null
   let subscriptionGeneration = 0
   let pendingViewportClaim = false
   let pendingClaimInput = ''
@@ -399,6 +404,7 @@ export function createRemoteRuntimePtyTransport(
           return false
         }
       }
+      recoverMissingVisualStream(targetHandle)
       return true
     } catch (error) {
       // Why: stale-handle errors must retire the mirror (recoverable via next snapshot), not dead-end in a red xterm banner (#7718).
@@ -416,6 +422,7 @@ export function createRemoteRuntimePtyTransport(
     if (stream?.sendInput(text)) {
       return
     }
+    const streamDeliveryFailed = Boolean(stream)
     if (pendingViewportClaim) {
       // Why: a claim during subscribe/reconnect has no stream record yet; hold its input so the stream emits claim+input in one order.
       pendingClaimInput += text
@@ -426,9 +433,11 @@ export function createRemoteRuntimePtyTransport(
       text,
       client: { id: clientId, type: 'desktop' },
       ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
-    }).catch((error) => {
-      handleRemoteTerminalError(error)
     })
+      .then(() => recoverMissingVisualStream(targetHandle, streamDeliveryFailed))
+      .catch((error) => {
+        handleRemoteTerminalError(error)
+      })
   })
 
   function sendViewportUpdate(cols: number, rows: number, claim = false): void {
@@ -443,6 +452,7 @@ export function createRemoteRuntimePtyTransport(
       }
       return
     }
+    const streamDeliveryFailed = Boolean(stream)
     if (claim) {
       pendingViewportClaim = true
     }
@@ -451,7 +461,13 @@ export function createRemoteRuntimePtyTransport(
       client: { id: clientId, type: 'desktop' },
       viewport: { cols, rows },
       ...(claim ? { claim: true } : {})
-    }).catch(() => {})
+    })
+      .then(() => recoverMissingVisualStream(targetHandle, streamDeliveryFailed))
+      .catch(() => {
+        if (claim && handle === targetHandle) {
+          clearPendingViewportClaim()
+        }
+      })
   }
 
   const viewportBatcher = createRemoteRuntimeViewportBatcher(
@@ -467,6 +483,20 @@ export function createRemoteRuntimePtyTransport(
     targetHandle: string
   ): RemoteRuntimeMultiplexedTerminal | null {
     return multiplexedStreamHandle === targetHandle ? multiplexedStream : null
+  }
+
+  function recoverMissingVisualStream(targetHandle: string, streamDeliveryFailed = false): void {
+    if (destroyed || !connected || handle !== targetHandle) {
+      return
+    }
+    const currentStream = getCurrentMultiplexedStream(targetHandle)
+    if (currentStream && !streamDeliveryFailed) {
+      return
+    }
+    if (currentStream) {
+      closeMultiplexedStream()
+    }
+    confirmAuthoritativeResubscribe(targetHandle)
   }
 
   function closeMultiplexedStream(): void {
@@ -516,7 +546,11 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
-  function waitForPublishedHostSessionHandle(hostTabId: string, previousHandle: string): void {
+  function waitForPublishedHostSessionHandle(
+    hostTabId: string,
+    previousHandle: string,
+    requireReplacement: boolean
+  ): void {
     if (!worktreeId) {
       return
     }
@@ -537,7 +571,13 @@ export function createRemoteRuntimePtyTransport(
           retireRemoteTerminalId()
           return
         }
-        if (!update.terminalHandle || update.terminalHandle === previousHandle) {
+        if (!update.terminalHandle) {
+          return
+        }
+        if (update.terminalHandle === previousHandle) {
+          if (!requireReplacement) {
+            confirmAuthoritativeResubscribe(previousHandle)
+          }
           return
         }
         rebindRemoteTerminalHandle(update.terminalHandle)
@@ -579,15 +619,19 @@ export function createRemoteRuntimePtyTransport(
   // Why: after a transport drop the host may have re-minted this handle; re-derive from the snapshot so we don't mirror/type into whatever PTY now sits behind the stale one (#7718).
   async function resubscribeAfterTransportClose(
     previousHandle: string,
-    requireReplacement: boolean
+    requireReplacement: boolean,
+    authoritativeHandle: Promise<string> | null
   ): Promise<void> {
     if (tabId && isWebTerminalSurfaceTabId(tabId)) {
       const hostTabId = toHostSessionTabId(tabId)
-      const nextHandle = await waitForResubscribeHostSessionHandle(
+      const inventoryHandle = waitForResubscribeHostSessionHandle(
         hostTabId,
         previousHandle,
         requireReplacement
       )
+      const nextHandle = authoritativeHandle
+        ? await Promise.race([inventoryHandle, authoritativeHandle])
+        : await inventoryHandle
       if (destroyed || !connected || handle !== previousHandle) {
         return
       }
@@ -607,7 +651,21 @@ export function createRemoteRuntimePtyTransport(
     await subscribeToHandle()
   }
 
-  function scheduleResubscribeAfterTransportClose(requireReplacement = false): void {
+  function confirmAuthoritativeResubscribe(confirmedHandle: string): void {
+    if (destroyed || !connected || handle !== confirmedHandle) {
+      return
+    }
+    if (resubscribing && !activeResubscribeRequiresReplacement) {
+      resolveAuthoritativeResubscribe?.(confirmedHandle)
+      return
+    }
+    scheduleResubscribeAfterTransportClose(false, true)
+  }
+
+  function scheduleResubscribeAfterTransportClose(
+    requireReplacement = false,
+    hasAuthoritativeHandle = false
+  ): void {
     if (destroyed || !connected || !handle) {
       return
     }
@@ -620,19 +678,37 @@ export function createRemoteRuntimePtyTransport(
       if (resubscribeRequestedHandle !== handle) {
         resubscribeRequestedHandle = handle
         resubscribeRequestedRequiresReplacement = requireReplacement
+        resubscribeRequestedHasAuthoritativeHandle = hasAuthoritativeHandle
       } else {
         resubscribeRequestedRequiresReplacement ||= requireReplacement
+        resubscribeRequestedHasAuthoritativeHandle ||= hasAuthoritativeHandle
       }
       return
     }
     const resubscribeHandle = handle
     clearPublishedHandleWait()
-    if (tabId && isWebTerminalSurfaceTabId(tabId)) {
+    if (tabId && isWebTerminalSurfaceTabId(tabId) && !hasAuthoritativeHandle) {
       // Why: subscribe before polling so a fresh host snapshot can't land in the gap between the inventory loop and its event-driven fallback.
-      waitForPublishedHostSessionHandle(toHostSessionTabId(tabId), resubscribeHandle)
+      waitForPublishedHostSessionHandle(
+        toHostSessionTabId(tabId),
+        resubscribeHandle,
+        requireReplacement
+      )
     }
     resubscribing = true
-    void resubscribeAfterTransportClose(resubscribeHandle, requireReplacement)
+    activeResubscribeRequiresReplacement = requireReplacement
+    let authoritativeHandle: Promise<string> | null = null
+    let authoritativeResolver: ((handle: string) => void) | null = null
+    if (!requireReplacement && !hasAuthoritativeHandle) {
+      authoritativeHandle = new Promise((resolve) => {
+        authoritativeResolver = resolve
+        resolveAuthoritativeResubscribe = resolve
+      })
+    }
+    const resubscribe = hasAuthoritativeHandle
+      ? subscribeToHandle()
+      : resubscribeAfterTransportClose(resubscribeHandle, requireReplacement, authoritativeHandle)
+    void resubscribe
       .catch((error) => {
         if (!destroyed && connected && handle) {
           clearPendingViewportClaim()
@@ -640,18 +716,47 @@ export function createRemoteRuntimePtyTransport(
         }
       })
       .finally(() => {
+        if (resolveAuthoritativeResubscribe === authoritativeResolver) {
+          resolveAuthoritativeResubscribe = null
+        }
         resubscribing = false
+        activeResubscribeRequiresReplacement = false
         const pendingHandle = resubscribeRequestedHandle
         const pendingRequiresReplacement = resubscribeRequestedRequiresReplacement
+        const pendingHasAuthoritativeHandle = resubscribeRequestedHasAuthoritativeHandle
         resubscribeRequestedHandle = null
         resubscribeRequestedRequiresReplacement = false
+        resubscribeRequestedHasAuthoritativeHandle = false
         if (!stopWaitingForPublishedHandle && pendingHandle && pendingHandle === handle) {
-          scheduleResubscribeAfterTransportClose(pendingRequiresReplacement)
+          if (!pendingHasAuthoritativeHandle || !getCurrentMultiplexedStream(pendingHandle)) {
+            scheduleResubscribeAfterTransportClose(
+              pendingRequiresReplacement,
+              pendingHasAuthoritativeHandle
+            )
+          }
         }
       })
   }
 
-  async function subscribeToHandle(): Promise<void> {
+  function subscribeToHandle(): Promise<void> {
+    const targetHandle = handle
+    if (subscriptionInstallPromise && subscriptionInstallHandle === targetHandle) {
+      return subscriptionInstallPromise
+    }
+    const install = installHandleSubscription()
+    subscriptionInstallPromise = install
+    subscriptionInstallHandle = targetHandle
+    const clearInstall = (): void => {
+      if (subscriptionInstallPromise === install) {
+        subscriptionInstallPromise = null
+        subscriptionInstallHandle = null
+      }
+    }
+    void install.then(clearInstall, clearInstall)
+    return install
+  }
+
+  async function installHandleSubscription(): Promise<void> {
     if (!handle) {
       return
     }

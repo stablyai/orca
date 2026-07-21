@@ -753,6 +753,119 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  it('serializes same-handle snapshot recovery through the active reconnect', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1'
+    })
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-survived',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    runtimeCall.mockImplementation((args: { method: string }) =>
+      args.method === 'session.tabs.list'
+        ? new Promise(() => {})
+        : Promise.resolve({ ok: true, result: {} })
+    )
+
+    subscriptionCallbacks?.onClose?.()
+    const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+    await vi.waitFor(() =>
+      expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
+    )
+    handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+      {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-2',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: 'tab-1::pane:1',
+        activeTabType: 'terminal',
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'tab-1::pane:1',
+            parentTabId: 'tab-1',
+            leafId: 'pane:1',
+            title: 'Pi',
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-survived'
+          }
+        ]
+      },
+      'env-1'
+    )
+
+    await vi.waitFor(() => {
+      const subscribedTerminals = subscriptionSendBinary.mock.calls
+        .map((call) => decodeTerminalStreamFrame(call[0]))
+        .flatMap((frame) => {
+          if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
+            return []
+          }
+          const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+          return payload ? [payload.terminal] : []
+        })
+      expect(subscribedTerminals).toEqual(['terminal-survived', 'terminal-survived'])
+    })
+    expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+  })
+
+  it('uses successful takeover as proof to restore output and flush queued input', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onData = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1'
+    })
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-survived',
+      cols: 80,
+      rows: 24,
+      callbacks: { onData }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    runtimeCall.mockImplementation((args: { method: string }) =>
+      args.method === 'session.tabs.list'
+        ? new Promise(() => {})
+        : Promise.resolve({ ok: true, result: {} })
+    )
+
+    subscriptionCallbacks?.onClose?.()
+    expect(transport.claimViewport?.(101, 33)).toBe(true)
+    expect(transport.sendInput('x')).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => {
+      const input = latestFrameForOpcode(TerminalStreamOpcode.Input)
+      expect(input ? decodeTerminalStreamText(input.payload) : null).toBe('x')
+    })
+    const replacementStreamId = latestSubscribePayload().streamId
+    emitOutput(replacementStreamId, 'visible again')
+    expect(onData).toHaveBeenCalledWith('visible again', expect.objectContaining({ seq: 1 }))
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.updateViewport',
+      params: {
+        terminal: 'terminal-survived',
+        client: {
+          id: expect.stringMatching(/^desktop:web-terminal-tab-1:pane:1:/),
+          type: 'desktop'
+        },
+        viewport: { cols: 101, rows: 33 },
+        claim: true
+      },
+      timeoutMs: 15_000
+    })
+  })
+
   it('coalesces concurrent stale errors for the handle that was replaced', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
