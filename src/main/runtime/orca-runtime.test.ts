@@ -10538,6 +10538,81 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('returns an existing agent owner without rebinding its PTY to the duplicate runtime tab', async () => {
+    const ownerLeafId = '11111111-1111-4111-8111-111111111111'
+    const ownerPaneKey = `owner-tab:${ownerLeafId}`
+    const spawn = vi.fn().mockResolvedValue({
+      id: 'pty-owner',
+      existingAgentSessionOwner: {
+        ptyId: 'pty-owner',
+        paneKey: ownerPaneKey,
+        tabId: 'owner-tab',
+        leafId: ownerLeafId
+      }
+    })
+    const revealTerminalSession = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'owner-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Owner agent',
+          activeLeafId: ownerLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'owner-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: ownerLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-owner'
+        }
+      ]
+    })
+    const [ownerBefore] = (await runtime.listTerminals()).terminals
+
+    const result = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex resume provider-session-a',
+      launchAgent: 'codex',
+      resumeProviderSession: { key: 'session_id', id: 'provider-session-a' }
+    })
+
+    expect(result).toMatchObject({
+      handle: ownerBefore.handle,
+      tabId: 'owner-tab',
+      paneKey: ownerPaneKey,
+      ptyId: 'pty-owner',
+      worktreeId: TEST_WORKTREE_ID,
+      title: 'Owner agent'
+    })
+    expect(revealTerminalSession).not.toHaveBeenCalled()
+    expect((await runtime.listTerminals()).terminals).toHaveLength(1)
+  })
+
   it('passes cached view colors to background agent spawns for source-owned startup replies', async () => {
     setTerminalViewAttributes({
       foreground: [0xff, 0xff, 0xff],

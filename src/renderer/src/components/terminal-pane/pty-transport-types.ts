@@ -1,6 +1,7 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type {
   AgentProviderSessionMetadata,
+  LiveAgentSessionOwner,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
@@ -55,6 +56,7 @@ export type PtyConnectResult = {
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   replay?: string
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
+  existingAgentSessionOwner?: LiveAgentSessionOwner
   /** Trailing partial escape the daemon emulator held mid-parse; the reattach
    *  replay writes it LAST (after the reset) so a racing live continuation
    *  completes it instead of rendering literally (#7329). */

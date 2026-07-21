@@ -19,6 +19,13 @@ export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
 
 export type AgentProviderSessionKey = 'session_id' | 'conversation_id'
 
+export type LiveAgentSessionOwner = {
+  ptyId: string
+  paneKey: string
+  tabId: string
+  leafId: string
+}
+
 export type AgentProviderSessionMetadata = {
   key: AgentProviderSessionKey
   id: string

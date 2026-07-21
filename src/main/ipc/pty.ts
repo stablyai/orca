@@ -33,8 +33,10 @@ import {
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
+  isResumableTuiAgent,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
+  type LiveAgentSessionOwner,
   type SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
@@ -187,6 +189,150 @@ const KEEP_HISTORY_STOP_POLL_MS = 100
 const ptyPaneKey = new Map<string, string>()
 // Why: reverse of ptyPaneKey — callers with a paneKey from outside the PTY lifecycle (e.g. agent-hook status routing) need the ptyId; kept in lock-step via the same sites.
 const paneKeyPtyId = new Map<string, string>()
+
+type AgentSessionClaim = LiveAgentSessionOwner & {
+  claimKey: string
+}
+
+// Why: renderer state can be stale; main must serialize provider-session resumes where the PTYs actually live.
+const agentSessionClaimByKey = new Map<string, AgentSessionClaim>()
+const agentSessionClaimKeysByPty = new Map<string, Set<string>>()
+const pendingAgentSessionSpawnByKey = new Map<string, Promise<LiveAgentSessionOwner | null>>()
+
+function createAgentSessionSpawnReservation(): {
+  promise: Promise<LiveAgentSessionOwner | null>
+  resolve: (owner: LiveAgentSessionOwner | null) => void
+} {
+  let resolve!: (owner: LiveAgentSessionOwner | null) => void
+  const promise = new Promise<LiveAgentSessionOwner | null>((settle) => {
+    resolve = settle
+  })
+  return { promise, resolve }
+}
+
+function getAgentSessionClaimKey(args: {
+  agent: unknown
+  providerSession: unknown
+  connectionId: unknown
+}): string | null {
+  if (!isResumableTuiAgent(args.agent)) {
+    return null
+  }
+  const providerSession = normalizeAgentProviderSession(args.providerSession)
+  if (!providerSession) {
+    return null
+  }
+  const connectionId =
+    typeof args.connectionId === 'string' && args.connectionId.length > 0 ? args.connectionId : null
+  return JSON.stringify([
+    connectionId,
+    args.agent,
+    providerSession.key,
+    providerSession.id,
+    args.agent === 'pi' ? (providerSession.transcriptPath ?? null) : null
+  ])
+}
+
+function rememberAgentSessionClaim(
+  claimKey: string,
+  owner: LiveAgentSessionOwner
+): LiveAgentSessionOwner {
+  const claim = { claimKey, ...owner }
+  agentSessionClaimByKey.set(claimKey, claim)
+  const claimKeys = agentSessionClaimKeysByPty.get(owner.ptyId) ?? new Set<string>()
+  claimKeys.add(claimKey)
+  agentSessionClaimKeysByPty.set(owner.ptyId, claimKeys)
+  return owner
+}
+
+function getLiveAgentSessionOwner(args: {
+  agent: unknown
+  providerSession: unknown
+  connectionId: unknown
+}): { claimKey: string; owner: LiveAgentSessionOwner | null } | null {
+  const claimKey = getAgentSessionClaimKey(args)
+  if (!claimKey) {
+    return null
+  }
+  const cached = agentSessionClaimByKey.get(claimKey)
+  if (cached && paneKeyPtyId.get(cached.paneKey) === cached.ptyId) {
+    return { claimKey, owner: cached }
+  }
+  if (cached) {
+    agentSessionClaimByKey.delete(claimKey)
+    agentSessionClaimKeysByPty.get(cached.ptyId)?.delete(claimKey)
+  }
+
+  for (const status of agentHookServer.getStatusSnapshot()) {
+    const statusClaimKey = getAgentSessionClaimKey({
+      agent: status.agentType,
+      providerSession: status.providerSession,
+      connectionId: status.connectionId
+    })
+    if (statusClaimKey !== claimKey) {
+      continue
+    }
+    const parsedPaneKey = parseValidPaneKey(status.paneKey)
+    const ptyId = paneKeyPtyId.get(status.paneKey)
+    if (!parsedPaneKey || !ptyId) {
+      continue
+    }
+    return {
+      claimKey,
+      owner: rememberAgentSessionClaim(claimKey, {
+        ptyId,
+        paneKey: status.paneKey,
+        tabId: parsedPaneKey.tabId,
+        leafId: parsedPaneKey.leafId
+      })
+    }
+  }
+  return { claimKey, owner: null }
+}
+
+type AgentSessionSpawnClaim = {
+  claimKey: string
+  reservation: ReturnType<typeof createAgentSessionSpawnReservation>
+}
+
+async function acquireAgentSessionSpawnClaim(args: {
+  agent: unknown
+  providerSession: unknown
+  connectionId: unknown
+  sessionId: unknown
+}): Promise<{ owner: LiveAgentSessionOwner } | { claim: AgentSessionSpawnClaim } | null> {
+  if (typeof args.sessionId === 'string' && args.sessionId.length > 0) {
+    return null
+  }
+  const liveSession = getLiveAgentSessionOwner(args)
+  if (!liveSession) {
+    return null
+  }
+  if (liveSession.owner) {
+    return { owner: liveSession.owner }
+  }
+  const pending = pendingAgentSessionSpawnByKey.get(liveSession.claimKey)
+  if (pending) {
+    const owner = await pending
+    return owner ? { owner } : acquireAgentSessionSpawnClaim(args)
+  }
+  const reservation = createAgentSessionSpawnReservation()
+  pendingAgentSessionSpawnByKey.set(liveSession.claimKey, reservation.promise)
+  return { claim: { claimKey: liveSession.claimKey, reservation } }
+}
+
+function settleAgentSessionSpawnClaim(
+  claim: AgentSessionSpawnClaim | null,
+  owner: LiveAgentSessionOwner | null
+): void {
+  if (!claim) {
+    return
+  }
+  claim.reservation.resolve(owner ? rememberAgentSessionClaim(claim.claimKey, owner) : null)
+  if (pendingAgentSessionSpawnByKey.get(claim.claimKey) === claim.reservation.promise) {
+    pendingAgentSessionSpawnByKey.delete(claim.claimKey)
+  }
+}
 
 const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_PORT',
@@ -1135,6 +1281,15 @@ export function clearProviderPtyState(id: string): void {
   clearNativeWindowsConptyPty(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
+  const agentSessionClaimKeys = agentSessionClaimKeysByPty.get(id)
+  if (agentSessionClaimKeys) {
+    for (const claimKey of agentSessionClaimKeys) {
+      if (agentSessionClaimByKey.get(claimKey)?.ptyId === id) {
+        agentSessionClaimByKey.delete(claimKey)
+      }
+    }
+    agentSessionClaimKeysByPty.delete(id)
+  }
   // Why: drop the memory-collector registration so a dead PTY doesn't resolve its dead pid on every snapshot; no-op for never-registered (SSH-owned) PTYs.
   unregisterPty(id)
   // Why: cover paths that bypass runtime.onPtyExit (SSH reattach/shutdown, daemon spawn-failure) — else the watcher's per-PTY buffer and worktree binding outlive the PTY.
@@ -2990,17 +3145,29 @@ export function registerPtyHandlers(
       if (existingPaneSpawn) {
         return await existingPaneSpawn.promise
       }
-      const finishTerminalInstall = beginPtySpawnForWorktree(
-        args.worktreeId,
-        cwd,
-        args.connectionId
-      )
-      const paneSpawnReservation = materializedPaneKey
-        ? reservePaneSpawn(materializedPaneKey)
-        : null
+      const agentSessionSpawn =
+        !args.sessionId && args.resumeProviderSession && isResumableTuiAgent(args.launchAgent)
+          ? await acquireAgentSessionSpawnClaim({
+              agent: args.launchAgent,
+              providerSession: args.resumeProviderSession,
+              connectionId: args.connectionId,
+              sessionId: args.sessionId
+            })
+          : null
+      if (agentSessionSpawn && 'owner' in agentSessionSpawn) {
+        return {
+          id: agentSessionSpawn.owner.ptyId,
+          existingAgentSessionOwner: agentSessionSpawn.owner
+        }
+      }
+      const agentSessionSpawnClaim = agentSessionSpawn?.claim ?? null
+      let finishTerminalInstall = (): void => {}
+      let paneSpawnReservation: ReturnType<typeof reservePaneSpawn> | null = null
       let result: PtySpawnResult
       let preparedProvisionalExecutionContext = false
       try {
+        finishTerminalInstall = beginPtySpawnForWorktree(args.worktreeId, cwd, args.connectionId)
+        paneSpawnReservation = materializedPaneKey ? reservePaneSpawn(materializedPaneKey) : null
         try {
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
@@ -3193,9 +3360,24 @@ export function registerPtyHandlers(
                 : null
           })
         }
+        const parsedOwnerPaneKey = spawnIdentityPaneKey
+          ? parseValidPaneKey(spawnIdentityPaneKey)
+          : null
+        settleAgentSessionSpawnClaim(
+          agentSessionSpawnClaim,
+          parsedOwnerPaneKey && spawnIdentityPaneKey
+            ? {
+                ptyId: result.id,
+                paneKey: spawnIdentityPaneKey,
+                tabId: parsedOwnerPaneKey.tabId,
+                leafId: parsedOwnerPaneKey.leafId
+              }
+            : null
+        )
         const response = { id: result.id }
         return resolvePaneSpawnReservation(materializedPaneKey, paneSpawnReservation, response)
       } catch (err) {
+        settleAgentSessionSpawnClaim(agentSessionSpawnClaim, null)
         // Why: any later throw must settle the reservation, or it lingers and every future spawn for this pane awaits a promise that never resolves (reject no-ops if already resolved).
         rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, err)
         throw err
@@ -3931,24 +4113,40 @@ export function registerPtyHandlers(
       if (existingPaneSpawn) {
         return await existingPaneSpawn.promise
       }
-      const finishTerminalInstall = beginPtySpawnForWorktree(
-        args.worktreeId,
-        cwd,
-        args.connectionId
-      )
-      const paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
-      const initiallyHidden = args.initiallyHidden === true
-      // Why: daemon PTYs can emit before spawn() resolves, so the hidden mark must beat byte zero (terminal-query-authority.md §races); other providers are safe with the post-spawn mark below.
-      const preSpawnHiddenMarkId =
-        initiallyHidden && isDaemonHostSpawn && effectiveSessionAppId !== undefined
-          ? effectiveSessionAppId
+      const agentSessionSpawn =
+        !args.sessionId && args.resumeProviderSession && isResumableTuiAgent(args.launchAgent)
+          ? await acquireAgentSessionSpawnClaim({
+              agent: args.launchAgent,
+              providerSession: args.resumeProviderSession,
+              connectionId: args.connectionId,
+              sessionId: args.sessionId
+            })
           : null
-      if (preSpawnHiddenMarkId !== null) {
-        markHiddenRendererPty(preSpawnHiddenMarkId)
+      if (agentSessionSpawn && 'owner' in agentSessionSpawn) {
+        return {
+          id: agentSessionSpawn.owner.ptyId,
+          isReattach: true,
+          existingAgentSessionOwner: agentSessionSpawn.owner
+        }
       }
+      const agentSessionSpawnClaim = agentSessionSpawn?.claim ?? null
+      let finishTerminalInstall = (): void => {}
+      let paneSpawnReservation: ReturnType<typeof reservePaneSpawn> | null = null
+      let preSpawnHiddenMarkId: string | null = null
       let result: PtySpawnResult
       let preparedProvisionalExecutionContext = false
       try {
+        finishTerminalInstall = beginPtySpawnForWorktree(args.worktreeId, cwd, args.connectionId)
+        paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
+        const initiallyHidden = args.initiallyHidden === true
+        // Why: daemon PTYs can emit before spawn() resolves, so the hidden mark must beat byte zero (terminal-query-authority.md §races); other providers are safe with the post-spawn mark below.
+        preSpawnHiddenMarkId =
+          initiallyHidden && isDaemonHostSpawn && effectiveSessionAppId !== undefined
+            ? effectiveSessionAppId
+            : null
+        if (preSpawnHiddenMarkId !== null) {
+          markHiddenRendererPty(preSpawnHiddenMarkId)
+        }
         try {
           if (preAllocatedHandle) {
             trustedTerminalHandleEnv.add(preAllocatedHandle)
@@ -4260,6 +4458,18 @@ export function registerPtyHandlers(
             })
           }
         }
+        const parsedOwnerPaneKey = reservationPaneKey ? parseValidPaneKey(reservationPaneKey) : null
+        settleAgentSessionSpawnClaim(
+          agentSessionSpawnClaim,
+          parsedOwnerPaneKey && reservationPaneKey
+            ? {
+                ptyId: result.id,
+                paneKey: reservationPaneKey,
+                tabId: parsedOwnerPaneKey.tabId,
+                leafId: parsedOwnerPaneKey.leafId
+              }
+            : null
+        )
         const response = {
           ...result,
           ...(!result.isReattach && effectiveLaunchConfig
@@ -4270,6 +4480,7 @@ export function registerPtyHandlers(
         }
         return resolvePaneSpawnReservation(reservationPaneKey, paneSpawnReservation, response)
       } catch (err) {
+        settleAgentSessionSpawnClaim(agentSessionSpawnClaim, null)
         // Why: any later throw must settle the reservation, else it lingers and every future spawn for this pane awaits a promise that never resolves (reject no-ops if already resolved).
         rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
         throw err

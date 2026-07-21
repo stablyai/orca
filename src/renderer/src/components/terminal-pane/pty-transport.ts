@@ -717,6 +717,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         const resultLaunchAgent = isTuiAgent(spawnResult.launchAgent)
           ? spawnResult.launchAgent
           : undefined
+        if (spawnResult.existingAgentSessionOwner) {
+          return {
+            id: spawnResult.id,
+            existingAgentSessionOwner: spawnResult.existingAgentSessionOwner
+          } satisfies PtyConnectResult
+        }
 
         // Why: on destroy mid-connect, kill only a fresh spawn — killing a reattached session (owned by the tab lifecycle) loses a live shell.
         if (destroyed) {

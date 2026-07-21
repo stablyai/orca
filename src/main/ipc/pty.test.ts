@@ -45,6 +45,7 @@ const {
   openCodeClearPtyMock,
   mimoCodeBuildPtyEnvMock,
   buildAgentHookEnvMock,
+  getAgentStatusSnapshotMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
   piBuildPtyEnvMock,
@@ -78,6 +79,7 @@ const {
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
+  getAgentStatusSnapshotMock: vi.fn(),
   clearAgentHookPaneStateMock: vi.fn(),
   registerPaneKeyAliasMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
@@ -151,6 +153,7 @@ vi.mock('../mimo/hook-service', () => ({
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
     buildPtyEnv: buildAgentHookEnvMock,
+    getStatusSnapshot: getAgentStatusSnapshotMock,
     clearPaneState: clearAgentHookPaneStateMock,
     registerPaneKeyAlias: registerPaneKeyAliasMock,
     clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
@@ -330,6 +333,8 @@ describe('registerPtyHandlers', () => {
     mimoCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
+    getAgentStatusSnapshotMock.mockReset()
+    getAgentStatusSnapshotMock.mockReturnValue([])
     clearAgentHookPaneStateMock.mockReset()
     registerPaneKeyAliasMock.mockReset()
     piBuildPtyEnvMock.mockReset()
@@ -12349,6 +12354,132 @@ describe('registerPtyHandlers', () => {
       expect(runtime.serializeHiddenOutputRecoveryBuffer).not.toHaveBeenCalled()
       expect(result).toBeNull()
       provider.emitExit('daemon-pty')
+    })
+
+    it('returns the live provider-session owner instead of spawning a duplicate agent', async () => {
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      const paneKey = `owner-tab:${leafId}`
+      const first = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        worktreeId: 'worktree-a',
+        tabId: 'owner-tab',
+        leafId,
+        env: { ORCA_PANE_KEY: paneKey },
+        command: 'codex'
+      })) as { id: string }
+      getAgentStatusSnapshotMock.mockReturnValue([
+        {
+          paneKey,
+          worktreeId: 'worktree-a',
+          connectionId: null,
+          agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-session-a' }
+        }
+      ])
+
+      const duplicate = await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        worktreeId: 'worktree-a',
+        tabId: 'duplicate-tab',
+        leafId: '22222222-2222-4222-8222-222222222222',
+        env: {
+          ORCA_PANE_KEY: 'duplicate-tab:22222222-2222-4222-8222-222222222222'
+        },
+        command: 'codex resume provider-session-a',
+        launchAgent: 'codex',
+        resumeProviderSession: { key: 'session_id', id: 'provider-session-a' }
+      })
+
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(duplicate).toMatchObject({
+        id: first.id,
+        isReattach: true,
+        existingAgentSessionOwner: { ptyId: first.id, paneKey, tabId: 'owner-tab', leafId }
+      })
+      clearProviderPtyState(first.id)
+    })
+
+    it('releases a provider-session claim when terminal admission rejects the spawn', async () => {
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      const removal = acquireWatcherRemovalGate('/repo/app')
+      await removal.ready
+      const leafId = '55555555-5555-4555-8555-555555555555'
+      const args = {
+        cols: 80,
+        rows: 24,
+        cwd: '/repo/app',
+        worktreeId: 'repo-1::/repo/app',
+        tabId: 'resume-tab',
+        leafId,
+        env: { ORCA_PANE_KEY: `resume-tab:${leafId}` },
+        command: 'codex resume provider-session-a',
+        launchAgent: 'codex',
+        resumeProviderSession: { key: 'session_id', id: 'provider-session-a' }
+      }
+
+      try {
+        await expect(handlers.get('pty:spawn')!(null, args)).rejects.toMatchObject({
+          code: 'terminal_removal_in_progress'
+        })
+      } finally {
+        removal.release()
+      }
+      const result = (await handlers.get('pty:spawn')!(null, args)) as { id: string }
+
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      clearProviderPtyState(result.id)
+    })
+
+    it('serializes concurrent runtime resumes for the same provider session', async () => {
+      const provider = installObservableDaemonTestProvider()
+      const runtime = {
+        setPtyController: vi.fn(),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const controller = runtime.setPtyController.mock.calls[0]![0] as {
+        spawn(args: Record<string, unknown>): Promise<{
+          id: string
+          existingAgentSessionOwner?: { tabId: string }
+        }>
+      }
+      const resume = (tabId: string, leafId: string) =>
+        controller.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          worktreeId: 'worktree-a',
+          tabId,
+          leafId,
+          command: 'claude --resume provider-session-a',
+          launchAgent: 'claude',
+          resumeProviderSession: { key: 'session_id', id: 'provider-session-a' }
+        })
+
+      const [first, second] = await Promise.all([
+        resume('first-tab', '33333333-3333-4333-8333-333333333333'),
+        resume('second-tab', '44444444-4444-4444-8444-444444444444')
+      ])
+
+      expect(provider.spawn).toHaveBeenCalledTimes(1)
+      expect(first.existingAgentSessionOwner).toBeUndefined()
+      expect(second).toMatchObject({
+        id: first.id,
+        existingAgentSessionOwner: { tabId: 'first-tab' }
+      })
+      clearProviderPtyState(first.id)
     })
 
     it('reports where the undelivered pending backlog starts alongside the snapshot', async () => {

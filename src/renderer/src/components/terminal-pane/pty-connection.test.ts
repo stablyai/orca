@@ -938,6 +938,54 @@ describe('connectPanePty', () => {
     resetAgentStartupDelayedDeliveryForTests()
   })
 
+  it('reveals the existing owner when main rejects a duplicate agent resume', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockResolvedValue({
+      id: 'pty-owner',
+      existingAgentSessionOwner: {
+        ptyId: 'pty-owner',
+        paneKey: 'owner-tab:11111111-1111-4111-8111-111111111111',
+        tabId: 'owner-tab',
+        leafId: '11111111-1111-4111-8111-111111111111'
+      }
+    })
+    transportFactoryQueue.push(transport)
+    const closeTab = vi.fn()
+    const setActiveTab = vi.fn()
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [
+          { id: 'tab-1', ptyId: null },
+          { id: 'owner-tab', ptyId: 'pty-owner' }
+        ]
+      },
+      closeTab,
+      setActiveTab
+    } as StoreState
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        startup: {
+          command: 'codex resume provider-session-a',
+          launchAgent: 'codex',
+          resumeProviderSession: { key: 'session_id', id: 'provider-session-a' }
+        }
+      }) as never
+    )
+    await flushAsyncTicks()
+
+    expect(closeTab).toHaveBeenCalledWith('tab-1', {
+      reason: 'pty-exit',
+      captureRecentlyClosed: false
+    })
+    expect(setActiveTab).toHaveBeenCalledWith('owner-tab')
+    expect((transport.getPtyId as () => string | null)()).toBeNull()
+  })
+
   it('does not retain PTY connect diagnostics unless e2e debug state is enabled', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

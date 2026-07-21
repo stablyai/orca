@@ -1390,6 +1390,34 @@ describe('createIpcPtyTransport', () => {
     })
   })
 
+  it('returns an existing agent-session owner without attaching or killing its PTY', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({
+      id: 'pty-owner',
+      isReattach: true,
+      existingAgentSessionOwner: {
+        ptyId: 'pty-owner',
+        paneKey: 'owner-tab:11111111-1111-4111-8111-111111111111',
+        tabId: 'owner-tab',
+        leafId: '11111111-1111-4111-8111-111111111111'
+      }
+    })
+
+    const transport = createIpcPtyTransport({})
+    kill.mockClear()
+    const result = await transport.connect({ url: '', callbacks: {} })
+    transport.destroy?.()
+
+    expect(result).toEqual({
+      id: 'pty-owner',
+      existingAgentSessionOwner: expect.objectContaining({ tabId: 'owner-tab' })
+    })
+    expect(transport.getPtyId()).toBeNull()
+    expect(kill).not.toHaveBeenCalled()
+  })
+
   it('drops an unknown daemon launch identity from the connection result', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

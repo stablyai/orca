@@ -4722,6 +4722,40 @@ export function connectPanePty(
         })
       const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
         .then(async (spawnedPtyId) => {
+          if (
+            spawnedPtyId &&
+            typeof spawnedPtyId === 'object' &&
+            spawnedPtyId.existingAgentSessionOwner
+          ) {
+            const owner = spawnedPtyId.existingAgentSessionOwner
+            const state = useAppStore.getState()
+            const ownerTabExists = (state.tabsByWorktree[deps.worktreeId] ?? []).some(
+              (tab) => tab.id === owner.tabId
+            )
+            if (ownerTabExists) {
+              const sleepingRecord = getSleepingRecordForPane(state)
+              if (sleepingRecord) {
+                clearSleepingRecordProviderDuplicates(state, sleepingRecord)
+              }
+            }
+            if (ownerTabExists && owner.tabId !== deps.tabId) {
+              state.closeTab(deps.tabId, {
+                reason: 'pty-exit',
+                captureRecentlyClosed: false
+              })
+              useAppStore.getState().setActiveTab(owner.tabId)
+            } else if (!ownerTabExists) {
+              deps.onPtyErrorRef?.current(
+                pane.id,
+                'This agent session is already running in another terminal.'
+              )
+            }
+            const gen = await preSignalPromise
+            if (typeof gen === 'number') {
+              void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+            }
+            return null
+          }
           if (outputCallbacks.generation !== transportStreamGeneration) {
             const gen = await preSignalPromise
             if (typeof gen === 'number') {

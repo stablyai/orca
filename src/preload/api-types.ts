@@ -67,6 +67,7 @@ import type { ProjectExecutionRuntimeResolution } from '../shared/project-execut
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
   AgentProviderSessionMetadata,
+  LiveAgentSessionOwner,
   SleepingAgentLaunchConfig
 } from '../shared/agent-session-resume'
 import type {
@@ -1326,6 +1327,7 @@ export type PreloadApi = {
       sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
+      existingAgentSessionOwner?: LiveAgentSessionOwner
     }>
     write: (id: string, data: string) => void
     writeAccepted: (id: string, data: string) => Promise<boolean>
