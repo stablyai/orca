@@ -174,9 +174,15 @@ describe('listWorkItems', () => {
     getIssueOwnerRepoMock.mockResolvedValue(null)
     getOwnerRepoMock.mockResolvedValue(null)
 
-    await expect(listWorkItems('/private-repo', 36)).resolves.toMatchObject({ items: [] })
+    // Why: unresolved sources must return empty null-source envelopes (not throw, not query) so the renderer can
+    // distinguish "no GitHub source detected" from genuine zero via `sources` (#9660 follow-up).
+    await expect(listWorkItems('/private-repo', 36)).resolves.toMatchObject({
+      items: [],
+      sources: { issues: null, prs: null }
+    })
     await expect(listWorkItems('/private-repo', 36, 'is:open')).resolves.toMatchObject({
-      items: []
+      items: [],
+      sources: { issues: null, prs: null }
     })
 
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()

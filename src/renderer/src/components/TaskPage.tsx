@@ -199,6 +199,7 @@ import {
   reconcileTaskPagePagesAfterLandingRefresh,
   reconcileTaskPagePagesWithWorkItemsCache,
   shouldResetTaskPagePaginationAfterLandingRefresh,
+  selectTaskPageUnresolvedSourceRepos,
   selectTaskPageWorkItemsCacheEntries,
   shouldReplaceTaskPageItemsAfterRefresh,
   type TaskPageRepoSourceState
@@ -3983,6 +3984,12 @@ export default function TaskPage(): React.JSX.Element {
   const perRepoSourceState = useMemo<TaskPageRepoSourceState[]>(
     () => buildTaskPageRepoSourceState(selectedRepos, selectedWorkItemsCacheEntries),
     [selectedRepos, selectedWorkItemsCacheEntries]
+  )
+
+  // Why: repos that fetched but resolved no GitHub source (#9660) show empty like a genuine zero-result; surface them explicitly with Retry.
+  const unresolvedSourceRepos = useMemo(
+    () => selectTaskPageUnresolvedSourceRepos(selectedRepos, perRepoSourceState),
+    [selectedRepos, perRepoSourceState]
   )
 
   useEffect(() => {
@@ -9138,6 +9145,43 @@ export default function TaskPage(): React.JSX.Element {
                     )
                   })}
 
+                {unresolvedSourceRepos.map((r) => (
+                  // Why: null-source repos (#9660) render empty like genuine zero — name the repo and offer Retry so a transient resolve blip is recoverable.
+                  <div
+                    key={`source-unresolved-${r.repoId}`}
+                    role="status"
+                    aria-atomic="true"
+                    className="flex items-center justify-between gap-3 border-b border-border/50 bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+                  >
+                    <span>
+                      {translate(
+                        'auto.components.TaskPage.noGithubSourceDetected',
+                        'No GitHub source detected for'
+                      )}{' '}
+                      <span className="font-mono">{r.label}</span> —{' '}
+                      {translate(
+                        'auto.components.TaskPage.noGithubSourceDetectedHint',
+                        'it may have no GitHub remote, or the source could not be resolved.'
+                      )}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRetryIssuesFetch(r.sourceKey)}
+                      disabled={tasksLoading || retryingSourceKeys.has(r.sourceKey)}
+                    >
+                      {retryingSourceKeys.has(r.sourceKey) ? (
+                        <span className="flex items-center gap-1">
+                          <LoaderCircle className="h-3 w-3 animate-spin" />
+                          {translate('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
+                        </span>
+                      ) : (
+                        translate('auto.components.TaskPage.0bfbf62f75', 'Retry')
+                      )}
+                    </Button>
+                  </div>
+                ))}
+
                 {showGitHubTaskSkeletons ? (
                   // Why: fill a typical viewport with shimmer rows so the table doesn't jump in height when results land.
                   <div className="divide-y divide-border/50">
@@ -9189,6 +9233,7 @@ export default function TaskPage(): React.JSX.Element {
                 !tasksError &&
                 !githubUnavailable &&
                 failedCount === 0 &&
+                unresolvedSourceRepos.length === 0 &&
                 perRepoSourceState.every((s) => !s.error) ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-base font-medium text-foreground">
