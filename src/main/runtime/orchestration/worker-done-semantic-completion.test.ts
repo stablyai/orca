@@ -104,4 +104,19 @@ describe('evaluateWorkerDoneSemanticCompletion', () => {
       })
     ).toEqual({ complete: true })
   })
+
+  it('fails closed for pending activation wording without a durable split', () => {
+    expect(
+      evaluateWorkerDoneSemanticCompletion({
+        subject: 'Activation pending',
+        body: 'Waiting for owner approval before the migration can run.',
+        filesModified: [],
+        taskSpec: 'Activate after migration.'
+      })
+    ).toMatchObject({
+      complete: false,
+      kind: 'remaining_gates',
+      appliedStatus: 'blocked'
+    })
+  })
 })

@@ -44,6 +44,10 @@ const UNRESOLVED_ESCALATION_RE =
   /\b(unresolved\s+escalation|escalation\s+(?:still\s+)?(?:open|unresolved|pending)|open\s+escalation)\b/i
 const REMAINING_GATES_RE =
   /\b(remaining(?:\s+(?:required)?)?\s+(?:reconciliation|activation|owner[- ]gated|deploy(?:ment)?|migration)?\s*gates?|activation\s+gates?\s+remain(?:ing|s)?|reconciliation(?:\/activation)?\s+gates?\s+remain|what'?s\s+left\b.{0,80}\b(?:activation|reconciliation|migration|deploy|gate))/i
+const PENDING_WORK_RE =
+  /\b(activation\s+pending|waiting\s+for\s+owner(?:\s+approval)?|before\s+the\s+migration\s+can\s+run|owner\s+approval\s+before|not\s+yet\s+(?:migrated|deployed|activated)|still\s+need(?:s|ed)?\s+to\s+(?:migrate|deploy|activate)|unfinished\s+required\s+(?:work|outcome))\b/i
+const POSITIVE_COMPLETION_RE =
+  /\b(complete(?:d)?|done|shipped|landed|merged|review-clean|implementation\s+finished)\b/i
 
 const CODE_COMPLETE_ACTIVATION_SPLIT_RE =
   /\b(code[- ]complete(?:\s+vs\.?|\s+versus|\s*\/\s*|\s+from\s+)?\s*activation|activation[- ]gate\s+split|explicit(?:ly)?\s+(?:defines?|allow(?:s|ed)?)\s+(?:a\s+)?(?:code[- ]complete|activation[- ]gate)\s+split|owner[- ]gated\s+activation(?:\s+dependency)?\s+(?:may|can|should)\s+remain|send\s+worker_done\s+when\s+(?:the\s+)?code(?:\/docs)?(?:\s+change)?\s+is\s+complete)\b/i
@@ -59,6 +63,9 @@ export function evaluateWorkerDoneSemanticCompletion(
   const body = input.body ?? ''
   const text = `${subject}\n${body}`
   const splitAllowed = taskSpecDefinesCodeCompleteActivationSplit(input.taskSpec)
+  const filesModified = Array.isArray(input.filesModified)
+    ? input.filesModified.filter((file) => typeof file === 'string' && file.trim().length > 0)
+    : []
 
   if (FAILURE_SUBJECT_RE.test(subject) || FAILURE_BODY_RE.test(text)) {
     return {
@@ -100,7 +107,7 @@ export function evaluateWorkerDoneSemanticCompletion(
     }
   }
 
-  if (REMAINING_GATES_RE.test(text)) {
+  if (REMAINING_GATES_RE.test(text) || PENDING_WORK_RE.test(text)) {
     if (splitAllowed) {
       return { complete: true }
     }
@@ -109,7 +116,19 @@ export function evaluateWorkerDoneSemanticCompletion(
       kind: 'remaining_gates',
       appliedStatus: 'blocked',
       reason:
-        'worker_done reports required remaining gates without an explicit durable code-complete/activation-gate split'
+        'worker_done reports required remaining or pending work without an explicit durable code-complete/activation-gate split'
+    }
+  }
+
+  const hasPositiveCompletionEvidence =
+    POSITIVE_COMPLETION_RE.test(text) || filesModified.length > 0
+  if (!hasPositiveCompletionEvidence) {
+    return {
+      complete: false,
+      kind: 'remaining_gates',
+      appliedStatus: 'blocked',
+      reason:
+        'worker_done lacks positive completion evidence (completion language or filesModified) and cannot fail open'
     }
   }
 
