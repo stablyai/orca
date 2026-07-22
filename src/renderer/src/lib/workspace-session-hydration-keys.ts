@@ -13,14 +13,10 @@ export type WorkspaceSessionHydrationOptions = {
 const WORKSPACE_CHROME_SESSION_FIELDS = [
   'tabsByWorktree',
   'openFilesByWorktree',
-  'activeFileIdByWorktree',
-  'activeBrowserTabIdByWorktree',
-  'activeTabIdByWorktree',
   'browserTabsByWorktree',
   'unifiedTabs',
   'tabGroups',
-  'tabGroupLayouts',
-  'activeGroupIdByWorktree'
+  'tabGroupLayouts'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
 // Why: unbounded per-worktree history — one entry per worktree ever focused / given default tabs.
@@ -32,8 +28,12 @@ const WORKSPACE_HISTORY_SESSION_FIELDS = [
   'defaultTerminalTabsAppliedByWorktreeId'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
-// Why: this selection marker can outlive the last tab and cannot restore anything by itself.
+// Why: selection markers can outlive their content and cannot restore anything by themselves.
 const WORKSPACE_SELECTION_SESSION_FIELDS = [
+  'activeFileIdByWorktree',
+  'activeBrowserTabIdByWorktree',
+  'activeTabIdByWorktree',
+  'activeGroupIdByWorktree',
   'activeTabTypeByWorktree'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 

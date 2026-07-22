@@ -1030,24 +1030,30 @@ function App(): React.JSX.Element {
           })
           void (async () => {
             try {
-              await timeRendererStartupStep('remote-catalog-refresh', async () => {
-                await actions.fetchReposForAllHosts()
-                await actions.fetchProjectGroupsForAllHosts()
-                await actions.fetchFolderWorkspacesForAllHosts()
-              })
-              if (!cancelled) {
-                await timeRendererStartupStep('remote-worktree-refresh', async () => {
-                  // Why: the full scan is not required for session recovery, so keep it off the startup-critical path.
-                  await actions.fetchAllWorktrees()
-                  await actions.fetchWorktreeLineage()
-                  // Why: the startup prune only saw session-referenced repos; now that every repo is
-                  // authoritative, prune again to drop deleted-worktree visit timestamps that would
-                  // otherwise accumulate unbounded (disconnected SSH stays non-authoritative and is kept).
-                  actions.pruneLastVisitedTimestamps()
+              try {
+                await timeRendererStartupStep('remote-catalog-refresh', async () => {
+                  await actions.fetchReposForAllHosts()
+                  await actions.fetchProjectGroupsForAllHosts()
+                  await actions.fetchFolderWorkspacesForAllHosts()
                 })
+              } catch (err) {
+                console.warn('Remote startup catalog refresh failed:', err)
               }
-            } catch (err) {
-              console.warn('Remote startup catalog refresh failed:', err)
+              if (!cancelled) {
+                try {
+                  await timeRendererStartupStep('remote-worktree-refresh', async () => {
+                    // Why: the full scan is not required for session recovery, so keep it off the startup-critical path.
+                    await actions.fetchAllWorktrees()
+                    // Why: the startup prune only saw session-referenced repos; use the deferred scan's
+                    // authoritative results to drop deleted-worktree visit timestamps that would
+                    // otherwise accumulate unbounded (disconnected SSH stays non-authoritative and is kept).
+                    actions.pruneLastVisitedTimestamps()
+                    await actions.fetchWorktreeLineage()
+                  })
+                } catch (err) {
+                  console.warn('Deferred startup worktree refresh failed:', err)
+                }
+              }
             } finally {
               if (!cancelled) {
                 useAppStore.setState({ startupWorktreeRefreshCompleted: true })

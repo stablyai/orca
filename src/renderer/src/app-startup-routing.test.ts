@@ -77,12 +77,17 @@ describe('renderer startup runtime routing', () => {
     )
     const remoteCatalogIndex = source.indexOf("timeRendererStartupStep('remote-catalog-refresh'")
     const remoteWorktreeIndex = source.indexOf("timeRendererStartupStep('remote-worktree-refresh'")
+    const remoteCatalogFailureIndex = source.indexOf(
+      "console.warn('Remote startup catalog refresh failed:'"
+    )
     const lineageIndex = source.indexOf('actions.fetchWorktreeLineage()')
     const startupRefreshCompletedIndex = source.indexOf('startupWorktreeRefreshCompleted: true')
 
     expect(hydrationDoneIndex).toBeGreaterThanOrEqual(0)
     expect(hydrationDoneIndex).toBeLessThan(remoteCatalogIndex)
-    expect(remoteCatalogIndex).toBeLessThan(remoteWorktreeIndex)
+    expect(remoteCatalogIndex).toBeLessThan(remoteCatalogFailureIndex)
+    // Why: a project-group/folder catalog failure must not suppress the independent full worktree scan.
+    expect(remoteCatalogFailureIndex).toBeLessThan(remoteWorktreeIndex)
     expect(remoteWorktreeIndex).toBeLessThan(lineageIndex)
     expect(lineageIndex).toBeLessThan(startupRefreshCompletedIndex)
     expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(

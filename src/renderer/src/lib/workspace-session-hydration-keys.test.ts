@@ -163,7 +163,10 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
       },
       openFilesByWorktree: { 'repo-empty-editor::/wt': [] },
       browserTabsByWorktree: { 'repo-empty-browser::/wt': [] },
-      activeFileIdByWorktree: { 'repo-empty-active-file::/wt': null },
+      activeFileIdByWorktree: { 'repo-empty-active-file::/wt': '/stale/file.ts' },
+      activeBrowserTabIdByWorktree: { 'repo-empty-active-browser::/wt': 'stale-browser' },
+      activeTabIdByWorktree: { 'repo-empty-active-terminal::/wt': 'stale-terminal' },
+      activeGroupIdByWorktree: { 'repo-empty-active-group::/wt': 'stale-group' },
       activeTabTypeByWorktree: staleActiveTabTypes
     } as unknown as WorkspaceSessionState
 
