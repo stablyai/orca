@@ -1705,7 +1705,7 @@ describe('OrcaRuntimeService', () => {
     expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
   })
 
-  it('classifies surviving sessions and exposes the cached status summary', async () => {
+  const buildSurvivingSessionReconciliationHarness = () => {
     const activePtyId = `${TEST_WORKTREE_ID}@@active`
     const restorablePtyId = `${TEST_WORKTREE_ID}@@restorable`
     const ambiguousPtyId = 'repo-1::/removed@@ambiguous'
@@ -1774,17 +1774,49 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+    runtime.onPtySpawned(activePtyId)
+    runtime.onPtySpawned(restorablePtyId)
+    runtime.onPtySpawned(ambiguousPtyId)
 
-    await expect(runtime.classifySurvivingSessionsAgainstGeneration()).resolves.toEqual({
+    const expected = {
       active: 1,
       restorable: 1,
       ambiguous: 1,
       provenOrphan: 0
-    })
-    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+    } as const
+
+    return {
+      runtime,
+      expected
+    }
+  }
+
+  it('classifies surviving daemon PTYs against the active runtime generation', async () => {
+    const { runtime, expected } = buildSurvivingSessionReconciliationHarness()
+
+    await expect(runtime.classifySurvivingSessionsAgainstGeneration()).resolves.toEqual(expected)
+  })
+
+  it('surfaces surviving session reconciliation on runtime status', () => {
+    const { runtime, expected } = buildSurvivingSessionReconciliationHarness()
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual(expected)
+  })
+
+  it('keeps live current-generation PTYs out of ambiguous reconciliation', () => {
+    const { runtime } = buildSurvivingSessionReconciliationHarness()
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toMatchObject({
       active: 1,
+      ambiguous: 1
+    })
+  })
+
+  it('keeps sleeping or serve-owned PTYs restorable', () => {
+    const { runtime } = buildSurvivingSessionReconciliationHarness()
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toMatchObject({
       restorable: 1,
-      ambiguous: 1,
       provenOrphan: 0
     })
   })

@@ -3621,6 +3621,7 @@ export class OrcaRuntimeService {
 
     this.leaves = nextLeaves
     this.rebuildLeafPtyIndex()
+    this.refreshKnownSurvivingSessionReconciliation()
     // Why: the emitted client payload is a function of the stored snapshot AND
     // the tab/leaf graph (handles/titles/connected resolve from leaf state), so
     // a graph-only change — e.g. a restored leaf binding its ptyId while the
@@ -6443,6 +6444,7 @@ export class OrcaRuntimeService {
       leaf.writable = this.graphStatus === 'ready'
       this.adoptPreAllocatedHandle(leaf)
     }
+    this.refreshKnownSurvivingSessionReconciliation()
   }
 
   registerPty(
@@ -21153,6 +21155,65 @@ export class OrcaRuntimeService {
     inventory?: PtyProcessInfo[]
   ): Promise<SurvivingSessionReconciliation> {
     const sessions = inventory ?? (await this.ptyController?.listProcesses?.()) ?? []
+    const result = this.classifySurvivingSessionInventory(sessions)
+    this.survivingSessionReconciliation = result
+    return result
+  }
+
+  private refreshKnownSurvivingSessionReconciliation(): void {
+    if (
+      this.ptysById.size === 0 &&
+      this.leaves.size === 0 &&
+      this.mobileSessionTabsByWorktree.size === 0
+    ) {
+      this.survivingSessionReconciliation = EMPTY_SURVIVING_SESSION_RECONCILIATION
+      return
+    }
+    this.survivingSessionReconciliation = this.classifySurvivingSessionInventory(
+      this.collectKnownSurvivingSessionInventory()
+    )
+  }
+
+  private collectKnownSurvivingSessionInventory(): PtyProcessInfo[] {
+    const sessionsById = new Map<string, PtyProcessInfo>()
+    for (const pty of this.ptysById.values()) {
+      sessionsById.set(pty.ptyId, {
+        id: pty.ptyId,
+        cwd: '',
+        title: pty.title ?? '',
+        worktreeId: pty.worktreeId
+      })
+    }
+    for (const leaf of this.leaves.values()) {
+      if (!leaf.ptyId || sessionsById.has(leaf.ptyId)) {
+        continue
+      }
+      sessionsById.set(leaf.ptyId, {
+        id: leaf.ptyId,
+        cwd: '',
+        title: '',
+        worktreeId: leaf.worktreeId
+      })
+    }
+    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
+      for (const tab of snapshot.tabs) {
+        if (tab.type !== 'terminal' || !tab.ptyId || sessionsById.has(tab.ptyId)) {
+          continue
+        }
+        sessionsById.set(tab.ptyId, {
+          id: tab.ptyId,
+          cwd: '',
+          title: '',
+          worktreeId
+        })
+      }
+    }
+    return [...sessionsById.values()]
+  }
+
+  private classifySurvivingSessionInventory(
+    sessions: readonly Pick<PtyProcessInfo, 'id' | 'worktreeId'>[]
+  ): SurvivingSessionReconciliation {
     const terminalTabsByPtyId = new Map<string, RuntimeMobileSessionTerminalTab[]>()
     for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
       for (const tab of snapshot.tabs) {
@@ -21187,11 +21248,9 @@ export class OrcaRuntimeService {
 
     const result: SurvivingSessionReconciliation = { ...EMPTY_SURVIVING_SESSION_RECONCILIATION }
     for (const session of sessions) {
-      const record = this.ptysById.get(session.id)
       const currentHandle =
         this.handleByPtyId.get(session.id) ?? this.findHandleForPtyRecord(session.id)
       const active = Boolean(
-        record?.connected ||
         this.leafExistsForPty(session.id) ||
         (currentHandle && this.handles.get(currentHandle)?.runtimeId === this.runtimeId)
       )
@@ -21217,8 +21276,6 @@ export class OrcaRuntimeService {
       // removed-worktree sessions ambiguous instead of claiming an orphan.
       result.ambiguous += 1
     }
-
-    this.survivingSessionReconciliation = result
     return result
   }
 
