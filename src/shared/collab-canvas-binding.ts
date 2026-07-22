@@ -11,6 +11,10 @@
  * - `session` — a tab inside a worktree, opened beside the terminal. Ephemeral.
  *              Borrows the agent already running in that session's terminal —
  *              it never spawns one, so there is nothing to rotate or close.
+ *
+ * Both are multiplayer: the document lives in a node-a sync room keyed by
+ * `boardId`, so the same board is live on the desktop and the tablet at once.
+ * The binding decides the *agent*, never the *document transport*.
  */
 export type CollabCanvasBinding =
   | {
@@ -28,12 +32,30 @@ export type CollabCanvasBinding =
       boardId: string
     }
 
-/** Where a board's tldraw snapshot lives on the board owner's host. Kept
- *  beside the pet's omp session dirs so one state root covers mesh surfaces.
- *  `$HOME` stays literal: the path is resolved in the pty shell on the
- *  worktree's owner host, which is the only host that resolves it correctly
- *  for an SSH/remote worktree (same rule as `buildPetOmpAgentArgs`). */
-export function collabCanvasSnapshotPath(boardId: string): string {
+/** The sync room a board's document lives in.
+ *
+ *  Boards are multiplayer: the authoritative document lives in the self-hosted
+ *  tldraw sync server on node-a (`@tldraw/sync-core` + `SQLiteSyncStorage`),
+ *  NOT in a per-host snapshot file. That is what lets the operator draw on the
+ *  tablet mid-session and watch it land on the desktop — the two clients join
+ *  the same room rather than handing a file back and forth.
+ *
+ *  Never Cloudflare: tldraw's own template uses Durable Objects + R2, and the
+ *  mesh runs free, private and local. */
+export function collabCanvasRoomUri(syncOrigin: string, boardId: string): string {
+  // Why the room is keyed by boardId and not by the panel/tab id: a board keeps
+  // one document across every surface that opens it (desktop tab, User Panel
+  // tile, tablet route), and those all carry different surface ids.
+  return `${syncOrigin.replace(/\/+$/, '')}/connect/${encodeURIComponent(boardId)}`
+}
+
+/** Where a board's exported tldraw snapshot is written on the owner's host.
+ *  Export only — this is a deliberate "save a copy", NOT the persistence
+ *  mechanism (see `collabCanvasRoomUri`). `$HOME` stays literal: the path is
+ *  resolved in the pty shell on the worktree's owner host, which is the only
+ *  host that resolves it correctly for an SSH/remote worktree (same rule as
+ *  `buildPetOmpAgentArgs`). */
+export function collabCanvasExportPath(boardId: string): string {
   return `$HOME/.local/state/meshina/collab-canvas/${boardId}.json`
 }
 
