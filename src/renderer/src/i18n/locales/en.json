@@ -6484,6 +6484,7 @@
           "versionUnavailable": "Orca version unavailable",
           "updateServer": "Update",
           "reviewServerUpdates": "Check for Server Updates",
+          "updatingServers": "Updating servers…",
           "orcaVersion": "Orca v{{value0}}"
         },
         "RuntimePairingGeneratedUrlRows": {
@@ -9331,7 +9332,7 @@
           "restartWarning": "Updating restarts these servers. {{value0}} live tabs and {{value1}} terminal panes may briefly disconnect.",
           "checking": "Checking paired servers…",
           "empty": "No paired Remote Orca Servers.",
-          "checkAgain": "Check again",
+          "checkAgain": "Check for Server Updates",
           "updating": "Updating servers…",
           "updateAll": "Update {{value0}} servers",
           "noUpdates": "No updates available",

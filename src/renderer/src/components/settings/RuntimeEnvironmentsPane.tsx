@@ -4,7 +4,6 @@
 import {
   AlertTriangle,
   ChevronDown,
-  Download,
   Loader2,
   Plus,
   RefreshCw,
@@ -57,6 +56,7 @@ import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import {
   getRemoteServerManualUpdateHelp,
   RemoteServerUpdateStatus
@@ -284,6 +284,7 @@ export function RuntimeEnvironmentsPane({
   )
   const consumedAddServerIntentSignalRef = useRef(0)
   const mountedRef = useMountedRef()
+  const updateCheckHint = getUpdateCheckHint()
   const activeValue =
     settings.activeRuntimeEnvironmentId ??
     (allowLocalRuntime ? LOCAL_RUNTIME_VALUE : NO_RUNTIME_VALUE)
@@ -394,9 +395,6 @@ export function RuntimeEnvironmentsPane({
   }, [loadEnvironments])
 
   const environmentIdsKey = environments.map((environment) => environment.id).join('\n')
-  const remoteUpdateCount = [...remoteServerUpdates.values()].filter(
-    (entry) => entry.phase === 'available' || entry.phase === 'failed'
-  ).length
   useEffect(() => {
     void refreshRemoteServerUpdates()
   }, [environmentIdsKey, refreshRemoteServerUpdates])
@@ -793,25 +791,23 @@ export function RuntimeEnvironmentsPane({
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={() => setRemoteServerUpdateDialogOpen(true)}
+                title={updateCheckHint}
+                onClick={(event) => {
+                  setRemoteServerUpdateDialogOpen(true)
+                  void refreshRemoteServerUpdates(getUpdateCheckClickOptions(event))
+                }}
                 disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
               >
                 {remoteServerUpdatesChecking || remoteServerUpdatesRunning ? (
                   <Loader2 className="animate-spin" />
                 ) : (
-                  <Download />
+                  <RefreshCw />
                 )}
-                {remoteUpdateCount > 0
-                  ? remoteUpdateCount === 1
-                    ? translate(
-                        'auto.components.settings.RuntimeEnvironmentsPane.updateAvailableOne',
-                        '1 update available'
-                      )
-                    : translate(
-                        'auto.components.settings.RuntimeEnvironmentsPane.updatesAvailable',
-                        '{{value0}} updates available',
-                        { value0: remoteUpdateCount }
-                      )
+                {remoteServerUpdatesRunning
+                  ? translate(
+                      'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
+                      'Updating servers…'
+                    )
                   : translate(
                       'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
                       'Check for Server Updates'

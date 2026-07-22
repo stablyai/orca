@@ -134,10 +134,10 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
         )
 
   useEffect(() => {
-    if (open && entries.length === 0 && !checking) {
+    if (open) {
       void refresh()
     }
-  }, [checking, entries.length, open, refresh])
+  }, [open, refresh])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -202,10 +202,10 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
           )}
         </div>
 
-        <DialogFooter className="items-center sm:justify-between">
+        <DialogFooter className="items-center sm:justify-start">
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             className="gap-2"
             title={updateCheckHint}
@@ -215,26 +215,22 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
             {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}
             {translate(
               'auto.components.settings.RemoteServerUpdateDialog.checkAgain',
-              'Check again'
+              'Check for Server Updates'
             )}
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            autoFocus={eligible.length > 0}
-            onClick={() => void start()}
-            disabled={eligible.length === 0 || checking || running}
-          >
-            {running ? <Loader2 className="animate-spin" /> : null}
-            {running
-              ? translate(
-                  'auto.components.settings.RemoteServerUpdateDialog.updating',
-                  'Updating servers…'
-                )
-              : eligible.length === 0
+          {eligible.length > 0 || running ? (
+            <Button
+              type="button"
+              size="sm"
+              autoFocus={eligible.length > 0}
+              onClick={() => void start()}
+              disabled={checking || running}
+            >
+              {running ? <Loader2 className="animate-spin" /> : null}
+              {running
                 ? translate(
-                    'auto.components.settings.RemoteServerUpdateDialog.noUpdates',
-                    'No updates available'
+                    'auto.components.settings.RemoteServerUpdateDialog.updating',
+                    'Updating servers…'
                   )
                 : eligible.length === 1
                   ? translate(
@@ -246,7 +242,8 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
                       'Update {{value0}} servers',
                       { value0: eligible.length }
                     )}
-          </Button>
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
