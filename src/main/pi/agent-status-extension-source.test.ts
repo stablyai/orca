@@ -277,23 +277,40 @@ describe('getPiAgentStatusExtensionSource', () => {
   })
 
   it('omits absent or empty Pi session metadata from status posts', async () => {
-    for (const sessionManager of [
-      { getSessionId: () => '', getSessionFile: () => undefined },
-      { getSessionFile: () => '/tmp/pi-session.jsonl' }
-    ]) {
-      const harness = createHarness({ kind: 'pi' })
-      await harness.callHook('session_start', {}, { sessionManager })
-      await harness.callHook('agent_start')
+    const harness = createHarness({ kind: 'pi' })
+    await harness.callHook(
+      'session_start',
+      {},
+      { sessionManager: { getSessionId: () => '', getSessionFile: () => undefined } }
+    )
+    await harness.callHook('agent_start')
 
-      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
-      const payloads = harness.fetchMock.mock.calls.map(
-        ([_, init]) => JSON.parse(String(init?.body)).payload
-      )
-      expect(payloads).toEqual([
-        { hook_event_name: 'session_start' },
-        { hook_event_name: 'agent_start' }
-      ])
-    }
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    const payloads = harness.fetchMock.mock.calls.map(
+      ([_, init]) => JSON.parse(String(init?.body)).payload
+    )
+    expect(payloads).toEqual([
+      { hook_event_name: 'session_start' },
+      { hook_event_name: 'agent_start' }
+    ])
+  })
+
+  it('preserves Pi session file metadata when the session id is unavailable', async () => {
+    const harness = createHarness({
+      kind: 'pi',
+      existsSync: (path) => path === '/tmp/pi-session.jsonl'
+    })
+
+    await harness.callHook(
+      'session_start',
+      {},
+      { sessionManager: { getSessionFile: () => '/tmp/pi-session.jsonl' } }
+    )
+
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'session_start',
+      session_file: '/tmp/pi-session.jsonl'
+    })
   })
 
   it('keeps OMP runtime status payloads unchanged by Pi session metadata', async () => {
