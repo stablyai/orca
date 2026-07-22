@@ -97,7 +97,11 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Dispatch a task to a terminal',
     usage:
       'orca orchestration dispatch --task <task_id> --to <handle> [--from <handle>] [--inject] [--dry-run] [--return-preamble] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'to', 'from', 'inject', 'dry-run', 'return-preamble']
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'to', 'from', 'inject', 'dry-run', 'return-preamble'],
+    notes: [
+      'Same-pane handle remints recover by rebinding the existing active dispatch (same taskId/dispatchId); they do not open a second concurrent dispatch.',
+      'task-update --status ready releases any active dispatch in the same write so task/dispatch status cannot diverge.'
+    ]
   },
   {
     path: ['orchestration', 'dispatch-show'],

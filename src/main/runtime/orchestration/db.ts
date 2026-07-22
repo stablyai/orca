@@ -604,15 +604,28 @@ export class OrchestrationDb {
   updateTaskStatus(id: string, status: TaskStatus, result?: string): TaskRow | undefined {
     const completedAt =
       status === 'completed' || status === 'failed' ? new Date().toISOString() : null
-    this.db
-      .prepare(
-        'UPDATE tasks SET status = ?, result = COALESCE(?, result), completed_at = COALESCE(?, completed_at) WHERE id = ?'
-      )
-      .run(status, result ?? null, completedAt, id)
+    // Why: ready/completed must converge task + active dispatch in one writer; a bare task flip left dispatch=dispatched after reconnect recovery.
+    this.db.exec('BEGIN')
+    try {
+      this.db
+        .prepare(
+          'UPDATE tasks SET status = ?, result = COALESCE(?, result), completed_at = COALESCE(?, completed_at) WHERE id = ?'
+        )
+        .run(status, result ?? null, completedAt, id)
 
-    if (status === 'completed') {
-      this.promoteReadyTasks(id)
-      this.completeActiveDispatchForTask(id)
+      if (status === 'ready') {
+        this.releaseActiveDispatchForTask(id, 'task status set to ready')
+      }
+
+      if (status === 'completed') {
+        this.promoteReadyTasks(id)
+        this.completeActiveDispatchForTask(id)
+      }
+
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
     }
 
     return this.getTask(id)
@@ -652,6 +665,13 @@ export class OrchestrationDb {
     if (!task) {
       throw new Error(`Task not found: ${taskId}`)
     }
+
+    // Why: same-pane remint keeps exact taskId/dispatchId authority; only the routing handle is refreshed.
+    const activeForTask = this.getActiveDispatchForTask(taskId)
+    if (activeForTask) {
+      return this.recoverActiveDispatchAssignee(activeForTask, assigneeHandle, assigneePaneKey)
+    }
+
     if (task.status !== 'ready') {
       throw new Error(`Task ${taskId} is ${task.status}; only ready tasks can be dispatched`)
     }
@@ -672,19 +692,88 @@ export class OrchestrationDb {
     const priorFailures = prior?.max_failures ?? 0
 
     const id = generateId('ctx')
-    this.db
-      .prepare(
-        `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, assignee_pane_key, status, failure_count, dispatched_at)
-         VALUES (?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
-      )
-      .run(id, taskId, assigneeHandle, assigneePaneKey ?? null, priorFailures)
-    this.hasAnyDispatchContextsCache = true
+    this.db.exec('BEGIN')
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, assignee_pane_key, status, failure_count, dispatched_at)
+           VALUES (?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
+        )
+        .run(id, taskId, assigneeHandle, assigneePaneKey ?? null, priorFailures)
 
-    this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
+      this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    this.hasAnyDispatchContextsCache = true
 
     return this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
       .get(id) as DispatchContextRow
+  }
+
+  getActiveDispatchForTask(taskId: string): DispatchContextRow | undefined {
+    return this.db
+      .prepare(
+        "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched') ORDER BY rowid DESC LIMIT 1"
+      )
+      .get(taskId) as DispatchContextRow | undefined
+  }
+
+  // Why: intentional ready resets must free the pane lock without burning circuit-breaker budget.
+  releaseActiveDispatchForTask(taskId: string, reason: string): DispatchContextRow | undefined {
+    const active = this.getActiveDispatchForTask(taskId)
+    if (!active) {
+      return undefined
+    }
+    this.db
+      .prepare("UPDATE dispatch_contexts SET status = 'failed', last_failure = ? WHERE id = ?")
+      .run(reason, active.id)
+    return this.getDispatchContextById(active.id)
+  }
+
+  private recoverActiveDispatchAssignee(
+    active: DispatchContextRow,
+    assigneeHandle: string,
+    assigneePaneKey?: string
+  ): DispatchContextRow {
+    const sameHandle = active.assignee_handle === assigneeHandle
+    const canRebindByPane = Boolean(
+      active.assignee_pane_key &&
+      assigneePaneKey &&
+      isEquivalentPaneKey(active.assignee_pane_key, assigneePaneKey)
+    )
+    if (!sameHandle && !canRebindByPane) {
+      throw new Error(
+        `Task ${active.task_id} already has an active dispatch (${active.id} on ${active.assignee_handle ?? '<unknown>'})`
+      )
+    }
+
+    this.db.exec('BEGIN')
+    try {
+      this.db
+        .prepare(
+          `UPDATE dispatch_contexts
+           SET assignee_handle = ?,
+               assignee_pane_key = COALESCE(?, assignee_pane_key)
+           WHERE id = ? AND status IN ('pending', 'dispatched')`
+        )
+        .run(assigneeHandle, assigneePaneKey ?? null, active.id)
+      // Why: reconnect recovery may have flipped the task to ready while this dispatch stayed active.
+      this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(active.task_id)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+
+    const recovered = this.getDispatchContextById(active.id)
+    if (!recovered || (recovered.status !== 'pending' && recovered.status !== 'dispatched')) {
+      throw new Error(`Active dispatch ${active.id} was released during recover`)
+    }
+    return recovered
   }
 
   getDispatchContext(taskId: string): DispatchContextRow | undefined {
@@ -765,22 +854,14 @@ export class OrchestrationDb {
   }
 
   completeActiveDispatchForTask(taskId: string): void {
-    const active = this.db
-      .prepare(
-        "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched') ORDER BY rowid DESC LIMIT 1"
-      )
-      .get(taskId) as DispatchContextRow | undefined
+    const active = this.getActiveDispatchForTask(taskId)
     if (active) {
       this.completeDispatch(active.id)
     }
   }
 
   failActiveDispatchForTask(taskId: string, error: string): DispatchContextRow | undefined {
-    const active = this.db
-      .prepare(
-        "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched') ORDER BY rowid DESC LIMIT 1"
-      )
-      .get(taskId) as DispatchContextRow | undefined
+    const active = this.getActiveDispatchForTask(taskId)
     return active ? this.failDispatch(active.id, error) : undefined
   }
 
