@@ -140,4 +140,43 @@ describe('evaluateWorkerDoneSemanticCompletion', () => {
       appliedStatus: 'blocked'
     })
   })
+
+  it('does not reclassify narratively resolved past failures as current failures', () => {
+    expect(
+      evaluateWorkerDoneSemanticCompletion({
+        subject: 'ORCH-R10 complete',
+        body:
+          'Migration failed on the first attempt, then succeeded after retry. ' +
+          'The blocked deployment was resolved. Implementation is complete.',
+        filesModified: ['src/main/runtime/orchestration/lifecycle-reconciliation.ts']
+      })
+    ).toEqual({ complete: true })
+  })
+
+  it('requires an explicit completion claim; filesModified alone is not enough', () => {
+    expect(
+      evaluateWorkerDoneSemanticCompletion({
+        subject: 'Migration update',
+        body: 'I updated the migration, but still need to update the application.',
+        filesModified: ['drizzle/0129_something.sql'],
+        taskSpec: 'Ship the migration and application follow-up.'
+      })
+    ).toMatchObject({
+      complete: false,
+      kind: 'remaining_gates',
+      appliedStatus: 'blocked'
+    })
+
+    expect(
+      evaluateWorkerDoneSemanticCompletion({
+        subject: 'Touched files',
+        body: 'Edited the helper without claiming completion.',
+        filesModified: ['src/main/runtime/orchestration/worker-done-semantic-completion.ts']
+      })
+    ).toMatchObject({
+      complete: false,
+      kind: 'remaining_gates',
+      appliedStatus: 'blocked'
+    })
+  })
 })
