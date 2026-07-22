@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, mkdir, realpath, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -330,7 +330,7 @@ describe('worktree base directory poller', () => {
     )
   })
 
-  it('detects linked HEAD rewrites even when the entry directory mtime is restored', async () => {
+  it('detects an in-place linked HEAD rewrite that leaves the entry directory signature unchanged', async () => {
     const commonDir = await makeRoot()
     const entry = join(commonDir, 'worktrees', 'external-head')
     await mkdir(entry, { recursive: true })
@@ -346,10 +346,11 @@ describe('worktree base directory poller', () => {
     )
     cleanups.push(() => poller.unsubscribe())
 
-    const before = await stat(entry)
+    // Why: rewriting an existing HEAD in place changes only the file's own metadata, never the
+    // parent entry directory's mtime/ctime/ino/size — so HEAD (like the other structural leaves)
+    // must be re-stat'd every tick, not gated behind the entry-dir signature.
     await new Promise((resolve) => setTimeout(resolve, 10))
     await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/next')
-    await utimes(entry, before.atime, before.mtime)
 
     await waitForEvents(received, (flat) =>
       flat.some((event) => event.type === 'update' && event.path === join(entry, 'HEAD'))

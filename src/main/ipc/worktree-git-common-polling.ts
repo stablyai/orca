@@ -6,10 +6,8 @@ import type {
   WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 
-// Shared with the darwin primary-metadata poll so the platforms cannot drift
-// on which shallow leaves count as watchable metadata. `logs/HEAD` catches
-// head moves that rewrite no other watched leaf (commit --amend, reset
-// --soft); `config.worktree` carries the sparse flag.
+// Shared with the darwin primary-metadata poll so platforms cannot drift.
+// `logs/HEAD` catches head moves; `config.worktree` carries the sparse flag.
 export const PRIMARY_CHECKOUT_METADATA_FILES = [
   'HEAD',
   'packed-refs',
@@ -25,68 +23,87 @@ const LINKED_WORKTREE_HEAD_LOG_FILE = join('logs', 'HEAD')
 // same way the base poller's backstop rescan does.
 const INDEX_BACKSTOP_TICKS = 15
 
-function statSignature(s: { mtimeMs: number; ctimeMs: number; ino: number; size: number }): string {
-  return `${s.mtimeMs}:${s.ctimeMs}:${s.ino}:${s.size}`
+function statSignature(s: { mtimeMs: number; ctimeMs: number; ino: number }): string {
+  return `${s.mtimeMs}:${s.ctimeMs}:${s.ino}`
+}
+
+async function dirSignature(path: string): Promise<string> {
+  try {
+    // Why: keep `size` — on a coarse-timestamp filesystem a same-granule directory
+    // allocation change would otherwise slip the readdir gate to the backstop.
+    const s = await stat(path)
+    return `${statSignature(s)}:${s.size}`
+  } catch {
+    return 'missing'
+  }
 }
 
 async function fileSignature(path: string): Promise<string | null> {
   try {
     const s = await stat(path)
-    return s.isFile() ? statSignature(s) : null
-  } catch {
-    return null
-  }
-}
-
-async function pathSignature(path: string): Promise<string | null> {
-  try {
-    const s = await stat(path)
-    // Why: omitting ctime keeps unrelated metadata churn from re-opening the
-    // index gate, which would make the HEAD regression test vacuous. The gate
-    // is load-bearing for index-event emission between backstop ticks; the
-    // renderer's status poll is the ultimate freshness net.
-    return `${s.mtimeMs}:${s.ino}:${s.size}`
+    return s.isFile() ? `${statSignature(s)}:${s.size}` : null
   } catch {
     return null
   }
 }
 
 type GitCommonEntrySnapshot = {
-  dirSignature: string | null
+  dirSignature: string
   structuralSignatures: Map<string, string>
   indexSignature: string | null
   headLogSignature: string | null
 }
 
 type GitCommonSnapshot = {
-  worktreesDirSignature: string | null
+  worktreesDirSignature: string
   entries: Map<string, GitCommonEntrySnapshot>
   primarySignatures: Map<string, string>
+  didFullScan: boolean
 }
 
 async function snapshotGitCommonEntry(
   entryPath: string,
   previous: GitCommonEntrySnapshot | undefined,
-  forceIndexRead: boolean
+  forceFullScan: boolean
 ): Promise<GitCommonEntrySnapshot> {
-  const dirSignature = await pathSignature(entryPath)
+  // Why: HEAD, gitdir, locked, config.worktree and logs/HEAD are rewritten in place without bumping
+  // the entry-dir mtime, so — like the pre-idle-gate poller — they are re-stat'd EVERY tick, never
+  // gated behind the dir signature (else a raw HEAD/structural rewrite would slip to the ~30s
+  // backstop). Only `index` rides the entry-dir signature (its same-dir rewrites are index-backstop-bounded).
   const structuralSignatures = new Map<string, string>()
-  await Promise.all(
-    LINKED_WORKTREE_STRUCTURAL_METADATA_FILES.map(async (name) => {
-      const signature = await fileSignature(join(entryPath, name))
-      if (signature !== null) {
-        structuralSignatures.set(name, signature)
+  const [nextDirSignature, headLogSignature] = await Promise.all([
+    dirSignature(entryPath),
+    fileSignature(join(entryPath, LINKED_WORKTREE_HEAD_LOG_FILE)),
+    Promise.all(
+      LINKED_WORKTREE_STRUCTURAL_METADATA_FILES.map(async (name) => {
+        const signature = await fileSignature(join(entryPath, name))
+        if (signature !== null) {
+          structuralSignatures.set(name, signature)
+        }
+      })
+    )
+  ])
+  if (nextDirSignature === 'missing') {
+    // A transient stat failure must not masquerade as a removal; the parent listing is authoritative.
+    return (
+      previous ?? {
+        dirSignature: nextDirSignature,
+        structuralSignatures,
+        indexSignature: null,
+        headLogSignature
       }
-    })
-  )
-  // `logs/HEAD` lives in a subdirectory, so appends never bump the entry-dir
-  // mtime — it must be stat'd every tick rather than gated like `index`.
-  const headLogSignature = await fileSignature(join(entryPath, LINKED_WORKTREE_HEAD_LOG_FILE))
-  const shouldReadIndex = forceIndexRead || !previous || previous.dirSignature !== dirSignature
+    )
+  }
+  const shouldReadIndex = forceFullScan || !previous || previous.dirSignature !== nextDirSignature
   const indexSignature = shouldReadIndex
     ? await fileSignature(join(entryPath, LINKED_WORKTREE_INDEX_FILE))
     : previous.indexSignature
-  return { dirSignature, structuralSignatures, indexSignature, headLogSignature }
+  return {
+    dirSignature: nextDirSignature,
+    structuralSignatures,
+    indexSignature,
+    headLogSignature
+  }
 }
 
 async function snapshotPrimaryCheckoutSignatures(
@@ -108,41 +125,44 @@ async function snapshotGitCommon(
   commonDirPath: string,
   previous?: GitCommonSnapshot,
   includePrimary = true,
-  forceIndexRead = false
+  forceFullScan = false
 ): Promise<GitCommonSnapshot> {
-  const entriesByPath = new Map<string, GitCommonEntrySnapshot>()
   const worktreesDir = join(commonDirPath, 'worktrees')
-  const worktreesDirSignature = await pathSignature(worktreesDir)
-  const primarySignatures = includePrimary
-    ? await snapshotPrimaryCheckoutSignatures(commonDirPath)
-    : new Map<string, string>()
-  let entries
-  try {
-    entries = await readdir(worktreesDir, { withFileTypes: true })
-  } catch {
-    // Missing worktrees dir is normal for repos without linked worktrees.
-    return {
-      worktreesDirSignature,
-      entries: entriesByPath,
-      primarySignatures
+  const [worktreesDirSignature, primarySignatures] = await Promise.all([
+    dirSignature(worktreesDir),
+    includePrimary ? snapshotPrimaryCheckoutSignatures(commonDirPath) : new Map<string, string>()
+  ])
+  const shouldReadWorktreesDir =
+    forceFullScan || !previous || previous.worktreesDirSignature !== worktreesDirSignature
+  let entryPaths: string[]
+  if (shouldReadWorktreesDir) {
+    try {
+      const entries = await readdir(worktreesDir, { withFileTypes: true })
+      entryPaths = entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(worktreesDir, entry.name))
+    } catch {
+      // Missing worktrees dir is normal for repos without linked worktrees.
+      entryPaths = []
     }
+  } else {
+    entryPaths = [...previous.entries.keys()]
   }
+
+  const entries = new Map<string, GitCommonEntrySnapshot>()
   await Promise.all(
-    entries.map(async (entry) => {
-      if (!entry.isDirectory()) {
-        return
-      }
-      const entryPath = join(worktreesDir, entry.name)
-      entriesByPath.set(
-        entryPath,
-        await snapshotGitCommonEntry(entryPath, previous?.entries.get(entryPath), forceIndexRead)
-      )
+    entryPaths.map(async (entryPath) => {
+      const previousEntry = previous?.entries.get(entryPath)
+      entries.set(entryPath, await snapshotGitCommonEntry(entryPath, previousEntry, forceFullScan))
     })
   )
+  // Why: structural leaves are re-stat'd every tick now, so the only gated work is the worktrees-dir
+  // readdir; onFullScan reflects that enumeration running (vs a gated skip when the dir is unchanged).
   return {
     worktreesDirSignature,
-    entries: entriesByPath,
-    primarySignatures
+    entries,
+    primarySignatures,
+    didFullScan: shouldReadWorktreesDir
   }
 }
 
@@ -240,7 +260,7 @@ export async function startGitCommonPolling(
   let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
-  const tick = async (forceIndexRead = false): Promise<void> => {
+  const tick = async (forceFullScan = false): Promise<void> => {
     timer = null
     if (disposed) {
       return
@@ -257,17 +277,19 @@ export async function startGitCommonPolling(
     // land each visible refresh a full scan-duration late every tick).
     const startedAt = Date.now()
     tickCount++
-    const shouldForceIndexRead = forceIndexRead || tickCount % INDEX_BACKSTOP_TICKS === 0
-    onFullScan?.()
+    const shouldForceFullScan = forceFullScan || tickCount % INDEX_BACKSTOP_TICKS === 0
     try {
       const next = await snapshotGitCommon(
         commonDirPath,
         snapshot,
         includePrimary,
-        shouldForceIndexRead
+        shouldForceFullScan
       )
       if (disposed) {
         return
+      }
+      if (next.didFullScan) {
+        onFullScan?.()
       }
       const events = diffGitCommon(commonDirPath, snapshot, next)
       snapshot = next
