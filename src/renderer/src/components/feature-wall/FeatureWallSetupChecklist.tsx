@@ -4,7 +4,7 @@ import type {
   FeatureWallSetupStep,
   FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import { getFeatureWallSetupStepsForSection } from '../../../../shared/feature-wall-setup-steps'
+import { getLocalizedFeatureWallSetupStepsForSection } from './feature-wall-setup-step-copy'
 import { cn } from '@/lib/utils'
 import type { FeatureWallSetupProgress } from './feature-wall-setup-progress'
 import { AgentCapabilitiesSetupAction } from './AgentCapabilitiesSetupAction'
@@ -261,8 +261,8 @@ export function FeatureWallSetupChecklist(
     activeStep?.id === 'two-worktrees' ||
     activeStep?.id === 'browser' ||
     activeStep?.id === 'add-two-repos'
-  const setupSteps = getFeatureWallSetupStepsForSection('setup')
-  const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
+  const setupSteps = getLocalizedFeatureWallSetupStepsForSection('setup')
+  const parallelWorkSteps = getLocalizedFeatureWallSetupStepsForSection('parallel-work')
   const visualBreakpoint = isEmbedded ? 'xl' : 'sm'
   const visualGridClass =
     visualBreakpoint === 'xl'

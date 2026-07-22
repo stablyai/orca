@@ -85,6 +85,50 @@
       "pr": "PR"
     }
   },
+  "featureWallSetup": {
+    "steps": {
+      "two-worktrees": {
+        "name": "Multitarea",
+        "subtitle": "Multitarea",
+        "description": "Trabaja en 2 worktrees diferentes a la vez. Cada uno está aislado (incluso en el mismo proyecto). Perfecto para trabajar en 2 funciones a la vez."
+      },
+      "browser": {
+        "name": "Usa el navegador de Orca",
+        "subtitle": "Usa el navegador de Orca",
+        "description": "Navega por tu aplicación web sin salir de Orca. Toma cualquier elemento y envía su código fuente y estilos exactos a un agente con un clic."
+      },
+      "notifications": {
+        "name": "Activa las notificaciones",
+        "subtitle": "Activa las notificaciones",
+        "description": "Entérate en el momento en que un agente termina, necesita atención o se bloquea."
+      },
+      "default-agent": {
+        "name": "Elige tu agente predeterminado",
+        "subtitle": "Elige tu agente predeterminado",
+        "description": "Empieza a trabajar más rápido con tu agente preferido ya seleccionado."
+      },
+      "agent-capabilities": {
+        "name": "Activa Orca CLI",
+        "subtitle": "Activa Orca CLI",
+        "description": "Registra el comando de shell de Orca e instala las habilidades de agente para flujos de trabajo de navegador, ordenador y orquestación."
+      },
+      "task-sources": {
+        "name": "Conecta integraciones",
+        "subtitle": "Conecta integraciones",
+        "description": "Inicia un agente desde una tarea con un clic y mantén el estado de la PR a la vista."
+      },
+      "setup-script": {
+        "name": "Automatiza la configuración del espacio de trabajo",
+        "subtitle": "Automatiza la configuración del espacio de trabajo",
+        "description": "Ejecuta comandos de instalación y configuración automáticamente para que cada worktree nuevo esté listo para los agentes."
+      },
+      "add-two-repos": {
+        "name": "Trabaja en varios repos",
+        "subtitle": "Trabaja en varios repos",
+        "description": "Añade tus repos clave a Orca para poder empezar el trabajo de un agente sin buscar carpetas."
+      }
+    }
+  },
   "auto": {
     "App": {
       "221a95ba38": "Vuelve a intentar la configuración inicial o ciérrala y continúa en la aplicación.",
