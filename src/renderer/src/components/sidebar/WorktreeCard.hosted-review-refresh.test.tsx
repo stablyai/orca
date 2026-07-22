@@ -147,6 +147,7 @@ describe('WorktreeCard hosted review refresh', () => {
     expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(2)
     expect(fetchHostedReviewForBranch).toHaveBeenLastCalledWith('/repo', 'feature/branch', {
       repoId: 'repo-1',
+      executionHostId: 'local',
       linkedGitHubPR: null,
       currentHeadOid: 'abc123',
       linkedGitLabMR: null,
