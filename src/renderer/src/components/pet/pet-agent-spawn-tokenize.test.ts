@@ -14,11 +14,12 @@ describe('pet omp args tokenize cleanly (Orca launch path)', () => {
     // config + tools + the persona survive as whole tokens
     expect(t).toContain('--config')
     expect(t).toContain('--tools')
-    expect(t).toContain('read,bash,edit,write,grep,glob,todo,web_search')
+    expect(t).toContain('read,bash,edit,write,grep,glob,todo,web_search,cloakbrowser_browse,searxng_search')
     const idx = t.indexOf('--append-system-prompt')
     expect(idx).toBeGreaterThan(-1)
-    // The persona must be ONE token, not shattered across spaces.
+    // The persona must be ONE token, not shattered across spaces, and it must
+    // name both first-class mesh web tools (HERMES web priority).
     expect(t[idx + 1]?.startsWith('You are the operator')).toBe(true)
-    expect(t[idx + 1]?.includes('web_search tools')).toBe(true)
+    expect(t[idx + 1]?.includes('cloakbrowser_browse and searxng_search tools')).toBe(true)
   })
 })

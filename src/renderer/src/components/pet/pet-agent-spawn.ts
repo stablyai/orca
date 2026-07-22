@@ -31,11 +31,32 @@ const PET_SESSION_ROOT = '$HOME/.local/state/meshina/omp-sessions'
  * `$HOME` literal for the owner-host shell, same reason as the session root. */
 const PET_MESH_CONFIG = '$HOME/meshina/configs/omp/mesh-coding.yml'
 
-/** Lean coding core + web, matching spawn_omp_worker.sh's default with --with-web.
- * `web_search` is the door to the mesh's actual web reach (SearXNG on node-d:8080,
- * CloakBrowser CDP on node-b:9222 — neither is an omp built-in, both are reached
- * through the config's provider + bash). Heavy surface stays off deliberately. */
-const PET_TOOLS = 'read,bash,edit,write,grep,glob,todo,web_search'
+/** Authoritative mesh MCP config (`mcp.json`) registering the first-class
+ * SearXNG and CloakBrowser MCP servers under HERMES web tool priority
+ * (Cloak first for fetch/scrape, SearXNG as SERP fallback). omp 17.x has no
+ * built-in SearXNG/CloakBrowser providers (audit 2026-07-16-L4), so they
+ * surface as MCP servers in `mcp.json` instead. omp auto-discovers
+ * `~/.omp/agent/mcp.json` on the owner host, so the pet's spawned omp sees
+ * both servers as long as the operator has symlinked the file at the
+ * discovery path (a one-time `ln -sf $HOME/meshina/configs/omp/mcp.json
+ * $HOME/.omp/agent/mcp.json`, run by the mesh `omp` setup; documented in
+ * the persona so the failure mode is named if it hasn't been done yet).
+ * `$HOME` literal for the same reason as the mesh config and session root. */
+const PET_MCP_CONFIG = '$HOME/meshina/configs/omp/mcp.json'
+
+/** MCP tool names that the mesh's `mcp.json` exposes. Listed in PET_TOOLS so
+ * the model knows the tools exist as first-class; the actual loading happens
+ * via the auto-discovered `~/.omp/agent/mcp.json` (see `PET_MCP_CONFIG`).
+ * Listed in HERMES web-tool priority order so the model reaches for Cloak
+ * before SearXNG. */
+const PET_MCP_TOOLS = 'cloakbrowser_browse,searxng_search'
+
+/** Lean coding core + mesh web reach. `web_search` is omp's built-in (xai
+ * provider); `cloakbrowser_browse` and `searxng_search` are MCP tools the
+ * mesh's `mcp.json` exposes (see `PET_MCP_CONFIG` / `PET_MCP_TOOLS`). HERMES
+ * web priority: Cloak first for fetch/scrape, SearXNG for SERP, built-in
+ * `web_search` only as the last-resort fallback. Heavy surface stays off. */
+const PET_TOOLS = `read,bash,edit,write,grep,glob,todo,web_search,${PET_MCP_TOOLS}`
 
 /** A short persona so the pet knows what it is and how to reach the mesh's web
  * tools, rather than sitting on a generic assistant prompt unaware of them.
@@ -44,11 +65,18 @@ const PET_TOOLS = 'read,bash,edit,write,grep,glob,todo,web_search'
  * it. */
 const PET_PERSONA = [
   'You are the operator’s pet assistant inside Orca, bound to this workspace.',
-  'You have read, bash, edit, write, grep, glob, todo and web_search tools.',
-  'For web search prefer the mesh SearXNG at node-d:8080 via',
-  'scripts/mesh/searxng_search.sh; for full-page fetch use the CloakBrowser CDP',
-  'endpoint on node-b:9222. Keep replies short and spoken-friendly — they are',
-  'read aloud. Lead with the outcome.'
+  'You have read, bash, edit, write, grep, glob, todo, web_search,',
+  'cloakbrowser_browse and searxng_search tools.',
+  'Per HERMES web tool priority, prefer cloakbrowser_browse for any fetch,',
+  'scrape or browse; fall back to searxng_search for SERP and quick lookups;',
+  'reach for the built-in web_search only when both MCP tools are unavailable.',
+  'The cloakbrowser_browse and searxng_search tools come from the mesh',
+  `MCP config at ${PET_MCP_CONFIG}; if they are missing from your tool`,
+  'set, the operator has not symlinked it at ~/.omp/agent/mcp.json yet,',
+  'and you should say so rather than silently reach for the built-in web_search.',
+  'Both MCP tools fail-closed (the call surfaces an error) if the mesh',
+  'endpoint is down, so do not retry in a loop. Keep replies short and',
+  'spoken-friendly — they are read aloud. Lead with the outcome.'
 ].join(' ')
 
 /**
