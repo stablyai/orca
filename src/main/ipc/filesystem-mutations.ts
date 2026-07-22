@@ -22,6 +22,8 @@ import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispat
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
 import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
+import type { SshMutationExpectation } from '../../shared/ssh-types'
+import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 
 /**
  * Re-throw filesystem errors with user-friendly messages.
@@ -70,7 +72,16 @@ async function assertNotExists(targetPath: string): Promise<void> {
 export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
     'fs:createFile',
-    async (_event, args: { filePath: string; connectionId?: string }): Promise<void> => {
+    async (
+      _event,
+      args: { filePath: string; connectionId?: string } & SshMutationExpectation
+    ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createFile(args.filePath)
@@ -88,7 +99,16 @@ export function registerFilesystemMutationHandlers(store: Store): void {
 
   ipcMain.handle(
     'fs:createDir',
-    async (_event, args: { dirPath: string; connectionId?: string }): Promise<void> => {
+    async (
+      _event,
+      args: { dirPath: string; connectionId?: string } & SshMutationExpectation
+    ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createDir(args.dirPath)
@@ -106,8 +126,14 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:rename',
     async (
       _event,
-      args: { oldPath: string; newPath: string; connectionId?: string }
+      args: { oldPath: string; newPath: string; connectionId?: string } & SshMutationExpectation
     ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.renameNoClobber(args.oldPath, args.newPath)
@@ -129,8 +155,18 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:copy',
     async (
       _event,
-      args: { sourcePath: string; destinationPath: string; connectionId?: string }
+      args: {
+        sourcePath: string
+        destinationPath: string
+        connectionId?: string
+      } & SshMutationExpectation
     ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.copy(args.sourcePath, args.destinationPath)
@@ -152,11 +188,29 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:importExternalPaths',
     async (
       _event,
-      args: { sourcePaths: string[]; destDir: string; connectionId?: string; ensureDir?: boolean }
+      args: {
+        sourcePaths: string[]
+        destDir: string
+        connectionId?: string
+        ensureDir?: boolean
+      } & SshMutationExpectation
     ): Promise<{ results: ImportItemResult[] }> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         return importExternalPathsSsh(args.sourcePaths, args.destDir, args.connectionId, {
-          ensureDir: args.ensureDir
+          ensureDir: args.ensureDir,
+          assertCurrent: () =>
+            assertSshMutationExpectation(
+              args.connectionId,
+              args.expectedSshTargetId,
+              args.expectedSshConnectionGeneration,
+              args.expectedExecutionHostId
+            )
         })
       }
 
@@ -205,8 +259,18 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:resolveDroppedPathsForAgent',
     async (
       _event,
-      args: { paths: string[]; worktreePath: string; connectionId?: string }
+      args: {
+        paths: string[]
+        worktreePath: string
+        connectionId?: string
+      } & SshMutationExpectation
     ): Promise<ResolveDroppedPathsResult> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       // Why: `== null` (not `!args.connectionId`) so an empty string is
       // treated as a renderer error, not silently routed to the local branch.
       if (args.connectionId == null) {
@@ -219,7 +283,14 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       const worktreePath = args.worktreePath.replace(/\/+$/, '')
       const destDir = `${worktreePath}/.orca/drops`
       const { results } = await importExternalPathsSsh(args.paths, destDir, args.connectionId, {
-        ensureDir: true
+        ensureDir: true,
+        assertCurrent: () =>
+          assertSshMutationExpectation(
+            args.connectionId,
+            args.expectedSshTargetId,
+            args.expectedSshConnectionGeneration,
+            args.expectedExecutionHostId
+          )
       })
       const resolvedPaths: string[] = []
       const skipped: { sourcePath: string; reason: ImportSkipReason }[] = []

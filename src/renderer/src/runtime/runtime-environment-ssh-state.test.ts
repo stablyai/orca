@@ -34,7 +34,7 @@ type RpcResponses = {
 function installRpcResponses(responses: RpcResponses): void {
   callRuntimeRpcMock.mockImplementation((_target, method, params) => {
     switch (method) {
-      case 'ssh.listTargets':
+      case 'ssh.listTargetSummaries':
         if (responses.failListTargets) {
           return Promise.reject(new Error('method not found'))
         }
@@ -130,6 +130,82 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
     const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
     expect(bucket?.targetsHydrated).toBe(true)
     expect(bucket?.targetLabels.get('ssh-1')).toBe('devbox')
+  })
+
+  it('does not let an in-flight response resurrect readiness after disconnect', async () => {
+    const envId = nextEnvId()
+    let resolveTargets!: (value: { targets: { id: string; label: string }[] }) => void
+    const targetsPromise = new Promise<{ targets: { id: string; label: string }[] }>((resolve) => {
+      resolveTargets = resolve
+    })
+    callRuntimeRpcMock.mockImplementation((_target, method) => {
+      if (method === 'ssh.listTargetSummaries') {
+        return targetsPromise as never
+      }
+      if (method === 'ssh.listRemovedTargetLabels') {
+        return Promise.resolve({ labels: {} } as never)
+      }
+      return Promise.resolve({ state: connState('ssh-1') } as never)
+    })
+
+    const hydration = hydrateRuntimeEnvironmentSshState(envId)
+    useAppStore.getState().markEnvironmentSshStateStale(envId)
+    resolveTargets({ targets: [{ id: 'ssh-1', label: 'devbox' }] })
+    await hydration
+
+    expect(useAppStore.getState().sshStateByEnvironment.has(envId)).toBe(false)
+  })
+
+  it('does not recreate a removed environment bucket from an in-flight response', async () => {
+    const envId = nextEnvId()
+    useAppStore
+      .getState()
+      .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-old', label: 'old box' }])
+    let resolveTargets!: (value: { targets: { id: string; label: string }[] }) => void
+    const targetsPromise = new Promise<{ targets: { id: string; label: string }[] }>((resolve) => {
+      resolveTargets = resolve
+    })
+    callRuntimeRpcMock.mockImplementation((_target, method) => {
+      if (method === 'ssh.listTargetSummaries') {
+        return targetsPromise as never
+      }
+      if (method === 'ssh.listRemovedTargetLabels') {
+        return Promise.resolve({ labels: {} } as never)
+      }
+      return Promise.resolve({ state: connState('ssh-new') } as never)
+    })
+
+    const hydration = hydrateRuntimeEnvironmentSshState(envId, { force: true })
+    useAppStore.getState().removeEnvironmentSshState(envId)
+    resolveTargets({ targets: [{ id: 'ssh-new', label: 'new box' }] })
+    await hydration
+
+    expect(useAppStore.getState().sshStateByEnvironment.has(envId)).toBe(false)
+  })
+
+  it('prunes connection state for targets removed by an authoritative refresh', async () => {
+    const envId = nextEnvId()
+    useAppStore.getState().setEnvironmentSshTargetsMetadata(envId, [
+      { id: 'ssh-live', label: 'live box' },
+      { id: 'ssh-removed', label: 'retired box' }
+    ])
+    useAppStore
+      .getState()
+      .setEnvironmentSshConnectionState(envId, 'ssh-live', connState('ssh-live'))
+    useAppStore
+      .getState()
+      .setEnvironmentSshConnectionState(envId, 'ssh-removed', connState('ssh-removed'))
+    installRpcResponses({
+      targets: [{ id: 'ssh-live', label: 'live box' }],
+      states: { 'ssh-live': connState('ssh-live') }
+    })
+
+    await hydrateRuntimeEnvironmentSshState(envId, { force: true })
+
+    const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
+    expect(bucket?.targetLabels.has('ssh-removed')).toBe(false)
+    expect(bucket?.connectionStates.has('ssh-removed')).toBe(false)
+    expect(bucket?.connectionStates.get('ssh-live')?.status).toBe('connected')
   })
 })
 

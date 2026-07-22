@@ -34,7 +34,10 @@ const mocks = vi.hoisted(() => ({
     worktreesByRepo: {
       repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/remote/repo' }]
     },
-    sshConnectionStates: new Map<string, { remotePlatform?: NodeJS.Platform }>()
+    sshConnectionStates: new Map<
+      string,
+      { remotePlatform?: NodeJS.Platform; connectionGeneration?: number }
+    >()
   }
 }))
 
@@ -143,10 +146,14 @@ describe('handleTerminalFileDrop', () => {
       {
         settings: { activeRuntimeEnvironmentId: 'env-1' },
         worktreeId: 'wt-1',
-        worktreePath: '/remote/repo'
+        worktreePath: '/remote/repo',
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       ['/Users/me/logo.png'],
-      '/remote/repo/.orca/drops'
+      '/remote/repo/.orca/drops',
+      { assertCurrent: expect.any(Function) }
     )
     expect(sendInput).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/remote/repo/.orca/drops/logo.png')
@@ -235,10 +242,14 @@ describe('handleTerminalFileDrop', () => {
       {
         settings: { activeRuntimeEnvironmentId: 'env-1' },
         worktreeId: 'wt-1',
-        worktreePath: '//server/share/repo'
+        worktreePath: '//server/share/repo',
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       ['/Users/me/logo.png'],
-      '\\\\server\\share\\repo\\.orca\\drops'
+      '\\\\server\\share\\repo\\.orca\\drops',
+      { assertCurrent: expect.any(Function) }
     )
     expect(sendInput).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('\\\\server\\share\\repo\\.orca\\drops\\logo.png')
@@ -288,10 +299,14 @@ describe('handleTerminalFileDrop', () => {
       {
         settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
         worktreeId: 'wt-1',
-        worktreePath: '/remote/repo'
+        worktreePath: '/remote/repo',
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       ['/Users/me/spec.pdf'],
-      '/remote/repo/.orca/drops'
+      '/remote/repo/.orca/drops',
+      { assertCurrent: expect.any(Function) }
     )
     expect(sendInput).toHaveBeenCalledWith('/remote/repo/.orca/drops/spec.pdf ')
   })
@@ -560,7 +575,9 @@ describe('handleTerminalFileDrop', () => {
     mocks.storeState.worktreesByRepo = {
       repo1: [{ id: 'wt-1', repoId: 'repo1', path: 'C:\\Remote Repo' }]
     }
-    mocks.storeState.sshConnectionStates = new Map([['ssh-win', { remotePlatform: 'win32' }]])
+    mocks.storeState.sshConnectionStates = new Map([
+      ['ssh-win', { remotePlatform: 'win32', connectionGeneration: 4 }]
+    ])
     mocks.resolveDroppedPathsForAgent.mockResolvedValue({
       failed: [],
       resolvedPaths: ['C:\\Remote Repo\\A&B.txt'],
@@ -586,7 +603,9 @@ describe('handleTerminalFileDrop', () => {
     expect(mocks.resolveDroppedPathsForAgent).toHaveBeenCalledWith({
       paths: ['C:\\Users\\Name\\A&B.txt'],
       worktreePath: 'C:\\Remote Repo',
-      connectionId: 'ssh-win'
+      connectionId: 'ssh-win',
+      expectedSshTargetId: 'ssh-win',
+      expectedSshConnectionGeneration: 4
     })
     expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ')
     expect(focus).toHaveBeenCalled()
@@ -606,7 +625,9 @@ describe('handleTerminalFileDrop', () => {
     mocks.storeState.worktreesByRepo = {
       repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/remote/repo' }]
     }
-    mocks.storeState.sshConnectionStates = new Map([['ssh-linux', { remotePlatform: 'linux' }]])
+    mocks.storeState.sshConnectionStates = new Map([
+      ['ssh-linux', { remotePlatform: 'linux', connectionGeneration: 5 }]
+    ])
     mocks.resolveDroppedPathsForAgent.mockResolvedValue({
       failed: [],
       resolvedPaths: ["/remote/repo/it's here.txt"],

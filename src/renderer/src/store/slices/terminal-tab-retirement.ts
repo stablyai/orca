@@ -1,10 +1,14 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
 import {
+  getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree,
   type WorktreeRuntimeOwnerState
 } from '@/lib/worktree-runtime-owner'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit'
 
@@ -107,6 +111,34 @@ function hasOwnerOutsideTargets(
   return false
 }
 
+function getProviderOwnership(
+  state: TerminalTabRetirementState,
+  worktreeId: string | null
+): { kind: 'local-or-ssh' } | { kind: 'runtime'; environmentId: string } | { kind: 'unresolved' } {
+  if (!worktreeId) {
+    return { kind: 'unresolved' }
+  }
+  if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
+    const parsed = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
+    return parsed?.kind === 'runtime'
+      ? { kind: 'runtime', environmentId: parsed.environmentId }
+      : parsed?.kind === 'local' || parsed?.kind === 'ssh'
+        ? { kind: 'local-or-ssh' }
+        : { kind: 'unresolved' }
+  }
+  const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
+  if (resolution.kind !== 'resolved') {
+    return { kind: 'unresolved' }
+  }
+  if (resolution.route.runtimeEnvironmentId) {
+    return { kind: 'runtime', environmentId: resolution.route.runtimeEnvironmentId }
+  }
+  const parsed = parseExecutionHostId(resolution.route.executionHostId)
+  return parsed?.kind === 'local' || parsed?.kind === 'ssh'
+    ? { kind: 'local-or-ssh' }
+    : { kind: 'unresolved' }
+}
+
 export function isTerminalTabPresent(
   state: Pick<AppState, 'tabsByWorktree'>,
   tabId: string
@@ -156,6 +188,7 @@ export function buildTerminalTabRetirementPlans(
     const runtimeTerminals: TerminalTabRetirementPlan['runtimeTerminals'] = []
     const cleanupOnlyPtyIds: string[] = []
     const unroutablePtyIds: string[] = []
+    const providerOwnership = getProviderOwnership(state, worktreeId)
 
     for (const ptyId of ptyIds) {
       const ownerIdentity = getTerminalPtyOwnershipIdentity(state, ptyId, worktreeId)
@@ -183,6 +216,9 @@ export function buildTerminalTabRetirementPlans(
           handle: remote.handle
         })
       } else if (ptyId.startsWith('remote:')) {
+        unroutablePtyIds.push(ptyId)
+      } else if (providerOwnership.kind !== 'local-or-ssh') {
+        // Why: HUB-native wake hints are not paired-client PTY ids; wait for pane resolution instead of killing the same-looking local id.
         unroutablePtyIds.push(ptyId)
       } else {
         localOrSshPtyIds.push(ptyId)

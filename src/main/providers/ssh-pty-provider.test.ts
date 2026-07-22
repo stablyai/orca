@@ -268,6 +268,16 @@ describe('SshPtyProvider', () => {
         env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' }
       })
       expect(result).toEqual({ id: scopedPty1 })
+      expect(provider.hasPty(scopedPty1)).toBe(true)
+    })
+
+    it('keeps a spawned PTY live across an overlapping stale process list', async () => {
+      mux.request.mockResolvedValueOnce({ id: 'pty-new' }).mockResolvedValueOnce([])
+
+      const result = await provider.spawn({ cols: 80, rows: 24 })
+      await provider.listProcesses()
+
+      expect(provider.hasPty(result.id)).toBe(true)
     })
 
     it('gates fresh startup intent with the relay ingress capability version', async () => {

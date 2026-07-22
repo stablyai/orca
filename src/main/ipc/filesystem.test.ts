@@ -1130,6 +1130,24 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it.each([
+    ['fs:writeFile', { filePath: path.resolve('/workspace/repo/file.txt'), content: 'data' }],
+    ['fs:deletePath', { targetPath: path.resolve('/workspace/repo/file.txt') }]
+  ])(
+    'rejects %s before local mutation when the expected execution host is SSH',
+    async (channel, args) => {
+      registerFilesystemHandlers(store as never)
+
+      await expect(
+        handlers.get(channel)!(null, { ...args, expectedExecutionHostId: 'ssh:ssh-1' })
+      ).rejects.toThrow('Workspace host changed; refresh and try again')
+
+      expect(writeFileMock).not.toHaveBeenCalled()
+      expect(trashItemMock).not.toHaveBeenCalled()
+      expect(tryDeleteWslUncPathMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
     { ext: 'png', mime: 'image/png', data: [0x89, 0x50, 0x4e, 0x47, 0x00] },
     { ext: 'pdf', mime: 'application/pdf', data: [0x25, 0x50, 0x44, 0x46, 0x00] },
     {

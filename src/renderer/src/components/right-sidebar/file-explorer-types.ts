@@ -1,7 +1,9 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+
 export type FileExplorerOperationOwner =
   | { kind: 'local' }
   | { kind: 'ssh'; connectionId: string }
-  | { kind: 'runtime'; environmentId: string }
+  | { kind: 'runtime'; environmentId: string; executionHostId: ExecutionHostId }
   | { kind: 'unresolved' }
 
 export type TreeNode = {
@@ -18,4 +20,5 @@ export type TreeNode = {
 export type DirCache = {
   children: TreeNode[]
   loading: boolean
+  operationOwner?: FileExplorerOperationOwner
 }

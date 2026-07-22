@@ -938,7 +938,9 @@ describe('terminal slice behaviors', () => {
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [
+          makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1', hostId: 'local' })
+        ]
       },
       tabsByWorktree: {
         [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-2' })]
@@ -964,7 +966,9 @@ describe('terminal slice behaviors', () => {
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [
+          makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1', hostId: 'local' })
+        ]
       },
       tabsByWorktree: {
         [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-1' })]
@@ -992,8 +996,18 @@ describe('terminal slice behaviors', () => {
       ],
       worktreesByRepo: {
         repo1: [
-          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
-          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+          makeWorktree({
+            id: targetWorktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            hostId: 'local'
+          }),
+          makeWorktree({
+            id: otherWorktreeId,
+            repoId: 'repo1',
+            path: '/path/wt2',
+            hostId: 'local'
+          })
         ]
       },
       tabsByWorktree: {
@@ -1047,8 +1061,18 @@ describe('terminal slice behaviors', () => {
       ],
       worktreesByRepo: {
         repo1: [
-          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
-          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+          makeWorktree({
+            id: targetWorktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            hostId: 'local'
+          }),
+          makeWorktree({
+            id: otherWorktreeId,
+            repoId: 'repo1',
+            path: '/path/wt2',
+            hostId: 'local'
+          })
         ]
       },
       tabsByWorktree: {
@@ -1080,7 +1104,8 @@ describe('terminal slice behaviors', () => {
       makeWorktree({
         id: `repo1::/path/wt-${index}`,
         repoId: 'repo1',
-        path: `/path/wt-${index}`
+        path: `/path/wt-${index}`,
+        hostId: 'local'
       })
     )
     const tabsByWorktree = Object.fromEntries(
@@ -1522,6 +1547,7 @@ describe('terminal slice behaviors', () => {
             id: worktreeId,
             repoId: 'repo1',
             path: '/path/wt1',
+            hostId: 'local',
             lastActivityAt: 1000
           })
         ]

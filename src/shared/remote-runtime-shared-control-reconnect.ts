@@ -31,6 +31,14 @@ export class SharedControlReconnectScheduler {
     this.attempt = scheduled.reconnectAttempt
   }
 
+  scheduleWithDefaultBackoff(intentionallyClosed: boolean, open: () => void): void {
+    this.schedule({
+      intentionallyClosed,
+      delaysMs: [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000],
+      open
+    })
+  }
+
   clear(): void {
     if (this.timer) {
       clearTimeout(this.timer)

@@ -12,6 +12,29 @@ function isValidRuntimeFileBase64(value: unknown): value is string {
   )
 }
 
+type SshMutationParams = {
+  expectedExecutionHostId?: string
+  expectedSshTargetId?: string
+  expectedSshConnectionGeneration?: number
+}
+
+function sshMutationArguments(
+  params: SshMutationParams
+): [expectedGeneration?: number, expectedTargetId?: string, expectedExecutionHostId?: string] {
+  if (
+    params.expectedExecutionHostId === undefined &&
+    params.expectedSshTargetId === undefined &&
+    params.expectedSshConnectionGeneration === undefined
+  ) {
+    return []
+  }
+  return [
+    params.expectedSshConnectionGeneration,
+    params.expectedSshTargetId,
+    params.expectedExecutionHostId
+  ]
+}
+
 const WorktreeSelector = z.object({
   worktree: z
     .unknown()
@@ -29,6 +52,12 @@ const FileOpen = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing relative path'))
+})
+
+const FileMutationOpen = FileOpen.extend({
+  expectedExecutionHostId: z.string().min(1).optional(),
+  expectedSshTargetId: z.string().min(1).optional(),
+  expectedSshConnectionGeneration: z.number().int().nonnegative().optional()
 })
 
 const ResolveTerminalPath = WorktreeSelector.extend({
@@ -86,13 +115,13 @@ const ServerDirectoryBrowse = z.object({
 // Why: write content must be a real string. Coercing a missing/non-string value
 // to '' silently truncated the target file to empty instead of erroring. An
 // explicit '' is still accepted (writing an empty file is legitimate).
-const FileWrite = FileOpen.extend({
+const FileWrite = FileMutationOpen.extend({
   content: z
     .unknown()
     .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
 })
 
-const FileWriteBase64 = FileOpen.extend({
+const FileWriteBase64 = FileMutationOpen.extend({
   contentBase64: z
     .unknown()
     .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
@@ -115,6 +144,9 @@ const FileReadChunk = FileOpen.extend({
 })
 
 const FileRename = WorktreeSelector.extend({
+  expectedExecutionHostId: z.string().min(1).optional(),
+  expectedSshTargetId: z.string().min(1).optional(),
+  expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),
   oldRelativePath: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
@@ -126,6 +158,9 @@ const FileRename = WorktreeSelector.extend({
 })
 
 const FileCopy = WorktreeSelector.extend({
+  expectedExecutionHostId: z.string().min(1).optional(),
+  expectedSshTargetId: z.string().min(1).optional(),
+  expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),
   sourceRelativePath: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
@@ -137,6 +172,9 @@ const FileCopy = WorktreeSelector.extend({
 })
 
 const FileCommitUpload = WorktreeSelector.extend({
+  expectedExecutionHostId: z.string().min(1).optional(),
+  expectedSshTargetId: z.string().min(1).optional(),
+  expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),
   tempRelativePath: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
@@ -147,7 +185,7 @@ const FileCommitUpload = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing final path'))
 })
 
-const FileDelete = FileOpen.extend({
+const FileDelete = FileMutationOpen.extend({
   recursive: z.boolean().optional()
 })
 
@@ -283,7 +321,12 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     name: 'files.write',
     params: FileWrite,
     handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFile(params.worktree, params.relativePath, params.content)
+      runtime.writeFileExplorerFile(
+        params.worktree,
+        params.relativePath,
+        params.content,
+        ...sshMutationArguments(params)
+      )
   }),
   defineMethod({
     name: 'files.writeBase64',
@@ -292,7 +335,8 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       runtime.writeFileExplorerFileBase64(
         params.worktree,
         params.relativePath,
-        params.contentBase64
+        params.contentBase64,
+        ...sshMutationArguments(params)
       )
   }),
   defineMethod({
@@ -303,26 +347,39 @@ export const FILE_METHODS: RpcAnyMethod[] = [
         params.worktree,
         params.relativePath,
         params.contentBase64,
-        params.append === true
+        params.append === true,
+        ...sshMutationArguments(params)
       )
   }),
   defineMethod({
     name: 'files.createFile',
-    params: FileOpen,
+    params: FileMutationOpen,
     handler: async (params, { runtime }) =>
-      runtime.createFileExplorerFile(params.worktree, params.relativePath)
+      runtime.createFileExplorerFile(
+        params.worktree,
+        params.relativePath,
+        ...sshMutationArguments(params)
+      )
   }),
   defineMethod({
     name: 'files.createDir',
-    params: FileOpen,
+    params: FileMutationOpen,
     handler: async (params, { runtime }) =>
-      runtime.createFileExplorerDir(params.worktree, params.relativePath)
+      runtime.createFileExplorerDir(
+        params.worktree,
+        params.relativePath,
+        ...sshMutationArguments(params)
+      )
   }),
   defineMethod({
     name: 'files.createDirNoClobber',
-    params: FileOpen,
+    params: FileMutationOpen,
     handler: async (params, { runtime }) =>
-      runtime.createFileExplorerDirNoClobber(params.worktree, params.relativePath)
+      runtime.createFileExplorerDirNoClobber(
+        params.worktree,
+        params.relativePath,
+        ...sshMutationArguments(params)
+      )
   }),
   defineMethod({
     name: 'files.commitUpload',
@@ -331,7 +388,8 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       runtime.commitFileExplorerUpload(
         params.worktree,
         params.tempRelativePath,
-        params.finalRelativePath
+        params.finalRelativePath,
+        ...sshMutationArguments(params)
       )
   }),
   defineMethod({
@@ -341,7 +399,8 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       runtime.renameFileExplorerPath(
         params.worktree,
         params.oldRelativePath,
-        params.newRelativePath
+        params.newRelativePath,
+        ...sshMutationArguments(params)
       )
   }),
   defineMethod({
@@ -351,14 +410,20 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       runtime.copyFileExplorerPath(
         params.worktree,
         params.sourceRelativePath,
-        params.destinationRelativePath
+        params.destinationRelativePath,
+        ...sshMutationArguments(params)
       )
   }),
   defineMethod({
     name: 'files.delete',
     params: FileDelete,
     handler: async (params, { runtime }) =>
-      runtime.deleteFileExplorerPath(params.worktree, params.relativePath, params.recursive)
+      runtime.deleteFileExplorerPath(
+        params.worktree,
+        params.relativePath,
+        params.recursive,
+        ...sshMutationArguments(params)
+      )
   }),
   defineMethod({
     name: 'files.search',

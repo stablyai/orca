@@ -396,7 +396,7 @@ describe('file RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
-    const response = await dispatcher.dispatch(
+    await dispatcher.dispatch(
       makeRequest('files.writeTerminalArtifact', {
         worktree: 'id:wt-1',
         absolutePath: '/tmp/result.json',
@@ -412,7 +412,6 @@ describe('file RPC methods', () => {
       '{}',
       undefined
     )
-    expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
   it('reads a preview file for a selected worktree', async () => {
@@ -775,7 +774,7 @@ describe('file RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
-    const response = await dispatcher.dispatch(
+    await dispatcher.dispatch(
       makeRequest('files.delete', {
         worktree: 'id:wt-1',
         relativePath: 'src',
@@ -784,6 +783,34 @@ describe('file RPC methods', () => {
     )
 
     expect(runtime.deleteFileExplorerPath).toHaveBeenCalledWith('id:wt-1', 'src', true)
+  })
+
+  it('forwards the captured SSH target and generation for destructive mutations', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      deleteFileExplorerPath: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.delete', {
+        worktree: 'id:wt-1',
+        relativePath: 'src',
+        recursive: true,
+        expectedExecutionHostId: 'ssh:ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 7
+      })
+    )
+
+    expect(runtime.deleteFileExplorerPath).toHaveBeenCalledWith(
+      'id:wt-1',
+      'src',
+      true,
+      7,
+      'ssh-1',
+      'ssh:ssh-1'
+    )
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 

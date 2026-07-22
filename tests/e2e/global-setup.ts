@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { prepareDockerSshRelayImage } from './helpers/docker-ssh-relay-image'
 
 /** Temp file where the test repo path is stored for the fixture to read. */
 export const TEST_REPO_PATH_FILE = path.join(os.tmpdir(), 'orca-e2e-test-repo-path.txt')
@@ -50,6 +51,7 @@ export default function globalSetup(): void {
       // Why: paired-browser specs need the web bundle served by the runtime; ordinary Electron E2E does not.
       console.error('[e2e] Building paired runtime web client...')
       execSync('pnpm run build:web', {
+        env: { ...process.env, VITE_EXPOSE_STORE: 'true' },
         cwd: root,
         stdio: 'inherit',
         timeout: WEB_E2E_BUILD_TIMEOUT_MS
@@ -57,7 +59,11 @@ export default function globalSetup(): void {
       console.error('[e2e] Web client build complete.')
     }
   }
-  if (process.env.ORCA_E2E_SSH_LOCALHOST === '1' || process.env.ORCA_E2E_SSH_DOCKER === '1') {
+  if (
+    process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
+    process.env.ORCA_E2E_SSH_DOCKER === '1' ||
+    process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1'
+  ) {
     // Why: the SSH specs deploy Orca's relay from out/relay. The
     // normal Electron E2E build does not produce that bundle, so build it only
     // for explicit SSH runs.
@@ -67,6 +73,10 @@ export default function globalSetup(): void {
       stdio: 'inherit',
       timeout: 120_000
     })
+  }
+  if (process.env.ORCA_E2E_SSH_DOCKER === '1' || process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') {
+    console.error('[e2e] Preparing Docker OpenSSH fixture image...')
+    prepareDockerSshRelayImage(root)
   }
 
   // ── 2. Create a seeded test git repo ───────────────────────────────

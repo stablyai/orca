@@ -2235,6 +2235,12 @@ describe('web worktree preload API', () => {
                     repoId: 'repo-1',
                     path: '/srv/repo',
                     hostId: 'local'
+                  },
+                  {
+                    id: 'repo-2::/ssh/repo',
+                    repoId: 'repo-2',
+                    path: '/ssh/repo',
+                    hostId: 'ssh:hub-private-target'
                   }
                 ]
               },
@@ -2252,7 +2258,16 @@ describe('web worktree preload API', () => {
       installWebPreloadApi()
 
       await expect(globals.window.api.worktrees.list({ repoId: 'repo-1' })).resolves.toMatchObject([
-        { id: 'repo-1::/srv/repo', hostId: `runtime:${environmentId}` }
+        {
+          id: 'repo-1::/srv/repo',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: environmentId
+        },
+        {
+          id: 'repo-2::/ssh/repo',
+          hostId: 'ssh:hub-private-target',
+          runtimeOwnerEnvironmentId: environmentId
+        }
       ])
     }
   )
@@ -2303,7 +2318,7 @@ describe('web worktree preload API', () => {
       'The paired Orca server changed while the request was in progress.'
     )
     await expect(globals.window.api.worktrees.listAll()).resolves.toMatchObject([
-      { id: 'worktree-b', hostId: `runtime:${paired.environment.id}` }
+      { id: 'worktree-b', runtimeOwnerEnvironmentId: paired.environment.id }
     ])
   })
 
@@ -2372,7 +2387,7 @@ describe('web worktree preload API', () => {
       worktrees: [
         {
           id: worktree.id,
-          hostId: 'runtime:web-env-1',
+          runtimeOwnerEnvironmentId: 'web-env-1',
           ownership: 'orca-managed',
           visible: true
         }

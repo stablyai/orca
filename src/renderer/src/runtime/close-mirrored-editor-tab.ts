@@ -41,7 +41,7 @@ export function notifyHostOfMirroredEditorClose(
   // Record the close intent SYNCHRONOUSLY so a host snapshot landing before the dynamic import below resolves can't
   // flash the old-path tab back. closeWebRuntimeSessionTab re-records it idempotently.
   recordWebSessionCloseIntent(
-    runtimeEnvironmentId,
+    { environmentId: runtimeEnvironmentId },
     worktreeId,
     toHostSessionTabId(unifiedTab.id),
     Date.now()

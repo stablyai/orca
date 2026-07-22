@@ -24,7 +24,7 @@ describe('right sidebar file/git runtime ownership boundaries', () => {
     const text = source(path)
 
     expect(text).toMatch(
-      /getRightSidebarWorktreeRuntimeSettings|getSettingsForWorktreeRuntimeOwner|getFileExplorerOperationOwner|getFileExplorerOperationRoute/
+      /getRightSidebarWorktreeRuntimeSettings|getSettingsForWorktreeRuntimeOwner|getFileExplorerOperationOwner|getFileExplorerOperationRoute|captureFileExplorerOperationGuard|requireFileExplorerOperationRoute|requireMatchingFileExplorerOperationRoute/
     )
     expect(text).not.toContain('settings: useAppStore.getState().settings')
     expect(text).not.toContain('const settings = useAppStore.getState().settings')

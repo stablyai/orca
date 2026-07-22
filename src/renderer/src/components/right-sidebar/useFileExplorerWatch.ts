@@ -1,7 +1,6 @@
-import { useEffect, useRef } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
+import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { FsChangedPayload } from '../../../../shared/types'
-import type { DirCache } from './file-explorer-types'
+import type { DirCache, FileExplorerOperationOwner } from './file-explorer-types'
 import type { InlineInput } from './FileExplorerRow'
 import { joinPath, normalizeRelativePath, dirname } from '@/lib/path'
 import {
@@ -16,8 +15,16 @@ import {
 } from './file-explorer-watcher-reconcile'
 import { useAppStore } from '@/store'
 import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
-import type { AppState } from '@/store/types'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getFileExplorerOperationOwnerFromState,
+  type FileExplorerOwnerState
+} from './file-explorer-operation-owner'
+
+type FileExplorerWatchOwnerState = Pick<
+  FileExplorerOwnerState,
+  'settings' | 'repos' | 'worktreesByRepo'
+> &
+  Partial<Omit<FileExplorerOwnerState, 'settings' | 'repos' | 'worktreesByRepo'>>
 
 type UseFileExplorerWatchParams = {
   worktreePath: string | null
@@ -31,6 +38,7 @@ type UseFileExplorerWatchParams = {
   inlineInput: InlineInput | null
   dragSourcePath: string | null
   isNativeDragOver: boolean
+  operationOwner?: FileExplorerOperationOwner
 }
 
 export function getExternalFileChangeRelativePath(
@@ -65,10 +73,7 @@ export function canonicalizeFileExplorerWatchPath(
 }
 
 function normalizeExplorerAbsolutePath(path: string): string {
-  if (path === '/' || /^[A-Za-z]:[\\/]$/.test(path)) {
-    return path
-  }
-  return path.replace(/[\\/]+$/, '')
+  return path === '/' || /^[A-Za-z]:[\\/]$/.test(path) ? path : path.replace(/[\\/]+$/, '')
 }
 
 export function payloadRequiresDeferredTreeRefresh(
@@ -86,10 +91,29 @@ export function payloadRequiresDeferredTreeRefresh(
 }
 
 export function getFileExplorerWatchRuntimeEnvironmentId(
-  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo'>,
-  activeWorktreeId: string | null
-): string | null {
-  return getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
+  state: FileExplorerWatchOwnerState,
+  activeWorktreeId: string | null,
+  expectedOwner?: FileExplorerOperationOwner
+): string | null | undefined {
+  const ownerState: FileExplorerOwnerState = {
+    settings: state.settings,
+    repos: state.repos,
+    worktreesByRepo: state.worktreesByRepo,
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo ?? {},
+    folderWorkspaces: state.folderWorkspaces ?? [],
+    projectGroups: state.projectGroups ?? [],
+    restoredRuntimeHostIdByWorkspaceSessionKey:
+      state.restoredRuntimeHostIdByWorkspaceSessionKey ?? {}
+  }
+  const owner = getFileExplorerOperationOwnerFromState(ownerState, activeWorktreeId)
+  if (expectedOwner && JSON.stringify(owner) !== JSON.stringify(expectedOwner)) {
+    return undefined
+  }
+  return owner.kind === 'runtime'
+    ? owner.environmentId
+    : owner.kind === 'unresolved'
+      ? undefined
+      : null
 }
 
 /**
@@ -108,11 +132,12 @@ export function useFileExplorerWatch({
   refreshTree,
   inlineInput,
   dragSourcePath,
-  isNativeDragOver
+  isNativeDragOver,
+  operationOwner
 }: UseFileExplorerWatchParams): void {
   // Why: subscriptions follow the selected worktree; host focus is only a legacy default, not an ownership signal.
   const activeRuntimeEnvironmentId = useAppStore((s) =>
-    getFileExplorerWatchRuntimeEnvironmentId(s, activeWorktreeId)
+    getFileExplorerWatchRuntimeEnvironmentId(s, activeWorktreeId, operationOwner)
   )
 
   // Keep refs for handler-accessed values so the IPC listener isn't re-subscribed on every render.
@@ -149,7 +174,7 @@ export function useFileExplorerWatch({
 
   // Why: one atomic effect avoids a cleanup-ordering race that drops events on rapid worktree switches (review issue §3).
   useEffect(() => {
-    if (!worktreePath) {
+    if (!worktreePath || activeRuntimeEnvironmentId === undefined) {
       return
     }
 

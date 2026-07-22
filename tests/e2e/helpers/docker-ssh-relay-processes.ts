@@ -74,6 +74,16 @@ function parseRelayProcessRows(output: string): RelayProcessRow[] {
 export function readDockerSshRelayProcessSnapshot(
   target: DockerSshRelayTarget
 ): DockerSshRelayProcessSnapshot | null {
+  const groups = readDockerSshRelayProcessSnapshots(target)
+  if (groups.length > 1) {
+    throw new Error(`Expected one Docker SSH relay process group, found ${groups.length}`)
+  }
+  return groups[0] ?? null
+}
+
+export function readDockerSshRelayProcessSnapshots(
+  target: DockerSshRelayTarget
+): DockerSshRelayProcessSnapshot[] {
   const rows = parseRelayProcessRows(
     execDockerSshRelayTargetCommand(target, LIST_RELAY_PROCESSES_COMMAND)
   )
@@ -85,10 +95,7 @@ export function readDockerSshRelayProcessSnapshot(
       .sort((left, right) => left - right)
     return watcherPids.length > 0 ? [{ relayPid: relay.pid, watcherPids, relayDir: relay.cwd }] : []
   })
-  if (groups.length > 1) {
-    throw new Error(`Expected one Docker SSH relay process group, found ${groups.length}`)
-  }
-  return groups[0] ?? null
+  return groups.sort((left, right) => left.relayPid - right.relayPid)
 }
 
 export function signalDockerSshRelayWatchers(

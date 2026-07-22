@@ -1032,6 +1032,14 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().settingsProjectHostSelection).toEqual({
       'git:acme/app': 'runtime:home-mac'
     })
+    expect(store.getState().settingsProjectSetupSelection).toEqual({})
+
+    store
+      .getState()
+      .setSettingsProjectHostSelection('git:acme/app', 'runtime:home-mac', 'jump-setup')
+    expect(store.getState().settingsProjectSetupSelection).toEqual({
+      'git:acme/app': 'jump-setup'
+    })
     // Ephemeral: never written through the UI persistence pipeline.
     expect(setUI).not.toHaveBeenCalled()
   })

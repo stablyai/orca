@@ -662,7 +662,8 @@
         "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
         "nativeDropTooManyPaths": "Drop contains too many files.",
         "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
-        "nativeDropPathsTooLarge": "Drop path list is too large."
+        "nativeDropPathsTooLarge": "Drop path list is too large.",
+        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects."
       },
       "useIpcEvents": {
         "0e3cf53060": "Browser tab {{value0}} not found",
@@ -6336,7 +6337,10 @@
           "addPlannedHostToHost": "Add {{host}}",
           "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later.",
           "projectRuntime": "Project Runtime",
-          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
+          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+          "hostStateDisconnected": "Disconnected",
+          "hostStateUnknown": "Unknown",
+          "nestedHostLabel": "{{value0}} via {{value1}}"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",

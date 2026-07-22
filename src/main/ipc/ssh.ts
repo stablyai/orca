@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines -- Why: co-locates SSH IPC handlers, port-forward broadcasting, and session lifecycle to keep the data flow obvious. */
 import { ipcMain, powerMonitor, type BrowserWindow } from 'electron'
+import { appendFileSync } from 'node:fs'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
 import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-connection'
@@ -37,6 +38,12 @@ import {
   getSshPtyProvider
 } from './pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import {
+  advanceSshConnectionGeneration,
+  getSshConnectionGeneration,
+  initializeSshConnectionGenerationSession,
+  resetSshConnectionGenerations
+} from '../ssh/ssh-connection-generation'
 
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
@@ -182,14 +189,14 @@ type ConnectAttempt = {
 }
 
 const connectInFlight = new Map<string, ConnectAttempt>()
-const connectGenerationByTarget = new Map<string, number>()
-
+const pendingTransportReconnects = new Set<string>()
 function currentConnectGeneration(targetId: string): number {
-  return connectGenerationByTarget.get(targetId) ?? 0
+  return getSshConnectionGeneration(targetId)
 }
 
 function invalidateConnectAttempt(targetId: string): void {
-  connectGenerationByTarget.set(targetId, currentConnectGeneration(targetId) + 1)
+  advanceSshConnectionGeneration(targetId)
+  pendingTransportReconnects.delete(targetId)
   connectInFlight.delete(targetId)
   credentialRequestedForTarget.delete(targetId)
 }
@@ -254,7 +261,11 @@ function broadcastSshState(
 
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
   const remotePlatform = activeSessions.get(targetId)?.getHostPlatform()?.os
-  return remotePlatform ? { ...state, remotePlatform } : state
+  return {
+    ...state,
+    connectionGeneration: currentConnectGeneration(targetId),
+    ...(remotePlatform ? { remotePlatform } : {})
+  }
 }
 
 function publishRelayOverride(
@@ -505,11 +516,35 @@ function createSshConnectionCallbacks(): SshConnectionCallbacks {
       // Why: an SSH reconnect must re-deploy the relay and rebuild providers; the guard below fires only for real reconnects, not an explicit connect's 'deploying'.
       const session = activeSessions.get(targetId)
       const sessionState = session?.getState()
+      if (
+        state.status === 'reconnecting' &&
+        (sessionState === 'ready' || sessionState === 'reconnecting')
+      ) {
+        pendingTransportReconnects.add(targetId)
+      } else if (
+        state.status === 'disconnected' ||
+        state.status === 'auth-failed' ||
+        state.status === 'reconnection-failed' ||
+        state.status === 'error'
+      ) {
+        pendingTransportReconnects.delete(targetId)
+      }
+      const completedTransportReconnect =
+        state.status === 'connected' && pendingTransportReconnects.delete(targetId)
+      if (completedTransportReconnect) {
+        // Why: staged mutations from the replaced SSH transport must fail even if its relay session disappeared before recovery completed.
+        advanceSshConnectionGeneration(targetId)
+      }
       const shouldReconnectRelay =
         session !== undefined &&
-        state.status === 'connected' &&
+        completedTransportReconnect &&
         state.reconnectAttempt === 0 &&
         (sessionState === 'ready' || sessionState === 'reconnecting')
+      const relayReconnectAlreadyInFlight =
+        !completedTransportReconnect &&
+        state.status === 'connected' &&
+        sessionState === 'reconnecting' &&
+        relayStateOverrides.has(targetId)
 
       if (shouldReconnectRelay) {
         // Why: SSH connects before the relay providers rebuild; keep renderer actions gated until SshRelaySession reaches ready again.
@@ -520,6 +555,9 @@ function createSshConnectionCallbacks(): SshConnectionCallbacks {
           'Relay channel reconnecting...',
           state.reconnectAttempt
         )
+      } else if (relayReconnectAlreadyInFlight) {
+        // Why: duplicate connected notifications belong to the same socket generation and must not expose providers before relay recovery finishes.
+        return
       } else {
         clearRelayStateOverride(targetId)
         broadcastSshState(getCurrentMainWindow, targetId, state)
@@ -646,6 +684,7 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
         supportsFolderDownload: connectionSupportsFolderDownload(tid)
       })
     }
+    currentRuntime?.notifySshRelayReady?.(tid)
     void restorePortForwards(tid, getCurrentMainWindow)
   })
 }
@@ -671,6 +710,7 @@ export function registerSshHandlers(
   getMainWindow: () => BrowserWindow | null,
   runtime?: OrcaRuntimeService
 ): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
+  initializeSshConnectionGenerationSession()
   // Why: macOS re-activation re-calls this with a new BrowserWindow; ipcMain.handle() throws on a duplicate channel, so remove prior handlers first.
   for (const ch of SSH_IPC_CHANNELS) {
     ipcMain.removeHandler(ch)
@@ -759,6 +799,11 @@ export function registerSshHandlers(
   // ── Connection lifecycle ───────────────────────────────────────────
 
   async function connectTarget(targetId: string): Promise<SshConnectionState> {
+    const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
+    if (e2eProbePath) {
+      appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
+      throw new Error('e2e_forbidden_local_ssh_connect')
+    }
     const observedGeneration = currentConnectGeneration(targetId)
     const reset = resetRelayInFlight.get(targetId)
     if (reset) {
@@ -774,10 +819,9 @@ export function registerSshHandlers(
       throw connectCancelledError()
     }
 
-    const generation = observedGeneration + 1
-    connectGenerationByTarget.set(targetId, generation)
-    const promise = doConnect(targetId, generation)
-    const attempt = { generation, promise }
+    pendingTransportReconnects.delete(targetId)
+    const promise = doConnect(targetId)
+    const attempt = { generation: currentConnectGeneration(targetId), promise }
     connectInFlight.set(targetId, attempt)
     try {
       return await promise
@@ -795,7 +839,7 @@ export function registerSshHandlers(
     return connectTarget(args.targetId)
   })
 
-  async function doConnect(targetId: string, generation: number): Promise<SshConnectionState> {
+  async function doConnect(targetId: string): Promise<SshConnectionState> {
     const target = sshStore!.getTarget(targetId)
     if (!target) {
       throw new Error(`SSH target "${targetId}" not found`)
@@ -815,9 +859,10 @@ export function registerSshHandlers(
     ) {
       // Why: BrowserWindow reactivation re-fires ssh:connect for already-live targets; treat as a refresh instead of tearing down the relay and its forwards.
       broadcastSshState(getCurrentMainWindow, targetId, existingState)
-      return existingState
+      return getPublicSshState(targetId)!
     }
 
+    const generation = advanceSshConnectionGeneration(targetId)
     clearRelayStateOverride(targetId)
     let conn
     // Why: tear down any existing session first to avoid leaking its multiplexer, providers, and timers (double-connect / reconnect-after-error).
@@ -1231,7 +1276,8 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   }
   relayStateOverrides.clear()
   connectInFlight.clear()
-  connectGenerationByTarget.clear()
+  pendingTransportReconnects.clear()
+  resetSshConnectionGenerations()
   resetRelayInFlight.clear()
   testingTargets.clear()
   credentialRequestedForTarget.clear()

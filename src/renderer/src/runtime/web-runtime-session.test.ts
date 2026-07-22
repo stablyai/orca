@@ -168,6 +168,9 @@ describe('activateWebRuntimeSessionWorktree', () => {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       }
     })
+    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) =>
+      updater({ state: 'before' })
+    )
   })
 
   afterEach(() => {
@@ -177,11 +180,15 @@ describe('activateWebRuntimeSessionWorktree', () => {
   })
 
   it('activates caller-owned session surfaces without steering host or clients', async () => {
-    const runtimeCall = vi.fn().mockResolvedValueOnce({
-      id: 'activate',
-      ok: true,
-      result: { repoId: 'repo', worktreeId: WORKTREE_ID, activated: true }
-    })
+    const snapshot = makeSnapshot()
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'activate',
+        ok: true,
+        result: { repoId: 'repo', worktreeId: WORKTREE_ID, activated: true }
+      })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: snapshot })
 
     vi.stubGlobal('window', {
       api: {
@@ -197,7 +204,7 @@ describe('activateWebRuntimeSessionWorktree', () => {
       })
     ).resolves.toBe(true)
 
-    expect(runtimeCall).toHaveBeenCalledWith({
+    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
       selector: ENVIRONMENT_ID,
       method: 'worktree.activate',
       params: {
@@ -207,6 +214,21 @@ describe('activateWebRuntimeSessionWorktree', () => {
       },
       timeoutMs: 15_000
     })
+    expect(runtimeCall).toHaveBeenNthCalledWith(2, {
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.list',
+      params: { worktree: `id:${WORKTREE_ID}` },
+      timeoutMs: 15_000
+    })
+    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      { state: 'before' },
+      snapshot,
+      ENVIRONMENT_ID
+    )
+    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      ENVIRONMENT_ID,
+      WORKTREE_ID
+    )
   })
 })
 
@@ -1443,7 +1465,6 @@ describe('web runtime session tab actions', () => {
       .mockResolvedValueOnce({ id: 'list-1', ok: true, result: makeSnapshot() })
       .mockResolvedValueOnce({ id: 'close-2', ok: true, result: {} })
       .mockResolvedValueOnce({ id: 'list-2', ok: true, result: makeSnapshot() })
-
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -1560,7 +1581,7 @@ describe('web runtime session tab actions', () => {
     )
     expect(
       isWebSessionCloseIntentPending(
-        ENVIRONMENT_ID,
+        { environmentId: ENVIRONMENT_ID },
         WORKTREE_ID,
         'host-browser-unified',
         Date.now()
@@ -1600,7 +1621,7 @@ describe('web runtime session tab actions', () => {
 
     expect(
       isWebSessionCloseIntentPending(
-        ENVIRONMENT_ID,
+        { environmentId: ENVIRONMENT_ID },
         WORKTREE_ID,
         'host-browser-unified',
         Date.now()
@@ -1633,7 +1654,12 @@ describe('web runtime session tab actions', () => {
       }
     })
 
-    recordWebSessionCloseIntent(ENVIRONMENT_ID, WORKTREE_ID, 'other-host-tab', Date.now())
+    recordWebSessionCloseIntent(
+      { environmentId: ENVIRONMENT_ID },
+      WORKTREE_ID,
+      'other-host-tab',
+      Date.now()
+    )
     await expect(
       closeWebRuntimeSessionTab({
         worktreeId: WORKTREE_ID,
@@ -1646,16 +1672,47 @@ describe('web runtime session tab actions', () => {
 
     expect(
       isWebSessionCloseIntentPending(
-        ENVIRONMENT_ID,
+        { environmentId: ENVIRONMENT_ID },
         WORKTREE_ID,
         'host-browser-unified',
         Date.now()
       )
     ).toBe(true)
     expect(
-      isWebSessionCloseIntentPending(ENVIRONMENT_ID, WORKTREE_ID, 'other-host-tab', Date.now())
+      isWebSessionCloseIntentPending(
+        { environmentId: ENVIRONMENT_ID },
+        WORKTREE_ID,
+        'other-host-tab',
+        Date.now()
+      )
     ).toBe(true)
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('clears an optimistic close intent when pairing CAS rejects the host call', async () => {
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'close-rejected',
+      ok: false,
+      error: { code: 'conflict', message: 'runtime_environment_replaced' }
+    })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+    ).resolves.toBe(false)
+
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: ENVIRONMENT_ID },
+        WORKTREE_ID,
+        'host-browser-unified',
+        Date.now()
+      )
+    ).toBe(false)
   })
 })
 

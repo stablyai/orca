@@ -23,7 +23,17 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     vi.clearAllMocks()
     subscriptionCallbacks = null
     subscriptionSendBinary.mockReset()
-    runtimeCall.mockResolvedValue({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+    runtimeCall.mockResolvedValue({
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'terminal-1',
+          tabId: 'tab-1',
+          leafId: 'pane:1',
+          worktreeId: 'wt-1'
+        }
+      }
+    })
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
@@ -58,6 +68,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
         rows: 24,
         callbacks: {}
       })
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
 
       // Typed input: debounced — nothing sent before the 8ms flush.
       expect(transport.sendInput('yes')).toBe(true)
@@ -92,6 +103,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
         rows: 24,
         callbacks: {}
       })
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
 
       expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true) // CPR reply
       await Promise.resolve()
@@ -120,6 +132,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
       rows: 24,
       callbacks: {}
     })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
 
     // A paste above CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS forces the async
     // validation path, so its bytes are captured in validationTail, not pending.

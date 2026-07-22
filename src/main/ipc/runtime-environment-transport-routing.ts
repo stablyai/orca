@@ -14,40 +14,22 @@ import {
 import { withRemoteRuntimeTailscaleHint } from '../../shared/remote-runtime-tailscale-hint'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
 import {
+  reconnectRemoteRuntimeSharedControlConnection,
   sendRemoteRuntimeConnectionRequest,
   sendRemoteRuntimeSharedControlRequest,
   subscribeRemoteRuntimeSharedControlRequest
 } from './runtime-environment-request-connections'
 import { attachRemoteControlDiagnostics } from './runtime-environment-status-diagnostics'
+import { runtimeEnvironmentRevisionFailure } from './runtime-environment-revision-guard'
+import { withTailscaleHintForResponse } from './runtime-environment-tailscale-response'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 const sharedControlSupport = new Map<string, { cacheKey: string; check: Promise<boolean> }>()
 
-export function resetSharedControlSupport(): void {
-  sharedControlSupport.clear()
-}
+export const resetSharedControlSupport = (): void => sharedControlSupport.clear()
 
-export function clearSharedControlSupport(environmentId: string): void {
-  sharedControlSupport.delete(environmentId)
-}
-
-// Why: when a remote host is unreachable, point the user at Tailscale as the
-// connectivity remedy; the helper no-ops on non-connectivity errors.
-function withTailscaleHintForResponse<TResult>(
-  response: RuntimeRpcResponse<TResult>,
-  endpoint: string
-): RuntimeRpcResponse<TResult> {
-  if (response.ok === true) {
-    return response
-  }
-  return {
-    ...response,
-    error: {
-      ...response.error,
-      message: withRemoteRuntimeTailscaleHint(response.error.message, endpoint)
-    }
-  }
-}
+export const clearSharedControlSupport = (environmentId: string): void =>
+  void sharedControlSupport.delete(environmentId)
 
 export async function getRuntimeEnvironmentStatus(
   userDataPath: string,
@@ -85,6 +67,7 @@ export async function getRuntimeEnvironmentStatus(
   }
   if (response.ok === true) {
     markEnvironmentUsed(userDataPath, environment.id, { runtimeId: response._meta.runtimeId })
+    reconnectRemoteRuntimeSharedControlConnection(environment.id)
   }
   return attachRemoteControlDiagnostics(
     withTailscaleHintForResponse(response, pairing.endpoint),
@@ -97,7 +80,8 @@ export async function callRuntimeEnvironment(
   selector: string,
   method: string,
   params: unknown,
-  timeoutMs?: number
+  timeoutMs?: number,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<RuntimeRpcResponse<unknown>> {
   const environment = resolveEnvironment(userDataPath, selector)
   // Why: connection failures reject (they don't resolve as ok:false), so the
@@ -109,6 +93,14 @@ export async function callRuntimeEnvironment(
   try {
     return await enqueueRuntimeCall(environment.id, method, async () => {
       const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
+      const revisionFailure = runtimeEnvironmentRevisionFailure(
+        currentEnvironment,
+        expectedEnvironmentPairingRevision,
+        method
+      )
+      if (revisionFailure) {
+        return revisionFailure
+      }
       const pairing = getPreferredPairingOffer(currentEnvironment)
       endpoint = pairing.endpoint
       const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
@@ -125,6 +117,7 @@ export async function callRuntimeEnvironment(
       }
       if (
         method !== 'status.get' &&
+        !shouldUseOneShotRequest(method) &&
         (await supportsSharedControl(userDataPath, currentEnvironment, pairing, effectiveTimeoutMs))
       ) {
         const response = await sendRemoteRuntimeSharedControlRequest(
@@ -243,6 +236,11 @@ function markEnvironmentUsedFromResponse(
 
 function shouldUseCachedRequestConnection(method: string): boolean {
   return method === 'terminal.send' || method === 'terminal.updateViewport'
+}
+
+function shouldUseOneShotRequest(method: string): boolean {
+  // Why: snapshot recovery must remain available while a retained shared-control stream is reconnecting after a HUB restart.
+  return method === 'session.tabs.list' || method === 'session.tabs.listAll'
 }
 
 function shouldKeepDedicatedSubscriptionSocket(method: string): boolean {

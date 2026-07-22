@@ -37,6 +37,7 @@ import type {
   SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
+import type { ExecutionHostId } from './execution-host'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -580,6 +581,9 @@ export type RuntimeTerminalCreate = {
   ptyId?: string | null
   worktreeId: string
   title: string | null
+  /** Spawn-time execution identity; paired clients must not infer nested SSH from their own graph. */
+  executionHostId?: ExecutionHostId
+  hostPlatform?: NodeJS.Platform
   surface?: 'background' | 'visible'
   warning?: string
   /** Present only for the structured host-authority resume path. */
@@ -597,6 +601,9 @@ export type RuntimeTerminalResolvePane = {
   tabId: string
   leafId: string
   ptyId: string | null
+  worktreeId?: string
+  executionHostId?: ExecutionHostId
+  hostPlatform?: NodeJS.Platform
 }
 
 export type RuntimeTerminalFocus = {

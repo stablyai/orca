@@ -77,6 +77,7 @@ import {
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import {
   buildLinearIssueLinkedWorkItem,
   getLinearLinkedWorkItemBranchName,
@@ -2381,16 +2382,44 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return { filePaths: [], folderPaths: [] }
       }
       const destinationDir = joinPath(targetRepoPath, '.orca/drops')
+      const sshExpectation = targetConnectionId
+        ? captureDirectSshMutationExpectation(
+            useAppStore.getState(),
+            targetConnectionId,
+            targetSettings?.activeRuntimeEnvironmentId
+          )
+        : {
+            expectedExecutionHostId: 'local' as const,
+            expectedSshTargetId: undefined,
+            expectedSshConnectionGeneration: undefined
+          }
+      const assertCurrent = targetConnectionId
+        ? () => {
+            const current = captureDirectSshMutationExpectation(
+              useAppStore.getState(),
+              targetConnectionId,
+              targetSettings?.activeRuntimeEnvironmentId
+            )
+            if (
+              current.expectedSshTargetId !== sshExpectation.expectedSshTargetId ||
+              current.expectedSshConnectionGeneration !==
+                sshExpectation.expectedSshConnectionGeneration
+            ) {
+              throw new Error('Attachment upload host changed; retry the upload.')
+            }
+          }
+        : undefined
       const { results } = await importExternalPathsToRuntime(
         {
           settings: targetSettings,
           worktreeId: targetRepoPath,
           worktreePath: targetRepoPath,
-          connectionId: targetConnectionId ?? undefined
+          connectionId: targetConnectionId ?? undefined,
+          ...sshExpectation
         },
         sourcePaths,
         destinationDir,
-        { ensureDestinationDir: true }
+        { ensureDestinationDir: true, assertCurrent }
       )
       const uploadResult = collectComposerDropUploadResult(results)
       if (shouldReportComposerDropUploadFailure(uploadResult, canReportFailure)) {

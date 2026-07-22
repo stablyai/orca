@@ -141,6 +141,167 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
 })
 
 describe('getExplicitRuntimeEnvironmentIdForWorktree', () => {
+  it('keeps SSH execution on its paired HUB transport owner', () => {
+    const nestedState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'different-hub' },
+      repos: [
+        {
+          id: 'nested-repo',
+          connectionId: 'hub-private-ssh',
+          executionHostId: 'runtime:owner-hub'
+        }
+      ],
+      worktreesByRepo: {
+        'nested-repo': [
+          {
+            id: 'nested-repo::remote-worktree',
+            repoId: 'nested-repo',
+            hostId: 'ssh:hub-private-ssh',
+            runtimeOwnerEnvironmentId: 'owner-hub'
+          }
+        ]
+      }
+    }
+
+    expect(
+      getExplicitRuntimeEnvironmentIdForWorktree(nestedState, 'nested-repo::remote-worktree')
+    ).toBe('owner-hub')
+    expect(getRuntimeEnvironmentIdForWorktree(nestedState, 'nested-repo::remote-worktree')).toBe(
+      'owner-hub'
+    )
+    expect(getExecutionHostIdForWorktree(nestedState, 'nested-repo::remote-worktree')).toBe(
+      'ssh:hub-private-ssh'
+    )
+  })
+
+  it('uses the repo HUB owner for a stale SSH publication without transport provenance', () => {
+    const stalePublicationState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'different-hub' },
+      repos: [
+        {
+          id: 'nested-repo',
+          connectionId: 'hub-private-ssh',
+          executionHostId: 'runtime:owner-hub'
+        }
+      ],
+      worktreesByRepo: {
+        'nested-repo': [
+          {
+            id: 'nested-repo::remote-worktree',
+            repoId: 'nested-repo',
+            hostId: 'ssh:hub-private-ssh'
+          }
+        ]
+      }
+    }
+
+    expect(
+      getExplicitRuntimeEnvironmentIdForWorktree(
+        stalePublicationState,
+        'nested-repo::remote-worktree'
+      )
+    ).toBe('owner-hub')
+  })
+
+  it('uses explicit HUB ownership from a detected-only worktree projection', () => {
+    const detectedOnlyState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'different-hub' },
+      repos: [],
+      worktreesByRepo: {},
+      detectedWorktreesByRepo: {
+        'nested-repo': {
+          worktrees: [
+            {
+              id: 'nested-repo::remote-worktree',
+              repoId: 'nested-repo',
+              hostId: 'ssh:hub-private-ssh',
+              runtimeOwnerEnvironmentId: 'owner-hub'
+            }
+          ]
+        }
+      }
+    }
+
+    expect(
+      getExplicitRuntimeEnvironmentIdForWorktree(detectedOnlyState, 'nested-repo::remote-worktree')
+    ).toBe('owner-hub')
+    expect(getExecutionHostIdForWorktree(detectedOnlyState, 'nested-repo::remote-worktree')).toBe(
+      'ssh:hub-private-ssh'
+    )
+  })
+
+  it('fails closed for conflicting detected-only HUB ownership', () => {
+    const ambiguousState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'hub-a' },
+      repos: [],
+      worktreesByRepo: {},
+      detectedWorktreesByRepo: {
+        'repo-a': {
+          worktrees: [
+            {
+              id: 'shared-worktree',
+              repoId: 'repo-a',
+              hostId: 'ssh:private-a',
+              runtimeOwnerEnvironmentId: 'hub-a'
+            }
+          ]
+        },
+        'repo-b': {
+          worktrees: [
+            {
+              id: 'shared-worktree',
+              repoId: 'repo-b',
+              hostId: 'ssh:private-b',
+              runtimeOwnerEnvironmentId: 'hub-b'
+            }
+          ]
+        }
+      }
+    }
+
+    expect(getExplicitRuntimeEnvironmentIdForWorktree(ambiguousState, 'shared-worktree')).toBeNull()
+    expect(getExecutionHostIdForWorktree(ambiguousState, 'shared-worktree')).toBe(
+      'runtime:unresolved-owner'
+    )
+  })
+
+  it('keeps simultaneous HUB-owned SSH worktrees scoped to their own runtimes', () => {
+    const multiHubState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'hub-b' },
+      repos: [
+        { id: 'repo-a', connectionId: 'private-a', executionHostId: 'runtime:hub-a' },
+        { id: 'repo-b', connectionId: 'private-b', executionHostId: 'runtime:hub-b' }
+      ],
+      worktreesByRepo: {
+        'repo-a': [
+          {
+            id: 'repo-a::ssh-worktree',
+            repoId: 'repo-a',
+            hostId: 'ssh:private-a',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }
+        ],
+        'repo-b': [
+          {
+            id: 'repo-b::ssh-worktree',
+            repoId: 'repo-b',
+            hostId: 'ssh:private-b',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          }
+        ]
+      }
+    }
+
+    expect(getRuntimeEnvironmentIdForWorktree(multiHubState, 'repo-a::ssh-worktree')).toBe('hub-a')
+    expect(getRuntimeEnvironmentIdForWorktree(multiHubState, 'repo-b::ssh-worktree')).toBe('hub-b')
+    expect(getExecutionHostIdForWorktree(multiHubState, 'repo-a::ssh-worktree')).toBe(
+      'ssh:private-a'
+    )
+    expect(getExecutionHostIdForWorktree(multiHubState, 'repo-b::ssh-worktree')).toBe(
+      'ssh:private-b'
+    )
+  })
+
   it('does not treat the focused runtime as ownership for legacy-local worktrees', () => {
     expect(getRuntimeEnvironmentIdForWorktree(state, 'legacy-repo::wt-legacy')).toBe('focused-env')
     expect(getExplicitRuntimeEnvironmentIdForWorktree(state, 'legacy-repo::wt-legacy')).toBeNull()
@@ -330,6 +491,12 @@ describe('getRuntimeSessionMirrorEnvironmentIds', () => {
             id: 'runtime-repo::wt-runtime-override',
             repoId: 'runtime-repo',
             hostId: 'runtime:worktree-env'
+          },
+          {
+            id: 'runtime-repo::wt-nested-ssh',
+            repoId: 'runtime-repo',
+            hostId: 'ssh:private-target',
+            runtimeOwnerEnvironmentId: 'nested-owner-env'
           }
         ]
       }
@@ -338,6 +505,7 @@ describe('getRuntimeSessionMirrorEnvironmentIds', () => {
     expect(getRuntimeSessionMirrorEnvironmentIds(multiRuntimeState)).toEqual([
       'focused-env',
       'folder-env',
+      'nested-owner-env',
       'owner-env',
       'worktree-env'
     ])
@@ -352,6 +520,26 @@ describe('getRuntimeSessionMirrorEnvironmentIds', () => {
         }
       })
     ).toEqual(['focused-env', 'restored-env'])
+  })
+
+  it('includes detected-only worktree owners before the primary catalog loads', () => {
+    expect(
+      getRuntimeSessionMirrorEnvironmentIds({
+        settings: { activeRuntimeEnvironmentId: null },
+        detectedWorktreesByRepo: {
+          repo: {
+            worktrees: [
+              {
+                id: 'repo::nested',
+                repoId: 'repo',
+                hostId: 'ssh:private-target',
+                runtimeOwnerEnvironmentId: 'owner-hub'
+              }
+            ]
+          }
+        }
+      })
+    ).toEqual(['owner-hub'])
   })
 
   it('does not include local or SSH owners', () => {

@@ -14,12 +14,12 @@ import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { setWithLRU } from '@/lib/scroll-cache'
-import { getConnectionIdForFile } from '@/lib/connection-context'
 import { getCombinedDiffSectionConnectionId } from './combined-diff-section-connection'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import {
@@ -1185,18 +1185,20 @@ export default function CombinedDiffViewer({
       const content = modifiedEditor?.getValue() ?? section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
       try {
-        const connectionId = getConnectionIdForFile(file.worktreeId, absolutePath) ?? undefined
         const state = useAppStore.getState()
         const worktree = file.worktreeId
           ? findWorktreeById(state.worktreesByRepo, file.worktreeId)
           : null
         await writeRuntimeFile(
-          {
-            settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
-            worktreeId: file.worktreeId,
-            worktreePath: worktree?.path ?? null,
-            connectionId
-          },
+          getEditorFileOperationContext(
+            state,
+            {
+              worktreeId: file.worktreeId,
+              runtimeEnvironmentId: file.runtimeEnvironmentId,
+              operationProvenance: file.operationProvenance
+            },
+            worktree?.path ?? null
+          ),
           absolutePath,
           content
         )
@@ -1237,7 +1239,7 @@ export default function CombinedDiffViewer({
         console.error('Save failed:', err)
       }
     },
-    [file.filePath, file.runtimeEnvironmentId, file.worktreeId, sections]
+    [file.filePath, file.operationProvenance, file.runtimeEnvironmentId, file.worktreeId, sections]
   )
 
   const handleSectionSaveRef = useRef(handleSectionSave)

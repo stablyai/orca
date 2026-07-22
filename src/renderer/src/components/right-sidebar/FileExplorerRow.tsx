@@ -79,6 +79,7 @@ export type InlineInput = {
   depth: number
   existingName?: string
   existingPath?: string
+  operationOwner?: TreeNode['operationOwner']
 }
 
 // ─── Inline Input Row ────────────────────────────────────────────

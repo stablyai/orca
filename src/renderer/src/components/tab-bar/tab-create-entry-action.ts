@@ -1,5 +1,4 @@
 import { detectLanguage } from '@/lib/language-detect'
-import { getConnectionId } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
 import {
   createRuntimePath,
@@ -14,7 +13,7 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import type { RuntimeFileListState } from '../quick-open-file-list'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import {
   classifyTabEntryQuery,
   type TabEntryActionClassification
@@ -219,14 +218,11 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
   if (!worktree) {
     throw new Error('No active worktree.')
   }
-  const runtimeContext: RuntimeFileOperationArgs = {
-    settings: {
-      activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
-    },
-    worktreeId: args.worktreeId,
-    worktreePath: worktree.path,
-    connectionId: getConnectionId(args.worktreeId) ?? undefined
-  }
+  const runtimeContext: RuntimeFileOperationArgs = getEditorFileOperationContext(
+    state,
+    { worktreeId: args.worktreeId },
+    worktree.path
+  )
   await openTabEntryWithOperations({
     query: args.query,
     fileList: args.fileList,
