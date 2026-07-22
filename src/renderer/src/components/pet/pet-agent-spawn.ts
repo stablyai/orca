@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { setPetBoundSession } from './pet-bound-session'
+import { getPetBoundSession, setPetBoundSession } from './pet-bound-session'
 import { resolveSpawnFreshness } from './pet-session-epoch'
 
 /**
@@ -136,6 +136,11 @@ export function usePetAgentSpawn(): {
     if (!activeWorktreeId) {
       return
     }
+    // Why capture here rather than render the binding into the closure: a stale
+    // closure over `previousBoundTabId` would freeze whatever binding existed
+    // when the hook ran, and the rebind we trigger below updates the binding
+    // — sampling at click time matches the rebind.
+    const previousBoundTabId = getPetBoundSession()?.tabId ?? null
     try {
       // Rotate to a clean session on the 1–3h cadence; otherwise resume.
       const fresh = resolveSpawnFreshness(petSessionDirName(activeWorktreeId))
@@ -150,6 +155,17 @@ export function usePetAgentSpawn(): {
       // an assistant and then still have nothing to say to it. Binding the tab
       // we just created is what makes the pet askable immediately.
       if (result?.tabId) {
+        // Why: rotation (or any rebind) swaps the pet onto a fresh omp tab
+        // while the previous tab's PTY stays alive — omp keeps posting status
+        // on its paneKey, so without this sweep the previous tab's row stays
+        // fresh and the pet stays permanently busy. Drop the prior bound
+        // tab's agent-status entries on every successful rebind (the pet now
+        // points at a different tab, so the orphaned row is no longer
+        // relevant) and mirror the closed-tab suppression so a late hook
+        // event from the dying session cannot resurrect it under us.
+        if (previousBoundTabId && previousBoundTabId !== result.tabId) {
+          useAppStore.getState().dropAgentStatusByTabPrefix(previousBoundTabId)
+        }
         setPetBoundSession({ tabId: result.tabId, worktreeId: activeWorktreeId })
       }
     } catch (error) {
