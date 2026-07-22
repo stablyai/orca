@@ -17,7 +17,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "thai": "ไทย"
       },
       "statusBar": {
         "claudeToggleDescription": "アクティブなワークスペースの Claude トークンとコストの使用状況を表示します。",
@@ -82,6 +83,50 @@
       "mr": "MR",
       "port": "ポート",
       "pr": "PR"
+    }
+  },
+  "featureWallSetup": {
+    "steps": {
+      "two-worktrees": {
+        "name": "マルチタスク",
+        "subtitle": "マルチタスク",
+        "description": "2つの異なるワークツリーで同時に作業できます。それぞれが独立しているため(同じプロジェクト内でも)、2つの機能を同時に進めるのに最適です。"
+      },
+      "browser": {
+        "name": "Orcaのブラウザを使う",
+        "subtitle": "Orcaのブラウザを使う",
+        "description": "Orcaを離れずにWebアプリを閲覧できます。任意の要素を選択し、正確なソースとスタイルをワンクリックでエージェントに送信できます。"
+      },
+      "notifications": {
+        "name": "通知をオンにする",
+        "subtitle": "通知をオンにする",
+        "description": "エージェントが完了した瞬間、対応が必要になった瞬間、またはブロックされた瞬間がすぐにわかります。"
+      },
+      "default-agent": {
+        "name": "デフォルトのエージェントを選ぶ",
+        "subtitle": "デフォルトのエージェントを選ぶ",
+        "description": "お気に入りのエージェントをあらかじめ選択しておくことで、新しい作業をより速く始められます。"
+      },
+      "agent-capabilities": {
+        "name": "Orca CLIを有効にする",
+        "subtitle": "Orca CLIを有効にする",
+        "description": "Orcaのシェルコマンドを登録し、ブラウザ、コンピューター、オーケストレーションのワークフロー向けエージェントスキルをインストールします。"
+      },
+      "task-sources": {
+        "name": "連携を接続する",
+        "subtitle": "連携を接続する",
+        "description": "タスクからワンクリックでエージェントを起動し、PRのステータスを常に確認できます。"
+      },
+      "setup-script": {
+        "name": "ワークスペースのセットアップを自動化する",
+        "subtitle": "ワークスペースのセットアップを自動化する",
+        "description": "インストールとセットアップのコマンドを自動実行し、新しいワークツリーが常にエージェントの準備が整った状態にします。"
+      },
+      "add-two-repos": {
+        "name": "複数のリポジトリで作業を始める",
+        "subtitle": "複数のリポジトリで作業を始める",
+        "description": "主要なリポジトリをOrcaに取り込むことで、フォルダーを探し回ることなくエージェントの作業をすぐに始められます。"
+      }
     }
   },
   "auto": {
@@ -6932,7 +6977,11 @@
             "fastDescription": "修飾キーを押しながらスクロールするときの追加倍率。",
             "tui": "TUI",
             "tuiDescription": "全画面ターミナルアプリ向けの離散的なホイール通知。"
-          }
+          },
+          "behavior_title": "ターミナルの動作",
+          "behavior_description": "ターミナルペインのコマンド入力の動作。",
+          "autosuggest_title": "コマンドの自動提案",
+          "autosuggest_description": "入力中に過去のコマンドからインライン候補を表示します。右矢印キーまたはEndキーで確定できます。"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} テーマのプレビュー",
@@ -8646,7 +8695,9 @@
               "title": "テーマモード",
               "keyword_target": "対象",
               "keyword_editing": "編集"
-            }
+            },
+            "autosuggest_title": "コマンドの自動提案",
+            "autosuggest_description": "シェルプロンプトで入力中に、過去のコマンドから薄いゴーストテキストの候補を表示します。"
           },
           "windows": {
             "search": {

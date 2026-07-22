@@ -1469,6 +1469,17 @@ export type PreloadApi = {
     reportRendererSerializerReady?: (ptyId: string) => Promise<void>
     management: PtyManagementApi
   }
+  terminal: {
+    /** Raw HISTFILE content plus the resolved shell kind for a worktree's shell, or null
+     *  when unsupported (fish/pwsh/powershell/cmd) or missing. Omit `shellPath` to resolve
+     *  the host's default login shell (the common no-override case). Local filesystem only —
+     *  do not call for SSH-hosted worktrees (the remote HISTFILE isn't on this machine). */
+    readHistoryFile: (args: {
+      worktreeId: string
+      shellPath?: string
+      wslDistro?: string
+    }) => Promise<{ content: string; shell: 'bash' | 'zsh' } | null>
+  }
   feedback: {
     submit: (args: {
       feedback: string

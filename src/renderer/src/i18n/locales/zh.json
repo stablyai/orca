@@ -17,7 +17,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "thai": "ไทย"
       },
       "statusBar": {
         "claudeToggleDescription": "显示当前工作区的 Claude Token 与费用消耗情况。",
@@ -82,6 +83,50 @@
       "mr": "MR",
       "port": "端口",
       "pr": "PR"
+    }
+  },
+  "featureWallSetup": {
+    "steps": {
+      "two-worktrees": {
+        "name": "多任务处理",
+        "subtitle": "多任务处理",
+        "description": "同时在 2 个不同的工作树中工作。每个工作树都是隔离的(即使在同一个项目中也是如此),非常适合同时处理 2 个功能。"
+      },
+      "browser": {
+        "name": "使用 Orca 浏览器",
+        "subtitle": "使用 Orca 浏览器",
+        "description": "无需离开 Orca 即可浏览你的 Web 应用。选取任意元素,一键将其确切的源代码和样式发送给智能体。"
+      },
+      "notifications": {
+        "name": "开启通知",
+        "subtitle": "开启通知",
+        "description": "智能体完成任务、需要处理或被阻塞时,第一时间知道。"
+      },
+      "default-agent": {
+        "name": "选择默认智能体",
+        "subtitle": "选择默认智能体",
+        "description": "预先选好你偏好的智能体,更快开始新工作。"
+      },
+      "agent-capabilities": {
+        "name": "启用 Orca CLI",
+        "subtitle": "启用 Orca CLI",
+        "description": "注册 Orca shell 命令,并为浏览器、计算机和编排工作流安装智能体技能。"
+      },
+      "task-sources": {
+        "name": "连接集成",
+        "subtitle": "连接集成",
+        "description": "一键从任务启动智能体,并实时查看 PR 状态。"
+      },
+      "setup-script": {
+        "name": "自动化工作区设置",
+        "subtitle": "自动化工作区设置",
+        "description": "自动运行安装和设置命令,让每个新的工作树都为智能体做好准备。"
+      },
+      "add-two-repos": {
+        "name": "在多个仓库中开始工作",
+        "subtitle": "在多个仓库中开始工作",
+        "description": "将你的关键仓库添加到 Orca 中,无需四处寻找文件夹即可开始智能体工作。"
+      }
     }
   },
   "auto": {
@@ -6895,7 +6940,11 @@
             "fastDescription": "按住修饰键滚动时的额外倍数。",
             "tui": "TUI",
             "tuiDescription": "面向全屏终端应用的离散滚轮报告。"
-          }
+          },
+          "behavior_title": "终端行为",
+          "behavior_description": "终端面板的命令输入行为。",
+          "autosuggest_title": "命令自动建议",
+          "autosuggest_description": "在你输入时显示基于之前命令的内联建议；按右箭头键或 End 键接受。"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "预览 {{value0}} 主题",
@@ -8609,7 +8658,9 @@
               "title": "主题模式",
               "keyword_target": "目标",
               "keyword_editing": "编辑"
-            }
+            },
+            "autosuggest_title": "命令自动建议",
+            "autosuggest_description": "在 shell 提示符输入时，显示基于之前命令的内联幽灵文本建议。"
           },
           "windows": {
             "search": {

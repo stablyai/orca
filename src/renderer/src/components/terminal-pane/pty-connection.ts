@@ -155,6 +155,15 @@ import {
   isPassiveCompletedHibernationEvidence
 } from '@/lib/sleeping-agent-pane-ownership'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
+import { createTerminalAutosuggestLineTracker } from './terminal-autosuggest-line-tracker'
+import {
+  createTerminalAutosuggestSessionPool,
+  parseShellHistoryContent
+} from './terminal-autosuggest-history-source'
+import {
+  computeActiveAutosuggestState,
+  type ActiveAutosuggestState
+} from './terminal-autosuggest-active-state'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { resolveSshPaneConnectGate } from './ssh-pane-connect-gate'
@@ -655,7 +664,22 @@ type PanePtyBinding = IDisposable & {
    *  stay silent — main's '2031-subscribe' fact is the sole responder for
    *  gate-managed PTYs. */
   isHiddenDeliveryGateManagedPty: () => boolean
+  /** Ghost-text command suggestion currently active for this pane, or null.
+   *  Null when autosuggest is disabled, the cursor is not at end-of-input, or
+   *  no history candidate extends the typed prefix. Recomputed on each call. */
+  getAutosuggestActiveState: () => ActiveAutosuggestState | null
+  /** Subscribe to events that can change this pane's autosuggest state (prompt
+   *  transitions, cursor moves, resizes). No-op subscription when autosuggest
+   *  is disabled. Returns an unsubscribe function. */
+  subscribeAutosuggest: (listener: () => void) => () => void
 }
+
+/** The autosuggest-facing surface of a pane binding, consumed by TerminalPane's
+ *  overlay + accept-shortcut wiring (panePtyBindingsRef stores IDisposable). */
+export type PaneAutosuggestAccess = Pick<
+  PanePtyBinding,
+  'getAutosuggestActiveState' | 'subscribeAutosuggest'
+>
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
   return isAgentTaskCompleteOsNotificationEnabledFromState(useAppStore.getState())
@@ -2102,6 +2126,27 @@ export function connectPanePty(
     // byte authority after this function explicitly revoked routing trust.
     sampleVisiblePaneForegroundAgent(true)
   }
+  // Why: per-pane command-autosuggest state. Gated on the setting so a disabled
+  // feature constructs nothing and does zero per-keystroke/per-chunk work. The
+  // tracker's prompt boundary is driven by either delivery path (byte-mode
+  // commandLifecycle callbacks below, or main-authority facts further down); the
+  // session pool records commands run this session, seeded once with persisted
+  // HISTFILE history after the shell is known.
+  const autosuggestEnabled = useAppStore.getState().settings?.terminalAutosuggestEnabled !== false
+  const autosuggestLineTracker = autosuggestEnabled
+    ? createTerminalAutosuggestLineTracker(pane.terminal)
+    : null
+  const autosuggestSessionPool = autosuggestEnabled ? createTerminalAutosuggestSessionPool() : null
+  let autosuggestPersistedHistory: readonly string[] = []
+  const recordSubmittedAutosuggestCommand = (): void => {
+    // Why: snapshot the typed line BEFORE resetting the tracker — command-start
+    // resets the prompt boundary, after which getCurrentInputLine returns null.
+    const submitted = autosuggestLineTracker?.getCurrentInputLine()
+    autosuggestLineTracker?.onCommandStartedFact()
+    if (submitted) {
+      autosuggestSessionPool?.push(submitted)
+    }
+  }
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandStarted: () => {
       // Why: a new command invalidates cleanup waiting on the previous D; only
@@ -2109,10 +2154,12 @@ export function connectPanePty(
       deferredCommandFinishedStatusDrop = null
       visibleForegroundSamplePending = false
       visibleForegroundSampleSettled = false
+      recordSubmittedAutosuggestCommand()
       // Why: typed commands can be aliases, so they only widen the bounded
       // process-confirmation window; they never become routing evidence.
       paneForegroundAgentTracker.onCommandStarted(commandInferredPaneAgent)
     },
+    onPromptEnd: () => autosuggestLineTracker?.onPromptEndFact(),
     onCommandFinished: handleCommandFinished
   })
   // Why: the xterm OSC 133 swallow is rendering hygiene, not a side effect —
@@ -2213,6 +2260,10 @@ export function connectPanePty(
         onAgentBecameWorking,
         onAgentExited,
         onCommandFinished: handleCommandFinished,
+        // Why: under main authority the OSC 133;B/C boundaries arrive as facts,
+        // not bytes — drive the same autosuggest tracker the byte path drives.
+        onCommandStarted: recordSubmittedAutosuggestCommand,
+        onPromptEnd: () => autosuggestLineTracker?.onPromptEndFact(),
         onPrLink: (link) =>
           useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link),
         // Why: the Command Code settle policy stays here — the done settle
@@ -3199,6 +3250,28 @@ export function connectPanePty(
   const connectionId = worktreeConnectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
+  // Why: seed the autosuggest pool once from this worktree's persisted HISTFILE so a
+  // fresh session can suggest previously-run commands before any run again. Main resolves
+  // the shell: an explicit override is passed through; when absent (the common OS default
+  // login shell case) main resolves process.env.SHELL and returns the kind, so the renderer
+  // no longer needs to identify the shell itself. Skipped for SSH worktrees (connectionId):
+  // the remote HISTFILE isn't on this machine's filesystem (see task-10 report). Best-effort:
+  // failures degrade to session-only suggestions.
+  if (autosuggestEnabled && !connectionId) {
+    void window.api.terminal
+      .readHistoryFile({
+        worktreeId: deps.worktreeId,
+        ...(shellOverride ? { shellPath: shellOverride } : {})
+      })
+      .then((result) => {
+        if (result && !disposed) {
+          autosuggestPersistedHistory = parseShellHistoryContent(result.content, result.shell)
+        }
+      })
+      .catch(() => {
+        /* best-effort seed — session-run commands still populate the pool */
+      })
+  }
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
   // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
   // enables ConPTY synchronized-output protection, which strips an agent's
@@ -8090,6 +8163,37 @@ export function connectPanePty(
     isHiddenDeliveryGateManagedPty() {
       return isHiddenDeliveryGateManagedPty(transport.getPtyId())
     },
+    getAutosuggestActiveState() {
+      if (!autosuggestLineTracker || !autosuggestSessionPool) {
+        return null
+      }
+      // Why: session-run commands rank ahead of persisted history (both already
+      // most-recent-first) so the freshest intent wins the prefix match.
+      const candidates = [...autosuggestSessionPool.getAll(), ...autosuggestPersistedHistory]
+      const foreground = pane.terminal.options.theme?.foreground ?? '#ffffff'
+      return computeActiveAutosuggestState(
+        pane.terminal,
+        autosuggestLineTracker,
+        candidates,
+        foreground
+      )
+    },
+    subscribeAutosuggest(listener) {
+      if (!autosuggestLineTracker) {
+        return () => {}
+      }
+      // Why: state can change from prompt transitions (tracker), typing/cursor
+      // movement (onCursorMove), and geometry changes that invalidate the ghost
+      // pixel position (onResize) — recompute on all three.
+      const unsubscribeTracker = autosuggestLineTracker.onChange(listener)
+      const cursorDisposable = pane.terminal.onCursorMove(listener)
+      const resizeDisposable = pane.terminal.onResize(listener)
+      return () => {
+        unsubscribeTracker()
+        cursorDisposable.dispose()
+        resizeDisposable.dispose()
+      }
+    },
     // Why: visible-resume size readback repairs dropped hidden resizes without refitting against xterm's transient hidden DOM fallback.
     noteVisibilityResume() {
       ptySizeReassertion.request({ fit: false })
@@ -8256,6 +8360,7 @@ export function connectPanePty(
         pendingGeometryReportRaf = null
       }
       commandLifecycle.dispose()
+      autosuggestLineTracker?.dispose()
       deferredCommandFinishedStatusDrop = null
       visibleForegroundSamplePending = false
       visibleForegroundSampleSettled = false

@@ -2,7 +2,7 @@
 // command-finished and GitHub pr-link scanning to the shared tracker so main
 // emits those facts for local/SSH PTYs. These tests pin the chunk-boundary
 // carry, exit-code best-effort, dedupe, and synthetic-frame isolation rules.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createTerminalTitleTracker,
   type TerminalTitleTrackerCallbacks
@@ -74,6 +74,21 @@ describe('createTerminalTitleTracker command-finished facts', () => {
     tracker.handleChunk(`${ESC}]0;zsh${BEL}${ESC}]133;D;0${BEL}done${BEL}`)
 
     expect(events).toEqual([['title', 'zsh'], ['finished', 0], ['bell']])
+  })
+})
+
+describe('createTerminalTitleTracker command-started/prompt-end facts', () => {
+  it('fires onCommandStarted and onPromptEnd for OSC 133;C and ;B', () => {
+    const onCommandStarted = vi.fn()
+    const onPromptEnd = vi.fn()
+    const tracker = createTerminalTitleTracker({
+      onCommandStarted,
+      onPromptEnd
+    })
+    tracker.handleChunk('\x1b]133;B\x07$ ')
+    tracker.handleChunk('git status\x1b]133;C\x07')
+    expect(onPromptEnd).toHaveBeenCalledTimes(1)
+    expect(onCommandStarted).toHaveBeenCalledTimes(1)
   })
 })
 

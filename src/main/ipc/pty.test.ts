@@ -2545,6 +2545,39 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(expectedOmpStatusExtension)
       })
 
+      async function withPosixPlatform<T>(fn: () => Promise<T>): Promise<T> {
+        const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+        try {
+          return await fn()
+        } finally {
+          if (platform) {
+            Object.defineProperty(process, 'platform', platform)
+          }
+        }
+      }
+
+      it('injects worktree-scoped HISTFILE on the daemon path (parity with LocalPtyProvider)', async () => {
+        // Why: the daemon bypasses LocalPtyProvider's internal injectHistoryEnv, so without
+        // this the common local case shares one global history and never seeds autosuggest.
+        const env = await withPosixPlatform(() =>
+          daemonSpawnAndGetEnv(undefined, undefined, undefined, undefined, {
+            worktreeId: 'wt-daemon-hist',
+            shellOverride: '/bin/bash'
+          } as never)
+        )
+        expect(env.HISTFILE).toMatch(/[/\\]terminal-history[/\\][^/\\]+[/\\]bash_history$/)
+      })
+
+      it('resolves the daemon HISTFILE shell from process.env.SHELL when no override is given', async () => {
+        const env = await withPosixPlatform(() =>
+          daemonSpawnAndGetEnv(undefined, undefined, undefined, { SHELL: '/usr/bin/zsh' }, {
+            worktreeId: 'wt-daemon-default-shell'
+          } as never)
+        )
+        expect(env.HISTFILE).toMatch(/[/\\]zsh_history$/)
+      })
+
       it('threads command: "omp" through to piBuildPtyEnv on the daemon path with OMP status metadata', async () => {
         // Why: mirror of the local-spawn OMP threading assertion; the daemon path's `command` forwarding could silently regress otherwise.
         const env = await daemonSpawnAndGetEnv(

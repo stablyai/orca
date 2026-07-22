@@ -331,10 +331,41 @@ export const BRAND_MISTRANSLATIONS = {
 }
 
 export const NATIVE_PICKER_LABELS = {
-  zh: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ko: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ja: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  es: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' }
+  zh: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    thai: 'ไทย'
+  },
+  ko: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    thai: 'ไทย'
+  },
+  ja: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    thai: 'ไทย'
+  },
+  es: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    thai: 'ไทย'
+  },
+  th: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    thai: 'ไทย'
+  }
 }
 
 const CJK_LATIN_SPACED_TERM_PATTERN = CJK_LATIN_SPACED_TERMS.join('|')

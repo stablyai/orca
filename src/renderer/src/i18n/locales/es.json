@@ -17,7 +17,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "thai": "ไทย"
       },
       "statusBar": {
         "claudeToggleDescription": "Muestra el consumo de tokens y el costo de Claude para el espacio de trabajo activo.",
@@ -82,6 +83,50 @@
       "mr": "MR",
       "port": "Puerto",
       "pr": "PR"
+    }
+  },
+  "featureWallSetup": {
+    "steps": {
+      "two-worktrees": {
+        "name": "Multitarea",
+        "subtitle": "Multitarea",
+        "description": "Trabaja en 2 worktrees diferentes a la vez. Cada uno está aislado (incluso en el mismo proyecto). Perfecto para trabajar en 2 funciones a la vez."
+      },
+      "browser": {
+        "name": "Usa el navegador de Orca",
+        "subtitle": "Usa el navegador de Orca",
+        "description": "Navega por tu aplicación web sin salir de Orca. Toma cualquier elemento y envía su código fuente y estilos exactos a un agente con un clic."
+      },
+      "notifications": {
+        "name": "Activa las notificaciones",
+        "subtitle": "Activa las notificaciones",
+        "description": "Entérate en el momento en que un agente termina, necesita atención o se bloquea."
+      },
+      "default-agent": {
+        "name": "Elige tu agente predeterminado",
+        "subtitle": "Elige tu agente predeterminado",
+        "description": "Empieza a trabajar más rápido con tu agente preferido ya seleccionado."
+      },
+      "agent-capabilities": {
+        "name": "Activa Orca CLI",
+        "subtitle": "Activa Orca CLI",
+        "description": "Registra el comando de shell de Orca e instala las habilidades de agente para flujos de trabajo de navegador, ordenador y orquestación."
+      },
+      "task-sources": {
+        "name": "Conecta integraciones",
+        "subtitle": "Conecta integraciones",
+        "description": "Inicia un agente desde una tarea con un clic y mantén el estado de la PR a la vista."
+      },
+      "setup-script": {
+        "name": "Automatiza la configuración del espacio de trabajo",
+        "subtitle": "Automatiza la configuración del espacio de trabajo",
+        "description": "Ejecuta comandos de instalación y configuración automáticamente para que cada worktree nuevo esté listo para los agentes."
+      },
+      "add-two-repos": {
+        "name": "Trabaja en varios repos",
+        "subtitle": "Trabaja en varios repos",
+        "description": "Añade tus repos clave a Orca para poder empezar el trabajo de un agente sin buscar carpetas."
+      }
     }
   },
   "auto": {
@@ -6910,7 +6955,11 @@
             "fastDescription": "Multiplicador adicional al desplazarse con una tecla modificadora.",
             "tui": "TUI",
             "tuiDescription": "Eventos discretos de rueda para apps de terminal de pantalla completa."
-          }
+          },
+          "behavior_title": "Comportamiento del terminal",
+          "behavior_description": "Comportamiento de entrada de comandos para los paneles de terminal.",
+          "autosuggest_title": "Autosugerencia de comandos",
+          "autosuggest_description": "Muestra una sugerencia en línea basada en comandos anteriores mientras escribes; acéptala con la flecha derecha o la tecla Fin."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Vista previa del tema {{value0}}",
@@ -8624,7 +8673,9 @@
               "title": "Modo del tema",
               "keyword_target": "destino",
               "keyword_editing": "edición"
-            }
+            },
+            "autosuggest_title": "Autosugerencia de comandos",
+            "autosuggest_description": "Muestra una sugerencia de texto fantasma en línea basada en comandos anteriores mientras escribes en el prompt de la shell."
           },
           "windows": {
             "search": {

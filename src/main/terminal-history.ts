@@ -17,7 +17,7 @@ import { parseWslPath, toLinuxPath } from './wsl'
 const HISTORY_DIR_NAME = 'terminal-history'
 const HISTORY_DIR_NAME_WSL = 'terminal-history-wsl'
 
-type ShellKind = 'zsh' | 'bash' | 'fish' | 'pwsh' | 'powershell' | 'cmd' | 'unknown'
+export type ShellKind = 'zsh' | 'bash' | 'fish' | 'pwsh' | 'powershell' | 'cmd' | 'unknown'
 
 let scheduledHistoryGcTimer: ReturnType<typeof setTimeout> | null = null
 let historyGcRunning = false
@@ -58,7 +58,7 @@ export function hashWorktreeId(worktreeId: string): string {
 }
 
 /** Map shell kind to the filename used inside the history directory. */
-function historyFilename(shell: ShellKind): string | null {
+export function historyFilename(shell: ShellKind): string | null {
   switch (shell) {
     case 'zsh':
       return 'zsh_history'

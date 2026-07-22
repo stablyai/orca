@@ -50,7 +50,8 @@ export function resolveTerminalKeyboardShortcutAction(
   isKittyKeyboardActivePane: Parameters<typeof resolveTerminalShortcutAction>[7],
   layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
-  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>
+  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
+  hasActiveAutosuggestAtEndOfLine?: Parameters<typeof resolveTerminalShortcutAction>[11]
 ): ReturnType<typeof resolveTerminalShortcutAction> {
   // Why: keep the host callback required at the production boundary so a
   // caller cannot silently fall back to client-OS byte routing.
@@ -65,7 +66,8 @@ export function resolveTerminalKeyboardShortcutAction(
     isKittyKeyboardActivePane,
     layoutBaseCharacterForCode,
     getWindowsShiftEnterEncoding,
-    isWindowsTerminalHost
+    isWindowsTerminalHost,
+    hasActiveAutosuggestAtEndOfLine
   )
 }
 
@@ -203,6 +205,10 @@ type KeyboardHandlersDeps = {
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
   paneKittyKeyboardModesRef?: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
+  // Why: stubbed plumbing for the ghost-text accept shortcut; Task 10 supplies
+  // the real pane-level autosuggest state lookups.
+  hasActiveAutosuggestAtEndOfLine?: () => boolean
+  getAutosuggestRemainderForPane?: (paneId: number) => string | null
   keybindings?: KeybindingOverrides
   terminalShortcutPolicy?: TerminalShortcutPolicy
 }
@@ -238,6 +244,8 @@ export function useTerminalKeyboardShortcuts({
   searchStateRef,
   macOptionAsAltRef,
   paneKittyKeyboardModesRef,
+  hasActiveAutosuggestAtEndOfLine,
+  getAutosuggestRemainderForPane,
   keybindings,
   terminalShortcutPolicy = 'orca-first'
 }: KeyboardHandlersDeps): void {
@@ -397,7 +405,8 @@ export function useTerminalKeyboardShortcuts({
         isKittyKeyboardActivePane,
         getLayoutBaseCharacterForCode,
         getActivePaneWindowsShiftEnterEncoding,
-        isActivePaneWindowsTerminalHost
+        isActivePaneWindowsTerminalHost,
+        hasActiveAutosuggestAtEndOfLine
       )
       if (!action) {
         return
@@ -429,6 +438,20 @@ export function useTerminalKeyboardShortcuts({
               | undefined
             binding?.requestDroidReconfirmation?.()
           }
+        }
+        return
+      }
+
+      if (action.type === 'acceptAutosuggest') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        const remainder = getAutosuggestRemainderForPane?.(pane.id)
+        if (remainder) {
+          paneTransportsRef.current.get(pane.id)?.sendInput(remainder)
         }
         return
       }

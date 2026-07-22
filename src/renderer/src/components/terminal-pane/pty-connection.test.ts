@@ -897,6 +897,9 @@ describe('connectPanePty', () => {
         },
         agentStatus: {
           inferInterrupt: vi.fn().mockResolvedValue(false)
+        },
+        terminal: {
+          readHistoryFile: vi.fn().mockResolvedValue(null)
         }
       },
       dispatchEvent: vi.fn(),

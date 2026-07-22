@@ -2797,6 +2797,9 @@ export type GlobalSettings = {
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
   /** Per-worktree shell history file so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
+  /** Shows a dimmed inline suggestion completing the current input from prior
+   *  commands; accept with RightArrow/End at end-of-line. Defaults to true. */
+  terminalAutosuggestEnabled: boolean
   /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
   terminalHiddenViewParking?: boolean
   /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */

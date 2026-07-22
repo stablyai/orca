@@ -40,7 +40,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "thai": "ไทย"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",
@@ -105,6 +106,50 @@
       "mr": "MR",
       "port": "Port",
       "pr": "PR"
+    }
+  },
+  "featureWallSetup": {
+    "steps": {
+      "two-worktrees": {
+        "name": "Multi-task",
+        "subtitle": "Multi-task",
+        "description": "Work in 2 different worktrees at once. Each one is isolated (even in the same project). Perfect for working on 2 features at once."
+      },
+      "browser": {
+        "name": "Use Orca's browser",
+        "subtitle": "Use Orca's browser",
+        "description": "Browse your web app without leaving Orca. Grab any element and send its exact source and styles to an agent with one click."
+      },
+      "notifications": {
+        "name": "Turn on notifications",
+        "subtitle": "Turn on notifications",
+        "description": "Know the moment an agent finishes, needs attention, or gets blocked."
+      },
+      "default-agent": {
+        "name": "Choose your default agent",
+        "subtitle": "Choose your default agent",
+        "description": "Start new work faster with your preferred agent already selected."
+      },
+      "agent-capabilities": {
+        "name": "Enable Orca CLI",
+        "subtitle": "Enable Orca CLI",
+        "description": "Register the Orca shell command and install agent skills for browser, computer, and orchestration workflows."
+      },
+      "task-sources": {
+        "name": "Connect integrations",
+        "subtitle": "Connect integrations",
+        "description": "Start an agent from a task in one click and keep PR status in view."
+      },
+      "setup-script": {
+        "name": "Automate workspace setup",
+        "subtitle": "Automate workspace setup",
+        "description": "Run install and setup commands automatically so every new worktree is ready for agents."
+      },
+      "add-two-repos": {
+        "name": "Start work in multiple repos",
+        "subtitle": "Start work in multiple repos",
+        "description": "Bring your key repos into Orca so you can start agent work without hunting for folders."
+      }
     }
   },
   "auto": {
@@ -6970,7 +7015,11 @@
             "fastDescription": "Extra multiplier while scrolling with a modifier key.",
             "tui": "TUI",
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
-          }
+          },
+          "behavior_title": "Terminal Behavior",
+          "behavior_description": "Command input behavior for terminal panes.",
+          "autosuggest_title": "Command Autosuggest",
+          "autosuggest_description": "Show an inline suggestion from prior commands as you type; accept with the Right Arrow or End key."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -8684,7 +8733,9 @@
               "title": "Theme Mode",
               "keyword_target": "target",
               "keyword_editing": "editing"
-            }
+            },
+            "autosuggest_title": "Command Autosuggest",
+            "autosuggest_description": "Show an inline ghost-text suggestion from prior commands while typing at a shell prompt."
           },
           "windows": {
             "search": {

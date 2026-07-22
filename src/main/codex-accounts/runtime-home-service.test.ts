@@ -176,7 +176,8 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
     agentStatusHooksEnabled,
-    tabAutoGenerateTitle
+    tabAutoGenerateTitle,
+    terminalAutosuggestEnabled: overrides.terminalAutosuggestEnabled ?? true
   }
 }
 

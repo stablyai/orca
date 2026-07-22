@@ -71,4 +71,14 @@ describe('createTerminalCommandLifecycle', () => {
     disposable.dispose()
     expect(dispose).toHaveBeenCalledOnce()
   })
+
+  it('fires onPromptEnd for OSC 133;B fed via handlePtyData', () => {
+    const onPromptEnd = vi.fn()
+    const lifecycle = createTerminalCommandLifecycle({
+      onCommandFinished: vi.fn(),
+      onPromptEnd
+    })
+    lifecycle.handlePtyData('\x1b]133;B\x07')
+    expect(onPromptEnd).toHaveBeenCalledTimes(1)
+  })
 })

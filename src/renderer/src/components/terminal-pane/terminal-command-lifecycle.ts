@@ -5,6 +5,8 @@ type TerminalCommandLifecycleOptions = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
   /** OSC 133;C — the shell exec'd a command; the pane's foreground changed. */
   onCommandStarted?: () => void
+  /** OSC 133;B — the shell returned to prompt; user input is expected. */
+  onPromptEnd?: () => void
 }
 
 export function createTerminalCommandLifecycle(options: TerminalCommandLifecycleOptions): {
@@ -17,7 +19,8 @@ export function createTerminalCommandLifecycle(options: TerminalCommandLifecycle
   // remains the byte path for remote-runtime PTYs and the kill-switch-off mode.
   const scanner = createOsc133CommandFinishedScanner(
     options.onCommandFinished,
-    options.onCommandStarted
+    options.onCommandStarted,
+    options.onPromptEnd
   )
   const disposables: IDisposable[] = []
 

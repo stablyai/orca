@@ -77,6 +77,10 @@ export type TerminalSideEffectFactConsumerCallbacks = {
   /** OSC 133;D — same policy hook the byte-mode commandLifecycle drove
    *  (stale agent-status row drop + interrupt-inference coordination). */
   onCommandFinished?: (bestEffortExitCode: number | null) => void
+  /** OSC 133;C — start of command output, drives autosuggest line-tracker reset. */
+  onCommandStarted?: () => void
+  /** OSC 133;B — prompt drawn, drives autosuggest line-tracker capture. */
+  onPromptEnd?: () => void
   onPrLink?: (link: TerminalGitHubPRLink) => void
   /** Command Code output scrape (no hooks): working seeds the status row;
    *  done is settle-checked by the pane policy before completing the turn. */
@@ -125,6 +129,12 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       return
     case 'command-finished':
       entry.callbacks.onCommandFinished?.(fact.exitCode)
+      return
+    case 'command-started':
+      entry.callbacks.onCommandStarted?.()
+      return
+    case 'prompt-end':
+      entry.callbacks.onPromptEnd?.()
       return
     case 'pr-link':
       entry.callbacks.onPrLink?.(fact.link)

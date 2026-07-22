@@ -42,6 +42,7 @@ export type TerminalShortcutAction =
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
   | { type: 'switchInputSource' }
+  | { type: 'acceptAutosuggest' }
 
 /** Kitty keyboard protocol modifier field: 1 + shift(1) + alt(2). */
 function kittyAltModifiers(shiftKey: boolean): number {
@@ -82,9 +83,24 @@ export function resolveTerminalShortcutAction(
   // Why: lazy so agent-state lookup for the pane's Windows encoding runs only on Shift+Enter, not every keystroke.
   getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
   // Why: keybindings follow the client OS, but byte protocols follow the PTY host — they differ for macOS clients on Windows runtimes.
-  isWindowsTerminalHost: () => boolean = () => isWindows
+  isWindowsTerminalHost: () => boolean = () => isWindows,
+  // Why: lazily reports whether a ghost-text command suggestion is showing at
+  // end-of-line for the active pane, gating bare RightArrow/End accept.
+  hasActiveAutosuggestAtEndOfLine?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+
+  // Why: must win over word-nav/EOL handling below; keybindingMatchesAction's
+  // exact modifier match keeps Alt+Arrow word-nav and Cmd+Arrow EOL jumps
+  // unaffected for the default (unmodified) binding. Excludes repeat so a
+  // held key can't resend the (possibly stale) remainder multiple times.
+  if (
+    !event.repeat &&
+    keybindingMatchesAction('terminal.acceptAutosuggest', event, platform, keybindings) &&
+    hasActiveAutosuggestAtEndOfLine?.()
+  ) {
+    return { type: 'acceptAutosuggest' }
+  }
 
   // Why: capture this chord even on repeat without blocking the OS default input-source switch.
   if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {

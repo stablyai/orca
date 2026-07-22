@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
+import { useCallback, useEffect, useState, type JSX } from 'react'
 import { EyeOff } from 'lucide-react'
 import {
   FEATURE_WALL_SETUP_STEP_IDS,
-  getFirstIncompleteFeatureWallSetupStepId,
-  getFeatureWallSetupSteps
+  getFirstIncompleteFeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
 import type { FeatureWallSetupStepId } from '../../../../shared/feature-wall-setup-steps'
+import { getLocalizedFeatureWallSetupSteps } from '../feature-wall/feature-wall-setup-step-copy'
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,7 @@ export default function SetupGuideModal(): JSX.Element | null {
   const closeModal = useAppStore((s) => s.closeModal)
   const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
   const isOpen = activeModal === 'setup-guide'
-  const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
+  const setupSteps = getLocalizedFeatureWallSetupSteps()
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)

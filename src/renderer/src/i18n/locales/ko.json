@@ -17,7 +17,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "thai": "ไทย"
       },
       "statusBar": {
         "claudeToggleDescription": "활성 워크스페이스에 대한 Claude 토큰 및 비용 사용량을 표시합니다.",
@@ -82,6 +83,50 @@
       "mr": "MR",
       "port": "포트",
       "pr": "PR"
+    }
+  },
+  "featureWallSetup": {
+    "steps": {
+      "two-worktrees": {
+        "name": "멀티태스킹",
+        "subtitle": "멀티태스킹",
+        "description": "2개의 서로 다른 워크트리에서 동시에 작업하세요. 각 워크트리는 (같은 프로젝트 내에서도) 격리되어 있어 2가지 기능을 동시에 작업하기에 완벽합니다."
+      },
+      "browser": {
+        "name": "Orca 브라우저 사용하기",
+        "subtitle": "Orca 브라우저 사용하기",
+        "description": "Orca를 벗어나지 않고 웹 앱을 둘러보세요. 어떤 요소든 선택해서 정확한 소스와 스타일을 클릭 한 번으로 에이전트에 전달할 수 있습니다."
+      },
+      "notifications": {
+        "name": "알림 켜기",
+        "subtitle": "알림 켜기",
+        "description": "에이전트가 작업을 완료하거나, 확인이 필요하거나, 막혔을 때 바로 알 수 있습니다."
+      },
+      "default-agent": {
+        "name": "기본 에이전트 선택하기",
+        "subtitle": "기본 에이전트 선택하기",
+        "description": "선호하는 에이전트를 미리 선택해 두면 새 작업을 더 빠르게 시작할 수 있습니다."
+      },
+      "agent-capabilities": {
+        "name": "Orca CLI 활성화하기",
+        "subtitle": "Orca CLI 활성화하기",
+        "description": "Orca 셸 명령어를 등록하고 브라우저, 컴퓨터, 오케스트레이션 워크플로우를 위한 에이전트 스킬을 설치합니다."
+      },
+      "task-sources": {
+        "name": "통합 연결하기",
+        "subtitle": "통합 연결하기",
+        "description": "작업에서 클릭 한 번으로 에이전트를 시작하고 PR 상태를 계속 확인하세요."
+      },
+      "setup-script": {
+        "name": "워크스페이스 설정 자동화하기",
+        "subtitle": "워크스페이스 설정 자동화하기",
+        "description": "설치 및 설정 명령어를 자동으로 실행해 모든 새 워크트리가 에이전트 작업 준비가 되도록 합니다."
+      },
+      "add-two-repos": {
+        "name": "여러 저장소에서 작업 시작하기",
+        "subtitle": "여러 저장소에서 작업 시작하기",
+        "description": "주요 저장소를 Orca로 가져와서 폴더를 찾아다니지 않고 바로 에이전트 작업을 시작하세요."
+      }
     }
   },
   "auto": {
@@ -6895,7 +6940,11 @@
             "fastDescription": "수정 키로 스크롤할 때 적용되는 추가 배율.",
             "tui": "TUI",
             "tuiDescription": "전체 화면 터미널 앱을 위한 개별 휠 보고."
-          }
+          },
+          "behavior_title": "터미널 동작",
+          "behavior_description": "터미널 패널의 명령 입력 동작입니다.",
+          "autosuggest_title": "명령어 자동 제안",
+          "autosuggest_description": "입력하는 동안 이전 명령어를 기반으로 인라인 제안을 표시합니다. 오른쪽 화살표 키 또는 End 키로 수락하세요."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} 테마 미리보기",
@@ -8609,7 +8658,9 @@
               "title": "테마 모드",
               "keyword_target": "대상",
               "keyword_editing": "편집"
-            }
+            },
+            "autosuggest_title": "명령어 자동 제안",
+            "autosuggest_description": "셸 프롬프트에서 입력하는 동안 이전 명령어를 기반으로 흐릿한 고스트 텍스트 제안을 표시합니다."
           },
           "windows": {
             "search": {

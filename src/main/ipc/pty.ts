@@ -56,6 +56,7 @@ import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-agent-kind'
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { injectHistoryEnv, logHistoryInjection } from '../terminal-history'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import {
@@ -4206,6 +4207,24 @@ export function registerPtyHandlers(
               provider.supportsGitCredentialGuardHost?.(effectiveSessionId) === true
           })
           promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
+          // Why: LocalPtyProvider injects worktree-scoped HISTFILE inside its own spawn,
+          // but the daemon-backed provider (the common local case) bypasses that path
+          // entirely — so without this, daemon-hosted shells share one global history and
+          // never seed autosuggest. Inject here for parity. POSIX-only: bash/zsh are the
+          // only shells with a HISTFILE (no-op otherwise) and the daemon spawns
+          // `process.env.SHELL || /bin/zsh`, matching this resolution. WSL-on-Windows
+          // histfile plumbing is a separately-scoped follow-up (see task-10 report).
+          if (
+            process.platform !== 'win32' &&
+            args.worktreeId &&
+            (getSettings?.()?.terminalScopeHistoryByWorktree ?? true)
+          ) {
+            const daemonShellPath = effectiveShellOverride ?? process.env.SHELL ?? '/bin/zsh'
+            logHistoryInjection(
+              args.worktreeId,
+              injectHistoryEnv(env, args.worktreeId, daemonShellPath, cwd ?? '')
+            )
+          }
         } catch (err) {
           // Why: buildPtyHostEnv has fs side-effects (Pi/OMP install); clear per-PTY state on throw, but only minted ids — caller ids may name existing PTYs.
           if (isMintedSessionId) {

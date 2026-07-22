@@ -110,6 +110,47 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
       )
     ).toEqual({ type: 'sendInput', data: '\x1b\r' })
   })
+
+  it('resolves acceptAutosuggest for a bare RightArrow with an active suggestion', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'ArrowRight' }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).toEqual({ type: 'acceptAutosuggest' })
+  })
+
+  it('does not resolve acceptAutosuggest for a repeated RightArrow, even with an active suggestion', () => {
+    // Why: proves the keydown handler's acceptAutosuggest branch (which runs
+    // ahead of its own e.repeat guard) can't fire on a held key, because this
+    // resolver — its sole gate — already returns null for repeats.
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'ArrowRight', repeat: true }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).toBeNull()
+  })
 })
 
 describe('runTerminalSearchNavigation', () => {
