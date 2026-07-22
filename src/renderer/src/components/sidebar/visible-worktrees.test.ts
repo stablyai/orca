@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   computeClearFilterActions,
   computeVisibleWorktreeIds,
+  getVisibleWorktreeIds,
   isDefaultBranchWorkspace,
+  setVisibleWorktreeIds,
   sidebarHasActiveFilters
 } from './visible-worktrees'
 import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
@@ -685,3 +687,13 @@ describe('computeClearFilterActions', () => {
     })
   })
 })
+
+describe('getVisibleWorktreeIds caching', () => {
+  it('preserves cached rendered order when setVisibleWorktreeIds is populated', () => {
+    setVisibleWorktreeIds(['wt-2', 'wt-1', 'wt-3'])
+    // Why: cached IDs override live store fallback to maintain rendered sidebar card order even when panel is hidden.
+    expect(getVisibleWorktreeIds().slice(0, 3)).toEqual(['wt-2', 'wt-1', 'wt-3'])
+    setVisibleWorktreeIds([])
+  })
+})
+

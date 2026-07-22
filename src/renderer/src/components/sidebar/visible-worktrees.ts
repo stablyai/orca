@@ -266,9 +266,17 @@ export function setVisibleWorktreeIds(ids: string[]): void {
  * only before WorktreeList's first render (e.g. app startup).
  */
 export function getVisibleWorktreeIds(): string[] {
-  // Prefer the cached IDs that mirror the rendered sidebar order.
+  // Why: reuse cached sidebar order while filtering out archived or deleted worktrees.
   if (_cachedVisibleIds.length > 0) {
-    return _cachedVisibleIds
+    const state = useAppStore.getState()
+    const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
+    const validIds = new Set(allWorktrees.map((w) => w.id))
+    const validCached = _cachedVisibleIds.filter((id) => validIds.has(id))
+    if (validCached.length > 0) {
+      const cachedSet = new Set(validCached)
+      const missing = allWorktrees.filter((w) => !cachedSet.has(w.id)).map((w) => w.id)
+      return [...validCached, ...missing]
+    }
   }
 
   // Fallback: live recomputation for the window before WorktreeList renders.
