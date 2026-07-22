@@ -855,31 +855,50 @@ function App(): React.JSX.Element {
             hydratePersistedUI: actions.hydratePersistedUI
           })
         )
-        const startupRuntimeHostIds = await timeRendererStartupStep(
+        // Why: list-runtime-session-hosts reads no repo state, so overlap it with the repo scan
+        // instead of paying its IPC round-trip serially before repos. .catch marks rejections handled
+        // if an earlier await throws first; the value is awaited below and surfaces any error there.
+        const runtimeHostsPromise = timeRendererStartupStep(
           'list-runtime-session-hosts',
           listRuntimeSessionHostIdsForStartup
         )
+        runtimeHostsPromise.catch(() => {})
         // Why: saved remote runtimes can spend the full connect timeout; load only the local catalog for first paint and refresh remotes after hydration.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
         )
-        await timeRendererStartupStep('fetch-project-groups-local', () =>
-          actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
-        )
-        await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
-          actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
-        )
-        await timeRendererStartupStep('fetch-worktrees', () =>
-          actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
-        )
-        // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
-        const sessionRead = await timeRendererStartupStep('session-get', () =>
-          fetchWorkspaceSessionWithRuntimeHostOwners(
-            window.api.session,
-            useAppStore.getState().repos,
-            startupRuntimeHostIds
+        // Why: folder workspaces merge against projectGroups (repos.ts fetchFolderWorkspacesForAllHosts),
+        // so keep this two-step catalog chain internally ordered; it is otherwise independent of
+        // repos/worktrees/session and overlaps the worktree scan below.
+        const localCatalogChain = (async () => {
+          await timeRendererStartupStep('fetch-project-groups-local', () =>
+            actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
           )
-        )
+          await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
+            actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+          )
+        })()
+        const startupRuntimeHostIds = await runtimeHostsPromise
+        // Why: once repos is loaded, fetch-worktrees (snapshots repos), session-get (repos-independent
+        // local disk read), and the local catalog chain are mutually independent — run them concurrently
+        // so the two disk reads hide behind the O(repos) worktree git scan (the startup long pole).
+        // fetchAllWorktrees({hydrationPurge:'defer'}) returns before its folderWorkspaces read (the purge
+        // guard in worktrees.ts), so it needs no catalog ordering here. session-get is a pure read;
+        // hydrate-session-stores below still runs only after all three settle. See #18.
+        const [, sessionRead] = await Promise.all([
+          timeRendererStartupStep('fetch-worktrees', () =>
+            actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
+          ),
+          // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
+          timeRendererStartupStep('session-get', () =>
+            fetchWorkspaceSessionWithRuntimeHostOwners(
+              window.api.session,
+              useAppStore.getState().repos,
+              startupRuntimeHostIds
+            )
+          ),
+          localCatalogChain
+        ])
         await keybindingsPromise
         if (!cancelled) {
           const sessionHydrationOptions = {
