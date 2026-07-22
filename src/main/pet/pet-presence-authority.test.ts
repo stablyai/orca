@@ -62,6 +62,27 @@ describe('pet presence authority', () => {
     expect(state.surfaces.map((s) => s.id)).toEqual(['phone-1'])
   })
 
+  it('hands off the pet immediately when a holding popout is removed (no stale wait)', () => {
+    // The reported bug: pop out a window, move the pet into it, close the
+    // popout -> the pet vanished for ~30s (the stale window) before resurfacing.
+    // removeSurface is what the webContents `destroyed` listener now calls, and
+    // it must reassign at once rather than leave a dead holder.
+    petPresenceAuthority.registerSurface('desk-1', 'desktop-window')
+    petPresenceAuthority.registerSurface('popout-1', 'popout-window')
+    // Pet walks into the popout, which now holds it.
+    petPresenceAuthority.reportExit('desk-1', 'right', { x: 1, y: 0.5 })
+    petPresenceAuthority.acknowledgeEntry('popout-1')
+    expect(petPresenceAuthority.getState().presence.surfaceId).toBe('popout-1')
+
+    // Popout closes -> its surface is evicted the instant the window dies.
+    petPresenceAuthority.removeSurface('popout-1')
+
+    const state = petPresenceAuthority.getState()
+    // Back on the desktop window (preferred over phone), with no dead holder.
+    expect(state.presence.surfaceId).toBe('desk-1')
+    expect(state.surfaces.map((s) => s.id)).toEqual(['desk-1'])
+  })
+
   it('claims the pet onto a live surface but not a stranger', () => {
     petPresenceAuthority.registerSurface('desk-1', 'desktop-window')
     petPresenceAuthority.registerSurface('phone-1', 'phone')

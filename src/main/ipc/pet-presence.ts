@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { petPresenceAuthority, type PetPresenceSnapshot } from '../pet/pet-presence-authority'
+import { PetSurfaceOwnership } from '../pet/pet-surface-ownership'
 import { resolveTravellingPetId } from '../pet/pet-identity'
 import type { PetEdge, PetPoint, PetSurfaceKind } from '../../shared/pet-presence'
 
@@ -15,6 +16,9 @@ import type { PetEdge, PetPoint, PetSurfaceKind } from '../../shared/pet-presenc
 const CHANGED_CHANNEL = 'petPresence:changed'
 
 let unsubscribe: (() => void) | null = null
+
+/** Which surfaces each renderer registered — see PetSurfaceOwnership for why. */
+const surfaceOwnership = new PetSurfaceOwnership()
 
 function broadcast(snapshot: PetPresenceSnapshot): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -41,11 +45,26 @@ export function registerPetPresenceHandlers(): void {
 
   ipcMain.handle(
     'petPresence:registerSurface',
-    async (_event, surfaceId: string, kind: PetSurfaceKind): Promise<PetPresenceSnapshot> =>
-      petPresenceAuthority.registerSurface(surfaceId, kind)
+    async (event, surfaceId: string, kind: PetSurfaceKind): Promise<PetPresenceSnapshot> => {
+      const webContentsId = event.sender.id
+      if (surfaceOwnership.add(webContentsId, surfaceId)) {
+        // Why `once('destroyed')` and not the window's 'closed': this fires for
+        // any renderer that goes away — popout close, crash, reload teardown —
+        // so its surfaces are evicted the instant the window dies instead of
+        // lingering until the 30s stale sweep. evictAll is idempotent, so a
+        // clean removeSurface beforehand makes this a no-op.
+        event.sender.once('destroyed', () => {
+          for (const orphanId of surfaceOwnership.evictAll(webContentsId)) {
+            petPresenceAuthority.removeSurface(orphanId)
+          }
+        })
+      }
+      return petPresenceAuthority.registerSurface(surfaceId, kind)
+    }
   )
 
-  ipcMain.handle('petPresence:removeSurface', async (_event, surfaceId: string): Promise<void> => {
+  ipcMain.handle('petPresence:removeSurface', async (event, surfaceId: string): Promise<void> => {
+    surfaceOwnership.forget(event.sender.id, surfaceId)
     petPresenceAuthority.removeSurface(surfaceId)
   })
 
