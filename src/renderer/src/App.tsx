@@ -184,7 +184,7 @@ import {
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
-  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
@@ -890,13 +890,15 @@ function App(): React.JSX.Element {
           sessionRead.runtimeHostIdByWorkspaceSessionKey
         )
         const hydrationRepoIdSet = new Set(hydrationRepoIds)
-        const hydrationRepos = useAppStore
-          .getState()
-          .repos.filter(
-            (repo) =>
-              hydrationRepoIdSet.has(repo.id) &&
-              getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
-          )
+        const hydrationRepos = useAppStore.getState().repos.filter(
+          (repo) =>
+            hydrationRepoIdSet.has(repo.id) &&
+            // Why: include SSH repos, not just local — a disconnected SSH repo resolves
+            // via the local metadata fallback (no network at cold start), so fetching it
+            // populates worktreesByRepo and keeps its tab/editor/browser chrome from being
+            // dropped at hydration. Only runtime-owned repos hydrate via placeholders instead.
+            parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'
+        )
         await timeRendererStartupStep('fetch-hydration-worktrees', () =>
           mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY, (repo) =>
             actions.fetchWorktrees(repo.id)

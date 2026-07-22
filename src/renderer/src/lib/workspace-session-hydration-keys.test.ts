@@ -109,6 +109,17 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
     expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-a', 'repo-b'])
   })
 
+  it('includes a repository referenced only by activeRepoId (no active worktree, no tabs)', () => {
+    const session = {
+      activeRepoId: 'repo-active-only',
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {}
+    } as unknown as WorkspaceSessionState
+
+    expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-active-only'])
+  })
+
   it('includes repositories referenced only by active, editor, browser, or sleeping-agent state', () => {
     const session = {
       activeRepoId: null,

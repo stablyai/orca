@@ -44,6 +44,16 @@ describe('renderer startup runtime routing', () => {
     expect(
       source.slice(hydrationWorktreesIndex, source.indexOf('await keybindingsPromise'))
     ).toContain('mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY')
+    // Why: the pre-hydration fetch must include SSH repos (only runtime-owned repos are
+    // excluded); gating on local-only drops SSH tab/editor/browser chrome at hydration.
+    const hydrationFilterBlock = source.slice(
+      source.indexOf('const hydrationRepos'),
+      hydrationWorktreesIndex
+    )
+    expect(hydrationFilterBlock).toContain(
+      "parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'"
+    )
+    expect(hydrationFilterBlock).not.toContain('=== LOCAL_EXECUTION_HOST_ID')
     expect(fullWorktreesIndex).toBeGreaterThan(
       source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
     )

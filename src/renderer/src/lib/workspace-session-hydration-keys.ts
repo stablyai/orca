@@ -111,6 +111,9 @@ export function collectWorktreeHydrationRepoIdsFromSession(
   for (const key of collectWorkspaceSessionKeys(session)) {
     addWorktreeRepoId(key)
   }
+  // Why: a repo referenced only by activeRepoId (no active worktree, no tabs) still needs
+  // enumeration so hydrateWorkspaceSession can restore its main worktree from worktreesByRepo.
+  addWorktreeRepoId(session.activeRepoId)
 
   return [...repoIds].filter(Boolean).sort()
 }
