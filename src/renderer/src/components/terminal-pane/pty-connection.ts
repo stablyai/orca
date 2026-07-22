@@ -11,7 +11,6 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
 import {
@@ -157,7 +156,9 @@ import {
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { resolveSshPaneConnectGate } from './ssh-pane-connect-gate'
+import { resolveSshPaneConnectGate, resolveSshPaneTargetPresence } from './ssh-pane-connect-gate'
+import { selectRuntimeAwareSshStatus } from '@/store/slices/runtime-environment-ssh'
+import { waitForRuntimeEnvironmentSshConnection } from '@/runtime/runtime-environment-ssh-state'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
@@ -7435,13 +7436,17 @@ export function connectPanePty(
     // Must run before session-id resolution: the SSH provider isn't registered until connect succeeds.
     if (connectionId) {
       const storeState = useAppStore.getState()
-      // Why: a removed SSH target (ghost workspace) would fail reattach with a spurious "file an issue" banner for an expected action, so skip it (runtime-owned targets exempt).
-      // A present map missing this id = target removed; an absent map = not yet hydrated (test stubs), so don't treat it as gone.
-      if (
-        !isRuntimeOwnedSshTargetId(connectionId) &&
-        storeState.sshTargetLabels instanceof Map &&
-        !storeState.sshTargetLabels.has(connectionId)
-      ) {
+      // Why: a removed SSH target (ghost workspace) would fail reattach with a spurious "file an issue" banner for an expected action, so skip it.
+      // The target's catalog lives on whichever machine owns it: a remote runtime environment's bucket, or this machine's local maps (#9276 — hub targets never appear locally).
+      const targetPresence = resolveSshPaneTargetPresence({
+        connectionId,
+        environmentId: runtimeEnvironmentId,
+        localTargetLabels: storeState.sshTargetLabels,
+        environmentBucket: runtimeEnvironmentId
+          ? storeState.sshStateByEnvironment.get(runtimeEnvironmentId)
+          : null
+      })
+      if (targetPresence === 'removed') {
         return
       }
       const restoredLeafSessionId =
@@ -7450,7 +7455,11 @@ export function connectPanePty(
           : null
       const gate = resolveSshPaneConnectGate({
         connectionId,
-        sshStatus: storeState.sshConnectionStates.get(connectionId)?.status,
+        // Why: for a remote-runtime worktree the OWNER's connection health decides spawn readiness; the local maps never track hub targets.
+        sshStatus: runtimeEnvironmentId
+          ? (selectRuntimeAwareSshStatus(storeState, runtimeEnvironmentId, connectionId) ??
+            undefined)
+          : storeState.sshConnectionStates.get(connectionId)?.status,
         isDeferredTarget: storeState.deferredSshReconnectTargets.includes(connectionId),
         restoredLeafSessionId,
         deferredTabSessionId: storeState.deferredSshSessionIdsByTabId[deps.tabId],
@@ -7468,14 +7477,17 @@ export function connectPanePty(
         void (async () => {
           // Why: for a passphrase target with no cached credential, don't auto-fire ssh.connect — a prompt popping just from focusing a tab / Cmd+J would surprise the user.
           // Wait for a user-initiated connect first; no-passphrase targets return false here and auto-connect as before.
+          // Remote-runtime targets skip the probe: credentials live on the owner, and the local ssh api doesn't know the target.
           let needsPrompt = false
-          try {
-            needsPrompt = await window.api.ssh.needsPassphrasePrompt({
-              targetId: connectionId
-            })
-          } catch (err) {
-            console.warn('[pty-connection] needsPassphrasePrompt probe failed:', err)
-            // Why: on probe failure fall through to auto-connect rather than stranding the tab — a stuck tab is worse than a surprising prompt.
+          if (!runtimeEnvironmentId) {
+            try {
+              needsPrompt = await window.api.ssh.needsPassphrasePrompt({
+                targetId: connectionId
+              })
+            } catch (err) {
+              console.warn('[pty-connection] needsPassphrasePrompt probe failed:', err)
+              // Why: on probe failure fall through to auto-connect rather than stranding the tab — a stuck tab is worse than a surprising prompt.
+            }
           }
           if (disposed) {
             return
@@ -7556,7 +7568,10 @@ export function connectPanePty(
           }
 
           // Why: wait for the shared SSH connection (multiple panes/tabs may need it) before PTY reattach, rather than returning early when it's in-flight.
-          const connectResult = await waitForSshConnection(connectionId)
+          // A remote-runtime worktree asks the OWNING environment to connect; the client never dials the hub's target itself.
+          const connectResult = runtimeEnvironmentId
+            ? await waitForRuntimeEnvironmentSshConnection(runtimeEnvironmentId, connectionId)
+            : await waitForSshConnection(connectionId)
           if (!connectResult.connected) {
             reportError(`SSH connection failed: ${connectResult.error}`)
             return

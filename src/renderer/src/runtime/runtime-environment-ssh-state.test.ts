@@ -5,7 +5,8 @@ import {
   applyRuntimeEnvironmentSshStateChanged,
   connectRuntimeEnvironmentSshTarget,
   hydrateRuntimeEnvironmentSshState,
-  resyncRuntimeEnvironmentSshTargets
+  resyncRuntimeEnvironmentSshTargets,
+  waitForRuntimeEnvironmentSshConnection
 } from './runtime-environment-ssh-state'
 import { callRuntimeRpc } from './runtime-rpc-client'
 
@@ -235,6 +236,86 @@ describe('connectRuntimeEnvironmentSshTarget', () => {
       'SSH target not found'
     )
     expect(useAppStore.getState().sshStateByEnvironment.has(envId)).toBe(false)
+  })
+})
+
+describe('waitForRuntimeEnvironmentSshConnection', () => {
+  function seedReachableEnv(envId: string, status: SshConnectionState['status']): void {
+    useAppStore
+      .getState()
+      .setRuntimeEnvironmentStatus(envId, { status: { runtimeId: 'r1' } } as never)
+    useAppStore
+      .getState()
+      .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-1', label: 'hub box' }])
+    useAppStore
+      .getState()
+      .setEnvironmentSshConnectionState(envId, 'ssh-1', connState('ssh-1', status))
+  }
+
+  it('resolves immediately without RPC when the owner already reports connected', async () => {
+    const envId = nextEnvId()
+    seedReachableEnv(envId, 'connected')
+
+    const result = await waitForRuntimeEnvironmentSshConnection(envId, 'ssh-1')
+
+    expect(result).toEqual({ connected: true })
+    expect(callRuntimeRpcMock).not.toHaveBeenCalled()
+  })
+
+  it('asks the owning environment to connect when the target is not connected', async () => {
+    const envId = nextEnvId()
+    seedReachableEnv(envId, 'disconnected')
+    callRuntimeRpcMock.mockResolvedValue({ state: connState('ssh-1', 'connected') } as never)
+
+    const result = await waitForRuntimeEnvironmentSshConnection(envId, 'ssh-1')
+
+    expect(result).toEqual({ connected: true })
+    expect(callRuntimeRpcMock).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: envId },
+      'ssh.connect',
+      { targetId: 'ssh-1' },
+      expect.anything()
+    )
+  })
+
+  it('reports failure with the hub error when the hub-side connect does not succeed', async () => {
+    const envId = nextEnvId()
+    seedReachableEnv(envId, 'disconnected')
+    callRuntimeRpcMock.mockResolvedValue({
+      state: { targetId: 'ssh-1', status: 'auth-failed', error: 'bad key', reconnectAttempt: 1 }
+    } as never)
+
+    const result = await waitForRuntimeEnvironmentSshConnection(envId, 'ssh-1')
+
+    expect(result.connected).toBe(false)
+    expect(result.error).toContain('bad key')
+  })
+
+  it('reports failure when the runtime RPC itself rejects', async () => {
+    const envId = nextEnvId()
+    callRuntimeRpcMock.mockRejectedValue(new Error('runtime unavailable'))
+
+    const result = await waitForRuntimeEnvironmentSshConnection(envId, 'ssh-1')
+
+    expect(result.connected).toBe(false)
+    expect(result.error).toContain('runtime unavailable')
+  })
+
+  it('coalesces concurrent waits for the same target into one connect RPC', async () => {
+    const envId = nextEnvId()
+    seedReachableEnv(envId, 'disconnected')
+    let resolveRpc: (value: never) => void = () => {}
+    callRuntimeRpcMock.mockImplementation(
+      () => new Promise((resolve) => (resolveRpc = resolve as never))
+    )
+
+    const first = waitForRuntimeEnvironmentSshConnection(envId, 'ssh-1')
+    const second = waitForRuntimeEnvironmentSshConnection(envId, 'ssh-1')
+    resolveRpc({ state: connState('ssh-1', 'connected') } as never)
+
+    expect(await first).toEqual({ connected: true })
+    expect(await second).toEqual({ connected: true })
+    expect(callRuntimeRpcMock).toHaveBeenCalledTimes(1)
   })
 })
 

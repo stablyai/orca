@@ -175,6 +175,20 @@ type StoreState = {
   >
   deferredSshReconnectTargets: string[]
   deferredSshSessionIdsByTabId: Record<string, string>
+  sshTargetLabels?: Map<string, string>
+  sshStateByEnvironment?: Map<
+    string,
+    {
+      targetLabels: Map<string, string>
+      removedTargetLabels: Map<string, string>
+      connectionStates: Map<
+        string,
+        { targetId: string; status: string; error: string | null; reconnectAttempt: number }
+      >
+      targetsHydrated: boolean
+    }
+  >
+  runtimeStatusByEnvironmentId?: Map<string, { status: unknown }>
   removeDeferredSshReconnectTarget: ReturnType<typeof vi.fn>
   removeDeferredSshSessionId: ReturnType<typeof vi.fn>
   consumePendingColdRestore: ReturnType<typeof vi.fn>
@@ -348,6 +362,15 @@ vi.mock('./remote-runtime-pty-transport', () => ({
       return nextTransport
     }
   )
+}))
+
+const { waitForRuntimeEnvironmentSshConnectionMock } = vi.hoisted(() => ({
+  waitForRuntimeEnvironmentSshConnectionMock: vi.fn()
+}))
+
+vi.mock('@/runtime/runtime-environment-ssh-state', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  waitForRuntimeEnvironmentSshConnection: waitForRuntimeEnvironmentSshConnectionMock
 }))
 
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
@@ -20348,6 +20371,137 @@ describe('connectPanePty', () => {
       expect(getSize).toHaveBeenCalledTimes(1)
       resolveSize({ cols: 120, rows: 40 })
       await flushAsyncTicks()
+    })
+  })
+
+  // Regression (#9276): a hub-owned SSH worktree opened on a paired desktop
+  // client mirrors its target only into the owner environment's SSH bucket;
+  // reading the LOCAL ssh maps made the pane silently bail before any spawn.
+  describe('remote-runtime-owned SSH panes', () => {
+    function hubBucket(overrides?: {
+      status?: string
+      targetLabels?: Map<string, string>
+      removedTargetLabels?: Map<string, string>
+      targetsHydrated?: boolean
+    }) {
+      return {
+        targetLabels: overrides?.targetLabels ?? new Map([['conn-1', 'Hub box']]),
+        removedTargetLabels: overrides?.removedTargetLabels ?? new Map<string, string>(),
+        connectionStates: new Map([
+          [
+            'conn-1',
+            {
+              targetId: 'conn-1',
+              status: overrides?.status ?? 'connected',
+              error: null,
+              reconnectAttempt: 0
+            }
+          ]
+        ]),
+        targetsHydrated: overrides?.targetsHydrated ?? true
+      }
+    }
+
+    function seedRemoteSshWorktree(bucket: ReturnType<typeof hubBucket> | null): void {
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        repos: [
+          {
+            id: 'repo1',
+            connectionId: 'conn-1',
+            executionHostId: 'runtime:env-1',
+            displayName: 'orca'
+          }
+        ],
+        // Why: a paired client's local maps are hydrated but never contain hub targets — the exact #9276 shape.
+        sshTargetLabels: new Map<string, string>(),
+        sshConnectionStates: new Map(),
+        sshStateByEnvironment: bucket ? new Map([['env-1', bucket]]) : new Map(),
+        runtimeStatusByEnvironmentId: new Map([['env-1', { status: { runtimeId: 'r1' } }]])
+      }
+    }
+
+    it('spawns through the owner environment when the hub reports the target connected', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      seedRemoteSshWorktree(hubBucket())
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(20)
+
+      expect(vi.mocked(createRemoteRuntimePtyTransport)).toHaveBeenCalledWith(
+        'env-1',
+        expect.anything()
+      )
+      expect(transport.connect).toHaveBeenCalled()
+      const api = (
+        globalThis as unknown as { window: { api: { ssh: { connect: ReturnType<typeof vi.fn> } } } }
+      ).window.api
+      expect(api.ssh.connect).not.toHaveBeenCalled()
+      expect(waitForRuntimeEnvironmentSshConnectionMock).not.toHaveBeenCalled()
+    })
+
+    it('asks the owner environment to reconnect (never the local ssh api) when the hub reports a disconnect', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      seedRemoteSshWorktree(hubBucket({ status: 'disconnected' }))
+      waitForRuntimeEnvironmentSshConnectionMock.mockResolvedValue({ connected: true })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(20)
+
+      expect(waitForRuntimeEnvironmentSshConnectionMock).toHaveBeenCalledWith('env-1', 'conn-1')
+      expect(transport.connect).toHaveBeenCalled()
+      const api = (
+        globalThis as unknown as {
+          window: {
+            api: {
+              ssh: {
+                connect: ReturnType<typeof vi.fn>
+                needsPassphrasePrompt: ReturnType<typeof vi.fn>
+              }
+            }
+          }
+        }
+      ).window.api
+      expect(api.ssh.connect).not.toHaveBeenCalled()
+      expect(api.ssh.needsPassphrasePrompt).not.toHaveBeenCalled()
+    })
+
+    it('still proceeds while the owner bucket has not hydrated instead of stranding the pane', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      seedRemoteSshWorktree(hubBucket({ targetsHydrated: false }))
+      waitForRuntimeEnvironmentSshConnectionMock.mockResolvedValue({ connected: true })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(20)
+
+      expect(waitForRuntimeEnvironmentSshConnectionMock).toHaveBeenCalledWith('env-1', 'conn-1')
+      expect(transport.connect).toHaveBeenCalled()
+    })
+
+    it('skips the pane when the owner has removed the target (remote ghost workspace)', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      seedRemoteSshWorktree(
+        hubBucket({
+          targetLabels: new Map<string, string>(),
+          removedTargetLabels: new Map([['conn-1', 'Hub box']])
+        })
+      )
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.connect).not.toHaveBeenCalled()
+      expect(waitForRuntimeEnvironmentSshConnectionMock).not.toHaveBeenCalled()
     })
   })
 })

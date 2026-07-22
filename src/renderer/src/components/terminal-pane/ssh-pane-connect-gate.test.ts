@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveSshPaneConnectGate } from './ssh-pane-connect-gate'
+import { resolveSshPaneConnectGate, resolveSshPaneTargetPresence } from './ssh-pane-connect-gate'
 
 const BASE = {
   connectionId: 'conn-1',
@@ -83,5 +83,119 @@ describe('resolveSshPaneConnectGate', () => {
       connectionId: 'runtime-ssh-env-1'
     })
     expect(gate.enterDeferredFlow).toBe(false)
+  })
+})
+
+describe('resolveSshPaneTargetPresence', () => {
+  const bucket = (overrides?: {
+    targetLabels?: Map<string, string>
+    removedTargetLabels?: Map<string, string>
+    targetsHydrated?: boolean
+  }) => ({
+    targetLabels: overrides?.targetLabels ?? new Map<string, string>(),
+    removedTargetLabels: overrides?.removedTargetLabels ?? new Map<string, string>(),
+    targetsHydrated: overrides?.targetsHydrated ?? true
+  })
+
+  it('reports a locally known target as present', () => {
+    expect(
+      resolveSshPaneTargetPresence({
+        connectionId: 'conn-1',
+        environmentId: null,
+        localTargetLabels: new Map([['conn-1', 'Box']]),
+        environmentBucket: null
+      })
+    ).toBe('present')
+  })
+
+  it('reports a target missing from the hydrated local map as removed', () => {
+    expect(
+      resolveSshPaneTargetPresence({
+        connectionId: 'conn-1',
+        environmentId: null,
+        localTargetLabels: new Map(),
+        environmentBucket: null
+      })
+    ).toBe('removed')
+  })
+
+  it('reports unknown while the local map is not hydrated', () => {
+    expect(
+      resolveSshPaneTargetPresence({
+        connectionId: 'conn-1',
+        environmentId: null,
+        localTargetLabels: undefined,
+        environmentBucket: null
+      })
+    ).toBe('unknown')
+  })
+
+  it('always treats runtime-owned targets as present', () => {
+    expect(
+      resolveSshPaneTargetPresence({
+        connectionId: 'runtime-ssh-env-1',
+        environmentId: 'env-1',
+        localTargetLabels: new Map(),
+        environmentBucket: null
+      })
+    ).toBe('present')
+  })
+
+  // Regression (#9276): a hub-owned SSH target lives only in the owner
+  // environment's bucket; reading the local map marked it removed and the
+  // pane silently never spawned.
+  it('reports a hub-owned target in the owner bucket as present despite empty local maps', () => {
+    expect(
+      resolveSshPaneTargetPresence({
+        connectionId: 'conn-1',
+        environmentId: 'env-1',
+        localTargetLabels: new Map(),
+        environmentBucket: bucket({ targetLabels: new Map([['conn-1', 'Hub box']]) })
+      })
+    ).toBe('present')
+  })
+
+  it('reports a hub-side tombstoned target as removed', () => {
+    expect(
+      resolveSshPaneTargetPresence({
+        connectionId: 'conn-1',
+        environmentId: 'env-1',
+        localTargetLabels: new Map([['conn-1', 'Local twin']]),
+        environmentBucket: bucket({ removedTargetLabels: new Map([['conn-1', 'Hub box']]) })
+      })
+    ).toBe('removed')
+  })
+
+  it('reports a target absent from a hydrated owner bucket as removed', () => {
+    expect(
+      resolveSshPaneTargetPresence({
+        connectionId: 'conn-1',
+        environmentId: 'env-1',
+        localTargetLabels: new Map([['conn-1', 'Local twin']]),
+        environmentBucket: bucket()
+      })
+    ).toBe('removed')
+  })
+
+  it('reports unknown while the owner bucket is missing', () => {
+    expect(
+      resolveSshPaneTargetPresence({
+        connectionId: 'conn-1',
+        environmentId: 'env-1',
+        localTargetLabels: new Map(),
+        environmentBucket: null
+      })
+    ).toBe('unknown')
+  })
+
+  it('reports unknown while the owner bucket is not hydrated', () => {
+    expect(
+      resolveSshPaneTargetPresence({
+        connectionId: 'conn-1',
+        environmentId: 'env-1',
+        localTargetLabels: new Map(),
+        environmentBucket: bucket({ targetsHydrated: false })
+      })
+    ).toBe('unknown')
   })
 })

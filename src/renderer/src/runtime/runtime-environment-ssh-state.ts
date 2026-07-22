@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { selectRuntimeAwareSshStatus } from '@/store/slices/runtime-environment-ssh'
 import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import { callRuntimeRpc } from './runtime-rpc-client'
 
@@ -162,4 +163,47 @@ export async function connectRuntimeEnvironmentSshTarget(
  * stale overlay converges to the ghost/re-adopted state (STA-1468). */
 export async function resyncRuntimeEnvironmentSshTargets(environmentId: string): Promise<void> {
   await syncEnvironmentSshTargetMetadata(environmentId)
+}
+
+const environmentSshConnectWaits = new Map<
+  string,
+  Promise<{ connected: boolean; error?: string }>
+>()
+
+/**
+ * Remote analog of the pane's deferred local SSH connect: ensure the OWNING
+ * environment's connection to `targetId` is up before the pane spawns/reattaches.
+ * The client never dials the target itself — it asks the owner to connect.
+ */
+export async function waitForRuntimeEnvironmentSshConnection(
+  environmentId: string,
+  targetId: string
+): Promise<{ connected: boolean; error?: string }> {
+  const state = useAppStore.getState()
+  if (selectRuntimeAwareSshStatus(state, environmentId, targetId) === 'connected') {
+    return { connected: true }
+  }
+  const waitKey = `${environmentId}::${targetId}`
+  const existing = environmentSshConnectWaits.get(waitKey)
+  if (existing) {
+    return existing
+  }
+  const wait = (async (): Promise<{ connected: boolean; error?: string }> => {
+    try {
+      const connectionState = await connectRuntimeEnvironmentSshTarget(environmentId, targetId)
+      if (connectionState?.status === 'connected') {
+        return { connected: true }
+      }
+      return {
+        connected: false,
+        error: connectionState?.error ?? connectionState?.status ?? 'not connected'
+      }
+    } catch (err) {
+      return { connected: false, error: err instanceof Error ? err.message : String(err) }
+    } finally {
+      environmentSshConnectWaits.delete(waitKey)
+    }
+  })()
+  environmentSshConnectWaits.set(waitKey, wait)
+  return wait
 }

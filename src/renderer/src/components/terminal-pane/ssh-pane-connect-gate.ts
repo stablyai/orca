@@ -1,6 +1,47 @@
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 
+export type SshPaneTargetPresence = 'present' | 'removed' | 'unknown'
+
+/**
+ * Whether the pane's SSH target still exists on the machine that owns it.
+ * `environmentId` names the remote Orca server owning the target (null = this
+ * machine). Only 'removed' should skip the pane; 'unknown' means the owner's
+ * catalog has not hydrated yet and the pane must proceed rather than strand.
+ */
+export function resolveSshPaneTargetPresence(input: {
+  connectionId: string
+  environmentId: string | null
+  localTargetLabels: unknown
+  environmentBucket:
+    | {
+        targetLabels: ReadonlyMap<string, string>
+        removedTargetLabels: ReadonlyMap<string, string>
+        targetsHydrated: boolean
+      }
+    | null
+    | undefined
+}): SshPaneTargetPresence {
+  // Why: runtime-owned targets are internal relay plumbing without catalog entries; treating them as removed would strand ephemeral-VM panes.
+  if (isRuntimeOwnedSshTargetId(input.connectionId)) {
+    return 'present'
+  }
+  if (input.environmentId === null) {
+    if (!(input.localTargetLabels instanceof Map)) {
+      return 'unknown'
+    }
+    return input.localTargetLabels.has(input.connectionId) ? 'present' : 'removed'
+  }
+  const bucket = input.environmentBucket
+  if (!bucket?.targetsHydrated) {
+    return 'unknown'
+  }
+  if (bucket.removedTargetLabels.has(input.connectionId)) {
+    return 'removed'
+  }
+  return bucket.targetLabels.has(input.connectionId) ? 'present' : 'removed'
+}
+
 export type SshPaneConnectGate = {
   /** Session the pane should reattach after connecting (null → fresh spawn). */
   pendingSessionId: string | null
