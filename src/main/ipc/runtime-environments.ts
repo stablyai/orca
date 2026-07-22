@@ -1,6 +1,8 @@
 import { app, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import type { RuntimeEnvironmentSubscriptionStartResult } from '../../shared/runtime-environment-subscription-start-result'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
 import type { Store } from '../persistence'
 import {
@@ -28,6 +30,17 @@ type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   notifyClosed: () => void
 }
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
+
+function serializeRuntimeEnvironmentSubscriptionError(error: unknown): {
+  code: string
+  message: string
+} {
+  return {
+    code: error instanceof RemoteRuntimeClientError ? error.code : 'runtime_error',
+    message: error instanceof Error ? error.message : String(error)
+  }
+}
+
 const getUserDataPath = (): string => app.getPath('userData')
 
 function closeSubscriptionsForEnvironment(environmentId: string): void {
@@ -91,69 +104,72 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         subscriptionId?: string
         expectedEnvironmentPairingRevision?: number
       }
-    ): Promise<{ subscriptionId: string; requestId: string }> => {
+    ): Promise<RuntimeEnvironmentSubscriptionStartResult> => {
       const subscriptionId =
         typeof args.subscriptionId === 'string' && args.subscriptionId.length > 0
           ? args.subscriptionId
           : randomUUID()
-      if (remoteRuntimeSubscriptions.has(subscriptionId)) {
-        throw new Error('Runtime environment subscription id already exists')
-      }
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-        throw new Error('runtime_manually_disconnected')
-      }
-      const pairingRevision = environment.pairingRevision ?? environment.createdAt
-      if (
-        args.expectedEnvironmentPairingRevision !== undefined &&
-        pairingRevision !== args.expectedEnvironmentPairingRevision
-      ) {
-        throw new Error('Runtime environment pairing changed; refresh and try again')
-      }
-      const transportGeneration = getRuntimeEnvironmentTransportGeneration(environment.id)
-      const transportIsCurrent = (): boolean =>
-        getRuntimeEnvironmentTransportGeneration(environment.id) === transportGeneration
-      const sender = event.sender
-      const ownerWebContentsId = sender.id
-      let senderDestroyed = sender.isDestroyed()
       let subscription: RemoteRuntimeSubscription | null = null
-      let destroyedListenerAttached = false
-      const removeDestroyedListener = (): void => {
-        if (!destroyedListenerAttached) {
-          return
-        }
-        destroyedListenerAttached = false
-        sender.removeListener('destroyed', closeSubscription)
-      }
-      const closeSubscription = (): void => {
-        senderDestroyed = true
-        const retained = remoteRuntimeSubscriptions.get(subscriptionId) ?? null
-        remoteRuntimeSubscriptions.delete(subscriptionId)
-        if (retained) {
-          retained.close()
-          return
-        }
-        removeDestroyedListener()
-        subscription?.close()
-      }
-      // Why: the renderer treats close as terminal and drops its handle, so send it once.
-      // Latch before sending so a re-entrant call cannot duplicate it, and never
-      // throw: a dying renderer must not abort its siblings' retirement.
-      let closeNotified = false
-      const notifyClosed = (): void => {
-        if (closeNotified || sender.isDestroyed()) {
-          return
-        }
-        closeNotified = true
-        try {
-          sender.send('runtimeEnvironments:subscriptionEvent', { subscriptionId, type: 'close' })
-        } catch {
-          // The renderer is gone; there is no one left to tell.
-        }
-      }
-      sender.once('destroyed', closeSubscription)
-      destroyedListenerAttached = true
+      let removeDestroyedListener = (): void => {}
       try {
+        if (remoteRuntimeSubscriptions.has(subscriptionId)) {
+          throw new Error('Runtime environment subscription id already exists')
+        }
+        const environment = resolveEnvironment(getUserDataPath(), args.selector)
+        if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+          throw new Error('runtime_manually_disconnected')
+        }
+        const pairingRevision = environment.pairingRevision ?? environment.createdAt
+        if (
+          args.expectedEnvironmentPairingRevision !== undefined &&
+          pairingRevision !== args.expectedEnvironmentPairingRevision
+        ) {
+          throw new Error('Runtime environment pairing changed; refresh and try again')
+        }
+        const transportGeneration = getRuntimeEnvironmentTransportGeneration(environment.id)
+        const transportIsCurrent = (): boolean =>
+          getRuntimeEnvironmentTransportGeneration(environment.id) === transportGeneration
+        const sender = event.sender
+        const ownerWebContentsId = sender.id
+        let senderDestroyed = sender.isDestroyed()
+        // Why: a close can beat the async handle continuation; tombstone so late handle is release-only.
+        let subscriptionClosed = false
+        let destroyedListenerAttached = false
+        const closeSubscription = (): void => {
+          senderDestroyed = true
+          const retained = remoteRuntimeSubscriptions.get(subscriptionId) ?? null
+          remoteRuntimeSubscriptions.delete(subscriptionId)
+          if (retained) {
+            retained.close()
+            return
+          }
+          removeDestroyedListener()
+          subscription?.close()
+        }
+        removeDestroyedListener = (): void => {
+          if (!destroyedListenerAttached) {
+            return
+          }
+          destroyedListenerAttached = false
+          sender.removeListener('destroyed', closeSubscription)
+        }
+        // Why: the renderer treats close as terminal and drops its handle, so send it once.
+        // Latch before sending so a re-entrant call cannot duplicate it, and never
+        // throw: a dying renderer must not abort its siblings' retirement.
+        let closeNotified = false
+        const notifyClosed = (): void => {
+          if (closeNotified || sender.isDestroyed()) {
+            return
+          }
+          closeNotified = true
+          try {
+            sender.send('runtimeEnvironments:subscriptionEvent', { subscriptionId, type: 'close' })
+          } catch {
+            // The renderer is gone; there is no one left to tell.
+          }
+        }
+        sender.once('destroyed', closeSubscription)
+        destroyedListenerAttached = true
         subscription = await subscribeRuntimeEnvironment(
           getUserDataPath(),
           environment.id,
@@ -176,47 +192,60 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
               }
             },
             onClose: () => {
+              subscriptionClosed = true
               const retained = remoteRuntimeSubscriptions.get(subscriptionId) ?? null
               retained?.removeDestroyedListener()
+              removeDestroyedListener()
               remoteRuntimeSubscriptions.delete(subscriptionId)
             }
           }
         )
+        let pairingIsCurrent = false
+        try {
+          const currentEnvironment = resolveEnvironment(getUserDataPath(), environment.id)
+          pairingIsCurrent =
+            (currentEnvironment.pairingRevision ?? currentEnvironment.createdAt) === pairingRevision
+        } catch {
+          pairingIsCurrent = false
+        }
+        if (!transportIsCurrent() || !pairingIsCurrent) {
+          // Why: return ok-union data (not throw) so contextBridge can clone the
+          // failure; close here once before returning to avoid catch double-close.
+          removeDestroyedListener()
+          subscription.close()
+          return {
+            ok: false,
+            error: serializeRuntimeEnvironmentSubscriptionError(
+              new Error('Runtime environment pairing changed; refresh and try again')
+            )
+          }
+        }
+        if (subscriptionClosed || senderDestroyed || sender.isDestroyed()) {
+          removeDestroyedListener()
+          subscription.close()
+          return { ok: true, subscriptionId, requestId: subscription.requestId }
+        }
+        remoteRuntimeSubscriptions.set(subscriptionId, {
+          requestId: subscription.requestId,
+          environmentId: environment.id,
+          ownerWebContentsId,
+          removeDestroyedListener,
+          notifyClosed,
+          sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,
+          close: () => {
+            removeDestroyedListener()
+            subscription?.close()
+          }
+        })
+        return { ok: true, subscriptionId, requestId: subscription.requestId }
       } catch (error) {
         removeDestroyedListener()
-        throw error
-      }
-      let pairingIsCurrent = false
-      try {
-        const currentEnvironment = resolveEnvironment(getUserDataPath(), environment.id)
-        pairingIsCurrent =
-          (currentEnvironment.pairingRevision ?? currentEnvironment.createdAt) === pairingRevision
-      } catch {
-        pairingIsCurrent = false
-      }
-      if (!transportIsCurrent() || !pairingIsCurrent) {
-        removeDestroyedListener()
-        subscription.close()
-        throw new Error('Runtime environment pairing changed; refresh and try again')
-      }
-      if (senderDestroyed || sender.isDestroyed()) {
-        removeDestroyedListener()
-        subscription.close()
-        return { subscriptionId, requestId: subscription.requestId }
-      }
-      remoteRuntimeSubscriptions.set(subscriptionId, {
-        requestId: subscription.requestId,
-        environmentId: environment.id,
-        ownerWebContentsId,
-        removeDestroyedListener,
-        notifyClosed,
-        sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,
-        close: () => {
-          removeDestroyedListener()
-          subscription?.close()
+        subscription?.close()
+        return {
+          ok: false,
+          error: serializeRuntimeEnvironmentSubscriptionError(error)
         }
-      })
-      return { subscriptionId, requestId: subscription.requestId }
+      }
     }
   )
   ipcMain.handle(
