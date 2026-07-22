@@ -227,7 +227,27 @@ export default defineConfig({
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      // Why: tldraw 5.2.5 pulls @tiptap/extension-highlight@3.28 which imports
+      // getStyleProperty from @tiptap/core, but the mesh lock pins core@3.22.5
+      // without that export. Shim for the collab-canvas/tldraw bundle only.
+      {
+        name: 'tiptap-getStyleProperty-shim',
+        transform(code, id) {
+          if (!id.includes('@tiptap/extension-highlight')) return null
+          if (!code.includes('getStyleProperty')) return null
+          return {
+            code: code.replace(
+              /import\s*\{\s*getStyleProperty\s*,\s*([^}]+)\}\s*from\s*["']@tiptap\/core["']/,
+              'import { $1 } from "@tiptap/core"; const getStyleProperty = () => null'
+            ),
+            map: null
+          }
+        }
+      }
+    ],
     worker: {
       format: 'es'
     }
