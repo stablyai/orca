@@ -4974,6 +4974,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/remote/repo1', 'review-branch', {
       repoId: 'repo1',
+      executionHostId: 'ssh:builder',
       linkedGitHubPR: null,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
@@ -5051,6 +5052,7 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'review-branch', {
       repoId: 'repo1',
+      executionHostId: 'local',
       linkedGitHubPR: null,
       linkedGitLabMR: 42,
       linkedBitbucketPR: null,
@@ -6106,6 +6108,7 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().prCache[legacyPathPRCacheKey]).toBeUndefined()
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'pr-branch', {
       repoId: 'repo1',
+      executionHostId: 'local',
       linkedGitHubPR: null,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
@@ -6138,6 +6141,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'review-branch', {
       repoId: 'repo1',
+      executionHostId: 'local',
       linkedGitHubPR: null,
       linkedGitLabMR: 789,
       linkedBitbucketPR: null,

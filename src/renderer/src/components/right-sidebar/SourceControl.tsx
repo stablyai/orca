@@ -35,7 +35,9 @@ import {
   isSyncPushStageError,
   resolveRemoteOperationErrorMessage
 } from '@/lib/source-control-remote-error'
-import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
+import { useActiveWorktree, useWorktreeMap } from '@/store/selectors'
+import { findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { detectLanguage } from '@/lib/language-detect'
@@ -350,6 +352,7 @@ type SourceControlOperationTarget = RuntimeGitContext & {
 type HostedReviewCreatedContext = {
   repoPath: string
   repoId: string
+  executionHostId: ExecutionHostId
   branch: string
   worktreeId: string | null
   openChecks: boolean
@@ -805,11 +808,16 @@ function SourceControlInner(): React.JSX.Element {
   )
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const activeRepo = useAppStore((s) => {
+    if (!activeWorktree) {
+      return null
+    }
+    return findRepoForWorktreeOwner(s.repos, activeWorktree)
+  })
   const activeRepoId = activeRepo?.id ?? null
   const activeRepoPath = activeRepo?.path ?? null
   const activeRepoConnectionId = activeRepo?.connectionId ?? null
-  const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
+  const activeRepoExecutionHostId = activeRepo ? getRepoExecutionHostId(activeRepo) : null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const entries = useAppStore((s) =>
@@ -1711,6 +1719,7 @@ function SourceControlInner(): React.JSX.Element {
     // Why: fetch review immediately on branch change; carry a known PR number because branch lookup is lossy for fork/deleted-head PRs.
     void fetchHostedReviewForBranch(activeRepo.path, branchName, {
       repoId: activeRepo.id,
+      executionHostId: getRepoExecutionHostId(activeRepo),
       linkedGitHubPR,
       fallbackGitHubPR: fallbackGitHubPRNumber,
       linkedGitLabMR,
@@ -2705,10 +2714,12 @@ function SourceControlInner(): React.JSX.Element {
     async (result: CreatedHostedReview, context?: HostedReviewCreatedContext): Promise<void> => {
       const repoPath = context?.repoPath ?? activeRepo?.path
       const repoId = context?.repoId ?? activeRepo?.id
+      const executionHostId =
+        context?.executionHostId ?? (activeRepo ? getRepoExecutionHostId(activeRepo) : undefined)
       const branch = context?.branch ?? branchName
       const worktreeId = context?.worktreeId ?? activeWorktreeId ?? null
       const openChecks = context?.openChecks ?? true
-      if (!repoPath || !repoId || !branch) {
+      if (!repoPath || !repoId || !executionHostId || !branch) {
         return
       }
       const copy = localizedHostedReviewCopy(
@@ -2744,6 +2755,7 @@ function SourceControlInner(): React.JSX.Element {
           await fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
             repoId,
+            executionHostId,
             ...linkedReviewNumbers
           })
           return
@@ -2752,6 +2764,7 @@ function SourceControlInner(): React.JSX.Element {
           await fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
             repoId,
+            executionHostId,
             ...linkedReviewNumbers
           })
           return
@@ -2760,6 +2773,7 @@ function SourceControlInner(): React.JSX.Element {
           fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
             repoId,
+            executionHostId,
             ...linkedReviewNumbers
           }),
           fetchPRForBranch(repoPath, branch, {
@@ -3154,6 +3168,7 @@ function SourceControlInner(): React.JSX.Element {
     void getHostedReviewCreationEligibility({
       repoPath: activeRepoPath,
       repoId: activeRepoId,
+      executionHostId: activeRepoExecutionHostId ?? undefined,
       ...(worktreePath ? { worktreePath } : {}),
       branch: branchName,
       base: effectiveBaseRef ?? null,
@@ -3303,6 +3318,7 @@ function SourceControlInner(): React.JSX.Element {
     try {
       const result = await createHostedReview(activeRepo.path, {
         repoId: activeRepo.id,
+        executionHostId: getRepoExecutionHostId(activeRepo),
         provider: hostedReviewCreateProvider,
         base,
         head: normalizeHostedReviewHeadRef(branchName),
@@ -3519,6 +3535,7 @@ function SourceControlInner(): React.JSX.Element {
       try {
         const result = await createHostedReview(activeRepo.path, {
           repoId: activeRepo.id,
+          executionHostId: getRepoExecutionHostId(activeRepo),
           provider: eligibility.provider,
           base: fields.base,
           head: normalizeHostedReviewHeadRef(token.branch),
@@ -3540,6 +3557,7 @@ function SourceControlInner(): React.JSX.Element {
             {
               repoPath: activeRepo.path,
               repoId: activeRepo.id,
+              executionHostId: getRepoExecutionHostId(activeRepo),
               branch: token.branch,
               worktreeId: token.worktreeId,
               openChecks
@@ -3563,6 +3581,7 @@ function SourceControlInner(): React.JSX.Element {
             {
               repoPath: activeRepo.path,
               repoId: activeRepo.id,
+              executionHostId: getRepoExecutionHostId(activeRepo),
               branch: token.branch,
               worktreeId: token.worktreeId,
               openChecks
@@ -3654,6 +3673,7 @@ function SourceControlInner(): React.JSX.Element {
       const result = await getHostedReviewCreationEligibility({
         repoPath: activeRepo.path,
         repoId: activeRepo.id,
+        executionHostId: getRepoExecutionHostId(activeRepo),
         worktreePath: token.worktreePath,
         branch: token.branch,
         base: token.baseRef ?? null,

@@ -254,6 +254,32 @@ describe('PullRequestPage host boundaries', () => {
     expect(checksSection).toContain('prCheckDetails({')
   })
 
+  it('scopes checks configuration and reviewer callbacks to the PR execution host', () => {
+    const source = componentSource('PullRequestPage.tsx')
+    const checksSection = sourceBetween(source, 'function ChecksTab', 'function MentionTextarea')
+
+    // Why: fix-check defaults and reviewer metadata share repo ids across local,
+    // SSH, and runtime owners, so source inspection guards both identity handoffs.
+    expect(checksSection).toContain('findRepoForHost(s.repos, targetRepoId')
+    expect(checksSection).toContain(
+      'const itemRepoExecutionHostId = item.repoExecutionHostId ?? LOCAL_EXECUTION_HOST_ID'
+    )
+    expect(checksSection).toContain('hostId: itemRepoExecutionHostId')
+    expect(checksSection).toMatch(
+      /getRuntimeWorkItemLaunchContext\(\s*useAppStore\.getState\(\),\s*checksRepoExecutionHostId\s*\)\s*\?\.platform/
+    )
+    expect(checksSection).toContain('findRepoForHost(state.repos, target.repoId')
+    expect(checksSection).toContain('hostId: checksRepoExecutionHostId')
+    expect(checksSection).toMatch(
+      /updateRepo\(result\.target\.repoId, result\.update, \{\s*hostId: checksRepoExecutionHostId/
+    )
+    expect(checksSection).toContain('repoExecutionHostId: checksRepoExecutionHostId')
+    expect(checksSection).toContain(
+      'item: { ...item, repoExecutionHostId: checksRepoExecutionHostId }'
+    )
+    expect(source).not.toContain('{ id: workItem.id, repoId: workItem.repoId }')
+  })
+
   it('routes edit metadata and mutations through the PR source context', () => {
     const source = componentSource('PullRequestPage.tsx')
     const editHelperSection = sourceBetween(

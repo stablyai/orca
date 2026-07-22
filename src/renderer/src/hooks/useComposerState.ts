@@ -141,6 +141,7 @@ import { buildExecutionHostRegistry } from '../../../shared/execution-host-regis
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import {
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
@@ -718,6 +719,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     hostId: ExecutionHostId | null
     projectHostSetupId: string | null
   } | null>(null)
+  // Why: the incoming task target only seeds the matching initial repo; once the
+  // user chooses another target, it must not silently reassert stale host identity.
   const initialTargetSeed =
     selectedTargetSeed ??
     (useInitialTargetSeed && repoId === resolvedInitialRepoId ? initialRunSeed : null)
@@ -2900,7 +2903,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       branchAutoNameRef.current = ''
       smartGitHubPrStartPointSelectionRef.current = null
       // Why: provider items can come from a different source host than the run host — resolve refs against the run repo, keep item metadata for provider identity.
-      const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
+      const runRepo =
+        selectedRepo ??
+        findRepoForHost(eligibleRepos, item.repoId, {
+          hostId: item.repoExecutionHostId ?? LOCAL_EXECUTION_HOST_ID,
+          settings
+        })
       applyLinkedWorkItem(normalizedItem)
       if (identity.type !== 'pr' || !runRepo) {
         setBaseBranch(undefined)

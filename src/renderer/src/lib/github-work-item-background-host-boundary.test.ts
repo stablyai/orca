@@ -21,6 +21,8 @@ describe('GitHub work-item background host routing boundary', () => {
       'const request:'
     )
 
+    // Why: these calls cross independent helpers, so source inspection guards
+    // against one leg silently reverting to globally focused-host routing.
     expect(flow).toContain('getSettingsForRepoRuntimeOwner(')
     expect(flow).toContain('{ repos: [repo], settings: store.settings }')
     expect(flow).toContain('repoExecutionHostId\n    )')

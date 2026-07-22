@@ -16,10 +16,23 @@ import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './filesystem-auth'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 
-function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
+function assertRegisteredRepo(
+  repoPath: string,
+  store: Store,
+  repoId?: string,
+  executionHostId?: ExecutionHostId
+): Repo {
   if (repoId) {
-    const repo = store.getRepo(repoId)
+    const repo = executionHostId
+      ? store
+          .getRepos()
+          .find(
+            (candidate) =>
+              candidate.id === repoId && getRepoExecutionHostId(candidate) === executionHostId
+          )
+      : store.getRepo(repoId)
     if (!repo || repo.path !== repoPath) {
       throw new Error('Access denied: unknown repository')
     }
@@ -77,7 +90,7 @@ function normalizeRemoteHostedReviewPath(remotePath: string): string {
 
 export function registerHostedReviewHandlers(store: Store, stats: StatsCollector): void {
   ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
-    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId, args.executionHostId)
     const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
@@ -106,7 +119,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle(
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
-      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId, args.executionHostId)
       const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
       const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
       return getHostedReviewCreationEligibility({
@@ -119,7 +132,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   )
 
   ipcMain.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
-    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId, args.executionHostId)
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
     const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
     const executionOptions =

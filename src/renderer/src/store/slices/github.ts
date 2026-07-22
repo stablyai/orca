@@ -53,6 +53,7 @@ import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
+import { findRepoForHost } from './repo-host-identity'
 import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../../../shared/github-api-availability'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
@@ -622,6 +623,7 @@ type FetchOptions = {
 
 type RepoScopedFetchOptions = FetchOptions & {
   repoId?: string
+  executionHostId?: ExecutionHostId
 }
 
 export type PRRefreshState = {
@@ -3354,12 +3356,24 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     prRepo,
     options
   ): Promise<PRCheckDetail[]> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const state = get()
+    const repo = options?.repoId
+      ? (findRepoForHost(state.repos ?? [], options.repoId, {
+          hostId: options.executionHostId,
+          settings: state.settings
+        }) ?? undefined)
+      : state.repos?.find(
+          (candidate) =>
+            candidate.path === repoPath &&
+            (!options?.executionHostId ||
+              getRepoExecutionHostId(candidate) === options.executionHostId)
+        )
+    if (options?.executionHostId && !repo) {
+      return []
+    }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
-      get().settings,
+      state.settings,
       repo,
       options?.sourceContext
     )

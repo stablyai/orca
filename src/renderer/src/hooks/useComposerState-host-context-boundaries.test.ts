@@ -108,7 +108,10 @@ describe('useComposerState host-context boundaries', () => {
       'const handleSmartGitLabItemSelect'
     )
 
-    expect(section).toContain('const runRepo = selectedRepo ??')
+    // Why: this source contract guards the host-bearing fallback when smart search
+    // returns duplicate repo ids and no run repo is already selected.
+    expect(section).toContain('findRepoForHost(eligibleRepos, item.repoId')
+    expect(section).toContain('hostId: item.repoExecutionHostId ?? LOCAL_EXECUTION_HOST_ID')
     expect(section).toContain('resolveGitHubPrStartPointForRepo')
     expect(section).toContain('repoId: runRepo.id')
     expect(section).toContain('settings: itemRepoSettings')

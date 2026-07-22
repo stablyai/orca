@@ -203,6 +203,28 @@ describe('task page cache selectors', () => {
     ).toBe(runtimeItem)
   })
 
+  it('normalizes a hostless dialog identity to the local work item', () => {
+    const runtimeItem = {
+      ...workItem('issue-1', 'repo-1'),
+      repoExecutionHostId: 'runtime:env-1' as const
+    }
+    const localItem = {
+      ...workItem('issue-1', 'repo-1'),
+      repoExecutionHostId: 'local' as const
+    }
+    const cache = {
+      runtime: entry<GitHubWorkItem[]>([runtimeItem]),
+      local: entry<GitHubWorkItem[]>([localItem])
+    }
+
+    expect(
+      findTaskPageDialogWorkItem(cache, {
+        id: localItem.id,
+        repoId: localItem.repoId
+      })
+    ).toBe(localItem)
+  })
+
   it('reconciles paged table rows with patched work-item cache entries', () => {
     const stale = {
       ...workItem('pr-1', 'repo-1'),

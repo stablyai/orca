@@ -6,6 +6,8 @@ const SOURCE = readFileSync(join(__dirname, 'useComposerState.ts'), 'utf8')
 
 describe('composer agent detection host boundary', () => {
   it('scopes detection to the selected repository execution host', () => {
+    // Why: detection is fanned out through setup and issue-command effects;
+    // source patterns ensure every dependency keeps the same selected host.
     expect(SOURCE).toContain('projectId: initialTargetSeed?.projectId')
     expect(SOURCE).toContain('hostId: initialTargetSeed?.hostId')
     expect(SOURCE).toContain('projectHostSetupId: initialTargetSeed?.projectHostSetupId')

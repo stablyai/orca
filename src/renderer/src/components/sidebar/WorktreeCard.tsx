@@ -83,6 +83,7 @@ import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
+  getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
@@ -666,6 +667,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR number from explicit metadata when we have one.
       void fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
+        executionHostId: getRepoExecutionHostId(repo),
         linkedGitHubPR: worktree.linkedPR ?? null,
         ...(cachedBranchFallbackGitHubPRNumber !== null
           ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
@@ -717,6 +719,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
     void fetchHostedReviewForBranch(repo.path, branch, {
       repoId: repo.id,
+      executionHostId: getRepoExecutionHostId(repo),
       linkedGitHubPR: worktree.linkedPR ?? null,
       ...(cachedBranchFallbackGitHubPRNumber !== null
         ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }

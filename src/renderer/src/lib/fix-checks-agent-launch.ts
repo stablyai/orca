@@ -193,6 +193,8 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     const targetWorktreeId = targetWorktree.id
     const targetExecutionHostId = getWorktreeExecutionHostId(targetWorktree, repo ?? undefined)
     const targetHost = parseExecutionHostId(targetExecutionHostId)
+    // Why: an explicit worktree host (even local) is authoritative, so stamped
+    // worktrees must not fall back to legacy connection-id derivation.
     const targetConnectionId =
       targetHost?.kind === 'ssh'
         ? targetHost.targetId

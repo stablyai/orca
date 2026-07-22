@@ -323,6 +323,7 @@ describe('hosted review cache race protection', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenNthCalledWith(2, {
       branch: 'feature/inflight',
       currentHeadOid: null,
+      executionHostId: 'local',
       linkedAzureDevOpsPR: null,
       linkedBitbucketPR: null,
       linkedGitHubPR: null,

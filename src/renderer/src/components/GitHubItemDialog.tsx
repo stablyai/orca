@@ -7663,7 +7663,11 @@ export default function GitHubItemDialog({
                       patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
                     }
                     onReviewRequestsChange?.(
-                      { id: workItem.id, repoId: workItem.repoId },
+                      {
+                        id: workItem.id,
+                        repoId: workItem.repoId,
+                        repoExecutionHostId: workItem.repoExecutionHostId
+                      },
                       nextReviewRequests
                     )
                   }}
@@ -7743,7 +7747,11 @@ export default function GitHubItemDialog({
                       patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
                     }
                     onReviewRequestsChange?.(
-                      { id: workItem.id, repoId: workItem.repoId },
+                      {
+                        id: workItem.id,
+                        repoId: workItem.repoId,
+                        repoExecutionHostId: workItem.repoExecutionHostId
+                      },
                       nextReviewRequests
                     )
                   }}

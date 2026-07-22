@@ -184,6 +184,7 @@ import {
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
 import { githubProjectHost } from '../../../shared/github-project-identity'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
 import {
   findGithubPrWorkspaceAttachment,
@@ -192,6 +193,7 @@ import {
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getRuntimeWorkItemLaunchContext } from '@/lib/work-item-runtime-host'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
@@ -4477,9 +4479,16 @@ function ChecksTab({
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateRepo = useAppStore((s) => s.updateRepo)
+  const itemRepoExecutionHostId = item.repoExecutionHostId ?? LOCAL_EXECUTION_HOST_ID
   const repo = useAppStore((s) =>
-    targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
+    targetRepoId
+      ? findRepoForHost(s.repos, targetRepoId, {
+          hostId: itemRepoExecutionHostId,
+          settings: s.settings
+        })
+      : null
   )
+  const checksRepoExecutionHostId = repo ? getRepoExecutionHostId(repo) : itemRepoExecutionHostId
   const [refreshing, setRefreshing] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [fixingChecks, setFixingChecks] = useState(false)
@@ -4504,6 +4513,8 @@ function ChecksTab({
   )
   const fixChecksLaunchPlatform = useMemo(
     () =>
+      getRuntimeWorkItemLaunchContext(useAppStore.getState(), checksRepoExecutionHostId)
+        ?.platform ??
       resolveSourceControlLaunchPlatform({
         connectionId: repo?.connectionId ?? null,
         worktreePath: repo?.path ?? null,
@@ -4515,7 +4526,7 @@ function ChecksTab({
               CLIENT_PLATFORM
             )
       }),
-    [repo?.connectionId, repo?.id, repo?.path]
+    [checksRepoExecutionHostId, repo?.connectionId, repo?.id, repo?.path]
   )
   const saveFixChecksActionDefault = useCallback(
     async (
@@ -4530,7 +4541,10 @@ function ChecksTab({
       }
       const latestRepo =
         target.type === 'repo'
-          ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
+          ? findRepoForHost(state.repos, target.repoId, {
+              hostId: checksRepoExecutionHostId,
+              settings: latestSettings
+            })
           : null
       const result = saveSourceControlActionRecipe({
         target,
@@ -4543,9 +4557,11 @@ function ChecksTab({
         await updateSettings({ sourceControlAi: result.sourceControlAi })
         return
       }
-      await updateRepo(result.target.repoId, result.update)
+      await updateRepo(result.target.repoId, result.update, {
+        hostId: checksRepoExecutionHostId
+      })
     },
-    [updateRepo, updateSettings]
+    [checksRepoExecutionHostId, updateRepo, updateSettings]
   )
   const handleStartFixChecksFromDialog = useCallback(
     async ({
@@ -4561,9 +4577,13 @@ function ChecksTab({
         return false
       }
       return await launchWorkItemDirect({
-        item: { ...item, repoId: targetRepoId, pasteContent: commandInput },
+        item: {
+          ...item,
+          repoId: targetRepoId,
+          pasteContent: commandInput
+        },
         repoId: targetRepoId,
-        repoExecutionHostId: item.repoExecutionHostId,
+        repoExecutionHostId: checksRepoExecutionHostId,
         launchSource: 'task_page',
         telemetrySource: 'sidebar',
         promptDelivery: 'submit-after-ready',
@@ -4579,7 +4599,7 @@ function ChecksTab({
         }
       })
     },
-    [item, targetRepoId]
+    [checksRepoExecutionHostId, item, targetRepoId]
   )
   const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
@@ -4759,7 +4779,7 @@ function ChecksTab({
     setFixingChecks(true)
     try {
       const started = await startFixChecksAgent({
-        item,
+        item: { ...item, repoExecutionHostId: checksRepoExecutionHostId },
         repoId: targetRepoId,
         basePrompt,
         launchSource: 'task_page',
@@ -4789,7 +4809,7 @@ function ChecksTab({
     } finally {
       setFixingChecks(false)
     }
-  }, [failedChecks.length, fixingChecks, item, list, targetRepoId])
+  }, [checksRepoExecutionHostId, failedChecks.length, fixingChecks, item, list, targetRepoId])
 
   const handleToggleCheckDetails = useCallback(
     (check: PRCheckDetail): void => {
@@ -7298,7 +7318,11 @@ export default function PullRequestPage({
                       patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
                     }
                     onReviewRequestsChange?.(
-                      { id: workItem.id, repoId: workItem.repoId },
+                      {
+                        id: workItem.id,
+                        repoId: workItem.repoId,
+                        repoExecutionHostId: workItem.repoExecutionHostId
+                      },
                       nextReviewRequests
                     )
                   }}

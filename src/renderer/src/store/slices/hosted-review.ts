@@ -17,7 +17,12 @@ import {
   type LinkedReviewHints
 } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { findRepoForHost } from './repo-host-identity'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 
 export { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 
@@ -30,10 +35,14 @@ type CacheEntry<T> = {
 type FetchOptions = {
   force?: boolean
   repoId?: string
+  executionHostId?: ExecutionHostId
   staleWhileRevalidate?: boolean
   currentHeadOid?: string | null
 }
-type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
+type CreateHostedReviewStoreInput = CreateHostedReviewInput & {
+  repoId?: string | null
+  executionHostId?: ExecutionHostId
+}
 
 const CACHE_TTL_MS = 60_000
 const HOSTED_REVIEW_CACHE_MAX = 500
@@ -97,14 +106,33 @@ function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
   return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL_MS
 }
 
-function findHostedReviewRepoByPath(
+/** @internal - exported for execution-host identity regression tests only. */
+export function _findHostedReviewRepoByPathForTest(
   repos: readonly Repo[] | undefined,
   repoPath: string,
-  repoId?: string | null
+  repoId?: string | null,
+  executionHostId?: ExecutionHostId
 ): Repo | undefined {
-  return repos?.find((candidate) =>
-    repoId ? candidate.id === repoId : candidate.path === repoPath
+  const candidates = repos ?? []
+  if (repoId) {
+    if (executionHostId) {
+      return findRepoForHost(candidates, repoId, { hostId: executionHostId }) ?? undefined
+    }
+    const exactPathMatches = candidates.filter(
+      (candidate) => candidate.id === repoId && candidate.path === repoPath
+    )
+    if (exactPathMatches.length === 1) {
+      return exactPathMatches[0]
+    }
+    const idMatches = candidates.filter((candidate) => candidate.id === repoId)
+    return idMatches.length === 1 ? idMatches[0] : undefined
+  }
+  const pathMatches = candidates.filter(
+    (candidate) =>
+      candidate.path === repoPath &&
+      (!executionHostId || getRepoExecutionHostId(candidate) === executionHostId)
   )
+  return pathMatches.length === 1 ? pathMatches[0] : undefined
 }
 
 function shouldRefetchForLinkedHint(
@@ -247,6 +275,7 @@ export type HostedReviewSlice = {
 type RefreshHostedReviewCardArgs = {
   repoPath: string
   repoId: string
+  executionHostId?: ExecutionHostId
   branch: string
   linkedGitHubPR?: number | null
   fallbackGitHubPR?: number | null
@@ -264,6 +293,7 @@ export function refreshHostedReviewCard(
   return fetchHostedReviewForBranch(args.repoPath, args.branch, {
     force: true,
     repoId: args.repoId,
+    ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
     linkedGitHubPR: args.linkedGitHubPR ?? null,
     ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
     linkedGitLabMR: args.linkedGitLabMR ?? null,
@@ -281,12 +311,26 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
   getHostedReviewCreationEligibility: async (args) => {
     const settings = get().settings
-    const repo = findHostedReviewRepoByPath(get().repos, args.repoPath, args.repoId)
+    const repo = _findHostedReviewRepoByPathForTest(
+      get().repos,
+      args.repoPath,
+      args.repoId,
+      args.executionHostId
+    )
+    if (!repo && (args.repoId || args.executionHostId)) {
+      throw new Error('No repository matches the requested execution host')
+    }
     const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
     const target = getActiveRuntimeTarget(ownerSettings)
     if (target.kind === 'environment') {
-      const { repoPath: _repoPath, worktreePath, ...runtimeArgs } = args
+      const {
+        repoPath: _repoPath,
+        worktreePath,
+        executionHostId: _executionHostId,
+        ...runtimeArgs
+      } = args
       void _repoPath
+      void _executionHostId
       return callRuntimeRpc<HostedReviewCreationEligibility>(
         target,
         'hostedReview.getCreationEligibility',
@@ -302,6 +346,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       window.api.hostedReview.getCreationEligibility({
         ...args,
         repoId: repo?.id ?? args.repoId,
+        executionHostId: repo ? getRepoExecutionHostId(repo) : args.executionHostId,
         connectionId: repo?.connectionId ?? null
       })
     )
@@ -309,10 +354,22 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
   createHostedReview: async (repoPath, input) => {
     const settings = get().settings
-    const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
+    const repo = _findHostedReviewRepoByPathForTest(
+      get().repos,
+      repoPath,
+      input.repoId,
+      input.executionHostId
+    )
+    if (!repo && (input.repoId || input.executionHostId)) {
+      throw new Error('No repository matches the requested execution host')
+    }
     const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
     const target = getActiveRuntimeTarget(ownerSettings)
-    const { repoId: inputRepoId, ...hostedReviewInput } = input
+    const {
+      repoId: inputRepoId,
+      executionHostId: inputExecutionHostId,
+      ...hostedReviewInput
+    } = input
     if (target.kind === 'environment') {
       const { worktreePath, ...runtimeInput } = hostedReviewInput
       return callRuntimeRpc<CreateHostedReviewResult>(
@@ -329,6 +386,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     return window.api.hostedReview.create({
       repoPath,
       repoId: repo?.id ?? inputRepoId ?? undefined,
+      executionHostId: repo ? getRepoExecutionHostId(repo) : inputExecutionHostId,
       connectionId: repo?.connectionId ?? null,
       ...hostedReviewInput
     })
@@ -339,10 +397,24 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     branch,
     options
   ): Promise<HostedReviewInfo | null> => {
-    const settings = get().settings
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const state = get()
+    const settings = state.settings
+    const repo = options?.repoId
+      ? (findRepoForHost(state.repos ?? [], options.repoId, {
+          hostId: options.executionHostId,
+          settings
+        }) ?? undefined)
+      : state.repos?.find(
+          (candidate) =>
+            candidate.path === repoPath &&
+            (!options?.executionHostId ||
+              getRepoExecutionHostId(candidate) === options.executionHostId)
+        )
+    // Why: an explicit owner is an authorization/routing boundary; falling back
+    // to the currently focused host could query or cache a different repository.
+    if (options?.executionHostId && !repo) {
+      return null
+    }
     const ownerSettings = settingsForHostedReviewRepoOwner(settings, repo)
     const target = getActiveRuntimeTarget(ownerSettings)
     const repoId = options?.repoId ?? repo?.id
@@ -408,6 +480,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                 )
               : await window.api.hostedReview.forBranch({
                   repoPath,
+                  ...(repo ? { executionHostId: getRepoExecutionHostId(repo) } : {}),
                   ...args
                 })
           if (requestGenerations.get(cacheKey) === generation) {

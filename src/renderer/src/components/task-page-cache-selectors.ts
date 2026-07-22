@@ -125,7 +125,7 @@ export function selectTaskPageUnresolvedSourceRepos(
   return unresolved
 }
 
-function taskPageWorkItemCacheKey(item: GitHubWorkItem): string {
+function taskPageWorkItemKey(item: GitHubWorkItem): string {
   return `${item.repoId}\u0000${normalizeExecutionHostId(item.repoExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID}\u0000${item.id}`
 }
 
@@ -136,7 +136,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
   const cachedItems = new Map<string, GitHubWorkItem>()
   for (const entry of entries) {
     for (const item of entry?.data ?? []) {
-      cachedItems.set(taskPageWorkItemCacheKey(item), item)
+      cachedItems.set(taskPageWorkItemKey(item), item)
     }
   }
 
@@ -147,7 +147,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
     }
     let pageChanged = false
     const nextPage = page.map((item) => {
-      const cached = cachedItems.get(taskPageWorkItemCacheKey(item))
+      const cached = cachedItems.get(taskPageWorkItemKey(item))
       if (!cached || cached === item) {
         return item
       }
@@ -159,10 +159,6 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
   })
 
   return changed ? nextPages : (pages as (GitHubWorkItem[] | null)[])
-}
-
-function taskPageWorkItemKey(item: GitHubWorkItem): string {
-  return `${item.repoId}\u0000${normalizeExecutionHostId(item.repoExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID}\u0000${item.id}`
 }
 
 function sortedStrings(values: readonly string[] | undefined): string {
@@ -353,16 +349,15 @@ export function findTaskPageDialogWorkItem(
     return null
   }
 
-  const requestedHostId = dialogWorkItemKey.repoExecutionHostId
-    ? normalizeExecutionHostId(dialogWorkItemKey.repoExecutionHostId)
-    : null
+  const requestedHostId =
+    normalizeExecutionHostId(dialogWorkItemKey.repoExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID
   for (const entry of Object.values(workItemsCache)) {
     const found = entry?.data?.find(
       (wi) =>
         wi.id === dialogWorkItemKey.id &&
         wi.repoId === dialogWorkItemKey.repoId &&
-        (requestedHostId === null ||
-          normalizeExecutionHostId(wi.repoExecutionHostId) === requestedHostId)
+        (normalizeExecutionHostId(wi.repoExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID) ===
+          requestedHostId
     )
     if (found) {
       return found

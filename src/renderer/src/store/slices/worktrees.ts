@@ -1446,6 +1446,8 @@ function getHostedReviewPushTargetLookup(
   key: string
   resolve: (settings: AppState['settings']) => Promise<GitPushTarget | undefined>
 } | null {
+  // Why: host-less legacy worktrees predate composite repo identity; keep the
+  // unique-owner/local fallback without letting ambiguous duplicate ids pick arbitrarily.
   const matchingRepos = repos.filter((repo) => repo.id === worktree.repoId)
   const explicitHostId = normalizeExecutionHostId(worktree.hostId)
   const repo = explicitHostId
@@ -3987,6 +3989,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // Why: refetch against post-update links so a cache entry from the previous provider link can't keep showing the removed review.
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
+          executionHostId: getRepoExecutionHostId(reviewRepo),
           linkedGitHubPR: getHostedReviewLinkForMetaRefresh(
             targetEnriched,
             worktreeForUpdate,
@@ -4273,6 +4276,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       void refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
+        executionHostId: getRepoExecutionHostId(repo),
         branch,
         linkedGitHubPR: alreadyLinked ? link.number : null,
         fallbackGitHubPR: null,
