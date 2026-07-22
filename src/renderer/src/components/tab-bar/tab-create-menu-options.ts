@@ -6,6 +6,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
   | 'new-browser'
+  | 'new-collab-canvas'
   | 'new-markdown'
   | 'new-simulator'
   | 'new-terminal'
@@ -22,6 +23,7 @@ export type TabCreateMenuOption = {
 
 export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
+  hasNewCollabCanvas?: boolean
   hasNewMarkdown: boolean
   hasOpenMarkdown: boolean
   hasSimulator: boolean
@@ -110,6 +112,23 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a', 'new browser'),
         translate('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
         translate('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
+      ]
+    })
+  }
+
+  if (context.hasNewCollabCanvas) {
+    options.push({
+      id: 'new-collab-canvas',
+      kind: 'new-collab-canvas',
+      label: 'New Collab Board',
+      keywords: [
+        'collab',
+        'board',
+        'whiteboard',
+        'canvas',
+        'tldraw',
+        'new collab board',
+        'collab canvas'
       ]
     })
   }

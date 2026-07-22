@@ -790,11 +790,16 @@ export type TabContentType =
    *  tree — that is what separates it from a `PinnedCanvasPanel`. */
   | 'collab-canvas'
 
-// Why 'collab-canvas' is deliberately absent: this union drives tab cycling,
-// the jump palette, and modal return-focus, which all narrow it further. Board
-// tabs join those flows in G1 with the UI in hand — widening it here would only
-// force six unrelated modules to grow a case they cannot yet render.
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
+// Why 'collab-canvas' is present: G1 wires the board tab UI. Tab cycling, the
+// jump palette, and return-focus must treat a board as a first-class surface so
+// it survives activation and does not fall through as a fake editor. The
+// earlier deliberate absence was only until this UI existed.
+export type WorkspaceVisibleTabType =
+  | 'terminal'
+  | 'editor'
+  | 'browser'
+  | 'simulator'
+  | 'collab-canvas'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 export type Tab = {

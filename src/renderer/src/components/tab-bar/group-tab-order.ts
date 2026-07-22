@@ -3,7 +3,7 @@ import type { AppState } from '../../store/types'
 import { reconcileTabOrder } from './reconcile-order'
 
 export type VisibleTabRef = {
-  type: 'terminal' | 'editor' | 'browser' | 'simulator'
+  type: 'terminal' | 'editor' | 'browser' | 'simulator' | 'collab-canvas'
   id: string
   tabId?: string
 }
@@ -13,6 +13,7 @@ export type ActiveTabNavOrderIds = {
   editorIds?: string[]
   browserIds?: string[]
   simulatorIds?: string[]
+  collabCanvasIds?: string[]
 }
 
 /**
@@ -53,7 +54,8 @@ export function getGroupVisibleTabOrder(
   terminalEntityIds: ReadonlySet<string>,
   editorEntityIds: ReadonlySet<string>,
   browserEntityIds: ReadonlySet<string>,
-  simulatorTabIds: ReadonlySet<string> = new Set()
+  simulatorTabIds: ReadonlySet<string> = new Set(),
+  collabCanvasTabIds: ReadonlySet<string> = new Set()
 ): VisibleTabRef[] {
   const tabsById = new Map(groupTabs.map((t) => [t.id, t]))
   const result: VisibleTabRef[] = []
@@ -65,6 +67,7 @@ export function getGroupVisibleTabOrder(
   const seenBrowsers = new Set<string>()
   const seenEditors = new Set<string>()
   const seenSimulators = new Set<string>()
+  const seenCollabCanvas = new Set<string>()
   for (const unifiedId of group.tabOrder) {
     const tab = tabsById.get(unifiedId)
     if (!tab) {
@@ -88,6 +91,12 @@ export function getGroupVisibleTabOrder(
       }
       seenSimulators.add(tab.id)
       result.push({ type: 'simulator', id: tab.id, tabId: tab.id })
+    } else if (tab.contentType === 'collab-canvas') {
+      if (!collabCanvasTabIds.has(tab.id) || seenCollabCanvas.has(tab.id)) {
+        continue
+      }
+      seenCollabCanvas.add(tab.id)
+      result.push({ type: 'collab-canvas', id: tab.id, tabId: tab.id })
     } else {
       if (!editorEntityIds.has(tab.entityId) || seenEditors.has(tab.id)) {
         continue
@@ -137,6 +146,11 @@ export function getActiveTabNavOrder(
     (state.unifiedTabsByWorktree[worktreeId] ?? [])
       .filter((tab) => tab.contentType === 'simulator')
       .map((tab) => tab.id)
+  const collabCanvasIds =
+    ids.collabCanvasIds ??
+    (state.unifiedTabsByWorktree[worktreeId] ?? [])
+      .filter((tab) => tab.contentType === 'collab-canvas')
+      .map((tab) => tab.id)
 
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const group = activeGroupId
@@ -153,7 +167,8 @@ export function getActiveTabNavOrder(
       new Set(terminalIds),
       new Set(editorIds),
       new Set(browserIds),
-      new Set(simulatorIds)
+      new Set(simulatorIds),
+      new Set(collabCanvasIds)
     )
   }
 
@@ -163,12 +178,14 @@ export function getActiveTabNavOrder(
     terminalIds,
     editorIds,
     browserIds,
-    simulatorIds
+    simulatorIds,
+    collabCanvasIds
   )
   const terminalIdSet = new Set(terminalIds)
   const editorIdSet = new Set(editorIds)
   const browserIdSet = new Set(browserIds)
   const simulatorIdSet = new Set(simulatorIds)
+  const collabCanvasIdSet = new Set(collabCanvasIds)
   const result: VisibleTabRef[] = []
   for (const id of visibleIds) {
     if (terminalIdSet.has(id)) {
@@ -179,6 +196,8 @@ export function getActiveTabNavOrder(
       result.push({ type: 'browser', id })
     } else if (simulatorIdSet.has(id)) {
       result.push({ type: 'simulator', id })
+    } else if (collabCanvasIdSet.has(id)) {
+      result.push({ type: 'collab-canvas', id })
     }
   }
   return result

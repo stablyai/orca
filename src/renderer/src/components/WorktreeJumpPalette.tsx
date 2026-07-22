@@ -438,7 +438,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const deferredQuery = useDeferredValue(query)
   const [selectedItemId, setSelectedItemId] = useState('')
   const previousWorktreeIdRef = useRef<string | null>(null)
-  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal' | 'simulator'>(
+  const previousActiveTabTypeRef = useRef<
+    'browser' | 'editor' | 'terminal' | 'simulator' | 'collab-canvas'
+  >(
     'terminal'
   )
   const previousBrowserPageIdRef = useRef<string | null>(null)

@@ -1,5 +1,6 @@
 import React from 'react'
-import { FilePlus, FileText, Globe, Loader2, Smartphone, TerminalSquare } from 'lucide-react'
+import { FilePlus, FileText, Globe,
+  Pencil, Loader2, Smartphone, TerminalSquare } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -81,6 +82,8 @@ function getActionPresentation(option: ActiveOption): {
     const icon =
       option.option.kind === 'new-browser' ? (
         <Globe className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'new-collab-canvas' ? (
+        <Pencil className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-markdown' ? (
         <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'open-markdown' ? (

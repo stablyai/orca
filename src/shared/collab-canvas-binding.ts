@@ -72,3 +72,15 @@ export function collabCanvasSessionDirName(binding: CollabCanvasBinding): string
 export function collabCanvasOwnsAgentSession(binding: CollabCanvasBinding): boolean {
   return binding.kind === 'panel'
 }
+
+/** Build a session-bound board attachment for a workspace tab.
+ *
+ *  `entityId` on the tab IS the boardId. Do not hand-build this object at call
+ *  sites — keep the shape in one place so panel vs session cannot drift.
+ */
+export function sessionCollabCanvasBinding(
+  worktreeId: string,
+  boardId: string
+): Extract<CollabCanvasBinding, { kind: 'session' }> {
+  return { kind: 'session', worktreeId, boardId }
+}

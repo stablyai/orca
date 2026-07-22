@@ -101,6 +101,8 @@ export type TabsSlice = {
       }
     >
   ) => Tab | null
+  /** Open a session collab board in a right split beside the active group. */
+  openCollabCanvasTabInActiveWorkspace: (groupId: string) => Tab | null
   getTab: (tabId: string) => Tab | null
   getActiveTab: (worktreeId: string) => Tab | null
   findTabForEntityInGroup: (
@@ -413,7 +415,12 @@ function collapseGroupLayout(
 }
 
 function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
+  if (
+    contentType === 'browser' ||
+    contentType === 'terminal' ||
+    contentType === 'simulator' ||
+    contentType === 'collab-canvas'
+  ) {
     return contentType
   }
   return 'editor'
@@ -800,6 +807,33 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     }
     if (moved && init?.recordInteraction !== false) {
       get().recordFeatureInteraction?.('tab-splits')
+    }
+    return created
+  },
+
+  openCollabCanvasTabInActiveWorkspace: (groupId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return null
+    }
+    // Board id becomes the sync-room key and the tab entityId. UUID is valid
+    // against the sidecar's board-id alphabet ([A-Za-z0-9._-]{1,64}).
+    const boardId = createBrowserUuid()
+    const created = get().createUnifiedTabInSplit(
+      worktreeId,
+      'collab-canvas',
+      { sourceGroupId: groupId, splitDirection: 'right' },
+      {
+        entityId: boardId,
+        label: 'Collab Board',
+        activate: true
+      }
+    )
+    if (created && state.activeWorktreeId === worktreeId) {
+      // Surface the board as the active tab type so overlays / cycling do not
+      // treat it as a phantom editor.
+      get().setActiveTabType('collab-canvas')
     }
     return created
   },

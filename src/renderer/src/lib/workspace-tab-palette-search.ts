@@ -21,6 +21,7 @@ export type WorkspaceTabContentType =
   | 'diff'
   | 'conflict-review'
   | 'check-details'
+  | 'collab-canvas'
 
 export type SearchableWorkspaceTab = {
   tab: Tab & { contentType: WorkspaceTabContentType }
@@ -38,7 +39,12 @@ export type SearchableWorkspaceTab = {
   isCurrentWorktree: boolean
 }
 
-type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+type WorkspaceTabPaletteActiveTabType =
+  | 'browser'
+  | 'editor'
+  | 'terminal'
+  | 'simulator'
+  | 'collab-canvas'
 
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]
@@ -79,7 +85,11 @@ function getActiveUnifiedTabId({
     ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
     : undefined
   const activeUnifiedTabId = activeGroup?.activeTabId ?? null
-  return activeTabType === 'terminal' || activeTabType === 'editor' ? activeUnifiedTabId : null
+  return activeTabType === 'terminal' ||
+    activeTabType === 'editor' ||
+    activeTabType === 'collab-canvas'
+    ? activeUnifiedTabId
+    : null
 }
 
 function isCurrentWorkspaceTab({
@@ -108,7 +118,12 @@ function isCurrentWorkspaceTab({
   if (tab.worktreeId !== activeWorktreeId) {
     return false
   }
-  const visibleType = tab.contentType === 'terminal' ? 'terminal' : 'editor'
+  const visibleType =
+    tab.contentType === 'terminal'
+      ? 'terminal'
+      : tab.contentType === 'collab-canvas'
+        ? 'collab-canvas'
+        : 'editor'
   const storedType = activeTabTypeByWorktree[tab.worktreeId] ?? activeTabType
   if (storedType !== visibleType || activeUnifiedTabId !== tab.id) {
     return false
@@ -127,7 +142,8 @@ function isWorkspaceTabContentType(
     contentType === 'editor' ||
     contentType === 'diff' ||
     contentType === 'conflict-review' ||
-    contentType === 'check-details'
+    contentType === 'check-details' ||
+    contentType === 'collab-canvas'
   )
 }
 

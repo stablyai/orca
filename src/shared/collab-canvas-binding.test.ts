@@ -4,6 +4,7 @@ import {
   collabCanvasOwnsAgentSession,
   collabCanvasRoomUri,
   collabCanvasSessionDirName,
+  sessionCollabCanvasBinding,
   type CollabCanvasBinding
 } from './collab-canvas-binding'
 
@@ -64,5 +65,11 @@ describe('collabCanvasOwnsAgentSession', () => {
 
   it('refuses for a session board — closing it would kill the working terminal', () => {
     expect(collabCanvasOwnsAgentSession(sessionBinding)).toBe(false)
+  })
+})
+
+describe('sessionCollabCanvasBinding', () => {
+  it('is the only constructor for session boards (entityId = boardId)', () => {
+    expect(sessionCollabCanvasBinding('w1', 'b2')).toEqual(sessionBinding)
   })
 })
