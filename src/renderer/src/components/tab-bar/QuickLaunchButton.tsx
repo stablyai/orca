@@ -102,24 +102,39 @@ function QuickLaunchAgentMenuItemsInner({
   onPromptDelivered
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
   // Why: must be a reactive selector (not getConnectionId() which reads a
-  // snapshot via getState()). This ensures the component re-renders when the
-  // SSH / runtime host changes. Prefer explicit SSH connection when present;
-  // otherwise use the worktree's runtime environment (orca serve / Devbox).
-  const agentDetectionTarget = useAppStore((s): AgentDetectionTarget | undefined => {
+  // snapshot via getState()). Prefer SSH when present, otherwise the worktree
+  // runtime environment (orca serve / Devbox). Return a STABLE string key —
+  // a fresh object each render retriggers useDetectedAgents effects (React #185).
+  const agentDetectionTargetKey = useAppStore((s): string | undefined => {
     const connectionId = getConnectionIdFromState(s, worktreeId)
     if (connectionId === undefined) {
       return undefined
     }
     const normalizedConnectionId = connectionId?.trim()
     if (normalizedConnectionId) {
-      return { kind: 'ssh', connectionId: normalizedConnectionId }
+      return `ssh:${normalizedConnectionId}`
     }
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim()
     if (runtimeEnvironmentId) {
-      return { kind: 'runtime', environmentId: runtimeEnvironmentId }
+      return `runtime:${runtimeEnvironmentId}`
+    }
+    return 'local'
+  })
+  const agentDetectionTarget = React.useMemo<AgentDetectionTarget | undefined>(() => {
+    if (agentDetectionTargetKey === undefined) {
+      return undefined
+    }
+    if (agentDetectionTargetKey === 'local') {
+      return { kind: 'local' }
+    }
+    if (agentDetectionTargetKey.startsWith('ssh:')) {
+      return { kind: 'ssh', connectionId: agentDetectionTargetKey.slice('ssh:'.length) }
+    }
+    if (agentDetectionTargetKey.startsWith('runtime:')) {
+      return { kind: 'runtime', environmentId: agentDetectionTargetKey.slice('runtime:'.length) }
     }
     return { kind: 'local' }
-  })
+  }, [agentDetectionTargetKey])
   const { detectedIds } = useDetectedAgents(agentDetectionTarget)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
