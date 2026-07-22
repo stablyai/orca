@@ -54,7 +54,8 @@ function addFolderWorkspaceKey(keys: Set<WorkspaceKey>, value: unknown): void {
 
 function collectWorkspaceSessionKeys(
   session: WorkspaceSessionState,
-  fields: readonly (keyof WorkspaceSessionState)[]
+  fields: readonly (keyof WorkspaceSessionState)[],
+  includeEntry: (value: unknown) => boolean = () => true
 ): string[] {
   const keys = new Set<string>()
   const addKey = (value: unknown): void => {
@@ -70,8 +71,10 @@ function collectWorkspaceSessionKeys(
     if (!isPlainRecord(value)) {
       continue
     }
-    for (const key of Object.keys(value)) {
-      addKey(key)
+    for (const [key, entry] of Object.entries(value)) {
+      if (includeEntry(entry)) {
+        addKey(key)
+      }
     }
   }
   for (const worktreeId of session.activeWorktreeIdsOnShutdown ?? []) {
@@ -90,6 +93,16 @@ function collectWorkspaceSessionKeys(
   }
 
   return [...keys]
+}
+
+function hasRestorableWorkspaceChrome(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.length > 0
+  }
+  if (isPlainRecord(value)) {
+    return Object.keys(value).length > 0
+  }
+  return value !== null && value !== undefined && value !== ''
 }
 
 export function collectFolderWorkspaceKeysFromSession(
@@ -127,7 +140,11 @@ export function collectWorktreeHydrationRepoIdsFromSession(
 
   // Why: only chrome-bearing fields — enumerating the unbounded history maps would pull in ~every
   // repo ever touched and defeat the selective pre-hydration fetch (they hydrate unfiltered).
-  for (const key of collectWorkspaceSessionKeys(session, WORKSPACE_CHROME_SESSION_FIELDS)) {
+  for (const key of collectWorkspaceSessionKeys(
+    session,
+    WORKSPACE_CHROME_SESSION_FIELDS,
+    hasRestorableWorkspaceChrome
+  )) {
     addWorktreeRepoId(key)
   }
   // Why: a repo referenced only by activeRepoId (no active worktree, no tabs) still needs

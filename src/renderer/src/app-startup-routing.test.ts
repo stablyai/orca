@@ -41,9 +41,14 @@ describe('renderer startup runtime routing', () => {
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
     expect(localFoldersIndex).toBeLessThan(sessionIndex)
     expect(sessionIndex).toBeLessThan(hydrationWorktreesIndex)
-    expect(
-      source.slice(hydrationWorktreesIndex, source.indexOf('await keybindingsPromise'))
-    ).toContain('mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY')
+    const hydrationWorktreeBlock = source.slice(
+      hydrationWorktreesIndex,
+      source.indexOf('await keybindingsPromise')
+    )
+    expect(hydrationWorktreeBlock).toContain(
+      'mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY'
+    )
+    expect(hydrationWorktreeBlock).toContain('executionHostId: getRepoExecutionHostId(repo)')
     // Why: the pre-hydration fetch must include SSH repos (only runtime-owned repos are
     // excluded); gating on local-only drops SSH tab/editor/browser chrome at hydration.
     const hydrationFilterBlock = source.slice(
@@ -83,6 +88,14 @@ describe('renderer startup runtime routing', () => {
     expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(
       'actions.fetchReposForAllHosts()'
     )
+
+    const startupFailureIndex = source.indexOf(
+      '[startup] Workspace session hydration failed; leaving disk state untouched:'
+    )
+    expect(startupFailureIndex).toBeGreaterThanOrEqual(0)
+    expect(
+      source.indexOf('startupWorktreeRefreshCompleted: true', startupFailureIndex)
+    ).toBeGreaterThan(startupFailureIndex)
     expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(
       'actions.fetchProjectGroupsForAllHosts()'
     )

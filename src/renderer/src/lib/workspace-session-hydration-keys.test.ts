@@ -128,6 +128,26 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
     expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-chrome'])
   })
 
+  it('does not scan repositories retained only by empty chrome maps', () => {
+    const emptyTabsByWorktree = Object.fromEntries(
+      Array.from({ length: 326 }, (_, index) => [`repo-empty-${index}::/wt`, []])
+    )
+    const session = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        ...emptyTabsByWorktree,
+        'repo-live::/wt': [{ ptyId: 'pty-a' }]
+      },
+      openFilesByWorktree: { 'repo-empty-editor::/wt': [] },
+      browserTabsByWorktree: { 'repo-empty-browser::/wt': [] },
+      activeFileIdByWorktree: { 'repo-empty-active-file::/wt': null }
+    } as unknown as WorkspaceSessionState
+
+    expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-live'])
+  })
+
   it('includes a repository referenced only by activeRepoId (no active worktree, no tabs)', () => {
     const session = {
       activeRepoId: 'repo-active-only',
@@ -146,8 +166,8 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
       activeTabId: null,
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
-      openFilesByWorktree: { 'repo-editor::/editor': [] },
-      browserTabsByWorktree: { 'repo-browser::/browser': [] },
+      openFilesByWorktree: { 'repo-editor::/editor': [{ filePath: '/editor/file.ts' }] },
+      browserTabsByWorktree: { 'repo-browser::/browser': [{ id: 'browser-a' }] },
       sleepingAgentSessionsByPaneKey: {
         'tab:leaf': { worktreeId: 'repo-agent::/agent' }
       }

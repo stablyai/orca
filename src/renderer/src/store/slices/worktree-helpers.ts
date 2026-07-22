@@ -22,6 +22,7 @@ import type {
 } from '../../../../shared/types'
 import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
@@ -119,7 +120,10 @@ export type WorktreeSlice = {
   /** Startup owns the initial all-host refresh; sidebar repo-change refreshes stay gated until it finishes. */
   startupWorktreeRefreshCompleted: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
-  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
+  fetchWorktrees: (
+    repoId: string,
+    options?: { requireAuthoritative?: boolean; executionHostId?: ExecutionHostId }
+  ) => Promise<boolean>
   fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
   updateWorktreeLineage: (

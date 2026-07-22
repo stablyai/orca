@@ -901,7 +901,7 @@ function App(): React.JSX.Element {
         )
         await timeRendererStartupStep('fetch-hydration-worktrees', () =>
           mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY, (repo) =>
-            actions.fetchWorktrees(repo.id)
+            actions.fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
           )
         )
         await keybindingsPromise
@@ -1064,6 +1064,8 @@ function App(): React.JSX.Element {
           error
         )
         if (!cancelled) {
+          // Why: degraded mode stays interactive; later repo/runtime changes must not remain gated forever.
+          useAppStore.setState({ startupWorktreeRefreshCompleted: true })
           // Why (issue #1158): only apply default UI if ui.get() never hydrated; otherwise defaults would clobber ui.json via the debounced writer.
           const fallbackUI = getStartupErrorFallbackUI(uiHydrated)
           if (fallbackUI) {
