@@ -239,6 +239,7 @@ import {
   ClaudeLiveSessions,
   normalizeClaudeLivePtySessionIds
 } from './claude-live-sessions'
+import { PtyBindings } from './pty-bindings'
 import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
@@ -2350,6 +2351,87 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
+export type PtyBindingArgs = {
+  worktreeId: string
+  tabId: string
+  leafId: string
+  ptyId: string
+  startupCwd?: string
+}
+
+// Apply a pty:spawn binding to a session in place. Shared by the live
+// persistPtyBinding path and the load-time shadow overlay so the minimal
+// tab/layout-skeleton reconstruction lives in exactly one place.
+export function applyPtyBindingToSession(
+  session: WorkspaceSessionState,
+  args: PtyBindingArgs
+): void {
+  const tabs = session.tabsByWorktree?.[args.worktreeId]
+  const tab = tabs?.find((t) => t.id === args.tabId)
+  if (tab) {
+    tab.ptyId = args.ptyId
+  } else {
+    // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
+    const nextTabs = [
+      ...(tabs ?? []),
+      createMinimalPersistedTerminalTab({
+        ...args,
+        existingTabCount: tabs?.length ?? 0
+      })
+    ]
+    session.tabsByWorktree = {
+      ...session.tabsByWorktree,
+      [args.worktreeId]: nextTabs
+    }
+    session.activeWorktreeId ??= args.worktreeId
+    session.activeTabId ??= args.tabId
+    session.activeTabIdByWorktree = {
+      ...session.activeTabIdByWorktree,
+      [args.worktreeId]: session.activeTabIdByWorktree?.[args.worktreeId] ?? args.tabId
+    }
+  }
+  if (!isTerminalLeafId(args.leafId)) {
+    // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
+    return
+  }
+  const layout = session.terminalLayoutsByTabId?.[args.tabId]
+  if (layout) {
+    if (!layout.root) {
+      // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
+      layout.root = { type: 'leaf', leafId: args.leafId }
+      layout.activeLeafId = args.leafId
+      layout.expandedLeafId = null
+    } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
+      // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
+      layout.root = {
+        type: 'split',
+        direction: 'vertical',
+        first: cloneLayoutNode(layout.root),
+        second: { type: 'leaf', leafId: args.leafId }
+      }
+      layout.activeLeafId = args.leafId
+      if (layout.expandedLeafId && !layoutContainsLeafId(layout.root, layout.expandedLeafId)) {
+        layout.expandedLeafId = null
+      }
+    }
+    layout.ptyIdsByLeafId = {
+      ...layout.ptyIdsByLeafId,
+      [args.leafId]: args.ptyId
+    }
+  } else {
+    // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
+    session.terminalLayoutsByTabId = {
+      ...session.terminalLayoutsByTabId,
+      [args.tabId]: {
+        root: { type: 'leaf', leafId: args.leafId },
+        activeLeafId: args.leafId,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [args.leafId]: args.ptyId }
+      }
+    }
+  }
+}
+
 // Deletes the O(1) owner-keyed fields for `ownerKey` from an already-cloned
 // session in place, recording removed tab ids into `removedTabIds`. The
 // pane-key-scanned maps (pty incarnations, surface tombstones, sleeping agents)
@@ -2609,6 +2691,7 @@ export class Store {
   private readonly dataFile: string
   private readonly activeViewPreference: ActiveViewPreference
   private readonly claudeLiveSessions: ClaudeLiveSessions
+  private readonly ptyBindings: PtyBindings
   private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
@@ -2651,6 +2734,14 @@ export class Store {
       this.dataFile,
       this.state.claudeLivePtySessionIds
     )
+    // Why: replay the pty:spawn shadow (Issue #217) onto the hydrated session before any pty
+    // reconciliation runs, so a binding written seconds before a force-quit isn't lost.
+    this.ptyBindings = new PtyBindings(this.dataFile)
+    if (this.state.workspaceSession) {
+      for (const binding of this.ptyBindings.get()) {
+        applyPtyBindingToSession(this.state.workspaceSession, binding)
+      }
+    }
     const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
@@ -3600,7 +3691,8 @@ export class Store {
     await Promise.all([
       this.pendingWrite,
       this.activeViewPreference.waitForPendingWrite(),
-      this.claudeLiveSessions.waitForPendingWrite()
+      this.claudeLiveSessions.waitForPendingWrite(),
+      this.ptyBindings.waitForPendingWrite()
     ])
   }
 
@@ -3772,8 +3864,9 @@ export class Store {
     this.writeGeneration++
     this.pendingWrite = null
     this.writeToDiskSync({ force: asyncWriteWasInFlight })
-    // Why: shutdown must also drain the sidecar's debounced remove() writes; add() is already sync-durable.
+    // Why: shutdown must also drain the sidecars' debounced writes; their sync paths (add/record) are already durable.
     this.claudeLiveSessions.flushOrThrow()
+    this.ptyBindings.flushOrThrow()
   }
 
   flushActiveViewPreferenceOrThrow(): void {
@@ -6073,7 +6166,9 @@ export class Store {
     return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 
-  // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
+  // Why: durably record the pty binding before pty:spawn returns to close the spawn/persist
+  // SIGKILL race (Issue #217). The binding goes to the pty-bindings shadow sidecar (a tiny sync
+  // write) instead of a full-state flush; the main blob catches up on the next debounced save.
   persistPtyBinding(
     args: {
       worktreeId: string
@@ -6159,11 +6254,12 @@ export class Store {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
       advanceTopologyAfterMembershipChange()
       try {
-        this.flushOrThrow()
+        this.ptyBindings.record(args)
       } catch (err) {
         restoreSession()
         throw err
       }
+      this.scheduleSave()
       return
     }
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
@@ -6207,11 +6303,12 @@ export class Store {
     }
     advanceTopologyAfterMembershipChange()
     try {
-      this.flushOrThrow()
+      this.ptyBindings.record(args)
     } catch (err) {
       restoreSession()
       throw err
     }
+    this.scheduleSave()
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────

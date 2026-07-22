@@ -38,6 +38,7 @@ import {
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
 import { SshConnectionStore } from './ssh/ssh-connection-store'
+import { getPtyBindingsFile } from './pty-bindings'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
@@ -5772,12 +5773,14 @@ describe('Store', () => {
       ptyId: 'daemon-pty'
     }
     store.persistPtyBinding(binding)
-    const inoBefore = statSync(dataFile()).ino
+    // The binding is durably recorded to the pty-bindings shadow sidecar (a tiny sync write),
+    // not the main state blob, so the no-rewrite invariant now applies to that file.
+    const inoBefore = statSync(getPtyBindingsFile(dataFile())).ino
 
-    // Warm-restart re-bind storm: an identical binding re-asserted with a sync flush must not rewrite.
+    // Warm-restart re-bind storm: an identical binding re-asserted must not rewrite.
     store.persistPtyBinding(binding)
 
-    expect(statSync(dataFile()).ino).toBe(inoBefore)
+    expect(statSync(getPtyBindingsFile(dataFile())).ino).toBe(inoBefore)
   })
 
   // ── worktreeMeta startup GC ────────────────────────────────────────
@@ -8564,6 +8567,9 @@ describe('Store', () => {
       }
     })
 
+    // Persist the base session to the main blob first; the binding below then relies purely on the
+    // pty-bindings shadow sidecar (no flush), exercising the overlay-on-load path a force-quit hits.
+    store.flush()
     store.persistPtyBinding({
       worktreeId: 'wt1',
       tabId: 'tab1',
