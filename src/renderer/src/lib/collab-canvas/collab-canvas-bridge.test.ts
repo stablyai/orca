@@ -19,39 +19,53 @@ const selection: CollabCanvasSelectionExport = {
 }
 
 describe('buildCollabCanvasInjectText', () => {
-  it('embeds board, worktree, and selection digest as an operator ask', () => {
-    const text = buildCollabCanvasInjectText(selection, {
-      atlasFilePath: '/tmp/orca-paste-board.png'
-    })
-    expect(text).toContain('OPERATOR — collab board selection')
+  it('embeds full-board screenshot path plus selection focus', () => {
+    const text = buildCollabCanvasInjectText(
+      {
+        ...selection,
+        hasSelection: true,
+        boardTextDigest: 'draw:shape:a @1,2\ndraw:shape:b @3,4',
+        boardShapeIds: ['shape:a', 'shape:b']
+      },
+      {
+        boardFilePath: '/tmp/orca-paste-board.png',
+        selectionFilePath: '/tmp/orca-paste-sel.png'
+      }
+    )
+    expect(text).toContain('OPERATOR — collab board update')
     expect(text).toContain('Board id: board-1')
     expect(text).toContain('Worktree: wt-1')
+    expect(text).toContain('Board screenshot (open this path — full page): /tmp/orca-paste-board.png')
+    expect(text).toContain('Selection crop (optional focus image): /tmp/orca-paste-sel.png')
     expect(text).toContain('draw a red box around the login form')
-    expect(text).toContain('Sketch image (open this path): /tmp/orca-paste-board.png')
     expect(text).toContain('Selected shapes: 2')
+    expect(text).toContain('agent-draft')
     expect(text).not.toContain('[collab-canvas]')
   })
 
-  it('marks missing atlas explicitly', () => {
-    const text = buildCollabCanvasInjectText({ ...selection, atlasDataUri: null })
-    expect(text).toContain('Sketch image: none')
+  it('marks missing board screenshot explicitly', () => {
+    const text = buildCollabCanvasInjectText({
+      ...selection,
+      atlasDataUri: null,
+      hasSelection: false
+    })
+    expect(text).toContain('Board screenshot: none')
+    expect(text).toContain('No selection')
   })
 })
 
 describe('buildCollabCanvasInjectPayload', () => {
   it('builds a session inject that reuses the terminal agent', () => {
     const payload = buildCollabCanvasInjectPayload(selection, {
-      atlasFilePath: '/tmp/atlas.png'
+      boardFilePath: '/tmp/atlas.png'
     })
     expect(payload.kind).toBe('collab-canvas-inject')
     expect(payload.usesExistingSessionAgent).toBe(true)
     expect(payload.boardId).toBe('board-1')
     expect(payload.worktreeId).toBe('wt-1')
     expect(payload.atlasDataUri).toBe(selection.atlasDataUri)
-    expect(payload.terminalText).toBe(
-      buildCollabCanvasInjectText(selection, { atlasFilePath: '/tmp/atlas.png' })
-    )
     expect(payload.terminalText).toContain('/tmp/atlas.png')
+    expect(payload.terminalText).toContain('Board screenshot')
   })
 
   it('rejects empty board or worktree ids', () => {

@@ -25,7 +25,7 @@ import {
 } from '../../lib/collab-canvas/collab-canvas-sync-config'
 import { createInlineAssetStore } from '../../lib/collab-canvas/collab-canvas-assets'
 import { buildCollabCanvasInjectPayload } from '../../lib/collab-canvas/collab-canvas-bridge'
-import { exportCollabSelectionFromEditor } from '../../lib/collab-canvas/export-selection'
+import { exportCollabBoardFromEditor } from '../../lib/collab-canvas/export-selection'
 import { materializeCollabAtlasToTempFile } from '../../lib/collab-canvas/materialize-atlas'
 import {
   injectCollabPayloadIntoTerminal,
@@ -35,6 +35,8 @@ import {
   preferredTabIdsFromGroups,
   resolveSessionAgentTerminalTabId
 } from '../../lib/collab-canvas/resolve-session-agent-tab'
+import { resolveLastAgentReply } from '../../lib/collab-canvas/resolve-last-agent-reply'
+import { prepareReplyForSpeech } from '../../lib/voice/prepare-reply-for-speech'
 import {
   COLLAB_CANVAS_SHAPE_UTILS,
   mountAgentDraftOnEditor
@@ -78,6 +80,7 @@ export function CollabCanvas({
     worktreeId ? (s.unifiedTabsByWorktree[worktreeId] ?? []) : []
   )
   const groups = useAppStore((s) => (worktreeId ? (s.groupsByWorktree[worktreeId] ?? []) : []))
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
 
   const resolveTerminalTabId = useCallback((): string | null => {
     if (!worktreeId) return null
@@ -86,6 +89,38 @@ export function CollabCanvas({
       preferredTabIds: preferredTabIdsFromGroups(groups)
     })
   }, [worktreeId, unifiedTabs, groups])
+
+  const placeDraftBody = useCallback(
+    (body: string, sourceTurnId: string) => {
+      const editor = editorRef.current
+      if (!editor) {
+        toast('Board editor not ready')
+        return
+      }
+      const cleaned = prepareReplyForSpeech(body).trim() || body.trim()
+      if (!cleaned) {
+        toast('Nothing to place as draft')
+        return
+      }
+      const bounds = editor.getSelectionPageBounds()
+      const placement = bounds
+        ? {
+            x: bounds.x + bounds.w + 24,
+            y: bounds.y,
+            w: 300,
+            h: Math.min(280, 80 + cleaned.length / 2)
+          }
+        : { x: 40, y: 40, w: 300, h: Math.min(280, 80 + cleaned.length / 2) }
+      mountAgentDraftOnEditor(editor, {
+        boardId: binding.boardId,
+        body: cleaned,
+        placement,
+        sourceTurnId
+      })
+      toast('Placed agent-draft on board')
+    },
+    [binding.boardId]
+  )
 
   const tryAwareness = useCallback(() => {
     if (binding.kind !== 'session') return
@@ -120,11 +155,6 @@ export function CollabCanvas({
   }, [sessionBoardKey, tryAwareness])
 
   const handlePlaceDraftFromClipboard = useCallback(async () => {
-    const editor = editorRef.current
-    if (!editor) {
-      toast('Board editor not ready')
-      return
-    }
     let body = ''
     try {
       body = (await navigator.clipboard.readText()).trim()
@@ -136,18 +166,28 @@ export function CollabCanvas({
       toast('Clipboard is empty — copy an agent reply first')
       return
     }
-    const bounds = editor.getSelectionPageBounds()
-    const placement = bounds
-      ? { x: bounds.x + bounds.w + 24, y: bounds.y, w: 300, h: Math.min(280, 80 + body.length / 2) }
-      : { x: 40, y: 40, w: 300, h: Math.min(280, 80 + body.length / 2) }
-    mountAgentDraftOnEditor(editor, {
-      boardId: binding.boardId,
-      body,
-      placement,
-      sourceTurnId: 'clipboard'
+    placeDraftBody(body, 'clipboard')
+  }, [placeDraftBody])
+
+  const handlePlaceDraftFromLastReply = useCallback(() => {
+    if (!worktreeId) {
+      toast('Draft from last reply is only for session boards')
+      return
+    }
+    const tabId = resolveTerminalTabId()
+    const hit = resolveLastAgentReply({
+      worktreeId,
+      preferredTabId: tabId,
+      entries: Object.values(agentStatusByPaneKey).filter(
+        (e): e is NonNullable<typeof e> => Boolean(e)
+      )
     })
-    toast('Placed agent-draft on board')
-  }, [binding.boardId])
+    if (!hit) {
+      toast('No agent reply found for this workspace yet')
+      return
+    }
+    placeDraftBody(hit.body, `agent:${hit.paneKey}`)
+  }, [worktreeId, resolveTerminalTabId, agentStatusByPaneKey, placeDraftBody])
 
   const handleSendToSession = useCallback(async () => {
     if (binding.kind !== 'session') {
@@ -168,36 +208,44 @@ export function CollabCanvas({
 
     setSending(true)
     try {
-      // Ensure awareness has fired before the first selection inject.
       tryAwareness()
 
-      const selection = await exportCollabSelectionFromEditor(editor, {
+      // Full board screenshot always + selection coords/crop when focused.
+      const snap = await exportCollabBoardFromEditor(editor, {
         boardId: binding.boardId,
-        worktreeId: binding.worktreeId,
-        includeAtlas: true
+        worktreeId: binding.worktreeId
       })
-      if (selection.selectedShapeIds.length === 0) {
-        toast('Select shapes on the board first')
+      if (snap.boardShapeIds.length === 0) {
+        toast('Board is empty — draw something first')
         return
       }
-      // Materialize PNG so the agent gets a real image path (terminal screenshot path),
-      // not just "atlas: attached" prose it cannot see.
-      const atlas = await materializeCollabAtlasToTempFile(selection.atlasDataUri)
-      if (!atlas.ok && selection.atlasDataUri) {
-        toast(`Sketch image path failed (${atlas.reason}) — sending text digest only`)
+
+      const boardMat = await materializeCollabAtlasToTempFile(snap.boardAtlasDataUri)
+      if (!boardMat.ok && snap.boardAtlasDataUri) {
+        toast(`Board screenshot path failed (${boardMat.reason})`)
       }
-      const payload = buildCollabCanvasInjectPayload(selection, {
-        atlasFilePath: atlas.ok ? atlas.filePath : null
+      let selectionPath: string | null = null
+      if (snap.selectionAtlasDataUri) {
+        const selMat = await materializeCollabAtlasToTempFile(snap.selectionAtlasDataUri)
+        if (selMat.ok) {
+          selectionPath = selMat.filePath
+        }
+      }
+
+      const payload = buildCollabCanvasInjectPayload(snap, {
+        boardFilePath: boardMat.ok ? boardMat.filePath : null,
+        selectionFilePath: selectionPath
       })
       const result = injectCollabPayloadIntoTerminal(payload, { tabId })
       if (!result.ok) {
         toast(`Inject failed: ${result.reason}`)
         return
       }
+      const focus = snap.hasSelection ? ' + selection focus' : ''
       toast(
-        atlas.ok
-          ? 'Sent sketch + path to session agent'
-          : 'Sent selection text to session agent'
+        boardMat.ok
+          ? `Sent full-board screenshot${focus} to session`
+          : 'Sent board digest (screenshot path failed)'
       )
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -240,7 +288,15 @@ export function CollabCanvas({
                 ? '· no terminal yet'
                 : '· binding session'}
           </span>
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+            <button
+              type="button"
+              className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+              onClick={() => handlePlaceDraftFromLastReply()}
+              title="Place the session agent's last reply as a provisional agent-draft (text only — not freehand ink)"
+            >
+              Draft from last reply
+            </button>
             <button
               type="button"
               className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
@@ -254,6 +310,7 @@ export function CollabCanvas({
               className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
               disabled={sending}
               onClick={() => void handleSendToSession()}
+              title="Full board screenshot for vision + selection coords when focused"
             >
               {sending ? 'Sending…' : 'Send to session'}
             </button>

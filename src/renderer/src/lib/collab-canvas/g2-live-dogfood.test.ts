@@ -60,7 +60,7 @@ describe('G2 live omp dogfood (node-b transcript)', () => {
     expect(ev.type).toBe(PASTE_TERMINAL_TEXT_EVENT)
     expect(ev.detail.tabId).toBe('term-g2-dogfood')
     expect(ev.detail.text).toContain('g2-dogfood-board')
-    expect(ev.detail.text).toContain('OPERATOR — collab board selection')
+    expect(ev.detail.text).toContain('OPERATOR — collab board update')
     expect(ev.detail.text).toContain(selection.textDigest)
 
     const draft = buildAgentDraftShapeProps({

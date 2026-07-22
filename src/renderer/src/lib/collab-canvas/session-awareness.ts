@@ -17,8 +17,8 @@ export function buildSessionBoardAwarenessText(args: {
     'OPERATOR — collab board is open beside this terminal.',
     `Board id: ${boardId || '(unknown)'} · worktree: ${worktreeId || '(unknown)'}.`,
     'You are the existing session agent (no second agent).',
-    'I may send sketches from the board with "Send to session" — treat those as real operator asks about the drawing.',
-    'When you propose layout or UI structure, keep replies short so I can place them as agent-drafts on the board.',
+    'I may send full-board screenshots (vision) plus selection coords via "Send to session" — open the PNG paths.',
+    'You cannot draw freehand on the board yet; short prose replies can land as dashed agent-draft cards.',
     ''
   ].join('\n')
 }

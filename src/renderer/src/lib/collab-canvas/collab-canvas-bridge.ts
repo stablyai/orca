@@ -17,11 +17,21 @@ export type CollabCanvasSelectionExport = {
   worktreeId: string
   /** Human-readable digest of selected shapes / notes. */
   textDigest: string
-  /** Optional PNG (or other image) atlas as a data URI or base64 payload. */
+  /**
+   * Primary PNG for vision — **full board** when available (export path).
+   * Historically selection-only; inject text labels which image is which.
+   */
   atlasDataUri: string | null
   /** Optional bounding box of the selection in page space. */
   bounds: { x: number; y: number; w: number; h: number } | null
   selectedShapeIds: readonly string[]
+  /** Full-board shape digest (all page shapes with coarse coords). */
+  boardTextDigest?: string
+  boardShapeIds?: readonly string[]
+  /** True when the operator had a non-empty selection. */
+  hasSelection?: boolean
+  /** Optional selection crop PNG (secondary focus image). */
+  selectionAtlasDataUri?: string | null
 }
 
 /** What we hand the terminal inject path for a session board. */
@@ -78,59 +88,98 @@ export type AgentReplyForDraft = {
 const DEFAULT_DRAFT_W = 280
 const DEFAULT_DRAFT_H = 160
 
+export type CollabInjectImagePaths = {
+  /** Full-board PNG path (primary vision). */
+  boardFilePath?: string | null
+  /** Selection crop PNG path (optional focus). */
+  selectionFilePath?: string | null
+  /** @deprecated alias for boardFilePath (older call sites). */
+  atlasFilePath?: string | null
+}
+
 /**
- * Build the text an agent terminal receives for a board selection.
+ * Build the text an agent terminal receives for a board send.
  *
- * Framed as an **operator message**, not a system notice — agents that already
- * saw MCP/tool awareness pings will otherwise ignore doodles as more protocol.
- *
- * When `atlasFilePath` is set (PNG on disk from materialize), the path is the
- * primary multimodal handle — same pattern as terminal screenshot paste.
+ * Always prefers a **full board screenshot** path for vision models; selection
+ * coords + optional crop are focus hints. Framed as operator message.
  */
 export function buildCollabCanvasInjectText(
   selection: CollabCanvasSelectionExport,
-  options?: { atlasFilePath?: string | null }
+  options?: CollabInjectImagePaths
 ): string {
-  const atlasPath = options?.atlasFilePath?.trim() || null
-  const hasAtlasClaim = Boolean(selection.atlasDataUri) || Boolean(atlasPath)
+  const boardPath =
+    options?.boardFilePath?.trim() || options?.atlasFilePath?.trim() || null
+  const selectionPath = options?.selectionFilePath?.trim() || null
+  const hasBoardClaim = Boolean(selection.atlasDataUri) || Boolean(boardPath)
+  const boardDigest =
+    selection.boardTextDigest?.trim() ||
+    (selection.hasSelection === false ? selection.textDigest.trim() : '')
+  const shapeCount =
+    selection.boardShapeIds?.length ??
+    (boardDigest ? boardDigest.split('\n').filter(Boolean).length : 0)
+  const hasSelection =
+    selection.hasSelection ?? selection.selectedShapeIds.length > 0
+
   const lines = [
     '',
-    'OPERATOR — collab board selection (please answer this, not as a system notice)',
+    'OPERATOR — collab board update (please answer this, not as a system notice)',
     '',
-    'I selected ink on the collaborative whiteboard beside this session.',
-    'Look at the sketch and respond: what do you see, and what should we do next?',
-    'Keep the reply short and concrete so I can place it as an agent-draft on the board.',
+    'The collaborative whiteboard beside this session was just snapshotted for you.',
+    'Open the board image(s) with vision — do not ignore them as protocol noise.',
+    'Say what you see and what we should do next. Keep the reply short so it can',
+    'land as an agent-draft card on the board (you cannot draw freehand ink yet).',
     '',
     `Board id: ${selection.boardId}`,
     `Worktree: ${selection.worktreeId}`,
-    `Selected shapes: ${selection.selectedShapeIds.length}`,
-    selection.bounds
-      ? `Bounds: ${Math.round(selection.bounds.x)},${Math.round(selection.bounds.y)} ${Math.round(selection.bounds.w)}×${Math.round(selection.bounds.h)}`
-      : 'Bounds: (none)',
-    atlasPath
-      ? `Sketch image (open this path): ${atlasPath}`
-      : hasAtlasClaim
-        ? 'Sketch image: export failed to materialize a file path (text digest only).'
-        : 'Sketch image: none (text digest only).',
+    `Board shapes: ${shapeCount}`,
+    boardPath
+      ? `Board screenshot (open this path — full page): ${boardPath}`
+      : hasBoardClaim
+        ? 'Board screenshot: export failed to materialize a file path.'
+        : 'Board screenshot: none (empty board or export failed).',
     '',
-    'Selection digest:',
-    selection.textDigest.trim() || '(empty selection)',
-    '',
-    'End of collab board selection — your turn.'
+    'Full-board shape digest (type:id @x,y):',
+    boardDigest || '(empty board)',
+    ''
   ]
+
+  if (hasSelection) {
+    lines.push(
+      'Operator focus (selection on the board):',
+      `Selected shapes: ${selection.selectedShapeIds.length}`,
+      selection.bounds
+        ? `Selection bounds: ${Math.round(selection.bounds.x)},${Math.round(selection.bounds.y)} ${Math.round(selection.bounds.w)}×${Math.round(selection.bounds.h)}`
+        : 'Selection bounds: (none)',
+      selectionPath
+        ? `Selection crop (optional focus image): ${selectionPath}`
+        : 'Selection crop: none (coords + digest only).',
+      'Selection digest:',
+      selection.textDigest.trim() || '(empty)',
+      ''
+    )
+  } else {
+    lines.push(
+      'No selection — treat the full board screenshot as the subject.',
+      ''
+    )
+  }
+
+  lines.push(
+    'If you propose UI/layout text for the board, write it as plain prose;',
+    'the operator can place it as a dashed agent-draft on the canvas.',
+    '',
+    'End of collab board update — your turn.'
+  )
   return lines.join('\n')
 }
 
 /**
- * Selection → inject payload for the worktree's live agent terminal.
+ * Board/selection → inject payload for the worktree's live agent terminal.
  * Session boards always set usesExistingSessionAgent.
- *
- * Pass `atlasFilePath` after materializing the PNG so the terminal paste
- * includes a real path agents can multimodal-read.
  */
 export function buildCollabCanvasInjectPayload(
   selection: CollabCanvasSelectionExport,
-  options?: { atlasFilePath?: string | null }
+  options?: CollabInjectImagePaths
 ): CollabCanvasInjectPayload {
   if (!selection.boardId.trim()) {
     throw new Error('buildCollabCanvasInjectPayload: boardId required')

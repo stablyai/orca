@@ -10,9 +10,9 @@
 /** Strip collab inject / awareness blobs that leaked into the assistant field. */
 export function stripCollabInjectEcho(text: string): string {
   let out = text
-  // New operator framing (G2-P atlas fix)
+  // Operator framing (selection-era and full-board-screenshot era)
   out = out.replace(
-    /OPERATOR\s*[—\-]\s*collab board selection[\s\S]*?End of collab board selection[^\n]*/gi,
+    /OPERATOR\s*[—\-]\s*collab board (?:selection|update)[\s\S]*?End of collab board (?:selection|update)[^\n]*/gi,
     '\n'
   )
   out = out.replace(
