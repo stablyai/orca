@@ -120,6 +120,11 @@ Task statuses: `pending`, `ready`, `dispatched`, `completed`, `failed`, `blocked
 Dispatch rules:
 
 - `--inject` sends the task spec plus preamble into a recognized agent CLI so it can report `worker_done`.
+- For every Codex `dispatch --inject`, verify submission instead of trusting `dispatch.ok` alone. `terminal wait --for tui-idle` can report ready while Codex is still starting MCP servers, leaving `[Pasted Content N chars]` in the composer without submitting it.
+  1. Wait about 3 seconds, then run `orca terminal read --terminal <handle> --json`.
+  2. If `[Pasted Content N chars]` remains at the prompt or no `UserPromptSubmit`/`Working` activity appears, send one bare Enter: `orca terminal send --terminal <handle> --text "" --enter --json`.
+  3. Read the terminal again and require the pasted-content marker to be gone plus `UserPromptSubmit`, `Working`, or task tool activity before treating delivery as successful.
+  4. Never resend the task text as a nudge; that can queue a duplicate prompt. Send only the bare Enter, once, after confirming the stuck composer state.
 - If the target is a bare shell, omit `--inject`, dispatch for tracking if needed, then send the prompt manually with `orca terminal send --terminal <handle> --text <prompt> --enter --json`.
 - After 3 consecutive failures on one task, the dispatch context circuit-breaks and the task is marked failed.
 - Use `task-list --brief --json` for coordinator sweeps; it collapses whitespace and caps each echoed spec at 160 characters (`spec_truncated` marks shortened rows). Omit `--brief` when the full spec is required, or when an older CLI rejects it as an unknown flag.
