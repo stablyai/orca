@@ -532,6 +532,8 @@ async function fetchViaBackend(
     provider: 'codex',
     session: mapBackendUsageWindow(payload.rate_limit?.primary_window, 300),
     weekly: mapBackendUsageWindow(payload.rate_limit?.secondary_window, 10080),
+    // Surfaced for the status-bar Usage row (e.g. "Codex · Plus").
+    planType: payload.plan_type,
     ...(payload.rate_limit_reset_credits !== undefined
       ? {
           rateLimitResetCredits:

@@ -78,9 +78,16 @@ import {
 } from './smart-workspace-localized-options'
 import {
   buildTaskSourceContextFromRepo,
+  getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  getGitHubRuntimeRepoId,
+  getGitHubSourceRuntimeTarget
+} from '@/lib/github-source-runtime-context'
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
 const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
@@ -304,7 +311,7 @@ export default function SmartWorkspaceNameField({
   const localInputRef = useRef<HTMLInputElement | null>(null)
   const focusedSelectedSourceKeyRef = useRef<string | null>(null)
   const tabsListRef = useRef<HTMLDivElement | null>(null)
-  const repoSlugCacheRef = useRef<Map<string, RepoSlug | null>>(new Map())
+  const repoSlugCacheRef = useRef<Map<string, RepoSlug>>(new Map())
   const handledCrossRepoUrlRef = useRef<string | null>(null)
   const localInputFocusFrameRef = useRef<number | null>(null)
   // Why: Electron makes programmatic .focus() look user-initiated, so gate the source popover until real interaction.
@@ -542,15 +549,6 @@ export default function SmartWorkspaceNameField({
     let stale = false
     const directNumber = normalizedGhQuery.directNumber
     const directLink = parsedGhLink
-    const searchTargetForRepo = (repo: RepoOption) =>
-      repoBackedSearchTargets.find((target) => target.repo.id === repo.id) ?? {
-        repo,
-        githubSourceContext: buildTaskSourceContextFromRepo({
-          provider: 'github' as const,
-          projectId: repo.id,
-          repo
-        })
-      }
     if (directLink !== null && handledCrossRepoUrlRef.current !== debouncedQuery.trim()) {
       setGithubLoading(true)
       const directLookup = async (): Promise<{
@@ -561,34 +559,43 @@ export default function SmartWorkspaceNameField({
         } | null
       }> => {
         if (crossRepoSwitchTarget === 'task-source') {
-          const matchingRepo = await findMatchingRepoForSlug(
-            repoBackedSearchTargets.map((target) => target.repo),
+          const matchingTarget = await findMatchingRepoForSlug(
+            repoBackedSearchTargets.map((target) => ({
+              repo: target.repo,
+              sourceContext: target.githubSourceContext
+            })),
             directLink.slug,
             repoSlugCacheRef.current
           )
-          handledCrossRepoUrlRef.current = debouncedQuery.trim()
-          if (!matchingRepo) {
+          if (!matchingTarget) {
             return { items: [], prompt: null }
           }
-          const target = searchTargetForRepo(matchingRepo)
           const item = await lookupGitHubWorkItemByOwnerRepoForSource({
-            repoPath: target.repo.path,
-            repoId: target.repo.id,
-            sourceContext: target.githubSourceContext,
+            repoPath: matchingTarget.repo.path,
+            repoId: matchingTarget.repo.id,
+            sourceContext: matchingTarget.sourceContext,
             owner: directLink.slug.owner,
             repo: directLink.slug.repo,
+            ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
             number: directLink.number,
             type: directLink.type
           })
+          // Why: only suppress re-tries once resolution succeeded — a transient
+          // GHES slug failure (matchingTarget === null) must stay retryable.
+          handledCrossRepoUrlRef.current = debouncedQuery.trim()
           return {
-            items: item ? [{ ...item, repoId: target.repo.id } as GitHubWorkItem] : [],
+            items: item ? [{ ...item, repoId: matchingTarget.repo.id } as GitHubWorkItem] : [],
             prompt: null
           }
         }
         if (!selectedRepo?.path) {
           return { items: [], prompt: null }
         }
-        const selectedSlug = await getRepoSlugCached(selectedRepo, repoSlugCacheRef.current)
+        const selectedSlug = await getRepoSlugCached(
+          selectedRepo,
+          githubSourceContext,
+          repoSlugCacheRef.current
+        )
         if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
           handledCrossRepoUrlRef.current = debouncedQuery.trim()
           const item = await lookupSmartGitHubSubmitItem({
@@ -599,6 +606,7 @@ export default function SmartWorkspaceNameField({
               kind: 'link',
               owner: directLink.slug.owner,
               repo: directLink.slug.repo,
+              ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
               number: directLink.number,
               type: directLink.type
             },
@@ -607,12 +615,22 @@ export default function SmartWorkspaceNameField({
           })
           return { items: item ? [item] : [], prompt: null }
         }
-        const matchingRepo = await findMatchingRepoForSlug(
-          repos,
+        const matchingTarget = await findMatchingRepoForSlug(
+          repos.map((repo) => ({
+            repo,
+            sourceContext: buildTaskSourceContextFromRepo({
+              provider: 'github',
+              projectId: repo.id,
+              repo
+            })
+          })),
           directLink.slug,
           repoSlugCacheRef.current
         )
-        return { items: [], prompt: { link: directLink, matchingRepo } }
+        return {
+          items: [],
+          prompt: { link: directLink, matchingRepo: matchingTarget?.repo ?? null }
+        }
       }
       void directLookup()
         .then((result) => {
@@ -647,6 +665,7 @@ export default function SmartWorkspaceNameField({
               kind: 'link' as const,
               owner: directLink.slug.owner,
               repo: directLink.slug.repo,
+              ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
               number: directLink.number,
               type: directLink.type
             }
@@ -1128,6 +1147,7 @@ export default function SmartWorkspaceNameField({
           sourceContext,
           owner: crossRepoPrompt.link.slug.owner,
           repo: crossRepoPrompt.link.slug.repo,
+          ...(crossRepoPrompt.link.slug.host ? { host: crossRepoPrompt.link.slug.host } : {}),
           number: crossRepoPrompt.link.number,
           type: crossRepoPrompt.link.type
         })
@@ -1161,8 +1181,12 @@ export default function SmartWorkspaceNameField({
     if (!added) {
       return
     }
-    repoSlugCacheRef.current.delete(added.id)
-    const slug = await getRepoSlugCached(added, repoSlugCacheRef.current)
+    const sourceContext = buildTaskSourceContextFromRepo({
+      provider: 'github',
+      projectId: added.id,
+      repo: added
+    })
+    const slug = await getRepoSlugCached(added, sourceContext, repoSlugCacheRef.current)
     if (slug && sameSlug(slug, crossRepoPrompt.link.slug)) {
       await acceptGitHubLink(added)
     }
@@ -1748,39 +1772,54 @@ function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
 }
 
 function sameSlug(left: RepoSlug, right: RepoSlug): boolean {
-  return (
-    left.owner.toLowerCase() === right.owner.toLowerCase() &&
-    left.repo.toLowerCase() === right.repo.toLowerCase()
-  )
+  return githubRepoIdentityKey(left) === githubRepoIdentityKey(right)
 }
 
-async function getRepoSlugCached(
-  repo: RepoOption,
-  cache: Map<string, RepoSlug | null>
+export async function getRepoSlugCached(
+  repo: Pick<RepoOption, 'id' | 'path'>,
+  sourceContext: TaskSourceContext | null | undefined,
+  cache: Map<string, RepoSlug>
 ): Promise<RepoSlug | null> {
-  const cacheKey = repo.id
+  const cacheKey = sourceContext
+    ? `${getTaskSourceCacheScope(sourceContext)}\0${repo.path}`
+    : `local:${repo.id}\0${repo.path}`
   if (cache.has(cacheKey)) {
     return cache.get(cacheKey) ?? null
   }
   try {
-    const slug = await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
-    cache.set(cacheKey, slug)
+    const target = getGitHubSourceRuntimeTarget(sourceContext)
+    const slug =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<RepoSlug | null>(
+            target,
+            'github.repoSlug',
+            { repo: getGitHubRuntimeRepoId(sourceContext, repo.id) },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
+    if (slug) {
+      cache.set(cacheKey, slug)
+    }
     return slug
   } catch {
-    cache.set(cacheKey, null)
     return null
   }
 }
 
+type RepoSlugTarget = {
+  repo: RepoOption
+  sourceContext: TaskSourceContext | null | undefined
+}
+
 async function findMatchingRepoForSlug(
-  repos: RepoOption[],
+  targets: RepoSlugTarget[],
   slug: RepoSlug,
-  cache: Map<string, RepoSlug | null>
-): Promise<RepoOption | null> {
-  for (const repo of repos) {
-    const candidate = await getRepoSlugCached(repo, cache)
+  cache: Map<string, RepoSlug>
+): Promise<RepoSlugTarget | null> {
+  for (const target of targets) {
+    const candidate = await getRepoSlugCached(target.repo, target.sourceContext, cache)
     if (candidate && sameSlug(candidate, slug)) {
-      return repo
+      return target
     }
   }
   return null

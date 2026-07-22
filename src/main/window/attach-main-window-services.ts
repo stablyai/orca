@@ -12,7 +12,12 @@ import type {
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
-import { getLocalPtyProvider, registerPtyHandlers } from '../ipc/pty'
+import {
+  getLocalPtyProvider,
+  registerPtyHandlers,
+  type GetSelectedCodexHomePath,
+  type PrepareCodexSessionResume
+} from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
@@ -25,7 +30,8 @@ import {
   getUpdateStatus,
   quitAndInstall,
   setupAutoUpdater,
-  dismissNudge
+  dismissNudge,
+  type UpdateInstallMode
 } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
@@ -39,7 +45,6 @@ import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
-import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import {
@@ -66,17 +71,19 @@ export function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
   runtime: OrcaRuntimeService,
-  getSelectedCodexHomePath?: (target?: CodexAccountSelectionTarget) => string | null,
+  getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   prepareClaudeAuth?: (
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    prepareCodexSessionResume?: PrepareCodexSessionResume
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
     // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
     onBeforeUpdateQuit?: () => void | Promise<void>
+    updateInstallMode?: UpdateInstallMode
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
@@ -94,6 +101,7 @@ export function attachMainWindowServices(
     prepareClaudeAuth,
     store,
     {
+      prepareCodexSessionResume: options?.prepareCodexSessionResume,
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
       awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
@@ -152,7 +160,8 @@ export function attachMainWindowServices(
       },
       setDismissedUpdateNudgeId: (id) => {
         store.updateUI({ dismissedUpdateNudgeId: id })
-      }
+      },
+      installMode: options?.updateInstallMode
     })
     logStartupMilestone('updater-setup-done')
   }

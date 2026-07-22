@@ -1,4 +1,3 @@
-import type { GlobalSettings } from '../../../shared/types'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
@@ -8,8 +7,13 @@ import {
   callAbortableRuntimeEnvironment,
   createRuntimeRpcAbortError
 } from './abortable-runtime-environment-call'
+import type { RuntimeClientTarget } from './runtime-client-target'
 
-export type RuntimeClientTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
+export {
+  getActiveRuntimeTarget,
+  settingsForRuntimeOwner,
+  type RuntimeClientTarget
+} from './runtime-client-target'
 
 const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
 const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
@@ -46,27 +50,6 @@ export function isRuntimeScopeForbiddenError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'forbidden'
 }
 
-export function getActiveRuntimeTarget(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): RuntimeClientTarget {
-  const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
-  if (!environmentId) {
-    return { kind: 'local' }
-  }
-  return { kind: 'environment', environmentId }
-}
-
-export function settingsForRuntimeOwner(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  runtimeEnvironmentId: string | null | undefined
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
-  if (runtimeEnvironmentId === null) {
-    return { activeRuntimeEnvironmentId: null }
-  }
-  const ownerId = runtimeEnvironmentId?.trim()
-  return ownerId ? { activeRuntimeEnvironmentId: ownerId } : settings
-}
-
 export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
@@ -75,10 +58,15 @@ export async function callRuntimeRpc<TResult>(
     timeoutMs?: number
     suppressFeatureInteraction?: boolean
     reuseRecentCompatibilityFailure?: boolean
+    skipCompatibilityCheck?: boolean
     signal?: AbortSignal
   } = {}
 ): Promise<TResult> {
-  if (target.kind === 'environment' && method !== 'status.get') {
+  if (
+    target.kind === 'environment' &&
+    method !== 'status.get' &&
+    options.skipCompatibilityCheck !== true
+  ) {
     await ensureRuntimeEnvironmentCompatible(target.environmentId, options)
   }
   if (options.signal?.aborted) {
@@ -195,13 +183,24 @@ function rememberRuntimeEnvironmentCompatibility(
 
 // Why: a live status answer invalidates failures and pending probes from the
 // dropped connection; only proven-compatible successes remain reusable.
-export function clearRecentRuntimeCompatibilityFailure(environmentId: string): void {
+export function clearRecentRuntimeCompatibilityFailure(
+  environmentId: string,
+  observedStatus?: RuntimeStatus
+): void {
   const trimmed = environmentId.trim()
   if (!trimmed) {
     return
   }
   const cached = runtimeCompatibilityChecks.get(trimmed)
-  if (cached && !cached.provenCompatible) {
+  if (
+    cached &&
+    (!cached.provenCompatible ||
+      (observedStatus &&
+        cached.status !== null &&
+        cached.status.runtimeId !== observedStatus.runtimeId))
+  ) {
+    // Why: a saved endpoint can reconnect to a different runtime version; its predecessor's
+    // positive capability verdict must not route a structured request to the replacement.
     runtimeCompatibilityChecks.delete(trimmed)
   }
 }
@@ -298,9 +297,9 @@ export async function runtimeEnvironmentSupportsCapability(
       ) {
         const supported = cached.status.capabilities?.includes(capability) === true
         if (!supported) {
-          // Why: an unsupported verdict must not survive a remote upgrade. The
-          // next explicit retry re-probes instead of pinning the old capability set.
-          runtimeCompatibilityChecks.delete(trimmed)
+          // Why: retain protocol proof for this legacy dispatch, but force the
+          // next capability decision to observe an in-place host upgrade.
+          cached.statusCheckedAt = null
         }
         return supported
       }
@@ -310,8 +309,9 @@ export async function runtimeEnvironmentSupportsCapability(
   }
   const status = await getRuntimeEnvironmentStatus(trimmed, timeoutMs)
   const supported = status.capabilities?.includes(capability) === true
-  if (!supported && runtimeCompatibilityChecks.get(trimmed)?.status === status) {
-    runtimeCompatibilityChecks.delete(trimmed)
+  const resolved = runtimeCompatibilityChecks.get(trimmed)
+  if (!supported && resolved?.status === status) {
+    resolved.statusCheckedAt = null
   }
   return supported
 }

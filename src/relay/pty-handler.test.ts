@@ -40,10 +40,15 @@ import {
 } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
+type TestRequestContext = {
+  isStale: () => boolean
+  signal?: AbortSignal
+}
+
 function createMockDispatcher() {
   const requestHandlers = new Map<
     string,
-    (params: Record<string, unknown>, context?: { isStale: () => boolean }) => Promise<unknown>
+    (params: Record<string, unknown>, context?: TestRequestContext) => Promise<unknown>
   >()
   const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
   const notifications: { method: string; params?: Record<string, unknown> }[] = []
@@ -52,10 +57,7 @@ function createMockDispatcher() {
     onRequest: vi.fn(
       (
         method: string,
-        handler: (
-          params: Record<string, unknown>,
-          context?: { isStale: () => boolean }
-        ) => Promise<unknown>
+        handler: (params: Record<string, unknown>, context?: TestRequestContext) => Promise<unknown>
       ) => {
         requestHandlers.set(method, handler)
       }
@@ -73,7 +75,7 @@ function createMockDispatcher() {
     async callRequest(
       method: string,
       params: Record<string, unknown> = {},
-      context?: { isStale: () => boolean }
+      context?: TestRequestContext
     ) {
       const handler = requestHandlers.get(method)
       if (!handler) {
@@ -96,6 +98,24 @@ function createMockDispatcher() {
 describe('PtyHandler', () => {
   let dispatcher: ReturnType<typeof createMockDispatcher>
   let handler: PtyHandler
+
+  async function spawnPty(
+    params: Record<string, unknown> = {}
+  ): Promise<{ id: string; incarnationId: string }> {
+    return (await dispatcher.callRequest('pty.spawn', params)) as {
+      id: string
+      incarnationId: string
+    }
+  }
+
+  async function attachPty(
+    params: Record<string, unknown>
+  ): Promise<{ incarnationId: string; replay?: string }> {
+    return (await dispatcher.callRequest('pty.attach', params)) as {
+      incarnationId: string
+      replay?: string
+    }
+  }
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -176,10 +196,174 @@ describe('PtyHandler', () => {
   })
 
   it('spawns a PTY and returns an id', async () => {
-    const result = await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
-    expect(result).toEqual({ id: 'pty-1' })
+    const result = await spawnPty({ cols: 80, rows: 24 })
+    expect(result).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
+  })
+
+  it("does not forward Orca's own NODE_ENV into the spawned shell", async () => {
+    // Why: NODE_ENV in the relay host process is a build-mode flag, not the
+    // user's; leaking it breaks `next build` and Vitest in the terminal.
+    const previous = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previous
+      }
+    }
+
+    const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnOptions.env.NODE_ENV).toBeUndefined()
+    expect(spawnOptions.env.PATH).toBe(process.env.PATH)
+  })
+
+  it('keeps a renderer-supplied NODE_ENV for the spawned shell', async () => {
+    // Why: only the ambient value is stripped; an explicit request still wins.
+    const previous = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { NODE_ENV: 'production' }
+      })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previous
+      }
+    }
+
+    const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnOptions.env.NODE_ENV).toBe('production')
+  })
+
+  it('replays an operation-owned spawn after its first response becomes stale', async () => {
+    const operationId = 'a'.repeat(43)
+
+    await dispatcher.callRequest(
+      'pty.spawn',
+      { cols: 80, rows: 24, agentSessionCreateOperationId: operationId },
+      { isStale: () => mockPtySpawn.mock.calls.length > 0 }
+    )
+    const replayed = await dispatcher.callRequest('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      agentSessionCreateOperationId: operationId
+    })
+
+    expect(replayed).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })
+    expect(mockPtySpawn).toHaveBeenCalledOnce()
+    expect(mockPtyInstance.kill).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('retains an operation fence when publication fails after native spawn', async () => {
+    const operationId = 'f'.repeat(43)
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn(() => {
+        throw new Error('listener publication failed')
+      })
+    })
+    const request = {
+      cols: 80,
+      rows: 24,
+      agentSessionCreateOperationId: operationId
+    }
+
+    await expect(dispatcher.callRequest('pty.spawn', request)).rejects.toThrow(
+      'listener publication failed'
+    )
+    await expect(dispatcher.callRequest('pty.spawn', request)).rejects.toThrow(
+      'listener publication failed'
+    )
+    expect(mockPtySpawn).toHaveBeenCalledOnce()
+    expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('releases a canceled operation before native spawn after module preflight', async () => {
+    let finishModuleLoad!: (value: { spawn: typeof mockPtySpawn }) => void
+    const moduleLoad = new Promise<{ spawn: typeof mockPtySpawn }>((resolve) => {
+      finishModuleLoad = resolve
+    })
+    const internals = handler as unknown as {
+      loadPty(): Promise<{ spawn: typeof mockPtySpawn } | null>
+    }
+    const loadPty = vi.spyOn(internals, 'loadPty').mockReturnValueOnce(moduleLoad)
+    const abort = new AbortController()
+    const operationId = 'c'.repeat(43)
+    const request = { cols: 80, rows: 24, agentSessionCreateOperationId: operationId }
+    const spawning = dispatcher.callRequest('pty.spawn', request, {
+      isStale: () => abort.signal.aborted,
+      signal: abort.signal
+    })
+
+    abort.abort()
+    finishModuleLoad({ spawn: mockPtySpawn })
+    await expect(spawning).rejects.toThrow('client_disconnected')
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+
+    loadPty.mockResolvedValue({ spawn: mockPtySpawn })
+    await expect(dispatcher.callRequest('pty.spawn', request)).resolves.toMatchObject({
+      id: expect.stringMatching(/^pty-/)
+    })
+    expect(mockPtySpawn).toHaveBeenCalledOnce()
+  })
+
+  it('rejects malformed create operation ids before spawning', async () => {
+    await expect(
+      dispatcher.callRequest('pty.spawn', { agentSessionCreateOperationId: 'not-valid' })
+    ).rejects.toThrow('agent_session_operation_invalid')
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+  })
+
+  it('adopts only the exact claimed owner generation on relay retry', async () => {
+    const agentSessionEnsure = {
+      claim: {
+        digestVersion: 1,
+        keyId: 'claim-key',
+        identityDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        agent: 'codex'
+      },
+      surface: {
+        worktreeId: 'repo::/tmp/worktree',
+        tabId: '11111111-1111-4111-8111-111111111111',
+        leafId: '22222222-2222-4222-8222-222222222222',
+        terminalHandle: 'term_claimed'
+      }
+    }
+
+    const first = (await dispatcher.callRequest('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      agentSessionEnsure
+    })) as Record<string, unknown>
+    const second = (await dispatcher.callRequest('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      agentSessionEnsure
+    })) as Record<string, unknown>
+
+    expect(first).toMatchObject({
+      id: 'pty-1',
+      agentSessionEnsure: { disposition: 'created' }
+    })
+    expect(second).toMatchObject({
+      id: 'pty-1',
+      agentSessionEnsure: { disposition: 'adopted' }
+    })
+    expect(second.agentSessionEnsure).toMatchObject({
+      owner: (first.agentSessionEnsure as { owner: unknown }).owner
+    })
+    expect(mockPtySpawn).toHaveBeenCalledOnce()
   })
 
   it('normalizes a missing native binding as degraded node-pty availability', async () => {
@@ -726,8 +910,9 @@ describe('PtyHandler', () => {
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+      let spawn!: { id: string; incarnationId: string }
       try {
-        await dispatcher.callRequest('pty.spawn', {
+        spawn = await spawnPty({
           env: { HOME: homeDir },
           command: 'echo fallback',
           commandDelivery: 'provider',
@@ -757,11 +942,14 @@ describe('PtyHandler', () => {
         data: '\x1b]777;orca-shell-ready'
       })
 
-      const result = await dispatcher.callRequest('pty.attach', {
+      const result = await attachPty({
         id: 'pty-1',
         suppressReplayNotification: true
       })
-      expect(result).toEqual({ replay: '\x1b]777;orca-shell-ready' })
+      expect(result).toEqual({
+        incarnationId: spawn.incarnationId,
+        replay: '\x1b]777;orca-shell-ready'
+      })
     }
   )
 
@@ -843,16 +1031,16 @@ describe('PtyHandler', () => {
       }),
       onExit: vi.fn()
     })
-    await dispatcher.callRequest('pty.spawn', {})
+    const spawn = await spawnPty()
     dataCallback?.('prompt$ ')
 
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
     try {
-      const result = await dispatcher.callRequest('pty.attach', {
+      const result = await attachPty({
         id: 'pty-1',
         suppressReplayNotification: true
       })
-      expect(result).toEqual({ replay: 'prompt$ ' })
+      expect(result).toEqual({ incarnationId: spawn.incarnationId, replay: 'prompt$ ' })
     } finally {
       aliveSpy.mockRestore()
     }
@@ -872,7 +1060,13 @@ describe('PtyHandler', () => {
     }
     mockPtySpawn.mockReturnValue(term)
 
-    await dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
+    await dispatcher.callRequest(
+      'pty.spawn',
+      {},
+      {
+        isStale: () => mockPtySpawn.mock.calls.length > 0
+      }
+    )
 
     // Why: assert via the captured spy reference rather than term.kill because
     // disposeManagedPty() neutralizes managed.pty.kill (replaces it with a
@@ -896,7 +1090,7 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest(
       'pty.spawn',
       { command: 'echo stale', commandDelivery: 'provider' },
-      { isStale: () => true }
+      { isStale: () => mockPtySpawn.mock.calls.length > 0 }
     )
 
     vi.advanceTimersByTime(50)
@@ -1006,33 +1200,135 @@ describe('PtyHandler', () => {
         id: 'pty-1',
         suppressReplayNotification: true
       })
-    ).resolves.toEqual({ replay: 'prompt' })
+    ).resolves.toEqual({ replay: 'prompt', incarnationId: expect.any(String) })
   })
 
   it('leaves startup queries untouched for an unsupported relay capability version', async () => {
-    let dataCallback: ((data: string) => void) | undefined
-    const term = {
-      ...mockPtyInstance,
-      onData: vi.fn((cb: (data: string) => void) => {
-        dataCallback = cb
-      }),
-      onExit: vi.fn()
-    }
-    mockPtySpawn.mockReturnValue(term)
-    await dispatcher.callRequest('pty.spawn', {
-      startupIngressVersion: PTY_STARTUP_INGRESS_VERSION - 1,
-      startupIngress: {
-        colors: { foreground: '#2e3434', background: '#ffffff' },
-        deadlineMs: 5_000
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
       }
-    })
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', {
+        startupIngressVersion: PTY_STARTUP_INGRESS_VERSION - 1,
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
 
-    const query = '\x1b]10;?\x07'
-    dataCallback!(query)
-    vi.advanceTimersByTime(8)
+      const query = '\x1b]10;?\x07'
+      dataCallback!(query)
+      vi.advanceTimersByTime(8)
 
-    expect(term.write).not.toHaveBeenCalled()
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+      expect(term.write).not.toHaveBeenCalled()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('consumes a color query at a native Windows SSH relay owner', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', { shellOverride: 'powershell.exe' })
+
+      dataCallback!('\x1b]10;?\x07')
+      vi.advanceTimersByTime(8)
+
+      expect(term.write).not.toHaveBeenCalled()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '',
+        rawLength: '\x1b]10;?\x07'.length,
+        seq: '\x1b]10;?\x07'.length,
+        transformed: true
+      })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('forwards color queries from a POSIX SSH relay owner', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      })
+      await dispatcher.callRequest('pty.spawn', { shellOverride: '/bin/bash' })
+      const query = '\x1b]10;?\x07'
+
+      dataCallback!(query)
+      vi.advanceTimersByTime(8)
+
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('keeps renderer color replies for a Windows SSH relay that owns WSL', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', {
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+      const reply = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
+
+      dataCallback!('\x1b]11;?\x07')
+      vi.advanceTimersByTime(8)
+      dispatcher.callNotification('pty.data', { id: 'pty-1', data: reply })
+
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]11;?\x07'
+      })
+      expect(term.write).toHaveBeenCalledWith(reply)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
   })
 
   it('coalesces background PTY output before notifying the client', async () => {
@@ -1120,15 +1416,15 @@ describe('PtyHandler', () => {
       onExit: vi.fn()
     })
 
-    await dispatcher.callRequest('pty.spawn', {})
+    const spawn = await spawnPty()
     dataCallback!('buffered output')
 
-    const result = await dispatcher.callRequest('pty.attach', {
+    const result = await attachPty({
       id: 'pty-1',
       suppressReplayNotification: true
     })
 
-    expect(result).toEqual({ replay: 'buffered output' })
+    expect(result).toEqual({ incarnationId: spawn.incarnationId, replay: 'buffered output' })
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.replay', expect.anything())
     vi.advanceTimersByTime(8)
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
@@ -1144,13 +1440,13 @@ describe('PtyHandler', () => {
       onExit: vi.fn()
     })
 
-    await dispatcher.callRequest('pty.spawn', {})
+    const spawn = await spawnPty()
     dataCallback!('buffered output')
     dispatcher.notify.mockClear()
 
-    const result = await dispatcher.callRequest('pty.attach', { id: 'pty-1' })
+    const result = await attachPty({ id: 'pty-1' })
 
-    expect(result).toEqual({})
+    expect(result).toEqual({ incarnationId: spawn.incarnationId })
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.replay', {
       id: 'pty-1',
       data: 'buffered output'
@@ -1164,8 +1460,9 @@ describe('PtyHandler', () => {
     const oldTabId = process.env.ORCA_TAB_ID
     delete process.env.ORCA_PANE_KEY
     delete process.env.ORCA_TAB_ID
+    let spawn!: { id: string; incarnationId: string }
     try {
-      await dispatcher.callRequest('pty.spawn', {
+      spawn = await spawnPty({
         env: { FOO: 'bar' },
         paneKey: 'tab-a:leaf-a',
         tabId: 'tab-a'
@@ -1188,7 +1485,7 @@ describe('PtyHandler', () => {
     expect(spawnOptions.env.ORCA_TAB_ID).toBeUndefined()
 
     await expect(
-      dispatcher.callRequest('pty.attach', {
+      attachPty({
         id: 'pty-1',
         expectedPaneKey: 'tab-b:leaf-b',
         expectedTabId: 'tab-b'
@@ -1196,12 +1493,12 @@ describe('PtyHandler', () => {
     ).rejects.toThrow('PTY "pty-1" not found')
 
     await expect(
-      dispatcher.callRequest('pty.attach', {
+      attachPty({
         id: 'pty-1',
         expectedPaneKey: 'tab-a:leaf-a',
         expectedTabId: 'tab-a'
       })
-    ).resolves.toEqual({})
+    ).resolves.toEqual({ incarnationId: spawn.incarnationId })
   })
 
   it('notifies on PTY exit and removes from map', async () => {
@@ -1214,11 +1511,15 @@ describe('PtyHandler', () => {
       })
     })
 
-    await dispatcher.callRequest('pty.spawn', {})
+    const spawn = await spawnPty()
     expect(handler.activePtyCount).toBe(1)
 
     exitCallback!({ exitCode: 0 })
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: 0 })
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', {
+      id: 'pty-1',
+      code: 0,
+      incarnationId: spawn.incarnationId
+    })
     expect(handler.activePtyCount).toBe(0)
   })
 
@@ -1235,7 +1536,7 @@ describe('PtyHandler', () => {
       })
     })
 
-    await dispatcher.callRequest('pty.spawn', {})
+    const spawn = await spawnPty()
     dataCallback!('final output')
     exitCallback!({ exitCode: 0 })
 
@@ -1243,7 +1544,11 @@ describe('PtyHandler', () => {
       id: 'pty-1',
       data: 'final output'
     })
-    expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.exit', { id: 'pty-1', code: 0 })
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.exit', {
+      id: 'pty-1',
+      code: 0,
+      incarnationId: spawn.incarnationId
+    })
   })
 
   it('writes data to PTY via pty.data notification', async () => {
@@ -1272,6 +1577,24 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
     dispatcher.callNotification('pty.resize', { id: 'pty-1', cols: 120, rows: 40 })
     expect(mockResize).toHaveBeenCalledWith(120, 40)
+  })
+
+  it('reports the PTY grid actually applied by node-pty', async () => {
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      cols: 132,
+      rows: 43,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    })
+
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    await expect(dispatcher.callRequest('pty.getSize', { id: spawned.id })).resolves.toEqual({
+      cols: 132,
+      rows: 43
+    })
+    await expect(dispatcher.callRequest('pty.getSize', { id: 'missing' })).resolves.toBeNull()
   })
 
   it('kills PTY on shutdown with SIGTERM by default', async () => {
@@ -1382,7 +1705,13 @@ describe('PtyHandler', () => {
     it('does not retry stale-spawn cleanup after the Windows kill deadline', async () => {
       await withWindowsPlatform(async () => {
         const mockKill = mockKillablePty()
-        await dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
+        await dispatcher.callRequest(
+          'pty.spawn',
+          {},
+          {
+            isStale: () => mockPtySpawn.mock.calls.length > 0
+          }
+        )
         expectBareKills(mockKill, 1)
         vi.advanceTimersByTime(5000)
         expectBareKills(mockKill, 1)
@@ -1461,7 +1790,7 @@ describe('PtyHandler', () => {
     const exits: { id: string; paneKey?: string }[] = []
     handler.setExitListener((evt) => exits.push(evt))
 
-    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-fallback:0' } })
+    const spawn = await spawnPty({ env: { ORCA_PANE_KEY: 'tab-fallback:0' } })
     await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
     vi.advanceTimersByTime(5000)
 
@@ -1472,7 +1801,11 @@ describe('PtyHandler', () => {
 
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: 137 })
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', {
+      id: 'pty-1',
+      code: 137,
+      incarnationId: spawn.incarnationId
+    })
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-fallback:0' }])
     expect(handler.activePtyCount).toBe(0)
   })
@@ -1608,22 +1941,22 @@ describe('PtyHandler', () => {
       onExit: vi.fn()
     })
 
-    await dispatcher.callRequest('pty.spawn', {})
+    const spawn = await spawnPty()
     dataCallback!('initial output')
 
-    const r1 = await dispatcher.callRequest('pty.attach', {
+    const r1 = await attachPty({
       id: 'pty-1',
       suppressReplayNotification: true
     })
-    expect(r1).toEqual({ replay: 'initial output' })
+    expect(r1).toEqual({ incarnationId: spawn.incarnationId, replay: 'initial output' })
 
     dataCallback!(' more')
 
-    const r2 = await dispatcher.callRequest('pty.attach', {
+    const r2 = await attachPty({
       id: 'pty-1',
       suppressReplayNotification: true
     })
-    expect(r2).toEqual({ replay: 'initial output more' })
+    expect(r2).toEqual({ incarnationId: spawn.incarnationId, replay: 'initial output more' })
   })
 
   it('second app restart still replays full buffer', async () => {
@@ -1636,30 +1969,33 @@ describe('PtyHandler', () => {
       onExit: vi.fn()
     })
 
-    await dispatcher.callRequest('pty.spawn', {})
+    const spawn = await spawnPty()
 
     dataCallback!('$ while true; do date; done\r\n')
     dataCallback!('Mon Apr 28\r\n')
 
-    await dispatcher.callRequest('pty.attach', {
+    const firstAttach = await attachPty({
       id: 'pty-1',
       suppressReplayNotification: true
     })
+    expect(firstAttach.incarnationId).toBe(spawn.incarnationId)
 
     dataCallback!('Tue Apr 29\r\n')
 
-    await dispatcher.callRequest('pty.attach', {
+    const secondAttach = await attachPty({
       id: 'pty-1',
       suppressReplayNotification: true
     })
+    expect(secondAttach.incarnationId).toBe(spawn.incarnationId)
 
     dataCallback!('Wed Apr 30\r\n')
 
-    const result = await dispatcher.callRequest('pty.attach', {
+    const result = await attachPty({
       id: 'pty-1',
       suppressReplayNotification: true
     })
     expect(result).toEqual({
+      incarnationId: spawn.incarnationId,
       replay: '$ while true; do date; done\r\nMon Apr 28\r\nTue Apr 29\r\nWed Apr 30\r\n'
     })
   })

@@ -856,15 +856,20 @@ describe('fetchClaudeRateLimits', () => {
             message: 'Rate limited. Please try again later.'
           }
         }),
-        { status: 429 }
+        { status: 429, headers: { 'retry-after': '3000' } }
       )
     )
 
-    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+    const before = Date.now()
+    const result = await fetchClaudeRateLimits({ authPreparation })
+    expect(result).toMatchObject({
       provider: 'claude',
       status: 'error',
-      error: 'Claude usage is rate limited right now.'
+      error: 'Claude usage is rate limited right now.',
+      usageMetadata: expect.objectContaining({ failureKind: 'rate-limited' })
     })
+    expect(result.usageMetadata?.retryAtMs).toBeGreaterThanOrEqual(before + 3000 * 1000)
+    expect(result.usageMetadata?.retryAtMs).toBeLessThanOrEqual(Date.now() + 3000 * 1000)
 
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://api.anthropic.com/api/oauth/usage',
@@ -874,6 +879,41 @@ describe('fetchClaudeRateLimits', () => {
         })
       })
     )
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('omits retryAtMs when a 429 has no Retry-After header', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'expired-oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'rate_limit_error',
+            message: 'Rate limited. Please try again later.'
+          }
+        }),
+        { status: 429 }
+      )
+    )
+
+    const result = await fetchClaudeRateLimits({ authPreparation })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.retryAtMs).toBeUndefined()
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 

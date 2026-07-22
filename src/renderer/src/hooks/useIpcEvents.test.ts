@@ -1797,7 +1797,10 @@ describe('useIpcEvents updater integration', () => {
     const replyTerminalCreate = vi.fn()
     const dispatchEvent = vi.fn()
     const createFloatingWorkspaceTerminalTab = vi.fn()
-    const createWebRuntimeSessionTerminal = vi.fn().mockResolvedValue(false)
+    const createWebRuntimeSessionTerminal = vi.fn().mockResolvedValue({
+      status: 'failed',
+      message: 'The workspace is not connected to a remote Orca host.'
+    })
     const focusRuntimeTerminalSurface = vi.fn(() => false)
     const focusTerminalTabSurface = vi.fn()
     let floatingPanelFocused = false

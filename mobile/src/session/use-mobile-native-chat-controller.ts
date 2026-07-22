@@ -17,7 +17,10 @@ import { detectAgentPermission } from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
 import { openMobileNativeChatFile } from './mobile-native-chat-open-file'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
-import { sendMobileNativeChatMessage } from './mobile-native-chat-send'
+import {
+  sendMobileNativeChatMessage,
+  sendMobileNativeChatMessageWithOutcome
+} from './mobile-native-chat-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
@@ -110,7 +113,8 @@ export function useMobileNativeChatController(args: {
     setComposerText: setChatComposerText,
     pending: chatPending,
     captureSendOrigin,
-    acceptSend
+    acceptSend,
+    holdUnconfirmedSend
   } = useMobileNativeChatDrafts({
     hostId,
     worktreeId,
@@ -224,7 +228,7 @@ export function useMobileNativeChatController(args: {
         onSendError('Message not sent (disconnected)')
         return false
       }
-      const accepted = await sendMobileNativeChatMessage({
+      const outcome = await sendMobileNativeChatMessageWithOutcome({
         client,
         terminal: handle,
         text,
@@ -232,7 +236,15 @@ export function useMobileNativeChatController(args: {
           ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
           : {})
       })
-      if (!accepted) {
+      if (outcome === 'unknown') {
+        // Why: an ack-lost send usually WAS delivered (issue seen on cellular
+        // relay) — verify via the transcript echo instead of a false "not sent".
+        holdUnconfirmedSend(origin, text, () =>
+          onSendError('Delivery unconfirmed — check chat before retrying')
+        )
+        return true
+      }
+      if (outcome === 'rejected') {
         onSendError('Message not sent')
         return false
       }
@@ -245,6 +257,7 @@ export function useMobileNativeChatController(args: {
       captureSendOrigin,
       client,
       deviceTokenRef,
+      holdUnconfirmedSend,
       nativeChatInputLeaseReady,
       onSendError
     ]

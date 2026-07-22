@@ -164,7 +164,7 @@ describe('DaemonPtyProvider', () => {
       lastSubprocess._simulateExit(42)
 
       await waitFor(() => exits.length > 0)
-      expect(exits[0]).toEqual({ id: 's1', code: 42 })
+      expect(exits[0]).toEqual({ id: 's1', code: 42, incarnationId: expect.any(String) })
     })
   })
 

@@ -70,7 +70,13 @@ describe('Linear issue context', () => {
       readLinearIssueContext(
         {
           current: true,
-          include: { attachments: false, children: false, comments: false, relations: false },
+          include: {
+            attachments: false,
+            children: false,
+            comments: false,
+            relations: false,
+            activity: false
+          },
           depth: 0
         },
         async () => ({

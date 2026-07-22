@@ -137,6 +137,36 @@ describe('skill bundle manifest generator', () => {
     expect(() => assertReleasedHistoryPreserved(null, artifacts)).not.toThrow()
   })
 
+  it('protects only revisions named by the committed release mapping', () => {
+    const snapshot = (releaseRevision, packageDigest) => ({ releaseRevision, packageDigest })
+    const committedRegistry = {
+      schemaVersion: 1,
+      skills: {
+        'linear-tickets': [snapshot(1, 'released'), snapshot(2, 'unreleased-tail')]
+      }
+    }
+    const artifacts = {
+      releasedSnapshotCounts: { 'linear-tickets': 2 },
+      snapshotRegistry: {
+        schemaVersion: 1,
+        skills: { 'linear-tickets': [snapshot(1, 'released'), snapshot(2, 'new-release')] }
+      }
+    }
+
+    expect(() =>
+      assertReleasedHistoryPreserved(committedRegistry, artifacts, {
+        schemaVersion: 1,
+        releases: [{ appVersion: '1.0.0', skills: { 'linear-tickets': 1 } }]
+      })
+    ).not.toThrow()
+    expect(() =>
+      assertReleasedHistoryPreserved(committedRegistry, artifacts, {
+        schemaVersion: 1,
+        releases: [{ appVersion: '1.0.0', skills: { 'linear-tickets': 2 } }]
+      })
+    ).toThrow('Released snapshot history changed for linear-tickets at revision 2')
+  })
+
   it('tolerates only redundant trailing release-mapping rows', () => {
     const serialized = (value) => `${JSON.stringify(value, null, 2)}\n`
     const rows = [

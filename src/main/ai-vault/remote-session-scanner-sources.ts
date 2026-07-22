@@ -185,6 +185,7 @@ function remoteCodexSources(
   ].map((codexHome) => ({
     agent: 'codex',
     rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
+    codexHome,
     extensions: ['.jsonl'],
     parse: (file, content, context) =>
       parseCodexSessionContent({

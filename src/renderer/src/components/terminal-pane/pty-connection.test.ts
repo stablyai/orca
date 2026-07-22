@@ -1065,7 +1065,7 @@ describe('connectPanePty', () => {
       'wt-1',
       expect.objectContaining({
         url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
       })
     )
@@ -7447,7 +7447,11 @@ describe('connectPanePty', () => {
           updatedAt: 1,
           stateStartedAt: 1,
           stateHistory: [],
-          providerSession: { key: 'session_id', id: 'codex-session-1' }
+          providerSession: {
+            key: 'session_id',
+            id: 'codex-session-1',
+            transcriptPath: '/Users/example/.codex/sessions/2026/07/20/rollout-session.jsonl'
+          }
         }
       }
     } as StoreState
@@ -7473,6 +7477,11 @@ describe('connectPanePty', () => {
       expect.objectContaining({
         sessionId: 'lost-pty',
         command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        resumeProviderSession: {
+          key: 'session_id',
+          id: 'codex-session-1',
+          transcriptPath: '/Users/example/.codex/sessions/2026/07/20/rollout-session.jsonl'
+        },
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
@@ -14893,7 +14902,14 @@ describe('connectPanePty', () => {
 
     const pane = createPane(2)
     const manager = createManager(2)
-    const deps = createDeps()
+    const deps = createDeps({
+      startup: {
+        command: "codex '--profile' 'recipe'",
+        launchAgent: 'codex',
+        launchConfig: { agentArgs: '--profile recipe', agentEnv: {} },
+        agentArgsOverride: '--profile recipe'
+      }
+    })
 
     connectPanePty(pane as never, manager as never, deps as never)
 
@@ -14902,6 +14918,7 @@ describe('connectPanePty', () => {
       expect.any(Object)
     )
     expect(createdTransportOptions[0]?.cwdFallback).toBeUndefined()
+    expect(createdTransportOptions[0]?.agentArgsOverride).toBe('--profile recipe')
     expect(transport.connect).toHaveBeenCalled()
   })
 
@@ -17806,6 +17823,8 @@ describe('connectPanePty', () => {
         stateHistory: []
       }
       releaseConfirmingNullSample?.()
+      // Ignore cursor resets from setup so this assertion only covers the replacement idle event.
+      pane.terminal.write.mockClear()
       idleHandler('Claude done')
       await vi.advanceTimersByTimeAsync(800)
       await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)

@@ -247,6 +247,21 @@ describe('reply ownership matrix', () => {
     expect(runtime.hasRemoteTerminalViewSubscriber('pty-m')).toBe(false)
   })
 
+  it('keeps raw preview presence separate from terminal query authority', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-preview')
+    const release = runtime.registerRawTerminalViewSubscriber('pty-preview')
+
+    expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(true)
+    expect(runtime.hasRemoteTerminalViewSubscriber('pty-preview')).toBe(false)
+    runtime.onPtyData('pty-preview', DA1, Date.now())
+    await settle(runtime, 'pty-preview')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+
+    release()
+    expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(false)
+  })
+
   it('treats mobile subscriber records as remote view subscribers', async () => {
     const { runtime } = createResponderRuntime()
     await runtime.handleMobileSubscribe('pty-mob', 'client-1', { cols: 40, rows: 20 })

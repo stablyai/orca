@@ -22,6 +22,11 @@ import path from 'node:path'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import {
+  assertElectronResolvedIsolatedHome,
+  createElectronHomeIsolation,
+  type ElectronHomeIsolation
+} from './electron-home-isolation'
 
 type LaunchedOrca = {
   app: ElectronApplication
@@ -64,15 +69,22 @@ function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   return testInfo.project.metadata.orcaHeadful === true
 }
 
-function launchEnv(userDataDir: string, headful: boolean): NodeJS.ProcessEnv {
+function createRestartLaunchIsolation(
+  userDataDir: string,
+  headful: boolean
+): ElectronHomeIsolation {
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
-  return {
-    ...cleanEnv,
-    NODE_ENV: 'development',
-    ORCA_E2E_USER_DATA_DIR: userDataDir,
-    ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
-  }
+  return createElectronHomeIsolation({
+    inheritedEnv: cleanEnv,
+    launchEnv: {
+      NODE_ENV: 'development',
+      ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
+    },
+    extraEnv: {},
+    userDataDir,
+    codexRealHomeEnabled: false
+  })
 }
 
 /**
@@ -86,6 +98,7 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
   const headful = shouldLaunchHeadful(testInfo)
+  const homeIsolation = createRestartLaunchIsolation(userDataDir, headful)
 
   // Why: this helper bypasses the shared `electronApp` fixture, so it must
   // seed the same completed onboarding profile or first-run overlays cover
@@ -98,8 +111,15 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
   const launch = async (): Promise<LaunchedOrca> => {
     const app = await electron.launch({
       args: getOrcaElectronLaunchArgs(mainPath, headful),
-      env: launchEnv(userDataDir, headful)
+      env: homeIsolation.env
     })
+    try {
+      const resolvedHome = await app.evaluate(({ app }) => app.getPath('home'))
+      assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+    } catch (error) {
+      await closeElectronAppForE2E(app)
+      throw error
+    }
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })

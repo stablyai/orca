@@ -143,7 +143,8 @@ function alignRepoWithRequestedProject(
     const updated = store.updateRepo(repo.id, {
       upstream: {
         owner: project.providerIdentity.owner,
-        repo: project.providerIdentity.repo
+        repo: project.providerIdentity.repo,
+        ...(project.providerIdentity.host ? { host: project.providerIdentity.host } : {})
       }
     })
     if (!updated) {

@@ -77,6 +77,11 @@ import {
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
+import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
+import {
+  removeRepoFromHostWorkspaceSessions,
+  removeRepoFromWorkspaceSession
+} from './orca-profiles/profile-project-session-state'
 import { hardenExistingSecureFile } from '../shared/secure-file'
 import {
   LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -103,6 +108,7 @@ import {
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
@@ -263,10 +269,6 @@ function decrypt(ciphertext: string): string {
     )
     return ciphertext
   }
-}
-
-function encryptOptionalSecret(value: string | null | undefined): string | null {
-  return value ? encrypt(value) : null
 }
 
 function decryptOptionalSecret(value: string | null | undefined): string | null {
@@ -2346,7 +2348,8 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
 
 function removeWorkspaceSessionOwner(
   session: WorkspaceSessionState | undefined,
-  ownerKey: string
+  ownerKey: string,
+  options: { advanceTerminalTopologyRevision?: boolean } = {}
 ): WorkspaceSessionState | undefined {
   if (!session) {
     return session
@@ -2360,6 +2363,30 @@ function removeWorkspaceSessionOwner(
     delete next.terminalLayoutsByTabId[tab.id]
     if (next.activeTabId === tab.id) {
       next.activeTabId = null
+    }
+  }
+  if (next.terminalPtyIncarnationsByPaneKey) {
+    const removedTabIds = new Set(removedTerminalTabs.map((tab) => tab.id))
+    next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
+        const separator = paneKey.lastIndexOf(':')
+        return separator < 1 || !removedTabIds.has(paneKey.slice(0, separator))
+      })
+    )
+  }
+  if (next.terminalSurfaceTombstonesByPaneKey) {
+    next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
+        ([, tombstone]) => tombstone.worktreeId !== ownerKey
+      )
+    )
+  }
+  const repoId = getRepoIdFromWorktreeId(ownerKey)
+  const previousTopologyRevision = next.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
+  if (options.advanceTerminalTopologyRevision) {
+    next.terminalTopologyRevisionByRepoId = {
+      ...next.terminalTopologyRevisionByRepoId,
+      [repoId]: previousTopologyRevision + 1
     }
   }
 
@@ -2535,7 +2562,7 @@ export class Store {
   private writeGeneration = 0
   // Why: after a profile transfer rewrites this file on disk, a late flush of stale in-memory state would resurrect the moved project.
   private writesFrozen = false
-  // Plaintext hash at last write, to skip no-op writes; not the payload, since encrypt() uses a random IV per call.
+  // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
@@ -2959,6 +2986,18 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
+        // Why (#9537): migrate the indistinguishable legacy host default once so WSL-default users follow their runtime.
+        const localAccountRuntimeAlreadyMigrated =
+          parsed.settings?.localAccountRuntimeDefaultedToAutoForAllUsers === true
+        const migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime'] =
+          localAccountRuntimeAlreadyMigrated
+            ? (parsed.settings?.localAccountRuntime ?? defaults.settings.localAccountRuntime)
+            : parsed.settings?.localAccountRuntime === 'wsl'
+              ? 'wsl'
+              : 'auto'
+        if (!localAccountRuntimeAlreadyMigrated) {
+          this.loadNeedsSave = true
+        }
         if (!autoRenameBranchFromWorkDefaultedOn) {
           this.loadNeedsSave = true
         }
@@ -3038,6 +3077,8 @@ export class Store {
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
+            localAccountRuntime: migratedLocalAccountRuntime,
+            localAccountRuntimeDefaultedToAutoForAllUsers: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -3491,27 +3532,61 @@ export class Store {
     return durable
   }
 
-  private computeStateHash(): string {
-    return createHash('sha1').update(JSON.stringify(this.getDurableState())).digest('hex')
-  }
-
-  // Why: build payload synchronously so hash and serialized bytes reflect the same state tick (no await interleave).
-  private buildStateToSave(): string {
+  // Why: build payload synchronously so hash and serialized bytes reflect the same state tick (no await interleave). One full-state stringify serves both the on-disk payload and the no-op-write guard hash: each secret slot is serialized as a fresh unguessable sentinel, then sentinels are substituted to ciphertext for the payload and to plaintext for the hash. The hash is thus a pure function of plaintext state (skips a byte-identical rewrite) without a second stringify.
+  private buildStateToSave(): { payload: string; stateHash: string } {
+    // Why sentinels (not a blob/key string match): the substitution must be
+    // position-exact. A plain search for the ciphertext — or even for a
+    // `"key":"blob"` token — can be mimicked by user-controlled state (e.g. an
+    // agentDefaultEnv var named after a secret field, or a value equal to a
+    // ciphertext), which would substitute the wrong site and let two DISTINCT
+    // states normalize equal → a silently dropped write (data loss), reachable
+    // on deterministic-IV platforms (macOS/legacy-Linux OSCrypt). A per-slot
+    // random UUID can't occur anywhere else in the serialized state (the user
+    // sets their data before it is minted), so it appears exactly once.
+    const secretSubs: { sentinel: string; blob: string; plaintext: string }[] = []
+    const encryptToSentinel = (plaintext: string): string => {
+      const blob = encrypt(plaintext)
+      // Deterministic already (empty secret / safeStorage unavailable / encrypt
+      // failure): blob === plaintext, so no normalization — and no sentinel,
+      // which also avoids substituting an empty or plaintext-shaped slot.
+      if (blob === plaintext) {
+        return blob
+      }
+      const sentinel = `orca-secret-slot-${randomUUID()}`
+      secretSubs.push({ sentinel, blob, plaintext })
+      return sentinel
+    }
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
-        httpProxyUrl: encrypt(this.state.settings.httpProxyUrl ?? '')
+        opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
+        httpProxyUrl: encryptToSentinel(this.state.settings.httpProxyUrl ?? '')
       },
       ui: {
         ...this.state.ui,
-        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
+        browserKagiSessionLink: this.state.ui.browserKagiSessionLink
+          ? encryptToSentinel(this.state.ui.browserKagiSessionLink)
+          : null
       }
     }
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
-    return JSON.stringify(stateToSave)
+    // One full-state stringify; secret slots currently hold sentinels.
+    const serialized = JSON.stringify(stateToSave)
+    // Substitute each unique sentinel exactly once: ciphertext for the on-disk
+    // payload, plaintext for the guard hash. Function-form replacement keeps
+    // `$` in blob/plaintext inert; both sides read the sentinel as JSON-escaped
+    // in `serialized`, so each replace is byte-for-byte position-exact.
+    let payload = serialized
+    let hashInput = serialized
+    for (const { sentinel, blob, plaintext } of secretSubs) {
+      const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
+      payload = payload.replace(escapedSentinel, () => blob)
+      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(plaintext).slice(1, -1))
+    }
+    const stateHash = createHash('sha1').update(hashInput).digest('hex')
+    return { payload, stateHash }
   }
 
   // Why: async writes avoid blocking the main Electron thread on every debounced save.
@@ -3520,12 +3595,11 @@ export class Store {
       return
     }
     const gen = this.writeGeneration
-    const stateHash = this.computeStateHash()
+    const { payload, stateHash } = this.buildStateToSave()
     // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
     if (stateHash === this.lastWrittenStateHash) {
       return
     }
-    const payload = this.buildStateToSave()
     const dataFile = this.dataFile
     const dir = dirname(dataFile)
     await mkdir(dir, { recursive: true }).catch(() => {})
@@ -3565,7 +3639,7 @@ export class Store {
     if (this.writesFrozen) {
       return
     }
-    const stateHash = this.computeStateHash()
+    const { payload, stateHash } = this.buildStateToSave()
     // Why: matching hash means the file already holds this state; force overrides when an async rename may be racing past the gen check.
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
       return
@@ -3576,8 +3650,6 @@ export class Store {
       mkdirSync(dir, { recursive: true })
     }
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-
-    const payload = this.buildStateToSave()
 
     // Why: on any write/rename failure, remove the tmp file so shutdown crashes don't leak orphans.
     let renamed = false
@@ -4095,6 +4167,11 @@ export class Store {
     // Why: presets are repo-scoped and unreachable once the repo is gone, so drop them with it.
     delete this.state.sparsePresetsByRepo[id]
     this.pruneWorktreeStateForRepo(id, null)
+    this.state.workspaceSession = removeRepoFromWorkspaceSession(this.state.workspaceSession, id)
+    this.state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
+      this.state.workspaceSessionsByHostId,
+      id
+    )
     this.scheduleSave()
   }
 
@@ -4111,6 +4188,21 @@ export class Store {
     this.syncProjectHostSetupCompatibilityState()
     // Why: prune only this host's worktree metas if the id survives elsewhere; otherwise prune everything (matches removeProject).
     this.pruneWorktreeStateForRepo(id, idStillPresent ? hostId : null)
+    if (!idStillPresent) {
+      this.state.workspaceSession = removeRepoFromWorkspaceSession(this.state.workspaceSession, id)
+      this.state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
+        this.state.workspaceSessionsByHostId,
+        id
+      )
+    } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
+      const session = this.state.workspaceSessionsByHostId?.[hostId]
+      if (session) {
+        this.state.workspaceSessionsByHostId = {
+          ...this.state.workspaceSessionsByHostId,
+          [hostId]: removeRepoFromWorkspaceSession(session, id)
+        }
+      }
+    }
     this.scheduleSave()
   }
 
@@ -4730,6 +4822,11 @@ export class Store {
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
     delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    this.state.workspaceSession = removeWorkspaceSessionOwner(
+      this.state.workspaceSession,
+      worktreeId,
+      { advanceTerminalTopologyRevision: true }
+    )!
     this.scheduleSave()
   }
 
@@ -4870,6 +4967,21 @@ export class Store {
         }
         if (sleepingChanged) {
           session.sleepingAgentSessionsByPaneKey = nextSleeping
+          sessionChanged = true
+        }
+      }
+      if (session.terminalSurfaceTombstonesByPaneKey) {
+        let tombstonesChanged = false
+        const nextTombstones = { ...session.terminalSurfaceTombstonesByPaneKey }
+        for (const [paneKey, tombstone] of Object.entries(nextTombstones)) {
+          if (tombstone.worktreeId !== oldWorktreeId) {
+            continue
+          }
+          nextTombstones[paneKey] = { ...tombstone, worktreeId: newWorktreeId }
+          tombstonesChanged = true
+        }
+        if (tombstonesChanged) {
+          session.terminalSurfaceTombstonesByPaneKey = nextTombstones
           sessionChanged = true
         }
       }
@@ -5181,6 +5293,7 @@ export class Store {
       usagePercentageDisplay: normalizeUsagePercentageDisplay(
         this.state.ui?.usagePercentageDisplay
       ),
+      statusBarUsageMode: normalizeStatusBarUsageMode(this.state.ui?.statusBarUsageMode),
       // Why: strict boolean coercion so a missing/legacy value reads as false (first-run notice still fires).
       trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
@@ -5277,6 +5390,9 @@ export class Store {
           : this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
       usagePercentageDisplay: normalizeUsagePercentageDisplay(
         sanitizedUpdates.usagePercentageDisplay ?? this.state.ui?.usagePercentageDisplay
+      ),
+      statusBarUsageMode: normalizeStatusBarUsageMode(
+        sanitizedUpdates.statusBarUsageMode ?? this.state.ui?.statusBarUsageMode
       ),
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
@@ -5456,6 +5572,11 @@ export class Store {
 
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
   private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
+    // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
+    session = sanitizeWorkspaceSessionTerminalRetirements(
+      session,
+      this.state.workspaceSessionsByHostId?.[hostId]
+    )
     const pruned = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
@@ -5467,12 +5588,13 @@ export class Store {
   }
 
   private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
+    const prior = this.state.workspaceSession
+    session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
 
     // Why (Issue #217): merge existing bindings when the incoming binding is empty, so a stale pre-spawn snapshot can't overwrite the durable PTY binding.
-    const prior = this.state.workspaceSession
     const normalized = normalizeWorkspaceSessionPaneIdentities(
       session,
       prior?.terminalLayoutsByTabId
@@ -5752,6 +5874,7 @@ export class Store {
     tabId: string
     leafId: string
     ptyId: string
+    incarnationId?: string
     startupCwd?: string
   }): void {
     const session = this.state.workspaceSession
@@ -5759,11 +5882,38 @@ export class Store {
       return
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
+    const paneKey = `${args.tabId}:${args.leafId}`
+    let terminalMembershipChanged = false
+    const advanceTopologyAfterMembershipChange = (): void => {
+      const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+      const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
+      if (!terminalMembershipChanged || currentRevision <= 0) {
+        return
+      }
+      // Why: a real host-admitted spawn after a retirement must be distinguishable from a stale renderer replay.
+      session.terminalTopologyRevisionByRepoId = {
+        ...session.terminalTopologyRevisionByRepoId,
+        [repoId]: currentRevision + 1
+      }
+    }
+    if (args.incarnationId) {
+      session.terminalPtyIncarnationsByPaneKey = {
+        ...session.terminalPtyIncarnationsByPaneKey,
+        [paneKey]: args.incarnationId
+      }
+      if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
+        session.terminalSurfaceTombstonesByPaneKey = {
+          ...session.terminalSurfaceTombstonesByPaneKey
+        }
+        delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
+      }
+    }
     const tabs = session.tabsByWorktree?.[args.worktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
       tab.ptyId = args.ptyId
     } else {
+      terminalMembershipChanged = true
       // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
       const nextTabs = [
         ...(tabs ?? []),
@@ -5785,6 +5935,7 @@ export class Store {
     }
     if (!isTerminalLeafId(args.leafId)) {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
+      advanceTopologyAfterMembershipChange()
       try {
         this.flushOrThrow()
       } catch (err) {
@@ -5796,11 +5947,13 @@ export class Store {
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
       if (!layout.root) {
+        terminalMembershipChanged = true
         // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
         layout.root = { type: 'leaf', leafId: args.leafId }
         layout.activeLeafId = args.leafId
         layout.expandedLeafId = null
       } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
+        terminalMembershipChanged = true
         // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
         layout.root = {
           type: 'split',
@@ -5818,6 +5971,7 @@ export class Store {
         [args.leafId]: args.ptyId
       }
     } else {
+      terminalMembershipChanged = true
       // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
       session.terminalLayoutsByTabId = {
         ...session.terminalLayoutsByTabId,
@@ -5829,6 +5983,7 @@ export class Store {
         }
       }
     }
+    advanceTopologyAfterMembershipChange()
     try {
       this.flushOrThrow()
     } catch (err) {

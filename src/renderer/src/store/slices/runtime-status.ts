@@ -114,7 +114,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     // "offline" compat failure before this online transition fires the
     // reuse-flagged background refetches — a recovered host must re-probe.
     if (status.status !== null) {
-      clearRecentRuntimeCompatibilityFailure(environmentId)
+      clearRecentRuntimeCompatibilityFailure(environmentId, status.status)
     }
     set((s) => {
       const next = new Map(s.runtimeStatusByEnvironmentId)

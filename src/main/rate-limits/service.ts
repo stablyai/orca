@@ -9,6 +9,8 @@ import type {
 } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
+import { mapClaudeUsageWindow } from './claude-usage-window'
+import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
@@ -83,6 +85,10 @@ const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> =
   'grok'
 ])
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
+// Why: usage-endpoint 429 windows can outlast the generic threshold (Retry-After ~1h); quota is informational, so a stale snapshot beats a bare "Limited".
+const RATE_LIMITED_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
+// Why: statusline posts arrive on every turn; skip renderer pushes for identical windows so streaming sessions don't spam state updates.
+const LIVE_CLAUDE_INGEST_DEDUPE_MS = 30 * 1000
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
 const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 
@@ -118,6 +124,22 @@ function isSystemDefaultClaudeAuth(
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function normalizeClaudeConfigDir(dir: string | null | undefined): string | null {
+  // Why: the same dir can arrive with mixed separators (Windows env vs statusline JSON); unify them so attribution compares paths, not spellings. Case is left alone — Linux paths are case-sensitive.
+  const trimmed = dir?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  return trimmed || null
+}
+
+function isSameUsageWindow(
+  a: ProviderRateLimits['session'],
+  b: ProviderRateLimits['session']
+): boolean {
+  if (!a || !b) {
+    return a === b
+  }
+  return a.usedPercent === b.usedPercent && a.resetsAt === b.resetsAt
 }
 
 export class RateLimitService {
@@ -168,6 +190,8 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
+  private lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   private opencodeFetchGeneration = 0
   private minimaxFetchGeneration = 0
   private lastOpencodeConfigHash = ''
@@ -433,6 +457,8 @@ export class RateLimitService {
     this.claudeFetchGeneration += 1
     // Why: a new account/target starts with a clean retry schedule.
     this.activeFailureStreakByProvider.claude = 0
+    // Why: statusline posts from the outgoing account's sessions must not land on the incoming account's bar mid-switch.
+    this.lastClaudeAuthSnapshot = null
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
@@ -448,6 +474,10 @@ export class RateLimitService {
     this.claudeFetchTarget = nextTarget
     this.claudeFetchGeneration += 1
     this.activeFailureStreakByProvider.claude = 0
+    if (targetChanged) {
+      // Why: statusline posts from the outgoing target's sessions must not land on the incoming target's bar mid-switch.
+      this.lastClaudeAuthSnapshot = null
+    }
     this.updateState({
       ...this.state,
       claude: this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
@@ -758,6 +788,10 @@ export class RateLimitService {
       }
       // Why: a failed startup read is not fresh data; keep it eligible for activation recovery, throttled per provider.
       if (limits.status === 'error') {
+        // Why: the server told us when to come back (Retry-After); retrying earlier burns the endpoint's budget and keeps the 429 alive.
+        if (this.isRetryAfterActive(limits)) {
+          continue
+        }
         const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
         const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
           ? Math.min(
@@ -847,11 +881,14 @@ export class RateLimitService {
 
     try {
       let shouldContinue = true
+      // Why: only user-directed (force) fetches may bypass a provider's Retry-After gate; queued reruns inherit force because only forced calls queue them.
+      let cycleForce = options?.force ?? false
       while (shouldContinue) {
         const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
-          this.runFetchAllCycle(fetchSignal)
+          this.runFetchAllCycle(fetchSignal, { force: cycleForce })
         )
         shouldContinue = false
+        cycleForce = true
         if (signal.aborted) {
           break
         }
@@ -872,7 +909,7 @@ export class RateLimitService {
         if (this.claudeOnlyFetchQueued) {
           this.claudeOnlyFetchQueued = false
           const claudeSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchClaudeOnlyCycle(fetchSignal)
+            this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
           )
           if (claudeSignal.aborted) {
             break
@@ -917,7 +954,7 @@ export class RateLimitService {
         if (this.fullFetchQueued) {
           this.fullFetchQueued = false
           const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchAllCycle(fetchSignal)
+            this.runFetchAllCycle(fetchSignal, { force: true })
           )
           if (fullSignal.aborted) {
             break
@@ -931,7 +968,7 @@ export class RateLimitService {
         if (this.claudeOnlyFetchQueued) {
           this.claudeOnlyFetchQueued = false
           const claudeSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchClaudeOnlyCycle(fetchSignal)
+            this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
           )
           if (claudeSignal.aborted) {
             break
@@ -965,18 +1002,21 @@ export class RateLimitService {
 
     try {
       let shouldContinue = true
+      // Why: only user-directed (force) fetches may bypass a provider's Retry-After gate; queued reruns inherit force because only forced calls queue them.
+      let cycleForce = options?.force ?? false
       while (shouldContinue) {
         const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
-          this.runFetchClaudeOnlyCycle(fetchSignal)
+          this.runFetchClaudeOnlyCycle(fetchSignal, { force: cycleForce })
         )
         shouldContinue = false
+        cycleForce = true
         if (signal.aborted) {
           break
         }
         if (this.fullFetchQueued) {
           this.fullFetchQueued = false
           const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchAllCycle(fetchSignal)
+            this.runFetchAllCycle(fetchSignal, { force: true })
           )
           if (fullSignal.aborted) {
             break
@@ -1035,7 +1075,7 @@ export class RateLimitService {
         if (this.fullFetchQueued) {
           this.fullFetchQueued = false
           const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchAllCycle(fetchSignal)
+            this.runFetchAllCycle(fetchSignal, { force: true })
           )
           if (fullSignal.aborted) {
             break
@@ -1058,7 +1098,7 @@ export class RateLimitService {
         if (this.claudeOnlyFetchQueued) {
           this.claudeOnlyFetchQueued = false
           const claudeSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchClaudeOnlyCycle(fetchSignal)
+            this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
           )
           if (claudeSignal.aborted) {
             break
@@ -1242,6 +1282,119 @@ export class RateLimitService {
     }
   }
 
+  // Why: hitting a usage endpoint before its Retry-After expires burns the budget for nothing and keeps the 429 window alive.
+  private isRetryAfterActive(limits: ProviderRateLimits | null): boolean {
+    return Boolean(
+      limits?.status === 'error' &&
+      limits.usageMetadata?.retryAtMs &&
+      limits.usageMetadata.retryAtMs > Date.now()
+    )
+  }
+
+  // Why: a live Claude session already streams fresh usage windows; spending the OAuth usage endpoint's tight budget on the same data invites 429s.
+  private isLiveClaudeUsageFresh(limits: ProviderRateLimits | null): boolean {
+    return Boolean(
+      limits?.status === 'ok' &&
+      limits.usageMetadata?.source === 'live-session' &&
+      Date.now() - limits.updatedAt < MIN_REFETCH_MS
+    )
+  }
+
+  private shouldSkipAutomatedClaudeFetch(limits: ProviderRateLimits | null): boolean {
+    return this.isRetryAfterActive(limits) || this.isLiveClaudeUsageFresh(limits)
+  }
+
+  private resolveClaudeFetchApply(
+    fresh: ProviderRateLimits,
+    previous: ProviderRateLimits | null
+  ): ProviderRateLimits {
+    // Why: a live statusline post can land while an OAuth cycle is in flight; a failed fetch must not
+    // roll the bar back to the pre-cycle snapshot or flip the just-refreshed live data to error.
+    const current = this.state.claude
+    if (fresh.status !== 'ok' && current && this.isLiveClaudeUsageFresh(current)) {
+      return current
+    }
+    return this.applyStalePolicy(fresh, previous)
+  }
+
+  private rememberClaudeAuthSnapshot(
+    authPreparation: ClaudeRuntimeAuthPreparation | undefined,
+    claudeGeneration: number,
+    claudeTarget: NormalizedClaudeAccountSelectionTarget
+  ): void {
+    // Why: an account switch during the resolver await already cleared the snapshot; restoring the outgoing account's configDir here would cross-attribute its live posts to the new bar.
+    if (
+      claudeGeneration !== this.claudeFetchGeneration ||
+      !this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
+    ) {
+      return
+    }
+    this.lastClaudeAuthSnapshot = {
+      configDir: normalizeClaudeConfigDir(authPreparation?.envPatch.CLAUDE_CONFIG_DIR),
+      provenance: authPreparation?.provenance ?? 'system'
+    }
+  }
+
+  /** Live usage windows forwarded from a Claude session's statusLine command. */
+  ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
+    // Why: attribution needs the selected account's config dir; until a fetch cycle captures it, drop posts rather than guess the account.
+    const snapshot = this.lastClaudeAuthSnapshot
+    if (!snapshot) {
+      // Why: breadcrumbs make a silently dark live feed diagnosable — dropped posts are otherwise invisible.
+      console.debug('[rate-limits] dropped live Claude usage: no auth snapshot yet', {
+        eventConfigDir: event.configDir
+      })
+      return
+    }
+    // Why: sessions of other accounts (or other runtimes) report their own quota; mixing them into the active account's bar would lie.
+    if (normalizeClaudeConfigDir(event.configDir) !== snapshot.configDir) {
+      console.debug('[rate-limits] dropped live Claude usage: configDir mismatch', {
+        eventConfigDir: event.configDir,
+        snapshotConfigDir: snapshot.configDir
+      })
+      return
+    }
+    const freshSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
+    const freshWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
+    if (!freshSession && !freshWeekly) {
+      return
+    }
+    const previous = this.state.claude
+    // Why: statusline payloads can carry a single window; an absent one means "no update", not "cleared" — keep the other bar populated.
+    const session = freshSession ?? previous?.session ?? null
+    const weekly = freshWeekly ?? previous?.weekly ?? null
+    if (
+      previous?.status === 'ok' &&
+      previous.usageMetadata?.source === 'live-session' &&
+      Date.now() - previous.updatedAt < LIVE_CLAUDE_INGEST_DEDUPE_MS &&
+      isSameUsageWindow(previous.session, session) &&
+      isSameUsageWindow(previous.weekly, weekly)
+    ) {
+      return
+    }
+    this.activeFailureStreakByProvider.claude = 0
+    this.updateState({
+      ...this.state,
+      claude: {
+        provider: 'claude',
+        session,
+        weekly,
+        // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible.
+        // Tradeoff: while live posts keep the OAuth poll gated, fableWeekly stays frozen until the session idles past the freshness window.
+        fableWeekly: previous?.fableWeekly ?? null,
+        updatedAt: Date.now(),
+        error: null,
+        status: 'ok',
+        usageMetadata: {
+          source: 'live-session',
+          lastSuccessfulSource: 'live-session',
+          credentialSource: previous?.usageMetadata?.credentialSource,
+          authProvenance: snapshot.provenance
+        }
+      }
+    })
+  }
+
   private trackActiveFailureStreak(
     provider: ActiveRateLimitProvider,
     fresh: ProviderRateLimits
@@ -1287,17 +1440,22 @@ export class RateLimitService {
     return { ...current, status: 'fetching' }
   }
 
-  private async runFetchAllCycle(signal: AbortSignal): Promise<void> {
+  private async runFetchAllCycle(
+    signal: AbortSignal,
+    options?: { force?: boolean }
+  ): Promise<void> {
     if (signal.aborted) {
       return
     }
     const claudeTarget = this.claudeFetchTarget
+    // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
+    const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
+    this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
-    const claudeGeneration = this.claudeFetchGeneration
     const codexTarget = this.codexFetchTarget
     const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
@@ -1360,15 +1518,21 @@ export class RateLimitService {
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
+    // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
+    const claudeFetchGated =
+      !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
+
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
-        fetchClaudeRateLimits({
-          authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-          networkProxySettings: this.networkProxySettingsResolver?.(),
-          signal
-        }),
+        claudeFetchGated
+          ? Promise.resolve(previousState.claude as ProviderRateLimits)
+          : fetchClaudeRateLimits({
+              authPreparation: claudeAuthPreparation,
+              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+              networkProxySettings: this.networkProxySettingsResolver?.(),
+              signal
+            }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
             codexHomePath,
@@ -1488,7 +1652,9 @@ export class RateLimitService {
     const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
     const shouldApplyCodex =
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
+    // Why: a gated cycle made no Claude attempt; applying its passthrough result would grow the failure streak and reset stale-policy clocks for free.
     const shouldApplyClaude =
+      !claudeFetchGated &&
       claudeGeneration === this.claudeFetchGeneration &&
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
@@ -1515,7 +1681,7 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.applyStalePolicy(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(claude, previousState.claude)
         : this.state.claude,
       codex: shouldApplyCodex
         ? this.applyStalePolicy(codex, previousState.codex)
@@ -1612,17 +1778,26 @@ export class RateLimitService {
     })
   }
 
-  private async runFetchClaudeOnlyCycle(signal: AbortSignal): Promise<void> {
+  private async runFetchClaudeOnlyCycle(
+    signal: AbortSignal,
+    options?: { force?: boolean }
+  ): Promise<void> {
     if (signal.aborted) {
       return
     }
+    // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
+    if (!options?.force && this.shouldSkipAutomatedClaudeFetch(this.state.claude)) {
+      return
+    }
     const claudeTarget = this.claudeFetchTarget
+    // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
+    const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
+    this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
-    const claudeGeneration = this.claudeFetchGeneration
     const previousState = this.state
 
     this.updateState({
@@ -1667,7 +1842,7 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.applyStalePolicy(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(claude, previousState.claude)
         : this.state.claude
     })
   }
@@ -1745,7 +1920,11 @@ export class RateLimitService {
     }
 
     // Previous data is too old — don't show stale data
-    if (Date.now() - previous.updatedAt > STALE_THRESHOLD_MS) {
+    const staleThresholdMs =
+      fresh.usageMetadata?.failureKind === 'rate-limited'
+        ? RATE_LIMITED_STALE_THRESHOLD_MS
+        : STALE_THRESHOLD_MS
+    if (Date.now() - previous.updatedAt > staleThresholdMs) {
       return fresh
     }
 

@@ -50,12 +50,14 @@ const {
     autoUpdaterMock.setFeedURL.mockClear()
     autoUpdaterMock.updateConfigPath = undefined
     autoUpdaterMock.allowPrerelease = false
+    autoUpdaterMock.autoRunAppAfterInstall = true
     delete (autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature
   }
 
   const autoUpdaterMock = {
     autoDownload: false,
     autoInstallOnAppQuit: false,
+    autoRunAppAfterInstall: true,
     allowPrerelease: false,
     on,
     checkForUpdates: vi.fn(),

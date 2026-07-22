@@ -22,6 +22,7 @@ import type {
 } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
+import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
 import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
 import {
@@ -66,6 +67,7 @@ import type { ActiveAutosuggestState } from './terminal-autosuggest-active-state
 import NativeChatView from '../native-chat/NativeChatView'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
+import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
 import {
@@ -86,6 +88,7 @@ import {
   resolveTerminalTabStripDropTarget
 } from './terminal-pane-tab-detach'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
@@ -158,7 +161,13 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-rec
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
+import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
+import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
+import {
+  updateTerminalRemoteRuntimeRecoveryUiState,
+  type VisiblePtyRecoveryState
+} from './terminal-remote-runtime-recovery-ui-state'
 
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
@@ -381,7 +390,12 @@ export default function TerminalPane({
   // Why: each Add action starts with a fresh draft so the terminal menu doesn't reuse cancelled quick-command text.
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
+  const [agentSessionContinuation, setAgentSessionContinuation] =
+    useState<AgentSessionContinuationRequest | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
+    Record<number, VisiblePtyRecoveryState>
+  >({})
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   const daemonActions = useDaemonActions()
   // Why: override state lives in a Map for perf; this counter forces a re-render on override change so the mobile-fit banner toggles.
@@ -564,6 +578,13 @@ export default function TerminalPane({
     }
     setTerminalError((prev) => (prev ? `${prev}\n${message}` : message))
   })
+  const onPtyRecoveryStateRef = useRef(
+    (paneId: number, state: PtyTransportRecoveryState | null) => {
+      setPtyRecoveryStatesByPaneId((previous) =>
+        updateTerminalRemoteRuntimeRecoveryUiState(previous, paneId, state)
+      )
+    }
+  )
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
@@ -1412,6 +1433,7 @@ export default function TerminalPane({
     onPtyExitRef,
     onAgentExitedRef,
     onPtyErrorRef,
+    onPtyRecoveryStateRef,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
     updateTabTitle,
@@ -1614,6 +1636,7 @@ export default function TerminalPane({
         onPtyExitRef,
         onAgentExitedRef,
         onPtyErrorRef,
+        onPtyRecoveryStateRef,
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
         updateTabTitle,
@@ -1785,6 +1808,7 @@ export default function TerminalPane({
     managerRef,
     containerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     isActiveRef,
     isVisibleRef,
     toggleExpandPane
@@ -2547,6 +2571,7 @@ export default function TerminalPane({
     onClearPaneTitle: handleClearPaneTitleShortcut,
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,
+    onAgentSessionContinuationReady: setAgentSessionContinuation,
     forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
@@ -2861,6 +2886,27 @@ export default function TerminalPane({
   const activePaneIsChatLeaf = Boolean(
     isChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
   )
+  // A split can host different agents, so continuation resolves the specific leaf before using tab-wide hints.
+  const resolveAgentForLeaf = (leafId: string | null): string | null => {
+    const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
+    if (detectedAgent) {
+      return detectedAgent
+    }
+    return (
+      nativeChatLaunchAgentForLeaf({
+        launchAgent: terminalTab?.launchAgent,
+        launchAgentLeafId: getTabWideAgentHintLeafId(),
+        leafId,
+        leafIds: getNativeChatLeafIds()
+      }) ?? resolveTitleAgentForLeaf(leafId)
+    )
+  }
+  const activePaneCanContinueInNewSession = canContinueAgentSessionInNewSession(
+    resolveAgentForLeaf(activePane?.leafId ?? null)
+  )
+  const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
+    resolveAgentForLeaf(contextMenuLeafId)
+  )
   // Each toggle gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
   const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
@@ -2970,6 +3016,14 @@ export default function TerminalPane({
                   isPaneExpanded: expandedPaneId === chatPane.id,
                   onToggleExpand: () =>
                     contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
+                  canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
+                    resolveAgentForLeaf(chatPane.leafId)
+                  ),
+                  onContinueAgentSessionInNewSession: () =>
+                    contextMenu.runForPane(
+                      chatPane.id,
+                      contextMenu.onContinueAgentSessionInNewSession
+                    ),
                   onForkAgentSession: () =>
                     void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
                   onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
@@ -3005,6 +3059,8 @@ export default function TerminalPane({
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
+        onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
         canToggleNativeChat={contextMenuCanToggleChat}
         isNativeChatView={contextMenuIsChatView}
@@ -3043,6 +3099,17 @@ export default function TerminalPane({
           }
         }}
       />
+      {agentSessionContinuation ? (
+        <AgentSessionContinuationDialog
+          open
+          request={agentSessionContinuation}
+          onOpenChange={(open) => {
+            if (!open) {
+              setAgentSessionContinuation(null)
+            }
+          }}
+        />
+      ) : null}
       <TerminalPaneHeaderOverlay
         tabId={tabId}
         worktreeId={worktreeId}
@@ -3066,6 +3133,10 @@ export default function TerminalPane({
         canToggleNativeChat={activePaneCanToggleChat}
         isChatViewMode={activePaneIsChatLeaf}
         onToggleNativeChat={handleToggleNativeChat}
+        canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
+        onContinueAgentSessionInNewSession={(pane) =>
+          contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)
+        }
         onSplitPane={splitTerminalPaneFromHeader}
         onBeginPaneDrag={beginPaneDragFromHeader}
         onActivatePaneTitleInteraction={activatePaneTitleInteraction}
@@ -3087,6 +3158,25 @@ export default function TerminalPane({
           foregroundColor={autosuggestState.foregroundColor}
         />
       ) : null}
+      {!showSshReconnectOverlay
+        ? managedPanes.map((pane) => {
+            const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
+            if (!recoveryState) {
+              return null
+            }
+            return createPortal(
+              <TerminalRemoteRuntimeReconnectBanner
+                key={`remote-runtime-reconnect-${pane.id}-${recoveryState.epoch}`}
+                phase={recoveryState.phase}
+                onReconnect={() => {
+                  paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
+                }}
+              />,
+              pane.container,
+              `remote-runtime-reconnect-${pane.id}`
+            )
+          })
+        : null}
       {managedPanes.map((pane) => {
         // Why: pane IDs collide across tabs, so key overlays by the transport's actual ptyId to avoid wrong-pane banners.
         const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()

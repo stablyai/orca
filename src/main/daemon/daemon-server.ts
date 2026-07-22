@@ -22,7 +22,6 @@ import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
-import { isNativeWindowsLocalPtySpawn } from '../runtime/terminal-model-query-authority'
 import { unlinkOwnedDaemonPidFile, unlinkOwnedDaemonTokenFile } from './daemon-spawner'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
@@ -33,6 +32,10 @@ import {
   type HelloMessage,
   type DaemonRequest
 } from './types'
+import {
+  isAgentSessionExecutionClaim,
+  isAgentSessionSurfaceBinding
+} from '../../shared/agent-session-host-authority'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -75,6 +78,9 @@ type ConnectedClient = {
 
 type PendingPtySpawnPreparation = {
   canceled: boolean
+  // Why: preparations are keyed by sessionId, but a control-socket close must
+  // cancel only the disconnecting client's preps, not another client's (F4).
+  clientId: string
 }
 
 type PendingShutdownReply = {
@@ -459,6 +465,8 @@ export class DaemonServer {
       this.clients.set(hello.clientId, client)
       this.setupControlSocket(socket, hello.clientId)
       if (previous) {
+        // Why: reconnect reuses clientId before stale close fires; cancel the old owner's preflight at handoff.
+        this.cancelPendingPtySpawnPreparationsForClient(hello.clientId)
         this.recordFullyAuthenticatedDisconnect(previous.authenticatedPairEstablished)
         // Why: tear down the old sockets after installing the new owner so a stale close can't delete the replacement.
         previous.streamSocket?.destroy()
@@ -497,6 +505,9 @@ export class DaemonServer {
       if (client?.controlSocket !== socket) {
         return
       }
+      // Why: a client that disconnects mid-preflight would otherwise still create
+      // its daemon PTY, orphaning a durable, unattached session — cancel its preps (F4).
+      this.cancelPendingPtySpawnPreparationsForClient(clientId)
       const wasFullyAuthenticated = client.authenticatedPairEstablished
       this.streamDataBatcher.clear(clientId)
       client.streamSocket?.destroy()
@@ -533,6 +544,8 @@ export class DaemonServer {
       if (this.clients.get(client.clientId) !== client || client.streamSocket !== socket) {
         return
       }
+      // Why: a preflight that outlives its output channel would create an unattached daemon PTY.
+      this.cancelPendingPtySpawnPreparationsForClient(client.clientId)
       this.streamDataBatcher.clear(client.clientId)
       client.streamSocket = null
     }
@@ -610,8 +623,8 @@ export class DaemonServer {
     this.pendingShutdownReplies.set(key, { start })
   }
 
-  private async preparePtySpawnUnlessCanceled(sessionId: string): Promise<void> {
-    const preparation: PendingPtySpawnPreparation = { canceled: false }
+  private async preparePtySpawnUnlessCanceled(sessionId: string, clientId: string): Promise<void> {
+    const preparation: PendingPtySpawnPreparation = { canceled: false, clientId }
     const pending = this.pendingPtySpawnPreparations.get(sessionId) ?? new Set()
     pending.add(preparation)
     this.pendingPtySpawnPreparations.set(sessionId, pending)
@@ -646,6 +659,16 @@ export class DaemonServer {
     }
   }
 
+  private cancelPendingPtySpawnPreparationsForClient(clientId: string): void {
+    for (const pending of this.pendingPtySpawnPreparations.values()) {
+      for (const preparation of pending) {
+        if (preparation.clientId === clientId) {
+          preparation.canceled = true
+        }
+      }
+    }
+  }
+
   private async routeRequest(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.clients.get(clientId)
 
@@ -660,9 +683,17 @@ export class DaemonServer {
         }
         this.createOrAttachInFlight++
         const p = request.payload
+        let routedSessionId = p.sessionId
         let result: Awaited<ReturnType<TerminalHost['createOrAttach']>>
         try {
-          await this.preparePtySpawnUnlessCanceled(p.sessionId)
+          if (
+            p.agentSessionEnsure !== undefined &&
+            (!isAgentSessionExecutionClaim(p.agentSessionEnsure.claim) ||
+              !isAgentSessionSurfaceBinding(p.agentSessionEnsure.surface))
+          ) {
+            throw new Error('agent_session_identity_required')
+          }
+          await this.preparePtySpawnUnlessCanceled(p.sessionId, clientId)
           result = await this.host.createOrAttach({
             sessionId: p.sessionId,
             cols: p.cols,
@@ -679,26 +710,24 @@ export class DaemonServer {
             terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
             shellReadySupported: p.shellReadySupported,
             historySeed: p.historySeed,
-            startupIngress: parsePtyStartupIngressIntent(p.startupIngress, {
-              allowWindowsEchoProjection: isNativeWindowsLocalPtySpawn({
-                connectionId: null,
-                cwd: p.cwd,
-                shellOverride: p.shellOverride
-              })
-            }),
+            startupIngress: parsePtyStartupIngressIntent(p.startupIngress),
             ...(p.shellReadyTimeoutMs !== undefined
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
               : {}),
+            ...(p.agentSessionEnsure ? { agentSessionEnsure: p.agentSessionEnsure } : {}),
+            onSessionResolved: (sessionId) => {
+              routedSessionId = sessionId
+            },
             streamClient: {
               onData: (data, rawLength = data.length, transformed = false, seq) => {
                 // Scan BEFORE enqueue: the batcher may drop this chunk, but its facts must be captured regardless.
-                this.transientFactRelay.onSessionData(p.sessionId, data)
-                const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)
+                this.transientFactRelay.onSessionData(routedSessionId, data)
+                const lastInputAt = this.lastInputAtBySessionId.get(routedSessionId)
                 const isInteractiveOutput =
                   data.length <= DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS &&
                   lastInputAt !== undefined &&
                   performance.now() - lastInputAt <= DaemonServer.INTERACTIVE_OUTPUT_WINDOW_MS
-                this.streamDataBatcher.enqueue(clientId, p.sessionId, data, {
+                this.streamDataBatcher.enqueue(clientId, routedSessionId, data, {
                   flushImmediately: isInteractiveOutput,
                   flushMaxChars: DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS,
                   rawLength,
@@ -706,22 +735,22 @@ export class DaemonServer {
                   seq
                 })
               },
-              onExit: (code) => {
+              onExit: (code, incarnationId) => {
                 // Why: exit tears down renderer handlers, so it must ride the ordered queue behind final output.
-                this.log.log('session-exited', { sessionId: p.sessionId, code })
-                this.streamDataBatcher.enqueueControlEvent(clientId, p.sessionId, {
+                this.log.log('session-exited', { sessionId: routedSessionId, code })
+                this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
                   type: 'event',
                   event: 'exit',
-                  sessionId: p.sessionId,
-                  payload: { code }
+                  sessionId: routedSessionId,
+                  payload: { code, incarnationId }
                 })
                 this.streamDataBatcher.flush(clientId)
                 recordDaemonStreamBacklogEvent('sessionExit', {
-                  sessionIdSuffix: p.sessionId.slice(-10)
+                  sessionIdSuffix: routedSessionId.slice(-10)
                 })
-                this.transientFactRelay.onSessionExit(p.sessionId)
-                this.streamClientIdBySessionId.delete(p.sessionId)
-                this.lastInputAtBySessionId.delete(p.sessionId)
+                this.transientFactRelay.onSessionExit(routedSessionId)
+                this.streamClientIdBySessionId.delete(routedSessionId)
+                this.lastInputAtBySessionId.delete(routedSessionId)
                 this.reevaluateIdleShutdown()
               }
             }
@@ -730,18 +759,19 @@ export class DaemonServer {
           this.createOrAttachInFlight--
           this.reevaluateIdleShutdown()
         }
-        this.streamClientIdBySessionId.set(p.sessionId, clientId)
+        routedSessionId = result.agentSessionEnsure?.owner.ptyId ?? p.sessionId
+        this.streamClientIdBySessionId.set(routedSessionId, clientId)
         // Why an attach-time marker: background resync can precede this attach, so scan suppression must start at the new stream's head.
-        if (this.transientFactRelay.isBackgrounded(p.sessionId)) {
-          this.streamDataBatcher.enqueueControlEvent(clientId, p.sessionId, {
+        if (this.transientFactRelay.isBackgrounded(routedSessionId)) {
+          this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
             type: 'event',
             event: 'sessionBackgroundMarker',
-            sessionId: p.sessionId,
+            sessionId: routedSessionId,
             payload: { background: true }
           })
         }
         this.log.log(result.isNew ? 'session-created' : 'session-attached', {
-          sessionId: p.sessionId,
+          sessionId: routedSessionId,
           pid: result.pid
         })
         return {
@@ -749,15 +779,22 @@ export class DaemonServer {
           snapshot: result.snapshot,
           pid: result.pid,
           shellState: result.shellState,
+          incarnationId: result.incarnationId,
           ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
           wslDistro: result.wslDistro,
-          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {})
+          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
+          ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
         }
       }
 
       case 'cancelCreateOrAttach':
         this.cancelPendingPtySpawnPreparations(request.payload.sessionId)
         return {}
+
+      case 'closeStartupQueryAuthority':
+        return {
+          appliedSeq: this.host.closeStartupQueryAuthority(request.payload.sessionId)
+        }
 
       case 'write':
         try {

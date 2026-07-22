@@ -41,6 +41,11 @@ import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
   normalizeUsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
+import {
+  DEFAULT_STATUS_BAR_USAGE_MODE,
+  normalizeStatusBarUsageMode,
+  type StatusBarUsageMode
+} from '../../../../shared/status-bar-usage-mode'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -878,6 +883,8 @@ export type UISlice = {
   setStatusBarVisible: (v: boolean) => void
   usagePercentageDisplay: UsagePercentageDisplay
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
+  statusBarUsageMode: StatusBarUsageMode
+  setStatusBarUsageMode: (mode: StatusBarUsageMode) => void
   workspacePortScan: { key: string; result: WorkspacePortScanResult } | null
   workspacePortScansByKey: Record<string, WorkspacePortScanResult>
   workspacePortScanRefreshing: boolean
@@ -2109,6 +2116,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       usagePercentageDisplayChangeNoticeDismissed: true
     })
   },
+  statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
+  setStatusBarUsageMode: (mode) => {
+    const normalized = normalizeStatusBarUsageMode(mode)
+    window.api.ui.set({ statusBarUsageMode: normalized }).catch(console.error)
+    set({ statusBarUsageMode: normalized })
+  },
   workspacePortScan: null,
   workspacePortScansByKey: {},
   workspacePortScanRefreshing: false,
@@ -2377,6 +2390,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         statusBarItems: statusBarItemsWithGrok,
         statusBarVisible: ui.statusBarVisible ?? true,
         usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
+        statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
         // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
         petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
         petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT),

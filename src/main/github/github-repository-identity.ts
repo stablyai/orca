@@ -8,6 +8,7 @@ import {
   type GitHubRemoteIdentity
 } from './github-remote-identity-parsing'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
+import { githubRepoIdentityKey } from '../../shared/github-repository-identity-key'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -234,7 +235,7 @@ export type PRRepositoryCandidates = {
 }
 
 function ownerRepoKey(ownerRepo: OwnerRepo): string {
-  return `${ownerRepo.owner.toLowerCase()}/${ownerRepo.repo.toLowerCase()}`
+  return githubRepoIdentityKey(ownerRepo)
 }
 
 export async function resolvePRRepositoryCandidates(

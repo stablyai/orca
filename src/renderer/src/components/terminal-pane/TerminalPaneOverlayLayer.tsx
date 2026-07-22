@@ -246,6 +246,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         }
         closeTerminalTab(terminalTabId, {
           reason: 'pty-exit',
+          lifecyclePtyId: ptyId,
           onClosed: leaveWorktreeIfEmpty
         })
       }}

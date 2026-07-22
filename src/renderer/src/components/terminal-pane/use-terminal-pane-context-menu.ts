@@ -35,6 +35,8 @@ import {
   prepareAgentSessionForkFromPane,
   type PreparedAgentSessionFork
 } from './terminal-agent-session-fork'
+import { prepareAgentSessionContinuationFromPane } from './terminal-agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
@@ -70,6 +72,7 @@ type UseTerminalPaneContextMenuDeps = {
   onClearPaneTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
+  onAgentSessionContinuationReady: (request: AgentSessionContinuationRequest) => void
   forceBracketedMultilineTextPaste: boolean
   rightClickToPaste: boolean
 }
@@ -93,6 +96,7 @@ type TerminalMenuState = {
   onClosePane: () => void
   onClearScreen: () => void
   onForkAgentSession: () => Promise<void>
+  onContinueAgentSessionInNewSession: () => void
   onCopyAgentSessionContext: () => Promise<void>
   onQuickCommand: (command: TerminalQuickCommand) => void
   onToggleExpand: () => void
@@ -117,6 +121,7 @@ export function useTerminalPaneContextMenu({
   onClearPaneTitle,
   onPasteError,
   onAgentSessionForkReady,
+  onAgentSessionContinuationReady,
   forceBracketedMultilineTextPaste,
   rightClickToPaste
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
@@ -400,6 +405,25 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const onContinueAgentSessionInNewSession = (): void => {
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    const initialCwd = paneCwdRef.current.get(pane.id)?.cwd || fallbackCwd
+    const request = prepareAgentSessionContinuationFromPane({
+      pane,
+      tabId,
+      worktreeId,
+      groupId,
+      workspacePath: fallbackCwd,
+      initialCwd
+    })
+    if (request) {
+      onAgentSessionContinuationReady(request)
+    }
+  }
+
   // Why: the captured session transcript is often wanted on its own — to paste
   // into another tool — so copy the bounded transcript directly, without the
   // fork prompt's framing or the fork dialog detour (issue #5020).
@@ -554,6 +578,7 @@ export function useTerminalPaneContextMenu({
     onClosePane,
     onClearScreen,
     onForkAgentSession,
+    onContinueAgentSessionInNewSession,
     onCopyAgentSessionContext,
     onQuickCommand,
     onToggleExpand,

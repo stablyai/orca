@@ -46,25 +46,14 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   } as Repo
 }
 
-type ProviderOverrides = {
-  review?: HostedReviewActionInfo
-  isGitLab?: boolean
-  shortLabel?: string
-  reviewLabel?: string
-}
-
-function HookProbe(props: {
-  repo: Repo
-  onRefreshReview: () => Promise<void>
-  overrides?: ProviderOverrides
-}): null {
+function HookProbe(props: { repo: Repo; onRefreshReview: () => Promise<void> }): null {
   latest = useHostedReviewActions({
-    review: props.overrides?.review ?? review,
+    review,
     githubPR,
     repo: props.repo,
-    isGitLab: props.overrides?.isGitLab ?? false,
-    shortLabel: props.overrides?.shortLabel ?? 'PR',
-    reviewLabel: props.overrides?.reviewLabel ?? 'pull request',
+    isGitLab: false,
+    shortLabel: 'PR',
+    reviewLabel: 'pull request',
     defaultMergeMethod: 'squash',
     autoMergeAction: null,
     onRefreshReview: props.onRefreshReview
@@ -72,16 +61,12 @@ function HookProbe(props: {
   return null
 }
 
-async function renderHook(
-  repo: Repo,
-  onRefreshReview = vi.fn().mockResolvedValue(undefined),
-  overrides?: ProviderOverrides
-) {
+async function renderHook(repo: Repo, onRefreshReview = vi.fn().mockResolvedValue(undefined)) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(HookProbe, { repo, onRefreshReview, overrides }))
+    root?.render(createElement(HookProbe, { repo, onRefreshReview }))
   })
   return { onRefreshReview }
 }
@@ -154,63 +139,5 @@ describe('useHostedReviewActions', () => {
     })
     expect(runtimeRpcMocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(onRefreshReview).toHaveBeenCalledTimes(1)
-  })
-
-  it('confirms before merging with the selected strategy label (#7943)', async () => {
-    await renderHook(makeRepo())
-
-    await act(async () => {
-      await latest?.handleMerge('merge')
-    })
-
-    expect(confirmationMocks.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Create merge commit PR #1015?',
-        confirmLabel: 'Create merge commit'
-      })
-    )
-  })
-
-  it('does not merge when the confirmation is cancelled (#7943)', async () => {
-    confirmationMocks.confirm.mockResolvedValue(false)
-    const { onRefreshReview } = await renderHook(makeRepo())
-
-    await act(async () => {
-      await latest?.handleMerge('squash')
-    })
-
-    expect(confirmationMocks.confirm).toHaveBeenCalledTimes(1)
-    expect(window.api.gh.mergePR).not.toHaveBeenCalled()
-    expect(runtimeRpcMocks.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(onRefreshReview).not.toHaveBeenCalled()
-  })
-
-  it('confirms GitLab MR merges with provider-aware copy (#7943)', async () => {
-    await renderHook(makeRepo(), undefined, {
-      review: {
-        provider: 'gitlab',
-        number: 42,
-        state: 'open',
-        status: 'success',
-        mergeable: 'MERGEABLE'
-      },
-      isGitLab: true,
-      shortLabel: 'MR',
-      reviewLabel: 'merge request'
-    })
-
-    await act(async () => {
-      await latest?.handleMerge('squash')
-    })
-
-    expect(confirmationMocks.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Squash and merge MR !42?' })
-    )
-    expect(window.api.gl.mergeMR).toHaveBeenCalledWith({
-      repoPath: '/repo',
-      repoId: 'repo-1',
-      iid: 42,
-      method: 'squash'
-    })
   })
 })

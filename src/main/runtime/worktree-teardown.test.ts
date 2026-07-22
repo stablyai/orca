@@ -507,7 +507,10 @@ describe('killAllProcessesForWorktree', () => {
             // The daemon never replies; the request only rejects when its own
             // timeout elapses, exactly like the real client.
             return new Promise((_resolve, reject) => {
-              setTimeout(() => reject(new Error(`Request kill timed out after ${timeoutMs}ms`)), timeoutMs)
+              setTimeout(
+                () => reject(new Error(`Request kill timed out after ${timeoutMs}ms`)),
+                timeoutMs
+              )
             })
           }
           return Promise.resolve({})
@@ -560,6 +563,25 @@ describe('killAllProcessesForWorktree', () => {
     listRegisteredPtysMock.mockReturnValue([])
 
     const result = await killAllProcessesForWorktree('w1', { runtime, localProvider })
+
+    expect(result.runtimeStopped).toBe(0)
+  })
+
+  it('tolerates an unresolved runtime selector during destructive removal', async () => {
+    // Why: a just-created/removed worktree can be absent from the runtime
+    // graph; that means zero runtime-owned PTYs, not a failed teardown.
+    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('selector_not_found'))
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const result = await killAllProcessesForWorktree('w1', {
+      runtime,
+      localProvider,
+      requirePhysicalStop: true
+    })
 
     expect(result.runtimeStopped).toBe(0)
   })

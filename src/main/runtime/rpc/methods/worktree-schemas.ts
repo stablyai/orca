@@ -3,6 +3,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -56,7 +57,8 @@ export const WorktreeSelector = z.object({
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({
-  notifyClients: OptionalBoolean
+  notifyClients: OptionalBoolean,
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
 
 export const WorktreeCreate = z

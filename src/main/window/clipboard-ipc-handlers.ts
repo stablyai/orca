@@ -7,7 +7,7 @@ import {
   type WebContents
 } from 'electron'
 import { spawn } from 'node:child_process'
-import { stat } from 'node:fs/promises'
+import { open, stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
 import { isENOENT, PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import {
@@ -34,6 +34,8 @@ import {
   writeRemoteFileToClipboard
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
+import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
@@ -83,7 +85,7 @@ export function registerClipboardHandlers(store: Store): void {
   void cleanupExpiredRemoteClipboardFiles()
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
-    assertTrustedClipboardSender(event)
+    assertTrustedClipboardTextSender(event)
     return assertClipboardTextWithinLimitWithYield(clipboard.readText(), options)
   })
   ipcMain.handle(
@@ -102,7 +104,20 @@ export function registerClipboardHandlers(store: Store): void {
       assertTrustedClipboardSender(event)
       const image = clipboard.readImage()
       if (image.isEmpty()) {
-        return null
+        if (process.platform !== 'win32') {
+          return null
+        }
+        const copiedFilePng = await readWindowsClipboardImageFileAsPng(
+          {
+            fileNameW: clipboard.readBuffer('FileNameW'),
+            shellIdListArray: clipboard.readBuffer('Shell IDList Array')
+          },
+          {
+            createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
+            openFile: (filePath) => open(filePath, 'r')
+          }
+        )
+        return copiedFilePng ? saveClipboardImageBufferForTarget(copiedFilePng, args) : null
       }
       assertClipboardImageDimensionsWithinLimit(image.getSize())
       return saveClipboardImageBufferForTarget(image.toPNG(), args)
@@ -141,7 +156,7 @@ export function registerClipboardHandlers(store: Store): void {
     }
   )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
-    assertTrustedClipboardSender(event)
+    assertTrustedClipboardTextSender(event)
     return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
   })
   ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
@@ -221,6 +236,14 @@ function makeClipboardFileDeps(
 
 function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
   if (!isTrustedClipboardRenderer(event.sender)) {
+    throw new Error('Unauthorized clipboard IPC sender')
+  }
+}
+
+function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
+  // Why: terminal copy/paste runs in the exact dashboard popout window, but its
+  // clipboard authority must not extend to image, file, or remote operations.
+  if (!isTrustedClipboardRenderer(event.sender) && !isDashboardPopoutRenderer(event.sender)) {
     throw new Error('Unauthorized clipboard IPC sender')
   }
 }

@@ -32,7 +32,10 @@ import type {
 } from './mobile-markdown-document'
 import type { RuntimeCapability } from './protocol-version'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
-import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
@@ -77,6 +80,9 @@ export type RuntimeStatus = {
   // Why: legacy or saved WebSocket pairings may not carry scope metadata, so
   // the server stamps the authenticated token scope here for status.get only.
   deviceScope?: DeviceScope
+  // Why: mobile gates its Floating Workspace entry on this; absent on older
+  // hosts, false when the user disabled the feature in desktop settings.
+  floatingWorkspaceEnabled?: boolean
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number
@@ -267,6 +273,25 @@ export type RuntimeMobileSessionTabMoveResult = {
   moved: true
 }
 
+export type RuntimeMobileSessionTabCloseResult = {
+  closed: true
+  refused?: true
+  refusalReason?:
+    | 'missing-intent'
+    | 'stale-publication'
+    | 'stale-terminal'
+    | 'live-host-pty'
+    | 'unknown-liveness'
+    | 'retirement-owner'
+  // Why: only a republished snapshot can restore a live mirror; dead-leaf refusals intentionally omit this marker.
+  snapshotRepublished?: true
+}
+
+// Why: lets the host tell a user's close from a client-lifecycle echo
+// ('pty-exit'/'cleanup') and adjudicate against its own PTY liveness.
+// Absent on legacy clients, where the existing close endpoint remains user intent.
+export type RuntimeSessionTabCloseReason = 'user' | 'pty-exit' | 'cleanup'
+
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
   publicationEpoch: string
@@ -283,6 +308,8 @@ export type RuntimeMobileSessionTabsResult = {
   worktree: string
   publicationEpoch: string
   snapshotVersion: number
+  /** Live-only targeted command; omitted from durable/list snapshots so reconnect cannot replay navigation. */
+  navigationIntent?: 'follow'
   activeGroupId: string | null
   activeTabId: string | null
   activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
@@ -499,7 +526,9 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   command?: string
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
@@ -527,6 +556,8 @@ export type RuntimeTerminalCreate = {
   title: string | null
   surface?: 'background' | 'visible'
   warning?: string
+  /** Present only for the structured host-authority resume path. */
+  agentSessionDisposition?: 'created' | 'adopted'
 }
 
 export type RuntimeTerminalSplit = {
@@ -1058,6 +1089,8 @@ export type BrowserErrorCode =
   | 'browser_no_tab'
   | 'browser_tab_not_found'
   | 'browser_tab_closed'
+  | 'browser_tab_changed'
+  | 'browser_owner_unavailable'
   | 'browser_stale_ref'
   | 'browser_ref_not_found'
   | 'browser_navigation_failed'

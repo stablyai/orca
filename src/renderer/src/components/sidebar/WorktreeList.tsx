@@ -24,6 +24,8 @@ import {
   Trash2
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { createLineageToggleHandlerCache } from './worktree-lineage-toggle-handler-cache'
+import { reuseArrayIfEqual } from './worktree-agent-row-selectors'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
 import {
@@ -310,6 +312,14 @@ type ProjectGroupDeleteDialogState = {
   groupId: string
   groupName: string
   removeContainedProjects: boolean
+}
+
+// Why: epoch-driven recomputes often produce arrays whose contents and order are unchanged; reusing the previous identity when element-wise equal keeps downstream memos and React.memo'd cards bailing out. Safe only because elements (Worktree objects / id strings) are immutably REPLACED on change — never wrap arrays of mutated-in-place objects.
+function useReusedArrayIdentity<T>(next: T[]): T[] {
+  const previousRef = useRef<T[]>(next)
+  const result = reuseArrayIfEqual(previousRef.current, next)
+  previousRef.current = result
+  return result
 }
 
 // Debounce re-sort after a sortEpoch bump so background score changes don't jar row positions.
@@ -2448,6 +2458,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       toggleGroup(groupKey)
     },
     [recordCurrentScrollAnchor, toggleGroup]
+  )
+  // Why: memo'd WorktreeCard needs a per-group-key stable onLineageToggle
+  // identity to bail out of re-renders; see worktree-lineage-toggle-handler-cache.
+  const getLineageToggleHandler = useMemo(
+    () => createLineageToggleHandlerCache(toggleGroupWithScrollAnchor),
+    [toggleGroupWithScrollAnchor]
   )
 
   const navigateWorktree = useCallback(
@@ -4856,11 +4872,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     lineageChildrenStyle={lineageChildrenStyle}
                     onLineageToggle={
                       lineageToggleGroupKey
-                        ? (event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            toggleGroupWithScrollAnchor(lineageToggleGroupKey)
-                          }
+                        ? getLineageToggleHandler(lineageToggleGroupKey)
                         : undefined
                     }
                   />
@@ -5462,7 +5474,7 @@ const WorktreeList = React.memo(function WorktreeList({
   }, [sortedIds, sortBy])
 
   // Flatten/filter/sort via the shared utility so card order matches Cmd+1–9 numbering.
-  const visibleWorktrees = useMemo(() => {
+  const recomputedVisibleWorktrees = useMemo(() => {
     void agentStatusEpoch
     const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
       filterRepoIds,
@@ -5514,6 +5526,10 @@ const WorktreeList = React.memo(function WorktreeList({
     worktreeLineageById,
     worktreesByRepo
   ])
+  // Why: agentStatusEpoch bumps recompute this memo even when membership and
+  // order are unchanged; keeping the previous identity stops the whole
+  // rows/sectionRows/renderedWorktrees chain from churning per epoch.
+  const visibleWorktrees = useReusedArrayIdentity(recomputedVisibleWorktrees)
 
   const worktrees = visibleWorktrees
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
@@ -5842,9 +5858,14 @@ const WorktreeList = React.memo(function WorktreeList({
     () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
     [pinnedDisplayPolicy, sectionRows]
   )
-  const renderedWorktreeIds = useMemo(
-    () => uniqueWorktreeIds(renderedWorktrees.map((worktree) => worktree.id)),
-    [renderedWorktrees]
+  // Why: order-preserving sectionRows rebuilds must not give this array a new
+  // identity — updateSelectionForGesture depends on it, and a fresh identity
+  // there defeats React.memo bail-out for every WorktreeCard on epoch bumps.
+  const renderedWorktreeIds = useReusedArrayIdentity(
+    useMemo(
+      () => uniqueWorktreeIds(renderedWorktrees.map((worktree) => worktree.id)),
+      [renderedWorktrees]
+    )
   )
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
@@ -5862,18 +5883,23 @@ const WorktreeList = React.memo(function WorktreeList({
     setSelectionAnchorId(prunedSelection.anchorId)
   }
 
-  const selectedWorktrees = useMemo(() => {
-    if (selectedWorktreeIds.size === 0) {
-      return []
-    }
-    const selected = new Map<string, Worktree>()
-    for (const worktree of renderedWorktrees) {
-      if (selectedWorktreeIds.has(worktree.id) && !selected.has(worktree.id)) {
-        selected.set(worktree.id, worktree)
+  // Why identity reuse: the empty/unchanged-selection case must keep one array
+  // identity — selectForContextMenu and both drag-start handlers depend on
+  // this array, and card memo bail-out depends on those staying stable.
+  const selectedWorktrees = useReusedArrayIdentity(
+    useMemo(() => {
+      if (selectedWorktreeIds.size === 0) {
+        return []
       }
-    }
-    return Array.from(selected.values())
-  }, [renderedWorktrees, selectedWorktreeIds])
+      const selected = new Map<string, Worktree>()
+      for (const worktree of renderedWorktrees) {
+        if (selectedWorktreeIds.has(worktree.id) && !selected.has(worktree.id)) {
+          selected.set(worktree.id, worktree)
+        }
+      }
+      return Array.from(selected.values())
+    }, [renderedWorktrees, selectedWorktreeIds])
+  )
 
   useEffect(() => {
     if (selectedWorktreeIds.size === 0) {

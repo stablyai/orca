@@ -37,8 +37,8 @@ import {
   gitOptionalLocksDisabledEnv,
   gitStreamStdout
 } from './runner'
-import { StatusPorcelainParser } from './status-porcelain-parser'
-import { DEFAULT_GIT_STATUS_LIMIT } from '../../shared/git-status-limit'
+import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
+import { capGitStatusEntries, resolveGitStatusLimit } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
   removeSafeUntrackedDiscardTarget,
@@ -231,10 +231,7 @@ export async function getStatus(
 
 function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
   // Why: each key part can change the output shape or runtime routing.
-  const limit =
-    typeof options.limit === 'number' && Number.isInteger(options.limit) && options.limit >= 0
-      ? options.limit
-      : DEFAULT_GIT_STATUS_LIMIT
+  const limit = resolveGitStatusLimit(options.limit)
   return [
     worktreePath,
     options.wslDistro ?? '',
@@ -254,10 +251,7 @@ async function runGetStatus(
   let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
   // Why: a bad limit (negative/fractional/NaN) breaks early-stop; require a valid non-negative int (0 disables the cap).
-  const limit =
-    typeof options.limit === 'number' && Number.isInteger(options.limit) && options.limit >= 0
-      ? options.limit
-      : DEFAULT_GIT_STATUS_LIMIT
+  const limit = resolveGitStatusLimit(options.limit)
 
   // Why: detectConflictOperation and git status are independent, so run them concurrently to save I/O latency.
   const conflictPromise = detectConflictOperation(worktreePath)
@@ -301,14 +295,19 @@ async function runGetStatus(
     // Not a git repo or git not available
   }
 
-  // Why: the parser overshoots by one (checks after pushing), so trim to exactly `limit`.
-  const entries = didHitLimit ? parser.entries.slice(0, limit) : parser.entries
+  const entries: GitStatusEntry[] = []
   const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
 
-  // Why: unmerged (`u`) records need async per-file lookups; resolve them off the hot path (conflicts are rare).
-  if (!didHitLimit) {
-    for (const line of parser.unmergedLines) {
-      const unmergedEntry = await parseUnmergedEntry(worktreePath, line)
+  // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
+  // an early conflict behind ordinary rows that appeared later in the stream.
+  for (const record of parser.statusRecords) {
+    if (didHitLimit && entries.length >= limit) {
+      break
+    }
+    if (record.type === 'entry') {
+      entries.push(record.entry)
+    } else {
+      const unmergedEntry = await parseUnmergedEntry(worktreePath, record.line)
       if (unmergedEntry) {
         entries.push(unmergedEntry)
       }
@@ -414,10 +413,14 @@ export function resolveSubmoduleWorktreePath(worktreePath: string, submodulePath
 export async function getSubmoduleStatus(
   worktreePath: string,
   submodulePath: string,
-  options: GitRuntimeOptions & { staged?: boolean } = {}
+  options: GetStatusOptions & { staged?: boolean } = {}
 ): Promise<GitStatusResult> {
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
-  const workingResult = await getStatus(submoduleWorktreePath, options)
+  const limit = resolveGitStatusLimit(options.limit)
+  // Why: staged expansion only represents HEAD→index; scanning the submodule worktree is wasted work.
+  const workingResult = options.staged
+    ? ({ entries: [], conflictOperation: 'unknown' } satisfies GitStatusResult)
+    : await getStatus(submoduleWorktreePath, options)
   // Why: a moved gitlink (clean worktree) has no status rows; surface the parent-commit→checkout range as inner rows.
   const fromOid = options.staged
     ? await readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
@@ -434,7 +437,7 @@ export async function getSubmoduleStatus(
       options
     )
     if (options.staged) {
-      return { ...workingResult, entries: rangeEntries }
+      return { ...workingResult, ...capGitStatusEntries(rangeEntries, limit) }
     }
     const rangePaths = new Set(rangeEntries.map((entry) => entry.path))
     // Range rows win on overlap so the diff matches getDiff's commit-range route.
@@ -442,7 +445,10 @@ export async function getSubmoduleStatus(
       ...rangeEntries,
       ...workingResult.entries.filter((entry) => !rangePaths.has(entry.path))
     ]
-    return { ...workingResult, entries }
+    return {
+      ...workingResult,
+      ...capGitStatusEntries(entries, limit, workingResult)
+    }
   }
   if (options.staged) {
     return { ...workingResult, entries: [] }

@@ -77,6 +77,7 @@ vi.mock('@/components/ui/context-menu', () => ({
 
 import {
   getSetupGuideSidebarEntryReady,
+  shouldShowAgentDashboardButton,
   shouldShowAgentsButton,
   shouldShowAutomationsButton,
   shouldShowMobileButton,
@@ -225,6 +226,30 @@ describe('SidebarNav', () => {
         experimentalActivity: true
       })
     ).toBe(true)
+  })
+
+  it('shows the Agent Dashboard entry only when its experiment is enabled', () => {
+    expect(shouldShowAgentDashboardButton(null)).toBe(false)
+    expect(shouldShowAgentDashboardButton({ experimentalAgentDashboardPopout: false })).toBe(false)
+    expect(shouldShowAgentDashboardButton({ experimentalAgentDashboardPopout: true })).toBe(true)
+  })
+
+  it('keeps the Agent Dashboard row unmounted by default', async () => {
+    const container = await renderSidebarNav()
+
+    expect(queryButtonByText(container, 'Agent Dashboard')).toBeNull()
+  })
+
+  it('mounts the Agent Dashboard row after opt-in', async () => {
+    setSidebarState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        experimentalAgentDashboardPopout: true
+      }
+    })
+    const container = await renderSidebarNav()
+
+    expect(queryButtonByText(container, 'Agent Dashboard')).not.toBeNull()
   })
 
   it('shows the Mobile entry by default for older settings', () => {

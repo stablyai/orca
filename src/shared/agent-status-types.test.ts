@@ -467,6 +467,7 @@ Fix dispatch fallback preview for normalized status prompts`
       state: 'working',
       startedAt: 100,
       agentType: 'general-purpose',
+      model: undefined,
       description: undefined
     })
     // Why: non-finite startedAt coerces to 0; descriptions fold to one line.
@@ -490,6 +491,7 @@ describe('agentSubagentsEqual', () => {
     expect(agentSubagentsEqual(undefined, undefined)).toBe(true)
     expect(agentSubagentsEqual([snapshot], [{ ...snapshot }])).toBe(true)
     expect(agentSubagentsEqual([snapshot], [{ ...snapshot, state: 'idle' }])).toBe(false)
+    expect(agentSubagentsEqual([snapshot], [{ ...snapshot, model: 'gpt-5.4-mini' }])).toBe(false)
     expect(agentSubagentsEqual([snapshot], undefined)).toBe(false)
     expect(agentSubagentsEqual(undefined, [snapshot])).toBe(false)
     expect(agentSubagentsEqual([snapshot], [snapshot, { ...snapshot, id: 'b' }])).toBe(false)

@@ -166,4 +166,86 @@ describe('useLiveWorktreeName request volume', () => {
 
     expect(unsubscribeStream).toHaveBeenCalledTimes(1)
   })
+
+  it('never calls worktree.show for the floating workspace sentinel', async () => {
+    let name = ''
+    function FloatingHarness(): null {
+      name = useLiveWorktreeName({
+        client,
+        connState: 'connected',
+        routeName: undefined,
+        worktreeId: 'global-floating-terminal'
+      })
+      return null
+    }
+
+    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
+    try {
+      await act(async () => {
+        renderer = create(createElement(FloatingHarness))
+        await Promise.resolve()
+      })
+    } finally {
+      restoreConsoleError()
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000)
+    })
+
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(name).toBe('Floating Workspace')
+  })
+
+  it('does not render stale names while switching through the floating route', async () => {
+    const firstNameByWorktree = new Map<string, string>()
+    let renderer: ReactTestRenderer | null = null
+
+    function RouteHarness(props: { routeName?: string; worktreeId: string }): null {
+      const name = useLiveWorktreeName({
+        client,
+        connState: 'connected',
+        routeName: props.routeName,
+        worktreeId: props.worktreeId
+      })
+      if (!firstNameByWorktree.has(props.worktreeId)) {
+        firstNameByWorktree.set(props.worktreeId, name)
+      }
+      return null
+    }
+
+    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(RouteHarness, {
+            routeName: 'Previous workspace',
+            worktreeId: 'repo-1::/worktree'
+          })
+        )
+        await Promise.resolve()
+      })
+      await act(async () => {
+        renderer?.update(
+          createElement(RouteHarness, {
+            worktreeId: 'global-floating-terminal'
+          })
+        )
+      })
+      await act(async () => {
+        renderer?.update(
+          createElement(RouteHarness, {
+            routeName: 'Next workspace',
+            worktreeId: 'repo-2::/worktree'
+          })
+        )
+      })
+    } finally {
+      restoreConsoleError()
+      act(() => renderer?.unmount())
+    }
+
+    expect(firstNameByWorktree.get('global-floating-terminal')).toBe('Floating Workspace')
+    expect(firstNameByWorktree.get('repo-2::/worktree')).toBe('Next workspace')
+  })
 })

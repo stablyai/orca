@@ -71,12 +71,16 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
     ['pty-1', { cols: 150, rows: 40 }]
   ])
   const resizes: { ptyId: string; cols: number; rows: number }[] = []
+  const writes: string[] = []
   const driverEvents: { ptyId: string; driver: { kind: string; clientId?: string } }[] = []
   const fitOverrideEvents: { ptyId: string; mode: string; cols: number; rows: number }[] = []
   let resizeSucceeds = true
 
   runtime.setPtyController({
-    write: () => true,
+    write: (_ptyId, data) => {
+      writes.push(data)
+      return true
+    },
     kill: () => true,
     getForegroundProcess: async () => null,
     resize: (ptyId, cols, rows) => {
@@ -111,6 +115,7 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
     runtime,
     ptySizes,
     resizes,
+    writes,
     driverEvents,
     fitOverrideEvents,
     setResizeSucceeds: (next: boolean) => {
@@ -126,6 +131,22 @@ describe('mobile presence lock — driver state machine', () => {
   it('starts idle for unknown PTY', () => {
     const { runtime } = createRuntime()
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+  })
+
+  it('stops a preview paste when mobile claims the floor between chunks', async () => {
+    const { runtime, writes } = createRuntime()
+    let driverChecks = 0
+    vi.spyOn(runtime, 'getDriver').mockImplementation(() => {
+      driverChecks++
+      return driverChecks >= 3 ? { kind: 'mobile', clientId: 'phone-A' } : { kind: 'idle' }
+    })
+
+    const result = runtime.writeTerminalPreviewInput('pty-1', 'x'.repeat(32 * 1024))
+    await vi.advanceTimersByTimeAsync(0)
+
+    await expect(result).resolves.toBe(false)
+    expect(writes).toHaveLength(1)
+    expect(Buffer.byteLength(writes[0]!, 'utf8')).toBe(16 * 1024)
   })
 
   it('handleMobileSubscribe in auto mode transitions idle → mobile{clientId}', async () => {

@@ -465,8 +465,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     cwd,
     cwdFallback,
     env,
+    envToDelete,
     command,
     launchConfig,
+    resumeProviderSession,
     launchToken,
     launchAgent,
     startupCommandDelivery,
@@ -678,9 +680,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cwd,
           ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
           env: options.env ?? env,
+          ...((options.envToDelete ?? envToDelete)
+            ? { envToDelete: options.envToDelete ?? envToDelete }
+            : {}),
           command: options.command ?? command,
           ...((options.launchConfig ?? launchConfig)
             ? { launchConfig: options.launchConfig ?? launchConfig }
+            : {}),
+          ...((options.resumeProviderSession ?? resumeProviderSession)
+            ? {
+                resumeProviderSession: options.resumeProviderSession ?? resumeProviderSession
+              }
             : {}),
           ...((options.launchToken ?? launchToken)
             ? { launchToken: options.launchToken ?? launchToken }

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type {
   GlobalSettings,
   PRInfo,
@@ -125,6 +126,21 @@ function makePRInfo(overrides: Partial<PRInfo> = {}): PRInfo {
   }
 }
 
+function makeHostedReviewInfo(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
+  return {
+    provider: 'github',
+    number: 6340,
+    title: 'Merged PR still checked out',
+    state: 'merged',
+    url: 'https://github.com/acme/orca/pull/6340',
+    status: 'success',
+    updatedAt: '2026-05-17T00:00:00.000Z',
+    mergeable: 'MERGEABLE',
+    headSha: 'abc123',
+    ...overrides
+  }
+}
+
 function renderWorktreeCardMarkup(element: ReactNode): string {
   return renderToStaticMarkup(<>{element}</>)
 }
@@ -186,5 +202,54 @@ describe('WorktreeCard merged PR fallback display', () => {
 
     expect(markup).not.toContain('Linked PR #6340')
     expect(markup).not.toContain('Merged PR no longer checked out')
+  })
+
+  it('does not let branch provenance resurrect a merged review after the worktree head moved', async () => {
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReviewInfo({ title: 'Stale proven merged PR', headSha: 'old-head' }),
+        fetchedAt: 200,
+        linkedReviewHintKey: 'github:6340',
+        branchLookupGitHubPRNumber: 6340
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null, head: 'new-head' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Linked PR #6340')
+    expect(markup).not.toContain('Stale proven merged PR')
+  })
+
+  it('keeps proven merged review visible when the worktree head is a confirmed PR commit', async () => {
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReviewInfo({
+          title: 'Confirmed proven merged PR',
+          headSha: 'final-head',
+          confirmedContainedHeadOid: 'behind-head'
+        }),
+        fetchedAt: 200,
+        linkedReviewHintKey: 'github:6340',
+        branchLookupGitHubPRNumber: 6340
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null, head: 'behind-head' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #6340')
   })
 })

@@ -5,6 +5,7 @@ import { workItemsCacheKey, type CacheEntry } from '@/store/slices/github'
 import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
 import {
   buildTaskPageRepoSourceState,
+  selectTaskPageUnresolvedSourceRepos,
   deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
   findTaskPageLinearDrawerIssue,
@@ -71,6 +72,54 @@ describe('task page cache selectors', () => {
         error: null
       }
     ])
+  })
+
+  it('flags fetched repos that resolved neither an issue nor a PR GitHub source', () => {
+    const sourcesEntry = (
+      sources: { issues: unknown; prs: unknown } | null
+    ): CacheEntry<GitHubWorkItem[]> =>
+      ({
+        data: [],
+        fetchedAt: 1,
+        ...(sources
+          ? { sources: { originCandidate: null, upstreamCandidate: null, ...sources } }
+          : {})
+      }) as CacheEntry<GitHubWorkItem[]>
+
+    const repos = [
+      { id: 'unresolved', path: '/repos/unresolved', displayName: 'unresolved-repo' },
+      { id: 'issues-ok', path: '/repos/issues-ok', displayName: 'issues-repo' },
+      { id: 'prs-ok', path: '/repos/prs-ok', displayName: 'prs-repo' },
+      { id: 'no-name', path: '/repos/no-name' },
+      { id: 'not-fetched', path: '/repos/not-fetched', displayName: 'pending-repo' }
+    ]
+    const entries = [
+      sourcesEntry({ issues: null, prs: null }),
+      sourcesEntry({ issues: { owner: 'acme', repo: 'issues-ok' }, prs: null }),
+      sourcesEntry({ issues: null, prs: { owner: 'acme', repo: 'prs-ok' } }),
+      sourcesEntry({ issues: null, prs: null }),
+      sourcesEntry(null)
+    ]
+    const sourceState = buildTaskPageRepoSourceState(repos, entries)
+
+    // Only both-null fetched repos are flagged; label falls back to path when displayName is absent.
+    expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState)).toEqual([
+      { repoId: 'unresolved', sourceKey: 'unresolved::local', label: 'unresolved-repo' },
+      { repoId: 'no-name', sourceKey: 'no-name::local', label: '/repos/no-name' }
+    ])
+  })
+
+  it('does not flag an unresolved-source repo that already carries a per-repo error', () => {
+    const repos = [{ id: 'errored', path: '/repos/errored', displayName: 'errored-repo' }]
+    const erroredEntry = {
+      data: [],
+      fetchedAt: 1,
+      sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null },
+      error: { type: 'rate_limited', message: 'slow down', source: { owner: 'acme', repo: 'x' } }
+    } as unknown as CacheEntry<GitHubWorkItem[]>
+    const sourceState = buildTaskPageRepoSourceState(repos, [erroredEntry])
+
+    expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState)).toEqual([])
   })
 
   it('scopes repo source rows by source cache scope for retry ownership', () => {

@@ -486,6 +486,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cachedBranchReview = useCachedBranchReview
     ? hostedReviewInfoFromGitHubPRInfo(cachedBranchPR)
     : hostedReview
+  // Why: branch provenance does not supersede the head-ownership gate for merged PRs.
+  const branchLookupGitHubPRNumber =
+    hostedReview?.provider === 'github' &&
+    hostedReview.state === 'merged' &&
+    !isCachedMergedBranchPRCurrentForWorktree(hostedReview, worktree)
+      ? null
+      : hostedReviewEntry?.branchLookupGitHubPRNumber
   const prDisplay = getWorktreeCardPrDisplay(
     cachedBranchReview,
     linkedGitHubPR,
@@ -497,7 +504,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       reviewHintKey:
         (useCachedBranchReview || cachedMergedBranchPRMatchesCurrentHead) && !hasLinkedReview
           ? ''
-          : hostedReviewEntry?.linkedReviewHintKey
+          : hostedReviewEntry?.linkedReviewHintKey,
+      branchLookupGitHubPRNumber
     }
   )
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
@@ -1205,7 +1213,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
             identityOrder="branch-first"
             detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
             openDelay={100}
-            hoverControl={detailsHoverControl}
+            // Why: compact mode also renders the plug/badge hover root; sharing one open-state made hovering the
+            // plug force-open the wider title card and race it closed (#9304), so let this title hover own its state.
             onEditIssue={affiliateListMode ? undefined : handleEditIssue}
             onEditComment={affiliateListMode ? undefined : handleEditComment}
             onOpenGitHubIssueInOrca={

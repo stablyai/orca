@@ -114,7 +114,7 @@ describe('buildDefaultTerminalOptions', () => {
     expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
   })
 
-  it('enables xterm contrast correction for low-contrast CLI colors', () => {
+  it('defaults minimumContrastRatio to the light-background value (applyTerminalAppearance re-gates it)', () => {
     expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
   })
 

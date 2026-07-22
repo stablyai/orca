@@ -26,7 +26,8 @@ import {
   Filter,
   Check,
   UserCircle,
-  PanelLeftClose
+  PanelLeftClose,
+  SquareTerminal
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts, updateLastConnected } from '../../../src/transport/host-store'
@@ -57,6 +58,7 @@ import type { RepoIcon } from '../../../../src/shared/repo-icon'
 import { PickerModal } from '../../../src/components/PickerModal'
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
 import { buildWorktreeNavigationActions } from '../../../src/agent-history/worktree-navigation-actions'
+import { floatingWorkspaceSessionPath } from '../../../src/session/floating-workspace'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
@@ -68,7 +70,7 @@ import { setCachedRepos } from '../../../src/cache/repo-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { leaveHostRoute } from '../../../src/host-route-exit'
-import { evaluateCompat, type CompatVerdict } from '../../../src/transport/protocol-compat'
+import { useHostStatusGates } from '../../../src/transport/host-status-gates'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'
 import {
   createInitialHostRouteActionState,
@@ -97,7 +99,7 @@ import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
   WORKSPACE_SORT_OPTIONS as SORT_OPTIONS
 } from '../../../src/worktree/workspace-list-picker-options'
-import type { DesktopStatus, RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
+import type { RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/types'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from '../../../src/worktree/mobile-workspace-statuses'
 
@@ -155,7 +157,6 @@ export function HostScreen({
   const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
-  const [compatVerdict, setCompatVerdict] = useState<CompatVerdict>({ kind: 'ok' })
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
@@ -175,7 +176,11 @@ export function HostScreen({
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
-  const [hostCapabilities, setHostCapabilities] = useState<string[]>([])
+  const { hostCapabilities, floatingWorkspaceEnabled, compatVerdict } = useHostStatusGates({
+    hostId,
+    client,
+    connState
+  })
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [routeActionState, setRouteActionState] = useState(() =>
@@ -315,7 +320,6 @@ export function HostScreen({
   useEffect(() => {
     setHostName('')
     setError('')
-    setCompatVerdict({ kind: 'ok' })
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
     repoMetadataFetchedAtRef.current = 0
@@ -483,52 +487,6 @@ export function HostScreen({
     [client, connState, hostId]
   )
 
-  // Why: re-evaluate protocol compat on connect; today's constants are wide-open so this never blocks yet.
-  useEffect(() => {
-    if (connState !== 'connected' || !client) {
-      // Why: drop capabilities while disconnected/switching so a capability-gated action can't linger for a new host.
-      setHostCapabilities([])
-      return
-    }
-    let cancelled = false
-    const requestClient = client
-    void (async () => {
-      try {
-        const response = await requestClient.sendRequest('status.get')
-        if (cancelled || clientRef.current !== requestClient) {
-          return
-        }
-        if (!response.ok) {
-          setHostCapabilities([])
-          return
-        }
-        const status = (response as RpcSuccess).result as DesktopStatus & {
-          capabilities?: string[]
-        }
-        setHostCapabilities(status.capabilities ?? [])
-        const verdict = evaluateCompat({
-          desktopProtocolVersion: status.protocolVersion,
-          desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
-        })
-        setCompatVerdict(verdict)
-        if (verdict.kind === 'blocked') {
-          // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
-          console.warn('[protocol-compat] blocked', {
-            reason: verdict.reason,
-            desktopVersion: verdict.desktopVersion,
-            requiredMobileVersion: verdict.requiredMobileVersion,
-            requiredDesktopVersion: verdict.requiredDesktopVersion
-          })
-        }
-      } catch {
-        // Why: sendRequest can throw on transport tear-down; treat as transient, keep the prior verdict.
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [connState, client])
-
   useFocusEffect(
     useCallback(() => {
       // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
@@ -674,8 +632,7 @@ export function HostScreen({
         router.push(target)
         return
       }
-      const targetPath = target.split('?')[0] ?? target
-      if (pathname === targetPath) {
+      if (pathname === (target.split('?')[0] ?? target)) {
         return
       }
       if (pathname === `/h/${hostId}`) {
@@ -691,11 +648,11 @@ export function HostScreen({
     (item: Worktree) => {
       setOptimisticActiveWorktreeId(item.worktreeId)
       if (client && connState === 'connected') {
-        // Why: notifyClients:false hydrates host tabs without pulling desktop into this worktree.
         void client
           .sendRequest('worktree.activate', {
             worktree: `id:${item.worktreeId}`,
-            notifyClients: false
+            notifyClients: false,
+            navigation: 'caller'
           })
           .catch(() => null)
       }
@@ -704,6 +661,12 @@ export function HostScreen({
     },
     [client, connState, hostId, navigateFromHostList]
   )
+
+  const openFloatingWorkspace = useCallback(() => {
+    // Why: no worktree.activate here — the floating sentinel has no worktree
+    // record; session.tabs.list hydrates its host-owned tabs on open.
+    navigateFromHostList(floatingWorkspaceSessionPath(hostId))
+  }, [hostId, navigateFromHostList])
 
   const handleSortChange = useCallback(
     (value: MobileSortMode) => {
@@ -870,6 +833,24 @@ export function HostScreen({
               </>
             )
           })()}
+          {!embedded && floatingWorkspaceEnabled ? (
+            <Pressable
+              style={[
+                styles.floatingWorkspaceHeaderButton,
+                connState !== 'connected' && styles.toolbarIconDisabled
+              ]}
+              onPress={openFloatingWorkspace}
+              disabled={connState !== 'connected'}
+              accessibilityRole="button"
+              accessibilityLabel="Floating Workspace"
+              hitSlop={8}
+            >
+              <SquareTerminal
+                size={18}
+                color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
+              />
+            </Pressable>
+          ) : null}
           {embedded && onHideSidebar ? (
             <Pressable
               style={styles.sidebarCollapseButton}
@@ -975,6 +956,24 @@ export function HostScreen({
                   color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
                 />
               </Pressable>
+
+              {floatingWorkspaceEnabled ? (
+                <Pressable
+                  style={[
+                    styles.embeddedToolbarIconButton,
+                    connState !== 'connected' && styles.toolbarIconDisabled
+                  ]}
+                  onPress={openFloatingWorkspace}
+                  disabled={connState !== 'connected'}
+                  accessibilityRole="button"
+                  accessibilityLabel="Floating Workspace"
+                >
+                  <SquareTerminal
+                    size={18}
+                    color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+                  />
+                </Pressable>
+              ) : null}
 
               <Pressable
                 style={[
@@ -1554,12 +1553,12 @@ const styles = StyleSheet.create({
   toolbarSpacer: {
     flex: 1
   },
-  toolbarIconButton: {
+  floatingWorkspaceHeaderButton: {
     width: 32,
-    height: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    marginLeft: spacing.xs
   },
   embeddedToolbarIconButton: {
     flex: 1,

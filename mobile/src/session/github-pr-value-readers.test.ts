@@ -9,6 +9,14 @@ describe('readRepoIdentity', () => {
     })
   })
 
+  it('preserves an Enterprise host', () => {
+    expect(readRepoIdentity({ owner: 'octo', repo: 'orca', host: 'github.acme.test' })).toEqual({
+      owner: 'octo',
+      repo: 'orca',
+      host: 'github.acme.test'
+    })
+  })
+
   it('drops a non-record value', () => {
     expect(readRepoIdentity(null)).toBeUndefined()
     expect(readRepoIdentity('octo/orca')).toBeUndefined()

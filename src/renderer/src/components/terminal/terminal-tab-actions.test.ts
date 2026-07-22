@@ -4,6 +4,7 @@ const {
   activateWebRuntimeSessionTabMock,
   closeWebRuntimeSessionTabMock,
   createWebRuntimeSessionTerminalMock,
+  getLatestWebSessionTabsPublicationEpochMock,
   getStateMock,
   isWebRuntimeSessionActiveMock,
   isWebTerminalSurfaceTabIdMock,
@@ -13,6 +14,7 @@ const {
   activateWebRuntimeSessionTabMock: vi.fn(),
   closeWebRuntimeSessionTabMock: vi.fn(),
   createWebRuntimeSessionTerminalMock: vi.fn(),
+  getLatestWebSessionTabsPublicationEpochMock: vi.fn(() => 'epoch-1'),
   getStateMock: vi.fn(),
   isWebRuntimeSessionActiveMock: vi.fn(),
   isWebTerminalSurfaceTabIdMock: vi.fn(() => false),
@@ -36,6 +38,7 @@ vi.mock('@/runtime/web-runtime-session', () => ({
 }))
 
 vi.mock('@/runtime/web-session-tabs-sync', () => ({
+  getLatestWebSessionTabsPublicationEpoch: getLatestWebSessionTabsPublicationEpochMock,
   resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
 }))
 
@@ -204,7 +207,150 @@ describe('closeTerminalTab', () => {
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'host-tab-1',
-      environmentId: 'web-runtime'
+      environmentId: 'web-runtime',
+      reason: 'user'
+    })
+  })
+
+  it('binds a pty-exit close to the observed host and terminal incarnation', () => {
+    const closeTab = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
+      },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'local-tab-1',
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('local-tab-1', {
+      reason: 'pty-exit',
+      lifecyclePtyId: 'remote:web-runtime@@term-1'
+    })
+
+    // Local prune behavior is unchanged.
+    expect(closeTab).toHaveBeenCalledWith('local-tab-1', {
+      reason: 'pty-exit',
+      remoteCloseOwnedByHost: true
+    })
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'host-tab-1',
+      environmentId: 'web-runtime',
+      reason: 'pty-exit',
+      publicationEpoch: 'epoch-1',
+      terminalHandle: 'term-1'
+    })
+  })
+
+  it('does not borrow a replacement PTY handle for a stale exit callback', () => {
+    const closeTab = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
+      },
+      ptyIdsByTabId: { 'local-tab-1': ['remote:web-runtime@@replacement-term'] },
+      terminalLayoutsByTabId: {},
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'local-tab-1',
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('local-tab-1', {
+      reason: 'pty-exit',
+      lifecyclePtyId: 'remote:web-runtime@@retired-term'
+    })
+
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terminalHandle: 'retired-term'
+      })
+    )
+  })
+
+  it('sends hostCloseReason on the wire without tagging the local close reason', () => {
+    // Why: parked-tab lifecycle closes must reach the host as 'pty-exit' so it
+    // can adjudicate them, while local guards keyed off `reason` still apply.
+    const closeTab = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
+      },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'local-tab-1',
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('local-tab-1', {
+      hostCloseReason: 'pty-exit',
+      lifecyclePtyId: 'remote:web-runtime@@term-1'
+    })
+
+    expect(closeTab).toHaveBeenCalledWith('local-tab-1', {
+      reason: undefined,
+      remoteCloseOwnedByHost: true
+    })
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'host-tab-1',
+      environmentId: 'web-runtime',
+      reason: 'pty-exit',
+      publicationEpoch: 'epoch-1',
+      terminalHandle: 'term-1'
+    })
+  })
+
+  it('keeps the pinned confirmation guard for a hostCloseReason pty-exit close', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1', { hostCloseReason: 'pty-exit' })
+
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks a user action as explicit when no lifecycle reason is present', () => {
+    const closeTab = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
+      },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'local-tab-1',
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('local-tab-1')
+
+    const args = closeWebRuntimeSessionTabMock.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(args).toMatchObject({
+      worktreeId: 'wt-1',
+      tabId: 'host-tab-1',
+      reason: 'user'
     })
   })
 
@@ -333,7 +479,8 @@ describe('closeTerminalTab', () => {
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'plain-uuid-tab',
-      environmentId: 'web-runtime'
+      environmentId: 'web-runtime',
+      reason: 'user'
     })
   })
 
@@ -592,12 +739,14 @@ describe('closeOtherTerminalTabs', () => {
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'close-a',
-      environmentId: 'web-runtime'
+      environmentId: 'web-runtime',
+      reason: 'user'
     })
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'close-b',
-      environmentId: 'web-runtime'
+      environmentId: 'web-runtime',
+      reason: 'user'
     })
     expect(closeTab).not.toHaveBeenCalled()
   })
@@ -633,12 +782,14 @@ describe('closeTerminalTabsToRight', () => {
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'term-b',
-      environmentId: 'web-runtime'
+      environmentId: 'web-runtime',
+      reason: 'user'
     })
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'term-c',
-      environmentId: 'web-runtime'
+      environmentId: 'web-runtime',
+      reason: 'user'
     })
     expect(closeFile).toHaveBeenCalledWith('file-b')
     expect(closeTab).not.toHaveBeenCalled()

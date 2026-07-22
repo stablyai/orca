@@ -7,8 +7,7 @@ import {
   nativeTheme,
   Notification,
   powerMonitor,
-  screen,
-  shell
+  screen
 } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
@@ -17,10 +16,7 @@ import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { translateMain } from '../i18n/main-i18n'
-import {
-  normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl
-} from '../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
@@ -49,6 +45,9 @@ import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
+import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
+import { closeDashboardPopout } from './dashboard-popout-window'
+import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -173,34 +172,12 @@ export function createMainWindow(
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
   const rawSavedBounds = store?.getUI().windowBounds
-  // Why: discard persisted bounds that are shrink-to-min (corrupt, see freezeBoundsOnQuit) or off-screen, falling back to defaultBounds.
-  // Require ~half MIN_WIDTH/HEIGHT of workArea overlap so a 1px sliver or dock-hidden rect isn't treated as visible.
-  const rectHasVisibleAreaOnAnyDisplay = (b: {
-    x: number
-    y: number
-    width: number
-    height: number
-  }): boolean => {
-    try {
-      return screen.getAllDisplays().some((d) => {
-        const wa = d.workArea
-        const overlapX = Math.max(0, Math.min(b.x + b.width, wa.x + wa.width) - Math.max(b.x, wa.x))
-        const overlapY = Math.max(
-          0,
-          Math.min(b.y + b.height, wa.y + wa.height) - Math.max(b.y, wa.y)
-        )
-        return overlapX >= MIN_WIDTH / 2 && overlapY >= MIN_HEIGHT / 2
-      })
-    } catch (err) {
-      console.warn('[window] screen.getAllDisplays() threw; treating bounds as off-screen', err)
-      return false
-    }
-  }
+  // Why: reject min-size or substantially off-screen bounds so the titlebar stays reachable after display changes.
   const savedBounds =
     rawSavedBounds &&
     rawSavedBounds.width > MIN_WIDTH &&
     rawSavedBounds.height > MIN_HEIGHT &&
-    rectHasVisibleAreaOnAnyDisplay(rawSavedBounds)
+    rectHasVisibleAreaOnAnyDisplay(rawSavedBounds, MIN_WIDTH / 2, MIN_HEIGHT / 2)
       ? rawSavedBounds
       : undefined
   if (rawSavedBounds && !savedBounds) {
@@ -417,13 +394,7 @@ export function createMainWindow(
     mainWindow.webContents.send('window:fullscreen-changed', false)
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    const externalUrl = normalizeExternalBrowserUrl(details.url)
-    if (externalUrl) {
-      shell.openExternal(externalUrl)
-    }
-    return { action: 'deny' }
-  })
+  installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
 
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
@@ -456,29 +427,6 @@ export function createMainWindow(
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
     // Why: attach guest popup/nav policy at creation; waiting for renderer registration races target=_blank/early redirects past it.
     browserManager.attachGuestPolicies(guest)
-  })
-
-  // Why: block in-window navigations so remote pages can't inherit the privileged preload bridge (dev server allowed for HMR).
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    const externalUrl = normalizeExternalBrowserUrl(url)
-
-    if (externalUrl) {
-      const target = new URL(externalUrl)
-      if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-        try {
-          const allowed = new URL(process.env.ELECTRON_RENDERER_URL)
-          if (target.origin === allowed.origin) {
-            return // allow dev server navigations (HMR, etc.)
-          }
-        } catch {
-          // fall through to prevent
-        }
-      }
-
-      shell.openExternal(externalUrl)
-    }
-
-    event.preventDefault()
   })
 
   // Why: mirror markdown-editor focus so before-input-event skips Cmd/Ctrl+B while TipTap owns focus (docs/markdown-cmd-b-bold-design.md).
@@ -1033,6 +981,10 @@ export function createMainWindow(
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
+    // Why: the dashboard pop-out is a companion of the main window — close it
+    // alongside so it never orphans as a lone window after the app window is
+    // gone (e.g. on macOS where the app stays alive after the window closes).
+    closeDashboardPopout()
     clearInitialRevealFallbackTimer()
     // Why: default-deny the Cmd+B carve-out after the window is gone so a stale-true flag can't leak into later state.
     markdownEditorFocused = false

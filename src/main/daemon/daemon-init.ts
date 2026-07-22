@@ -1020,7 +1020,11 @@ function legacyDaemonProcessMayBeAlive(runtimeDir: string, protocolVersion: numb
   }
 }
 
-async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPtyAdapter[]> {
+// Why: callers that own an isolated runtime namespace must keep discovery history out of app userData.
+export async function createLegacyDaemonAdapters(
+  runtimeDir: string,
+  historyPath = getHistoryDir()
+): Promise<DaemonPtyAdapter[]> {
   const adapters: DaemonPtyAdapter[] = []
   for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
     const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
@@ -1055,7 +1059,7 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
         socketPath,
         tokenPath,
         protocolVersion,
-        historyPath: getHistoryDir()
+        historyPath
       })
     )
   }

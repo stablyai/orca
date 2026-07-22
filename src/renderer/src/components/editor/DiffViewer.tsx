@@ -4,7 +4,7 @@ import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { monaco } from '@/lib/monaco-setup'
-import { computeDiffEditorFontSize } from '@/lib/editor-font-zoom'
+import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
@@ -422,7 +422,7 @@ export default function DiffViewer({
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               fontSize: diffEditorFontSize,
-              fontFamily: settings?.terminalFontFamily || 'monospace',
+              fontFamily: resolveEditorFontFamily(settings),
               lineNumbers: 'on',
               ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
               automaticLayout: true,
