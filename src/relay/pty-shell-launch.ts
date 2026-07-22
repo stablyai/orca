@@ -7,6 +7,7 @@ import {
   getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
 } from '../main/shell-templates'
+import { getRemoteCliPathRestoreBlock } from './remote-cli-path-restore'
 
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
@@ -111,7 +112,7 @@ if [[ ! -o login ]]; then
   # Why: remote startup files can re-export user defaults after relay spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
   [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
-  [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+  ${getRemoteCliPathRestoreBlock()}
   ${getPosixOmpShellWrapper()}
 fi
 if [[ ! -o login ]]; then
@@ -127,7 +128,7 @@ ${getZshStartupFileSourceBlock({
 # Why: .zlogin is the final zsh login startup file before the prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
-[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+${getRemoteCliPathRestoreBlock()}
 ${getPosixOmpShellWrapper()}
 ${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
 ${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
@@ -149,7 +150,7 @@ fi
 # Why: remote startup files can re-export user defaults after relay spawn.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
-[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+${getRemoteCliPathRestoreBlock()}
 ${getPosixOmpShellWrapper()}
 # Why: SSH bash sessions need the same command lifecycle markers as local
 # bash so agent rows stop showing "working" when the foreground command exits.

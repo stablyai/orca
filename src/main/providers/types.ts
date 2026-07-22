@@ -26,12 +26,15 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import type { GitProviderStatusOptions } from './git-provider-status-options'
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from './pty-provider-events'
 import type { PtySpawnResult } from './pty-spawn-result'
+import type { PtyOrchestrationCliCommandResolver } from './pty-orchestration-cli-command'
+import type { PtyProcessInfo } from './pty-process-info'
 
 export type {
   PtyBackgroundStreamEvent,
   PtyDataEvent,
   PtyTransientFact
 } from './pty-provider-events'
+export type { PtyProcessInfo } from './pty-process-info'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -100,18 +103,9 @@ export type PtySpawnOptions = {
 
 export type { PtySpawnResult }
 
-export type PtyProcessInfo = {
-  id: string
-  cwd: string
-  title: string
-  /** Owning worktree when the provider can report it authoritatively. */
-  worktreeId?: string
-  /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
-  terminalHandle?: string
-}
-
 export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  getOrchestrationCliCommand?: PtyOrchestrationCliCommandResolver
   /** Whether this spawn target can append the Git guard after its final env merge. */
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   attach(id: string): Promise<void>

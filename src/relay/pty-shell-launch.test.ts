@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -7,6 +7,37 @@ import { getRelayShellLaunchConfig } from './pty-shell-launch'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
+const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
+const itWithZsh = hasZsh ? it : it.skip
+
+function quotePosix(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`
+}
+
+function writeMarkerCommand(directory: string, command: string, marker: string): void {
+  mkdirSync(directory, { recursive: true })
+  const commandPath = join(directory, command)
+  writeFileSync(commandPath, `#!/bin/sh\nprintf '%s\\n' ${quotePosix(marker)}\n`, 'utf8')
+  chmodSync(commandPath, 0o755)
+}
+
+function parseOutputFields(output: string): Map<string, string> {
+  return new Map(
+    output
+      .split('\n')
+      .map((line) => line.match(/(initial-(?:orca|relay|path)|nested-(?:orca|relay))=(.*)$/))
+      .filter((match): match is RegExpMatchArray => match !== null)
+      .map((match) => [match[1] ?? '', match[2] ?? ''])
+  )
+}
+
+const PATH_COLLISION_PROBE = [
+  'printf \'initial-orca=%s\\n\' "$(orca)"',
+  'printf \'initial-relay=%s\\n\' "$(orca-relay)"',
+  'printf \'nested-orca=%s\\n\' "$("$SHELL" -lc orca)"',
+  'printf \'nested-relay=%s\\n\' "$("$SHELL" -lc orca-relay)"',
+  'printf \'initial-path=%s\\n\' "$PATH"'
+].join('; ')
 
 function runInteractiveBashRcfile(rcfile: string, homeDir: string): string {
   const result = spawnSync(
@@ -250,5 +281,97 @@ describe('getRelayShellLaunchConfig', () => {
     expect(output).not.toContain('syntax error')
     expect(output).toContain('PROMPT_SEP')
     expectBashOsc133Lifecycle(output)
+  })
+
+  itWithBash('keeps SSH lifecycle commands on the relay across nested bash login startup', () => {
+    const relayBin = join(homeDir, 'relay [bin]*')
+    const hostBin = join(homeDir, 'host bin')
+    writeMarkerCommand(relayBin, 'orca', 'RELAY')
+    writeMarkerCommand(relayBin, 'orca-relay', 'RELAY')
+    writeMarkerCommand(hostBin, 'orca', 'HOST')
+    writeFileSync(
+      join(homeDir, '.bash_profile'),
+      `export PATH=${quotePosix(hostBin)}:"$PATH"\n`,
+      'utf8'
+    )
+    const inheritedPath = `${relayBin}:${hostBin}:${relayBin}:${process.env.PATH ?? '/usr/bin'}`
+    const config = getRelayShellLaunchConfig('/bin/bash', {
+      HOME: homeDir,
+      PATH: inheritedPath,
+      ORCA_REMOTE_CLI_BIN_DIR: relayBin
+    })
+    const result = spawnSync(
+      '/bin/bash',
+      ['--noprofile', '--rcfile', config.args[1] as string, '-ic', PATH_COLLISION_PROBE],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ...config.env,
+          HOME: homeDir,
+          SHELL: '/bin/bash',
+          PATH: inheritedPath,
+          ORCA_REMOTE_CLI_BIN_DIR: relayBin
+        }
+      }
+    )
+
+    expect(result.status, result.stderr).toBe(0)
+    const fields = parseOutputFields(result.stdout)
+    expect(fields.get('initial-orca')).toBe('RELAY')
+    expect(fields.get('initial-relay')).toBe('RELAY')
+    expect(fields.get('nested-orca')).toBe('HOST')
+    expect(fields.get('nested-relay')).toBe('RELAY')
+    expect(fields.get('initial-path')?.split(':')[0]).toBe(relayBin)
+    expect(
+      fields
+        .get('initial-path')
+        ?.split(':')
+        .filter((entry) => entry === relayBin)
+    ).toHaveLength(1)
+  })
+
+  itWithZsh('keeps SSH lifecycle commands on the relay across nested zsh login startup', () => {
+    const relayBin = join(homeDir, 'relay [bin]*')
+    const hostBin = join(homeDir, 'host bin')
+    writeMarkerCommand(relayBin, 'orca', 'RELAY')
+    writeMarkerCommand(relayBin, 'orca-relay', 'RELAY')
+    writeMarkerCommand(hostBin, 'orca', 'HOST')
+    writeFileSync(
+      join(homeDir, '.zprofile'),
+      `export PATH=${quotePosix(hostBin)}:"$PATH"\n`,
+      'utf8'
+    )
+    const inheritedPath = `${relayBin}:${hostBin}:${relayBin}:${process.env.PATH ?? '/usr/bin'}`
+    const config = getRelayShellLaunchConfig('/bin/zsh', {
+      HOME: homeDir,
+      PATH: inheritedPath,
+      ORCA_REMOTE_CLI_BIN_DIR: relayBin
+    })
+    const result = spawnSync('/bin/zsh', [...config.args, '-c', PATH_COLLISION_PROBE], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ...config.env,
+        HOME: homeDir,
+        SHELL: '/bin/zsh',
+        PATH: inheritedPath,
+        ORCA_REMOTE_CLI_BIN_DIR: relayBin
+      }
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+    const fields = parseOutputFields(result.stdout)
+    expect(fields.get('initial-orca')).toBe('RELAY')
+    expect(fields.get('initial-relay')).toBe('RELAY')
+    expect(fields.get('nested-orca')).toBe('HOST')
+    expect(fields.get('nested-relay')).toBe('RELAY')
+    expect(fields.get('initial-path')?.split(':')[0]).toBe(relayBin)
+    expect(
+      fields
+        .get('initial-path')
+        ?.split(':')
+        .filter((entry) => entry === relayBin)
+    ).toHaveLength(1)
   })
 })

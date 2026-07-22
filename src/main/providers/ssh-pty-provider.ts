@@ -1,5 +1,10 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import {
+  mergeSshRemoteCliBridgeEnv,
+  resolveSshOrchestrationCliCommand,
+  type SshRemoteCliBridgeEnv
+} from './ssh-remote-cli-resolution'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
 import { PTY_STARTUP_INGRESS_VERSION } from '../../shared/pty-startup-ingress'
@@ -14,13 +19,6 @@ type DataCallback = (payload: {
 }) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
 type ExitCallback = (payload: { id: string; code: number }) => void
-type RemoteCliBridgeEnv = {
-  binDir: string
-  relayDir: string
-  nodePath: string
-  sockPath: string
-  pathDelimiter?: ':' | ';'
-}
 
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
@@ -62,7 +60,7 @@ export class SshPtyProvider implements IPtyProvider {
   constructor(
     connectionId: string,
     mux: SshChannelMultiplexer,
-    private readonly remoteCliBridgeEnv?: RemoteCliBridgeEnv
+    private readonly remoteCliBridgeEnv?: SshRemoteCliBridgeEnv
   ) {
     this.connectionId = connectionId
     this.mux = mux
@@ -114,6 +112,14 @@ export class SshPtyProvider implements IPtyProvider {
     return this.connectionId
   }
 
+  getOrchestrationCliCommand(context: { isWsl: boolean; shellPath: string | null }) {
+    return resolveSshOrchestrationCliCommand({
+      launcherPath: this.remoteCliBridgeEnv?.orchestrationLauncherPath,
+      pathDelimiter: this.remoteCliBridgeEnv?.pathDelimiter ?? ':',
+      ...context
+    })
+  }
+
   private toRelayPtyId(id: string): string {
     return toRelaySshPtyId(this.connectionId, id)
   }
@@ -145,14 +151,15 @@ export class SshPtyProvider implements IPtyProvider {
           suppressReplayNotification: true,
           ...(expectedPaneKey ? { expectedPaneKey } : {}),
           ...(expectedTabId ? { expectedTabId } : {})
-        })) as { replay?: string }
+        })) as { replay?: string; shellPath?: string }
         console.warn(
           `[ssh-pty] pty.attach succeeded for ${opts.sessionId}, replay=${!!attachResult.replay}`
         )
         return {
           id: this.toAppPtyId(relaySessionId),
           isReattach: true,
-          ...(attachResult.replay ? { replay: attachResult.replay } : {})
+          ...(attachResult.replay ? { replay: attachResult.replay } : {}),
+          ...(attachResult.shellPath ? { shellPath: attachResult.shellPath } : {})
         }
       } catch (err) {
         // Why: pty.attach fails when the relay grace window has elapsed.
@@ -211,23 +218,7 @@ export class SshPtyProvider implements IPtyProvider {
     env: Record<string, string> | undefined,
     envToDelete?: readonly string[]
   ): Record<string, string> {
-    const merged = { ...env }
-    if (this.remoteCliBridgeEnv) {
-      const pathDelimiter = this.remoteCliBridgeEnv.pathDelimiter ?? ':'
-      const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
-      if (pathKey) {
-        const pathValue = merged[pathKey] ?? ''
-        merged[pathKey] = pathValue.split(pathDelimiter).includes(this.remoteCliBridgeEnv.binDir)
-          ? pathValue
-          : pathValue
-            ? `${this.remoteCliBridgeEnv.binDir}${pathDelimiter}${pathValue}`
-            : this.remoteCliBridgeEnv.binDir
-      }
-      merged.ORCA_REMOTE_CLI_BIN_DIR = this.remoteCliBridgeEnv.binDir
-      merged.ORCA_RELAY_DIR = this.remoteCliBridgeEnv.relayDir
-      merged.ORCA_RELAY_NODE_PATH = this.remoteCliBridgeEnv.nodePath
-      merged.ORCA_RELAY_SOCKET_PATH = this.remoteCliBridgeEnv.sockPath
-    }
+    const merged = mergeSshRemoteCliBridgeEnv(env, this.remoteCliBridgeEnv)
     // Why: match local/daemon precedence—managed defaults and augmentations
     // cannot resurrect values the caller explicitly removed.
     for (const key of envToDelete ?? []) {
@@ -244,7 +235,7 @@ export class SshPtyProvider implements IPtyProvider {
   async attachForReconnect(
     id: string,
     expected?: { paneKey?: string; tabId?: string }
-  ): Promise<{ replay?: string }> {
+  ): Promise<{ replay?: string; shellPath?: string }> {
     // Why: reconnect owns replay delivery so stale/duplicate attach results can
     // be filtered before they reach the renderer. The expected identity lets the
     // relay reject a cross-generation id collision instead of reattaching this
@@ -254,7 +245,7 @@ export class SshPtyProvider implements IPtyProvider {
       suppressReplayNotification: true,
       ...(expected?.paneKey ? { expectedPaneKey: expected.paneKey } : {}),
       ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
-    })) as { replay?: string } | undefined
+    })) as { replay?: string; shellPath?: string } | undefined
     return result ?? {}
   }
 

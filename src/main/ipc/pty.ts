@@ -3147,9 +3147,8 @@ export function registerPtyHandlers(
               metadataLeafId !== null
               ? { tabId: args.tabId, leafId: metadataLeafId }
               : undefined,
-            !args.connectionId
-              ? shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd)
-              : undefined
+            shouldSkipCodexHomeEnvForWindowsShell(result.shellPath ?? daemonShellOverride, cwd),
+            result.shellPath
           )
         }
         // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
@@ -4188,9 +4187,8 @@ export function registerPtyHandlers(
               metadataLeafId !== null
               ? { tabId: args.tabId, leafId: metadataLeafId }
               : undefined,
-            !args.connectionId
-              ? shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd)
-              : undefined
+            shouldSkipCodexHomeEnvForWindowsShell(result.shellPath ?? effectiveShellOverride, cwd),
+            result.shellPath
           )
         }
         // Why: arm main's per-PTY Command Code output detector from the launch command (startupCommand parity); banner detection covers PTYs without one.

@@ -14,10 +14,6 @@ vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
 }))
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({
-  execCommand: vi.fn().mockResolvedValue('')
-}))
-
 vi.mock('./ssh-channel-multiplexer', () => {
   return {
     SshChannelMultiplexer: class MockSshChannelMultiplexer {
@@ -38,6 +34,11 @@ vi.mock('../providers/ssh-pty-provider', () => ({
   isSshPtyIdentityMismatchError: (err: unknown) =>
     (err instanceof Error ? err.message : String(err)).includes('identity mismatch'),
   SshPtyProvider: class MockSshPtyProvider {
+    constructor(
+      readonly connectionId: string,
+      readonly mux: unknown,
+      readonly remoteCliBridgeEnv?: Record<string, unknown>
+    ) {}
     onData = vi.fn().mockReturnValue(() => {})
     onReplay = vi.fn().mockReturnValue(() => {})
     onExit = vi.fn().mockReturnValue(() => {})
@@ -90,7 +91,6 @@ const { markHiddenRendererPty, setRendererPtyDeliveryInterest } =
   await import('../ipc/pty-hidden-delivery-gate')
 const { _resetHiddenRendererPtyDeliveryGateForTest } =
   await import('../ipc/pty-hidden-delivery-gate')
-const { execCommand } = await import('./ssh-relay-deploy-helpers')
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
 const {
   registerSshPtyProvider,
@@ -409,48 +409,6 @@ describe('SshRelaySession', () => {
     expect(unregisterSshFilesystemProvider).toHaveBeenCalledWith('target-1')
     expect(unregisterSshGitProvider).toHaveBeenCalledWith('target-1')
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
-  })
-
-  it('compiles a native Windows Orca CLI bridge without a cmd.exe shim', async () => {
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const mockConn = {
-      writeFile: vi.fn().mockResolvedValue(undefined)
-    } as unknown as SshConnection
-    vi.mocked(deployAndLaunchRelay).mockResolvedValueOnce({
-      transport: {
-        write: vi.fn(),
-        onData: vi.fn(),
-        onClose: vi.fn()
-      },
-      platform: 'win32-x64',
-      hostPlatform: getRemoteHostPlatform('win32-x64'),
-      remoteHome: 'C:/Users/me',
-      remoteRelayDir: 'C:/Users/me/.orca-remote/relay-v1',
-      nodePath: 'C:/Program Files/nodejs/node.exe',
-      sockPath: '\\\\.\\pipe\\orca-relay-123'
-    })
-
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-
-    await session.establish(mockConn)
-
-    expect(execCommand).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(execCommand).mock.calls[0]?.[1]).toContain('powershell.exe')
-    expect(vi.mocked(execCommand).mock.calls[0]?.[2]).toEqual({ wrapCommand: false })
-    expect(mockConn.writeFile).toHaveBeenCalledWith(
-      'C:/Users/me/.orca-relay/bin/orca-launcher.cs',
-      expect.stringContaining('ProcessStartInfo'),
-      { hostPlatform: getRemoteHostPlatform('win32-x64') }
-    )
-    const launcherSource = vi.mocked(mockConn.writeFile).mock.calls[0]?.[1] as string
-    expect(launcherSource).toContain('ORCA_RELAY_SOCKET_PATH')
-    expect(launcherSource).not.toContain('cmd.exe')
-    expect(launcherSource).not.toContain('%*')
-    expect(vi.mocked(execCommand).mock.calls[1]?.[1]).toContain('powershell.exe')
-    expect(vi.mocked(execCommand).mock.calls[1]?.[2]).toEqual({ wrapCommand: false })
-    expect(vi.mocked(execCommand).mock.calls.some(([, command]) => command.includes('chmod'))).toBe(
-      false
-    )
   })
 
   it('reconnect re-attaches live PTYs', async () => {

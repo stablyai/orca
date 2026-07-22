@@ -1,5 +1,44 @@
 import type { OrchestrationCliCommand } from './cli-command'
 
+function quotePosix(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`
+}
+
+function quotePowerShell(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+function renderCliCommand(command: OrchestrationCliCommand): string {
+  if (typeof command === 'string') {
+    return command
+  }
+  switch (command.kind) {
+    case 'posix-path':
+      return quotePosix(command.executablePath)
+    case 'powershell-path':
+      return `& ${quotePowerShell(command.executablePath)}`
+    case 'posix-env':
+      return `"$${command.variableName}"`
+    case 'powershell-env':
+      return `& $env:${command.variableName}`
+    case 'cmd-env':
+      return `"%${command.variableName}%"`
+  }
+}
+
+function renderLineContinuation(command: OrchestrationCliCommand | undefined): string {
+  if (
+    typeof command === 'object' &&
+    (command.kind === 'powershell-env' || command.kind === 'powershell-path')
+  ) {
+    return '`'
+  }
+  if (typeof command === 'object' && command.kind === 'cmd-env') {
+    return '^'
+  }
+  return '\\'
+}
+
 export type PreambleParams = {
   taskId: string
   // Why: completion and heartbeat payloads attribute activity to a specific
@@ -12,8 +51,8 @@ export type PreambleParams = {
   coordinatorHandle: string
   workerHandle: string
   devMode?: boolean
-  // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
-  // other execution hosts keep their existing bare `orca` bridge.
+  // Why: WSL and SSH panes use host-scoped launchers that cannot be inferred
+  // safely from the desktop process platform.
   cliCommand?: OrchestrationCliCommand
   // Why: populated by the coordinator's dispatch pre-flight (§3.1) only
   // when the target worktree is behind its tracking remote. When absent
@@ -47,7 +86,15 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
   // socket. Without this, agents inside the dev Electron app would call the
   // production CLI and talk to the wrong Orca instance (Section 6.4).
-  const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+  // Why: SSH lifecycle traffic must cross the relay even when the desktop is
+  // a dev build; `orca-dev` exists on the desktop, not the remote host.
+  const cli =
+    params.cliCommand && typeof params.cliCommand !== 'string'
+      ? renderCliCommand(params.cliCommand)
+      : params.devMode
+        ? 'orca-dev'
+        : renderCliCommand(params.cliCommand ?? 'orca')
+  const continuation = renderLineContinuation(params.cliCommand)
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
     workerKind: params.workerKind ?? 'prompt-returning-agent'
@@ -74,11 +121,11 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # with subject like "Failed: <reason>" — never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
-  ${cli} orchestration send --to ${params.coordinatorHandle} --from ${params.workerHandle} \\
-    --type worker_done --subject "<short status>" \\
-    --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
-    --files-modified "path/a,path/b" \\
+  ${cli} orchestration send --to ${params.coordinatorHandle} --from ${params.workerHandle} ${continuation}
+    --type worker_done --subject "<short status>" ${continuation}
+    --body "<3-sentence summary: what you did, what you found, what's left>" ${continuation}
+    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} ${continuation}
+    --files-modified "path/a,path/b" ${continuation}
     --report-path "<optional: path to the full artifact>"
 
   # BEHAVIOR RULE: send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
@@ -91,9 +138,9 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # attributes the heartbeat to the specific dispatch context, not just
   # the task, so a straggler heartbeat from a previously-failed dispatch
   # cannot mask a hung retry.
-  ${cli} orchestration send --to ${params.coordinatorHandle} --from ${params.workerHandle} \\
-    --type heartbeat --subject "alive" \\
-    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
+  ${cli} orchestration send --to ${params.coordinatorHandle} --from ${params.workerHandle} ${continuation}
+    --type heartbeat --subject "alive" ${continuation}
+    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} ${continuation}
     --phase "<short: investigating|implementing|reviewing|waiting>"
 
   # Ask the coordinator a question and block until it answers.
@@ -108,16 +155,16 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # blocks on \`check --wait\` until the coordinator replies, then prints the
   # reply body. Use it anywhere you would otherwise have reached for
   # AskUserQuestion.
-  ${cli} orchestration ask --to ${params.coordinatorHandle} --from ${params.workerHandle} \\
-    --question "<your question>" \\
-    --options "<optional,comma,separated>" \\
+  ${cli} orchestration ask --to ${params.coordinatorHandle} --from ${params.workerHandle} ${continuation}
+    --question "<your question>" ${continuation}
+    --options "<optional,comma,separated>" ${continuation}
     --timeout-ms 600000
 
   # Escalate a blocker or failure (pre-completion, when you need the
   # coordinator to do something before you can continue):
-  ${cli} orchestration send --to ${params.coordinatorHandle} --from ${params.workerHandle} \\
-    --type escalation --subject "Blocked: <reason>" \\
-    --body "<details>" \\
+  ${cli} orchestration send --to ${params.coordinatorHandle} --from ${params.workerHandle} ${continuation}
+    --type escalation --subject "Blocked: <reason>" ${continuation}
+    --body "<details>" ${continuation}
     --task-id ${params.taskId}
 
   # Check for messages from the coordinator:

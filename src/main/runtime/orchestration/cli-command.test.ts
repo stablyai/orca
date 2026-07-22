@@ -40,7 +40,7 @@ describe('resolveTerminalOrchestrationCliCommand', () => {
     ).toBe('orca-ide')
   })
 
-  it('preserves native and SSH bare-orca commands', () => {
+  it('preserves native bare-orca and isolates SSH orchestration from host collisions', () => {
     expect(
       resolveTerminalOrchestrationCliCommand({
         connectionId: null,
@@ -52,8 +52,26 @@ describe('resolveTerminalOrchestrationCliCommand', () => {
       resolveTerminalOrchestrationCliCommand({
         connectionId: 'ssh-1',
         isWsl: null,
-        worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+        worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
+        sshCliCommand: {
+          kind: 'posix-path',
+          executablePath: '/home/alice/.orca-relay/bin/orca-relay'
+        }
       })
-    ).toBe('orca')
+    ).toEqual({
+      kind: 'posix-path',
+      executablePath: '/home/alice/.orca-relay/bin/orca-relay'
+    })
+  })
+
+  it('fails before dispatch when an SSH launcher was not proven', () => {
+    expect(() =>
+      resolveTerminalOrchestrationCliCommand({
+        connectionId: 'ssh-1',
+        isWsl: false,
+        worktreeId: 'repo::/home/alice/repo',
+        sshCliCommand: null
+      })
+    ).toThrow(/remote CLI launcher was not installed/)
   })
 })

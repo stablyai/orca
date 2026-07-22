@@ -177,7 +177,7 @@ describe('PtyHandler', () => {
 
   it('spawns a PTY and returns an id', async () => {
     const result = await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
-    expect(result).toEqual({ id: 'pty-1' })
+    expect(result).toEqual({ id: 'pty-1', shellPath: expect.any(String) })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
   })
@@ -379,16 +379,22 @@ describe('PtyHandler', () => {
       .spyOn(ptyShellUtils, 'resolveDefaultShell')
       .mockReturnValue('/default-shell')
     try {
-      await dispatcher.callRequest('pty.spawn', {
+      const result = await dispatcher.callRequest('pty.spawn', {
         cols: 80,
         rows: 24,
         shellOverride: 'powershell.exe'
       })
+      expect(result).toEqual({ id: 'pty-1', shellPath: 'powershell.exe' })
       expect(mockPtySpawn).toHaveBeenCalledWith(
         'powershell.exe',
         expect.any(Array),
         expect.any(Object)
       )
+      expect(await dispatcher.callRequest('pty.listProcesses')).toEqual([
+        expect.objectContaining({ id: 'pty-1', shellPath: 'powershell.exe' })
+      ])
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      expect(JSON.parse(state)[0]?.shellPath).toBe('powershell.exe')
 
       mockPtySpawn.mockClear()
 
@@ -502,7 +508,14 @@ describe('PtyHandler', () => {
         cols: 80,
         rows: 24,
         shellOverride: 'wsl.exe',
-        terminalWindowsWslDistro: 'Ubuntu-24.04'
+        terminalWindowsWslDistro: 'Ubuntu-24.04',
+        env: {
+          WSLENV: 'KEEP_ME:ORCA_CLI_COMMAND/u',
+          ORCA_CLI_COMMAND: 'C:/Users/me/.orca-relay/bin/orca-relay.exe',
+          ORCA_RELAY_NODE_PATH: 'C:/Program Files/nodejs/node.exe',
+          ORCA_RELAY_DIR: 'C:/Users/me/.orca-remote/relay-v1',
+          ORCA_RELAY_SOCKET_PATH: '\\\\.\\pipe\\orca-relay-123'
+        }
       })
 
       expect(mockPtySpawn).toHaveBeenCalledWith(
@@ -510,6 +523,14 @@ describe('PtyHandler', () => {
         ['-d', 'Ubuntu-24.04'],
         expect.any(Object)
       )
+      const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(spawnEnv.WSLENV.split(':')).toEqual([
+        'KEEP_ME',
+        'ORCA_CLI_COMMAND/p',
+        'ORCA_RELAY_DIR/p',
+        'ORCA_RELAY_NODE_PATH/p',
+        'ORCA_RELAY_SOCKET_PATH'
+      ])
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -803,7 +824,10 @@ describe('PtyHandler', () => {
         id: 'pty-1',
         suppressReplayNotification: true
       })
-      expect(result).toEqual({ replay: '\x1b]777;orca-shell-ready' })
+      expect(result).toMatchObject({
+        replay: '\x1b]777;orca-shell-ready',
+        shellPath: expect.any(String)
+      })
     }
   )
 
@@ -894,7 +918,7 @@ describe('PtyHandler', () => {
         id: 'pty-1',
         suppressReplayNotification: true
       })
-      expect(result).toEqual({ replay: 'prompt$ ' })
+      expect(result).toMatchObject({ replay: 'prompt$ ', shellPath: expect.any(String) })
     } finally {
       aliveSpy.mockRestore()
     }
@@ -1048,7 +1072,7 @@ describe('PtyHandler', () => {
         id: 'pty-1',
         suppressReplayNotification: true
       })
-    ).resolves.toEqual({ replay: 'prompt' })
+    ).resolves.toEqual({ replay: 'prompt', shellPath: '/bin/zsh' })
   })
 
   it('leaves startup queries untouched for an unsupported relay capability version', async () => {
@@ -1272,7 +1296,7 @@ describe('PtyHandler', () => {
       suppressReplayNotification: true
     })
 
-    expect(result).toEqual({ replay: 'buffered output' })
+    expect(result).toMatchObject({ replay: 'buffered output', shellPath: expect.any(String) })
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.replay', expect.anything())
     vi.advanceTimersByTime(8)
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
@@ -1294,7 +1318,7 @@ describe('PtyHandler', () => {
 
     const result = await dispatcher.callRequest('pty.attach', { id: 'pty-1' })
 
-    expect(result).toEqual({})
+    expect(result).toEqual({ shellPath: expect.any(String) })
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.replay', {
       id: 'pty-1',
       data: 'buffered output'
@@ -1345,7 +1369,7 @@ describe('PtyHandler', () => {
         expectedPaneKey: 'tab-a:leaf-a',
         expectedTabId: 'tab-a'
       })
-    ).resolves.toEqual({})
+    ).resolves.toEqual({ shellPath: expect.any(String) })
   })
 
   it('notifies on PTY exit and removes from map', async () => {
@@ -1777,7 +1801,7 @@ describe('PtyHandler', () => {
       id: 'pty-1',
       suppressReplayNotification: true
     })
-    expect(r1).toEqual({ replay: 'initial output' })
+    expect(r1).toMatchObject({ replay: 'initial output', shellPath: expect.any(String) })
 
     dataCallback!(' more')
 
@@ -1785,7 +1809,7 @@ describe('PtyHandler', () => {
       id: 'pty-1',
       suppressReplayNotification: true
     })
-    expect(r2).toEqual({ replay: 'initial output more' })
+    expect(r2).toMatchObject({ replay: 'initial output more', shellPath: expect.any(String) })
   })
 
   it('second app restart still replays full buffer', async () => {
@@ -1822,7 +1846,8 @@ describe('PtyHandler', () => {
       suppressReplayNotification: true
     })
     expect(result).toEqual({
-      replay: '$ while true; do date; done\r\nMon Apr 28\r\nTue Apr 29\r\nWed Apr 30\r\n'
+      replay: '$ while true; do date; done\r\nMon Apr 28\r\nTue Apr 29\r\nWed Apr 30\r\n',
+      shellPath: expect.any(String)
     })
   })
 

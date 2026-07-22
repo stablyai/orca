@@ -1,6 +1,12 @@
+import { randomBytes } from 'node:crypto'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, joinRemotePath } from './ssh-remote-platform'
-import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
+import { SSH_ORCHESTRATION_CLI_COMMAND } from './ssh-orchestration-cli-command'
+import {
+  powerShellArguments,
+  powerShellLiteral,
+  powerShellNativeArg
+} from './ssh-remote-powershell'
 
 type RemoteCliInstallEnv = {
   binDir: string
@@ -17,8 +23,10 @@ type RemoteCliInstallFile = {
 
 export type RemoteCliInstallPlan = {
   launcherPath: string
+  orchestrationLauncherPath: string
   files: RemoteCliInstallFile[]
-  postWriteCommands: string[]
+  postWriteSteps: { binary: string; args: string[]; cwd?: string }[]
+  cleanupPaths: string[]
 }
 
 const WINDOWS_REMOTE_CLI_LAUNCHER_SOURCE = String.raw`using System;
@@ -146,14 +154,17 @@ function quoteSh(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
 }
 
-function createWindowsLauncherCompileCommand(
+function createWindowsLauncherCompileStep(
   binDir: string,
   sourceFileName: string,
-  launcherFileName: string,
-  launcherPath: string,
+  compiledFileName: string,
   sourcePath: string,
+  compiledPath: string,
+  launcherPath: string,
+  orchestrationTempPath: string,
+  orchestrationLauncherPath: string,
   legacyShimPath: string
-): string {
+): { binary: string; args: string[] } {
   // Why: legacy csc.exe mis-parses space-bearing absolute paths handed to it by
   // Windows PowerShell 5.1's native-argument quoting, so compile from the bin
   // directory and pass only the bare, space-free launcher file names.
@@ -162,49 +173,65 @@ function createWindowsLauncherCompileCommand(
     '/target:exe',
     '/optimize+',
     '/warnaserror+',
-    `/out:${launcherFileName}`,
+    `/out:${compiledFileName}`,
     sourceFileName
   ]
     .map(powerShellNativeArg)
     .join(' ')
-  return powerShellCommand(
-    [
-      `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(binDir)}`,
-      '$windowsDirectory = if ($env:WINDIR) { $env:WINDIR } else { $env:SystemRoot }',
-      `$compilerCandidates = @((Join-Path $windowsDirectory 'Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'), (Join-Path $windowsDirectory 'Microsoft.NET\\Framework\\v4.0.30319\\csc.exe'))`,
-      '$compiler = $compilerCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1',
-      "if (-not $compiler) { Write-Error 'Unable to find the .NET Framework C# compiler required for the Orca SSH CLI launcher.'; exit 1 }",
-      `& $compiler ${compilerArgs}`,
-      'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
-      `if (-not (Test-Path -LiteralPath ${powerShellLiteral(launcherPath)} -PathType Leaf)) { Write-Error 'The Orca SSH CLI launcher compiler produced no executable.'; exit 1 }`,
-      // Why: remove the legacy %* bridge only after a successful compile, so a
-      // host missing csc.exe keeps its existing CLI (orca.exe shadows orca.cmd).
-      `Remove-Item -LiteralPath ${powerShellLiteral(legacyShimPath)} -Force -ErrorAction SilentlyContinue`,
-      `Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Force`
-    ].join('; ')
-  )
+  const script = [
+    `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(binDir)}`,
+    '$windowsDirectory = if ($env:WINDIR) { $env:WINDIR } else { $env:SystemRoot }',
+    `$compilerCandidates = @((Join-Path $windowsDirectory 'Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'), (Join-Path $windowsDirectory 'Microsoft.NET\\Framework\\v4.0.30319\\csc.exe'))`,
+    '$compiler = $compilerCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1',
+    "if (-not $compiler) { Write-Error 'Unable to find the .NET Framework C# compiler required for the Orca SSH CLI launcher.'; exit 1 }",
+    `& $compiler ${compilerArgs}`,
+    'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+    `if (-not (Test-Path -LiteralPath ${powerShellLiteral(compiledPath)} -PathType Leaf)) { Write-Error 'The Orca SSH CLI launcher compiler produced no executable.'; exit 1 }`,
+    `Copy-Item -LiteralPath ${powerShellLiteral(compiledPath)} -Destination ${powerShellLiteral(orchestrationTempPath)} -Force -ErrorAction Stop`,
+    `Move-Item -LiteralPath ${powerShellLiteral(orchestrationTempPath)} -Destination ${powerShellLiteral(orchestrationLauncherPath)} -Force -ErrorAction Stop`,
+    `Move-Item -LiteralPath ${powerShellLiteral(compiledPath)} -Destination ${powerShellLiteral(launcherPath)} -Force -ErrorAction Stop`,
+    // Why: remove the legacy %* bridge only after a successful compile, so a
+    // host missing csc.exe keeps its existing CLI (orca.exe shadows orca.cmd).
+    `Remove-Item -LiteralPath ${powerShellLiteral(legacyShimPath)} -Force -ErrorAction SilentlyContinue`,
+    `Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Force`
+  ].join('; ')
+  return { binary: 'powershell.exe', args: powerShellArguments(script) }
 }
 
 export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliInstallPlan {
+  const installId = randomBytes(8).toString('hex')
   if (isWindowsRemoteHost(env.hostPlatform)) {
     const launcherFileName = 'orca.exe'
-    const sourceFileName = 'orca-launcher.cs'
+    const sourceFileName = `orca-launcher-${installId}.cs`
     const launcherPath = joinRemotePath(env.hostPlatform, env.binDir, launcherFileName)
     const sourcePath = joinRemotePath(env.hostPlatform, env.binDir, sourceFileName)
+    const compiledFileName = `orca-launcher-${installId}.exe`
+    const compiledPath = joinRemotePath(env.hostPlatform, env.binDir, compiledFileName)
     const legacyShimPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca.cmd')
+    const orchestrationLauncherPath = joinRemotePath(
+      env.hostPlatform,
+      env.binDir,
+      `${SSH_ORCHESTRATION_CLI_COMMAND}.exe`
+    )
+    const orchestrationTempPath = `${orchestrationLauncherPath}.${installId}.tmp`
     const binDir = joinRemotePath(env.hostPlatform, env.binDir)
     return {
       launcherPath,
+      orchestrationLauncherPath,
       files: [{ path: sourcePath, contents: WINDOWS_REMOTE_CLI_LAUNCHER_SOURCE }],
+      cleanupPaths: [sourcePath, compiledPath, orchestrationTempPath],
       // Why: compiling on the Windows target avoids shipping an unsigned
       // cross-host binary while ensuring argv never crosses cmd.exe's parser.
-      postWriteCommands: [
-        createWindowsLauncherCompileCommand(
+      postWriteSteps: [
+        createWindowsLauncherCompileStep(
           binDir,
           sourceFileName,
-          launcherFileName,
-          launcherPath,
+          compiledFileName,
           sourcePath,
+          compiledPath,
+          launcherPath,
+          orchestrationTempPath,
+          orchestrationLauncherPath,
           legacyShimPath
         )
       ]
@@ -212,27 +239,43 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
   }
 
   const launcherPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca')
+  const orchestrationLauncherPath = joinRemotePath(
+    env.hostPlatform,
+    env.binDir,
+    SSH_ORCHESTRATION_CLI_COMMAND
+  )
+  const launcherTempPath = `${launcherPath}.${installId}.tmp`
+  const orchestrationTempPath = `${orchestrationLauncherPath}.${installId}.tmp`
+  const launcherContents = [
+    // Why: profiles may replace PATH with only a competing CLI directory;
+    // `/usr/bin/env sh` would then fail before the absolute bridge can run.
+    '#!/bin/sh',
+    'set -eu',
+    `ORCA_RELAY_NODE_PATH=\${ORCA_RELAY_NODE_PATH:-${quoteSh(env.nodePath)}}`,
+    `ORCA_RELAY_DIR=\${ORCA_RELAY_DIR:-${quoteSh(env.relayDir)}}`,
+    `ORCA_RELAY_SOCKET_PATH=\${ORCA_RELAY_SOCKET_PATH:-${quoteSh(env.sockPath)}}`,
+    'if [ ! -S "$ORCA_RELAY_SOCKET_PATH" ]; then',
+    '  echo "Orca SSH CLI bridge cannot find the relay socket: $ORCA_RELAY_SOCKET_PATH" >&2',
+    '  exit 1',
+    'fi',
+    'exec "$ORCA_RELAY_NODE_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --orca-cli "$@"',
+    ''
+  ].join('\n')
   return {
     launcherPath,
+    orchestrationLauncherPath,
     files: [
       {
-        path: launcherPath,
-        contents: [
-          '#!/usr/bin/env sh',
-          'set -eu',
-          `ORCA_RELAY_NODE_PATH=\${ORCA_RELAY_NODE_PATH:-${quoteSh(env.nodePath)}}`,
-          `ORCA_RELAY_DIR=\${ORCA_RELAY_DIR:-${quoteSh(env.relayDir)}}`,
-          `ORCA_RELAY_SOCKET_PATH=\${ORCA_RELAY_SOCKET_PATH:-${quoteSh(env.sockPath)}}`,
-          'if [ ! -S "$ORCA_RELAY_SOCKET_PATH" ]; then',
-          '  echo "Orca SSH CLI bridge cannot find the relay socket: $ORCA_RELAY_SOCKET_PATH" >&2',
-          '  exit 1',
-          'fi',
-          'exec "$ORCA_RELAY_NODE_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --orca-cli "$@"',
-          ''
-        ].join('\n')
-      }
+        path: launcherTempPath,
+        contents: launcherContents
+      },
+      { path: orchestrationTempPath, contents: launcherContents }
     ],
-    // Surface chmod failures: a non-executable launcher must fail install loudly, not silently.
-    postWriteCommands: [`chmod +x ${quoteSh(launcherPath)}`]
+    cleanupPaths: [launcherTempPath, orchestrationTempPath],
+    postWriteSteps: [
+      { binary: 'chmod', args: ['+x', launcherTempPath, orchestrationTempPath] },
+      { binary: 'mv', args: ['-f', launcherTempPath, launcherPath] },
+      { binary: 'mv', args: ['-f', orchestrationTempPath, orchestrationLauncherPath] }
+    ]
   }
 }

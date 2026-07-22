@@ -484,6 +484,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
       }
 
+      // Why: prove the remote lifecycle-command route before mutating task
+      // state, so launcher-install failures leave the task ready to retry.
+      const cliCommand = runtime.getTerminalOrchestrationCliCommand(to)
       const ctx = db.createDispatchContext(
         params.task,
         to,
@@ -498,7 +501,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         coordinatorHandle: params.from ?? 'coordinator',
         workerHandle: to,
         devMode: params.devMode,
-        cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
+        cliCommand
       })
 
       let injected = false

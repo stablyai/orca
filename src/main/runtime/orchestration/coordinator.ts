@@ -3,6 +3,7 @@ import type { OrchestrationDb } from './db'
 import type { MessageRow, TaskRow, CoordinatorStatus } from './types'
 import { buildDispatchPreamble } from './preamble'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
+import type { OrchestrationCliCommand } from './cli-command'
 
 export type CoordinatorRuntime = {
   sendTerminalAgentPrompt(handle: string, prompt: string): Promise<unknown>
@@ -28,8 +29,8 @@ export type CoordinatorRuntime = {
   } | null>
   // Why: optional so lightweight runtime fakes keep compiling; when present, dispatch records the assignee's remint-stable pane identity.
   getTerminalPaneKey?(handle: string): string | null
-  // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
-  getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
+  // Why: native, WSL, and SSH workers require the command owned by their pane.
+  getTerminalOrchestrationCliCommand?(handle: string): OrchestrationCliCommand
 }
 
 // Why (§3.1): 20 lets normal monorepo day-velocity pass but trips the 168-commit harm from ORCHESTRATOR_FEEDBACK.md (chosen in msg_eff3a646110d).
@@ -414,6 +415,9 @@ export class Coordinator {
       }
     }
 
+    // Why: prove the remote lifecycle-command route before mutating task state;
+    // a failed SSH launcher install must leave the ready task retryable.
+    const cliCommand = this.runtime.getTerminalOrchestrationCliCommand?.(targetHandle)
     const dispatch = this.db.createDispatchContext(
       task.id,
       targetHandle,
@@ -429,10 +433,8 @@ export class Coordinator {
       coordinatorHandle: this.opts.coordinatorHandle,
       workerHandle: targetHandle,
       devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
-      ...(this.runtime.getTerminalOrchestrationCliCommand
-        ? { cliCommand: this.runtime.getTerminalOrchestrationCliCommand(targetHandle) }
-        : {}),
-      // Why (§3.2): pass baseDrift unconditionally — the preamble builder itself gates the drift section on behind > 0.
+      ...(cliCommand ? { cliCommand } : {}),
+      // Why (§3.2): the preamble builder itself gates the drift section on behind > 0.
       ...(baseDrift ? { baseDrift } : {})
     })
 

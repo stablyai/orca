@@ -1346,6 +1346,21 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
+    it('does not create a dispatch when SSH orchestration capability is unavailable', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockImplementation(() => {
+        throw new Error('SSH remote CLI launcher was not installed')
+      })
+
+      await expect(
+        call('orchestration.dispatch', { task: task.id, to: 'term_ssh' })
+      ).rejects.toThrow('remote CLI launcher was not installed')
+
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+    })
+
     it('uses caller-provided dev mode for injected preamble', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })

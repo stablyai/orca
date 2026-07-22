@@ -35,6 +35,89 @@ describe('SshPtyProvider', () => {
     expect(provider.getConnectionId()).toBe('conn-1')
   })
 
+  describe('orchestration CLI command', () => {
+    it('uses an absolute launcher path on POSIX hosts regardless of shell startup', () => {
+      provider = new SshPtyProvider('conn-1', mux as never, {
+        binDir: '/home/user/.orca-relay/bin',
+        relayDir: '/relay',
+        nodePath: '/node',
+        sockPath: '/socket',
+        orchestrationLauncherPath: '/home/user/.orca-relay/bin/orca-relay'
+      })
+
+      expect(provider.getOrchestrationCliCommand({ isWsl: false, shellPath: '/bin/zsh' })).toEqual({
+        kind: 'posix-path',
+        executablePath: '/home/user/.orca-relay/bin/orca-relay'
+      })
+    })
+
+    it('uses PowerShell invocation syntax for pwsh on a POSIX SSH host', () => {
+      provider = new SshPtyProvider('conn-1', mux as never, {
+        binDir: '/home/user/.orca-relay/bin',
+        relayDir: '/relay',
+        nodePath: '/node',
+        sockPath: '/socket',
+        orchestrationLauncherPath: "/home/user's/.orca-relay/bin/orca-relay"
+      })
+
+      expect(
+        provider.getOrchestrationCliCommand({ isWsl: false, shellPath: '/opt/microsoft/pwsh' })
+      ).toEqual({
+        kind: 'powershell-path',
+        executablePath: "/home/user's/.orca-relay/bin/orca-relay"
+      })
+    })
+
+    it.each([
+      ['WSL', true, 'C:/Windows/System32/wsl.exe', 'posix-env'],
+      ['PowerShell 5', false, 'powershell.exe', 'powershell-env'],
+      ['PowerShell 7', false, 'C:/Program Files/PowerShell/7/pwsh.exe', 'powershell-env'],
+      ['cmd', false, 'C:/Windows/System32/cmd.exe', 'cmd-env'],
+      ['Git Bash', false, 'C:/Program Files/Git/bin/bash.exe', 'posix-env']
+    ])('selects %s invocation syntax on Windows SSH hosts', (_name, isWsl, shellPath, kind) => {
+      provider = new SshPtyProvider('conn-1', mux as never, {
+        binDir: 'C:/Users/me/.orca-relay/bin',
+        relayDir: 'C:/Users/me/.orca-remote/relay-v1',
+        nodePath: 'C:/Program Files/nodejs/node.exe',
+        sockPath: '\\\\.\\pipe\\orca-relay-123',
+        orchestrationLauncherPath: 'C:/Users/me/.orca-relay/bin/orca-relay.exe',
+        pathDelimiter: ';'
+      })
+
+      expect(provider.getOrchestrationCliCommand({ isWsl, shellPath })).toEqual({
+        kind,
+        variableName: 'ORCA_CLI_COMMAND'
+      })
+    })
+
+    it('withholds capability after install failure or for an unknown Windows shell', () => {
+      const missingInstall = new SshPtyProvider('conn-1', mux as never, {
+        binDir: '/home/user/.orca-relay/bin',
+        relayDir: '/relay',
+        nodePath: '/node',
+        sockPath: '/socket'
+      })
+      const unknownWindowsShell = new SshPtyProvider('conn-1', mux as never, {
+        binDir: 'C:/Users/me/.orca-relay/bin',
+        relayDir: 'C:/relay',
+        nodePath: 'C:/node.exe',
+        sockPath: '\\\\.\\pipe\\orca',
+        orchestrationLauncherPath: 'C:/Users/me/.orca-relay/bin/orca-relay.exe',
+        pathDelimiter: ';'
+      })
+
+      expect(
+        missingInstall.getOrchestrationCliCommand({ isWsl: false, shellPath: '/bin/bash' })
+      ).toBeNull()
+      expect(
+        unknownWindowsShell.getOrchestrationCliCommand({
+          isWsl: false,
+          shellPath: 'C:/tools/nu.exe'
+        })
+      ).toBeNull()
+    })
+  })
+
   describe('spawn', () => {
     it('sends pty.spawn request through multiplexer', async () => {
       mux.request.mockResolvedValue({ id: 'pty-1' })
@@ -239,7 +322,8 @@ describe('SshPtyProvider', () => {
         binDir: '/home/user/.orca-relay/bin',
         relayDir: '/home/user/.orca-relay/relay-v1',
         nodePath: '/usr/bin/node',
-        sockPath: '/home/user/.orca-relay/relay.sock'
+        sockPath: '/home/user/.orca-relay/relay.sock',
+        orchestrationLauncherPath: '/home/user/.orca-relay/bin/orca-relay'
       })
 
       await provider.spawn({
@@ -256,6 +340,7 @@ describe('SshPtyProvider', () => {
           PATH: '/home/user/.orca-relay/bin:/usr/bin',
           ORCA_TERMINAL_HANDLE: 'term_ssh',
           [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
+          ORCA_CLI_COMMAND: '/home/user/.orca-relay/bin/orca-relay',
           ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
           ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
           ORCA_RELAY_NODE_PATH: '/usr/bin/node',
@@ -270,7 +355,8 @@ describe('SshPtyProvider', () => {
         binDir: '/home/user/.orca-relay/bin',
         relayDir: '/home/user/.orca-relay/relay-v1',
         nodePath: '/usr/bin/node',
-        sockPath: '/home/user/.orca-relay/relay.sock'
+        sockPath: '/home/user/.orca-relay/relay.sock',
+        orchestrationLauncherPath: '/home/user/.orca-relay/bin/orca-relay'
       })
 
       await provider.spawn({
@@ -286,6 +372,7 @@ describe('SshPtyProvider', () => {
         env: {
           ORCA_TERMINAL_HANDLE: 'term_ssh',
           [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
+          ORCA_CLI_COMMAND: '/home/user/.orca-relay/bin/orca-relay',
           ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
           ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
           ORCA_RELAY_NODE_PATH: '/usr/bin/node',
@@ -301,6 +388,7 @@ describe('SshPtyProvider', () => {
         relayDir: 'C:/Users/me/.orca-remote/relay-v1',
         nodePath: 'C:/Program Files/nodejs/node.exe',
         sockPath: '\\\\.\\pipe\\orca-relay-123',
+        orchestrationLauncherPath: 'C:/Users/me/.orca-relay/bin/orca-relay.exe',
         pathDelimiter: ';'
       })
 
@@ -317,6 +405,7 @@ describe('SshPtyProvider', () => {
         env: {
           Path: 'C:/Users/me/.orca-relay/bin;C:/Windows/System32;C:/Tools',
           [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
+          ORCA_CLI_COMMAND: 'C:/Users/me/.orca-relay/bin/orca-relay.exe',
           ORCA_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin',
           ORCA_RELAY_DIR: 'C:/Users/me/.orca-remote/relay-v1',
           ORCA_RELAY_NODE_PATH: 'C:/Program Files/nodejs/node.exe',
@@ -325,8 +414,70 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it.each([
+      {
+        name: 'buried POSIX entry',
+        binDir: '/home/user/.orca-relay/bin',
+        pathDelimiter: ':' as const,
+        pathKey: 'PATH',
+        input: '/host/bin:/home/user/.orca-relay/bin:/usr/bin',
+        expected: '/home/user/.orca-relay/bin:/host/bin:/usr/bin'
+      },
+      {
+        name: 'duplicate POSIX entries',
+        binDir: '/home/user/.orca-relay/bin',
+        pathDelimiter: ':' as const,
+        pathKey: 'PATH',
+        input: '/home/user/.orca-relay/bin:/usr/bin:/home/user/.orca-relay/bin:',
+        expected: '/home/user/.orca-relay/bin:/usr/bin:'
+      },
+      {
+        name: 'POSIX prefix lookalike and empty entries',
+        binDir: '/relay/[bin]*',
+        pathDelimiter: ':' as const,
+        pathKey: 'PATH',
+        input: ':/relay/[bin]*-old:/relay/[bin]*::/usr/bin',
+        expected: '/relay/[bin]*::/relay/[bin]*-old::/usr/bin'
+      },
+      {
+        name: 'case-insensitive Windows entries',
+        binDir: 'C:/Users/me/.orca-relay/bin',
+        pathDelimiter: ';' as const,
+        pathKey: 'Path',
+        input: 'C:/Tools;c:/users/ME/.ORCA-RELAY/BIN;C:/Windows',
+        expected: 'C:/Users/me/.orca-relay/bin;C:/Tools;C:/Windows'
+      }
+    ])('moves the relay bin first for $name', async (testCase) => {
+      mux.request.mockResolvedValue({ id: 'pty-path' })
+      provider = new SshPtyProvider('conn-1', mux as never, {
+        binDir: testCase.binDir,
+        relayDir: '/relay',
+        nodePath: '/node',
+        sockPath: '/socket',
+        orchestrationLauncherPath:
+          testCase.pathDelimiter === ';'
+            ? `${testCase.binDir}/orca-relay.exe`
+            : `${testCase.binDir}/orca-relay`,
+        pathDelimiter: testCase.pathDelimiter
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: { [testCase.pathKey]: testCase.input }
+      })
+
+      expect(mux.request.mock.calls[0]?.[1]?.env).toMatchObject({
+        [testCase.pathKey]: testCase.expected,
+        ORCA_CLI_COMMAND:
+          testCase.pathDelimiter === ';'
+            ? `${testCase.binDir}/orca-relay.exe`
+            : `${testCase.binDir}/orca-relay`
+      })
+    })
+
     it('reattaches an existing session and returns attach replay separately from snapshot', async () => {
-      mux.request.mockResolvedValue({ replay: 'buffered-output' })
+      mux.request.mockResolvedValue({ replay: 'buffered-output', shellPath: '/bin/zsh' })
 
       const result = await provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })
 
@@ -339,7 +490,8 @@ describe('SshPtyProvider', () => {
       expect(result).toEqual({
         id: 'ssh:conn-1@@pty-old',
         isReattach: true,
-        replay: 'buffered-output'
+        replay: 'buffered-output',
+        shellPath: '/bin/zsh'
       })
     })
 
@@ -439,11 +591,11 @@ describe('SshPtyProvider', () => {
   })
 
   it('attachForReconnect returns replay without relay notification', async () => {
-    mux.request.mockResolvedValue({ replay: 'restored output' })
+    mux.request.mockResolvedValue({ replay: 'restored output', shellPath: '/bin/zsh' })
 
     const result = await provider.attachForReconnect(scopedPty1)
 
-    expect(result).toEqual({ replay: 'restored output' })
+    expect(result).toEqual({ replay: 'restored output', shellPath: '/bin/zsh' })
     expect(mux.request).toHaveBeenCalledWith('pty.attach', {
       id: 'pty-1',
       suppressReplayNotification: true

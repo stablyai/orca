@@ -2,6 +2,11 @@ import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { buildDispatchPreamble } from './preamble'
 
+const itWithPwsh =
+  spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion']).status === 0
+    ? it
+    : it.skip
+
 function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[0]> = {}) {
   return {
     taskId: 'task_abc123',
@@ -182,6 +187,79 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('orca-ide orchestration check')
     expect(result).toContain('orca-ide orchestration ask')
     expect(result).not.toMatch(/(^|\s)orca orchestration/m)
+  })
+
+  it('uses the SSH relay command even when the desktop runtime is a dev build', () => {
+    const result = buildDispatchPreamble(
+      baseParams({
+        devMode: true,
+        cliCommand: {
+          kind: 'posix-path',
+          executablePath: "/home/me user/.orca-relay/bin/orca-relay's"
+        }
+      })
+    )
+
+    expect(result).toContain("'/home/me user/.orca-relay/bin/orca-relay'\\''s' orchestration send")
+    expect(result).toContain("'/home/me user/.orca-relay/bin/orca-relay'\\''s' orchestration check")
+    expect(result).toContain("'/home/me user/.orca-relay/bin/orca-relay'\\''s' orchestration ask")
+    expect(result).not.toContain('orca-dev orchestration')
+    expect(result).not.toMatch(/(^|\s)orca orchestration/m)
+  })
+
+  it.each([
+    [
+      'WSL or Git Bash',
+      { kind: 'posix-env' as const, variableName: 'ORCA_CLI_COMMAND' as const },
+      '"$ORCA_CLI_COMMAND" orchestration send',
+      '\\'
+    ],
+    [
+      'PowerShell on POSIX',
+      { kind: 'powershell-path' as const, executablePath: "/home/me user's/orca-relay" },
+      "& '/home/me user''s/orca-relay' orchestration send",
+      '`'
+    ],
+    [
+      'PowerShell',
+      { kind: 'powershell-env' as const, variableName: 'ORCA_CLI_COMMAND' as const },
+      '& $env:ORCA_CLI_COMMAND orchestration send',
+      '`'
+    ],
+    [
+      'cmd',
+      { kind: 'cmd-env' as const, variableName: 'ORCA_CLI_COMMAND' as const },
+      '"%ORCA_CLI_COMMAND%" orchestration send',
+      '^'
+    ]
+  ])('renders the exact %s launcher syntax', (_name, cliCommand, expected, continuation) => {
+    const result = buildDispatchPreamble(baseParams({ cliCommand }))
+
+    expect(result).toContain(expected)
+    expect(result).toContain(`${expected} --to term_coord --from term_worker ${continuation}\n`)
+    expect(result).not.toMatch(/(^|\s)orca orchestration/m)
+    expect(result).not.toContain('orca-relay orchestration')
+  })
+
+  itWithPwsh('executes the rendered absolute launcher command in POSIX-hosted PowerShell', () => {
+    const result = buildDispatchPreamble(
+      baseParams({ cliCommand: { kind: 'powershell-path', executablePath: '/bin/echo' } })
+    )
+    const checkCommand = result
+      .split('\n')
+      .find((line) => line.trim() === "& '/bin/echo' orchestration check --terminal term_worker")
+    expect(checkCommand).toBeTruthy()
+
+    const executed = spawnSync(
+      'pwsh',
+      ['-NoProfile', '-NonInteractive', '-Command', checkCommand!],
+      {
+        encoding: 'utf8'
+      }
+    )
+
+    expect(executed.status, executed.stderr).toBe(0)
+    expect(executed.stdout.trim()).toBe('orchestration check --terminal term_worker')
   })
 
   it('appends a BASE DRIFT section when baseDrift.behind > 0', () => {

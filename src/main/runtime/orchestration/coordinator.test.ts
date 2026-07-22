@@ -7,6 +7,7 @@ import {
   parseAllowStaleBaseFromSpec,
   type CoordinatorRuntime
 } from './coordinator'
+import type { OrchestrationCliCommand } from './cli-command'
 
 type DriftResult = {
   base: string
@@ -21,7 +22,7 @@ function createMockRuntime(): CoordinatorRuntime & {
   createdTerminalOptions: { title?: string }[]
   probeDriftCalls: string[]
   probeDriftResult: DriftResult
-  cliCommand: 'orca' | 'orca-ide'
+  cliCommand: OrchestrationCliCommand
   setProbeDrift(result: DriftResult): void
   throwProbeDrift: Error | null
 } {
@@ -37,7 +38,7 @@ function createMockRuntime(): CoordinatorRuntime & {
     createdTerminalOptions: [] as { title?: string }[],
     probeDriftCalls: [] as string[],
     probeDriftResult: null as DriftResult,
-    cliCommand: 'orca' as 'orca' | 'orca-ide',
+    cliCommand: 'orca' as OrchestrationCliCommand,
     throwProbeDrift: null as Error | null,
     setProbeDrift(result: DriftResult): void {
       mock.probeDriftResult = result
@@ -154,6 +155,33 @@ describe('Coordinator', () => {
     expect(result.completedTasks).toContain(task.id)
     expect(runtime.sentMessages.length).toBeGreaterThan(0)
     expect(runtime.sentMessages[0].text).toContain('orca-ide orchestration send')
+  })
+
+  it('leaves a ready task untouched when SSH orchestration capability is unavailable', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_ssh', worktreeId: 'wt1', connected: true, writable: true }]
+    runtime.getTerminalOrchestrationCliCommand = () => {
+      throw new Error('SSH remote CLI launcher was not installed')
+    }
+    const task = db.createTask({ spec: 'implement feature' })
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'build it',
+      coordinatorHandle: 'coord'
+    })
+
+    const dispatchTask = (
+      coordinator as unknown as {
+        dispatchTask(taskRow: typeof task, targetHandle: string): Promise<void>
+      }
+    ).dispatchTask.bind(coordinator)
+    await expect(dispatchTask(task, 'term_ssh')).rejects.toThrow(
+      'remote CLI launcher was not installed'
+    )
+
+    expect(db.getTask(task.id)?.status).toBe('ready')
+    expect(db.getDispatchContext(task.id)).toBeUndefined()
+    expect(runtime.sentMessages).toEqual([])
   })
 
   it('records the assignee pane key when the runtime can resolve one', async () => {

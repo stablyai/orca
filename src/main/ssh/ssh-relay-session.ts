@@ -3,7 +3,6 @@
 
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
-import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
@@ -52,8 +51,7 @@ import { PortScanner } from './ssh-port-scanner'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
-import { joinRemotePath, isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
-import { makeRemoteDirectoryCommand } from './ssh-remote-commands'
+import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { createRemoteCliInstallPlan } from './ssh-remote-cli-launcher'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -78,6 +76,7 @@ type RemoteCliBridgeEnv = {
   nodePath: string
   sockPath: string
   hostPlatform: RemoteHostPlatform
+  orchestrationLauncherPath?: string
   pathDelimiter?: ':' | ';'
 }
 
@@ -512,10 +511,16 @@ export class SshRelaySession {
       return false
     }
 
+    // Why: the install probe enters through the remote launcher and comes back
+    // over `orca.cli`, so register that bidirectional route before probing.
+    this.wireUpRemoteOrcaCli(mux)
     try {
-      await this.installRemoteOrcaCliLauncher()
+      const orchestrationLauncherPath = await this.installRemoteOrcaCliLauncher(mux)
+      if (this.remoteCliBridgeEnv) {
+        this.remoteCliBridgeEnv.orchestrationLauncherPath = orchestrationLauncherPath
+      }
     } catch (error) {
-      // Why: on MaxSessions=1 remotes the relay holds the only slot, so this raw-connection install can fail — don't fail the whole connection.
+      // Why: keep terminal access, but withhold orchestration until the launcher is proven.
       console.warn(
         `[ssh-relay-session] remote orca CLI launcher install failed for ${this.targetId}: ${
           error instanceof Error ? error.message : String(error)
@@ -525,8 +530,6 @@ export class SshRelaySession {
     if (shouldContinue && !shouldContinue()) {
       return false
     }
-
-    this.wireUpRemoteOrcaCli(mux)
 
     const ptyProvider = new SshPtyProvider(this.targetId, mux, this.remoteCliBridgeEnv ?? undefined)
     registerSshPtyProvider(this.targetId, ptyProvider)
@@ -628,39 +631,96 @@ export class SshRelaySession {
     }
   }
 
-  private async installRemoteOrcaCliLauncher(): Promise<void> {
+  private async installRemoteOrcaCliLauncher(mux: SshChannelMultiplexer): Promise<string> {
     if (!this.remoteCliBridgeEnv) {
-      return
+      throw new Error('Remote CLI bridge environment is unavailable')
     }
-    const { binDir, hostPlatform } = this.remoteCliBridgeEnv
+    const { binDir } = this.remoteCliBridgeEnv
     const plan = createRemoteCliInstallPlan(this.remoteCliBridgeEnv)
-    const conn = this.requireReadyConnection()
-    await execCommand(conn, makeRemoteDirectoryCommand(hostPlatform, binDir), {
-      wrapCommand: !isWindowsRemoteHost(hostPlatform)
-    })
-    if (typeof conn.writeFile === 'function') {
+    let installError: unknown = null
+    try {
+      await mux.request('fs.createDir', { dirPath: binDir })
       for (const file of plan.files) {
-        await conn.writeFile(file.path, file.contents, { hostPlatform })
+        await mux.request('fs.writeFile', { filePath: file.path, content: file.contents })
       }
-    } else {
-      const sftp = await conn.sftp()
-      try {
-        for (const file of plan.files) {
-          await new Promise<void>((resolve, reject) => {
-            const ws = sftp.createWriteStream(file.path)
-            sftp.once('error', reject)
-            ws.once('close', resolve)
-            ws.once('error', reject)
-            ws.end(file.contents)
-          })
+      for (const step of plan.postWriteSteps) {
+        const result = (await mux.request('agent.execNonInteractive', {
+          binary: step.binary,
+          args: step.args,
+          ...(step.cwd ? { cwd: step.cwd } : {}),
+          operation: 'ssh-cli-launcher-install',
+          timeoutMs: 30_000
+        })) as {
+          exitCode: number | null
+          timedOut: boolean
+          spawnError?: string
+          stderr?: string
         }
-      } finally {
-        sftp.end()
+        if (result.spawnError || result.timedOut || result.exitCode !== 0) {
+          throw new Error(
+            result.spawnError || result.stderr || `launcher install exited ${result.exitCode}`
+          )
+        }
       }
+    } catch (error) {
+      // Why: compiler/chmod failures can recur on every reconnect; random
+      // staging names must not accumulate indefinitely on the remote host.
+      await Promise.allSettled(
+        plan.cleanupPaths.map((targetPath) =>
+          mux.request('fs.deletePath', { targetPath, recursive: false })
+        )
+      )
+      installError = error
     }
-    for (const command of plan.postWriteCommands) {
-      await execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(hostPlatform) })
+
+    const probe = (await mux.request('agent.execNonInteractive', {
+      binary: plan.orchestrationLauncherPath,
+      args: ['status', '--json'],
+      env: {
+        ORCA_RELAY_NODE_PATH: this.remoteCliBridgeEnv.nodePath,
+        ORCA_RELAY_DIR: this.remoteCliBridgeEnv.relayDir,
+        ORCA_RELAY_SOCKET_PATH: this.remoteCliBridgeEnv.sockPath
+      },
+      operation: 'ssh-cli-launcher-probe',
+      timeoutMs: 30_000
+    })) as {
+      exitCode: number | null
+      timedOut: boolean
+      spawnError?: string
+      stderr?: string
+      stdout?: string
     }
+    let parsedProbe: unknown
+    try {
+      parsedProbe = JSON.parse(probe.stdout ?? '')
+    } catch {
+      parsedProbe = null
+    }
+    const probeRecord = parsedProbe as {
+      app?: { running?: unknown }
+      runtime?: { reachable?: unknown }
+      result?: unknown
+    } | null
+    const status = (probeRecord?.result ?? probeRecord) as {
+      app?: { running?: unknown }
+      runtime?: { reachable?: unknown }
+    } | null
+    const hasExpectedStatus = status?.app?.running === true && status.runtime?.reachable === true
+    if (probe.spawnError || probe.timedOut || probe.exitCode !== 0 || !hasExpectedStatus) {
+      const probeMessage =
+        probe.spawnError ||
+        probe.stderr ||
+        (probe.exitCode !== 0
+          ? `launcher probe exited ${probe.exitCode}`
+          : 'launcher probe returned an invalid Orca status response')
+      if (installError) {
+        const installMessage =
+          installError instanceof Error ? installError.message : String(installError)
+        throw new Error(`${installMessage}; existing launcher probe failed: ${probeMessage}`)
+      }
+      throw new Error(probeMessage)
+    }
+    return plan.orchestrationLauncherPath
   }
 
   private wireUpRemoteOrcaCli(mux: SshChannelMultiplexer): void {
@@ -1039,6 +1099,9 @@ export class SshRelaySession {
         }
         const appPtyId = toAppSshPtyId(this.targetId, ptyId)
         setPtyOwnership(appPtyId, this.targetId)
+        if (attachResult.shellPath) {
+          this.runtime?.recordPtyShellPath(appPtyId, attachResult.shellPath)
+        }
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'attached')
         this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
       } catch (err) {

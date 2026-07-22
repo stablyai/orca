@@ -1573,7 +1573,7 @@ describe('registerPtyHandlers', () => {
             env: Record<string, string>
             sessionId?: string
             isNewSession?: boolean
-          }) => ({
+          }): Promise<{ id: string; shellPath?: string; wslDistro?: string | null }> => ({
             id: options.sessionId ?? 'daemon-pty',
             ...(reportedWslDistro !== undefined ? { wslDistro: reportedWslDistro } : {})
           })
@@ -2153,7 +2153,11 @@ describe('registerPtyHandlers', () => {
           }): Promise<{ id: string }>
         }
         const leafId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-        setupDaemonAdapter()
+        const daemonSpawn = setupDaemonAdapter()
+        daemonSpawn.mockResolvedValueOnce({
+          id: 'daemon-runtime',
+          shellPath: '/bin/actual-remote-shell'
+        })
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -2179,7 +2183,8 @@ describe('registerPtyHandlers', () => {
           'wt-runtime',
           null,
           { tabId: 'tab-1', leafId },
-          false
+          false,
+          '/bin/actual-remote-shell'
         )
       })
 
@@ -2187,6 +2192,7 @@ describe('registerPtyHandlers', () => {
         await withWin32Platform(async () => {
           _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
           const daemonSpawn = setupDaemonAdapter()
+          daemonSpawn.mockResolvedValueOnce({ id: 'daemon-wsl', shellPath: 'wsl.exe' })
           const runtime = {
             setPtyController: vi.fn(),
             registerPty: vi.fn(),
@@ -2240,7 +2246,8 @@ describe('registerPtyHandlers', () => {
             'repo-1::C:\\repo',
             null,
             undefined,
-            true
+            true,
+            'wsl.exe'
           )
         })
       })
@@ -5285,7 +5292,8 @@ describe('registerPtyHandlers', () => {
       'wt-1',
       null,
       { tabId: 'tab-1', leafId },
-      false
+      false,
+      undefined
     )
   })
 
@@ -5318,7 +5326,8 @@ describe('registerPtyHandlers', () => {
       'wt-1',
       null,
       undefined,
-      false
+      false,
+      undefined
     )
   })
 

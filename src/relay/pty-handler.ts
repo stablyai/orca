@@ -16,6 +16,7 @@ import {
   listShellProfiles
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
+import { addSshRelayWslEnv, isWindowsWslShell } from './ssh-relay-wsl-env'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
@@ -58,6 +59,7 @@ function isMissingNodePtyNativeBinding(error: unknown): boolean {
 type ManagedPty = {
   id: string
   pty: IPty
+  shellPath: string
   initialCwd: string
   buffered: string
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
@@ -202,6 +204,7 @@ type PtyProcessSummary = {
   id: string
   cwd: string
   title: string
+  shellPath: string
   worktreeId?: string
   terminalHandle?: string
 }
@@ -212,6 +215,7 @@ type SerializedPtyEntry = {
   cols: number
   rows: number
   cwd: string
+  shellPath?: string
   paneKey?: string
   tabId?: string
   attachIdentity?: PtyIdentity
@@ -800,7 +804,7 @@ export class PtyHandler {
   private async spawn(
     params: Record<string, unknown>,
     context?: RequestContext
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; shellPath: string }> {
     const env = params.env as Record<string, string> | undefined
     const worktreeId = env?.ORCA_WORKTREE_ID
     const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
@@ -816,7 +820,7 @@ export class PtyHandler {
   private async spawnAfterAdmission(
     params: Record<string, unknown>,
     context?: RequestContext
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; shellPath: string }> {
     const pty = await this.loadPty()
     if (!pty) {
       throw new Error('node-pty is not available on this remote host')
@@ -855,6 +859,9 @@ export class PtyHandler {
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command }, envToDelete)
+    if (process.platform === 'win32' && isWindowsWslShell(shell)) {
+      addSshRelayWslEnv(spawnEnv)
+    }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
@@ -910,6 +917,7 @@ export class PtyHandler {
     const managed: ManagedPty = {
       id,
       pty: term,
+      shellPath: shell,
       initialCwd: cwd,
       buffered: '',
       paneKey,
@@ -954,10 +962,13 @@ export class PtyHandler {
           : STARTUP_COMMAND_WRITE_DELAY_MS
       )
     }
-    return { id }
+    return { id, shellPath: shell }
   }
 
-  private async attach(params: Record<string, unknown>): Promise<{ replay?: string }> {
+  private async attach(params: Record<string, unknown>): Promise<{
+    replay?: string
+    shellPath: string
+  }> {
     const id = params.id as string
     const managed = this.ptys.get(id)
     // Why: after dispose, pty.kill is a POSIX no-op; treat disposed as not-found so failures aren't silent.
@@ -998,11 +1009,11 @@ export class PtyHandler {
       this.pendingOutputByPty.delete(id)
       this.clearOutputFlushTimerIfIdle()
       if (params.suppressReplayNotification) {
-        return { replay: managed.buffered }
+        return { replay: managed.buffered, shellPath: managed.shellPath }
       }
       this.dispatcher.notify('pty.replay', { id, data: managed.buffered })
     }
-    return {}
+    return { shellPath: managed.shellPath }
   }
 
   private writeData(params: Record<string, unknown>): void {
@@ -1208,6 +1219,7 @@ export class PtyHandler {
         id,
         cwd: managed.initialCwd,
         title,
+        shellPath: managed.shellPath,
         ...(managed.worktreeId ? { worktreeId: managed.worktreeId } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
@@ -1230,6 +1242,7 @@ export class PtyHandler {
         cols,
         rows,
         cwd: managed.initialCwd,
+        shellPath: managed.shellPath,
         paneKey: managed.paneKey,
         tabId: managed.tabId,
         attachIdentity: managed.attachIdentity,
@@ -1322,6 +1335,7 @@ export class PtyHandler {
     this.wireAndStore({
       id: entry.id,
       pty: term,
+      shellPath: shell,
       initialCwd: entry.cwd,
       buffered: '',
       paneKey: entry.paneKey,

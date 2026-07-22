@@ -5,5 +5,16 @@ export {
 } from '../../shared/powershell-native-argument'
 
 export function powerShellCommand(script: string): string {
-  return `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(script)}`
+  return `powershell.exe ${powerShellArguments(script).join(' ')}`
+}
+
+export function powerShellArguments(script: string): string[] {
+  return [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-EncodedCommand',
+    encodePowerShellCommand(script)
+  ]
 }

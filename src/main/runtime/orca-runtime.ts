@@ -524,7 +524,10 @@ import {
 } from '../project-runtime-git-options'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
+import {
+  resolveTerminalOrchestrationCliCommand,
+  type OrchestrationCliCommand
+} from './orchestration/cli-command'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
@@ -1064,6 +1067,7 @@ type RuntimePtyWorktreeRecord = {
   // selection must follow the pane that executes it, not process.platform.
   isWsl: boolean | null
   wslDistro: string | null
+  shellPath: string | null
   // Why: background CLI PTYs can outlive a failed renderer reveal. Preserve the
   // spawn-time tab/pane identity so later reveals can adopt under the env key.
   tabId: string | null
@@ -6605,12 +6609,20 @@ export class OrcaRuntimeService {
     }
   }
 
+  recordPtyShellPath(ptyId: string, shellPath: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.shellPath = shellPath
+    }
+  }
+
   registerPty(
     ptyId: string,
     worktreeId: string,
     connectionId: string | null = null,
     binding?: { tabId: string; leafId: string },
-    isWsl?: boolean
+    isWsl?: boolean,
+    shellPath?: string
   ): void {
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
@@ -6622,6 +6634,7 @@ export class OrcaRuntimeService {
       connected: true,
       connectionId,
       ...(isWsl !== undefined ? { isWsl } : {}),
+      ...(shellPath !== undefined ? { shellPath } : {}),
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {})
     })
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
@@ -8972,7 +8985,7 @@ export class OrcaRuntimeService {
       : undefined
   }
 
-  getTerminalOrchestrationCliCommand(handle: string): 'orca' | 'orca-ide' {
+  getTerminalOrchestrationCliCommand(handle: string): OrchestrationCliCommand {
     let pty: RuntimePtyWorktreeRecord | null = null
     try {
       const ptyId = this.resolveLeafForHandle(handle)?.ptyId
@@ -8983,10 +8996,17 @@ export class OrcaRuntimeService {
     if (!pty) {
       return 'orca'
     }
+    const sshCliCommand = pty.connectionId
+      ? (this.getSshProviderFn?.(pty.connectionId)?.getOrchestrationCliCommand?.({
+          isWsl: pty.isWsl === true,
+          shellPath: pty.shellPath
+        }) ?? null)
+      : undefined
     return resolveTerminalOrchestrationCliCommand({
       connectionId: pty.connectionId,
       isWsl: pty.isWsl,
       worktreeId: pty.worktreeId,
+      sshCliCommand,
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined
@@ -22581,6 +22601,7 @@ export class OrcaRuntimeService {
         | 'connectionId'
         | 'isWsl'
         | 'wslDistro'
+        | 'shellPath'
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
@@ -22603,6 +22624,7 @@ export class OrcaRuntimeService {
         connectionId,
         isWsl: state.isWsl ?? null,
         wslDistro,
+        shellPath: state.shellPath ?? null,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
         launchConfig: null,
@@ -22664,6 +22686,9 @@ export class OrcaRuntimeService {
       } else {
         this.wslDistroByPtyId.delete(ptyId)
       }
+    }
+    if (state.shellPath !== undefined) {
+      pty.shellPath = state.shellPath
     }
     if (state.tabId !== undefined) {
       pty.tabId = state.tabId
@@ -22752,7 +22777,8 @@ export class OrcaRuntimeService {
       }
       if (worktreeId) {
         this.recordPtyWorktree(session.id, worktreeId, {
-          connected: true
+          connected: true,
+          ...(session.shellPath ? { shellPath: session.shellPath } : {})
         })
       }
       // Why: fire-and-forget so this listing hot path doesn't serialize a relay round-trip per session and a throw can't abort the sweep below.
