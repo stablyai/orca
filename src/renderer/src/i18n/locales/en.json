@@ -9335,7 +9335,7 @@
           "checkAgain": "Check for Server Updates",
           "updating": "Updating servers…",
           "updateAll": "Update {{value0}} servers",
-          "noUpdates": "No updates available",
+          "noUpdates": "All servers are up to date.",
           "updateOne": "Update server",
           "downloadProgress": "{{value0}} download progress",
           "liveTabOne": "1 live tab",

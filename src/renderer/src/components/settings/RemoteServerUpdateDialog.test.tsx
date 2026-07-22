@@ -62,8 +62,8 @@ describe('RemoteServerUpdateDialog', () => {
     await act(async () => root.render(<RemoteServerUpdateDialog />))
 
     expect(storeMock.state.refreshRemoteServerUpdates).toHaveBeenCalledOnce()
-    expect(container.textContent).toContain('Check for Server Updates')
-    expect(container.textContent).not.toContain('No updates available')
+    expect(container.textContent).toContain('All servers are up to date.')
+    expect(container.textContent).not.toContain('Check for Server Updates')
     expect(container.textContent).not.toContain('Update server')
 
     await act(async () => root.unmount())
@@ -81,7 +81,7 @@ describe('RemoteServerUpdateDialog', () => {
 
     await act(async () => root.render(<RemoteServerUpdateDialog />))
 
-    expect(container.textContent).toContain('Check for Server Updates')
+    expect(container.textContent).not.toContain('Check for Server Updates')
     expect(container.textContent).toContain('Update server')
 
     await act(async () => root.unmount())

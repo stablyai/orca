@@ -1,5 +1,5 @@
 import type React from 'react'
-import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,7 +14,6 @@ import { Progress } from '@/components/ui/progress'
 import { useAppStore } from '@/store'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import {
   getRemoteServerManualUpdateHelp,
   RemoteServerUpdateStatus
@@ -110,10 +109,14 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const start = useAppStore((state) => state.startRemoteServerUpdates)
-  const updateCheckHint = getUpdateCheckHint()
   const eligible = entries.filter(
     (entry) => entry.phase === 'available' || entry.phase === 'failed'
   )
+  const allCurrent =
+    entries.length > 0 &&
+    !checking &&
+    !running &&
+    entries.every((entry) => entry.phase === 'current' || entry.phase === 'updated')
   const liveTabCount = eligible.reduce((total, entry) => total + entry.liveTabCount, 0)
   const liveLeafCount = eligible.reduce((total, entry) => total + entry.liveLeafCount, 0)
   const liveTabLabel =
@@ -202,23 +205,25 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
           )}
         </div>
 
-        <DialogFooter className="items-center sm:justify-start">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            title={updateCheckHint}
-            onClick={(event) => void refresh(getUpdateCheckClickOptions(event))}
-            disabled={checking || running}
-          >
-            {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+        {checking ? (
+          <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
             {translate(
-              'auto.components.settings.RemoteServerUpdateDialog.checkAgain',
-              'Check for Server Updates'
+              'auto.components.settings.RemoteServerUpdateDialog.checking',
+              'Checking paired servers…'
             )}
-          </Button>
-          {eligible.length > 0 || running ? (
+          </div>
+        ) : allCurrent ? (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.RemoteServerUpdateDialog.noUpdates',
+              'All servers are up to date.'
+            )}
+          </p>
+        ) : null}
+
+        {eligible.length > 0 || running ? (
+          <DialogFooter>
             <Button
               type="button"
               size="sm"
@@ -243,8 +248,8 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
                       { value0: eligible.length }
                     )}
             </Button>
-          ) : null}
-        </DialogFooter>
+          </DialogFooter>
+        ) : null}
       </DialogContent>
     </Dialog>
   )
