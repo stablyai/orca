@@ -7,7 +7,9 @@ import type { PanelSplitChoice } from './panel-split-candidates'
  *  so they must survive re-renders and tree edits. */
 export type PanelCanvasPanelLeaf = {
   id: string
-  kind: 'terminal' | 'web'
+  /** All three reference a pinned User Panel entry by id and differ only in
+   *  what the tile renders: a PTY, a webview, or a collab whiteboard. */
+  kind: 'terminal' | 'web' | 'canvas'
   panelId: string
 }
 
@@ -45,7 +47,10 @@ function mintId(): string {
   return crypto.randomUUID()
 }
 
-export function canvasLeafFor(kind: 'terminal' | 'web', panelId: string): PanelCanvasLeaf {
+export function canvasLeafFor(
+  kind: PanelCanvasPanelLeaf['kind'],
+  panelId: string
+): PanelCanvasLeaf {
   return { id: mintId(), kind, panelId }
 }
 

@@ -785,7 +785,15 @@ export type TabContentType =
   | 'check-details'
   | 'browser'
   | 'simulator'
+  /** A collab whiteboard scoped to this worktree, opened beside the terminal.
+   *  Ephemeral: it dies with the workspace and never enters the User Panels
+   *  tree — that is what separates it from a `PinnedCanvasPanel`. */
+  | 'collab-canvas'
 
+// Why 'collab-canvas' is deliberately absent: this union drives tab cycling,
+// the jump palette, and modal return-focus, which all narrow it further. Board
+// tabs join those flows in G1 with the UI in hand — widening it here would only
+// force six unrelated modules to grow a case they cannot yet render.
 export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
@@ -3351,6 +3359,27 @@ export type ManualRepoOrderEntry = {
   repoId: string
 }
 
+/** A collaborative drawing board pinned to the left sidebar under the User
+ *  Panels root — the operator and one bound omp agent share the surface.
+ *
+ *  Why `boardId` is separate from `id`: `id` identifies the *sidebar entry*
+ *  (rename it, move it between groups, delete it), while `boardId` keys the
+ *  persisted tldraw snapshot and the agent's omp `--session-dir`. Keeping them
+ *  distinct means a re-pinned board keeps its drawing and its conversation.
+ *
+ *  Not to be confused with Orca's `panel-canvas` subsystem, which is the
+ *  *tiling layout* of panels. This is a whiteboard. */
+export type PinnedCanvasPanel = {
+  id: string
+  title: string
+  /** Stable key for the tldraw snapshot + the bound agent's session dir. */
+  boardId: string
+  /** Panel tree group id under the User Panels root; absent = top-level. */
+  groupId?: string
+  /** Sort order within the group (or root). */
+  order?: number
+}
+
 /** A user-configured web page pinned to the left sidebar. */
 export type PinnedWebPanel = {
   id: string
@@ -3422,7 +3451,19 @@ export type PanelLayoutBrowserLeaf = {
   label?: string
 }
 
-export type PanelLayoutLeaf = PanelLayoutPanelLeaf | PanelLayoutShellLeaf | PanelLayoutBrowserLeaf
+/** A collab whiteboard tile referencing a pinned `PinnedCanvasPanel`, so a
+ *  board can sit in a saved layout beside btop and a browser. The board's
+ *  drawing lives in its own snapshot file, so the layout only carries the id. */
+export type PanelLayoutCanvasLeaf = {
+  kind: 'canvas'
+  panelId: string
+}
+
+export type PanelLayoutLeaf =
+  | PanelLayoutPanelLeaf
+  | PanelLayoutShellLeaf
+  | PanelLayoutBrowserLeaf
+  | PanelLayoutCanvasLeaf
 
 /** A resizable split holding two or more tiles or nested splits. `sizes` are
  *  relative flex weights matching `children`; absent means equal shares. */
