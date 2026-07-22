@@ -121,6 +121,8 @@ Dispatch rules:
 
 - `--inject` sends the task spec plus preamble into a recognized agent CLI so it can report `worker_done`.
 - If the target is a bare shell, omit `--inject`, dispatch for tracking if needed, then send the prompt manually with `orca terminal send --terminal <handle> --text <prompt> --enter --json`.
+- After reconnect, a pane may remint a new terminal handle while keeping the same pane identity. Recover with `dispatch --to <new-handle>` against the still-active task: Orca rebinds the existing dispatch (same `taskId`/`dispatchId`) instead of opening a second concurrent dispatch. Do not `task-update --status ready` first when you need to preserve that dispatch id.
+- `task-update --status ready` releases any active dispatch in the same write so task/dispatch status cannot diverge; the next dispatch mints a new `dispatchId`.
 - After 3 consecutive failures on one task, the dispatch context circuit-breaks and the task is marked failed.
 - Use `task-list --brief --json` for coordinator sweeps; it collapses whitespace and caps each echoed spec at 160 characters (`spec_truncated` marks shortened rows). Omit `--brief` when the full spec is required, or when an older CLI rejects it as an unknown flag.
 

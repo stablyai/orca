@@ -1323,7 +1323,7 @@ describe('orchestration RPC methods', () => {
           task: child.id,
           to: 'term_a'
         })
-      ).rejects.toThrow('only ready tasks can be dispatched')
+      ).rejects.toThrow(/only ready or recoverable dispatched tasks can be dispatched/)
     })
 
     it('rolls back active dispatch when injection fails', async () => {
@@ -1344,6 +1344,70 @@ describe('orchestration RPC methods', () => {
 
       expect(db.getTask(task.id)?.status).toBe('ready')
       expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
+    })
+
+    it('recovers a reminted same-pane handle without minting a new dispatch id', async () => {
+      setup()
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_old' || handle === 'term_new' ? `tab_1:${leafId}` : null
+      )
+      const task = db.createTask({ spec: 'work' })
+      const original = db.createDispatchContext(task.id, 'term_old', `tab_1:${leafId}`)
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_new'
+      })) as { dispatch: { id: string; assignee_handle: string }; recovered: boolean }
+
+      expect(result.recovered).toBe(true)
+      expect(result.dispatch.id).toBe(original.id)
+      expect(result.dispatch.assignee_handle).toBe('term_new')
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getActiveDispatchForTerminal('term_old')).toBeUndefined()
+      expect(db.getActiveDispatchForTerminal('term_new')?.id).toBe(original.id)
+    })
+
+    it('rolls back a remint rebind when injection fails', async () => {
+      setup()
+      const leafId = '22222222-2222-4222-9222-222222222222'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_old' || handle === 'term_new' ? `tab_1:${leafId}` : null
+      )
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockRejectedValue(
+        new Error('terminal_not_writable')
+      )
+      const task = db.createTask({ spec: 'work' })
+      const original = db.createDispatchContext(task.id, 'term_old', `tab_1:${leafId}`)
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_new',
+          inject: true
+        })
+      ).rejects.toThrow('terminal_not_writable')
+
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getDispatchContextById(original.id)?.status).toBe('failed')
+      expect(db.getActiveDispatchForTask(task.id)).toBeUndefined()
+    })
+
+    it('still rejects a second task on a reminted handle for an occupied pane', async () => {
+      setup()
+      const leafId = '33333333-3333-4333-9333-333333333333'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(`tab_1:${leafId}`)
+      const first = db.createTask({ spec: 'first' })
+      const second = db.createTask({ spec: 'second' })
+      db.createDispatchContext(first.id, 'term_old', `tab_1:${leafId}`)
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: second.id,
+          to: 'term_new'
+        })
+      ).rejects.toThrow(/already has an active dispatch/)
     })
 
     it('uses caller-provided dev mode for injected preamble', async () => {

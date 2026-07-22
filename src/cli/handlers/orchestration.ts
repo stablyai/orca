@@ -589,6 +589,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string } | null
       injected?: boolean
+      recovered?: boolean
       dryRun?: boolean
       preamble?: string
     }>('orchestration.dispatch', {
@@ -604,7 +605,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       if (r.dryRun) {
         return r.preamble ?? ''
       }
-      const base = `Dispatched ${r.dispatch?.task_id} -> ${r.dispatch?.id} [${r.dispatch?.status}]`
+      const action = r.recovered ? 'Recovered' : 'Dispatched'
+      const base = `${action} ${r.dispatch?.task_id} -> ${r.dispatch?.id} [${r.dispatch?.status}]`
       return r.preamble ? `${base}\n\n--- Preamble ---\n${r.preamble}` : base
     })
   },

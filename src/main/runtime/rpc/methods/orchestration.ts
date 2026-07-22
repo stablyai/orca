@@ -468,8 +468,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
       const to = params.to
 
-      if (task.status !== 'ready') {
-        throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
+      // Why: createDispatchContext owns ready-vs-recover; dispatched same-pane remints rebind the live handle without minting a new dispatchId.
+      if (task.status !== 'ready' && task.status !== 'dispatched') {
+        throw new Error(
+          `Task ${params.task} is ${task.status}; only ready or recoverable dispatched tasks can be dispatched`
+        )
       }
 
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
@@ -484,11 +487,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
       }
 
+      const previousActive = db.getActiveDispatchForTask(params.task)
       const ctx = db.createDispatchContext(
         params.task,
         to,
         runtime.getTerminalPaneKey(to) ?? undefined
       )
+      const recovered = Boolean(previousActive && previousActive.id === ctx.id)
 
       // Why: built after ctx so dispatchId is the real ctx.id, letting heartbeats attribute liveness to a specific dispatch context, not just a task.
       const preamble = buildDispatchPreamble({
@@ -514,9 +519,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       // Why: returnPreamble is opt-in because the preamble is several hundred bytes most callers don't need in the response.
       if (params.returnPreamble) {
-        return { dispatch: ctx, injected, preamble }
+        return { dispatch: ctx, injected, recovered, preamble }
       }
-      return { dispatch: ctx, injected }
+      return { dispatch: ctx, injected, recovered }
     }
   }),
 
