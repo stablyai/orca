@@ -46,11 +46,19 @@ describe('G2 live omp dogfood (node-b transcript)', () => {
     expect(payload.usesExistingSessionAgent).toBe(true)
 
     const dispatch = vi.fn()
-    const result = injectCollabPayloadIntoTerminal(payload, dispatch)
-    expect(result).toEqual({ ok: true, usesExistingSessionAgent: true })
+    const result = injectCollabPayloadIntoTerminal(payload, {
+      tabId: 'term-g2-dogfood',
+      dispatch
+    })
+    expect(result).toEqual({
+      ok: true,
+      usesExistingSessionAgent: true,
+      tabId: 'term-g2-dogfood'
+    })
     expect(dispatch).toHaveBeenCalledTimes(1)
     const ev = dispatch.mock.calls[0][0] as CustomEvent
     expect(ev.type).toBe(PASTE_TERMINAL_TEXT_EVENT)
+    expect(ev.detail.tabId).toBe('term-g2-dogfood')
     expect(ev.detail.text).toContain('g2-dogfood-board')
     expect(ev.detail.text).toContain(selection.textDigest)
 
