@@ -10,7 +10,7 @@ export async function inspectWorkerTerminal(
 ): Promise<{
   terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
   exact: boolean
-  status: 'unattached' | 'missing' | 'identity_changed' | 'running'
+  status: 'unattached' | 'missing' | 'identity_changed' | 'running' | 'exited'
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
   if (!worker?.agent_terminal_handle) {
@@ -25,7 +25,11 @@ export async function inspectWorkerTerminal(
     paneKey: runtime.getTerminalPaneKey(worker.agent_terminal_handle),
     processIncarnation: runtime.getTerminalProcessIncarnation(worker.agent_terminal_handle)
   })
-  return { terminal, exact, status: exact ? 'running' : 'identity_changed' }
+  return {
+    terminal,
+    exact,
+    status: exact ? (terminal.connected === false ? 'exited' : 'running') : 'identity_changed'
+  }
 }
 
 export function exposeWorker(worker: WorkerDispatchRow) {

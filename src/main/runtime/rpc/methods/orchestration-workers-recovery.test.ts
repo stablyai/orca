@@ -113,6 +113,31 @@ describe('orchestration worker recovery', () => {
     expect(db.getTask(task.id)?.status).toBe('blocked')
   })
 
+  it('labels an exact but disconnected worker as exited and does not close it again', async () => {
+    const { task, dispatch } = createWorker()
+    vi.mocked(runtime.showTerminal).mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'repo::worktree',
+      connected: false,
+      writable: false
+    } as never)
+
+    await expect(
+      call('orchestration.workerShow', { dispatch: dispatch.id })
+    ).resolves.toMatchObject({
+      observation: { status: 'exited', exactWorker: true },
+      terminal: { handle: 'term_worker', connected: false }
+    })
+    await expect(
+      call('orchestration.workerStop', { dispatch: dispatch.id })
+    ).resolves.toMatchObject({
+      state: 'stop_unknown',
+      processAction: 'none'
+    })
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(db.getTask(task.id)?.status).toBe('blocked')
+  })
+
   it('turns an interrupted start into inspectable unknown after runtime restart', async () => {
     const run = db.createRun({
       objective: 'Interrupted start',

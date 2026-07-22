@@ -88,7 +88,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
         )
       }
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
-      if (!observation.exact) {
+      if (!observation.exact || observation.status !== 'running') {
         return unknownReceipt(
           params.dispatch,
           db.markWorkerStopUnknown(

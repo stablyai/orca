@@ -321,8 +321,8 @@ Explicit non-goals:
 
 ### Federation scenario matrix
 
-- [ ] Mac Run home -> Windows worker: start, completion, failure, question/reply, read, and stop.
-- [ ] Windows Run home -> Mac worker: the same flows through a saved Mac pairing.
+- [x] Mac Run home -> Windows worker: start, completion, failure, question/reply, read, and stop.
+- [x] Windows Run home -> Mac worker: the same flows through a saved Mac pairing.
 - [ ] Native, WSL, SSH, and relay-backed execution-host paths preserve ownership and CLI capability.
 - [ ] Run home restarts alone; worker server restarts alone; both restart.
 - [ ] Disconnect before send proves no effect.
@@ -933,6 +933,65 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Rebuild and restart the Windows branch server, then repeat the same Dispatch and require an
     automatically relayed `worker_done` before checking any federation acceptance row.
+
+### 2026-07-22 — Mac-home to Windows-worker federation accepted
+
+- Changes:
+  - Fast-forwarded and restarted the isolated Windows branch server with the profile-scoped wrapper
+    fix while preserving its authenticated server key and saved-environment binding.
+  - Exercised separate success, intentional failure, and blocking question/reply Dispatches from the
+    isolated Mac Run home to native Windows Codex workers.
+- Files:
+  - `ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md`
+- Verification:
+  - Success `ctx_f982ddb1bdf9` submitted without manual input, relayed `worker_done`, and atomically
+    settled its Task/Dispatch as completed/succeeded.
+  - Failure `ctx_5f28665cf04a` relayed `outcome=failed` and atomically settled its Task/Dispatch as
+    failed without treating failure prose as success.
+  - Question `ctx_4aec24c47e30` relayed a typed question to the Mac Delivery, carried the `blue` reply
+    back to the blocked Windows ask, then relayed a successful terminal report.
+  - Routed bounded read and exact-agent stop were also exercised against Windows Dispatch receipts;
+    stop closed only the accepted agent terminal.
+- Findings:
+  - Windows ConPTY prompt submission, profile-specific CLI selection, authenticated lifecycle
+    acceptance, contiguous bidirectional relay, whole-batch acknowledgment, and terminal-state
+    reconciliation now pass together in the real Mac-to-Windows path.
+  - This completes only the named Mac-home to Windows-worker row; reverse direction, restart with an
+    active Dispatch, disconnect/unknown-outcome, WSL/SSH/relay-host, and transport coverage remain
+    open.
+- Next:
+  - Pair the isolated Mac server into the Windows test profile and run the same acceptance flow with
+    Windows as the Run home.
+
+### 2026-07-22 — Windows-home to Mac-worker federation accepted
+
+- Changes:
+  - Added a reciprocal saved Mac environment to the isolated Windows profile without exposing its
+    pairing credential in terminal history.
+  - Exercised separate success, intentional failure, blocking question/reply, bounded read, and exact
+    stop Dispatches with Windows as Run home and native macOS as worker server.
+  - Made worker observations report `exited` for the exact disconnected terminal instead of
+    misleadingly projecting `running`; stop now refuses to close an exact-but-exited process again.
+- Files:
+  - `src/main/runtime/rpc/methods/orchestration-worker-observation.ts`
+  - `src/main/runtime/rpc/methods/orchestration-federation-control.ts`
+  - `src/main/runtime/rpc/methods/orchestration-worker-stop.ts`
+  - Focused local/federated observation and stop tests
+- Verification:
+  - Success `ctx_5188e1f8417e` relayed from macOS and settled at the Windows Run home.
+  - Failure `ctx_a3418dc84ed6` relayed `outcome=failed` and settled failed at the Windows home.
+  - Question `ctx_a2521b88b6c9` carried `square` from Windows to the blocked macOS ask, followed by a
+    successful terminal report.
+  - Stop `ctx_bec120349d3f` first proved routed read against the exact Mac worker, then closed only that
+    terminal and settled stopped/failed; the observation regression suites pass 36 tests.
+- Findings:
+  - One reciprocal pairing is sufficient for a Windows-owned Run to route Mac worker control while
+    preserving a single Run database on Windows; no replicated scheduler or failover layer is needed.
+  - Stable process identity and live process status are separate facts. A disconnected terminal can
+    still be the exact historical worker, but it must not be labeled running or closed again.
+- Next:
+  - Validate active-Dispatch restart/disconnect and exact-retry behavior, then exercise WSL/SSH/relay
+    execution-host propagation without broadening the federation protocol.
 
 ### Entry template
 

@@ -39,7 +39,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS: RpcMethod[] = [
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
-      if (!observation.exact || !observation.terminal) {
+      if (!observation.exact || !observation.terminal || observation.status !== 'running') {
         throw new OrchestrationError(
           'worker_identity_changed',
           `Remote Dispatch ${params.dispatchId} no longer resolves to its exact process.`
@@ -142,7 +142,11 @@ async function inspectRemoteAttachment(runtime: OrcaRuntimeService, dispatchId: 
   return {
     terminal,
     exact,
-    status: exact ? ('running' as const) : ('identity_changed' as const)
+    status: exact
+      ? terminal.connected === false
+        ? ('exited' as const)
+        : ('running' as const)
+      : ('identity_changed' as const)
   }
 }
 

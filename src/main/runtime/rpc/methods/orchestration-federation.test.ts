@@ -643,6 +643,23 @@ describe('orchestration federation', () => {
     expect(workerRuntime.closeTerminal).toHaveBeenCalledTimes(1)
     expect(workerRuntime.closeTerminal).toHaveBeenCalledWith('term_windows_worker')
     expect(homeDb.getTask(task.id)?.status).toBe('blocked')
+
+    vi.mocked(workerRuntime.showTerminal).mockResolvedValue({
+      handle: 'term_windows_worker',
+      worktreeId: 'repo::windows-worktree',
+      connected: false,
+      writable: false
+    } as never)
+    const shown = await homeDispatcher.dispatch({
+      id: 'rpc_remote_show_after_stop',
+      authToken: 'coordinator-token',
+      method: 'orchestration.workerShow',
+      params: { dispatch: dispatch.id }
+    })
+    expect(shown).toMatchObject({
+      ok: true,
+      result: { observation: { status: 'exited', exactWorker: true } }
+    })
   })
 
   it('rejects a re-paired server before show or stop effects', async () => {
