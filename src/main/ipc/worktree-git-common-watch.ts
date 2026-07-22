@@ -4,7 +4,8 @@ import { subscribeViaWatcherProcess } from './parcel-watcher-process'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
-  WorktreeBaseSubscription
+  WorktreeBaseSubscription,
+  WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 import {
   PRIMARY_CHECKOUT_METADATA_FILES,
@@ -69,42 +70,68 @@ async function startSnapshotDiffPoller(
   takeSnapshot: () => Promise<Map<string, number>>,
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
+  visibility: WorktreePollerWindowVisibility,
   onFullScan?: () => void
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
   let snapshot = await takeSnapshot()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let parkedWhileHidden = false
 
-  const timer = setInterval(() => {
-    if (disposed || ticking) {
+  const tick = async (): Promise<void> => {
+    timer = null
+    if (disposed) {
+      return
+    }
+    if (!visibility.isWindowVisible()) {
+      parkedWhileHidden = true
+      return
+    }
+    if (ticking) {
       return
     }
     ticking = true
     onFullScan?.()
-    void takeSnapshot()
-      .then((next) => {
-        if (disposed) {
-          return
-        }
-        const events = diffMtimeMap(snapshot, next)
-        snapshot = next
-        if (events.length > 0) {
-          onEvents(events)
-        }
-      })
-      .catch(() => {
-        // Transient fs error: keep the previous snapshot and retry next tick.
-      })
-      .finally(() => {
-        ticking = false
-      })
-  }, pollIntervalMs)
+    try {
+      const next = await takeSnapshot()
+      if (disposed) {
+        return
+      }
+      const events = diffMtimeMap(snapshot, next)
+      snapshot = next
+      if (events.length > 0) {
+        onEvents(events)
+      }
+    } catch {
+      // Transient fs error: keep the previous snapshot and retry next tick.
+    } finally {
+      ticking = false
+    }
+    if (!disposed) {
+      timer = setTimeout(() => void tick(), pollIntervalMs)
+      timer.unref?.()
+    }
+  }
+
+  const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
+    if (disposed || !parkedWhileHidden) {
+      return
+    }
+    parkedWhileHidden = false
+    void tick()
+  })
+
+  timer = setTimeout(() => void tick(), pollIntervalMs)
   timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
-      clearInterval(timer)
+      if (timer) {
+        clearTimeout(timer)
+      }
+      unsubscribeVisibility()
     }
   }
 }
@@ -246,6 +273,7 @@ export async function startGitCommonWatch(
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
   platform: NodeJS.Platform,
+  visibility: WorktreePollerWindowVisibility,
   onFullScan?: () => void
 ): Promise<WorktreeBaseSubscription> {
   if (platform === 'darwin') {
@@ -255,6 +283,7 @@ export async function startGitCommonWatch(
         () => snapshotPrimaryCheckoutMetadata(target.path),
         onEvents,
         pollIntervalMs,
+        visibility,
         onFullScan
       )
     ])
@@ -264,5 +293,5 @@ export async function startGitCommonWatch(
       }
     }
   }
-  return startGitCommonPolling(target.path, onEvents, pollIntervalMs, onFullScan)
+  return startGitCommonPolling(target.path, onEvents, pollIntervalMs, visibility, onFullScan)
 }

@@ -2,7 +2,8 @@ import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
   WorktreeBasePollEvent,
-  WorktreeBaseSubscription
+  WorktreeBaseSubscription,
+  WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 
 // Shared with the darwin primary-metadata poll so the platforms cannot drift
@@ -228,6 +229,7 @@ export async function startGitCommonPolling(
   commonDirPath: string,
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
+  visibility: WorktreePollerWindowVisibility,
   onFullScan?: () => void,
   includePrimary = true
 ): Promise<WorktreeBaseSubscription> {
@@ -235,39 +237,71 @@ export async function startGitCommonPolling(
   let ticking = false
   let tickCount = 0
   let snapshot = await snapshotGitCommon(commonDirPath, undefined, includePrimary)
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let parkedWhileHidden = false
 
-  const timer = setInterval(() => {
-    if (disposed || ticking) {
+  const tick = async (forceIndexRead = false): Promise<void> => {
+    timer = null
+    if (disposed) {
+      return
+    }
+    if (!visibility.isWindowVisible()) {
+      parkedWhileHidden = true
+      return
+    }
+    if (ticking) {
       return
     }
     ticking = true
     tickCount++
-    const forceIndexRead = tickCount % INDEX_BACKSTOP_TICKS === 0
+    const shouldForceIndexRead = forceIndexRead || tickCount % INDEX_BACKSTOP_TICKS === 0
     onFullScan?.()
-    void snapshotGitCommon(commonDirPath, snapshot, includePrimary, forceIndexRead)
-      .then((next) => {
-        if (disposed) {
-          return
-        }
-        const events = diffGitCommon(commonDirPath, snapshot, next)
-        snapshot = next
-        if (events.length > 0) {
-          onEvents(events)
-        }
-      })
-      .catch(() => {
-        // Transient fs error: keep the previous snapshot and retry next tick.
-      })
-      .finally(() => {
-        ticking = false
-      })
-  }, pollIntervalMs)
+    try {
+      const next = await snapshotGitCommon(
+        commonDirPath,
+        snapshot,
+        includePrimary,
+        shouldForceIndexRead
+      )
+      if (disposed) {
+        return
+      }
+      const events = diffGitCommon(commonDirPath, snapshot, next)
+      snapshot = next
+      if (events.length > 0) {
+        onEvents(events)
+      }
+    } catch {
+      // Transient fs error: keep the previous snapshot and retry next tick.
+    } finally {
+      ticking = false
+    }
+    if (!disposed) {
+      timer = setTimeout(() => void tick(), pollIntervalMs)
+      timer.unref?.()
+    }
+  }
+
+  const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
+    if (disposed || !parkedWhileHidden) {
+      return
+    }
+    parkedWhileHidden = false
+    // Why: a linked index can change without its parent dir signature moving;
+    // force the leaf read when diffing the retained pre-hide snapshot.
+    void tick(true)
+  })
+
+  timer = setTimeout(() => void tick(), pollIntervalMs)
   timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
-      clearInterval(timer)
+      if (timer) {
+        clearTimeout(timer)
+      }
+      unsubscribeVisibility()
     }
   }
 }

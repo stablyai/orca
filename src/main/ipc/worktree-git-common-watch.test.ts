@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
@@ -8,7 +8,10 @@ import type {
   WatcherProcessHooks
 } from './parcel-watcher-process-subscription'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
-import type { WorktreeBasePollEvent } from './worktree-base-directory-poller'
+import type {
+  WorktreeBasePollEvent,
+  WorktreePollerWindowVisibility
+} from './worktree-base-directory-poller'
 import { startGitCommonWatch } from './worktree-git-common-watch'
 
 vi.mock('./parcel-watcher-process', () => ({
@@ -16,6 +19,40 @@ vi.mock('./parcel-watcher-process', () => ({
 }))
 
 const POLL_MS = 25
+
+const alwaysVisible: WorktreePollerWindowVisibility = {
+  isWindowVisible: () => true,
+  onWindowBecameVisible: () => () => {}
+}
+
+function createVisibilityHarness(): {
+  source: WorktreePollerWindowVisibility
+  hide: () => void
+  show: () => void
+} {
+  let visible = true
+  let listener: (() => void) | null = null
+  return {
+    source: {
+      isWindowVisible: () => visible,
+      onWindowBecameVisible: (nextListener) => {
+        listener = nextListener
+        return () => {
+          if (listener === nextListener) {
+            listener = null
+          }
+        }
+      }
+    },
+    hide: () => {
+      visible = false
+    },
+    show: () => {
+      visible = true
+      listener?.()
+    }
+  }
+}
 
 type ChildSubscription = {
   dir: string
@@ -67,7 +104,8 @@ describe('worktree git-common narrow watch (darwin)', () => {
       makeTarget(commonDir),
       (events) => received.push(events),
       POLL_MS,
-      'darwin'
+      'darwin',
+      alwaysVisible
     )
     cleanups.push(() => watch.unsubscribe())
   }
@@ -167,6 +205,42 @@ describe('worktree git-common narrow watch (darwin)', () => {
     })
   })
 
+  it('keeps the native stream live while the primary poll is parked', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const headFile = join(commonDir, 'HEAD')
+    await writeFile(headFile, 'ref: refs/heads/main')
+    const visibility = createVisibilityHarness()
+    const received: WorktreeBasePollEvent[][] = []
+    const fullScans: number[] = []
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      visibility.source,
+      () => fullScans.push(Date.now())
+    )
+    cleanups.push(() => watch.unsubscribe())
+
+    visibility.hide()
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+    await writeFile(headFile, 'ref: refs/heads/feature')
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+
+    expect(fullScans).toHaveLength(0)
+    const entryPath = join(commonDir, 'worktrees', 'native-while-hidden')
+    childSubscriptions[0].callback(null, [{ type: 'create', path: entryPath }])
+    expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+    expect(childSubscriptions[0].unsubscribe).not.toHaveBeenCalled()
+
+    visibility.show()
+    expect(fullScans).toHaveLength(1)
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: headFile })
+    })
+  })
+
   it('stops forwarding events and unsubscribes the child on dispose', async () => {
     installSubscribeMock()
     const commonDir = await makeCommonDir(true)
@@ -175,7 +249,8 @@ describe('worktree git-common narrow watch (darwin)', () => {
       makeTarget(commonDir),
       (events) => received.push(events),
       POLL_MS,
-      'darwin'
+      'darwin',
+      alwaysVisible
     )
     await watch.unsubscribe()
     expect(childSubscriptions[0].unsubscribe).toHaveBeenCalledTimes(1)

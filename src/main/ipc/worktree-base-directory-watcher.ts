@@ -17,7 +17,10 @@ import {
   buildWorktreeBaseDirectoryWatchTargets,
   clearWorktreeBaseDirectoryWatchTargetWarnings
 } from './worktree-base-directory-watch-targets'
-import { startWorktreeBaseDirectoryPoller } from './worktree-base-directory-poller'
+import {
+  createWorktreePollerWindowVisibility,
+  startWorktreeBaseDirectoryPoller
+} from './worktree-base-directory-poller'
 
 type ActiveWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow
@@ -192,10 +195,14 @@ async function subscribeTarget(
     () => (activeWatches.get(target.key) ?? activeWatch)?.repos ?? target.repos,
     (events) => {
       const currentWatch = activeWatches.get(target.key) ?? activeWatch
-      if (!currentWatch || currentWatch.disposed) {
-        return
+      if (currentWatch && !currentWatch.disposed) {
+        handleLocalWatchEvents(currentWatch, null, events)
       }
-      handleLocalWatchEvents(currentWatch, null, events)
+    },
+    {
+      visibility: createWorktreePollerWindowVisibility(
+        () => (activeWatches.get(target.key) ?? activeWatch)?.mainWindow ?? null
+      )
     }
   )
   activeWatch = createActiveWatch(target, mainWindow, subscription)
