@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this suite covers the SSH git provider's one-RPC-per-method contract; splitting it would duplicate the shared mux fixture. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { SshGitProvider } from './ssh-git-provider'
+import { SSH_WORKTREE_ADD_TIMEOUT_MS, SshGitProvider } from './ssh-git-provider'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -1341,18 +1341,25 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(worktrees)
   })
 
-  it('addWorktree sends git.addWorktree request', async () => {
+  it('addWorktree uses the extended git.addWorktree deadline', async () => {
+    const controller = new AbortController()
     await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
       base: 'main',
-      noCheckout: true
+      noCheckout: true,
+      signal: controller.signal
     })
-    expect(mux.request).toHaveBeenCalledWith('git.addWorktree', {
-      repoPath: '/home/user/repo',
-      branchName: 'feature',
-      targetDir: '/home/user/feat',
-      base: 'main',
-      noCheckout: true
-    })
+    expect(SSH_WORKTREE_ADD_TIMEOUT_MS).toBe(600_000)
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktree',
+      {
+        repoPath: '/home/user/repo',
+        branchName: 'feature',
+        targetDir: '/home/user/feat',
+        base: 'main',
+        noCheckout: true
+      },
+      { signal: controller.signal, timeoutMs: SSH_WORKTREE_ADD_TIMEOUT_MS }
+    )
   })
 
   it('removeWorktree sends git.removeWorktree request', async () => {

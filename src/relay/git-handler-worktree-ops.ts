@@ -4,22 +4,31 @@ import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
 export { readRelayWorktreeList } from './git-handler-worktree-list'
 
+function rethrowIfRequestAborted(signal: AbortSignal | undefined, error: unknown): void {
+  if (signal?.aborted) {
+    throw error
+  }
+}
+
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
   targetDir: string,
   branchName: string,
-  effectiveBase: string
+  effectiveBase: string,
+  options: { signal?: AbortSignal }
 ): Promise<void> {
   const configKey = `branch.${branchName}.base`
   try {
-    await git(['config', '--local', '--replace-all', configKey, effectiveBase], targetDir)
+    await git(['config', '--local', '--replace-all', configKey, effectiveBase], targetDir, options)
   } catch (error) {
+    rethrowIfRequestAborted(options.signal, error)
     console.warn(`relay addWorktree: failed to set ${configKey} for ${targetDir}`, error)
     try {
       // Why: SSH worktree creation shares branch config by name; clear stale
       // metadata if replacing an old same-name base fails.
-      await git(['config', '--local', '--unset-all', configKey], targetDir)
+      await git(['config', '--local', '--unset-all', configKey], targetDir, options)
     } catch (unsetError) {
+      rethrowIfRequestAborted(options.signal, unsetError)
       console.warn(
         `relay addWorktree: failed to unset stale ${configKey} for ${targetDir}`,
         unsetError
@@ -28,7 +37,11 @@ async function persistRelayWorktreeCreationBase(
   }
 }
 
-export async function addWorktreeOp(git: GitExec, params: Record<string, unknown>): Promise<void> {
+export async function addWorktreeOp(
+  git: GitExec,
+  params: Record<string, unknown>,
+  options: { signal?: AbortSignal } = {}
+): Promise<void> {
   const repoPath = params.repoPath as string
   const branchName = params.branchName as string
   const targetDir = params.targetDir as string
@@ -54,9 +67,14 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
     base && !checkoutExistingBranch
       ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
           try {
-            await git(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`], repoPath)
+            await git(
+              ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
+              repoPath,
+              options
+            )
             return true
-          } catch {
+          } catch (error) {
+            rethrowIfRequestAborted(options.signal, error)
             return false
           }
         })
@@ -72,14 +90,14 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
     args.push(effectiveBase)
   }
 
-  await git(args, repoPath)
+  await git(args, repoPath, options)
 
   if (checkoutExistingBranch) {
     return
   }
 
   if (effectiveBase) {
-    await persistRelayWorktreeCreationBase(git, targetDir, branchName, effectiveBase)
+    await persistRelayWorktreeCreationBase(git, targetDir, branchName, effectiveBase, options)
   }
 
   // Why: best-effort write so a deliberate user value (any scope) is
@@ -91,9 +109,10 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   try {
     let alreadySet = false
     try {
-      await git(['config', '--get', 'push.autoSetupRemote'], targetDir)
+      await git(['config', '--get', 'push.autoSetupRemote'], targetDir, options)
       alreadySet = true
     } catch (readError) {
+      rethrowIfRequestAborted(options.signal, readError)
       // Why: `git config --get` exits 1 only when the key is unset at every
       // scope. Any other code is a real read failure (corrupt config,
       // locked file) — surface it via the outer catch instead of falling
@@ -104,9 +123,10 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
       }
     }
     if (!alreadySet) {
-      await git(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
+      await git(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir, options)
     }
   } catch (error) {
+    rethrowIfRequestAborted(options.signal, error)
     console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
   }
 }

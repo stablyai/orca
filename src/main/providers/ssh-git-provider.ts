@@ -40,6 +40,9 @@ type NonInteractiveExecQueueEntry = {
   release: () => void
 }
 
+// Why: 大型 SSH checkout 和 Git LFS 下载可正常超过通用 RPC 的 30 秒时限。
+export const SSH_WORKTREE_ADD_TIMEOUT_MS = 10 * 60_000
+
 function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false
@@ -711,15 +714,25 @@ export class SshGitProvider implements IGitProvider {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
+    options?: {
+      base?: string
+      checkoutExistingBranch?: boolean
+      noCheckout?: boolean
+      signal?: AbortSignal
+    }
   ): Promise<void> {
+    const { signal, ...params } = options ?? {}
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.addWorktree', {
-        repoPath,
-        branchName,
-        targetDir,
-        ...options
-      })
+      await this.mux.request(
+        'git.addWorktree',
+        {
+          repoPath,
+          branchName,
+          targetDir,
+          ...params
+        },
+        { signal, timeoutMs: SSH_WORKTREE_ADD_TIMEOUT_MS }
+      )
     })
   }
 

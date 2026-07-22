@@ -2494,12 +2494,36 @@ describe('GitHandler', () => {
           (
             args: string[],
             cwd: string,
-            opts?: { maxBuffer?: number }
+            opts?: { maxBuffer?: number; signal?: AbortSignal }
           ) => Promise<{ stdout: string; stderr: string }>
         >()
       ;(handler as unknown as { git: typeof gitMock }).git = gitMock
       return { localDispatcher, gitMock }
     }
+
+    it('passes request cancellation to the git worktree add subprocess', async () => {
+      const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      const controller = new AbortController()
+      gitMock.mockRejectedValueOnce(new Error('aborted'))
+
+      await expect(
+        localDispatcher.callRequest(
+          'git.addWorktree',
+          {
+            repoPath: '/relay/repo',
+            branchName: 'feature/test',
+            targetDir: '/relay/wt'
+          },
+          { isStale: () => false, signal: controller.signal }
+        )
+      ).rejects.toThrow('aborted')
+
+      expect(gitMock).toHaveBeenCalledWith(
+        ['worktree', 'add', '--no-track', '-b', 'feature/test', '/relay/wt'],
+        '/relay/repo',
+        { signal: controller.signal }
+      )
+    })
 
     it('passes --no-track and writes push.autoSetupRemote when unset', async () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
