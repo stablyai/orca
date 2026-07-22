@@ -56,7 +56,7 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(16)
+    expect(registry.size).toBe(17)
     expect(registry.has('orchestration.send')).toBe(true)
     expect(registry.has('orchestration.check')).toBe(true)
     expect(registry.has('orchestration.reply')).toBe(true)
@@ -72,6 +72,7 @@ describe('orchestration RPC methods', () => {
     expect(registry.has('orchestration.gateCreate')).toBe(true)
     expect(registry.has('orchestration.gateResolve')).toBe(true)
     expect(registry.has('orchestration.gateList')).toBe(true)
+    expect(registry.has('orchestration.roleLeaseGrant')).toBe(true)
     expect(registry.has('orchestration.reset')).toBe(true)
   })
 

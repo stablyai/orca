@@ -3,6 +3,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import type { GateStatus } from '../../orchestration/db'
 import { Coordinator } from '../../orchestration/coordinator'
+import { assertCallerCoordinatorControl } from './orchestration-role-lease'
 
 // Why: the coordinator instance is stored at module scope so orchestration.runStop
 // can signal it to halt. Only one coordinator can run at a time (enforced by
@@ -14,20 +15,29 @@ const RunParams = z.object({
   from: OptionalString,
   pollIntervalMs: OptionalFiniteNumber,
   maxConcurrent: OptionalFiniteNumber,
-  worktree: OptionalString
+  worktree: OptionalString,
+  callerTerminalHandle: OptionalString,
+  callerPaneKey: OptionalString
 })
 
-const RunStopParams = z.object({})
+const RunStopParams = z.object({
+  callerTerminalHandle: OptionalString,
+  callerPaneKey: OptionalString
+})
 
 const GateCreateParams = z.object({
   task: requiredString('Missing --task'),
   question: requiredString('Missing --question'),
-  options: OptionalString
+  options: OptionalString,
+  callerTerminalHandle: OptionalString,
+  callerPaneKey: OptionalString
 })
 
 const GateResolveParams = z.object({
   id: requiredString('Missing --id'),
-  resolution: requiredString('Missing --resolution')
+  resolution: requiredString('Missing --resolution'),
+  callerTerminalHandle: OptionalString,
+  callerPaneKey: OptionalString
 })
 
 const GateListParams = z.object({
@@ -45,6 +55,7 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
     params: RunParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      assertCallerCoordinatorControl(db, runtime, params, 'run')
 
       const existing = db.getActiveCoordinatorRun()
       if (existing) {
@@ -84,8 +95,9 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runStop',
     params: RunStopParams,
-    handler: (_params, { runtime }) => {
+    handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      assertCallerCoordinatorControl(db, runtime, params, 'runStop')
       const run = db.getActiveCoordinatorRun()
       if (!run) {
         throw new Error('No active coordinator run')
@@ -105,6 +117,7 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
     params: GateCreateParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      assertCallerCoordinatorControl(db, runtime, params, 'gateCreate')
       let options: string[] | undefined
       if (params.options) {
         try {
@@ -131,6 +144,7 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
     params: GateResolveParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      assertCallerCoordinatorControl(db, runtime, params, 'gateResolve')
       const gate = db.resolveGate(params.id, params.resolution)
       if (!gate) {
         throw new Error(`Gate not found: ${params.id}`)

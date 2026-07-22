@@ -153,6 +153,17 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'task', 'status']
   },
   {
+    path: ['orchestration', 'role-lease'],
+    summary: 'Grant an explicit coordinator role lease (ORCH-R15 handoff ceremony)',
+    usage:
+      'orca orchestration role-lease --role coordinator --to <handle> [--from <handle>] [--subject-pane-key <pane>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'role', 'to', 'from', 'subject-pane-key'],
+    notes: [
+      'Ordinary user text after worker_done is not a promotion. Grant a lease only via this durable ceremony (or re-dispatch the pane as a worker).',
+      'Active/quarantined worker callers cannot self-promote.'
+    ]
+  },
+  {
     path: ['orchestration', 'reset'],
     summary: 'Reset orchestration state (one scope; bare command resets all)',
     usage: 'orca orchestration reset [--all | --tasks | --messages] [--json]',

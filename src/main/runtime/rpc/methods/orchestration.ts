@@ -9,6 +9,11 @@ import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
+import {
+  assertCallerCoordinatorControl,
+  assertSenderCoordinatorMessageAllowed,
+  ORCHESTRATION_ROLE_LEASE_METHODS
+} from './orchestration-role-lease'
 
 const MESSAGE_TYPES: MessageType[] = [
   'status',
@@ -57,6 +62,8 @@ const SendParams = z
     payload: OptionalString,
     // Why: pane key is the remint-stable identity used to verify worker_done/heartbeat ownership; the from handle stays routing metadata.
     senderPaneKey: OptionalString,
+    callerTerminalHandle: OptionalString,
+    callerPaneKey: OptionalString,
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
@@ -119,7 +126,8 @@ const TaskCreateParams = z.object({
   displayName: OptionalString,
   deps: OptionalString,
   parent: OptionalString,
-  callerTerminalHandle: OptionalString
+  callerTerminalHandle: OptionalString,
+  callerPaneKey: OptionalString
 })
 
 const TaskListParams = z.object({
@@ -144,7 +152,9 @@ const TaskUpdateParams = z.object({
         message: 'Missing --status'
       })
     ),
-  result: OptionalString
+  result: OptionalString,
+  callerTerminalHandle: OptionalString,
+  callerPaneKey: OptionalString
 })
 
 const DispatchParams = z.object({
@@ -155,7 +165,9 @@ const DispatchParams = z.object({
   inject: OptionalBoolean,
   dryRun: OptionalBoolean,
   returnPreamble: OptionalBoolean,
-  devMode: OptionalBoolean
+  devMode: OptionalBoolean,
+  callerTerminalHandle: OptionalString,
+  callerPaneKey: OptionalString
 })
 
 const DispatchShowParams = z.object({
@@ -170,14 +182,18 @@ const AskParams = z.object({
   question: requiredString('Missing --question'),
   options: OptionalString,
   timeoutMs: OptionalFiniteNumber,
-  from: OptionalString
+  from: OptionalString,
+  callerTerminalHandle: OptionalString,
+  callerPaneKey: OptionalString
 })
 
 const ResetParams = z
   .object({
     all: OptionalBoolean,
     tasks: OptionalBoolean,
-    messages: OptionalBoolean
+    messages: OptionalBoolean,
+    callerTerminalHandle: OptionalString,
+    callerPaneKey: OptionalString
   })
   .superRefine((params, ctx) => {
     const selectedScopeCount = [params.all, params.tasks, params.messages].filter(
@@ -200,6 +216,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const from = params.from ?? 'unknown'
       // Why: older shells may lack ORCA_PANE_KEY, but the runtime still knows the pane behind their handle; persist that authority.
       const senderPaneKey = params.senderPaneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
+      // Why: ORCH-R15 — deny coordinator-shaped sends from worker/quarantined panes before insert.
+      assertSenderCoordinatorMessageAllowed(db, runtime, {
+        from,
+        senderPaneKey,
+        callerTerminalHandle: params.callerTerminalHandle,
+        callerPaneKey: params.callerPaneKey,
+        type: params.type
+      })
 
       if (!isGroupAddress(params.to)) {
         // Point-to-point — existing single-recipient behavior
@@ -376,6 +400,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskCreateParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      assertCallerCoordinatorControl(db, runtime, params, 'taskCreate')
       let deps: string[] | undefined
       if (params.deps) {
         try {
@@ -429,6 +454,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskUpdateParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      assertCallerCoordinatorControl(db, runtime, params, 'taskUpdate')
       const task = db.updateTaskStatus(params.id, params.status, params.result)
       if (!task) {
         throw new Error(`Task not found: ${params.id}`)
@@ -462,6 +488,18 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
+
+      // Why: ORCH-R15 — mutating dispatch is coordinator control; dry-run stays readable for quarantined debugging.
+      assertCallerCoordinatorControl(
+        db,
+        runtime,
+        {
+          callerTerminalHandle: params.callerTerminalHandle,
+          callerPaneKey: params.callerPaneKey,
+          from: params.from
+        },
+        'dispatch'
+      )
 
       if (!params.to) {
         throw new Error('Missing --to')
@@ -567,6 +605,16 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
+      assertCallerCoordinatorControl(
+        db,
+        runtime,
+        {
+          callerTerminalHandle: params.callerTerminalHandle,
+          callerPaneKey: params.callerPaneKey,
+          from
+        },
+        'ask'
+      )
       const timeoutMs = params.timeoutMs ?? 600_000
       const options =
         params.options
@@ -617,12 +665,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   }),
 
   ...ORCHESTRATION_GATE_METHODS,
+  ...ORCHESTRATION_ROLE_LEASE_METHODS,
 
   defineMethod({
     name: 'orchestration.reset',
     params: ResetParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      assertCallerCoordinatorControl(db, runtime, params, 'reset')
       if (params.all) {
         db.resetAll()
         return { reset: 'all' }

@@ -181,6 +181,18 @@ async function resolveTaskCreatorTerminalHandle(
   return await resolveOrchestrationPaneTerminalHandle(client, { optional: true })
 }
 
+// Why: ORCH-R15 role checks must see the live pane, not a spoofable --from alone.
+async function resolveCallerRoleIdentity(
+  client: Parameters<CommandHandler>[0]['client']
+): Promise<{ callerTerminalHandle?: string; callerPaneKey?: string }> {
+  const callerTerminalHandle = await resolveTaskCreatorTerminalHandle(client)
+  const envPane = process.env.ORCA_PANE_KEY
+  return {
+    callerTerminalHandle,
+    callerPaneKey: envPane && envPane.length > 0 ? envPane : undefined
+  }
+}
+
 async function isLiveTerminalHandle(
   handle: string,
   client: Parameters<CommandHandler>[0]['client']
@@ -352,6 +364,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
     // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness probe (worker_done must survive the mid-restart window) and no remint (older runtimes require from === the stale assignee_handle).
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const caller = await resolveCallerRoleIdentity(client)
     const result = await client.call<OrchestrationSendResult>('orchestration.send', {
       from,
       to,
@@ -363,6 +376,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       payload: getOptionalStructuredMessagePayload(flags),
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
       senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+      callerTerminalHandle: caller.callerTerminalHandle,
+      callerPaneKey: caller.callerPaneKey,
       devMode: isDevCliInvocation()
     })
     if ('message' in result.result && result.result.lifecycle?.action === 'rejected') {
@@ -501,7 +516,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration task-create': async ({ flags, client, json }) => {
-    const callerTerminalHandle = await resolveTaskCreatorTerminalHandle(client)
+    const caller = await resolveCallerRoleIdentity(client)
     const result = await client.call<{ task: { id: string; status: string } }>(
       'orchestration.taskCreate',
       {
@@ -510,7 +525,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         displayName: getOptionalStringFlag(flags, 'display-name'),
         deps: getOptionalStringFlag(flags, 'deps'),
         parent: getOptionalStringFlag(flags, 'parent'),
-        callerTerminalHandle
+        callerTerminalHandle: caller.callerTerminalHandle,
+        callerPaneKey: caller.callerPaneKey
       }
     )
     printResult(result, json, (r) => `Created ${r.task.id} [${r.task.status}]`)
@@ -569,12 +585,15 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         `invalid status '${status}', expected one of: ${TASK_STATUS_VALUES.join(', ')}`
       )
     }
+    const caller = await resolveCallerRoleIdentity(client)
     const result = await client.call<{ task: { id: string; status: string } }>(
       'orchestration.taskUpdate',
       {
         id: getRequiredStringFlag(flags, 'id'),
         status,
-        result: getOptionalStringFlag(flags, 'result')
+        result: getOptionalStringFlag(flags, 'result'),
+        callerTerminalHandle: caller.callerTerminalHandle,
+        callerPaneKey: caller.callerPaneKey
       }
     )
     printResult(result, json, (r) => `Updated ${r.task.id} -> ${r.task.status}`)
@@ -582,6 +601,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const caller = await resolveCallerRoleIdentity(client)
     const dryRun = flags.has('dry-run') ? true : undefined
     const returnPreamble = flags.has('return-preamble') ? true : undefined
     // Why: --to is only required for non-dry-run; the RPC handler re-enforces.
@@ -598,7 +618,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       inject: flags.has('inject') ? true : undefined,
       dryRun,
       returnPreamble,
-      devMode: isDevCliInvocation()
+      devMode: isDevCliInvocation(),
+      callerTerminalHandle: caller.callerTerminalHandle,
+      callerPaneKey: caller.callerPaneKey
     })
     printResult(result, json, (r) => {
       if (r.dryRun) {
@@ -612,6 +634,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration ask': async ({ flags, client, cwd, json }) => {
     const parsedTimeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const caller = await resolveCallerRoleIdentity(client)
     const timeoutMs = parsedTimeoutMs ?? 600_000
     const result = await client.call<{
       answer: string | null
@@ -625,7 +648,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         question: getRequiredStringFlag(flags, 'question'),
         options: getOptionalStringFlag(flags, 'options'),
         timeoutMs: parsedTimeoutMs,
-        from
+        from,
+        callerTerminalHandle: caller.callerTerminalHandle,
+        callerPaneKey: caller.callerPaneKey
       },
       // Why: extend past timeoutMs so the RPC transport's 60s default doesn't abort before the runtime's own timeout resolves.
       { timeoutMs: timeoutMs + 5_000 }
@@ -672,6 +697,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration run': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const caller = await resolveCallerRoleIdentity(client)
     const result = await client.call<{
       runId: string
       status: string
@@ -680,26 +706,35 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       from,
       pollIntervalMs: getOptionalPositiveIntegerFlag(flags, 'poll-interval-ms'),
       maxConcurrent: getOptionalPositiveIntegerFlag(flags, 'max-concurrent'),
-      worktree: getOptionalStringFlag(flags, 'worktree')
+      worktree: getOptionalStringFlag(flags, 'worktree'),
+      callerTerminalHandle: caller.callerTerminalHandle,
+      callerPaneKey: caller.callerPaneKey
     })
     printResult(result, json, (r) => `Run ${r.runId} started (${r.status})`)
   },
 
   'orchestration run-stop': async ({ client, json }) => {
+    const caller = await resolveCallerRoleIdentity(client)
     const result = await client.call<{
       runId: string
       stopped: boolean
-    }>('orchestration.runStop', {})
+    }>('orchestration.runStop', {
+      callerTerminalHandle: caller.callerTerminalHandle,
+      callerPaneKey: caller.callerPaneKey
+    })
     printResult(result, json, (r) => `Run ${r.runId} stopped`)
   },
 
   'orchestration gate-create': async ({ flags, client, json }) => {
+    const caller = await resolveCallerRoleIdentity(client)
     const result = await client.call<{
       gate: { id: string; task_id: string; status: string }
     }>('orchestration.gateCreate', {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
-      options: getOptionalStringFlag(flags, 'options')
+      options: getOptionalStringFlag(flags, 'options'),
+      callerTerminalHandle: caller.callerTerminalHandle,
+      callerPaneKey: caller.callerPaneKey
     })
     printResult(
       result,
@@ -709,11 +744,14 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration gate-resolve': async ({ flags, client, json }) => {
+    const caller = await resolveCallerRoleIdentity(client)
     const result = await client.call<{
       gate: { id: string; task_id: string; status: string; resolution: string }
     }>('orchestration.gateResolve', {
       id: getRequiredStringFlag(flags, 'id'),
-      resolution: getRequiredStringFlag(flags, 'resolution')
+      resolution: getRequiredStringFlag(flags, 'resolution'),
+      callerTerminalHandle: caller.callerTerminalHandle,
+      callerPaneKey: caller.callerPaneKey
     })
     printResult(result, json, (r) => `Gate ${r.gate.id} resolved: ${r.gate.resolution}`)
   },
@@ -736,12 +774,42 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     })
   },
 
+  'orchestration role-lease': async ({ flags, client, json }) => {
+    const role = getRequiredStringFlag(flags, 'role')
+    if (role !== 'coordinator') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `invalid role '${role}', expected: coordinator`
+      )
+    }
+    const caller = await resolveCallerRoleIdentity(client)
+    const from = getOptionalStringFlag(flags, 'from') ?? caller.callerTerminalHandle ?? undefined
+    const result = await client.call<{
+      lease: { id: string; subject_handle: string; role: string; ceremony: string }
+    }>('orchestration.roleLeaseGrant', {
+      to: getRequiredStringFlag(flags, 'to'),
+      from,
+      subjectPaneKey: getOptionalStringFlag(flags, 'subject-pane-key'),
+      callerTerminalHandle: caller.callerTerminalHandle,
+      callerPaneKey: caller.callerPaneKey
+    })
+    printResult(
+      result,
+      json,
+      (r) =>
+        `Granted ${r.lease.role} lease ${r.lease.id} -> ${r.lease.subject_handle} (${r.lease.ceremony})`
+    )
+  },
+
   'orchestration reset': async ({ flags, client, json }) => {
     const hasScopeFlag = flags.has('all') || flags.has('tasks') || flags.has('messages')
+    const caller = await resolveCallerRoleIdentity(client)
     const result = await client.call<{ reset: string }>('orchestration.reset', {
       all: flags.has('all') || !hasScopeFlag ? true : undefined,
       tasks: flags.has('tasks') ? true : undefined,
-      messages: flags.has('messages') ? true : undefined
+      messages: flags.has('messages') ? true : undefined,
+      callerTerminalHandle: caller.callerTerminalHandle,
+      callerPaneKey: caller.callerPaneKey
     })
     printResult(result, json, (r) => `Reset: ${r.reset}`)
   }

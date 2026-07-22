@@ -83,3 +83,16 @@ export type CoordinatorRun = {
   created_at: string
   completed_at: string | null
 }
+
+// Why: durable coordinator promotion must be machine-verifiable; ordinary chat
+// after worker_done must not imply authority (ORCH-R15).
+export type RoleLeaseRow = {
+  id: string
+  subject_handle: string
+  subject_pane_key: string | null
+  role: 'coordinator'
+  ceremony: 'explicit_handoff'
+  granted_by_handle: string | null
+  created_at: string
+  revoked_at: string | null
+}

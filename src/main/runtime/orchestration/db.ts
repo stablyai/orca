@@ -12,7 +12,8 @@ import type {
   TaskRow,
   DispatchContextRow,
   DecisionGateRow,
-  CoordinatorRun
+  CoordinatorRun,
+  RoleLeaseRow
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -38,7 +39,8 @@ export type {
   TaskRow,
   DispatchContextRow,
   DecisionGateRow,
-  CoordinatorRun
+  CoordinatorRun,
+  RoleLeaseRow
 }
 
 function generateId(prefix: string): string {
@@ -84,7 +86,7 @@ function exposeMessageListTimestamps(messages: MessageRow[]): MessageRow[] {
 }
 
 // Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane-identity columns.
-const SCHEMA_VERSION = 6
+const SCHEMA_VERSION = 7
 
 export class OrchestrationDb {
   private db: Database.Database
@@ -198,6 +200,22 @@ export class OrchestrationDb {
         created_at          TEXT NOT NULL DEFAULT (datetime('now')),
         completed_at        TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS role_leases (
+        id                  TEXT PRIMARY KEY,
+        subject_handle      TEXT NOT NULL,
+        subject_pane_key    TEXT,
+        role                TEXT NOT NULL
+          CHECK(role IN ('coordinator')),
+        ceremony            TEXT NOT NULL
+          CHECK(ceremony IN ('explicit_handoff')),
+        granted_by_handle   TEXT,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        revoked_at          TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_role_leases_subject
+        ON role_leases(subject_handle, revoked_at);
     `)
     this.createUndeliveredInboxIndexIfPossible()
   }
@@ -286,6 +304,25 @@ export class OrchestrationDb {
         if (!this.hasColumn('messages', 'sender_pane_key')) {
           this.db.exec(`ALTER TABLE messages ADD COLUMN sender_pane_key TEXT`)
         }
+      }
+      // Why: ORCH-R15 durable coordinator promotion; worker/quarantine roles stay derived from dispatch_contexts.
+      if (current < 7) {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS role_leases (
+            id                  TEXT PRIMARY KEY,
+            subject_handle      TEXT NOT NULL,
+            subject_pane_key    TEXT,
+            role                TEXT NOT NULL
+              CHECK(role IN ('coordinator')),
+            ceremony            TEXT NOT NULL
+              CHECK(ceremony IN ('explicit_handoff')),
+            granted_by_handle   TEXT,
+            created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+            revoked_at          TEXT
+          );
+          CREATE INDEX IF NOT EXISTS idx_role_leases_subject
+            ON role_leases(subject_handle, revoked_at);
+        `)
       }
       this.createUndeliveredInboxIndexIfPossible()
 
@@ -703,31 +740,20 @@ export class OrchestrationDb {
     return this.findActiveDispatchForAssignee(handle)
   }
 
-  /**
-   * Cheap "are there any dispatch rows at all" probe. When false, no terminal
-   * can have an active or recent-completed dispatch, so orchestration-context
-   * builders can skip their per-terminal query fan-out entirely. Cached after
-   * the first probe; createDispatchContext marks it true, resets clear it.
-   */
-  hasAnyDispatchContexts(): boolean {
-    if (this.hasAnyDispatchContextsCache === undefined) {
-      const row = this.db.prepare('SELECT 1 FROM dispatch_contexts LIMIT 1').get()
-      this.hasAnyDispatchContextsCache = row !== undefined
-    }
-    return this.hasAnyDispatchContextsCache
-  }
-
-  private findActiveDispatchForAssignee(
+  // Why: role-lease resolution and reconnect recovery both need pane-aware active lookup.
+  findActiveDispatchForAssignee(
     assigneeHandle: string,
     assigneePaneKey?: string
   ): DispatchContextRow | undefined {
-    const byHandle = this.db
-      .prepare(
-        "SELECT * FROM dispatch_contexts WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') LIMIT 1"
-      )
-      .get(assigneeHandle) as DispatchContextRow | undefined
-    if (byHandle) {
-      return byHandle
+    if (assigneeHandle) {
+      const byHandle = this.db
+        .prepare(
+          "SELECT * FROM dispatch_contexts WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') LIMIT 1"
+        )
+        .get(assigneeHandle) as DispatchContextRow | undefined
+      if (byHandle) {
+        return byHandle
+      }
     }
 
     if (!assigneePaneKey) {
@@ -746,6 +772,49 @@ export class OrchestrationDb {
       }
     }
     return undefined
+  }
+
+  findLatestDispatchForAssignee(identity: {
+    handle?: string
+    paneKey?: string
+  }): DispatchContextRow | undefined {
+    const handle = identity.handle?.trim() || undefined
+    const paneKey = identity.paneKey?.trim() || undefined
+    if (handle) {
+      const byHandle = this.db
+        .prepare(
+          'SELECT * FROM dispatch_contexts WHERE assignee_handle = ? ORDER BY rowid DESC LIMIT 1'
+        )
+        .get(handle) as DispatchContextRow | undefined
+      if (byHandle) {
+        return byHandle
+      }
+    }
+    if (!paneKey) {
+      return undefined
+    }
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM dispatch_contexts WHERE assignee_pane_key IS NOT NULL ORDER BY rowid DESC'
+      )
+      .all() as DispatchContextRow[]
+    return rows.find(
+      (row) => row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, paneKey)
+    )
+  }
+
+  /**
+   * Cheap "are there any dispatch rows at all" probe. When false, no terminal
+   * can have an active or recent-completed dispatch, so orchestration-context
+   * builders can skip their per-terminal query fan-out entirely. Cached after
+   * the first probe; createDispatchContext marks it true, resets clear it.
+   */
+  hasAnyDispatchContexts(): boolean {
+    if (this.hasAnyDispatchContextsCache === undefined) {
+      const row = this.db.prepare('SELECT 1 FROM dispatch_contexts LIMIT 1').get()
+      this.hasAnyDispatchContextsCache = row !== undefined
+    }
+    return this.hasAnyDispatchContextsCache
   }
 
   getLatestDispatchForTerminal(handle: string): DispatchContextRow | undefined {
@@ -830,6 +899,74 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined
+  }
+
+  // ── Role leases (ORCH-R15) ──
+
+  grantCoordinatorRoleLease(input: {
+    subjectHandle: string
+    subjectPaneKey?: string
+    grantedByHandle?: string
+  }): RoleLeaseRow {
+    // Why: one active coordinator lease per subject; revoke prior before minting the ceremony.
+    this.revokeCoordinatorRoleLeases({
+      handle: input.subjectHandle,
+      paneKey: input.subjectPaneKey
+    })
+    const id = generateId('lease')
+    this.db
+      .prepare(
+        `INSERT INTO role_leases (
+           id, subject_handle, subject_pane_key, role, ceremony, granted_by_handle
+         ) VALUES (?, ?, ?, 'coordinator', 'explicit_handoff', ?)`
+      )
+      .run(id, input.subjectHandle, input.subjectPaneKey ?? null, input.grantedByHandle ?? null)
+    return this.db.prepare('SELECT * FROM role_leases WHERE id = ?').get(id) as RoleLeaseRow
+  }
+
+  revokeCoordinatorRoleLeases(identity: { handle?: string; paneKey?: string }): number {
+    const handle = identity.handle?.trim() || undefined
+    const paneKey = identity.paneKey?.trim() || undefined
+    const actives = this.db
+      .prepare('SELECT * FROM role_leases WHERE revoked_at IS NULL')
+      .all() as RoleLeaseRow[]
+    let revoked = 0
+    for (const lease of actives) {
+      const handleMatch = Boolean(handle && lease.subject_handle === handle)
+      const paneMatch = Boolean(
+        paneKey && lease.subject_pane_key && isEquivalentPaneKey(lease.subject_pane_key, paneKey)
+      )
+      if (!handleMatch && !paneMatch) {
+        continue
+      }
+      this.db
+        .prepare("UPDATE role_leases SET revoked_at = datetime('now') WHERE id = ?")
+        .run(lease.id)
+      revoked += 1
+    }
+    return revoked
+  }
+
+  findActiveCoordinatorLease(identity: {
+    handle?: string
+    paneKey?: string
+  }): RoleLeaseRow | undefined {
+    const handle = identity.handle?.trim() || undefined
+    const paneKey = identity.paneKey?.trim() || undefined
+    if (!handle && !paneKey) {
+      return undefined
+    }
+    const actives = this.db
+      .prepare('SELECT * FROM role_leases WHERE revoked_at IS NULL ORDER BY rowid DESC')
+      .all() as RoleLeaseRow[]
+    return actives.find((lease) => {
+      if (handle && lease.subject_handle === handle) {
+        return true
+      }
+      return Boolean(
+        paneKey && lease.subject_pane_key && isEquivalentPaneKey(lease.subject_pane_key, paneKey)
+      )
+    })
   }
 
   // ── Decision Gates ──
@@ -974,6 +1111,7 @@ export class OrchestrationDb {
   // ── Lifecycle ──
 
   resetAll(): void {
+    this.db.exec('DELETE FROM role_leases')
     this.db.exec('DELETE FROM coordinator_runs')
     this.db.exec('DELETE FROM decision_gates')
     this.db.exec('DELETE FROM dispatch_contexts')
@@ -983,6 +1121,7 @@ export class OrchestrationDb {
   }
 
   resetTasks(): void {
+    this.db.exec('DELETE FROM role_leases')
     this.db.exec('DELETE FROM coordinator_runs')
     this.db.exec('DELETE FROM decision_gates')
     this.db.exec('DELETE FROM dispatch_contexts')
