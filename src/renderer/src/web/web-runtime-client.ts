@@ -2,6 +2,7 @@
 import type { RuntimeRpcResponse, RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
 import type { WebPairingOffer } from './web-pairing'
+import { installWindowVisibilityInterval } from '../lib/window-visibility-interval'
 import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime-tailscale-hint'
 import {
   decrypt,
@@ -76,7 +77,7 @@ export class WebRuntimeClient {
   private connectTimer: number | null = null
   private handshakeTimer: number | null = null
   private reconnectTimer: number | null = null
-  private heartbeatTimer: number | null = null
+  private heartbeatCleanup: (() => void) | null = null
   private lastInboundFrameAt = 0
   // Timestamp of an outstanding liveness probe (null = none); dead-close fires only on an unanswered sent probe.
   private heartbeatProbeSentAt: number | null = null
@@ -765,18 +766,23 @@ export class WebRuntimeClient {
 
   private startHeartbeat(): void {
     this.clearHeartbeatTimer()
+    this.heartbeatCleanup = installWindowVisibilityInterval({
+      run: () => this.runHeartbeatTick(),
+      runOnVisible: () => this.rebaselineHeartbeat(),
+      intervalMs: HEARTBEAT_INTERVAL_MS
+    })
+  }
+
+  private rebaselineHeartbeat(): void {
     const now = this.now()
     this.lastInboundFrameAt = now
     this.lastHeartbeatTickAt = now
     this.heartbeatProbeSentAt = null
-    this.heartbeatTimer = window.setInterval(() => this.runHeartbeatTick(), HEARTBEAT_INTERVAL_MS)
   }
 
   private clearHeartbeatTimer(): void {
-    if (this.heartbeatTimer) {
-      window.clearInterval(this.heartbeatTimer)
-      this.heartbeatTimer = null
-    }
+    this.heartbeatCleanup?.()
+    this.heartbeatCleanup = null
     this.heartbeatProbeSentAt = null
   }
 
