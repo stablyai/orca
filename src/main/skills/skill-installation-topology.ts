@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { constants } from 'node:fs'
+import { constants, type Stats } from 'node:fs'
 import { access, lstat, realpath, stat } from 'node:fs/promises'
 import { dirname, normalize, resolve } from 'node:path'
 import type { SkillInstallationTopology } from '../../shared/skill-freshness'
@@ -28,7 +28,9 @@ export function normalizedSkillIdentityPath(value: string): string {
 
 export function skillPhysicalIdentity(
   resolvedPath: string,
-  fileStat: Awaited<ReturnType<typeof stat>>
+  // Why: concrete Stats, not Awaited<ReturnType<typeof stat>> — that alias resolves nullable under a
+  // clean-install typecheck (@types/node stat overloads), tripping TS18048.
+  fileStat: Stats
 ): string {
   const inodeIdentity = fileStat.dev || fileStat.ino ? `${fileStat.dev}:${fileStat.ino}` : null
   return inodeIdentity ?? normalizedSkillIdentityPath(resolvedPath)
@@ -103,7 +105,7 @@ export async function classifyHomeSkillTopology(
   }
   const linked = logicalStat.isSymbolicLink()
   let resolvedPath: string
-  let resolvedStat: Awaited<ReturnType<typeof stat>>
+  let resolvedStat: Stats
   try {
     resolvedPath = await realpath(unresolvedPath)
     resolvedStat = await stat(resolvedPath)

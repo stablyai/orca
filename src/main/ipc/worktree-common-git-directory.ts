@@ -1,3 +1,4 @@
+import type { Stats } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import type { Repo } from '../../shared/types'
 import {
@@ -7,7 +8,9 @@ import {
 } from '../../shared/cross-platform-path'
 import type { FileStat } from '../providers/types'
 
-type GitDirectoryStat = Awaited<ReturnType<typeof stat>> | FileStat
+// Why: use the concrete Stats type, not Awaited<ReturnType<typeof stat>> — @types/node's stat overloads
+// make the latter resolve to a nullable type under a clean-install typecheck (TS18048).
+type GitDirectoryStat = Stats | FileStat
 
 type GitDirectoryAccess = {
   stat?: (path: string) => Promise<GitDirectoryStat>
