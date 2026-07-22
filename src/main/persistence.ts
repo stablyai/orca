@@ -4770,7 +4770,7 @@ export class Store {
     }
     this.state.automations = [...(this.state.automations ?? []), automation]
     this.recordFeatureInteraction('automation-created')
-    this.flush()
+    this.scheduleSave()
     return automation
   }
 
@@ -4842,7 +4842,7 @@ export class Store {
       updatedAt: Date.now()
     }
     this.state.automations[index] = updated
-    this.flush()
+    this.scheduleSave()
     return updated
   }
 
@@ -4851,7 +4851,7 @@ export class Store {
     this.state.automationRuns = (this.state.automationRuns ?? []).filter(
       (entry) => entry.automationId !== id
     )
-    this.flush()
+    this.scheduleSave()
   }
 
   createAutomationRun(
@@ -4899,7 +4899,7 @@ export class Store {
     if (trigger === 'manual') {
       this.recordFeatureInteraction('automation-run')
     }
-    this.flush()
+    this.scheduleSave()
     return run
   }
 
@@ -4948,7 +4948,7 @@ export class Store {
       automation.lastRunAt = now
       automation.updatedAt = now
     }
-    this.flush()
+    this.scheduleSave()
     return updated
   }
 
@@ -4966,7 +4966,7 @@ export class Store {
       return { ...run, workspaceDisplayName: normalizedDisplayName }
     })
     if (updatedCount > 0) {
-      this.flush()
+      this.scheduleSave()
     }
     return updatedCount
   }
@@ -4992,7 +4992,7 @@ export class Store {
     const nextRunAt = nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
     const updated = { ...current, nextRunAt, updatedAt: Date.now() }
     this.state.automations[index] = updated
-    this.flush()
+    this.scheduleSave()
     return updated
   }
 
@@ -6476,7 +6476,7 @@ export class Store {
     } else {
       this.state.sshRemotePtyLeases.push(next)
     }
-    this.flush()
+    this.scheduleSave()
   }
 
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
@@ -6510,7 +6510,7 @@ export class Store {
       ? this.clearSshRemotePtyBindingsForLeases(targetId, leasesToClear)
       : false
     if (changed || bindingsChanged) {
-      this.flush()
+      this.scheduleSave()
     }
   }
 
@@ -6525,7 +6525,7 @@ export class Store {
     const shouldClearBindings = state === 'terminated' || state === 'expired'
     if (lease.state === state) {
       if (shouldClearBindings && this.clearSshRemotePtyBindingsForLeases(targetId, [lease])) {
-        this.flush()
+        this.scheduleSave()
       }
       return
     }
@@ -6540,7 +6540,7 @@ export class Store {
     if (shouldClearBindings) {
       this.clearSshRemotePtyBindingsForLeases(targetId, [lease])
     }
-    this.flush()
+    this.scheduleSave()
   }
 
   removeSshRemotePtyLease(targetId: string, ptyId: string): void {
@@ -6554,7 +6554,7 @@ export class Store {
       (lease) => lease.targetId !== targetId || lease.ptyId !== relayPtyId
     )
     if (this.state.sshRemotePtyLeases.length !== before) {
-      this.flush()
+      this.scheduleSave()
     }
   }
 
@@ -6566,7 +6566,7 @@ export class Store {
       (lease) => lease.targetId !== targetId
     )
     if (this.state.sshRemotePtyLeases.length !== before) {
-      this.flush()
+      this.scheduleSave()
     }
   }
 

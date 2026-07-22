@@ -1793,6 +1793,7 @@ describe('Store', () => {
       store.updateAutomation(existingWorkspace.id, { workspaceMode: 'new_per_run' }).reuseSession
     ).toBe(false)
 
+    store.flush()
     const persisted = readDataFile() as { automations: Record<string, unknown>[] }
     delete persisted.automations[0].reuseSession
     writeDataFile(persisted)
@@ -1955,6 +1956,7 @@ describe('Store', () => {
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
     const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    store.flush()
     const persisted = readDataFile() as {
       automations: Record<string, unknown>[]
       automationRuns: Record<string, unknown>[]
@@ -2210,6 +2212,7 @@ describe('Store', () => {
 
     expect(store.getUI().featureInteractions?.['automation-created']?.interactionCount).toBe(1)
     expect(store.getUI().featureInteractions?.['automation-run']?.interactionCount).toBe(1)
+    store.flush()
     const persisted = readDataFile() as PersistedState
     expect(persisted.ui?.featureInteractions?.['automation-created']).toMatchObject({
       interactionCount: 1
