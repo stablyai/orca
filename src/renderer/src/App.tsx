@@ -898,13 +898,28 @@ function App(): React.JSX.Element {
         // fetchAllWorktrees({hydrationPurge:'defer'}) returns before its folderWorkspaces read (the purge
         // guard in worktrees.ts), so it needs no catalog ordering here. session-get is a pure read;
         // hydrate-session-stores below still runs only after all three settle. See #18.
-        const [, sessionRead] = await Promise.all([
+        // Why (#18 review): join on allSettled, NOT fail-fast Promise.all. A fast rejection from one branch
+        // would drop into the catch/recovery path (which reconnects terminals and flips readiness) while a
+        // sibling hydration task is still in flight and mutating catalog/worktree state — the old serial flow
+        // guaranteed no hydration step ran during recovery. Wait for all three to settle, then surface the
+        // first rejection so recovery still triggers, but only once nothing is left writing to the store.
+        const [worktreesOutcome, sessionOutcome, catalogOutcome] = await Promise.allSettled([
           timeRendererStartupStep('fetch-worktrees', () =>
             actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
           ),
           sessionReadPromise,
           localCatalogChain
         ])
+        if (worktreesOutcome.status === 'rejected') {
+          throw worktreesOutcome.reason
+        }
+        if (sessionOutcome.status === 'rejected') {
+          throw sessionOutcome.reason
+        }
+        if (catalogOutcome.status === 'rejected') {
+          throw catalogOutcome.reason
+        }
+        const sessionRead = sessionOutcome.value
         await keybindingsPromise
         if (!cancelled) {
           const sessionHydrationOptions = {

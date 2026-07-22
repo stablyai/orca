@@ -48,14 +48,19 @@ describe('renderer startup runtime routing', () => {
     // Lineage is deferred to post-hydration remote refresh, not part of the local hydration block.
     expect(lineageIndex).toBe(-1)
 
-    // Guard the concurrency itself: fetch-worktrees, the session read, and the local catalog chain must
-    // be joined in a single Promise.all so the two disk reads hide behind the O(repos) worktree scan.
-    const joinStart = startupBlock.indexOf('await Promise.all([')
+    // Guard the concurrency itself: fetch-worktrees, the session read, and the local catalog chain must be
+    // joined in a single allSettled so the two disk reads hide behind the O(repos) worktree scan — AND so a
+    // fast rejection can't enter recovery while a sibling is still mutating the store (allSettled, not
+    // fail-fast Promise.all).
+    const joinStart = startupBlock.indexOf('await Promise.allSettled([')
     expect(joinStart).toBeGreaterThan(hydrateUiIndex)
     const joinBlock = startupBlock.slice(joinStart)
     expect(joinBlock).toContain("timeRendererStartupStep('fetch-worktrees'")
     expect(joinBlock).toContain('sessionReadPromise')
     expect(joinBlock).toContain('localCatalogChain')
+    // The join must not be fail-fast: a bare `Promise.all([` on these branches would re-introduce the
+    // recovery-during-hydration race.
+    expect(startupBlock).not.toContain('await Promise.all([')
   })
 
   it('refreshes remote catalogs after startup hydration succeeds', () => {
