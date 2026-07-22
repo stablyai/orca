@@ -8,15 +8,51 @@ export type WorkerEffect = {
   role?: string
   id?: string
   state?: string
+  tabId?: string
+  leafId?: string
+  requested?: string
+  effective?: string
+  source?: string
+  hookFound?: boolean
+  startupPolicy?: string
+  terminalId?: string
 }
 
 export type WorkerSetupReceipt = {
-  requested: string
-  effective: string
+  requested: 'run' | 'skip' | 'inherit' | 'not_applicable'
+  effective: 'run' | 'skip' | 'inherit' | 'not_applicable'
   source: string
   hookFound: boolean
-  startupPolicy: string
-  state: string
+  startupPolicy: 'start-immediately' | 'wait-for-setup'
+  state:
+    | 'running'
+    | 'succeeded'
+    | 'failed'
+    | 'skipped'
+    | 'not_configured'
+    | 'spawn_failed'
+    | 'not_applicable'
+}
+
+export function applyWaitForSetupOutcome(
+  receipt: WorkerSetupReceipt,
+  effects: WorkerEffect[],
+  wait: { satisfied: boolean; status: string }
+): void {
+  if (receipt.startupPolicy !== 'wait-for-setup' || receipt.state !== 'running') {
+    return
+  }
+  if (wait.satisfied) {
+    receipt.state = 'succeeded'
+  } else if (wait.status === 'exited') {
+    receipt.state = 'failed'
+  } else {
+    return
+  }
+  const setupEffect = effects.find((effect) => effect.kind === 'setup')
+  if (setupEffect) {
+    setupEffect.state = receipt.state
+  }
 }
 
 export async function createWorkerWorktree(args: {
@@ -83,7 +119,6 @@ export async function createWorkerWorktree(args: {
     startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
     state: created.setupReceipt?.state ?? 'not_configured'
   }
-  effects.push({ kind: 'setup', action: setupDecision, state: setupReceipt.state })
   if (!terminalHandle) {
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
   }
@@ -98,9 +133,25 @@ export async function createWorkerWorktree(args: {
             ? 'setup'
             : 'configured_tab',
       action: terminal.handle === terminalHandle ? 'reused_agent_terminal' : 'created',
-      id: terminal.handle
+      id: terminal.handle,
+      tabId: terminal.tabId,
+      leafId: terminal.leafId
     })
   }
+  const setupTerminal = effects.find(
+    (effect) => effect.kind === 'terminal' && effect.role === 'setup'
+  )
+  effects.push({
+    kind: 'setup',
+    action: setupDecision,
+    requested: setupReceipt.requested,
+    effective: setupReceipt.effective,
+    source: setupReceipt.source,
+    hookFound: setupReceipt.hookFound,
+    startupPolicy: setupReceipt.startupPolicy,
+    state: setupReceipt.state,
+    terminalId: setupTerminal?.id
+  })
   return {
     worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
     terminalHandle,

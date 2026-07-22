@@ -1,0 +1,106 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const callMock = vi.fn()
+const originalExitCode = process.exitCode
+
+vi.mock('../format', () => ({ printResult: vi.fn() }))
+vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
+
+import { ORCHESTRATION_HANDLERS } from './orchestration'
+
+describe('orchestration worker-start CLI contract', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    process.exitCode = undefined
+  })
+
+  afterEach(() => {
+    process.exitCode = originalExitCode
+  })
+
+  const invokeWorkerStart = (flags: Map<string, string | boolean>) =>
+    ORCHESTRATION_HANDLERS['orchestration worker-start']({
+      flags,
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+  it('passes the complete supported creation contract and retry receipt', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        runId: 'run_1',
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        effects: [],
+        residualResources: []
+      }
+    })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['on', 'windows'],
+        ['worktree', 'new-top-level'],
+        ['name', 'release-audit'],
+        ['repo', 'id:windows-repo'],
+        ['base-branch', 'origin/release'],
+        ['display-name', 'Release audit'],
+        ['comment', 'Supervised from the Mac Run home'],
+        ['setup', 'run'],
+        ['agent', 'codex'],
+        ['timeout-ms', '90000'],
+        ['run', 'run_1'],
+        ['from', 'term_coord'],
+        ['retry-request', 'request_1']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.workerStart',
+      {
+        task: 'task_1',
+        on: 'windows',
+        worktree: 'new-top-level',
+        name: 'release-audit',
+        repo: 'id:windows-repo',
+        baseBranch: 'origin/release',
+        displayName: 'Release audit',
+        comment: 'Supervised from the Mac Run home',
+        setup: 'run',
+        agent: 'codex',
+        terminal: undefined,
+        retryOf: undefined,
+        timeoutMs: 90_000,
+        run: 'run_1',
+        from: 'term_coord',
+        devMode: false
+      },
+      { orchestrationRequestId: 'request_1' }
+    )
+    expect(process.exitCode).toBeUndefined()
+  })
+
+  it('sets an unsuccessful exit code for failed and unknown receipts', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'outcome_unknown',
+        effects: [],
+        residualResources: []
+      }
+    })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    )
+
+    expect(process.exitCode).toBe(1)
+  })
+})

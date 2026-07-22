@@ -6,11 +6,17 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import {
+  appendFederationSetupEffect,
   appendFederationTerminalEffects,
-  isFederationEffectUnknown,
-  isFederationResidualEffect,
   type FederationEffect
 } from './orchestration-federation-effects'
+import type { WorkerSetupReceipt } from './orchestration-worker-topology'
+import {
+  persistFederatedReadinessStage,
+  persistFederatedSetupSpawnFailure,
+  persistFederatedSetupWaitOutcome
+} from './orchestration-federation-setup'
+import { failFederatedAttachmentWithReceipt } from './orchestration-federation-start-receipt'
 
 const FederationAttachStartParams = z.object({
   dispatchId: requiredString('Missing Dispatch ID'),
@@ -96,7 +102,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
       let failedStage = createsWorktree ? 'worktree_create' : 'worktree_resolve'
       let worktree
       let terminalHandle = params.terminal
-      let setup = {
+      let setup: WorkerSetupReceipt = {
         requested: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         effective: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         source: createsWorktree
@@ -144,7 +150,6 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
             state: created.setupReceipt?.state ?? 'not_configured'
           }
-          effects.push({ kind: 'setup', action: setupDecision, state: setup.state })
           if (!terminalHandle) {
             throw new Error(
               created.warning ?? 'Agent-first worktree creation returned no terminal.'
@@ -152,6 +157,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           }
           const listed = await runtime.listTerminals(`id:${created.worktree.id}`)
           appendFederationTerminalEffects(effects, listed.terminals, terminalHandle)
+          appendFederationSetupEffect(effects, setup)
         } else {
           worktree = await runtime.showManagedWorktree(params.worktree).catch(() => {
             throw new OrchestrationError(
@@ -202,21 +208,29 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         if (!worktree || !terminalHandle) {
           throw new Error('Federated worker topology did not resolve.')
         }
-        db.recordRemoteAttachmentStage({
+        const setupStage = {
+          db,
           dispatchId: params.dispatchId,
-          stage: 'terminal_readying',
           worktreeId: worktree.id,
           terminalHandle,
-          setupState: setup.state,
-          effects,
-          residualResources: effects.filter(isFederationResidualEffect)
-        })
+          setup,
+          effects
+        }
+        if (persistFederatedSetupSpawnFailure(setupStage)) {
+          failedStage = 'setup_start'
+          throw new Error('Setup terminal failed to start before the gated agent launch.')
+        }
+        persistFederatedReadinessStage(setupStage)
         failedStage = 'agent_readiness'
         const wait = await runtime.waitForTerminal(terminalHandle, {
           condition: 'tui-idle',
           timeoutMs: params.timeoutMs ?? 60_000
         })
+        persistFederatedSetupWaitOutcome({ ...setupStage, wait })
         if (!wait.satisfied) {
+          if (setup.state === 'failed') {
+            failedStage = 'setup_wait'
+          }
           throw new Error(
             wait.blockedReason
               ? `Agent startup blocked: ${wait.blockedReason}`
@@ -251,11 +265,17 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
           })
         )
-        effects.push({ kind: 'dispatch_input', state: 'accepted' })
+        effects.push({
+          kind: 'dispatch_input',
+          role: 'agent',
+          id: terminalHandle,
+          state: 'accepted'
+        })
         const attachment = db.markRemoteAttachmentReady(params.dispatchId)
         return {
           dispatchId: params.dispatchId,
           state: attachment.state,
+          stage: attachment.stage,
           runtimeEpoch: runtime.getRuntimeId(),
           worktreeId: worktree.id,
           terminalHandle,
@@ -264,18 +284,14 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           residualResources: []
         }
       } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error)
-        const unknown = isFederationEffectUnknown(error, failedStage)
-        const attachment = db.failRemoteAttachment(params.dispatchId, failedStage, reason, unknown)
-        return {
+        return failFederatedAttachmentWithReceipt({
+          db,
           dispatchId: params.dispatchId,
-          state: attachment.state === 'start_unknown' ? 'outcome_unknown' : attachment.state,
           runtimeEpoch: runtime.getRuntimeId(),
           failedStage,
-          lastError: reason,
-          effects: JSON.parse(attachment.effects) as unknown[],
-          residualResources: JSON.parse(attachment.residual_resources) as unknown[]
-        }
+          error,
+          setup
+        })
       }
     }
   })

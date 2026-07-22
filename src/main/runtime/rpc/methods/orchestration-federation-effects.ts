@@ -4,11 +4,19 @@ export type FederationEffect = {
   role?: string
   id?: string
   state?: string
+  tabId?: string
+  leafId?: string
+  requested?: string
+  effective?: string
+  source?: string
+  hookFound?: boolean
+  startupPolicy?: string
+  terminalId?: string
 }
 
 export function appendFederationTerminalEffects(
   effects: FederationEffect[],
-  terminals: { handle: string; title: string | null }[],
+  terminals: { handle: string; title: string | null; tabId?: string; leafId?: string }[],
   agentHandle: string
 ): void {
   for (const terminal of terminals) {
@@ -21,9 +29,33 @@ export function appendFederationTerminalEffects(
             ? 'setup'
             : 'configured_tab',
       action: terminal.handle === agentHandle ? 'reused_agent_terminal' : 'created',
-      id: terminal.handle
+      id: terminal.handle,
+      tabId: terminal.tabId,
+      leafId: terminal.leafId
     })
   }
+}
+
+export function appendFederationSetupEffect(
+  effects: FederationEffect[],
+  setup: {
+    requested: string
+    effective: string
+    source: string
+    hookFound: boolean
+    startupPolicy: string
+    state: string
+  }
+): void {
+  const setupTerminal = effects.find(
+    (effect) => effect.kind === 'terminal' && effect.role === 'setup'
+  )
+  effects.push({
+    kind: 'setup',
+    action: setup.requested,
+    ...setup,
+    terminalId: setupTerminal?.id
+  })
 }
 
 export function isFederationResidualEffect(effect: FederationEffect): boolean {

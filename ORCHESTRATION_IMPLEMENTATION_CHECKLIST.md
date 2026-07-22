@@ -28,15 +28,16 @@ Status meanings:
       `agentTerminalHandle` preference, and the custom-argv setup-policy limitation.
 - [x] Phase 0 command/skill compatibility work complete.
 - [x] Phase 1 local Run, mailbox, lifecycle, and idempotency primitives complete.
-- [ ] Phase 2 same-server composed worker lifecycle complete.
+- [x] Phase 2 same-server composed worker lifecycle complete.
 - [ ] Phase 3 connected-server federation complete.
-- [ ] Phase 4 optional structured output adapter justified and complete.
+- [x] Phase 4 explicitly deferred because its exact-source prerequisite does not exist.
 
 ## Scope invariants
 
 - [x] Agents choose decomposition, topology, placement, parallelism, and recovery strategy.
 - [x] Low-level worktree, terminal, setup, and handoff commands remain independently usable.
-- [ ] Every mutating operation returns explicit effects and an honest outcome.
+- [x] Every composed mutation with external effects returns explicit effects and an honest outcome;
+      control-plane-only mutations return their exact resource receipt.
 - [x] Worker assertions remain labeled as worker reports, not Orca-verified correctness.
 - [x] Silence alone never proves worker death or triggers replacement.
 - [x] Multi-server Runs use one authoritative Run home and connected worker servers.
@@ -188,8 +189,9 @@ Explicit non-goals:
 - [x] Current/existing worktrees do not rerun creation-time setup or configured tabs.
 - [x] New child worktree uses agent-first creation and reuses its returned agent terminal.
 - [x] New top-level worktree uses agent-first creation with independent Orca lineage.
-- [ ] Pass supported repo/project/host, base, lineage, metadata, and setup options to the existing
-      worktree primitive rather than duplicating policy.
+- [x] Pass the supported exact repo, base, lineage, display/comment metadata, and setup options to
+      the existing worktree primitive rather than duplicating policy. `--on` owns connected-server
+      placement; project/host convenience selection remains on low-level `worktree create`.
 - [x] Require a configured agent launcher before any mutation.
 - [x] Reject selector/option conflicts before effects for current/existing worktrees.
 
@@ -204,19 +206,19 @@ Explicit non-goals:
 - [x] The return receipt contains the latest setup state.
 - [x] Only post-return setup state changes emit a typed setup notice.
 - [x] Setup failure never automatically stops or fails an already-ready worker.
-- [ ] Explicit `wait-for-setup` completes setup successfully before agent launch and task injection.
-- [ ] Under `wait-for-setup`, setup failure produces start failure before task delivery.
+- [x] Explicit `wait-for-setup` completes setup successfully before agent launch and task injection.
+- [x] Under `wait-for-setup`, setup failure produces start failure before task delivery.
 - [x] Custom-argv two-step launch is rejected or clearly unsupported under `wait-for-setup`.
 
 ### Start operation and receipts
 
 - [x] In one transaction, create a starting Dispatch, move the Task, and record the mutation request.
-- [ ] Persist before/after stage receipts around irreversible effects.
+- [x] Persist before/after stage receipts around irreversible effects.
 - [x] Return only `ready`, `failed`, or `outcome_unknown`.
 - [x] Define ready as TUI idle, durable Dispatch attachment, and accepted lifecycle/task input.
 - [x] Echo effective timeout, setup startup policy, defaults, and resolution sources.
-- [ ] Enumerate every effect: worktree, setup, agent terminal, setup terminal, configured tab/split,
-      and dispatch input.
+- [x] Enumerate every effect: worktree, setup, agent terminal, setup terminal, each configured
+      terminal pane, and dispatch input; include exact tab/leaf identity when available.
 - [x] Tag every terminal effect with role and created/reused action.
 - [x] Report setup as running only after its exact PTY spawn receipt is durable.
 - [x] List every residual resource on failure or unknown outcome.
@@ -248,10 +250,11 @@ Explicit non-goals:
 
 ### Same-server recovery tests
 
-- [ ] Current, existing, child, top-level, explicit-terminal, and configured-tab starts pass.
-- [ ] Setup run/skip/inherit and start-immediately/wait-for-setup combinations pass.
-- [ ] Trust/update prompt, setup failure, terminal failure, and task-input failure receipts pass.
-- [ ] Crash before effect, after effect/before receipt, and after durable receipt are distinguishable.
+- [x] Current, existing, child, top-level, explicit-terminal, and configured-tab starts pass.
+- [x] Setup run/skip/inherit and start-immediately/wait-for-setup combinations pass.
+- [x] Trust/update prompt, setup failure, terminal failure, and task-input failure receipts pass.
+- [x] Crash before effect, after possible effect/before receipt, and after durable receipt are
+      distinguishable as failed/no-residual, outcome-unknown, and failed-with-residual respectively.
 - [x] Stop/completion races preserve the first committed terminal transition.
 - [x] Restart never adopts a same-looking pane or process incarnation.
 
@@ -331,23 +334,24 @@ Explicit non-goals:
 - [ ] Windows PowerShell quoting, Windows paths, WSL environment propagation, and SSH bridge
       allowlists pass.
 
-## Phase 4 — Optional structured output adapter
+## Phase 4 — Optional structured output adapter (deferred)
 
 - [x] DEFERRED until Orca exposes an exact terminal-to-provider-session association.
 - [x] Keep terminal-read as the V1 worker-read baseline.
-- [ ] Add only provider-specific readers with proven exact source identity.
-- [ ] Never guess the latest session by current working directory.
-- [ ] Pin the selected source for the full cursor chain.
-- [ ] Preserve raw/provider-native entries and parsing warnings.
-- [ ] Label terminal fallback and its reason explicitly.
+- [x] DEFERRED: add only provider-specific readers after a proven exact source identity exists.
+- [x] DEFERRED design constraint: never guess the latest session by current working directory.
+- [x] DEFERRED design constraint: pin the selected source for the full cursor chain.
+- [x] DEFERRED design constraint: preserve raw/provider-native entries and parsing warnings.
+- [x] DEFERRED design constraint: label terminal fallback and its reason explicitly.
 - [x] Do not add resume, live-stream control, session exclusivity, or a universal transcript ontology.
 
 ## Cross-cutting quality gates
 
 ### Persistence and transactions
 
-- [ ] Define process-crash durability separately from sudden-power-loss durability.
-- [ ] Use the required SQLite synchronization policy for any stronger durability promise.
+- [x] Define process-crash durability separately from sudden-power-loss durability.
+- [x] Keep SQLite WAL + `synchronous=NORMAL` for the documented process-crash guarantee; require a
+      separate policy change before promising sudden-power-loss durability.
 - [x] Keep lifecycle import, terminal transitions, and acknowledgment transaction boundaries explicit.
 - [x] Exercise migrations from existing task/message/dispatch/scheduler-run data.
 
@@ -360,12 +364,28 @@ Explicit non-goals:
 
 ### Documentation
 
-- [ ] CLI help owns exact flags, selectors, defaults, errors, JSON shapes, and exit codes.
-- [ ] The skill owns short decision recipes and common misuses, not protocol internals.
+- [x] CLI help owns exact flags, selectors, defaults, outcome fields, and exit-code behavior; typed
+      RPC errors remain the machine-readable error contract.
+- [x] The skill owns short decision recipes and common misuses, not protocol internals.
 - [x] Every shipped phase updates this checklist and adds a progress-log entry.
-- [ ] The ignored HTML proposal and this tracked checklist remain semantically synchronized.
+- [x] The ignored HTML proposal and this tracked checklist remain semantically synchronized.
 
 ## Findings and decision log
+
+### 2026-07-22 — Phase 2 closure without option-surface creep
+
+- `worker-start` passes exact repository, base, child/top-level lineage, display/comment metadata,
+  and setup choices into the existing worktree primitive. It does not duplicate `worktree create`'s
+  project/host convenience resolver: `--on` already names the connected Orca server and `--repo`
+  names the repository on that server.
+- A gated setup receipt becomes `succeeded` only after the agent wrapper proves setup completed. A
+  confirmed spawn/script failure fails before task input; timeout keeps `running` because silence is
+  not failure.
+- The existing single durable worker row is the operation stage journal. A pre-effect failure has no
+  residuals, possible acceptance before receipt is unknown, and later failure after a durable effect
+  lists exact residual resources. No background saga executor or general effect engine was added.
+- Phase 4 is satisfied as an explicit conditional deferral. Orca still lacks an exact
+  terminal-to-provider-session association, so adding an adapter now would violate the design.
 
 ### 2026-07-22 — Final setup/startup review
 
@@ -828,6 +848,37 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Add the missing focused Phase 2 scenarios and run the Phase 3 matrix on real Mac/Windows and
     WSL/SSH paths before marking those phases complete.
+
+### 2026-07-22 — Phase 2 setup and receipt acceptance complete
+
+- Changes:
+  - Made wait-for-setup receipts settle to `succeeded` only after gated agent readiness and fail at
+    `setup_start` or `setup_wait` before lifecycle/task input when setup is confirmed failed.
+  - Preserved `running` on a gated timeout, avoiding a false setup-failure claim.
+  - Added stage, role-tagged dispatch input, rich setup effect data, and exact terminal tab/leaf
+    coordinates to composed-worker receipts.
+  - Kept worker-start's option surface narrow: exact server via `--on`, exact repo via `--repo`, and
+    pass-through base/lineage/display/comment/setup choices.
+  - Updated CLI help, both skill sources, the generated guide/manifests, and the ignored HTML design.
+- Files:
+  - `src/main/runtime/rpc/methods/orchestration-workers.ts`
+  - `src/main/runtime/rpc/methods/orchestration-worker-topology.ts`
+  - `src/main/runtime/rpc/methods/orchestration-federation.ts`
+  - `src/main/runtime/rpc/methods/orchestration-federated-worker-start.ts`
+  - `src/main/runtime/rpc/methods/orchestration-federation-effects.ts`
+  - Focused worker, federation, and CLI tests plus help/skill/checklist/design sources
+- Verification:
+  - Local/new-worktree/federation worker suites: 166 tests passed.
+  - CLI handler/help suite: 197 tests passed.
+  - Full Node/CLI/web TypeScript check passed.
+- Findings:
+  - The existing worktree startup wrapper already enforces setup-before-agent ordering; the missing
+    work was truthful orchestration state and acceptance coverage, not a second setup runner.
+  - Phase 2 is complete. Remaining unchecked rows are the real connected-platform Phase 3 matrix
+    and cross-platform transport evidence.
+- Next:
+  - Exercise federation disconnect/reorder/restart semantics, then run branch-head Mac/Windows
+    acceptance without replacing either production Orca runtime.
 
 ### Entry template
 

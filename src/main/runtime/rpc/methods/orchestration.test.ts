@@ -2032,6 +2032,68 @@ describe('orchestration RPC methods', () => {
       )
     })
 
+    it('starts a fresh agent in an exact existing worktree without replaying setup', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
+      vi.mocked(runtime.showManagedWorktree).mockImplementation(
+        async (selector) =>
+          ({
+            id: selector === 'id:repo::other' ? 'repo::other' : 'repo::worktree',
+            repoId: 'repo'
+          }) as never
+      )
+      const task = db.createTask({ spec: 'existing worktree worker' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        worktree: 'id:repo::other',
+        agent: 'codex'
+      })) as { state: string; setup: { state: string }; effects: unknown[] }
+
+      expect(result).toMatchObject({ state: 'ready' })
+      expect(result.effects).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: 'worktree', action: 'reused', id: 'repo::other' }),
+          expect.objectContaining({ kind: 'setup', action: 'not_applicable' })
+        ])
+      )
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::other',
+        expect.objectContaining({ command: 'codex' })
+      )
+      expect(createWorktree).not.toHaveBeenCalled()
+    })
+
+    it('reuses only an explicitly selected existing agent terminal', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const task = db.createTask({ spec: 'reuse exact worker' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        terminal: 'term_worker'
+      })) as { state: string; effects: unknown[] }
+
+      expect(result).toMatchObject({ state: 'ready' })
+      expect(result.effects).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'terminal',
+            role: 'agent',
+            action: 'reused',
+            id: 'term_worker'
+          })
+        ])
+      )
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+      expect(createWorktree).not.toHaveBeenCalled()
+    })
+
     it('returns a failed receipt and preserves a created terminal as residual', async () => {
       setup()
       mockCurrentWorkerStart({ ready: false })
@@ -2048,6 +2110,80 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('failed')
       expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
+
+    it('returns a no-effect failure when terminal creation fails', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.createTerminal).mockRejectedValueOnce(new Error('terminal spawn rejected'))
+      const task = db.createTask({ spec: 'terminal failure' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { state: string; failedStage: string; residualResources: unknown[] }
+
+      expect(result).toMatchObject({
+        state: 'failed',
+        failedStage: 'terminal_create',
+        residualResources: []
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
+    it('preserves the exact attached terminal when task input is rejected', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
+        new Error('agent input rejected')
+      )
+      const task = db.createTask({ spec: 'input failure' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as {
+        state: string
+        failedStage: string
+        residualResources: { kind: string; id: string }[]
+      }
+
+      expect(result).toMatchObject({ state: 'failed', failedStage: 'dispatch_input' })
+      expect(result.residualResources).toEqual(
+        expect.arrayContaining([expect.objectContaining({ kind: 'terminal', id: 'term_worker' })])
+      )
+    })
+
+    it.each(['codex-update-prompt', 'codex-trust-workspace'] as const)(
+      'returns a truthful readiness failure for %s',
+      async (blockedReason) => {
+        setup()
+        mockCurrentWorkerStart()
+        vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
+          handle: 'term_worker',
+          condition: 'tui-idle',
+          satisfied: false,
+          status: 'running',
+          exitCode: null,
+          blockedReason
+        })
+        const task = db.createTask({ spec: 'blocked startup prompt' })
+
+        const result = (await call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          agent: 'codex'
+        })) as { state: string; failedStage: string; lastError: string }
+
+        expect(result).toMatchObject({
+          state: 'failed',
+          failedStage: 'agent_readiness',
+          lastError: `Agent startup blocked: ${blockedReason}`
+        })
+        expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+      }
+    )
 
     it('creates a child worktree agent-first with setup run by default', async () => {
       setup()

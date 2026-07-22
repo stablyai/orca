@@ -7,10 +7,16 @@ import { startFederatedWorker } from './orchestration-federated-worker-start'
 import { WorkerStartParams } from './orchestration-worker-start-schema'
 import {
   createWorkerWorktree,
-  isUnknownWorkerStartOutcome,
   monitorWorkerSetup,
-  type WorkerEffect
+  type WorkerEffect,
+  type WorkerSetupReceipt
 } from './orchestration-worker-topology'
+import {
+  persistGatedSetupSpawnFailure,
+  persistWorkerReadinessStage,
+  persistWorkerSetupWaitOutcome
+} from './orchestration-worker-setup-gate'
+import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -138,7 +144,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
       let terminalHandle = params.terminal
       let failedStage = 'terminal_create'
-      let setupReceipt = {
+      let setupReceipt: WorkerSetupReceipt = {
         requested: 'not_applicable',
         effective: 'not_applicable',
         source: 'existing_worktree',
@@ -192,24 +198,30 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         if (!resolvedWorktree || !terminalHandle) {
           throw new Error('Worker topology did not resolve an agent terminal and worktree.')
         }
-        db.recordWorkerStage({
+        const setupStage = {
+          db,
           dispatchId: started.dispatch.id,
-          stage: 'terminal_readying',
           worktreeId: resolvedWorktree.id,
           terminalHandle,
-          effects,
-          residualResources: effects.filter(
-            (effect) =>
-              effect.action?.startsWith('created') || effect.action === 'reused_agent_terminal'
-          )
-        })
+          setup: setupReceipt,
+          effects
+        }
+        if (persistGatedSetupSpawnFailure(setupStage)) {
+          failedStage = 'setup_start'
+          throw new Error('Setup terminal failed to start before the gated agent launch.')
+        }
+        persistWorkerReadinessStage(setupStage)
 
         failedStage = 'agent_readiness'
         const wait = await runtime.waitForTerminal(terminalHandle, {
           condition: 'tui-idle',
           timeoutMs: params.timeoutMs ?? 60_000
         })
+        persistWorkerSetupWaitOutcome({ ...setupStage, wait })
         if (!wait.satisfied) {
+          if (setupReceipt.state === 'failed') {
+            failedStage = 'setup_wait'
+          }
           throw new Error(
             wait.blockedReason
               ? `Agent startup blocked: ${wait.blockedReason}`
@@ -243,7 +255,12 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
         })
         await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
-        effects.push({ kind: 'dispatch_input', state: 'accepted' })
+        effects.push({
+          kind: 'dispatch_input',
+          role: 'agent',
+          id: terminalHandle,
+          state: 'accepted'
+        })
         const worker = db.markWorkerDispatchReady(started.dispatch.id)
         monitorWorkerSetup({
           runtime,
@@ -258,35 +275,22 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           taskId: task.id,
           dispatchId: started.dispatch.id,
           state: worker.state,
+          stage: worker.stage,
           setup: setupReceipt,
           timeoutMs: params.timeoutMs ?? 60_000,
           effects,
           residualResources: []
         }
       } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error)
-        const unknown = isUnknownWorkerStartOutcome(error, failedStage)
-        const worker = unknown
-          ? db.markWorkerStartUnknown(started.dispatch.id, failedStage, reason)
-          : db.failWorkerStart(started.dispatch.id, failedStage, reason)
-        return {
+        return failWorkerStartWithReceipt({
+          db,
           runId: run.id,
           taskId: task.id,
           dispatchId: started.dispatch.id,
-          state: worker.state === 'start_unknown' ? 'outcome_unknown' : worker.state,
           failedStage,
-          lastError: reason,
-          effects: JSON.parse(worker.effects) as unknown[],
-          residualResources: JSON.parse(worker.residual_resources) as unknown[],
-          ...(unknown
-            ? {
-                nextCommands: [
-                  `orca orchestration worker-show --dispatch ${started.dispatch.id} --json`,
-                  `orca orchestration worker-abandon --dispatch ${started.dispatch.id} --json`
-                ]
-              }
-            : {})
-        }
+          error,
+          setup: setupReceipt
+        })
       }
     }
   })

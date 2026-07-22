@@ -127,13 +127,14 @@ export async function startFederatedWorker(args: {
         effects: remote.effects,
         residualResources: remote.residualResources
       })
-      db.markWorkerDispatchReady(started.dispatch.id)
+      const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
       runtime.ensureOrchestrationFederationRelay(runId)
       return {
         runId,
         taskId: task.id,
         dispatchId: started.dispatch.id,
         state: 'ready',
+        stage: readyWorker.stage,
         server: { environmentId: server.environmentId, name: server.name },
         setup: remote.setup,
         timeoutMs: params.timeoutMs ?? 60_000,
@@ -159,9 +160,11 @@ export async function startFederatedWorker(args: {
       taskId: task.id,
       dispatchId: started.dispatch.id,
       state: worker.state,
+      stage: worker.stage,
       server: { environmentId: server.environmentId, name: server.name },
       failedStage: worker.stage,
       lastError: worker.last_error,
+      setup: remote.setup,
       effects: remote.effects ?? [],
       residualResources: remote.residualResources ?? []
     }
@@ -174,6 +177,7 @@ export async function startFederatedWorker(args: {
         taskId: task.id,
         dispatchId: started.dispatch.id,
         state: worker.state,
+        stage: worker.stage,
         server: { environmentId: server.environmentId, name: server.name },
         failedStage: worker.stage,
         lastError: worker.last_error,
@@ -251,6 +255,7 @@ function federatedUnknownReceipt(
     taskId,
     dispatchId: worker.dispatch_id,
     state: 'outcome_unknown',
+    stage: worker.stage,
     server: { name: serverName },
     failedStage: worker.stage,
     lastError: worker.last_error,
