@@ -7,6 +7,29 @@ afterEach(() => {
 })
 
 describe('RemoteRuntimeServerHeartbeat', () => {
+  it('still reaps a client that misses a probe while another remains alive', async () => {
+    vi.useFakeTimers()
+    let now = 1_000
+    const responsiveSocket = { ping: vi.fn(), terminate: vi.fn() } as unknown as WebSocket
+    const deadSocket = { ping: vi.fn(), terminate: vi.fn() } as unknown as WebSocket
+    const heartbeat = new RemoteRuntimeServerHeartbeat(100, () => now)
+    heartbeat.noteAlive(responsiveSocket)
+    heartbeat.noteAlive(deadSocket)
+    heartbeat.start(() => [responsiveSocket, deadSocket])
+
+    now += 100
+    await vi.advanceTimersByTimeAsync(100)
+    heartbeat.noteAlive(responsiveSocket)
+    now += 100
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(responsiveSocket.ping).toHaveBeenCalledTimes(2)
+    expect(responsiveSocket.terminate).not.toHaveBeenCalled()
+    expect(deadSocket.ping).toHaveBeenCalledTimes(1)
+    expect(deadSocket.terminate).toHaveBeenCalledTimes(1)
+    heartbeat.stop()
+  })
+
   it('grants clients a fresh probe after the server event loop resumes', async () => {
     vi.useFakeTimers()
     let now = 1_000
