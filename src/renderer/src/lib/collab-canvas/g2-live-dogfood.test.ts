@@ -4,6 +4,7 @@
  * at test generation time via env or fixture).
  */
 import { readFileSync, existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildAgentDraftShapeProps,
