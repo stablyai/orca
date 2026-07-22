@@ -7,7 +7,8 @@ import {
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
-  UI_LANGUAGE_SYSTEM
+  UI_LANGUAGE_SYSTEM,
+  UI_LANGUAGE_THAI
 } from './ui-language'
 
 describe('ui-locale', () => {
@@ -32,6 +33,11 @@ describe('ui-locale', () => {
     expect(normalizeSupportedUiLocale('es-ES')).toBe('es')
     expect(normalizeSupportedUiLocale('es-MX')).toBe('es')
     expect(normalizeSupportedUiLocale('es')).toBe('es')
+  })
+
+  it('normalizes Thai locale prefixes', () => {
+    expect(normalizeSupportedUiLocale('th-TH')).toBe('th')
+    expect(normalizeSupportedUiLocale('th')).toBe('th')
   })
 
   it('falls back unsupported locales to English', () => {
@@ -64,12 +70,17 @@ describe('ui-locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_SPANISH, 'en-US')).toBe('es')
   })
 
+  it('resolves explicit Thai independently of system locale', () => {
+    expect(resolveUiLocale(UI_LANGUAGE_THAI, 'en-US')).toBe('th')
+  })
+
   it('maps system locale to the closest supported locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'en-GB')).toBe('en')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'zh-CN')).toBe('zh')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'ko-KR')).toBe('ko')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'ja-JP')).toBe('ja')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'es-MX')).toBe('es')
+    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'th-TH')).toBe('th')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'fr-FR')).toBe('en')
   })
 
@@ -79,5 +90,6 @@ describe('ui-locale', () => {
     expect(resolveRendererUiLocale(UI_LANGUAGE_KOREAN)).toBe('ko')
     expect(resolveRendererUiLocale(UI_LANGUAGE_JAPANESE)).toBe('ja')
     expect(resolveRendererUiLocale(UI_LANGUAGE_SPANISH)).toBe('es')
+    expect(resolveRendererUiLocale(UI_LANGUAGE_THAI)).toBe('th')
   })
 })
