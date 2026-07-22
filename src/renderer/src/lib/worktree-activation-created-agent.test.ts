@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
+import type { GlobalSettings, Worktree } from '../../../shared/types'
 import { useAppStore } from '@/store'
 import {
   activateAndRevealWorktree,
@@ -113,6 +114,120 @@ describe('activateAndRevealWorktree created agent reopen', () => {
       }
     })
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
+  })
+
+  function seedEmptyWorktreeState(
+    worktree: Worktree,
+    settingsOverrides: Partial<GlobalSettings>
+  ): void {
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/workspace/repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      activeRepoId: 'repo-1',
+      activeView: 'terminal',
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      activeTabIdByWorktree: {},
+      tabBarOrderByWorktree: {},
+      pendingStartupByTabId: {},
+      settings: { ...getDefaultSettings('/tmp'), ...settingsOverrides },
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      revealWorktreeInSidebar: vi.fn()
+    })
+  }
+
+  it('seeds the configured default agent when the worktree has no creation agent (issue #9772)', () => {
+    const worktree = { ...makeWorktree(), createdWithAgent: undefined }
+    seedEmptyWorktreeState(worktree, {
+      agentCmdOverrides: {},
+      defaultTuiAgent: 'claude',
+      disabledTuiAgents: [],
+      setupScriptLaunchMode: 'new-tab'
+    })
+
+    activateAndRevealWorktree(worktree.id)
+    const state = useAppStore.getState()
+    const seededTab = state.tabsByWorktree[worktree.id]?.[0]
+
+    expect(seededTab).toBeDefined()
+    const startup = state.pendingStartupByTabId[seededTab!.id]
+    expect(startup?.launchAgent).toBe('claude')
+    expect(startup?.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: 'sidebar',
+      request_kind: 'new'
+    })
+  })
+
+  it('keeps a blank initial terminal when the default agent preference is blank', () => {
+    const worktree = { ...makeWorktree(), createdWithAgent: undefined }
+    seedEmptyWorktreeState(worktree, {
+      agentCmdOverrides: {},
+      defaultTuiAgent: 'blank',
+      disabledTuiAgents: [],
+      setupScriptLaunchMode: 'new-tab'
+    })
+
+    activateAndRevealWorktree(worktree.id)
+    const state = useAppStore.getState()
+    const seededTab = state.tabsByWorktree[worktree.id]?.[0]
+
+    expect(seededTab).toBeDefined()
+    expect(state.pendingStartupByTabId[seededTab!.id]).toBeUndefined()
+  })
+
+  it('keeps a blank initial terminal when the default agent is disabled', () => {
+    const worktree = { ...makeWorktree(), createdWithAgent: undefined }
+    seedEmptyWorktreeState(worktree, {
+      agentCmdOverrides: {},
+      defaultTuiAgent: 'claude',
+      disabledTuiAgents: ['claude'],
+      setupScriptLaunchMode: 'new-tab'
+    })
+
+    activateAndRevealWorktree(worktree.id)
+    const state = useAppStore.getState()
+    const seededTab = state.tabsByWorktree[worktree.id]?.[0]
+
+    expect(seededTab).toBeDefined()
+    expect(state.pendingStartupByTabId[seededTab!.id]).toBeUndefined()
+  })
+
+  it('prefers the creation agent over the default agent setting', () => {
+    const worktree = makeWorktree()
+    seedEmptyWorktreeState(worktree, {
+      agentCmdOverrides: {},
+      defaultTuiAgent: 'claude',
+      disabledTuiAgents: [],
+      setupScriptLaunchMode: 'new-tab'
+    })
+
+    activateAndRevealWorktree(worktree.id)
+    const state = useAppStore.getState()
+    const seededTab = state.tabsByWorktree[worktree.id]?.[0]
+
+    expect(seededTab).toBeDefined()
+    const startup = state.pendingStartupByTabId[seededTab!.id]
+    expect(startup?.launchAgent).toBe('codex')
+    expect(startup?.telemetry?.request_kind).toBe('resume')
   })
 
   it('uses WSL launch quoting when reopening a Windows-path WSL project agent', () => {

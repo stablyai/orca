@@ -47,6 +47,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
@@ -228,12 +229,26 @@ export function activateAndRevealFolderWorkspace(
   return { primaryTabId }
 }
 
-function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayload | undefined {
-  const agent = worktree.createdWithAgent
-  if (!isTuiAgent(agent)) {
+function buildInitialTerminalStartup(worktree: Worktree): WorktreeStartupPayload | undefined {
+  const createdAgent = worktree.createdWithAgent
+  if (isTuiAgent(createdAgent)) {
+    return buildAgentLaunchStartup(worktree, createdAgent, 'resume')
+  }
+  // Why: workspaces without a creation agent (main checkouts, externally added
+  // worktrees) must still honor the default-agent setting (issue #9772).
+  const settings = useAppStore.getState().settings
+  const preferred = settings?.defaultTuiAgent
+  if (!isTuiAgent(preferred) || !isTuiAgentEnabled(preferred, settings?.disabledTuiAgents)) {
     return undefined
   }
+  return buildAgentLaunchStartup(worktree, preferred, 'new')
+}
 
+function buildAgentLaunchStartup(
+  worktree: Worktree,
+  agent: TuiAgent,
+  requestKind: 'new' | 'resume'
+): WorktreeStartupPayload | undefined {
   const state = useAppStore.getState()
   const repo = state.repos.find((entry) => entry.id === worktree.repoId)
   const launchPlatform = repo
@@ -273,7 +288,7 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     telemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: 'sidebar',
-      request_kind: 'resume'
+      request_kind: requestKind
     }
   }
 }
@@ -345,7 +360,7 @@ export function activateAndRevealWorktree(
   const primaryTabId = ensureWorktreeHasInitialTerminal(
     useAppStore.getState(),
     worktreeId,
-    opts?.startup ?? buildCreatedAgentReopenStartup(wt),
+    opts?.startup ?? buildInitialTerminalStartup(wt),
     opts?.setup,
     opts?.issueCommand,
     opts?.defaultTabs
