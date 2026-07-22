@@ -236,6 +236,10 @@ import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
 import { ActiveViewPreference } from './active-view-preference'
 import {
+  ClaudeLiveSessions,
+  normalizeClaudeLivePtySessionIds
+} from './claude-live-sessions'
+import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
 } from '../shared/folder-workspaces'
@@ -2125,32 +2129,8 @@ function remapAcknowledgedAgentPaneKeys(
   return { acknowledgements: next, changed }
 }
 
-// Why: bounds a corrupt/bloated persisted list — the gate only needs the few Claude sessions a daemon can keep alive.
-const MAX_CLAUDE_LIVE_PTY_SESSION_IDS = 200
-
 // Why: bound removed-SSH-target history so remove/re-add churn can't grow the file unbounded.
 const MAX_REMOVED_SSH_TARGET_TOMBSTONES = 50
-
-function normalizeClaudeLivePtySessionIds(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  // Why: scan newest-first so the cap keeps the most recent ids, matching addClaudeLivePtySessionId's eviction policy.
-  const ids: string[] = []
-  for (let index = value.length - 1; index >= 0; index -= 1) {
-    const entry = value[index]
-    if (typeof entry !== 'string' || entry.length === 0 || entry.length > 512) {
-      continue
-    }
-    if (!ids.includes(entry)) {
-      ids.push(entry)
-    }
-    if (ids.length >= MAX_CLAUDE_LIVE_PTY_SESSION_IDS) {
-      break
-    }
-  }
-  return ids.toReversed()
-}
 
 function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsupportedPtyEntry[] {
   if (!Array.isArray(value)) {
@@ -2628,6 +2608,7 @@ export class Store {
   private state: PersistedState
   private readonly dataFile: string
   private readonly activeViewPreference: ActiveViewPreference
+  private readonly claudeLiveSessions: ClaudeLiveSessions
   private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
@@ -2664,6 +2645,12 @@ export class Store {
     // Why: activeView is a frequent, tiny preference; keeping it beside the
     // profile avoids serializing the multi-MB recovery store on navigation.
     this.activeViewPreference = new ActiveViewPreference(this.dataFile, this.state.ui?.activeView)
+    // Why: the live-PTY gate must survive a force-quit right after a Claude spawn; an authoritative
+    // sidecar lets that write a tiny id list instead of serializing the multi-MB recovery store.
+    this.claudeLiveSessions = new ClaudeLiveSessions(
+      this.dataFile,
+      this.state.claudeLivePtySessionIds
+    )
     const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
@@ -3610,12 +3597,18 @@ export class Store {
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
   async waitForPendingWrite(): Promise<void> {
-    await Promise.all([this.pendingWrite, this.activeViewPreference.waitForPendingWrite()])
+    await Promise.all([
+      this.pendingWrite,
+      this.activeViewPreference.waitForPendingWrite(),
+      this.claudeLiveSessions.waitForPendingWrite()
+    ])
   }
 
   // Why githubCache is omitted: memory-only this session (see getGithubCacheFile), so refreshes never touch the durable file.
   private getDurableState(): Omit<PersistedState, 'githubCache'> {
-    const { githubCache: _memoryOnly, ...durable } = this.state
+    // Why: claudeLivePtySessionIds now lives in an authoritative sidecar (claudeLiveSessions);
+    // keep it out of the main blob so its force-quit-durable writes stay tiny.
+    const { githubCache: _memoryOnly, claudeLivePtySessionIds: _sidecar, ...durable } = this.state
     return durable
   }
 
@@ -3779,6 +3772,8 @@ export class Store {
     this.writeGeneration++
     this.pendingWrite = null
     this.writeToDiskSync({ force: asyncWriteWasInFlight })
+    // Why: shutdown must also drain the sidecar's debounced remove() writes; add() is already sync-durable.
+    this.claudeLiveSessions.flushOrThrow()
   }
 
   flushActiveViewPreferenceOrThrow(): void {
@@ -6264,30 +6259,15 @@ export class Store {
   // ── Live Claude PTY sessions ───────────────────────────────────────
 
   getClaudeLivePtySessionIds(): string[] {
-    return [...(this.state.claudeLivePtySessionIds ?? [])]
+    return this.claudeLiveSessions.get()
   }
 
   addClaudeLivePtySessionId(sessionId: string): void {
-    if (sessionId.length === 0 || sessionId.length > 512) {
-      return
-    }
-    const ids = this.state.claudeLivePtySessionIds ?? []
-    if (ids.includes(sessionId)) {
-      return
-    }
-    // Why: drop oldest at the cap — stale ids get pruned against the daemon at startup, so only recency matters.
-    this.state.claudeLivePtySessionIds = [...ids, sessionId].slice(-MAX_CLAUDE_LIVE_PTY_SESSION_IDS)
-    // Why: flush sync so a force-quit right after a Claude spawn still seeds the live-PTY gate next launch.
-    this.flush()
+    this.claudeLiveSessions.add(sessionId)
   }
 
   removeClaudeLivePtySessionId(sessionId: string): void {
-    const ids = this.state.claudeLivePtySessionIds ?? []
-    if (!ids.includes(sessionId)) {
-      return
-    }
-    this.state.claudeLivePtySessionIds = ids.filter((id) => id !== sessionId)
-    this.scheduleSave()
+    this.claudeLiveSessions.remove(sessionId)
   }
 
   getDeletedSshConfigAliases(): string[] {
