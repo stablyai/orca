@@ -10,6 +10,9 @@ const fetchIssue = vi.fn()
 const fetchLinearIssue = vi.fn()
 const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
+const hoverCardState = vi.hoisted(() => ({
+  onOpenChange: undefined as ((open: boolean) => void) | undefined
+}))
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let root: Root | null = null
@@ -54,6 +57,21 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
+vi.mock('@/components/ui/hover-card', () => ({
+  HoverCard: ({
+    children,
+    onOpenChange
+  }: {
+    children: ReactNode
+    onOpenChange?: (open: boolean) => void
+  }) => {
+    hoverCardState.onOpenChange = onOpenChange
+    return <>{children}</>
+  },
+  HoverCardContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  HoverCardTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+}))
+
 vi.mock('./CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownStartedAt: () => null
@@ -88,6 +106,28 @@ function makeRepo(): Repo {
   }
 }
 
+function makeGitHubRepo(): Repo {
+  return {
+    ...makeRepo(),
+    gitRemoteIdentity: {
+      canonicalKey: 'github.com/stablyai/orca',
+      remoteName: 'origin',
+      remoteUrl: 'https://github.com/stablyai/orca.git'
+    }
+  }
+}
+
+function makeGitLabRepo(): Repo {
+  return {
+    ...makeRepo(),
+    gitRemoteIdentity: {
+      canonicalKey: 'gitlab.com/stablyai/orca',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:stablyai/orca.git'
+    }
+  }
+}
+
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
     id: 'repo-1::/repo/worktrees/branch',
@@ -115,6 +155,7 @@ describe('WorktreeCard hosted review refresh', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    hoverCardState.onOpenChange = undefined
     worktreeCardProperties = ['status']
     container = document.createElement('div')
     document.body.appendChild(container)
@@ -131,11 +172,13 @@ describe('WorktreeCard hosted review refresh', () => {
     vi.useRealTimers()
   })
 
-  it('polls visible hosted review cards after a cached branch miss', async () => {
+  it('keeps polling visible GitLab review cards after a cached branch miss', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     act(() => {
-      root?.render(<WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />)
+      root?.render(
+        <WorktreeCard worktree={makeWorktree()} repo={makeGitLabRepo()} isActive={false} />
+      )
     })
 
     expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(1)
@@ -170,5 +213,68 @@ describe('WorktreeCard hosted review refresh', () => {
     })
 
     expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
+  })
+
+  it('leaves GitHub-backed card refreshes to the batched PR coordinator', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    act(() => {
+      root?.render(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeGitHubRepo()}
+          isActive={false}
+          coordinatedGitHubRefresh
+        />
+      )
+    })
+
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+
+    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
+  })
+
+  it('keeps polling GitHub-backed cards outside the coordinator-owned list', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    act(() => {
+      root?.render(
+        <WorktreeCard worktree={makeWorktree()} repo={makeGitHubRepo()} isActive={false} />
+      )
+    })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes coordinator-owned GitHub review details on demand when status is hidden', async () => {
+    worktreeCardProperties = []
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    act(() => {
+      root?.render(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeGitHubRepo()}
+          isActive={false}
+          coordinatedGitHubRefresh
+        />
+      )
+    })
+
+    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
+
+    act(() => {
+      hoverCardState.onOpenChange?.(true)
+    })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(1)
   })
 })

@@ -83,6 +83,7 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { isGitHubBackedRepo } from '../../../../shared/project-host-setup-projection'
 
 type WorktreeRenameRequest = {
   worktreeId: string
@@ -131,6 +132,7 @@ type WorktreeCardProps = {
   nativeDragEnabled?: boolean
   affiliateListMode?: boolean
   statusPrDisplay?: WorktreeCardPrDisplay | null
+  coordinatedGitHubRefresh?: boolean
 }
 
 const EMPTY_WORKSPACE_PORTS = []
@@ -222,7 +224,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onLineageToggle,
   isLineageDropTarget = false,
   affiliateListMode = false,
-  statusPrDisplay = null
+  statusPrDisplay = null,
+  coordinatedGitHubRefresh = false
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
@@ -605,6 +608,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
+  // Why: only sidebar rows are registered with WorktreeList's coordinator;
+  // standalone surfaces must retain their own refresh path.
+  const usesCoordinatedGitHubRefresh =
+    coordinatedGitHubRefresh && repo ? isGitHubBackedRepo(repo) : false
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 
@@ -620,6 +627,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       worktree.isBare ||
       !hostedReviewCacheKey ||
       !shouldRefreshHostedReview ||
+      usesCoordinatedGitHubRefresh ||
       isMacAppDataPath(repo.path)
     ) {
       return
@@ -659,7 +667,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     fetchHostedReviewForBranch,
     branch,
     hostedReviewCacheKey,
-    shouldRefreshHostedReview
+    shouldRefreshHostedReview,
+    usesCoordinatedGitHubRefresh
   ])
 
   useEffect(() => {
@@ -676,7 +685,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ) {
       return
     }
-    // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
+    // Why: the list coordinator excludes hidden metadata; keep this one-shot
+    // hover refresh card-owned without restoring background polling.
     void fetchHostedReviewForBranch(repo.path, branch, {
       repoId: repo.id,
       linkedGitHubPR: worktree.linkedPR ?? null,
