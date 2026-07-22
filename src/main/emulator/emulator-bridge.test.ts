@@ -9,15 +9,19 @@ const {
   killServeSimHelperProcessesForDeviceMock,
   listSimulatorDevicesMock,
   listServeSimHelperProcessesForDeviceMock,
-  shutdownSimulatorDeviceMock
+  shutdownSimulatorDeviceMock,
+  netFetchMock
 } = vi.hoisted(() => ({
   execServeSimCommandMock: vi.fn(async () => ({})),
   hideNativeSimulatorAppMock: vi.fn(async () => {}),
   killServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
   listSimulatorDevicesMock: vi.fn(async (): Promise<SimulatorDevice[]> => []),
   listServeSimHelperProcessesForDeviceMock: vi.fn(async (): Promise<ServeSimHelperProcess[]> => []),
-  shutdownSimulatorDeviceMock: vi.fn(async () => {})
+  shutdownSimulatorDeviceMock: vi.fn(async () => {}),
+  netFetchMock: vi.fn()
 }))
+
+vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 vi.mock('./serve-sim-execution', () => ({
   execServeSimCommand: execServeSimCommandMock,
@@ -62,6 +66,7 @@ function session(deviceUdid: string): EmulatorSessionInfo {
     deviceUdid,
     streamUrl: `http://127.0.0.1:3100/${deviceUdid}`,
     wsUrl: `ws://127.0.0.1:3100/${deviceUdid}`,
+    axUrl: `http://127.0.0.1:3100/${deviceUdid}/ax`,
     helperPid: 1234,
     // iOS serve-sim sessions round-trip through the registry as mjpeg.
     streamCodec: 'mjpeg'
@@ -84,6 +89,7 @@ describe('EmulatorBridge helper ownership', () => {
     hideNativeSimulatorAppMock.mockImplementation(async () => {})
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
+    netFetchMock.mockReset()
   })
 
   it('stops the previous Orca-managed helper when a worktree switches devices', async () => {
@@ -352,6 +358,59 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     hideNativeSimulatorAppMock.mockImplementation(async () => {})
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
+    netFetchMock.mockReset()
+  })
+
+  it('reads iOS accessibility from the active worktree session', async () => {
+    const tree = [{ type: 'Application', children: [] }]
+    netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    await expect(commands.emulatorAx({ worktree: 'wt-1' })).resolves.toEqual(tree)
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3100/device-1/ax',
+      expect.any(Object)
+    )
+  })
+
+  it('reports when the requested iOS device differs from the active session', async () => {
+    listSimulatorDevicesMock.mockResolvedValue([
+      {
+        name: 'iPhone requested',
+        udid: 'device-requested',
+        state: 'Booted',
+        runtime: 'iOS 26.0'
+      }
+    ])
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-active'), { managed: true })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    await expect(
+      commands.emulatorAx({ device: 'device-requested', worktree: 'wt-1' })
+    ).rejects.toMatchObject({
+      code: 'emulator_no_active',
+      message: expect.stringContaining('active: device-active')
+    })
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
   it('reconnects to an existing active helper instead of replacing it', async () => {
