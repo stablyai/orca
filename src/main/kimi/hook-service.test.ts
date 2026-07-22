@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -36,7 +36,20 @@ afterEach(() => {
 })
 
 const configPath = (): string => join(home, '.kimi-code', 'config.toml')
-const scriptPath = (): string => join(home, '.orca', 'agent-hooks', 'kimi-hook.sh')
+const scriptPath = (fileName = 'kimi-hook.sh'): string =>
+  join(home, '.orca', 'agent-hooks', fileName)
+
+function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+  const original = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return run()
+  } finally {
+    if (original) {
+      Object.defineProperty(process, 'platform', original)
+    }
+  }
+}
 
 describe('KimiHookService', () => {
   it('reports not_installed before install', () => {
@@ -62,6 +75,33 @@ describe('KimiHookService', () => {
     expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     // The command Kimi runs points at the managed script via sh.
     expect(config).toContain('agent-hooks/kimi-hook.sh')
+  })
+
+  it('installs a native batch launcher on Windows', () => {
+    const status = withPlatform('win32', () => new KimiHookService().install())
+    expect(status.state).toBe('installed')
+
+    const config = readFileSync(configPath(), 'utf-8')
+    const encodedCommand = config.match(/-EncodedCommand ([A-Za-z0-9+/=]+)/)?.[1]
+    expect(encodedCommand).toBeDefined()
+    const decodedCommand = Buffer.from(encodedCommand!, 'base64').toString('utf16le')
+    expect(decodedCommand).toContain('kimi-hook.cmd')
+
+    const script = readFileSync(scriptPath('kimi-hook.cmd'), 'utf-8')
+    expect(script).toContain('call "%ORCA_AGENT_HOOK_ENDPOINT%"')
+    expect(script).toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" goto :orca_agent_hook_drain_stdin')
+    expect(script).toContain('if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto :orca_agent_hook_drain_stdin')
+    expect(script).toContain('if "%ORCA_PANE_KEY%"=="" goto :orca_agent_hook_drain_stdin')
+    expect(script).toContain('/hook/kimi')
+    expect(script).toContain('--data-urlencode "payload@-"')
+    expect(script).toContain(
+      [
+        ':orca_agent_hook_drain_stdin',
+        '"%SystemRoot%\\System32\\more.com" >nul 2>nul',
+        'exit /b 0'
+      ].join('\r\n')
+    )
+    expect(existsSync(scriptPath())).toBe(false)
   })
 
   it('keeps user config when installing, then restores it on remove', () => {

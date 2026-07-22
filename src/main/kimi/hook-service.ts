@@ -13,9 +13,11 @@ import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildWindowsAgentHookPostCommand,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeManagedScript
 } from '../agent-hooks/installer-utils'
 import {
@@ -23,7 +25,11 @@ import {
   writeManagedScriptRemote,
   writeTextFileRemoteAtomic
 } from '../agent-hooks/installer-utils-remote'
-import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
+import {
+  buildPosixHookPayloadCapture,
+  buildWindowsHookEnvironmentGuardLines,
+  buildWindowsHookStdinDrainEpilogue
+} from '../agent-hooks/hook-stdin-contract'
 import {
   applyManagedKimiHooks,
   KIMI_HOOK_EVENTS,
@@ -42,22 +48,36 @@ function getConfigPath(): string {
   return join(getKimiHome(), 'config.toml')
 }
 
-// Always a POSIX `.sh` script: Kimi runs hook commands through its shell, which
-// is Git Bash even on Windows (see the CLI README / KIMI_SHELL_PATH), so a
-// single curl-based script body works on every platform.
-const MANAGED_SCRIPT_FILE_NAME = 'kimi-hook.sh'
+const REMOTE_MANAGED_SCRIPT_FILE_NAME = 'kimi-hook.sh'
+
+function getManagedScriptFileName(): string {
+  return process.platform === 'win32' ? 'kimi-hook.cmd' : 'kimi-hook.sh'
+}
 
 function getManagedScriptPath(): string {
-  return getSharedManagedScriptPath(MANAGED_SCRIPT_FILE_NAME)
+  return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
 function getManagedCommand(scriptPath: string): string {
-  // Forward slashes so Kimi's Git Bash shell accepts the path on Windows.
-  const posixPath = process.platform === 'win32' ? scriptPath.replaceAll('\\', '/') : scriptPath
-  return wrapPosixHookCommand(posixPath)
+  return process.platform === 'win32'
+    ? wrapWindowsHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
-function getManagedScript(): string {
+function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+  if (target === 'local' && process.platform === 'win32') {
+    return [
+      '@echo off',
+      'setlocal',
+      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      ...buildWindowsHookEnvironmentGuardLines(),
+      buildWindowsAgentHookPostCommand('kimi'),
+      'exit /b 0',
+      ...buildWindowsHookStdinDrainEpilogue(),
+      ''
+    ].join('\r\n')
+  }
+
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
@@ -167,7 +187,7 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
-    const isManagedCommand = createManagedCommandMatcher(MANAGED_SCRIPT_FILE_NAME)
+    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
     return buildStatus(readManagedKimiHookEvents(text, isManagedCommand), configPath)
   }
 
@@ -191,23 +211,21 @@ export class KimiHookService {
     return this.getStatus()
   }
 
-  // Why: install Orca's managed Kimi hooks on a remote box over SFTP, mirroring
-  // the local install. POSIX-only by design (Kimi's shell is sh/Git Bash); the
-  // managed script body is already platform-independent.
+  // Why: SFTP 远端约定为 POSIX，不能让本机 Windows 平台选择污染远端脚本。
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = pathPosix.join(remoteHome, '.kimi-code', 'config.toml')
     const remoteScriptPath = pathPosix.join(
       remoteHome,
       '.orca',
       'agent-hooks',
-      MANAGED_SCRIPT_FILE_NAME
+      REMOTE_MANAGED_SCRIPT_FILE_NAME
     )
     try {
       // null (file absent) → start from an empty config; Kimi creates it lazily.
       const text = (await readTextFileRemote(sftp, remoteConfigPath)) ?? ''
       const command = wrapPosixHookCommand(remoteScriptPath)
       // Write the script first so config.toml never points at a missing script.
-      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript())
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeTextFileRemoteAtomic(sftp, remoteConfigPath, applyManagedKimiHooks(text, command))
       return {
         agent: 'kimi',

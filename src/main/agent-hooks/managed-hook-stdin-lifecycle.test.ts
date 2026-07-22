@@ -254,7 +254,7 @@ describe('Windows managed hook stdin structure', () => {
         (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
       )
       mainBatchScripts.push('antigravity-hook.cmd')
-      expect(mainBatchScripts).toHaveLength(10)
+      expect(mainBatchScripts).toHaveLength(11)
       for (const fileName of mainBatchScripts) {
         const script = readFileSync(join(hooksDir, fileName), 'utf8')
         expect(script, `${fileName} port guard`).toContain(
@@ -278,10 +278,6 @@ describe('Windows managed hook stdin structure', () => {
       const copilot = readFileSync(join(hooksDir, 'copilot-hook.ps1'), 'utf8')
       expect(copilot.indexOf('[Console]::In.ReadToEnd()')).toBeLessThan(
         copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')
-      )
-      const kimi = readFileSync(join(hooksDir, 'kimi-hook.sh'), 'utf8')
-      expect(kimi.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)).toBeLessThan(
-        kimi.indexOf('exit 0')
       )
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
