@@ -1,6 +1,7 @@
-import type { OrchestrationDb } from './db'
+import type { LifecycleRejectionCode, OrchestrationDb } from './db'
 import type { MessageRow } from './types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { evaluateWorkerDoneSemanticCompletion } from './worker-done-semantic-completion'
 
 // Why: the tab half can change on pane break-out, while opaque legacy keys
 // have no safe equivalence beyond exact equality.
@@ -39,8 +40,9 @@ export type LifecycleReconciliationResult =
 
 export type LifecycleRejectionResult = {
   action: 'rejected'
-  code: 'sender_not_assignee'
+  code: LifecycleRejectionCode
   reason: string
+  appliedStatus?: 'blocked' | 'failed'
 }
 
 type LogFn = (msg: string) => void
@@ -65,20 +67,26 @@ function getPersistedLifecycleRejection(
   payload: Record<string, unknown>
 ): LifecycleRejectionResult | undefined {
   const rejection = payload._orcaLifecycleRejection
+  if (!rejection || typeof rejection !== 'object') {
+    return undefined
+  }
+  const code = (rejection as { code?: unknown }).code
   if (
-    !rejection ||
-    typeof rejection !== 'object' ||
-    (rejection as { code?: unknown }).code !== 'sender_not_assignee' ||
+    (code !== 'sender_not_assignee' && code !== 'incomplete_outcome') ||
     typeof (rejection as { reason?: unknown }).reason !== 'string'
   ) {
     return undefined
   }
   // Why: the marker is reserved persistence state; treating it as a rejection
   // also prevents caller-supplied markers from turning lifecycle sends into success.
+  const appliedStatus = (rejection as { appliedStatus?: unknown }).appliedStatus
   return {
     action: 'rejected',
-    code: 'sender_not_assignee',
-    reason: (rejection as { reason: string }).reason
+    code,
+    reason: (rejection as { reason: string }).reason,
+    ...(appliedStatus === 'blocked' || appliedStatus === 'failed'
+      ? { appliedStatus }
+      : {})
   }
 }
 
@@ -226,6 +234,43 @@ function reconcileWorkerDoneMessage(
     payload.filesModified.every((file) => typeof file === 'string')
       ? payload.filesModified
       : []
+
+  // Why: matching taskId+dispatchId is necessary but not sufficient. INC-3
+  // closed as completed on an empty-files worker_done that still declared
+  // transactional migration failure and remaining activation gates.
+  const semantic = evaluateWorkerDoneSemanticCompletion({
+    subject: msg.subject,
+    body: msg.body,
+    filesModified,
+    taskSpec: task.spec
+  })
+  if (!semantic.complete) {
+    const reason = semantic.reason
+    onLog(`Warning: worker_done rejected: ${reason}`)
+    const rejectionPayload = JSON.stringify({
+      taskId,
+      dispatchId,
+      filesModified,
+      closedBy: msg.from_handle,
+      incompleteKind: semantic.kind,
+      appliedStatus: semantic.appliedStatus,
+      closedAt: new Date().toISOString()
+    })
+    db.closeActiveDispatchWithoutCompletion(taskId, semantic.appliedStatus, rejectionPayload)
+    db.convertLifecycleMessageToRejection(
+      msg.id,
+      reason,
+      'incomplete_outcome',
+      semantic.appliedStatus
+    )
+    suppressEarlierHeartbeats(db, msg, dispatchId)
+    return {
+      action: 'rejected',
+      code: 'incomplete_outcome',
+      reason,
+      appliedStatus: semantic.appliedStatus
+    }
+  }
 
   const result = JSON.stringify({
     completedBy: msg.from_handle,

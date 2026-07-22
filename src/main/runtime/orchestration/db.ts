@@ -45,7 +45,14 @@ function generateId(prefix: string): string {
   return `${prefix}_${randomBytes(6).toString('hex')}`
 }
 
-function addLifecycleRejectionMarker(payload: string | null, reason: string): string {
+export type LifecycleRejectionCode = 'sender_not_assignee' | 'incomplete_outcome'
+
+function addLifecycleRejectionMarker(
+  payload: string | null,
+  reason: string,
+  code: LifecycleRejectionCode = 'sender_not_assignee',
+  appliedStatus?: 'blocked' | 'failed'
+): string {
   let parsed: Record<string, unknown> = {}
   try {
     const value: unknown = payload ? JSON.parse(payload) : {}
@@ -57,7 +64,11 @@ function addLifecycleRejectionMarker(payload: string | null, reason: string): st
   }
   return JSON.stringify({
     ...parsed,
-    _orcaLifecycleRejection: { code: 'sender_not_assignee', reason }
+    _orcaLifecycleRejection: {
+      code,
+      reason,
+      ...(appliedStatus ? { appliedStatus } : {})
+    }
   })
 }
 
@@ -373,7 +384,12 @@ export class OrchestrationDb {
     )
   }
 
-  convertLifecycleMessageToRejection(messageId: string, reason: string): MessageRow | undefined {
+  convertLifecycleMessageToRejection(
+    messageId: string,
+    reason: string,
+    code: LifecycleRejectionCode = 'sender_not_assignee',
+    appliedStatus?: 'blocked' | 'failed'
+  ): MessageRow | undefined {
     const message = this.getMessageById(messageId)
     if (!message || (message.type !== 'worker_done' && message.type !== 'heartbeat')) {
       return message
@@ -381,7 +397,7 @@ export class OrchestrationDb {
 
     const originalBody = message.body ? `\n\nOriginal body:\n${message.body}` : ''
     const body = `Orca rejected this ${message.type}: ${reason}${originalBody}`
-    const payload = addLifecycleRejectionMarker(message.payload, reason)
+    const payload = addLifecycleRejectionMarker(message.payload, reason, code, appliedStatus)
     // Why: rejected lifecycle signals stay auditable but must not reach read paths as actionable completion/liveness events.
     this.db
       .prepare(
@@ -391,6 +407,23 @@ export class OrchestrationDb {
       )
       .run(`Rejected ${message.type}: ${message.subject}`, body, payload, messageId)
     return this.getMessageById(messageId)
+  }
+
+  // Why: incomplete worker_done must close the in-flight dispatch without
+  // promoting dependents the way updateTaskStatus('completed') does.
+  closeActiveDispatchWithoutCompletion(
+    taskId: string,
+    status: 'blocked' | 'failed',
+    result?: string
+  ): TaskRow | undefined {
+    this.completeActiveDispatchForTask(taskId)
+    const completedAt = status === 'failed' ? new Date().toISOString() : null
+    this.db
+      .prepare(
+        'UPDATE tasks SET status = ?, result = COALESCE(?, result), completed_at = COALESCE(?, completed_at) WHERE id = ?'
+      )
+      .run(status, result ?? null, completedAt, taskId)
+    return this.getTask(taskId)
   }
 
   // Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.

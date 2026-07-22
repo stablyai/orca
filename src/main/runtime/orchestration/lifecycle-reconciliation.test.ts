@@ -409,4 +409,77 @@ describe('lifecycle reconciliation', () => {
     expect(db.getMessageById(lateHeartbeat.id)).toMatchObject({ read: 1 })
     expect(db.getMessageById(lateHeartbeat.id)?.delivered_at).not.toBeNull()
   })
+
+  it('rejects the INC-3 incomplete worker_done instead of completing durable state', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({
+      spec: 'Activate incident producer after owner-gated migration approval.'
+    })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const child = db.createTask({ spec: 'dependent follow-up', deps: [task.id] })
+    const logs: string[] = []
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'INC-3 migration remaining',
+      body:
+        'Attempted activation for INC-3. Migration 0129 failed transactionally. ' +
+        'Remaining reconciliation/activation gates still block deploy and E2E. ' +
+        'No migration/deploy/E2E has occurred.',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        filesModified: []
+      }),
+      senderPaneKey: `tab_w:${LEAF_A}`
+    })
+
+    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toMatchObject({
+      action: 'rejected',
+      code: 'incomplete_outcome',
+      appliedStatus: 'failed'
+    })
+    expect(db.getTask(task.id)?.status).toBe('failed')
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+    expect(db.getTask(child.id)?.status).toBe('pending')
+    expect(db.getMessageById(message.id)).toMatchObject({
+      priority: 'high',
+      subject: 'Rejected worker_done: INC-3 migration remaining'
+    })
+    expect(JSON.parse(db.getMessageById(message.id)?.payload ?? '{}')).toMatchObject({
+      _orcaLifecycleRejection: {
+        code: 'incomplete_outcome',
+        appliedStatus: 'failed'
+      }
+    })
+    expect(logs.some((line) => line.includes('worker_done rejected'))).toBe(true)
+  })
+
+  it('allows remaining activation gates only when the durable spec defines the split', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({
+      spec:
+        'Send worker_done when the code/docs change is complete. ' +
+        'The durable task defines a code-complete vs activation split; ' +
+        'owner-gated activation may remain unmet.'
+    })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Code complete; activation pending',
+      body: 'Diff is review-clean. Remaining activation gates are owner-gated.',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        filesModified: ['ORCHESTRATION.md']
+      }),
+      senderPaneKey: `tab_w:${LEAF_A}`
+    })
+
+    expect(reconcileLifecycleMessage(db, message).action).toBe('completed')
+    expect(db.getTask(task.id)?.status).toBe('completed')
+  })
 })
