@@ -323,15 +323,15 @@ Explicit non-goals:
 
 - [x] Mac Run home -> Windows worker: start, completion, failure, question/reply, read, and stop.
 - [x] Windows Run home -> Mac worker: the same flows through a saved Mac pairing.
-- [ ] Native, WSL, SSH, and relay-backed execution-host paths preserve ownership and CLI capability.
+- [x] Native, WSL, SSH, and relay-backed execution-host paths preserve ownership and CLI capability.
 - [x] Run home restarts alone; worker server restarts alone; both restart.
 - [x] Disconnect before send proves no effect.
-- [ ] Disconnect after possible acceptance returns unknown and deduplicates exact retry.
-- [ ] Duplicate and reordered relay frames/acknowledgments converge without loss or duplication.
+- [x] Disconnect after possible acceptance returns unknown and deduplicates exact retry.
+- [x] Duplicate and reordered relay frames/acknowledgments converge without loss or duplication.
 - [x] Re-pair/key change cannot retarget an active Dispatch.
 - [x] Same-looking handles/resources on two servers never cross-route.
 - [x] Mixed server versions fail before effects.
-- [ ] Windows PowerShell quoting, Windows paths, WSL environment propagation, and SSH bridge
+- [x] Windows PowerShell quoting, Windows paths, WSL environment propagation, and SSH bridge
       allowlists pass.
 
 ## Phase 4 — Optional structured output adapter (deferred)
@@ -358,9 +358,9 @@ Explicit non-goals:
 ### Cross-platform
 
 - [ ] Native macOS, Linux, and Windows tests cover each new CLI/RPC contract.
-- [ ] WSL and SSH host identity/capability state is scoped to the actual execution host.
-- [ ] Paths use platform utilities; examples are PowerShell/cmd/POSIX safe.
-- [ ] Named-pipe, Unix-socket, WebSocket, WSL, and SSH bridges carry Dispatch capabilities safely.
+- [x] WSL and SSH host identity/capability state is scoped to the actual execution host.
+- [x] Paths use platform utilities; examples are PowerShell/cmd/POSIX safe.
+- [x] Named-pipe, Unix-socket, WebSocket, WSL, and SSH bridges carry Dispatch capabilities safely.
 
 ### Documentation
 
@@ -1020,6 +1020,78 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Disconnect the worker route after possible acceptance, then follow the returned exact recovery
     command and prove that retry deduplicates to one remote effect.
+
+### 2026-07-22 — Post-acceptance disconnect deduplicated
+
+- Changes:
+  - Cut the Windows Tailscale proxy while a Mac-home `worker-start` was provisioning remotely, then
+    restored the same route and replayed the exact application request ID.
+  - Allowed an explicit `worker-stop` to fence `start_unknown` locally and on the worker server;
+    exact pane/process observation still decides whether a terminal may actually be closed.
+- Files:
+  - `src/main/runtime/orchestration/db.ts`
+  - `src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts`
+  - `ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md`
+- Verification:
+  - The lost response left `task_bb86c87bdc60` attached to one pending Dispatch,
+    `ctx_6580d07d9006`, rather than creating a replacement.
+  - Replaying request `disconnect-after-start-01` returned the same Dispatch with
+    `state=outcome_unknown` and `mutation.replayed=true`.
+  - Remote inspection found one `disconnect-after-acceptance-01` worktree, one exact agent
+    terminal, and one expected setup terminal; no duplicate topology was created.
+  - Worker Dispatch DB, federated control, and recovery suites passed 29 tests; node typecheck and
+    focused oxlint passed. Branch-head CLI and Electron builds succeeded on macOS and Windows.
+  - Relay tests reject an out-of-order sequence without advancing the cursor, later accept the
+    missing and retried frames contiguously, treat the repeated frame as a duplicate, and preserve
+    exactly two messages. Lost-ack retry and mailbox delivery suites passed with it (24 tests).
+- Findings:
+  - The acceptance run exposed one narrow recovery inconsistency: `worker-show` could prove an exact
+    worker existed while `worker-stop` rejected the durable `start_unknown` state. Explicit stop now
+    enters the same fenced stopping path from `ready` or `start_unknown`; unattached, missing, or
+    identity-changed workers still become `stop_unknown` without a process action.
+  - No scheduler, automatic retry, adoption, cleanup, or general distributed-operation framework is
+    needed for this recovery path.
+- Next:
+  - Exercise duplicate/reordered relay convergence and the native/WSL/SSH transport matrix, then
+    synchronize the HTML proposal with the implemented contract.
+
+### 2026-07-22 — Cross-platform capability transport verified
+
+- Changes:
+  - Added an SSH compatibility-bridge test that carries the opaque Dispatch capability in the RPC
+    envelope and settles only the matching pane/process Dispatch.
+  - Added a composed worker-start test that binds the host-resolved `orca-ide` command and the
+    Dispatch capability into one WSL worker preamble.
+  - Updated the built-CLI reset fixture to recreate its required coordinator Run after a task reset.
+  - Updated the HTML recovery contract so explicit stop from `start_unknown` remains fenced and
+    process-identity checked.
+- Files:
+  - `src/main/ssh/ssh-remote-orca-cli.test.ts`
+  - `src/main/runtime/rpc/methods/orchestration-workers-new-worktree.test.ts`
+  - `src/main/runtime/orchestration-cli-subprocess.test.ts`
+  - `docs/orchestration-primitives.html` (ignored design source)
+  - `ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md`
+- Verification:
+  - Native macOS Unix-socket worker control, native Windows named-pipe lifecycle reporting, and
+    bidirectional authenticated WebSocket federation passed in the real Mac/Windows matrix.
+  - On the real Windows host, the PowerShell/SSH launcher, SSH command allowlist, host passthrough,
+    WSL/native command selection, and multiline Windows quoting suites passed 31 tests; 13
+    Unix-socket-only runtime-client tests correctly skipped on Windows.
+  - Platform-neutral SSH capability, WSL command selection, preamble, worker-start, and CLI envelope
+    suites passed 94 focused tests on macOS.
+  - The rebuilt CLI plus every orchestration, composed-worker, federation, and SSH regression file
+    passed together: 25 files and 456 tests. Full Node/CLI/web typecheck, focused oxlint/format,
+    generated-skill verification, and `git diff --check` passed.
+- Findings:
+  - The available Windows acceptance host has no WSL distribution installed and prompts to install
+    the feature. Acceptance therefore uses explicit WSL host/path tests rather than mutating the
+    machine. SSH is likewise exercised at the bridge and lifecycle boundary rather than requiring a
+    new external host.
+  - Native and relay-backed behavior is real end-to-end evidence; WSL and SSH evidence is bounded to
+    the host-selection, prompt, envelope, quoting, allowlist, and lifecycle contracts Orca owns.
+- Next:
+  - Run the remaining full validation and Linux CI, then finish the ignored HTML synchronization and
+    PR evidence without adding new orchestration concepts.
 
 ### Entry template
 

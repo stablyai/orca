@@ -293,6 +293,70 @@ describe('runRemoteOrcaCli', () => {
     }
   })
 
+  it('carries the Dispatch capability through the SSH envelope', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+    vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_ssh:leaf_ssh')
+    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('ssh_runtime:pty:1')
+    const run = db.createRun({
+      objective: 'SSH capability transport',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
+    const started = db.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const capability = db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_ssh',
+      paneKey: 'tab_ssh:leaf_ssh',
+      processIncarnation: 'ssh_runtime:pty:1',
+      worktreeId: 'repo::/home/alice/repo',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    db.markWorkerDispatchReady(started.dispatch.id)
+
+    try {
+      const result = await runRemoteOrcaCli(
+        runtime,
+        {
+          argv: [
+            'orchestration',
+            'send',
+            '--type',
+            'worker_done',
+            '--subject',
+            'Done',
+            '--task-id',
+            task.id,
+            '--dispatch-id',
+            started.dispatch.id,
+            '--outcome',
+            'succeeded',
+            '--dispatch-capability',
+            capability,
+            '--json'
+          ],
+          cwd: '/home/alice/repo',
+          env: {
+            ORCA_TERMINAL_HANDLE: 'term_ssh',
+            ORCA_PANE_KEY: 'tab_ssh:leaf_ssh'
+          }
+        },
+        LEGACY_FALLBACK_OPTIONS
+      )
+
+      expect(result.exitCode).toBe(0)
+      expect(db.getTask(task.id)).toMatchObject({ status: 'completed' })
+      expect(db.getWorkerDispatch(started.dispatch.id)).toMatchObject({ state: 'succeeded' })
+    } finally {
+      db.close()
+    }
+  })
+
   it('rejects identity-less lifecycle sends in the legacy fallback', async () => {
     const { runtime, db } = createRuntime()
 

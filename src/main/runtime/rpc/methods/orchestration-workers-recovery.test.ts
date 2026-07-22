@@ -44,7 +44,7 @@ describe('orchestration worker recovery', () => {
     return method.handler(method.params!.parse(params), { runtime })
   }
 
-  function createWorker(runtimeEpoch = runtime.getRuntimeId()) {
+  function createWorker(runtimeEpoch = runtime.getRuntimeId(), ready = true) {
     const run = db.createRun({
       objective: 'Recovery',
       coordinatorHandle: 'term_coord',
@@ -65,7 +65,11 @@ describe('orchestration worker recovery', () => {
       setupState: 'not_applicable',
       effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }]
     })
-    db.markWorkerDispatchReady(started.dispatch.id)
+    if (ready) {
+      db.markWorkerDispatchReady(started.dispatch.id)
+    } else {
+      db.markWorkerStartUnknown(started.dispatch.id, 'dispatch_input', 'connection lost')
+    }
     return { run, task, dispatch: started.dispatch }
   }
 
@@ -85,6 +89,19 @@ describe('orchestration worker recovery', () => {
       dispatchId: dispatch.id,
       terminal: { tail: ['working'] }
     })
+  })
+
+  it('stops an exact worker whose start receipt is unknown', async () => {
+    const { task, dispatch } = createWorker(runtime.getRuntimeId(), false)
+
+    await expect(
+      call('orchestration.workerStop', { dispatch: dispatch.id })
+    ).resolves.toMatchObject({
+      state: 'stopped',
+      processAction: 'closed_agent_terminal'
+    })
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
+    expect(db.getTask(task.id)?.status).toBe('blocked')
   })
 
   it('does not adopt or stop a same-looking pane with a new process incarnation', async () => {

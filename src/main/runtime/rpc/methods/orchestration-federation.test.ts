@@ -501,7 +501,7 @@ describe('orchestration federation', () => {
     expect(homeDb.getFederatedDispatch(dispatch.id)?.to_home_imported_sequence).toBe(1)
   })
 
-  it('rejects a relay gap without committing its message or cursor', async () => {
+  it('rejects a reordered relay gap, then converges without loss or duplication', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     const dispatch = homeDb.getDispatchContext(task.id)!
@@ -525,6 +525,61 @@ describe('orchestration federation', () => {
     ).toThrow(/not contiguous/)
     expect(homeDb.getMessageById('relay_gap')).toBeUndefined()
     expect(homeDb.getFederatedDispatch(dispatch.id)?.to_home_imported_sequence).toBe(0)
+
+    homeDb.importFederatedRelayItem({
+      dispatchId: dispatch.id,
+      sequence: 1,
+      message: {
+        id: 'relay_first',
+        runId: task.run_id,
+        from: `dispatch:${dispatch.id}`,
+        to: `run:${task.run_id}`,
+        subject: 'First',
+        body: 'Arrived after the gap was rejected',
+        type: 'status',
+        priority: 'normal'
+      },
+      lifecycle: { kind: 'none' }
+    })
+    const recovered = homeDb.importFederatedRelayItem({
+      dispatchId: dispatch.id,
+      sequence: 2,
+      message: {
+        id: 'relay_gap',
+        runId: task.run_id,
+        from: `dispatch:${dispatch.id}`,
+        to: `run:${task.run_id}`,
+        subject: 'Gap',
+        body: 'Out of order',
+        type: 'status',
+        priority: 'normal'
+      },
+      lifecycle: { kind: 'none' }
+    })
+    const duplicate = homeDb.importFederatedRelayItem({
+      dispatchId: dispatch.id,
+      sequence: 2,
+      message: {
+        id: 'relay_gap',
+        runId: task.run_id,
+        from: `dispatch:${dispatch.id}`,
+        to: `run:${task.run_id}`,
+        subject: 'Gap',
+        body: 'Out of order',
+        type: 'status',
+        priority: 'normal'
+      },
+      lifecycle: { kind: 'none' }
+    })
+
+    expect(recovered.duplicate).toBe(false)
+    expect(duplicate.duplicate).toBe(true)
+    expect(homeDb.getFederatedDispatch(dispatch.id)?.to_home_imported_sequence).toBe(2)
+    expect(
+      homeDb
+        .getRunMailboxHistory(task.run_id, 10)
+        .filter((message) => ['relay_first', 'relay_gap'].includes(message.id))
+    ).toHaveLength(2)
   })
 
   it('restarts relay polling when a federated worker is shown', async () => {
