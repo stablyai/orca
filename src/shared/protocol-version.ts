@@ -51,6 +51,9 @@ export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-comman
 // replay ambiguous cutovers when the host advertises idempotent create support.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+// Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
+export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
+  'terminal.create-idempotency.v2' as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -69,7 +72,8 @@ export const RUNTIME_CAPABILITIES = [
   AI_VAULT_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
-  WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

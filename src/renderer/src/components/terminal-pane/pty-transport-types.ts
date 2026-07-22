@@ -72,6 +72,21 @@ type PtyCallbacks = {
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void
+  onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
+}
+
+export type PtyTransportRecoveryState = {
+  phase:
+    | 'connecting'
+    | 'connected'
+    | 'recovering'
+    | 'backoff'
+    | 'disconnected'
+    | 'offline'
+    | 'ended'
+    | 'disposed'
+  epoch: number
+  attempt: number
 }
 
 export type PtyTransport = {
@@ -125,6 +140,9 @@ export type PtyTransport = {
     }
   ) => boolean
   isConnected: () => boolean
+  getRecoveryState?: () => PtyTransportRecoveryState
+  /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
+  retryRecovery?: () => boolean
   getPtyId: () => string | null
   getConnectionId?: () => string | null | undefined
   /** The runtime captured by this transport; legacy remote PTY ids do not

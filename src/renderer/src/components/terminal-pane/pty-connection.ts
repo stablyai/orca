@@ -27,6 +27,7 @@ import { takeCurrentPtyDeliveryAckCredit } from './terminal-pty-ack-gate'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
+import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
@@ -2233,6 +2234,7 @@ export function connectPanePty(
     activePanePtyBinding = null
     activePanePtyBindingBoundAt = null
     delete pane.container.dataset.ptyId
+    delete pane.container.dataset.ptyRecoveryState
   }
 
   const agentCompletionCoordinator = createAgentCompletionCoordinator({
@@ -5227,6 +5229,13 @@ export function connectPanePty(
           onError: (message: string): void => {
             if (isCurrent()) {
               onError(message)
+            }
+          },
+          onRecoveryStateChange: (state: PtyTransportRecoveryState): void => {
+            if (isCurrent()) {
+              // Why: cached pixels remain visible while detached; expose transport truth for diagnostics and recovery UI.
+              pane.container.dataset.ptyRecoveryState = state.phase
+              deps.onPtyRecoveryStateRef?.current?.(pane.id, state)
             }
           }
         }

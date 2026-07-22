@@ -72,6 +72,15 @@ describe('startup ordering', () => {
     expect(source).toContain("logStartupMilestone('wsl-cli-barrier-resolved'")
   })
 
+  it('notifies the serve supervisor only after publishing readiness', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const readyStart = source.indexOf('await serveReadinessPublisher.publish(')
+    const supervisorReady = source.indexOf('notifyServeSupervisorReady(', readyStart)
+
+    expect(readyStart).toBeGreaterThanOrEqual(0)
+    expect(supervisorReady).toBeGreaterThan(readyStart)
+  })
+
   it('does not run the rate-limit quota fetch before the first window can show results', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const attachIndex = source.indexOf('rateLimits.attach(window)')

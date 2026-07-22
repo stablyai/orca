@@ -1651,14 +1651,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           payload.state === 'done' ? existing?.orchestration : undefined
         const orchestration =
           payloadMergedOrchestration ?? runtimeMergedOrchestration ?? completedFallbackOrchestration
-        const canReuseExistingIdentity =
+        // Why: waiting/blocked are still the same resumable turn; child permission hooks omit the root session id.
+        const canReuseExistingProviderSession =
           existing?.agentType === identity.agentType &&
-          !isAgentCompletionState(existing.state) &&
-          !isAgentCompletionState(payload.state)
+          existing.state !== 'done' &&
+          payload.state !== 'done'
         const providerSession =
           metadata?.providerSession ??
-          (canReuseExistingIdentity ? existing.providerSession : undefined)
-        const existingProviderSession = canReuseExistingIdentity
+          (canReuseExistingProviderSession ? existing.providerSession : undefined)
+        const existingProviderSession = canReuseExistingProviderSession
           ? existing.providerSession
           : undefined
         const providerSessionChanged =
@@ -1716,6 +1717,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           updatedAt,
           stateStartedAt,
           agentType: identity.agentType,
+          model:
+            payload.model ??
+            (existing?.agentType === identity.agentType ? existing.model : undefined),
           paneKey,
           terminalHandle: statusTerminalHandle,
           worktreeId:
@@ -1785,6 +1789,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.updatedAt !== existing.updatedAt ||
             entry.stateStartedAt !== existing.stateStartedAt ||
             entry.agentType !== existing.agentType ||
+            entry.model !== existing.model ||
             entry.terminalTitle !== existing.terminalTitle ||
             entry.toolName !== existing.toolName ||
             entry.toolInput !== existing.toolInput ||

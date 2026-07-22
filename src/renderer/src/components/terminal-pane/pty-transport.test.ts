@@ -2005,6 +2005,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       method: 'terminal.create',
       params: {
         worktree: 'id:repo1::/remote/wt',
+        clientMutationId: expect.any(String),
         command: 'claude',
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',

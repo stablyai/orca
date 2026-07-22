@@ -97,6 +97,7 @@ const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: remember the last recognized agent foreground so a degraded scan doesn't report the shell and look like an exit.
 const ptyLastRecognizedForeground = new Map<string, string>()
 const ptyTerminalHandle = new Map<string, string>()
+const ptyWorktreeId = new Map<string, string>()
 const ptyInitialCwd = new Map<string, string>()
 // Why: reattach carries current settings, not the live process's launch context; keep the first creator's WSL/native identity.
 const ptyWslDistroById = new Map<string, string | null>()
@@ -240,6 +241,7 @@ function clearPtyState(id: string): void {
   ptyAgentForegroundContextPaths.delete(id)
   ptyLastRecognizedForeground.delete(id)
   ptyTerminalHandle.delete(id)
+  ptyWorktreeId.delete(id)
   ptyInitialCwd.delete(id)
   ptyWslDistroById.delete(id)
   ptyLoadGeneration.delete(id)
@@ -852,6 +854,9 @@ export class LocalPtyProvider implements IPtyProvider {
     if (finalEnv.ORCA_TERMINAL_HANDLE) {
       ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
     }
+    if (args.worktreeId) {
+      ptyWorktreeId.set(id, args.worktreeId)
+    }
     ptyAgentForegroundContextPaths.set(
       id,
       getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })
@@ -1306,6 +1311,7 @@ export class LocalPtyProvider implements IPtyProvider {
       id,
       cwd: ptyInitialCwd.get(id) ?? '',
       title: proc.process || ptyShellName.get(id) || 'shell',
+      ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
       ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {})
     }))
   }

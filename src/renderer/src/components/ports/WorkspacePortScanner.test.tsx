@@ -219,6 +219,55 @@ afterEach(() => {
 })
 
 describe('WorkspacePortScanner', () => {
+  it('turns a missing runtime scan payload into an unavailable result', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({ ok: true, result: undefined })
+
+    await act(async () => {
+      root?.render(<WorkspacePortScanner />)
+      await flushPromises()
+    })
+
+    expect(useAppStore.getState().workspacePortScansByKey[remoteScanKey]).toMatchObject({
+      ports: [],
+      unavailableReason: 'Workspace port scan returned an invalid response.'
+    })
+  })
+
+  it.each([
+    ['a malformed port record', { platform: 'linux', scannedAt: 1, ports: [null] }],
+    [
+      'a malformed workspace owner',
+      {
+        platform: 'linux',
+        scannedAt: 1,
+        ports: [
+          {
+            id: 'tcp:3000',
+            bindHost: '127.0.0.1',
+            connectHost: '127.0.0.1',
+            port: 3000,
+            protocol: 'http',
+            kind: 'workspace',
+            owner: null
+          }
+        ]
+      }
+    ],
+    ['an unsupported platform', { platform: 'plan9', scannedAt: 1, ports: [] }]
+  ])('turns %s into an unavailable result', async (_label, result) => {
+    runtimeEnvironmentCall.mockResolvedValue({ ok: true, result })
+
+    await act(async () => {
+      root?.render(<WorkspacePortScanner />)
+      await flushPromises()
+    })
+
+    expect(useAppStore.getState().workspacePortScansByKey[remoteScanKey]).toMatchObject({
+      ports: [],
+      unavailableReason: 'Workspace port scan returned an invalid response.'
+    })
+  })
+
   it('does not restart remote scans before the background interval when host inputs rerender', async () => {
     await act(async () => {
       root?.render(<WorkspacePortScanner />)

@@ -286,6 +286,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.listCustomViewProjects',
   'linear.listCustomViews',
   'linear.listIssues',
+  'linear.mcpListIssues',
   'linear.listProjectIssues',
   'linear.listProjects',
   'linear.teamLabels',

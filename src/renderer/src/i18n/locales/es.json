@@ -2714,6 +2714,13 @@
             "removedTitle": "Host SSH eliminado",
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
+          },
+          "TerminalRemoteRuntimeReconnectBanner": {
+            "retryingTitle": "Reconnecting to remote runtime",
+            "disconnectedTitle": "Remote runtime disconnected",
+            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
+            "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
+            "reconnectButton": "Reconnect"
           }
         }
       },
@@ -3289,7 +3296,9 @@
             "noUsageData": "No usage data",
             "detailed": "Detailed",
             "compact": "Compact",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
+            "compactTooltip": "Uso condensado: sólo la ventana más estrecha"
           }
         }
       },
@@ -4862,7 +4871,7 @@
           "dbb9626ed1": "Cancelar",
           "854ebbcc45": "Orca eliminará la autenticación de Claude gestionada para esta cuenta guardada. Si está activa actualmente, Orca volverá al login predeterminado de Claude del sistema.",
           "63843e37e2": "¿Eliminar la cuenta de Claude?",
-          "99c8f9e498": "Orca eliminará el home de Codex gestionado para esta cuenta guardada. Si está activo actualmente, Orca volverá al login predeterminado de Codex del sistema.",
+          "380a7736cc": "Eliminar esta cuenta borra permanentemente su home de Codex gestionado, incluido todo el historial de sesiones de Codex y los inicios de sesión de MCP almacenados dentro. Esto no se puede deshacer. Si la cuenta está activa, Orca vuelve al login predeterminado de Codex del sistema.",
           "0d47394635": "¿Eliminar cuenta de Codex?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk__…/go",
           "51c9104e13": "Encuéntralo en la URL después de iniciar sesión en opencode.ai (p. ej.",
@@ -9247,7 +9256,9 @@
           "howToUse": "How to use it",
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
-          "terminalAriaLabel": "Linear skill install terminal"
+          "terminalAriaLabel": "Linear skill install terminal",
+          "manageConnectionHint": "Review connected Linear workspaces and API keys in",
+          "manageConnectionLink": "Integrations settings"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
