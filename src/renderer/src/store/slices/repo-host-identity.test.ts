@@ -27,6 +27,19 @@ describe('findRepoForWorktreeOwner', () => {
     expect(findRepoForWorktreeOwner([local, runtime], worktree('runtime:env-1'))).toBe(runtime)
   })
 
+  it('fails closed when an explicit worktree owner is unavailable', () => {
+    const local = repo('local', '/local')
+
+    expect(findRepoForWorktreeOwner([local], worktree('runtime:missing'))).toBeNull()
+  })
+
+  it('fails closed when the explicit owner matches duplicate repo records', () => {
+    const first = repo('ssh:ssh-1', '/ssh/first')
+    const second = repo('ssh:ssh-1', '/ssh/second')
+
+    expect(findRepoForWorktreeOwner([first, second], worktree('ssh:ssh-1'))).toBeNull()
+  })
+
   it('uses the only matching repo for a legacy hostless worktree', () => {
     const ssh = repo('ssh:ssh-1', '/ssh')
 

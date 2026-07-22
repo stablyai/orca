@@ -4985,6 +4985,13 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       repos: [
         {
           id: 'repo-1',
+          path: '/local/repo',
+          name: 'local',
+          kind: 'git',
+          executionHostId: 'local'
+        },
+        {
+          id: 'repo-1',
           path: repoPath,
           name: 'repo',
           kind: 'git',
@@ -4998,6 +5005,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
           {
             id: worktreeId,
             repoId: 'repo-1',
+            hostId: 'ssh:ssh-1',
             path: '/repo/worktrees/test',
             branch,
             displayName: 'test',
@@ -5016,6 +5024,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
         repoPath,
         branch,
         connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         connectionState: 'connected'
       }),
       reason: 'active',

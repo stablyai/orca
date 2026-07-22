@@ -1137,6 +1137,7 @@ function buildPRRefreshCandidate(
   if (!repo) {
     return null
   }
+  const executionHostId = getRepoExecutionHostId(repo)
   if (isMacAppDataPath(repoPath ?? repo.path)) {
     return null
   }
@@ -1147,7 +1148,7 @@ function buildPRRefreshCandidate(
     branch,
     settingsForGitHubRepoOwner(state.settings, repo),
     repo.connectionId,
-    repo.executionHostId,
+    executionHostId,
     true
   )
   const cachedPR = state.prCache[cacheKey]?.data ?? null
@@ -1157,7 +1158,7 @@ function buildPRRefreshCandidate(
     repo.id,
     branch,
     repo.connectionId,
-    repo.executionHostId,
+    executionHostId,
     true
   )
   const cachedFallbackPRNumber = cachedPR?.number ?? null
@@ -1195,7 +1196,7 @@ function buildPRRefreshCandidate(
     isBare: worktree.isBare,
     isArchived: worktree.isArchived,
     connectionId: repo.connectionId ?? null,
-    executionHostId: repo.executionHostId ?? null,
+    executionHostId,
     connectionState: repo.connectionId
       ? sshStatus === 'connected'
         ? 'connected'
