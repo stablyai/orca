@@ -108,27 +108,29 @@ export function evaluateWorkerDoneSemanticCompletion(
   }
 
   if (REMAINING_GATES_RE.test(text) || PENDING_WORK_RE.test(text)) {
-    if (!splitAllowed) {
-      return {
-        complete: false,
-        kind: 'remaining_gates',
-        appliedStatus: 'blocked',
-        reason:
-          'worker_done reports required remaining or pending work without an explicit durable code-complete/activation-gate split'
-      }
+    return {
+      complete: false,
+      kind: 'remaining_gates',
+      appliedStatus: 'blocked',
+      reason: splitAllowed
+        ? 'worker_done reports unmet activation/remaining gates; durable task stays blocked despite an explicit code-complete/activation-gate split'
+        : 'worker_done reports required remaining or pending work without an explicit durable code-complete/activation-gate split'
     }
-    // Explicit split may leave activation pending, but still requires code-complete evidence.
   }
 
-  const hasPositiveCompletionEvidence =
-    POSITIVE_COMPLETION_RE.test(text) || filesModified.length > 0
-  if (!hasPositiveCompletionEvidence) {
+  const negated =
+    /\b(?:not|never|no(?:t)?\s+yet|hasn'?t|haven'?t|didn'?t|doesn'?t|isn'?t|aren'?t|wasn'?t|weren'?t|cannot|can'?t)\b[\s\w-]{0,40}\b(?:complete(?:d)?|done|shipped|merged|landed)\b/i.test(
+      text
+    )
+  const hasAffirmativeCompletionEvidence =
+    !negated && (POSITIVE_COMPLETION_RE.test(text) || filesModified.length > 0)
+  if (!hasAffirmativeCompletionEvidence) {
     return {
       complete: false,
       kind: 'remaining_gates',
       appliedStatus: 'blocked',
       reason:
-        'worker_done lacks positive completion evidence (completion language or filesModified) and cannot fail open'
+        'worker_done lacks affirmative completion evidence (non-negated completion language or filesModified) and cannot fail open'
     }
   }
 

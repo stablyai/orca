@@ -456,7 +456,7 @@ describe('lifecycle reconciliation', () => {
     expect(logs.some((line) => line.includes('worker_done rejected'))).toBe(true)
   })
 
-  it('allows remaining activation gates only when the durable spec defines the split', () => {
+  it('keeps activation-pending worker_done blocked even with an explicit split', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({
       spec:
@@ -479,7 +479,11 @@ describe('lifecycle reconciliation', () => {
       senderPaneKey: `tab_w:${LEAF_A}`
     })
 
-    expect(reconcileLifecycleMessage(db, message).action).toBe('completed')
-    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'incomplete_outcome',
+      appliedStatus: 'blocked'
+    })
+    expect(db.getTask(task.id)?.status).toBe('blocked')
   })
 })

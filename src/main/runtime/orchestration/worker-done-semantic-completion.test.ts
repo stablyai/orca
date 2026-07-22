@@ -102,7 +102,11 @@ describe('evaluateWorkerDoneSemanticCompletion', () => {
         filesModified: ['ORCHESTRATION.md'],
         taskSpec: spec
       })
-    ).toEqual({ complete: true })
+    ).toMatchObject({
+      complete: false,
+      kind: 'remaining_gates',
+      appliedStatus: 'blocked'
+    })
   })
 
   it('fails closed for pending activation wording without a durable split', () => {
