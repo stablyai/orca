@@ -144,6 +144,18 @@ export function mountAgentDraftOnEditor(
   reply: AgentReplyForDraft
 ): BridgeDraftProps {
   const { draft, shape } = buildAgentDraftCreateShapePartial(reply)
-  editor.createShape(shape)
+  try {
+    editor.createShape(shape)
+  } catch (err) {
+    // Surface schema misconfig clearly — ValidationError on unknown type means
+    // useSync/Tldraw was built without AgentDraftShapeUtil in the store schema.
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(
+      msg.includes('agent-draft')
+        ? `agent-draft shape rejected by store schema (register AgentDraftShapeUtil on useSync): ${msg}`
+        : msg,
+      { cause: err instanceof Error ? err : undefined }
+    )
+  }
   return draft
 }

@@ -82,7 +82,15 @@ export function CollabCanvas({
 
   // Stable across renders: a new asset store identity would churn the sync client.
   const assets = useMemo(() => createInlineAssetStore(), [])
-  const store = useSync({ uri, assets })
+  // Why shapeUtils on useSync (not only <Tldraw>): the remote store validates
+  // records with its schema on put(). Without agent-draft in that schema,
+  // auto-draft / createShape throws ValidationError ("got agent-draft") and
+  // the React boundary fires (dogfood 2026-07-22 after omp reply).
+  const store = useSync({
+    uri,
+    assets,
+    shapeUtils: COLLAB_CANVAS_SHAPE_UTILS
+  })
 
   const editorRef = useRef<Editor | null>(null)
   const awarenessSentRef = useRef<string | null>(null)

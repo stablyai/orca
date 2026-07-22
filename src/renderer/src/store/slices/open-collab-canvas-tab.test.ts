@@ -53,4 +53,27 @@ describe('openCollabCanvasTabInActiveWorkspace', () => {
     const room = collabCanvasRoomUri(origin, created!.entityId)
     expect(room).toBe(`${origin}/connect/${created!.entityId}`)
   })
+
+  it('opens a pinned panel board beside session with the same boardId', () => {
+    const groupId = store.getState().groupsByWorktree[WT][0].id
+    const boardId = 'panel-board-abc123'
+    const created = store.getState().openPinnedCanvasBoardBesideSession({
+      boardId,
+      title: 'My whiteboard',
+      groupId
+    })
+    expect(created).not.toBeNull()
+    expect(created!.contentType).toBe('collab-canvas')
+    expect(created!.entityId).toBe(boardId)
+    expect(created!.label).toBe('My whiteboard')
+    expect(created!.groupId).not.toBe(groupId)
+
+    // Re-open activates the same tab (no duplicate sync clients for one board).
+    const again = store.getState().openPinnedCanvasBoardBesideSession({
+      boardId,
+      title: 'My whiteboard',
+      groupId
+    })
+    expect(again!.id).toBe(created!.id)
+  })
 })

@@ -338,9 +338,32 @@ export function SortableCanvasPanelButton({
           <span className="min-w-0 flex-1 truncate">{panel.title}</span>
         </button>
       </ContextMenuTrigger>
-      <ContextMenuContent className="min-w-[12rem]">
+      <ContextMenuContent className="min-w-[14rem]">
         <ContextMenuItem onSelect={() => setRenaming(true)}>
           {translate('auto.components.sidebar.SidebarPanelsNav.renamePanel', 'Rename')}
+        </ContextMenuItem>
+        <ContextMenuItem
+          onSelect={() => {
+            const state = useAppStore.getState()
+            if (!state.activeWorktreeId) {
+              return
+            }
+            // Same boardId → same sync room as the User Panel page; open as a
+            // session-bound tab split right of the active terminal group.
+            const tab = state.openPinnedCanvasBoardBesideSession({
+              boardId: panel.boardId,
+              title: panel.title
+            })
+            if (tab) {
+              // Leave the full-page panel view so the operator sees the split.
+              state.closePinnedCanvasPanelPage()
+            }
+          }}
+        >
+          {translate(
+            'auto.components.sidebar.SidebarPanelsNav.openBesideSession',
+            'Open beside session'
+          )}
         </ContextMenuItem>
         <ContextMenuItem
           variant="destructive"
