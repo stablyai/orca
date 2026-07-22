@@ -91,6 +91,14 @@ docs/**
 docs/reference/react-performance-audit.md
 !docs/STYLEGUIDE.md
 !docs/mobile-terminal-shortcut-bar.md
+!docs/mesh-fork-additions.md
+!docs/pet-bound-assistant.md
+!docs/pet-cross-surface-handoff.md
+!docs/pet-identity.md
+!docs/pet-roam-and-overlay.md
+!docs/mesh-voice.md
+!docs/omp-mesh-tooling.md
+!docs/relay-nodepty-toolchain.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
