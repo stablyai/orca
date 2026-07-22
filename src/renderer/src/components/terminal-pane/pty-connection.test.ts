@@ -13463,6 +13463,8 @@ describe('connectPanePty', () => {
 
   it('holds newer live bytes until a later replay frame has fully parsed', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const { deliverTerminalDataWithDeferredCredit } =
+      await import('@/lib/pane-manager/terminal-delivery-credit')
     enableActiveRuntimeEnvironment()
     const transport = createMockTransport('remote:env-1@@terminal-live-order')
     const callbacksRef: {
@@ -13484,8 +13486,12 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(8)
     expect(writes).toEqual(['\x1b[2J\x1b[3J\x1b[H'])
 
-    callbacksRef.data?.('NEWER-LIVE\r\n')
+    const acknowledgeLiveFrame = vi.fn()
+    deliverTerminalDataWithDeferredCredit(acknowledgeLiveFrame, () => {
+      callbacksRef.data?.('NEWER-LIVE\r\n')
+    })
     expect(writes).not.toContain('NEWER-LIVE\r\n')
+    expect(acknowledgeLiveFrame).not.toHaveBeenCalled()
     for (let index = 0; index < 12 && parseCallbacks.length > 0; index += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(4)
@@ -13498,7 +13504,17 @@ describe('connectPanePty', () => {
     expect(replayIndex).toBeGreaterThan(0)
     expect(resetIndex).toBeGreaterThan(replayIndex)
     expect(liveIndex).toBeGreaterThan(resetIndex)
+    expect(acknowledgeLiveFrame).toHaveBeenCalledOnce()
+
+    callbacksRef.replay?.('stalled replay')
+    await flushAsyncTicks(8)
+    const acknowledgeDisposedFrame = vi.fn()
+    deliverTerminalDataWithDeferredCredit(acknowledgeDisposedFrame, () => {
+      callbacksRef.data?.('LIVE-BEHIND-STALLED-REPLAY')
+    })
+    expect(acknowledgeDisposedFrame).not.toHaveBeenCalled()
     binding.dispose()
+    expect(acknowledgeDisposedFrame).toHaveBeenCalledOnce()
   })
 
   it('drops a queued relay replay instead of retagging it for a replacement PTY', async () => {

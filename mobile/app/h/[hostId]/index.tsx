@@ -38,6 +38,7 @@ import {
   useForceReconnect
 } from '../../../src/transport/client-context'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
+import { startHostWorktreeRefresh } from '../../../src/worktree/host-worktree-refresh'
 import {
   useLastConnectedAt,
   useReconnectAttempt
@@ -140,7 +141,8 @@ export function HostScreen({
   const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
-  const fetchRepoMetadataInFlightRef = useRef(false)
+  const fetchRepoMetadataInFlightRef = useRef(new WeakSet<RpcClient>())
+  const fetchRepoMetadataPendingRef = useRef(new WeakSet<RpcClient>())
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
@@ -351,48 +353,54 @@ export function HostScreen({
   }, [hostId])
 
   const fetchRepoMetadata = useCallback(
-    async (options: { force?: boolean } = {}) => {
+    async (options: { force?: boolean; queueIfInFlight?: boolean } = {}) => {
       if (!client || connState !== 'connected' || !hostId) {
         return
       }
-      if (fetchRepoMetadataInFlightRef.current) {
+      if (fetchRepoMetadataInFlightRef.current.has(client)) {
+        if (options.queueIfInFlight) {
+          fetchRepoMetadataPendingRef.current.add(client)
+        }
         return
       }
       const now = Date.now()
       if (!options.force && now - repoMetadataFetchedAtRef.current < REPO_METADATA_REFRESH_MS) {
         return
       }
-      fetchRepoMetadataInFlightRef.current = true
+      fetchRepoMetadataInFlightRef.current.add(client)
       const requestClient = client,
         requestHostId = hostId
       try {
-        const repoResponse = await requestClient.sendRequest('repo.list')
-        if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
-          return
-        }
-        const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
-        repoMetadataFetchedAtRef.current = Date.now()
-        setCachedRepos(requestHostId, repoResult.repos)
-        setRepoColorsByName(
-          new Map(
-            repoResult.repos.map((repo) => [
-              repo.displayName,
-              repo.badgeColor || repoColor(repo.displayName)
-            ])
-          )
-        )
-        setRepoIconsByName(
-          new Map(
-            repoResult.repos.flatMap((repo) =>
-              repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
+        do {
+          fetchRepoMetadataPendingRef.current.delete(requestClient)
+          const repoResponse = await requestClient.sendRequest('repo.list')
+          if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
+            return
+          }
+          const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
+          repoMetadataFetchedAtRef.current = Date.now()
+          setCachedRepos(requestHostId, repoResult.repos)
+          setRepoColorsByName(
+            new Map(
+              repoResult.repos.map((repo) => [
+                repo.displayName,
+                repo.badgeColor || repoColor(repo.displayName)
+              ])
             )
           )
-        )
-        setRepoIdsByName(new Map(repoResult.repos.map((repo) => [repo.displayName, repo.id])))
+          setRepoIconsByName(
+            new Map(
+              repoResult.repos.flatMap((repo) =>
+                repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
+              )
+            )
+          )
+          setRepoIdsByName(new Map(repoResult.repos.map((repo) => [repo.displayName, repo.id])))
+        } while (fetchRepoMetadataPendingRef.current.has(requestClient))
       } catch {
-        // Repo metadata is decorative; the next throttled refresh can retry.
+        // Repo metadata is decorative; the next refresh can retry.
       } finally {
-        fetchRepoMetadataInFlightRef.current = false
+        fetchRepoMetadataInFlightRef.current.delete(requestClient)
       }
     },
     [client, connState, hostId]
@@ -489,39 +497,29 @@ export function HostScreen({
     }, [])
   )
 
-  useFocusEffect(
-    useCallback(() => {
-      // The embedded sidebar isn't a routed screen (focus never fires); it polls via the mount effect below.
-      if (embedded || connState !== 'connected') {
-        return
-      }
-      void fetchWorktrees()
-      void fetchRepoMetadata()
-      // Pull desktop's shared view settings on focus so desktop changes show up without a manual refresh.
-      void syncViewSettingsFromDesktop()
-      // Why: React Navigation keeps prior screens mounted; only poll while this route is visible.
-      const interval = setInterval(() => {
-        void fetchWorktrees()
-        void fetchRepoMetadata()
-      }, 3000)
-      return () => clearInterval(interval)
-    }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
-  )
-
-  // Why: the embedded sidebar is never the focused route, so useFocusEffect never polls; mirror it from a mount effect.
-  useEffect(() => {
-    if (!embedded || connState !== 'connected') {
+  const startWorktreeRefresh = useCallback(() => {
+    if (!client || connState !== 'connected') {
       return
     }
-    void fetchWorktrees()
-    void fetchRepoMetadata()
     void syncViewSettingsFromDesktop()
-    const interval = setInterval(() => {
-      void fetchWorktrees()
-      void fetchRepoMetadata()
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+    return startHostWorktreeRefresh({ client, fetchWorktrees, fetchRepoMetadata })
+  }, [client, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+
+  useFocusEffect(
+    useCallback(() => {
+      // The embedded sidebar isn't a routed screen (focus never fires); it refreshes via the mount effect below.
+      if (!embedded) {
+        return startWorktreeRefresh()
+      }
+    }, [embedded, startWorktreeRefresh])
+  )
+
+  // Why: the embedded sidebar is never the focused route, so wire its refresh lifecycle from a mount effect.
+  useEffect(() => {
+    if (embedded) {
+      return startWorktreeRefresh()
+    }
+  }, [embedded, startWorktreeRefresh])
 
   // Why (#8498): steady-state polls miss the transition INTO 'connected' after background/sleep, when the cache is stalest.
   const { refreshing, onRefresh } = useWorktreeResync({
@@ -740,14 +738,16 @@ export function HostScreen({
   const toggleCollapsed = useCallback(
     (key: string) => {
       const next = new Set(viewStateRef.current.collapsedGroups)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
+      if (!next.delete(key)) {
         next.add(key)
       }
       persistViewSettings({ collapsedGroups: [...next] })
     },
     [persistViewSettings]
+  )
+  const toggleWorktreeLineage = useCallback(
+    (item: Worktree) => toggleCollapsed(getMobileWorkspaceLineageGroupKey(item.worktreeId)),
+    [toggleCollapsed]
   )
   const { sections, rawSections, uniqueRepos, uniqueRepoColors } = useWorkspaceSections({
     displayWorktrees,
@@ -1191,9 +1191,7 @@ export function HostScreen({
               hideRepo={groupMode === 'repo'}
               onPress={openWorktreeSession}
               onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
-              onToggleLineage={(row) =>
-                toggleCollapsed(getMobileWorkspaceLineageGroupKey(row.worktreeId))
-              }
+              onToggleLineage={toggleWorktreeLineage}
             />
           )}
         />

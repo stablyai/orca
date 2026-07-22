@@ -6,6 +6,7 @@ import type {
   WorkspaceLineage
 } from '../../../../shared/types'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+import { getProjectedWorktreeLineageChildrenByParentId } from '../sidebar/worktree-lineage-projection'
 
 export type AttachedWorktreeResolution = {
   folderWorkspace: FolderWorkspace | null
@@ -90,39 +91,30 @@ export function getLineageChildrenByParentId(
   worktreeById: Map<string, Worktree>,
   rootWorktreeIds: ReadonlySet<string>
 ): Map<string, Worktree[]> {
-  const descendantsByParentId = new Map<string, Worktree[]>()
+  const projectedChildrenByParentId = getProjectedWorktreeLineageChildrenByParentId(
+    lineageById,
+    worktreeById
+  )
   const includedIds = new Set(rootWorktreeIds)
-  let added = true
-
-  while (added) {
-    added = false
-    for (const lineage of Object.values(lineageById)) {
-      const parent = worktreeById.get(lineage.parentWorktreeId)
-      const child = worktreeById.get(lineage.worktreeId)
-      if (!isValidLineageChild(parent, child, lineage, includedIds)) {
+  const queue = [...rootWorktreeIds]
+  for (let index = 0; index < queue.length; index += 1) {
+    for (const child of projectedChildrenByParentId.get(queue[index]) ?? []) {
+      if (child.isArchived || includedIds.has(child.id)) {
         continue
       }
       includedIds.add(child.id)
-      added = true
+      queue.push(child.id)
     }
   }
 
-  for (const worktreeId of includedIds) {
-    const child = worktreeById.get(worktreeId)
-    if (!child) {
-      continue
+  const descendantsByParentId = new Map<string, Worktree[]>()
+  for (const parentId of includedIds) {
+    const children = (projectedChildrenByParentId.get(parentId) ?? []).filter(
+      (child) => includedIds.has(child.id) && !child.isArchived
+    )
+    if (children.length > 0) {
+      descendantsByParentId.set(parentId, children)
     }
-    const lineage = lineageById[child.id]
-    if (!lineage || !includedIds.has(lineage.parentWorktreeId)) {
-      continue
-    }
-    const parent = worktreeById.get(lineage.parentWorktreeId)
-    if (!isCurrentLineagePair(parent, child, lineage)) {
-      continue
-    }
-    const children = descendantsByParentId.get(parent.id) ?? []
-    children.push(child)
-    descendantsByParentId.set(parent.id, children)
   }
 
   for (const children of descendantsByParentId.values()) {
@@ -158,39 +150,6 @@ function getLineageChildWorktree(
     return null
   }
   return worktree
-}
-
-function isValidLineageChild(
-  parent: Worktree | undefined,
-  child: Worktree | undefined,
-  lineage: WorktreeLineage,
-  includedIds: ReadonlySet<string>
-): child is Worktree {
-  if (
-    !parent ||
-    !child ||
-    parent.isArchived ||
-    child.isArchived ||
-    !includedIds.has(parent.id) ||
-    includedIds.has(child.id)
-  ) {
-    return false
-  }
-  return isCurrentLineagePair(parent, child, lineage)
-}
-
-function isCurrentLineagePair(
-  parent: Worktree | undefined,
-  child: Worktree,
-  lineage: WorktreeLineage
-): parent is Worktree {
-  return Boolean(
-    parent &&
-    !parent.isArchived &&
-    !child.isArchived &&
-    child.instanceId === lineage.worktreeInstanceId &&
-    parent.instanceId === lineage.parentWorktreeInstanceId
-  )
 }
 
 function sortWorktreesByRecentActivity(left: Worktree, right: Worktree): number {

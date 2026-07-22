@@ -9,13 +9,14 @@ import {
   Alert
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import type { RpcSuccess } from '../../../src/transport/types'
 import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { styles } from './accounts-screen-styles'
+import { useNow } from '../../../src/hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
 import {
   type AccountsSnapshot,
@@ -40,14 +41,16 @@ export default function AccountsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
+  const [clockEnabled, setClockEnabled] = useState(false)
 
-  // Why: the reset countdown must stay fresh while the screen sits open —
-  // snapshot pushes only arrive when the desktop's rate-limit poll completes.
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
-  }, [])
+  useFocusEffect(
+    useCallback(() => {
+      setClockEnabled(true)
+      return () => setClockEnabled(false)
+    }, [])
+  )
+  // Why: snapshot pushes only arrive when the desktop's rate-limit poll completes.
+  const now = useNow(60_000, clockEnabled)
 
   useEffect(() => {
     if (!hostId) {

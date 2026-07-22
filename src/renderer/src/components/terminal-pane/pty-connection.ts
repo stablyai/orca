@@ -23,7 +23,10 @@ import {
   isStatefulRendererReplyCsiQuery,
   isStatelessRendererReplyCsiQuery
 } from '../../../../shared/terminal-reply-query-extraction'
-import { takeCurrentPtyDeliveryAckCredit } from './terminal-pty-ack-gate'
+import {
+  deliverTerminalDataWithDeferredCredit,
+  takeCurrentTerminalDeliveryCredit
+} from '@/lib/pane-manager/terminal-delivery-credit'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
@@ -3312,7 +3315,13 @@ export function connectPanePty(
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
   let hasReceivedPtyOutput = false
   let deferredReattachLiveData:
-    | { data: string; ptyId: string | null; streamGeneration: number; meta?: PtyDataMeta }[]
+    | {
+        data: string
+        ptyId: string | null
+        streamGeneration: number
+        meta?: PtyDataMeta
+        ackCredit?: () => void
+      }[]
     | null = null
   let deferredReattachLiveDataChars = 0
   let reattachLiveDataDeferralDepth = 0
@@ -5787,7 +5796,7 @@ export function connectPanePty(
         foreground: foregroundOutput,
         beforeWrite: beforeTerminalOutputWrite,
         // Why: claim the delivery's parse-deferred ACK credit (null outside a delivery); the FIRST scheduler write carries it all and fires when bytes are consumed.
-        ackCredit: takeCurrentPtyDeliveryAckCredit() ?? undefined,
+        ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
         onBackgroundBacklogDropped: markHiddenOutputRestoreNeeded,
         latencySensitive:
           !foreground || parseHiddenStartupOutput
@@ -6881,20 +6890,26 @@ export function connectPanePty(
       }
       if (deferredReattachLiveData !== null) {
         // Why: a replacement stream must not inherit bytes or a gap marker from the replay owner it superseded.
-        deferredReattachLiveData = deferredReattachLiveData.filter(
-          (chunk) => chunk.streamGeneration === streamGeneration
-        )
+        deferredReattachLiveData = deferredReattachLiveData.filter((chunk) => {
+          const keep = chunk.streamGeneration === streamGeneration
+          if (!keep) {
+            chunk.ackCredit?.()
+          }
+          return keep
+        })
         deferredReattachLiveDataChars = deferredReattachLiveData.reduce(
           (total, chunk) => total + chunk.data.length,
           0
         )
         const oversized = data.length > MAX_DEFERRED_REATTACH_LIVE_CHARS
         const deferredData = oversized ? data.slice(-MAX_DEFERRED_REATTACH_LIVE_CHARS) : data
+        const ackCredit = takeCurrentTerminalDeliveryCredit()
         deferredReattachLiveData.push({
           data: deferredData,
           ptyId: transport.getPtyId(),
           streamGeneration,
-          ...(meta ? { meta } : {})
+          ...(meta ? { meta } : {}),
+          ...(ackCredit ? { ackCredit } : {})
         })
         deferredReattachLiveDataChars += deferredData.length
         // Why: one huge IPC frame would bypass the queue's memory bound; mark a stream gap so snapshot recovery replaces it, not a partial ANSI frame.
@@ -6906,6 +6921,7 @@ export function connectPanePty(
         ) {
           const removed = deferredReattachLiveData.shift()
           deferredReattachLiveDataChars -= removed?.data.length ?? 0
+          removed?.ackCredit?.()
           dropped = true
         }
         if (dropped && deferredReattachLiveData[0]) {
@@ -7111,6 +7127,9 @@ export function connectPanePty(
       const currentOwner = deferredReattachLiveDataOwners.get(currentGeneration)
       deferredReattachLiveDataOwners = new Map()
       if (disposed || !chunks) {
+        for (const chunk of chunks ?? []) {
+          chunk.ackCredit?.()
+        }
         return
       }
       // Why: paint the authoritative replay first, then admit deferred live chunks so the replay clear can't erase newer output.
@@ -7121,9 +7140,16 @@ export function connectPanePty(
           chunk.streamGeneration !== currentGeneration ||
           currentOwner?.failed === true
         ) {
+          chunk.ackCredit?.()
           continue
         }
-        dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
+        if (chunk.ackCredit) {
+          deliverTerminalDataWithDeferredCredit(chunk.ackCredit, () => {
+            dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
+          })
+        } else {
+          dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
+        }
         deliveredDeferredChunks += 1
       }
       if (deliveredDeferredChunks > 0) {
@@ -8157,6 +8183,14 @@ export function connectPanePty(
     reconcileIfSessionMissing,
     dispose() {
       disposed = true
+      // Why: a stalled xterm replay may never reach its finally; release live-frame credit when this renderer no longer owns the stream.
+      for (const chunk of deferredReattachLiveData ?? []) {
+        chunk.ackCredit?.()
+      }
+      deferredReattachLiveData = null
+      deferredReattachLiveDataChars = 0
+      reattachLiveDataDeferralDepth = 0
+      deferredReattachLiveDataOwners = new Map()
       cancelPendingSafeFitContinuations(pane)
       pendingHiddenSnapshotFit = null
       pendingReattachFit = null

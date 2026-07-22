@@ -139,6 +139,97 @@ describe('MobileSocketWiring', () => {
     expect(wiring.connectionCount).toBe(0)
   })
 
+  it('closes an unknown-token socket even when reporting the failure throws', () => {
+    const desktop = generateKeyPair()
+    const phone = generateKeyPair()
+    const ws = new FakeSocket()
+    const transport = new FakeTransport()
+    const notificationError = new Error('renderer exited')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onUnpairedDeviceAuthFailure = vi.fn(() => {
+      throw notificationError
+    })
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registryFor('device-1', 'valid-token'),
+      e2eeKeypair: {
+        publicKey: desktop.publicKey,
+        secretKey: desktop.secretKey,
+        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
+      },
+      onText: vi.fn(),
+      onBinary: vi.fn(),
+      onClose: vi.fn(),
+      onUnpairedDeviceAuthFailure
+    })
+    wiring.attachTransport(transport)
+
+    transport.receive(
+      ws,
+      JSON.stringify({
+        type: 'e2ee_hello',
+        publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
+      })
+    )
+    const sharedKey = deriveSharedKey(phone.secretKey, desktop.publicKey)
+    expect(() =>
+      transport.receive(
+        ws,
+        encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'stale-token' }), sharedKey)
+      )
+    ).not.toThrow()
+
+    expect(onUnpairedDeviceAuthFailure).toHaveBeenCalledOnce()
+    expect(onUnpairedDeviceAuthFailure).toHaveBeenCalledWith({ transport: 'direct' })
+    expect(consoleError).toHaveBeenCalledWith(
+      '[mobile] Failed to report unpaired-device auth failure:',
+      notificationError
+    )
+    expect(transport.setClientId).not.toHaveBeenCalled()
+    expect(ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
+    expect(wiring.channelCount).toBe(0)
+    consoleError.mockRestore()
+  })
+
+  it('reports auth encrypted to a stale desktop key on the direct path', () => {
+    const currentDesktop = generateKeyPair()
+    const staleDesktop = generateKeyPair()
+    const phone = generateKeyPair()
+    const ws = new FakeSocket()
+    const transport = new FakeTransport()
+    const onUnpairedDeviceAuthFailure = vi.fn()
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registryFor('device-1', 'valid-token'),
+      e2eeKeypair: {
+        publicKey: currentDesktop.publicKey,
+        secretKey: currentDesktop.secretKey,
+        publicKeyB64: Buffer.from(currentDesktop.publicKey).toString('base64')
+      },
+      onText: vi.fn(),
+      onBinary: vi.fn(),
+      onClose: vi.fn(),
+      onUnpairedDeviceAuthFailure
+    })
+    wiring.attachTransport(transport)
+
+    transport.receive(
+      ws,
+      JSON.stringify({
+        type: 'e2ee_hello',
+        publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
+      })
+    )
+    const staleSharedKey = deriveSharedKey(phone.secretKey, staleDesktop.publicKey)
+    transport.receive(
+      ws,
+      encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), staleSharedKey)
+    )
+
+    expect(onUnpairedDeviceAuthFailure).toHaveBeenCalledOnce()
+    expect(onUnpairedDeviceAuthFailure).toHaveBeenCalledWith({ transport: 'direct' })
+    expect(transport.setClientId).not.toHaveBeenCalled()
+    expect(ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
+  })
+
   it('rejects a relay socket whose immutable relayDeviceId differs from E2EE identity', () => {
     const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
     const phone = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))

@@ -26,7 +26,7 @@ import {
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
@@ -266,6 +266,82 @@ function capRetainedAgents(
     capped[key] = retained[key]
   }
   return capped
+}
+
+// Why: missed pane teardown can leak heavy live rows in any state and amplify every status-map copy (#9872).
+export const MAX_LIVE_AGENT_STATUSES = 500
+
+type PaneLiveness = 'live' | 'dead' | 'unprovable'
+
+// Why: only a rooted tab proves which leaves are mounted; rootless and headless rows may still be live (#2962).
+function classifyPaneKeyLiveness(state: AppState): (paneKey: string) => PaneLiveness {
+  const rootedLeafKeys = new Set<string>()
+  const rootedTabIds = new Set<string>()
+  for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
+    if (!layout?.root) {
+      continue
+    }
+    rootedTabIds.add(tabId)
+    const stack: TerminalPaneLayoutNode[] = [layout.root]
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      if (node.type === 'leaf') {
+        rootedLeafKeys.add(`${tabId}:${node.leafId}`)
+      } else {
+        stack.push(node.first, node.second)
+      }
+    }
+  }
+  return (paneKey) => {
+    if (rootedLeafKeys.has(paneKey)) {
+      return 'live'
+    }
+    const tabId = getTabIdFromPaneKey(paneKey)
+    return tabId !== null && rootedTabIds.has(tabId) ? 'dead' : 'unprovable'
+  }
+}
+
+// Why: mutate the caller-owned spread so eviction does not allocate another heavy-map copy.
+function capLiveAgentStatusesInPlace(
+  freshLive: Record<string, AgentStatusEntry>,
+  protectedPaneKey: string,
+  buildClassifier: () => (paneKey: string) => PaneLiveness,
+  now: number,
+  maxEntries = MAX_LIVE_AGENT_STATUSES
+): string[] {
+  const keys = Object.keys(freshLive)
+  let overflow = keys.length - maxEntries
+  if (overflow <= 0) {
+    return []
+  }
+  const classify = buildClassifier()
+  const evictedPaneKeys: string[] = []
+  const sweep = (canEvict: (liveness: PaneLiveness, entry: AgentStatusEntry) => boolean): void => {
+    for (const key of keys) {
+      if (overflow <= 0) {
+        break
+      }
+      if (key === protectedPaneKey || !(key in freshLive)) {
+        continue
+      }
+      const liveness = classify(key)
+      if (liveness === 'live' || !canEvict(liveness, freshLive[key])) {
+        continue
+      }
+      delete freshLive[key]
+      overflow -= 1
+      evictedPaneKeys.push(key)
+    }
+  }
+  // Prefer rows that are provably dead or too stale to represent a live agent.
+  sweep(
+    (liveness, entry) => liveness === 'dead' || now - entry.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+  )
+  // Shed fresh unprovable rows only when needed; rooted live panes make this a soft cap.
+  if (overflow > 0) {
+    sweep(() => true)
+  }
+  return evictedPaneKeys
 }
 
 function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
@@ -1916,19 +1992,35 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           nextSleepingAgentSessions = { ...s.sleepingAgentSessionsByPaneKey }
           delete nextSleepingAgentSessions[paneKey]
         }
+        const nextLive = { ...s.agentStatusByPaneKey, [paneKey]: entry }
+        // Why: cap the live map so a huge map's per-ping spread copy can't OOM the renderer (#9872).
+        const evictedPaneKeys = capLiveAgentStatusesInPlace(
+          nextLive,
+          paneKey,
+          () => classifyPaneKeyLiveness(s),
+          updatedAt
+        )
+        const evictedOrphans = evictedPaneKeys.length > 0
+        if (evictedOrphans) {
+          const evictedPaneKeySet = new Set(evictedPaneKeys)
+          nextSleepingAgentSessions = removePaneKeys(nextSleepingAgentSessions, evictedPaneKeySet)
+          nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evictedPaneKeySet)
+        }
         return {
-          agentStatusByPaneKey: { ...s.agentStatusByPaneKey, [paneKey]: entry },
+          agentStatusByPaneKey: nextLive,
           retainedAgentsByPaneKey: nextRetainedAgents,
           sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           agentStatusEpoch:
-            retentionRelevantChange || migrationUnsupported.changed
+            retentionRelevantChange || migrationUnsupported.changed || evictedOrphans
               ? s.agentStatusEpoch + 1
               : s.agentStatusEpoch,
           sortEpoch:
-            sortRelevantChange || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+            sortRelevantChange || migrationUnsupported.changed || evictedOrphans
+              ? s.sortEpoch + 1
+              : s.sortEpoch
         }
       })
       if (suppressedInheritedTerminalStatus) {
