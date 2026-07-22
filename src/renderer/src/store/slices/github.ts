@@ -53,6 +53,7 @@ import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
+import { findRepoForWorktreeOwner } from './repo-host-identity'
 import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../../../shared/github-api-availability'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
@@ -1132,7 +1133,7 @@ function buildPRRefreshCandidate(
   worktree: Worktree,
   repoPath?: string
 ): GitHubPRRefreshCandidate | null {
-  const repo = state.repos.find((r) => r.id === worktree.repoId)
+  const repo = findRepoForWorktreeOwner(state.repos, worktree)
   if (!repo) {
     return null
   }
@@ -4322,7 +4323,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       for (const wt of worktrees) {
-        const repo = state.repos.find((r) => r.id === wt.repoId)
+        const repo = findRepoForWorktreeOwner(state.repos, wt)
         if (!repo) {
           continue
         }
@@ -4408,7 +4409,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return
     }
 
-    const repo = state.repos.find((r) => r.id === worktree.repoId)
+    const repo = findRepoForWorktreeOwner(state.repos, worktree)
     if (!repo) {
       return
     }
@@ -4606,7 +4607,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return
     }
 
-    const repo = state.repos.find((r) => r.id === worktree.repoId)
+    const repo = findRepoForWorktreeOwner(state.repos, worktree)
     if (!repo) {
       return
     }

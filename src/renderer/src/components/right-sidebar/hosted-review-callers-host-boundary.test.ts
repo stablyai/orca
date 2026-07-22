@@ -92,4 +92,16 @@ describe('hosted-review caller host boundaries', () => {
     )
     expectEveryCallToCarryExecutionHost(readSource('../sidebar/WorktreeCard.tsx'), 'fetchIssue')
   })
+
+  it('uses worktree ownership for terminal links, check reloads, and linked issues', () => {
+    for (const sourcePath of [
+      '../../store/slices/worktrees.ts',
+      '../../store/slices/editor.ts',
+      '../sidebar/use-worktree-issue-link.ts'
+    ]) {
+      const source = readSource(sourcePath)
+      expect(source, sourcePath).toContain('findRepoForWorktreeOwner')
+      expect(source, sourcePath).toContain('executionHostId')
+    }
+  })
 })

@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
+import { findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { parseExplicitGitHubIssueUrl } from './worktree-meta-updates'
 
@@ -32,7 +34,7 @@ export function useWorktreeIssueLink(args: { worktreeId: string; issueInput: str
     if (!worktree) {
       return undefined
     }
-    return s.repos.find((repo) => repo.id === worktree.repoId)
+    return findRepoForWorktreeOwner(s.repos, worktree)
   })
   const cachedIssueUrl = useAppStore((s) => {
     if (!issueRepo || issueNumber === null) {
@@ -81,7 +83,10 @@ export function useWorktreeIssueLink(args: { worktreeId: string; issueInput: str
 
     setOpeningIssue(true)
     try {
-      const issue = await fetchIssue(issueRepo.path, issueNumber, { repoId: issueRepo.id })
+      const issue = await fetchIssue(issueRepo.path, issueNumber, {
+        repoId: issueRepo.id,
+        executionHostId: getRepoExecutionHostId(issueRepo)
+      })
       if (issue?.url) {
         void window.api.shell.openUrl(issue.url)
       }

@@ -2873,8 +2873,13 @@ describe('createEditorSlice conflict status reconciliation', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const store = createStore<any>()((...args: any[]) => ({
       activeWorktreeId: 'wt-1',
-      repos: [{ id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+      repos: [
+        { id: 'repo-1', path: '/local/repo' },
+        { id: 'repo-1', path: '/repo', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }
+      ],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'ssh:ssh-1', path: '/repo/worktree' }]
+      },
       fetchPRCheckDetails,
       ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
     })) as unknown as StoreApi<AppState>
@@ -2897,7 +2902,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
     expect(fetchPRCheckDetails).toHaveBeenCalledWith(
       '/repo',
       expect.objectContaining({ checkRunId: 42, checkName: 'verify' }),
-      { repoId: 'repo-1' }
+      { repoId: 'repo-1', executionHostId: 'ssh:ssh-1' }
     )
     expect(store.getState().openFiles).toContainEqual(
       expect.objectContaining({

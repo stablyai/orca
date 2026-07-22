@@ -64,6 +64,8 @@ import {
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
+import { findRepoForWorktreeOwner } from './repo-host-identity'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   addAdditionalValidWorkspaceKeys,
@@ -3445,8 +3447,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
-    const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
-    const repo = state.repos.find((candidate) => candidate.id === repoId)
+    const fallbackRepoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
+    const fallbackRepos = state.repos.filter((candidate) => candidate.id === fallbackRepoId)
+    const repo = worktree
+      ? findRepoForWorktreeOwner(state.repos, worktree)
+      : fallbackRepos.length === 1
+        ? fallbackRepos[0]
+        : null
     if (!repo?.path) {
       return
     }
@@ -3465,7 +3472,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           url: check.url,
           prRepo: null
         },
-        { repoId: repo.id }
+        { repoId: repo.id, executionHostId: getRepoExecutionHostId(repo) }
       )
       patch({
         details,

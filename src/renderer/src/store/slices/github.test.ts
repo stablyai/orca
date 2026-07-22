@@ -5359,6 +5359,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
   })
 
   it('refreshes runtime PR data directly instead of enqueueing local coordinator work', async () => {
+    resetRemoteRuntimeMocks()
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-1',
       ok: true,
@@ -5372,6 +5373,13 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
+        {
+          id: 'repo-1',
+          path: '/local/repo',
+          name: 'local',
+          kind: 'git',
+          executionHostId: 'local'
+        },
         {
           id: 'repo-1',
           path: repoPath,
@@ -5390,6 +5398,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
           {
             id: 'wt-1',
             repoId: 'repo-1',
+            hostId: 'runtime:env-1',
             path: '/repo/worktrees/runtime',
             branch,
             displayName: 'runtime',

@@ -5537,6 +5537,7 @@ describe('worktree remote runtime mutations', () => {
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
+      hostId: 'ssh:ssh-1',
       path: '/worktrees/orca',
       branch: 'refs/heads/feature/pr-link',
       pushTarget: {
@@ -5547,7 +5548,16 @@ describe('worktree remote runtime mutations', () => {
     })
     store.setState({
       repos: [
-        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+        { id: 'repo1', path: '/repos/local', displayName: 'local', badgeColor: '#000', addedAt: 0 },
+        {
+          id: 'repo1',
+          path: '/repos/orca',
+          displayName: 'ssh',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1'
+        }
       ],
       worktreesByRepo: { repo1: [wt] },
       fetchPRForBranch
@@ -5565,6 +5575,7 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
+      executionHostId: 'ssh:ssh-1',
       worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
@@ -5611,6 +5622,7 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
+      executionHostId: 'local',
       worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
@@ -5802,6 +5814,7 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
+      executionHostId: 'local',
       worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,

@@ -31,7 +31,7 @@ import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
 } from './recently-closed-tabs'
-import { findRepoForHost } from './repo-host-identity'
+import { findRepoForHost, findRepoForWorktreeOwner } from './repo-host-identity'
 import {
   dropWorktreeRowsForRemovedRuntimeEnvironments,
   isRemovedRuntimeHostId
@@ -4228,7 +4228,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (!worktree || worktree.isBare || worktree.isArchived) {
       return
     }
-    const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
+    const repo = findRepoForWorktreeOwner(state.repos, worktree)
     if (!repo || (repo.kind && repo.kind !== 'git')) {
       return
     }
@@ -4244,6 +4244,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       void fetchPRForBranch(repo.path, branch, {
         force: true,
         repoId: repo.id,
+        executionHostId: getRepoExecutionHostId(repo),
         worktreeId,
         linkedPRNumber: alreadyLinked ? link.number : null,
         fallbackPRNumber: null,
