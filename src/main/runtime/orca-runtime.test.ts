@@ -1973,6 +1973,66 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('treats legacy mobile pane ids as restorable during reconciliation', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorkspaceSession: () => ({
+        ...getDefaultWorkspaceSession(),
+        sleepingAgentSessionsByPaneKey: {
+          'tab-legacy:2': {
+            paneKey: 'tab-legacy:2',
+            tabId: 'tab-legacy',
+            worktreeId: TEST_WORKTREE_ID,
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'session-legacy' },
+            prompt: 'resume',
+            state: 'done',
+            capturedAt: 1,
+            updatedAt: 1,
+            origin: 'worktree-sleep'
+          }
+        }
+      })
+    } as never)
+
+    runtime.setPtyController(controllerHarness.controller)
+    await controllerHarness.resolveRefresh([
+      { id: `${TEST_WORKTREE_ID}@@legacy-restorable`, cwd: TEST_WORKTREE_PATH, title: '' }
+    ])
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'legacy-pane:test',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'tab-legacy',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-legacy',
+              title: 'sleeping agent',
+              parentTabId: 'tab-legacy',
+              leafId: 'pane:2',
+              ptyId: `${TEST_WORKTREE_ID}@@legacy-restorable`,
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 1, ambiguous: 0 }
+    })
+  })
+
   it('reports the configured Windows terminal shell on status', () => {
     const runtime = new OrcaRuntimeService({
       ...store,
@@ -2838,6 +2898,48 @@ describe('OrcaRuntimeService', () => {
     })
     const split = internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
     expect(split.tabs.filter((tab) => tab.type === 'terminal')).toHaveLength(2)
+  })
+
+  it('finds legacy mobile pane ids when snapshot PTY ids are absent', () => {
+    const runtime = createRuntime()
+    const internals = runtime as unknown as {
+      recordPtyWorktree: (
+        ptyId: string,
+        worktreeId: string,
+        state?: Record<string, unknown>
+      ) => { worktreeId: string; tabId: string | null; paneKey: string | null }
+      findPtyForMobileTerminalTab: (
+        worktreeId: string,
+        tab: {
+          type: 'terminal'
+          id: string
+          parentTabId: string
+          leafId: string
+          title: string
+          isActive: boolean
+        }
+      ) => { worktreeId: string; tabId: string | null; paneKey: string | null } | null
+    }
+    internals.recordPtyWorktree('pty-legacy-pane', TEST_WORKTREE_ID, {
+      connected: true,
+      tabId: 'tab-legacy',
+      paneKey: 'tab-legacy:2'
+    })
+
+    const match = internals.findPtyForMobileTerminalTab(TEST_WORKTREE_ID, {
+      type: 'terminal',
+      id: 'tab-legacy',
+      parentTabId: 'tab-legacy',
+      leafId: 'pane:2',
+      title: 'legacy',
+      isActive: true
+    })
+
+    expect(match).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'tab-legacy',
+      paneKey: 'tab-legacy:2'
+    })
   })
 
   it('keeps targeted terminal lists from adopting controller PTYs for other worktrees', async () => {

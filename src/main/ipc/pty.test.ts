@@ -4476,6 +4476,82 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('marks local inventory stale after ipc pty spawn', async () => {
+    let listCall = 0
+    let resolveRefresh!: (sessions: { id: string; cwd: string; title: string }[]) => void
+    const pendingRefresh = new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
+      resolveRefresh = resolve
+    })
+    const runtime = {
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'handle-1'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      preparePtyExecutionContext: vi.fn(),
+      getPtyOutputSequence: vi.fn(() => 0),
+      synchronizePtyOutputSequenceFromProvider: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn()
+    }
+
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({ id: 'daemon-local-pty', pid: 321 })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => {
+        listCall += 1
+        if (listCall === 1) {
+          return []
+        }
+        return pendingRefresh
+      }),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      refreshLocalProcessInventory: () => Promise<void>
+      getLocalProcessInventorySnapshot: () => {
+        state: 'pending' | 'ready' | 'stale'
+        processes?: { id: string; cwd: string; title: string }[]
+      }
+    }
+
+    await controller.refreshLocalProcessInventory()
+    expect(controller.getLocalProcessInventorySnapshot()).toEqual({
+      state: 'ready',
+      processes: []
+    })
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+
+    expect(controller.getLocalProcessInventorySnapshot()).toEqual({
+      state: 'stale',
+      processes: []
+    })
+    expect(listCall).toBe(2)
+
+    resolveRefresh([{ id: 'daemon-local-pty', cwd: '/local', title: 'shell' }])
+    await vi.waitFor(() =>
+      expect(controller.getLocalProcessInventorySnapshot()).toEqual({
+        state: 'ready',
+        processes: [{ id: 'daemon-local-pty', cwd: '/local', title: 'shell' }]
+      })
+    )
+  })
+
   it('removes an exited PTY before the next status read', async () => {
     let exitListener = (_payload: { id: string; code: number }) => {
       throw new Error('missing exit listener')

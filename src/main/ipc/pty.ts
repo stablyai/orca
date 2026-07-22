@@ -4396,6 +4396,7 @@ export function registerPtyHandlers(
                 ? spawnedPid
                 : null
           })
+          noteLocalProcessInventoryChange(args.connectionId)
         }
         // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event (missing required field skips it).
         if (args.telemetry) {

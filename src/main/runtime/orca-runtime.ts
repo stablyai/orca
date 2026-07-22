@@ -225,7 +225,6 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../../shared/setup-agent-sequencing'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
-import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
@@ -21243,7 +21242,12 @@ export class OrcaRuntimeService {
       }
 
       const tabs = terminalTabsByPtyId.get(session.id) ?? []
-      const paneKeys = new Set(tabs.map((tab) => `${tab.parentTabId}:${tab.leafId}`))
+      const paneKeys = new Set(
+        tabs.flatMap((tab) => [
+          this.getMobileTerminalPaneKey(tab),
+          `${tab.parentTabId}:${tab.leafId}`
+        ])
+      )
       const worktreeId = session.worktreeId ?? parsePtySessionId(session.id).worktreeId
       const restorable =
         tabs.some((tab) => this.hasServeOrSshOwnedBinding(tab)) ||
@@ -23768,10 +23772,10 @@ export class OrcaRuntimeService {
       }
       return null
     }
-    const paneKeys = new Set([`${tab.parentTabId}:${tab.leafId}`])
-    if (tab.leafId === `pane:${FIRST_PANE_ID}`) {
-      paneKeys.add(`${tab.parentTabId}:${FIRST_PANE_ID}`)
-    }
+    const paneKeys = new Set([
+      this.getMobileTerminalPaneKey(tab),
+      `${tab.parentTabId}:${tab.leafId}`
+    ])
     for (const pty of this.ptysById.values()) {
       if (pty.tabId === tab.parentTabId && pty.paneKey && paneKeys.has(pty.paneKey)) {
         return pty
