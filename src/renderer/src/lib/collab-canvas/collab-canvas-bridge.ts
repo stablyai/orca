@@ -165,8 +165,14 @@ export function buildCollabCanvasInjectText(
   }
 
   lines.push(
-    'If you propose UI/layout text for the board, write it as plain prose;',
-    'the operator can place it as a dashed agent-draft on the canvas.',
+    'Write-back: plain prose becomes an agent-draft card automatically after this turn.',
+    'To place shapes on the board, include a fenced JSON block:',
+    '```collab-board',
+    '[{"op":"geo","geo":"rectangle","x":40,"y":40,"w":200,"h":100,"label":"Login"},',
+    ' {"op":"note","x":40,"y":160,"text":"Validate email"},',
+    ' {"op":"draft","body":"Next step…"}]',
+    '```',
+    'Ops: geo (rectangle|ellipse|triangle|diamond|…), note, draft. Keep it short.',
     '',
     'End of collab board update — your turn.'
   )

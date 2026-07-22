@@ -36,6 +36,9 @@ import {
   resolveSessionAgentTerminalTabId
 } from '../../lib/collab-canvas/resolve-session-agent-tab'
 import { resolveLastAgentReply } from '../../lib/collab-canvas/resolve-last-agent-reply'
+import { decideCollabAutoDraft } from '../../lib/collab-canvas/collab-auto-draft'
+import { parseAgentBoardOps } from '../../lib/collab-canvas/parse-agent-board-ops'
+import { applyAgentBoardOps } from '../../lib/collab-canvas/apply-agent-board-ops'
 import { prepareReplyForSpeech } from '../../lib/voice/prepare-reply-for-speech'
 import {
   COLLAB_CANVAS_SHAPE_UTILS,
@@ -72,8 +75,14 @@ export function CollabCanvas({
 
   const editorRef = useRef<Editor | null>(null)
   const awarenessSentRef = useRef<string | null>(null)
+  /** Armed after Send — next working→done for this worktree auto-places write-back. */
+  const awaitingReplyRef = useRef(false)
+  const workingByPaneRef = useRef<Map<string, boolean>>(new Map())
+  const placedDraftKeysRef = useRef<Set<string>>(new Set())
   const [sending, setSending] = useState(false)
+  const [autoDraft, setAutoDraft] = useState(true)
   const [awareStatus, setAwareStatus] = useState<'idle' | 'sent' | 'no-terminal'>('idle')
+  const [awaitingLabel, setAwaitingLabel] = useState(false)
 
   const worktreeId = binding.kind === 'session' ? binding.worktreeId : null
   const unifiedTabs = useAppStore((s) =>
@@ -90,17 +99,41 @@ export function CollabCanvas({
     })
   }, [worktreeId, unifiedTabs, groups])
 
-  const placeDraftBody = useCallback(
-    (body: string, sourceTurnId: string) => {
+  const applyAgentReplyToBoard = useCallback(
+    (rawBody: string, sourceTurnId: string, opts?: { quiet?: boolean }) => {
       const editor = editorRef.current
       if (!editor) {
-        toast('Board editor not ready')
-        return
+        if (!opts?.quiet) toast('Board editor not ready')
+        return false
       }
-      const cleaned = prepareReplyForSpeech(body).trim() || body.trim()
+      const { ops, proseWithoutFence } = parseAgentBoardOps(rawBody)
+      if (ops.length > 0) {
+        const result = applyAgentBoardOps(editor, binding.boardId, ops)
+        if (!opts?.quiet) {
+          toast(
+            `Applied ${result.applied} board op(s)` +
+              (result.geos || result.notes || result.drafts
+                ? ` · geo ${result.geos} · note ${result.notes} · draft ${result.drafts}`
+                : '')
+          )
+        }
+        // If fence had only shapes and leftover prose is still useful, draft it too.
+        const leftover = prepareReplyForSpeech(proseWithoutFence).trim()
+        if (leftover && leftover.length > 40 && !ops.some((o) => o.op === 'draft')) {
+          mountAgentDraftOnEditor(editor, {
+            boardId: binding.boardId,
+            body: leftover,
+            placement: { x: 40, y: 40 },
+            sourceTurnId
+          })
+        }
+        return true
+      }
+
+      const cleaned = prepareReplyForSpeech(rawBody).trim() || rawBody.trim()
       if (!cleaned) {
-        toast('Nothing to place as draft')
-        return
+        if (!opts?.quiet) toast('Nothing to place as draft')
+        return false
       }
       const bounds = editor.getSelectionPageBounds()
       const placement = bounds
@@ -117,9 +150,17 @@ export function CollabCanvas({
         placement,
         sourceTurnId
       })
-      toast('Placed agent-draft on board')
+      if (!opts?.quiet) toast('Placed agent-draft on board')
+      return true
     },
     [binding.boardId]
+  )
+
+  const placeDraftBody = useCallback(
+    (body: string, sourceTurnId: string) => {
+      applyAgentReplyToBoard(body, sourceTurnId)
+    },
+    [applyAgentReplyToBoard]
   )
 
   const tryAwareness = useCallback(() => {
@@ -153,6 +194,46 @@ export function CollabCanvas({
     const t = window.setTimeout(() => tryAwareness(), 400)
     return () => window.clearTimeout(t)
   }, [sessionBoardKey, tryAwareness])
+
+  // Auto write-back: after Send, next working→done for this worktree lands on the board.
+  useEffect(() => {
+    if (binding.kind !== 'session' || !autoDraft) return
+    const wt = binding.worktreeId
+    const tabId = resolveTerminalTabId()
+
+    for (const entry of Object.values(agentStatusByPaneKey)) {
+      if (!entry) continue
+      const matchesWt =
+        entry.worktreeId === wt ||
+        (tabId != null &&
+          (entry.tabId === tabId || entry.paneKey.startsWith(`${tabId}:`)))
+      if (!matchesWt) continue
+
+      const wasWorking = workingByPaneRef.current.get(entry.paneKey) === true
+      workingByPaneRef.current.set(entry.paneKey, entry.state === 'working')
+
+      const decision = decideCollabAutoDraft({
+        armed: awaitingReplyRef.current,
+        wasWorking,
+        state: entry.state,
+        reply: entry.lastAssistantMessage,
+        alreadyPlacedKeys: placedDraftKeysRef.current,
+        paneKey: entry.paneKey
+      })
+      if (!decision.place) continue
+
+      placedDraftKeysRef.current.add(decision.dedupeKey)
+      awaitingReplyRef.current = false
+      setAwaitingLabel(false)
+      applyAgentReplyToBoard(decision.body, `auto:${entry.paneKey}`, { quiet: false })
+    }
+  }, [
+    binding,
+    autoDraft,
+    agentStatusByPaneKey,
+    resolveTerminalTabId,
+    applyAgentReplyToBoard
+  ])
 
   const handlePlaceDraftFromClipboard = useCallback(async () => {
     let body = ''
@@ -241,10 +322,14 @@ export function CollabCanvas({
         toast(`Inject failed: ${result.reason}`)
         return
       }
+      // Arm auto-draft for the next agent turn in this worktree.
+      awaitingReplyRef.current = autoDraft
+      setAwaitingLabel(autoDraft)
       const focus = snap.hasSelection ? ' + selection focus' : ''
       toast(
         boardMat.ok
-          ? `Sent full-board screenshot${focus} to session`
+          ? `Sent full-board screenshot${focus}` +
+              (autoDraft ? ' · auto-draft armed' : '')
           : 'Sent board digest (screenshot path failed)'
       )
     } catch (err) {
@@ -287,13 +372,28 @@ export function CollabCanvas({
               : awareStatus === 'no-terminal'
                 ? '· no terminal yet'
                 : '· binding session'}
+            {awaitingLabel ? (
+              <span className="text-sky-600 dark:text-sky-400">· awaiting reply → board</span>
+            ) : null}
           </span>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+            <label
+              className="flex cursor-pointer items-center gap-1 text-muted-foreground"
+              title="After Send, place the next finished agent turn on the board (draft or collab-board ops)"
+            >
+              <input
+                type="checkbox"
+                className="accent-primary"
+                checked={autoDraft}
+                onChange={(e) => setAutoDraft(e.target.checked)}
+              />
+              Auto draft
+            </label>
             <button
               type="button"
               className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
               onClick={() => handlePlaceDraftFromLastReply()}
-              title="Place the session agent's last reply as a provisional agent-draft (text only — not freehand ink)"
+              title="Place the session agent's last reply as draft / collab-board ops"
             >
               Draft from last reply
             </button>
