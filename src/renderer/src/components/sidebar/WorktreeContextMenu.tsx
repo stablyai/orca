@@ -53,7 +53,7 @@ import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { canCreateChildWorkspace } from '@/lib/worktree-create-parent'
 import { translate } from '@/i18n/i18n'
 import {
   folderWorkspaceKey,
@@ -162,18 +162,6 @@ function isWorktreeParentPickerDisabled(args: {
   eligibleParentCount: number
 }): boolean {
   return args.isDeleting || args.eligibleParentCount === 0
-}
-
-function canCreateChildWorkspaceFromContextMenu(args: {
-  repo: Pick<Repo, 'kind'> | null | undefined
-  branch: Worktree['branch']
-  isFolderWorkspace: boolean
-}): boolean {
-  // Why: a child branches from this worktree's branch, so detached/branchless
-  // rows and non-git (folder) workspaces have nothing to base the child on.
-  return (
-    args.repo != null && isGitRepoKind(args.repo) && !args.isFolderWorkspace && args.branch !== ''
-  )
 }
 
 function getWorktreeParentPickerAnchor(
@@ -859,7 +847,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 </>
               ) : null}
               <DropdownMenuSeparator />
-              {canCreateChildWorkspaceFromContextMenu({
+              {canCreateChildWorkspace({
                 repo,
                 branch: worktree.branch,
                 isFolderWorkspace: folderWorkspaceId !== null
@@ -1037,7 +1025,6 @@ export {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
-  canCreateChildWorkspaceFromContextMenu,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
   getWorktreeParentPickerAnchor,

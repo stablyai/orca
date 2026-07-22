@@ -38,6 +38,7 @@ export type WindowShortcutAction =
   | { type: 'openQuickOpen' }
   | { type: 'toggleQuickCommandsMenu' }
   | { type: 'openNewWorkspace' }
+  | { type: 'openNewChildWorkspace' }
   | { type: 'deleteCurrentWorkspace' }
   | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
@@ -229,10 +230,12 @@ export function resolveWindowShortcutAction(
   // main process so it reaches the renderer even when focus lives inside
   // a contentEditable surface (markdown rich editor) or a browser guest
   // webContents, both of which bypass the renderer's window-level keydown.
-  // Shift is accepted for compatibility with the former Create-from shortcut;
-  // the unified composer now exposes source switching inside the name field.
   if (actionMatches('workspace.create', input, platform, keybindings, options)) {
     return { type: 'openNewWorkspace' }
+  }
+
+  if (actionMatches('workspace.createChild', input, platform, keybindings, options)) {
+    return { type: 'openNewChildWorkspace' }
   }
 
   if (actionMatches('workspace.delete', input, platform, keybindings, options)) {
@@ -318,6 +321,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'tab.openQuickCommandsMenu'
     case 'openNewWorkspace':
       return 'workspace.create'
+    case 'openNewChildWorkspace':
+      return 'workspace.createChild'
     case 'deleteCurrentWorkspace':
       return 'workspace.delete'
     case 'openWorkspaceBoard':
