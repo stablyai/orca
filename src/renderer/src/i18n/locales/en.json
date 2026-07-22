@@ -1269,7 +1269,8 @@
         "noRunTargets": "No run targets are ready for this project.",
         "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe",
         "branchName": "Branch name",
-        "branchNamePlaceholder": "feature/my-branch"
+        "branchNamePlaceholder": "feature/my-branch",
+        "childWorkspaceParentHint": "Created as a child workspace of \"{{parent}}\"."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -4375,6 +4376,7 @@
           "697d0f6e1b": "Unpin",
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "Change Parent Worktree...",
+          "newChildWorkspace": "New Child Workspace...",
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",

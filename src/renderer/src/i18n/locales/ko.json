@@ -1246,7 +1246,8 @@
         "noRunTargets": "이 프로젝트에는 실행 대상이 준비되어 있지 않습니다.",
         "perWorkspaceEnvHint": "레시피에서 온디맨드 환경 프로비저닝",
         "branchName": "브랜치 이름",
-        "branchNamePlaceholder": "feature/my-branch"
+        "branchNamePlaceholder": "feature/my-branch",
+        "childWorkspaceParentHint": "\"{{parent}}\"의 하위 워크스페이스로 생성됩니다."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
@@ -4310,6 +4311,7 @@
           "697d0f6e1b": "고정 해제",
           "250de158fd": "워크스페이스 제거",
           "changeParentWorkspace": "상위 워크트리 변경...",
+          "newChildWorkspace": "새 하위 워크스페이스...",
           "setParentWorkspace": "상위 워크트리 설정...",
           "workspaceSection": "워크스페이스",
           "primaryDeleteDisabled": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",

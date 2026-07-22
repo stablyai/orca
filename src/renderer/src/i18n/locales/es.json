@@ -1246,7 +1246,8 @@
         "noRunTargets": "No hay destinos de ejecución listos para este proyecto.",
         "perWorkspaceEnvHint": "Provisiona un entorno bajo demanda a partir de una receta",
         "branchName": "Nombre de rama",
-        "branchNamePlaceholder": "feature/my-branch"
+        "branchNamePlaceholder": "feature/my-branch",
+        "childWorkspaceParentHint": "Se creará como espacio de trabajo hijo de «{{parent}}»."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Crear worktree",
@@ -4329,6 +4330,7 @@
           "697d0f6e1b": "Desanclar",
           "250de158fd": "Eliminar espacio de trabajo",
           "changeParentWorkspace": "Cambiar worktree padre...",
+          "newChildWorkspace": "Nuevo espacio de trabajo hijo...",
           "setParentWorkspace": "Establecer worktree padre...",
           "workspaceSection": "Espacio de trabajo",
           "primaryDeleteDisabled": "El worktree principal no se puede eliminar. Quita el proyecto en su lugar.",

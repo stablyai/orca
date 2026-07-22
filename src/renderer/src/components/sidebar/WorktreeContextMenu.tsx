@@ -23,6 +23,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  GitBranchPlus,
   Kanban,
   Trash2,
   Unlink,
@@ -48,6 +49,7 @@ import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { translate } from '@/i18n/i18n'
 import {
   folderWorkspaceKey,
@@ -144,6 +146,18 @@ function isWorktreeParentPickerDisabled(args: {
   eligibleParentCount: number
 }): boolean {
   return args.isDeleting || args.eligibleParentCount === 0
+}
+
+function canCreateChildWorkspaceFromContextMenu(args: {
+  repo: Pick<Repo, 'kind'> | null | undefined
+  branch: Worktree['branch']
+  isFolderWorkspace: boolean
+}): boolean {
+  // Why: a child branches from this worktree's branch, so detached/branchless
+  // rows and non-git (folder) workspaces have nothing to base the child on.
+  return (
+    args.repo != null && isGitRepoKind(args.repo) && !args.isFolderWorkspace && args.branch !== ''
+  )
 }
 
 function getWorktreeParentPickerAnchor(
@@ -601,6 +615,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     )
   }, [activeContextWorktrees, updateWorktreeLineage])
 
+  // Why: no initialBaseBranch — seeding it would occupy the Start-from slot and
+  // block name/issue sources. The parent's branch becomes the base at create time.
+  const handleCreateChildWorkspace = useCallback(() => {
+    openModal('new-workspace-composer', {
+      initialRepoId: worktree.repoId,
+      parentWorktreeId: worktree.id,
+      telemetrySource: 'sidebar'
+    })
+  }, [openModal, worktree.id, worktree.repoId])
+
   const suppressOpeningPointerEvent = useCallback((event: React.SyntheticEvent) => {
     const contextMenuOpenedAt = contextMenuOpenedAtRef.current
     if (
@@ -807,6 +831,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 </>
               ) : null}
               <DropdownMenuSeparator />
+              {canCreateChildWorkspaceFromContextMenu({
+                repo,
+                branch: worktree.branch,
+                isFolderWorkspace: folderWorkspaceId !== null
+              }) && (
+                <DropdownMenuItem onSelect={handleCreateChildWorkspace} disabled={isDeleting}>
+                  <GitBranchPlus className="size-3.5" />
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.newChildWorkspace',
+                    'New Child Workspace...'
+                  )}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onSelect={handleOpenParentPicker}
                 disabled={isWorktreeParentPickerDisabled({ isDeleting, eligibleParentCount })}
@@ -972,6 +1009,7 @@ export {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
+  canCreateChildWorkspaceFromContextMenu,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
   getWorktreeParentPickerAnchor,

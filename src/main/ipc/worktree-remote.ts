@@ -40,6 +40,7 @@ import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
+import { recordWorktreeLineageForCreatedWorktree } from './worktree-create-lineage'
 import {
   buildPosixRunnerScript,
   buildWindowsRunnerScript,
@@ -1863,6 +1864,12 @@ export async function createRemoteWorktree(
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  const lineage = recordWorktreeLineageForCreatedWorktree(
+    store,
+    args.parentWorkspace,
+    worktree,
+    now
+  )
 
   // Why: shared/symlink paths are local-only; remote (SSH) support needs a new relay method + auth surface, so configured symlinkPaths are ignored here.
 
@@ -1909,7 +1916,8 @@ export async function createRemoteWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree: { ...worktree, workspaceLineage },
+    worktree: { ...worktree, ...(lineage ? { lineage } : {}), workspaceLineage },
+    ...(lineage ? { lineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
@@ -2444,6 +2452,12 @@ export async function createLocalWorktree(
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  const lineage = recordWorktreeLineageForCreatedWorktree(
+    store,
+    args.parentWorkspace,
+    worktree,
+    now
+  )
   // Why: reuse the roots creation already paid for via `git worktree list` so later IPC doesn't lazily rescan and trip macOS privacy prompts.
   registerWorktreeRootsForRepo(store, repo.id, [
     repo.path,
@@ -2513,7 +2527,8 @@ export async function createLocalWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree: { ...worktree, workspaceLineage },
+    worktree: { ...worktree, ...(lineage ? { lineage } : {}), workspaceLineage },
+    ...(lineage ? { lineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(stagedStartup.activationSetup
       ? { setup: stagedStartup.activationSetup }

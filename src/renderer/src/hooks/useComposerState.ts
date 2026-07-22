@@ -30,6 +30,8 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
+import { resolveWorktreeCreateParent } from '@/lib/worktree-create-parent'
+import { branchDisplayName } from '@/components/sidebar/WorktreeCardHelpers'
 import {
   buildTaskSourceContextFromRepo,
   type TaskSourceContext
@@ -219,6 +221,8 @@ export type UseComposerStateOptions = {
   initialWorkspaceStatus?: WorkspaceStatus
   /** Seeds the Start-from selection on open; the Create-from → Quick fallback uses it so a PR pick lands with the resolved PR head as base. */
   initialBaseBranch?: string
+  /** Worktree recorded as the lineage parent of the created workspace (quick submit). Paired with initialBaseBranch by "New Child Workspace". */
+  parentWorktreeId?: string
   /** The full-page composer persists drafts across navigation; the transient quick-composer modal must not clobber that draft. */
   persistDraft: boolean
   /** Invoked after a successful createWorktree; the caller usually closes its surface (palette modal, full page, etc.). */
@@ -314,6 +318,8 @@ export type ComposerCardProps = {
   onNoteChange: (value: string) => void
   baseBranch: string | undefined
   onBaseBranchChange: (next: string | undefined) => void
+  /** Parent context when composing a child workspace from the sidebar; renders the lineage hint under the name field. */
+  childWorkspaceParent?: { displayName: string } | null
   /** Called when a PR is selected in the Start-from picker; updates baseBranch and linkedWorkItem/linkedPR in one pass. */
   onBaseBranchPrSelect: (
     baseBranch: string,
@@ -525,6 +531,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     initialTaskSourceContext = null,
     initialWorkspaceStatus,
     initialBaseBranch,
+    parentWorktreeId,
     persistDraft,
     onCreated,
     repoIdOverride,
@@ -721,6 +728,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
+  // Why: resolved live from the store so a parent deleted (or a repo switch)
+  // hides the child-workspace hint and drops the link without extra state.
+  const createParentWorktree = useAppStore((s) =>
+    parentWorktreeId && selectedRepoIsGit
+      ? resolveWorktreeCreateParent(s, parentWorktreeId, repoId)
+      : null
+  )
   const [ephemeralVmRecipes, setEphemeralVmRecipes] = useState<
     NonNullable<OrcaHooks['environmentRecipes']>
   >([])
@@ -3975,6 +3989,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ...(selectedRepoIsGit && submitCompareBaseRef
             ? { compareBaseRef: submitCompareBaseRef }
             : {}),
+          ...(selectedRepoIsGit && parentWorktreeId ? { parentWorktreeId } : {}),
           setupDecision: effectiveSetupDecision,
           ...(selectedRepoIsGit && sparseEnabled
             ? {
@@ -4050,6 +4065,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       normalizedSparseDirectories,
       note,
       onCreated,
+      parentWorktreeId,
       parsedLinkedIssueNumber,
       persistSetupAgentStartupPolicy,
       persistDraft,
@@ -4185,6 +4201,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onCreate: () => void submit(),
     baseBranch: isProjectGroupTarget ? undefined : baseBranch,
     onBaseBranchChange: isProjectGroupTarget ? () => {} : handleBaseBranchChange,
+    childWorkspaceParent:
+      !isProjectGroupTarget && createParentWorktree
+        ? {
+            // Why: displayName is typed non-optional but can arrive undefined at runtime (crash 99657ab1).
+            displayName:
+              createParentWorktree.displayName || branchDisplayName(createParentWorktree.branch)
+          }
+        : null,
     onBaseBranchPrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchPrSelect,
     onBaseBranchMrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchMrSelect,
     baseBranchLinkedPrNumber:

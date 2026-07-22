@@ -197,6 +197,32 @@ function changeInputValue(input: HTMLInputElement, value: string): void {
 
 let current: { container: HTMLDivElement; root: Root } | null = null
 
+describe('NewWorkspaceComposerCard child workspace parent hint', () => {
+  afterEach(() => {
+    act(() => current?.root.unmount())
+    current?.container.remove()
+    current = null
+  })
+
+  it('shows the parent lineage hint when composing a child workspace', () => {
+    current = renderCard({
+      childWorkspaceParent: { displayName: 'Payments API' }
+    })
+
+    const hint = current.container.querySelector('[data-testid="child-workspace-parent-hint"]')
+    expect(hint).not.toBeNull()
+    expect(hint?.textContent).toContain('Payments API')
+  })
+
+  it('renders no hint without a parent context', () => {
+    current = renderCard()
+
+    expect(
+      current.container.querySelector('[data-testid="child-workspace-parent-hint"]')
+    ).toBeNull()
+  })
+})
+
 describe('NewWorkspaceComposerCard folder task source mode', () => {
   afterEach(() => {
     act(() => current?.root.unmount())
