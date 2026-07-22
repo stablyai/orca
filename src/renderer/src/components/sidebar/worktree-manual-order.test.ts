@@ -105,6 +105,27 @@ describe('buildWorktreeDragPreviewOffsets', () => {
     ])
   })
 
+  it('keeps a virtualized middle slice anchored while dragging upward', () => {
+    const groupIds = Array.from({ length: 40 }, (_, index) => `worktree-${index}`)
+    const rects = groupIds.slice(25, 36).map((worktreeId, index) => ({
+      worktreeId,
+      groupIndex: index + 25,
+      top: 1500 + index * 56,
+      bottom: 1550 + index * 56
+    }))
+
+    const offsets = buildWorktreeDragPreviewOffsets({
+      groupIds,
+      draggedIds: ['worktree-35'],
+      dropIndex: 25,
+      rects
+    })
+
+    expect(Array.from(offsets)).toEqual(
+      groupIds.slice(25, 35).map((worktreeId) => [worktreeId, 56])
+    )
+  })
+
   it('returns no preview offsets for a no-op hover', () => {
     const offsets = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b'],

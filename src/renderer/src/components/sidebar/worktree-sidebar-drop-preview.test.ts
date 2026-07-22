@@ -61,6 +61,58 @@ describe('computeWorktreeSidebarDropPreview', () => {
     expect(Array.from(preview?.previewOffsetsByWorktreeId ?? [])).toEqual([['sibling', -288]])
   })
 
+  it('keeps a partially mounted lineage unit anchored when inserting above it', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 100,
+      containerTop: 0,
+      scrollTop: 400,
+      rects: [
+        { worktreeId: 'parent', groupIndex: 1, top: 500, bottom: 590 },
+        { worktreeId: 'child-a', groupIndex: 2, top: 596, bottom: 686 },
+        { worktreeId: 'child-b', groupIndex: 3, top: 692, bottom: 782 },
+        { worktreeId: 'sibling', groupIndex: 4, top: 788, bottom: 888 },
+        { worktreeId: 'dragged', groupIndex: 5, top: 894, bottom: 994 }
+      ],
+      groupIds: ['offscreen', 'parent', 'sibling', 'dragged'],
+      draggedIds: ['dragged']
+    })
+
+    expect(preview).toMatchObject({
+      dropIndex: 1,
+      dropIndicatorY: 497
+    })
+    expect(Array.from(preview?.previewOffsetsByWorktreeId ?? [])).toEqual([
+      ['parent', 106],
+      ['sibling', 106]
+    ])
+  })
+
+  it('moves a partially mounted parent and its children as one unit', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 600,
+      containerTop: 0,
+      scrollTop: 400,
+      rects: [
+        { worktreeId: 'parent', groupIndex: 1, top: 500, bottom: 590 },
+        { worktreeId: 'child-a', groupIndex: 2, top: 596, bottom: 686 },
+        { worktreeId: 'child-b', groupIndex: 3, top: 692, bottom: 782 },
+        { worktreeId: 'sibling', groupIndex: 4, top: 788, bottom: 888 },
+        { worktreeId: 'tail', groupIndex: 5, top: 894, bottom: 994 }
+      ],
+      groupIds: ['offscreen', 'parent', 'sibling', 'tail'],
+      draggedIds: ['parent']
+    })
+
+    expect(preview).toMatchObject({
+      dropIndex: 4,
+      dropIndicatorY: 997
+    })
+    expect(Array.from(preview?.previewOffsetsByWorktreeId ?? [])).toEqual([
+      ['sibling', -288],
+      ['tail', -288]
+    ])
+  })
+
   it('uses one card-height placeholder for multi-select reorder previews', () => {
     const preview = computeWorktreeSidebarDropPreview({
       pointerY: 280,

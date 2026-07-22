@@ -104,7 +104,15 @@ export function buildWorktreeDragPreviewOffsets(args: {
     const rect = rectById.get(id)
     return rect ? [rect] : []
   })
-  const baseTop = groupRects[0]?.top ?? 0
+  const firstMountedRect = groupRects[0]
+  const firstMountedUnitIndex = firstMountedRect
+    ? args.groupIds.indexOf(firstMountedRect.worktreeId)
+    : 0
+  // Why: virtualization can mount a middle slice of the group. Backfill its
+  // estimated prefix so replay reaches the first measured row at its real top.
+  const baseTop = firstMountedRect
+    ? firstMountedRect.top - Math.max(0, firstMountedUnitIndex) * fallbackStride
+    : 0
   const fallbackHeight = Math.max(0, fallbackStride - fallbackGap)
   const gapAfterById = new Map<string, number>()
   for (let index = 0; index < groupRects.length; index++) {

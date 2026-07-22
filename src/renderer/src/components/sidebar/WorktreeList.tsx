@@ -182,6 +182,7 @@ import {
   setSidebarPointerDragDocumentStyles,
   updateSidebarDragPreviewPosition
 } from './worktree-sidebar-pointer-drag-dom'
+import { shouldStartWorkspaceBoardDragPreview } from './workspace-board-drag-preview-intent'
 import {
   getWorktreeSidebarDragAutoscroll,
   getWorktreeSidebarDragRectsForGroup,
@@ -199,7 +200,8 @@ import {
 } from './worktree-sidebar-drop-preview'
 import {
   getReorderedWorktreeIdsToUnnest,
-  getWorktreeLineageDropTargetId
+  getWorktreeLineageInsertionGuideY,
+  getWorktreeLineageDropTarget
 } from './worktree-lineage-drag-drop'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import {
@@ -993,16 +995,29 @@ function getPointerDropStatusTarget(args: {
   container: HTMLElement
   x: number
   y: number
-}): WorktreeSidebarStatusDropTarget & { lineageParentId: string | null } {
+}): WorktreeSidebarStatusDropTarget & {
+  lineageParentId: string | null
+  lineageDropIndicatorY: number | null
+} {
   const target = document.elementFromPoint(args.x, args.y)
   if (!(target instanceof Element) || !args.container.contains(target)) {
-    return { status: null, isPinDrop: false, lineageParentId: null }
+    return {
+      status: null,
+      isPinDrop: false,
+      lineageParentId: null,
+      lineageDropIndicatorY: null
+    }
   }
   const pinTarget = target.closest<HTMLElement>('[data-workspace-pin-drop-target]')
   if (pinTarget && args.container.contains(pinTarget)) {
-    return { status: null, isPinDrop: true, lineageParentId: null }
+    return {
+      status: null,
+      isPinDrop: true,
+      lineageParentId: null,
+      lineageDropIndicatorY: null
+    }
   }
-  const lineageParentId = getWorktreeLineageDropTargetId({
+  const lineageTarget = getWorktreeLineageDropTarget({
     container: args.container,
     target,
     pointerY: args.y
@@ -1014,7 +1029,8 @@ function getPointerDropStatusTarget(args: {
         ? ((statusTarget.dataset.workspaceStatus as WorkspaceStatus | undefined) ?? null)
         : null,
     isPinDrop: false,
-    lineageParentId
+    lineageParentId: lineageTarget?.parentId ?? null,
+    lineageDropIndicatorY: lineageTarget?.dropIndicatorY ?? null
   }
 }
 
@@ -1543,6 +1559,27 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         .map((row) => ({ worktreeId: row.worktree.id, depth: row.depth })),
     [naturalDragWorktreeIds, rows]
   )
+  const lineageDragOrder = useMemo(() => {
+    const orderIndexById = new Map<string, number>()
+    const directChildIdsByParentId = new Map<string, string[]>()
+    worktrees.forEach((worktree, index) => {
+      orderIndexById.set(worktree.id, index)
+      const lineage = worktreeLineageById[worktree.id]
+      const parent = lineage ? worktreeMap.get(lineage.parentWorktreeId) : undefined
+      if (
+        !lineage ||
+        !parent ||
+        lineage.worktreeInstanceId !== worktree.instanceId ||
+        lineage.parentWorktreeInstanceId !== parent.instanceId
+      ) {
+        return
+      }
+      const childIds = directChildIdsByParentId.get(parent.id) ?? []
+      childIds.push(worktree.id)
+      directChildIdsByParentId.set(parent.id, childIds)
+    })
+    return { orderIndexById, directChildIdsByParentId }
+  }, [worktreeLineageById, worktreeMap, worktrees])
   const getReorderDraggedIds = useCallback(
     (draggedIds: readonly string[]) =>
       expandDraggedWorktreeIdsForVisibleLineage(worktreeLineageDragRows, draggedIds),
@@ -2683,9 +2720,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const getEligibleLineageDropTarget = useCallback(
     (
-      target: WorktreeSidebarStatusDropTarget & { lineageParentId: string | null },
+      target: WorktreeSidebarStatusDropTarget & {
+        lineageParentId: string | null
+        lineageDropIndicatorY?: number | null
+      },
       draggedIds: readonly string[]
-    ): WorktreeSidebarStatusDropTarget & { lineageParentId: string | null } => {
+    ): WorktreeSidebarStatusDropTarget & {
+      lineageParentId: string | null
+      lineageDropIndicatorY?: number | null
+    } => {
       const parentId = target.lineageParentId
       if (!parentId) {
         return target
@@ -2703,9 +2746,33 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           repoMap
         }).some((candidate) => candidate.id === parentId)
       })
-      return canAssignAll ? target : { ...target, lineageParentId: null }
+      return canAssignAll
+        ? target
+        : { ...target, lineageParentId: null, lineageDropIndicatorY: null }
     },
     [repoMap, worktreeLineageById, worktreeMap, worktrees]
+  )
+
+  const resolveLineageDropIndicatorY = useCallback(
+    (args: {
+      container: HTMLElement
+      parentId: string
+      draggedIds: readonly string[]
+      fallbackY: number | null | undefined
+    }): number | null => {
+      if (args.fallbackY === null || args.fallbackY === undefined) {
+        return null
+      }
+      return getWorktreeLineageInsertionGuideY({
+        container: args.container,
+        parentId: args.parentId,
+        directChildIds: lineageDragOrder.directChildIdsByParentId.get(args.parentId) ?? [],
+        draggedIds: args.draggedIds,
+        orderIndexById: lineageDragOrder.orderIndexById,
+        fallbackY: args.fallbackY
+      })
+    },
+    [lineageDragOrder]
   )
 
   const commitWorktreeLineageParentDrop = useCallback(
@@ -2783,14 +2850,26 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       clearWorktreeDrag()
       return
     }
-    // Why: show the board preview as soon as a card drag begins so the drop target is visible up front, not only at the sidebar edge.
+    const previewSidebarContainer = scrollRef.current
     if (
       !drag.workspaceBoardDragPreviewRequested &&
       !workspaceBoardOpen &&
-      !hasWorkspaceKanbanSidebarDropBoard()
+      previewSidebarContainer
     ) {
-      drag.workspaceBoardDragPreviewRequested = true
-      onWorkspaceBoardDragPreviewStart()
+      const sidebarRect = previewSidebarContainer.getBoundingClientRect()
+      // Why: mounting a large companion board during every vertical reorder can
+      // stall the first drag frame; rightward edge movement signals board intent.
+      if (
+        shouldStartWorkspaceBoardDragPreview({
+          pointerX: drag.currentX,
+          startX: drag.startX,
+          sidebarRight: sidebarRect.right
+        }) &&
+        !hasWorkspaceKanbanSidebarDropBoard()
+      ) {
+        drag.workspaceBoardDragPreviewRequested = true
+        onWorkspaceBoardDragPreviewStart()
+      }
     }
     const boardTarget = updateWorkspaceKanbanSidebarDropTargetVisual({
       x: drag.currentX,
@@ -2842,20 +2921,28 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       drag.draggedIds
     )
     if (preferredStatusTarget.lineageParentId) {
+      const lineageDropIndicatorY = sidebarContainer
+        ? resolveLineageDropIndicatorY({
+            container: sidebarContainer,
+            parentId: preferredStatusTarget.lineageParentId,
+            draggedIds: drag.draggedIds,
+            fallbackY: preferredStatusTarget.lineageDropIndicatorY
+          })
+        : null
       updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, null)
       clearWorkspaceKanbanSidebarDropTargetVisual()
       setDragOverStatus(null)
       setPinDragOver(false)
       setWorktreeDragState((prev) =>
         prev.dropIndex === null &&
-        prev.dropIndicatorY === null &&
+        prev.dropIndicatorY === lineageDropIndicatorY &&
         prev.pointerY === drag.currentY &&
         prev.previewOffsetsByWorktreeId.size === 0
           ? prev
           : {
               ...prev,
               dropIndex: null,
-              dropIndicatorY: null,
+              dropIndicatorY: lineageDropIndicatorY,
               previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,
               pointerY: drag.currentY
             }
@@ -2985,6 +3072,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onWorkspaceBoardDragPreviewCommit,
     shouldShowWorkspaceBoardDropIndicator,
     getEligibleLineageDropTarget,
+    resolveLineageDropIndicatorY,
     workspaceBoardOpen,
     workspaceStatuses
   ])
@@ -3531,18 +3619,24 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         session.draggedIds
       )
       if (target.lineageParentId) {
+        const lineageDropIndicatorY = resolveLineageDropIndicatorY({
+          container: event.currentTarget,
+          parentId: target.lineageParentId,
+          draggedIds: session.draggedIds,
+          fallbackY: target.lineageDropIndicatorY
+        })
         event.preventDefault()
         event.dataTransfer.dropEffect = 'move'
         setNativeLineageDropTargetId(target.lineageParentId)
         setWorktreeDragState((prev) =>
           prev.dropIndex === null &&
-          prev.dropIndicatorY === null &&
+          prev.dropIndicatorY === lineageDropIndicatorY &&
           prev.previewOffsetsByWorktreeId.size === 0
             ? prev
             : {
                 ...prev,
                 dropIndex: null,
-                dropIndicatorY: null,
+                dropIndicatorY: lineageDropIndicatorY,
                 previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,
                 pointerY: event.clientY
               }
@@ -3609,6 +3703,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       computeWorktreeStatusDrop,
       getEligibleLineageDropTarget,
       refreshWorktreeDragSession,
+      resolveLineageDropIndicatorY,
       startWorktreeNativeAutoscroll
     ]
   )
