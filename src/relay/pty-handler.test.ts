@@ -2321,6 +2321,31 @@ describe('PtyHandler', () => {
     expect(callArgs.env.TERM_PROGRAM).toBe('Orca')
   })
 
+  it('lists pane key and start time so clients can reap orphaned pane PTYs', async () => {
+    const fgSpy = vi.spyOn(ptyShellUtils, 'getForegroundProcessName').mockResolvedValue('shell')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: { ORCA_PANE_KEY: 'tab-1:leaf-1', ORCA_TAB_ID: 'tab-1' }
+      })
+      await dispatcher.callRequest('pty.spawn', {})
+
+      const sessions = (await dispatcher.callRequest('pty.listProcesses')) as {
+        id: string
+        paneKey?: string
+        startedAtMs?: number
+      }[]
+
+      const panePty = sessions.find((session) => session.id === 'pty-1')
+      const barePty = sessions.find((session) => session.id === 'pty-2')
+      expect(panePty?.paneKey).toBe('tab-1:leaf-1')
+      expect(typeof panePty?.startedAtMs).toBe('number')
+      expect(barePty?.paneKey).toBeUndefined()
+      expect(typeof barePty?.startedAtMs).toBe('number')
+    } finally {
+      fgSpy.mockRestore()
+    }
+  })
+
   it('fences both revived worktree identity and cwd with rollback', async () => {
     const finishSiblingAdmission = vi.fn()
     const beginWorktreePtySpawn = vi.fn((operationPath: string) => {

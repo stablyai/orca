@@ -119,6 +119,8 @@ export type SshRelayAiVaultHostInfo = {
 
 const RECONNECT_REPLAY_DUPLICATE_WINDOW_MS = 1000
 const REPLAY_FINGERPRINT_EDGE_CHARS = 128
+// Why: a spawn racing the orphan sweep may not have registered ownership yet; age-gate so it can never be reaped.
+const ORPHANED_RELAY_PTY_MIN_AGE_MS = 30_000
 
 function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined): number {
   const raw = graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -299,6 +301,7 @@ export class SshRelaySession {
 
       // Why: explicit disconnect keeps PTY ownership, so a later manual connect must reattach those remote PTYs.
       await this.reattachKnownPtys(ownsAttempt)
+      await this.reapOrphanedRelayPtys(ownsAttempt)
 
       if (!ownsAttempt()) {
         throw new Error('Session disposed during establish')
@@ -411,6 +414,7 @@ export class SshRelaySession {
       }
 
       await this.reattachKnownPtys(ownsAttempt)
+      await this.reapOrphanedRelayPtys(ownsAttempt)
 
       if (!ownsAttempt()) {
         return
@@ -1133,6 +1137,71 @@ export class SshRelaySession {
         if (this.pendingPtyReattaches.get(appPtyId) === pendingReattach) {
           this.pendingPtyReattaches.delete(appPtyId)
         }
+      }
+    }
+  }
+
+  // Why: nothing else reconciles the relay's PTY list with what the app tracks, so
+  // closes that failed or happened while disconnected leak slots until the relay's
+  // session cap blocks new terminals (the relay only self-cleans when all clients
+  // stay away past the grace window). Best-effort: a failed reap waits for the next
+  // reconnect sweep.
+  private async reapOrphanedRelayPtys(shouldContinue: () => boolean): Promise<void> {
+    const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    if (!ptyProvider) {
+      return
+    }
+    let sessions: Awaited<ReturnType<SshPtyProvider['listProcesses']>>
+    try {
+      sessions = await ptyProvider.listProcesses()
+    } catch (err) {
+      console.warn(
+        `[ssh-relay-session] Orphaned PTY sweep skipped for ${this.targetId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      )
+      return
+    }
+    // Why: build the known set after listing so a spawn that completed mid-sweep counts as known.
+    const knownRelayPtyIds = new Set([
+      ...getPtyIdsForConnection(this.targetId).map((ptyId) =>
+        toRelaySshPtyId(this.targetId, ptyId)
+      ),
+      ...this.store
+        .getSshRemotePtyLeases(this.targetId)
+        .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
+        .map((lease) => lease.ptyId)
+    ])
+    for (const session of sessions) {
+      if (!shouldContinue()) {
+        return
+      }
+      // Why: only pane-bound PTYs are provably desktop-owned; bare relay shells (e.g. remote CLI) are left alone.
+      if (!session.paneKey) {
+        continue
+      }
+      if (
+        typeof session.startedAtMs !== 'number' ||
+        Date.now() - session.startedAtMs < ORPHANED_RELAY_PTY_MIN_AGE_MS
+      ) {
+        continue
+      }
+      const relayPtyId = toRelaySshPtyId(this.targetId, session.id)
+      if (knownRelayPtyIds.has(relayPtyId)) {
+        continue
+      }
+      try {
+        await ptyProvider.shutdown(session.id, { immediate: true, keepHistory: false })
+        this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
+        console.warn(
+          `[ssh-relay-session] Reaped orphaned relay PTY ${relayPtyId} for ${this.targetId} (pane ${session.paneKey})`
+        )
+      } catch (err) {
+        console.warn(
+          `[ssh-relay-session] Failed to reap orphaned relay PTY ${relayPtyId} for ${this.targetId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        )
       }
     }
   }

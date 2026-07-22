@@ -13,4 +13,8 @@ export type PtyProcessInfo = {
   /** Exact WSL owner reported by the PTY provider; null means native Windows. */
   wslDistro?: string | null
   agentSessionOwners?: AgentSessionOwnerBinding[]
+  /** Renderer pane key (ORCA_PANE_KEY) captured at spawn, when the provider tracks it. */
+  paneKey?: string
+  /** Ms since the provider created or revived this PTY, measured on the provider host's clock. */
+  ageMs?: number
 }
