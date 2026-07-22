@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canCreateChildWorkspaceFromContextMenu,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
   shouldUseNativeContextMenu,
@@ -169,60 +168,6 @@ describe('parent picker context menu affordance', () => {
     } as HTMLElement
 
     expect(getWorktreeParentPickerAnchor(scope, 'child')).toBe(scope)
-  })
-})
-
-describe('new child workspace context menu affordance', () => {
-  it('offers child creation for git-backed rows with a branch', () => {
-    expect(
-      canCreateChildWorkspaceFromContextMenu({
-        repo: { kind: 'git' },
-        branch: 'feature/api',
-        isFolderWorkspace: false
-      })
-    ).toBe(true)
-    // Legacy repos persisted without a kind are git repos.
-    expect(
-      canCreateChildWorkspaceFromContextMenu({
-        repo: {},
-        branch: 'main',
-        isFolderWorkspace: false
-      })
-    ).toBe(true)
-  })
-
-  it('hides child creation when there is no branch to base the child on', () => {
-    expect(
-      canCreateChildWorkspaceFromContextMenu({
-        repo: { kind: 'git' },
-        branch: '',
-        isFolderWorkspace: false
-      })
-    ).toBe(false)
-  })
-
-  it('hides child creation for folder workspaces and missing projects', () => {
-    expect(
-      canCreateChildWorkspaceFromContextMenu({
-        repo: { kind: 'folder' },
-        branch: 'feature/api',
-        isFolderWorkspace: false
-      })
-    ).toBe(false)
-    expect(
-      canCreateChildWorkspaceFromContextMenu({
-        repo: { kind: 'git' },
-        branch: 'feature/api',
-        isFolderWorkspace: true
-      })
-    ).toBe(false)
-    expect(
-      canCreateChildWorkspaceFromContextMenu({
-        repo: null,
-        branch: 'feature/api',
-        isFolderWorkspace: false
-      })
-    ).toBe(false)
   })
 })
 

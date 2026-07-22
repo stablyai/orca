@@ -1,7 +1,20 @@
 import { getIndexedRepoMap, getIndexedWorktreeById } from '@/store/worktree-repo-index'
 import type { AppState } from '@/store/types'
 import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../../../shared/execution-host'
-import type { Worktree } from '../../../shared/types'
+import { isGitRepoKind } from '../../../shared/repo-kind'
+import type { Repo, Worktree } from '../../../shared/types'
+
+export function canCreateChildWorkspace(args: {
+  repo: Pick<Repo, 'kind'> | null | undefined
+  branch: Worktree['branch']
+  isFolderWorkspace: boolean
+}): boolean {
+  // Why: a child branches from this worktree's branch, so detached/branchless
+  // rows and non-git (folder) workspaces have nothing to base the child on.
+  return (
+    args.repo != null && isGitRepoKind(args.repo) && !args.isFolderWorkspace && args.branch !== ''
+  )
+}
 
 // Why: re-validated at submit with the parent picker's rules — the parent can be
 // deleted (or the composer switched to another repo/host) while the composer was

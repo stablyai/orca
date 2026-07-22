@@ -768,22 +768,20 @@ describe('resolveWindowShortcutAction', () => {
     ).toBeNull()
   })
 
-  it('routes Cmd/Ctrl+Shift+N to the unified new-workspace composer', () => {
-    // Why: keep the former Create-from shortcut accepted so muscle memory
-    // still opens the composer; source switching now lives in the smart name field.
+  it('routes Cmd/Ctrl+Shift+N to the child-workspace composer', () => {
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyN', key: 'n', meta: true, control: false, alt: false, shift: true },
         'darwin'
       )
-    ).toEqual({ type: 'openNewWorkspace' })
+    ).toEqual({ type: 'openNewChildWorkspace' })
 
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyN', key: 'n', meta: false, control: true, alt: false, shift: true },
         'linux'
       )
-    ).toEqual({ type: 'openNewWorkspace' })
+    ).toEqual({ type: 'openNewChildWorkspace' })
 
     // Alt must still be rejected — the allowlist is alt-free for Cmd/Ctrl+N
     // so future chords like Cmd+Alt+Shift+N remain available.
