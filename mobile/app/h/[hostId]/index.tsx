@@ -37,6 +37,7 @@ import {
   useForceReconnect
 } from '../../../src/transport/client-context'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
+import { openCollabBoardFromHostPanel } from '../../../src/collab-canvas/open-collab-board'
 import {
   useLastConnectedAt,
   useReconnectAttempt
@@ -771,6 +772,15 @@ export function HostScreen({
     [client, connState, hostId, navigateFromHostList]
   )
 
+  const openWorktreeCollabBoard = useCallback(
+    (item: Worktree) => {
+      // Session-scoped boardId: stable per worktree so Nord and desktop share a room.
+      const boardId = `wt-${item.worktreeId}`.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64)
+      openCollabBoardFromHostPanel(router, { hostId: String(hostId), boardId })
+    },
+    [hostId, router]
+  )
+
   const handleSortChange = useCallback(
     (value: MobileSortMode) => {
       persistViewSettings({ sortMode: value })
@@ -1421,6 +1431,13 @@ export function HostScreen({
                       navigate: navigateFromHostList,
                       onDone: () => setActionTarget(null)
                     }),
+                    {
+                      label: 'Open Collab Board',
+                      onPress: () => {
+                        openWorktreeCollabBoard(actionTarget)
+                        setActionTarget(null)
+                      }
+                    },
                     {
                       label: 'Sleep',
                       icon: Moon,
