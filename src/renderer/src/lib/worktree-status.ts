@@ -102,7 +102,8 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
 /**
  * Apply the WorktreeCard priority overlay (permission > working > done >
  * heuristic) on top of the title-heuristic base. Explicit agent rows may
- * promote the dot; sleep cleanup owns removing stale retained rows.
+ * promote the dot while current workspace liveness owns whether completion can
+ * appear on the card.
  *
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
  * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
@@ -143,7 +144,9 @@ export function resolveWorktreeStatus(args: {
   if (args.hasLiveWorking || heuristic === 'working') {
     return 'working'
   }
-  if (args.hasLiveDone || args.hasRetainedDone) {
+  // Why: retained/fresh done rows can outlive sleep; the same live PTY/browser
+  // contract that drives Hide sleeping must gate the card's green status.
+  if ((args.hasLiveDone || args.hasRetainedDone) && heuristic !== 'inactive') {
     return 'done'
   }
   return heuristic

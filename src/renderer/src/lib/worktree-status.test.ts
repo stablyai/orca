@@ -156,7 +156,7 @@ describe('resolveWorktreeStatus', () => {
     expect(status).toBe('inactive')
   })
 
-  it('promotes to done when a retained done row is visible, even without a live pty', () => {
+  it('keeps a sleeping worktree inactive when only a retained done row survives', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: 'bash' }],
       browserTabs: [],
@@ -167,7 +167,55 @@ describe('resolveWorktreeStatus', () => {
       hasRetainedDone: true
     })
 
-    expect(status).toBe('done')
+    expect(status).toBe('inactive')
+  })
+
+  it('keeps a sleeping worktree inactive when a fresh done row outlives its PTY', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'agent [done]' }],
+      browserTabs: [],
+      ptyIdsByTabId: { 'tab-1': [] },
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: true,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('inactive')
+  })
+
+  it('keeps an empty remote session snapshot inactive when a retained done row survives', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [],
+      browserTabs: [],
+      ptyIdsByTabId: {},
+      agentStatusPaneIdsByTabId: {
+        'removed-tab': new Set(['removed-pane'])
+      },
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      hasRetainedDone: true
+    })
+
+    expect(status).toBe('inactive')
+  })
+
+  it('drops and restores done immediately across sleep and wake without freshness expiry', () => {
+    const args = {
+      tabs: [{ id: 'tab-1', title: 'agent [done]' }],
+      browserTabs: [],
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: true,
+      hasRetainedDone: true
+    }
+
+    expect(resolveWorktreeStatus({ ...args, ptyIdsByTabId: livePtyMap('tab-1') })).toBe('done')
+    expect(resolveWorktreeStatus({ ...args, ptyIdsByTabId: { 'tab-1': [] } })).toBe('inactive')
+    expect(resolveWorktreeStatus({ ...args, ptyIdsByTabId: { 'tab-1': ['reattached-pty'] } })).toBe(
+      'done'
+    )
   })
 
   it('treats pending paired web host terminal mirrors as inactive without a live pty', () => {

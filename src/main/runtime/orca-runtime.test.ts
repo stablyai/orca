@@ -25019,6 +25019,229 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('does not treat a saved tab PTY id as liveness after sleep', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...session,
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({})
+      }
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: false,
+      hasAttachedPty: false,
+      liveTerminalCount: 0,
+      status: 'inactive'
+    })
+  })
+
+  it('does not count a connected provider PTY without current tab or pane ownership', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => 'powershell.exe'),
+      listProcesses: vi.fn(async () => [
+        {
+          id: `${TEST_WORKTREE_ID}@@orphan-after-sleep`,
+          cwd: TEST_REPO_PATH,
+          title: 'powershell.exe'
+        }
+      ])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: false,
+      hasAttachedPty: false,
+      liveTerminalCount: 0,
+      status: 'inactive'
+    })
+  })
+
+  it('counts a live background PTY with explicit spawn-time pane ownership before persistence', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = `${TEST_WORKTREE_ID}@@background-before-reveal`
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
+      tabId: 'background-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => 'agent.exe'),
+      listProcesses: vi.fn(async () => [{ id: ptyId, cwd: TEST_REPO_PATH, title: 'agent' }])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true,
+      hasAttachedPty: true,
+      liveTerminalCount: 1,
+      status: 'active'
+    })
+  })
+
+  it('accepts explicit spawn-time ownership while a saved tab layout is still absent', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal({ terminalLayoutsByTabId: {} })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => 'agent.exe'),
+      listProcesses: vi.fn(async () => [
+        { id: 'persisted-pty', cwd: TEST_REPO_PATH, title: 'agent' }
+      ])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      hasHostSidebarActivity: true,
+      hasAttachedPty: true,
+      liveTerminalCount: 1,
+      status: 'active'
+    })
+  })
+
+  it('keeps persisted PTY ownership while a reconnect snapshot is missing its tab row', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal({ tabsByWorktree: {} })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, 'ssh-reconnect', {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => 'agent.exe'),
+      listProcesses: vi.fn(async () => [
+        { id: 'persisted-pty', cwd: TEST_WORKTREE_PATH, title: 'agent' }
+      ])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true,
+      hasAttachedPty: true,
+      liveTerminalCount: 1,
+      status: 'active'
+    })
+  })
+
+  it('rejects an explicit runtime binding once an empty persisted layout proves sleep', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...session,
+      terminalLayoutsByTabId: { 'host-tab': makeHeadlessTerminalLayout({}) }
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const ptyId = `${TEST_WORKTREE_ID}@@failed-reattach`
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => 'powershell.exe'),
+      listProcesses: vi.fn(async () => [{ id: ptyId, cwd: TEST_REPO_PATH, title: 'powershell' }])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      hasHostSidebarActivity: false,
+      hasAttachedPty: false,
+      liveTerminalCount: 0,
+      status: 'inactive'
+    })
+  })
+
+  it('updates multi-pane remote liveness immediately across sleep and wake', async () => {
+    const secondLeafId = '44444444-4444-4444-8444-444444444444'
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({
+          [HEADLESS_LEAF_ID]: 'remote-pty-1',
+          [secondLeafId]: 'remote-pty-2'
+        })
+      }
+    })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const setWorkspaceSession = runtimeStore.setWorkspaceSession as unknown as (
+      next: WorkspaceSessionState
+    ) => void
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => 'agent.exe'),
+      listProcesses: vi.fn(async () => [
+        { id: 'remote-pty-1', cwd: '', title: 'agent' },
+        { id: 'remote-pty-2', cwd: '', title: 'agent' }
+      ])
+    })
+
+    await expect(runtime.getWorktreePs()).resolves.toMatchObject({
+      worktrees: [
+        expect.objectContaining({
+          hasHostSidebarActivity: true,
+          hasAttachedPty: true,
+          liveTerminalCount: 2
+        })
+      ]
+    })
+
+    setWorkspaceSession({
+      ...session,
+      terminalLayoutsByTabId: { 'host-tab': makeHeadlessTerminalLayout({}) }
+    })
+    await expect(runtime.getWorktreePs()).resolves.toMatchObject({
+      worktrees: [
+        expect.objectContaining({
+          hasHostSidebarActivity: false,
+          hasAttachedPty: false,
+          liveTerminalCount: 0,
+          status: 'inactive'
+        })
+      ]
+    })
+
+    setWorkspaceSession({
+      ...session,
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({ [secondLeafId]: 'remote-pty-2' })
+      }
+    })
+    await expect(runtime.getWorktreePs()).resolves.toMatchObject({
+      worktrees: [
+        expect.objectContaining({
+          hasHostSidebarActivity: true,
+          hasAttachedPty: true,
+          liveTerminalCount: 1
+        })
+      ]
+    })
+  })
+
   it('attributes live legacy PTYs from saved layout bindings when their panes are hidden', async () => {
     const session = makeWorkspaceSessionWithHeadlessTerminal()
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
@@ -25083,7 +25306,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('preserves deferred startup activity before restored terminal panes mount', async () => {
+  it('does not treat deferred startup reattach hints as live before a PTY is restored', async () => {
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       activeWorktreeIdsOnShutdown: [TEST_WORKTREE_ID]
     })
@@ -25100,7 +25323,10 @@ describe('OrcaRuntimeService', () => {
 
     expect(worktrees[0]).toMatchObject({
       worktreeId: TEST_WORKTREE_ID,
-      hasHostSidebarActivity: true
+      hasHostSidebarActivity: false,
+      hasAttachedPty: false,
+      liveTerminalCount: 0,
+      status: 'inactive'
     })
   })
 
@@ -25450,7 +25676,9 @@ describe('OrcaRuntimeService', () => {
     ['blocked', 0, true, 'permission'],
     ['waiting', 0, true, 'permission'],
     ['done', 0, false, 'inactive'],
-    ['working', -AGENT_STATUS_STALE_AFTER_MS - 1, false, 'inactive']
+    ['working', -AGENT_STATUS_STALE_AFTER_MS - 1, false, 'inactive'],
+    ['waiting', -AGENT_STATUS_STALE_AFTER_MS - 1, false, 'inactive'],
+    ['done', -AGENT_STATUS_STALE_AFTER_MS - 1, false, 'inactive']
   ] as const)(
     'projects %s agent activity to mobile at freshness offset %s',
     async (state, updatedAtOffset, hasHostSidebarActivity, status) => {

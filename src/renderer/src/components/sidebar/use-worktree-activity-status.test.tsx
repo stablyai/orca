@@ -345,8 +345,9 @@ describe('useWorktreeActivityStatus', () => {
     expect(renderToStaticMarkup(<StatusProbe worktreeId={firstWorktreeId} />)).toBe(
       '<span>working</span>'
     )
+    // Why: retained completion is scoped here, but no live PTY means the card must agree with Hide sleeping.
     expect(renderToStaticMarkup(<StatusProbe worktreeId={secondWorktreeId} />)).toBe(
-      '<span>done</span>'
+      '<span>inactive</span>'
     )
   })
 })
