@@ -108,16 +108,16 @@ export function evaluateWorkerDoneSemanticCompletion(
   }
 
   if (REMAINING_GATES_RE.test(text) || PENDING_WORK_RE.test(text)) {
-    if (splitAllowed) {
-      return { complete: true }
+    if (!splitAllowed) {
+      return {
+        complete: false,
+        kind: 'remaining_gates',
+        appliedStatus: 'blocked',
+        reason:
+          'worker_done reports required remaining or pending work without an explicit durable code-complete/activation-gate split'
+      }
     }
-    return {
-      complete: false,
-      kind: 'remaining_gates',
-      appliedStatus: 'blocked',
-      reason:
-        'worker_done reports required remaining or pending work without an explicit durable code-complete/activation-gate split'
-    }
+    // Explicit split may leave activation pending, but still requires code-complete evidence.
   }
 
   const hasPositiveCompletionEvidence =

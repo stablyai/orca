@@ -119,4 +119,21 @@ describe('evaluateWorkerDoneSemanticCompletion', () => {
       appliedStatus: 'blocked'
     })
   })
+
+  it('still requires completion evidence when an activation split is present', () => {
+    expect(
+      evaluateWorkerDoneSemanticCompletion({
+        subject: 'Activation pending',
+        body: 'Waiting for owner approval before the migration can run.',
+        filesModified: [],
+        taskSpec:
+          'Send worker_done when the code/docs change is complete. ' +
+          'The durable task defines a code-complete vs activation split.'
+      })
+    ).toMatchObject({
+      complete: false,
+      kind: 'remaining_gates',
+      appliedStatus: 'blocked'
+    })
+  })
 })
