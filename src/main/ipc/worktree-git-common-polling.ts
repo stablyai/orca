@@ -253,6 +253,9 @@ export async function startGitCommonPolling(
       return
     }
     ticking = true
+    // Why: measure from tick start so cadence is start-to-start, not gap-after-completion (which would
+    // land each visible refresh a full scan-duration late every tick).
+    const startedAt = Date.now()
     tickCount++
     const shouldForceIndexRead = forceIndexRead || tickCount % INDEX_BACKSTOP_TICKS === 0
     onFullScan?.()
@@ -277,7 +280,8 @@ export async function startGitCommonPolling(
       ticking = false
     }
     if (!disposed) {
-      timer = setTimeout(() => void tick(), pollIntervalMs)
+      const nextDelay = Math.max(0, pollIntervalMs - (Date.now() - startedAt))
+      timer = setTimeout(() => void tick(), nextDelay)
       timer.unref?.()
     }
   }

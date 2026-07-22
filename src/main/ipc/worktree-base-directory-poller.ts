@@ -283,6 +283,9 @@ async function startBasePoller(
       return
     }
     ticking = true
+    // Why: measure from tick start so the cadence is start-to-start (like the old setInterval), not
+    // gap-after-completion — otherwise each visible refresh lands a full scan-duration late every tick.
+    const startedAt = Date.now()
     try {
       await poll(forceFullScan)
     } catch {
@@ -291,7 +294,8 @@ async function startBasePoller(
       ticking = false
     }
     if (!disposed) {
-      timer = setTimeout(() => void tick(), pollIntervalMs)
+      const nextDelay = Math.max(0, pollIntervalMs - (Date.now() - startedAt))
+      timer = setTimeout(() => void tick(), nextDelay)
       timer.unref?.()
     }
   }
