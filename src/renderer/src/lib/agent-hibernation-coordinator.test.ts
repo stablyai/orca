@@ -30,6 +30,11 @@ const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 
 const mockRuntimeEnvironmentCall = vi.fn()
 
+const { recordBreadcrumbMock } = vi.hoisted(() => ({ recordBreadcrumbMock: vi.fn() }))
+vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
+  recordRendererCrashBreadcrumb: recordBreadcrumbMock
+}))
+
 vi.stubGlobal('window', {
   api: {
     runtimeEnvironments: {
@@ -179,6 +184,7 @@ afterEach(() => {
   resetAgentHibernationOutputActivityForTests()
   hydrateDrivers([])
   mockRuntimeEnvironmentCall.mockReset()
+  recordBreadcrumbMock.mockClear()
   vi.useRealTimers()
 })
 
@@ -190,6 +196,8 @@ describe('agent sleep coordinator', () => {
 
     await vi.advanceTimersByTimeAsync(1000)
     expect(shutdown).not.toHaveBeenCalled()
+    // Why: no confirmed candidates on the first tick, so no mass-kill breadcrumb yet (issue #9949).
+    expect(recordBreadcrumbMock).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1000)
     expect(shutdown).toHaveBeenCalledWith('wt-bg', {
@@ -197,6 +205,11 @@ describe('agent sleep coordinator', () => {
       tabId: 'tab-1',
       leafId: LEAF,
       ptyId: 'pty-1'
+    })
+    expect(recordBreadcrumbMock).toHaveBeenCalledTimes(1)
+    expect(recordBreadcrumbMock).toHaveBeenCalledWith('terminal_mass_kill', {
+      source: 'hibernation',
+      count: 1
     })
     expect(useAppStore.getState().shutdownWorktreeTerminals).not.toHaveBeenCalled()
   })

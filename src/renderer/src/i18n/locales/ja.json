@@ -3025,7 +3025,11 @@
             "b8f4a2c1d0e3": "{{value0}} 件の孤立",
             "c7e3b1a0d9f2": "孤立した terminal {{value0}} 件を終了",
             "d8f4c2b1e0a3": "孤立した terminals {{value0}} 件を終了",
-            "e9a5d3c2b1f0": "{{value0}} を終了しますか？"
+            "e9a5d3c2b1f0": "{{value0}} を終了しますか？",
+            "c916c9e26f": "孤立した terminal {{value0}} 件を終了しますか？",
+            "e1a552a443": "孤立した terminals {{value0}} 件を終了しますか？",
+            "a464e7a27c": "タブが開いていない孤立した terminal セッションをすべて強制終了します。保存されていない作業はすべて失われます。これを元に戻すことはできません。",
+            "d313bc7de9": "孤立した terminal を終了"
           },
           "SshStatusSegment": {
             "3ad70e0365": "リモートホストを管理…",

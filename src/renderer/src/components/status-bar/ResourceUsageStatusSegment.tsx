@@ -73,6 +73,7 @@ import {
   type ResourceSessionBindingInputs
 } from './resource-session-bindings'
 import { createClosedResourceSessionCountSelector } from './resource-session-count-selector'
+import { useOrphanKillGate } from './orphan-terminal-kill-gate'
 import { translate } from '@/i18n/i18n'
 
 const POLL_MS = 2_000
@@ -1063,21 +1064,23 @@ export function ResourceUsageStatusSegment({
     [refreshSessions]
   )
 
-  const handleKillOrphans = useCallback(async () => {
+  // Why: read live tab bindings at both stage and confirm time so an adopted session is never swept (issue #9949).
+  const getBoundPtyIds = useCallback(
+    (): ReadonlySet<string> =>
+      buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds,
+    [resourceSessionBindings]
+  )
+  const orphanKill = useOrphanKillGate({ setSessions, refreshSessions, getBoundPtyIds })
+  const orphanKillCount = orphanKill.pending?.length ?? 0
+
+  // Why: only stage the confirm here; the bulk sweep must not kill without an explicit confirm (issue #9949).
+  const requestOrphanKill = useCallback((): void => {
     if (!workspaceSessionReady) {
       return
     }
-    const bound = buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds
-    const orphans = sessions.filter((s) => !bound.has(s.id))
-    if (orphans.length === 0) {
-      return
-    }
-    // Why: optimistic removal so rows disappear immediately instead of waiting for the next daemon-side list refresh.
-    const orphanIds = new Set(orphans.map((s) => s.id))
-    setSessions((prev) => prev.filter((s) => !orphanIds.has(s.id)))
-    await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
-    void refreshSessions()
-  }, [sessions, resourceSessionBindings, workspaceSessionReady, refreshSessions])
+    const bound = getBoundPtyIds()
+    orphanKill.request(sessions.filter((s) => !bound.has(s.id)))
+  }, [sessions, getBoundPtyIds, workspaceSessionReady, orphanKill])
 
   const runKillConfirmed = useCallback(async () => {
     if (!killConfirm) {
@@ -1516,7 +1519,7 @@ export function ResourceUsageStatusSegment({
           {orphanCount > 0 ? (
             <button
               type="button"
-              onClick={() => void handleKillOrphans()}
+              onClick={requestOrphanKill}
               className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
             >
               {orphanCount === 1
@@ -1606,6 +1609,81 @@ export function ResourceUsageStatusSegment({
                 : translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.b10695d6ce',
                     'Kill session'
+                  )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Why: bulk orphan sweep is a mass-kill; gate it behind the same confirm flow single kills use (issue #9949). */}
+      <Dialog
+        open={orphanKill.pending !== null}
+        onOpenChange={(next) => {
+          if (next || orphanKill.isKilling) {
+            return
+          }
+          orphanKill.cancel()
+        }}
+      >
+        <DialogContent
+          className="max-w-md"
+          showCloseButton={!orphanKill.isKilling}
+          onPointerDownOutside={(e) => {
+            if (orphanKill.isKilling) {
+              e.preventDefault()
+            }
+          }}
+          onEscapeKeyDown={(e) => {
+            if (orphanKill.isKilling) {
+              e.preventDefault()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {orphanKillCount === 1
+                ? translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.c916c9e26f',
+                    'Kill {{value0}} orphan terminal?',
+                    { value0: orphanKillCount }
+                  )
+                : translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.e1a552a443',
+                    'Kill {{value0}} orphan terminals?',
+                    { value0: orphanKillCount }
+                  )}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.a464e7a27c',
+                "Force-quits every orphaned terminal session with no open tab. Any unsaved work in them is lost. This can't be undone."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => orphanKill.cancel()}
+              disabled={orphanKill.isKilling}
+            >
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.946d9f94d0',
+                'Cancel'
+              )}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void orphanKill.confirm()}
+              disabled={orphanKill.isKilling}
+            >
+              {orphanKill.isKilling ? <LoaderCircle className="size-4 animate-spin" /> : null}
+              {orphanKill.isKilling
+                ? translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.41ae4fa725',
+                    'Killing…'
+                  )
+                : translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.d313bc7de9',
+                    'Kill orphans'
                   )}
             </Button>
           </DialogFooter>

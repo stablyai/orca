@@ -391,6 +391,63 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'worktree.sleep'
 ])
 
+// Why: methods whose handlers can tear down PTYs (ptyController.kill / killAllProcessesForWorktree).
+// Each dispatch on either transport logs one console attribution line so a mass-kill is traceable to its caller (issue #9949).
+const KILL_CAPABLE_RPC_METHODS = new Set<string>([
+  'terminal.close',
+  'terminal.closeTab',
+  'terminal.stop',
+  'terminal.stopExact',
+  'session.tabs.close',
+  // Why: the tmuxCompat 'kill-pane' branch routes to closeTerminal, so it is a kill path too.
+  'agentTeams.tmuxCompat',
+  'worktree.sleep',
+  'worktree.rm'
+])
+
+// Origin naming for an audit line; a DeviceEntry (WebSocket) or the synthetic local-socket identity.
+type KillDispatchOrigin = { deviceId: string; deviceName: string; scope: string }
+
+// Why: the Unix socket authenticates by shared token, not a device identity, so its kills get this synthetic origin.
+const LOCAL_SOCKET_ORIGIN: KillDispatchOrigin = {
+  deviceId: 'local-socket',
+  deviceName: 'local-socket',
+  scope: 'local-socket'
+}
+
+// Ids-only target summary; never dump the full params payload.
+function summarizeKillTarget(params: unknown): Record<string, string> {
+  if (typeof params !== 'object' || params === null) {
+    return {}
+  }
+  const source = params as Record<string, unknown>
+  const summary: Record<string, string> = {}
+  for (const field of ['worktree', 'terminal', 'tabId'] as const) {
+    const value = source[field]
+    if (typeof value === 'string' && value.length > 0) {
+      summary[field] = value
+    }
+  }
+  return summary
+}
+
+// Why: console attribution line naming who dispatched a kill-capable RPC; low volume, one line per kill dispatch (not persisted).
+export function recordKillCapableRpcDispatch(
+  request: RpcRequest,
+  origin: KillDispatchOrigin
+): void {
+  if (!KILL_CAPABLE_RPC_METHODS.has(request.method)) {
+    return
+  }
+  console.info('[runtime-rpc] kill-capable dispatch', {
+    method: request.method,
+    deviceId: origin.deviceId,
+    deviceName: origin.deviceName,
+    scope: origin.scope,
+    ...summarizeKillTarget(request.params)
+  })
+}
+
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
 function isLongPollRequest(request: RpcRequest): boolean {
   if (request.method === 'terminal.wait') {
@@ -1008,6 +1065,8 @@ export class OrcaRuntimeRpcServer {
     }
     const request = parsed.request
 
+    recordKillCapableRpcDispatch(request, LOCAL_SOCKET_ORIGIN)
+
     // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
     const longPoll = isLongPollRequest(request)
     if (longPoll && this.activeLongPolls >= this.longPollCap) {
@@ -1116,6 +1175,12 @@ export class OrcaRuntimeRpcServer {
       )
       return
     }
+
+    recordKillCapableRpcDispatch(request, {
+      deviceId: device.deviceId,
+      deviceName: device.name,
+      scope: device.scope
+    })
 
     // Why: bind deviceToken to this socket so ws.on('close') knows which mobile client disconnected.
     if (wsTransport && ws) {

@@ -16,6 +16,7 @@ import {
 } from './foreground-terminal-tabs'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
@@ -204,6 +205,13 @@ export async function runAgentHibernationTick(): Promise<void> {
       await currentCandidates(coordinator.now())
     )
     coordinator.confirmationState = plan.confirmationState
+    if (plan.candidates.length > 0) {
+      // Why: attribute automatic hibernation that mass-kills agent panes (issue #9949).
+      recordRendererCrashBreadcrumb('terminal_mass_kill', {
+        source: 'hibernation',
+        count: plan.candidates.length
+      })
+    }
     for (const candidate of plan.candidates) {
       void hibernatePaneIfStillEligible(candidate)
     }

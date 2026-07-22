@@ -9,6 +9,7 @@ import {
   type TerminalTabRetirementState
 } from '@/store/slices/terminal-tab-retirement'
 import { reserveTerminalRetirementTeardowns } from '@/store/slices/terminal-retirement-teardown-reservation'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 
 const CLOSE_BATCH_SIZE = 2
 
@@ -55,6 +56,7 @@ type KillAllTerminalSurfaceDependencies = {
   now: () => number
   yieldToRenderer: () => Promise<void>
   reportSummary: (summary: KillAllTerminalSurfacesSummary) => void
+  recordBreadcrumb: typeof recordRendererCrashBreadcrumb
 }
 
 export function snapshotKillAllTerminalSurfaceIds(
@@ -140,7 +142,8 @@ function createDefaultDependencies(): KillAllTerminalSurfaceDependencies {
         }
         channel.port2.postMessage(undefined)
       }),
-    reportSummary: (summary) => console.info('[kill-all-terminal-surfaces]', summary)
+    reportSummary: (summary) => console.info('[kill-all-terminal-surfaces]', summary),
+    recordBreadcrumb: recordRendererCrashBreadcrumb
   }
 }
 
@@ -150,6 +153,11 @@ export async function runKillAllTerminalSurfaces(
 ): Promise<KillAllTerminalSurfacesSummary> {
   const deps = { ...createDefaultDependencies(), ...dependencies }
   const targetIds = [...new Set(snapshotTargetIds)]
+  // Why: attribute who triggered a terminal mass-kill (issue #9949); best-effort, never throws.
+  deps.recordBreadcrumb('terminal_mass_kill', {
+    source: 'kill-all-surfaces',
+    count: targetIds.length
+  })
 
   let daemon: KillAllTerminalSurfacesSummary['daemon']
   try {

@@ -522,6 +522,26 @@ describe('runKillAllTerminalSurfaces', () => {
     })
   })
 
+  it('records one terminal_mass_kill breadcrumb with the deduplicated snapshot count', async () => {
+    const recordBreadcrumb = vi.fn()
+    const current = state({ tabsByWorktree: { wt: [terminal('target', 'wt')] } })
+
+    await runKillAllTerminalSurfaces(['target', 'target', 'other'], {
+      getState: () => current,
+      killDaemonSessions: vi.fn().mockResolvedValue({ killedCount: 0, remainingCount: 0 }),
+      closeSurface: (targetId) => removeSurface(current, targetId),
+      killPty: vi.fn().mockResolvedValue(undefined),
+      reportSummary: vi.fn(),
+      recordBreadcrumb
+    })
+
+    expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
+    expect(recordBreadcrumb).toHaveBeenCalledWith('terminal_mass_kill', {
+      source: 'kill-all-surfaces',
+      count: 2
+    })
+  })
+
   it('records bounded fanout and two-close batches for 100 terminal tabs', async () => {
     const tabs = Array.from({ length: 100 }, (_, index) => terminal(`tab-${index}`, 'wt'))
     const ptyIdsByTabId = Object.fromEntries(tabs.map((tab, index) => [tab.id, [`pty-${index}`]]))

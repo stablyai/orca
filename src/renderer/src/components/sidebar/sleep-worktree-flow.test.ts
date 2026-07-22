@@ -15,9 +15,11 @@ const mocks = vi.hoisted(() => {
   const toastError = vi.fn()
   const markWorktreeSleepIntent = vi.fn()
   const clearWorktreeSleepIntent = vi.fn()
+  const recordRendererCrashBreadcrumb = vi.fn()
   return {
     clearWorktreeSleepIntent,
     markWorktreeSleepIntent,
+    recordRendererCrashBreadcrumb,
     state,
     suspendWorkspace,
     toastError
@@ -34,6 +36,9 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/lib/worktree-sleep-intent', () => ({
   clearWorktreeSleepIntent: mocks.clearWorktreeSleepIntent,
   markWorktreeSleepIntent: mocks.markWorktreeSleepIntent
+}))
+vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
+  recordRendererCrashBreadcrumb: mocks.recordRendererCrashBreadcrumb
 }))
 
 import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
@@ -57,6 +62,7 @@ describe('runSleepWorktree', () => {
     mocks.suspendWorkspace.mockClear().mockResolvedValue(null)
     mocks.markWorktreeSleepIntent.mockClear()
     mocks.clearWorktreeSleepIntent.mockClear()
+    mocks.recordRendererCrashBreadcrumb.mockClear()
     mocks.toastError.mockClear()
     mocks.state.activeWorktreeId = null
     mocks.state.tabsByWorktree = {}
@@ -256,6 +262,16 @@ describe('runSleepWorktree', () => {
           'The workspace was kept open. Try again; if the problem continues, check the host connection.'
       })
     )
+  })
+
+  it('records one terminal_mass_kill breadcrumb with the worktree count', async () => {
+    await runSleepWorktrees(['wt-1', 'wt-2'])
+
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(1)
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith('terminal_mass_kill', {
+      source: 'worktree-sleep',
+      count: 2
+    })
   })
 
   it('sleeps multiple worktrees and clears active only once when included', async () => {

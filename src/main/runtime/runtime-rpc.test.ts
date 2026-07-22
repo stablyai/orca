@@ -4354,3 +4354,160 @@ describe('OrcaRuntimeRpcServer', () => {
     })
   })
 })
+
+describe('OrcaRuntimeRpcServer kill-capable dispatch audit', () => {
+  const AUDIT_TAG = '[runtime-rpc] kill-capable dispatch'
+
+  const makeRuntime = (): OrcaRuntimeService =>
+    ({ getRuntimeId: () => 'test-runtime' }) as unknown as OrcaRuntimeService
+
+  const stubStreamingDispatch = (server: OrcaRuntimeRpcServer): void => {
+    ;(server as unknown as { dispatcher: { dispatchStreaming: () => Promise<void> } }).dispatcher =
+      {
+        dispatchStreaming: vi.fn(async () => {})
+      } as never
+  }
+
+  const stubUnixDispatch = (server: OrcaRuntimeRpcServer): void => {
+    ;(server as unknown as { dispatcher: { dispatch: () => Promise<unknown> } }).dispatcher = {
+      dispatch: vi.fn(async () => ({ id: 'req_1', result: {} }))
+    } as never
+  }
+
+  it('emits an audit record naming the client on a kill-capable dispatch', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: makeRuntime(),
+      userDataPath,
+      enableWebSocket: false
+    })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const device = server['deviceRegistry']!.addDevice('Pixel 8', 'mobile')
+    stubStreamingDispatch(server)
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      await server['handleWebSocketMessage'](
+        JSON.stringify({
+          id: 'req_1',
+          method: 'terminal.close',
+          deviceToken: device.token,
+          params: { terminal: 'term-42' }
+        }),
+        () => {},
+        () => {},
+        undefined,
+        new FakeWebSocket() as unknown as WebSocket
+      )
+      const auditCall = infoSpy.mock.calls.find((call) => call[0] === AUDIT_TAG)
+      expect(auditCall).toBeDefined()
+      expect(auditCall?.[1]).toMatchObject({
+        method: 'terminal.close',
+        deviceId: device.deviceId,
+        deviceName: 'Pixel 8',
+        scope: 'mobile',
+        terminal: 'term-42'
+      })
+    } finally {
+      infoSpy.mockRestore()
+      await server.stop()
+    }
+  })
+
+  it('does not emit an audit record for a read-only dispatch', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: makeRuntime(),
+      userDataPath,
+      enableWebSocket: false
+    })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const device = server['deviceRegistry']!.addDevice('Pixel 8', 'mobile')
+    stubStreamingDispatch(server)
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      await server['handleWebSocketMessage'](
+        JSON.stringify({
+          id: 'req_1',
+          method: 'terminal.read',
+          deviceToken: device.token,
+          params: { terminal: 'term-42' }
+        }),
+        () => {},
+        () => {},
+        undefined,
+        new FakeWebSocket() as unknown as WebSocket
+      )
+      expect(infoSpy.mock.calls.some((call) => call[0] === AUDIT_TAG)).toBe(false)
+    } finally {
+      infoSpy.mockRestore()
+      await server.stop()
+    }
+  })
+
+  it('audits agentTeams.tmuxCompat since its kill-pane branch tears down a PTY', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: makeRuntime(),
+      userDataPath,
+      enableWebSocket: false
+    })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const device = server['deviceRegistry']!.addDevice('Pixel 8', 'mobile')
+    stubStreamingDispatch(server)
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      await server['handleWebSocketMessage'](
+        JSON.stringify({
+          id: 'req_1',
+          method: 'agentTeams.tmuxCompat',
+          deviceToken: device.token,
+          params: { paneKey: 'pane-1', command: 'kill-pane -t %3' }
+        }),
+        () => {},
+        () => {},
+        undefined,
+        new FakeWebSocket() as unknown as WebSocket
+      )
+      const auditCall = infoSpy.mock.calls.find((call) => call[0] === AUDIT_TAG)
+      expect(auditCall?.[1]).toMatchObject({
+        method: 'agentTeams.tmuxCompat',
+        deviceId: device.deviceId
+      })
+    } finally {
+      infoSpy.mockRestore()
+      await server.stop()
+    }
+  })
+
+  it('audits kill-capable dispatches on the unix-socket path with a local-socket origin', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: makeRuntime(),
+      userDataPath,
+      enableWebSocket: false
+    })
+    stubUnixDispatch(server)
+    const authToken = (server as unknown as { authToken: string }).authToken
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      await server['handleMessage'](
+        JSON.stringify({
+          id: 'req_1',
+          method: 'terminal.close',
+          authToken,
+          params: { terminal: 'term-42' }
+        })
+      )
+      const auditCall = infoSpy.mock.calls.find((call) => call[0] === AUDIT_TAG)
+      expect(auditCall?.[1]).toMatchObject({
+        method: 'terminal.close',
+        scope: 'local-socket',
+        deviceId: 'local-socket',
+        terminal: 'term-42'
+      })
+    } finally {
+      infoSpy.mockRestore()
+      await server.stop()
+    }
+  })
+})

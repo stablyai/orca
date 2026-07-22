@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { translate } from '@/i18n/i18n'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 
 /**
  * Shared "sleep worktree" flow (close all panels to free memory / CPU)
@@ -135,6 +136,11 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
   if (worktreeIds.length === 0) {
     return
   }
+  // Why: attribute who triggered a terminal mass-kill (issue #9949); best-effort, never throws.
+  recordRendererCrashBreadcrumb('terminal_mass_kill', {
+    source: 'worktree-sleep',
+    count: worktreeIds.length
+  })
   const {
     activeWorktreeId,
     setActiveWorktree,

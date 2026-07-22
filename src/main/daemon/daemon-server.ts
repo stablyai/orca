@@ -881,7 +881,9 @@ export class DaemonServer {
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
         this.log.log('session-killed', {
           sessionId: request.payload.sessionId,
-          immediate: request.payload.immediate === true
+          immediate: request.payload.immediate === true,
+          clientId,
+          requestId: request.id
         })
         try {
           await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })

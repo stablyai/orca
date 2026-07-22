@@ -2045,6 +2045,7 @@ export function useIpcEvents(): void {
     }
 
     unsubs.push(
+      // Why: runSleepWorktree -> runSleepWorktrees records the single terminal_mass_kill breadcrumb; no relay-site duplicate (issue #9949).
       window.api.ui.onSleepWorktree(({ worktreeId }) => {
         void runSleepWorktree(worktreeId)
       })

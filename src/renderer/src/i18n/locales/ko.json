@@ -3025,7 +3025,11 @@
             "b8f4a2c1d0e3": "고아 {{value0}}개",
             "c7e3b1a0d9f2": "고아 terminal {{value0}}개 종료",
             "d8f4c2b1e0a3": "고아 terminals {{value0}}개 종료",
-            "e9a5d3c2b1f0": "{{value0}}을(를) 종료할까요?"
+            "e9a5d3c2b1f0": "{{value0}}을(를) 종료할까요?",
+            "c916c9e26f": "고아 terminal {{value0}}개를 종료할까요?",
+            "e1a552a443": "고아 terminals {{value0}}개를 종료할까요?",
+            "a464e7a27c": "탭이 열려 있지 않은 모든 고아 terminal 세션을 강제 종료합니다. 저장하지 않은 작업은 모두 손실됩니다. 이 작업은 취소할 수 없습니다.",
+            "d313bc7de9": "고아 terminal 종료"
           },
           "SshStatusSegment": {
             "3ad70e0365": "원격 호스트 관리…",
