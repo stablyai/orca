@@ -4,6 +4,7 @@ import {
   getDefaultTaskRepoSelection,
   getTaskProjectPickerGroups,
   getTaskProjectPickerRepos,
+  getTaskSourceEligibleRepos,
   normalizeTaskRepoSelection
 } from './task-page-default-repo-selection'
 
@@ -17,6 +18,28 @@ function repo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {
     ...overrides
   }
 }
+
+describe('getTaskSourceEligibleRepos', () => {
+  it('excludes local-only git repos with no resolvable remote identity', () => {
+    // Why: a repo with no remote has no provider to fetch tasks from (#9844);
+    // it otherwise appears as its own "project" via the repo:${id} fallback.
+    const eligible = getTaskSourceEligibleRepos([
+      repo({ id: 'github', upstream: { owner: 'stablyai', repo: 'orca' } }),
+      repo({
+        id: 'gitlab',
+        gitRemoteIdentity: {
+          canonicalKey: 'gitlab.com/team/app',
+          remoteName: 'origin',
+          remoteUrl: 'https://gitlab.com/team/app.git'
+        }
+      }),
+      repo({ id: 'local-only' }),
+      repo({ id: 'folder', kind: 'folder' })
+    ])
+
+    expect(eligible.map((r) => r.id).sort()).toEqual(['github', 'gitlab'])
+  })
+})
 
 describe('getDefaultTaskRepoSelection', () => {
   it('selects one source per logical GitHub project', () => {

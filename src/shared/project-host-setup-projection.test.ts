@@ -3,6 +3,7 @@ import {
   projectHostSetupProjectionFromRepos,
   getProjectHostSetupsForProject,
   getProjectHostSetupWorktreeMeta,
+  hasResolvableProjectRemoteIdentity,
   isGitHubBackedRepo
 } from './project-host-setup-projection'
 import type { Repo } from './types'
@@ -506,5 +507,43 @@ describe('isGitHubBackedRepo', () => {
 
   it('is false for a plain local repo with no provider signal', () => {
     expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
+  })
+})
+
+describe('hasResolvableProjectRemoteIdentity', () => {
+  it('is true for a GitHub upstream repo', () => {
+    expect(
+      hasResolvableProjectRemoteIdentity(
+        repo({
+          id: 'r',
+          path: '/r',
+          displayName: 'r',
+          upstream: { owner: 'stablyai', repo: 'orca' }
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('is true for a non-GitHub remote resolved through gitRemoteIdentity', () => {
+    expect(
+      hasResolvableProjectRemoteIdentity(
+        repo({
+          id: 'r',
+          path: '/r',
+          displayName: 'r',
+          gitRemoteIdentity: {
+            canonicalKey: 'gitlab.com/team/app',
+            remoteName: 'origin',
+            remoteUrl: 'https://gitlab.com/team/app.git'
+          }
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('is false for a local-only git repo with no remote', () => {
+    expect(
+      hasResolvableProjectRemoteIdentity(repo({ id: 'r', path: '/r', displayName: 'r' }))
+    ).toBe(false)
   })
 })

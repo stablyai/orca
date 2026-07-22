@@ -1,11 +1,23 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
+import {
+  getProjectIdentityKey,
+  hasResolvableProjectRemoteIdentity
+} from '../../../shared/project-host-setup-projection'
+import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/types'
 
 export type TaskProjectPickerGroup = {
   projectKey: string
   repo: Repo
   sources: Repo[]
+}
+
+/** Repos usable as task/issue sources: git repos (not folders) that resolve to
+ *  a remote provider. Excludes local-only repos with no remote, which have no
+ *  provider to fetch tasks from and otherwise surface as their own project via
+ *  the repo:${id} identity fallback (#9844). */
+export function getTaskSourceEligibleRepos(repos: readonly Repo[]): Repo[] {
+  return repos.filter((repo) => isGitRepoKind(repo) && hasResolvableProjectRemoteIdentity(repo))
 }
 
 export function getDefaultTaskRepoSelection(repos: readonly Repo[]): Set<string> {

@@ -80,6 +80,16 @@ export function isGitHubBackedRepo(
   return getProjectProviderIdentity(repo) !== null
 }
 
+/** True when the repo has a remote identity Orca can resolve to a task/issue
+ *  provider (an explicit provider identity or any git remote). This is exactly
+ *  the negation of the `repo:${id}` fallback in getProjectIdentityKey — a
+ *  local-only repo with no remote has no provider to fetch tasks from. */
+export function hasResolvableProjectRemoteIdentity(
+  repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+): boolean {
+  return getProjectProviderIdentity(repo) !== null || getProjectGitRemoteIdentity(repo) !== null
+}
+
 export function getProjectIdentityKey(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {
