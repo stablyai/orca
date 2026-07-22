@@ -69,12 +69,12 @@ describe('TerminalSshReconnectOverlay', () => {
     cleanup()
   })
 
-  it('renders a direct Connect action for a disconnected SSH terminal', async () => {
+  it('renders a non-blocking Connect banner for a disconnected SSH terminal', async () => {
     const connect = vi.fn().mockResolvedValue(undefined)
     installSshConnect(connect)
     const user = userEvent.setup()
 
-    render(
+    const { container } = render(
       <TerminalSshReconnectOverlay
         targetId="ssh-target-1"
         targetLabel="devbox"
@@ -84,6 +84,10 @@ describe('TerminalSshReconnectOverlay', () => {
 
     expect(screen.getByText('SSH connection required')).toBeInTheDocument()
     expect(screen.getByText(/This terminal is waiting for devbox/)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    const banner = container.querySelector('[data-terminal-ssh-reconnect-banner="disconnected"]')
+    expect(banner).toHaveClass('inset-x-3', 'bottom-3')
+    expect(banner).not.toHaveClass('inset-0', 'bg-background/75')
     await user.click(screen.getByRole('button', { name: 'Connect' }))
 
     expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-target-1' })
