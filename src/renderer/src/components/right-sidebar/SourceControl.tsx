@@ -2779,6 +2779,7 @@ function SourceControlInner(): React.JSX.Element {
           fetchPRForBranch(repoPath, branch, {
             force: true,
             repoId,
+            executionHostId,
             worktreeId: worktreeId ?? undefined,
             linkedPRNumber: result.number
           })

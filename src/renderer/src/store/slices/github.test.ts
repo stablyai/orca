@@ -4970,11 +4970,9 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
     await Promise.resolve()
 
-    expect(mockApi.gh.issue).toHaveBeenCalledWith({
-      repoPath,
-      repoId: 'repo-1',
-      number: 123
-    })
+    expect(mockApi.gh.issue).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath, repoId: 'repo-1', number: 123 })
+    )
   })
 
   it('enqueues active PR refresh IPC for connected SSH-backed repos', () => {
@@ -5481,11 +5479,9 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     store.getState().refreshAllGitHub()
     await Promise.resolve()
 
-    expect(mockApi.gh.issue).toHaveBeenCalledWith({
-      repoPath,
-      repoId: 'repo-1',
-      number: 123
-    })
+    expect(mockApi.gh.issue).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath, repoId: 'repo-1', number: 123 })
+    )
   })
 })
 

@@ -1250,6 +1250,7 @@ const api = {
     prForBranch: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       branch: string
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
@@ -1281,6 +1282,7 @@ const api = {
     issue: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       number: number
     }): Promise<unknown> => ipcRenderer.invoke('gh:issue', args),
@@ -1374,6 +1376,7 @@ const api = {
     prCheckDetails: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       checkRunId?: number
       workflowRunId?: number
@@ -1396,6 +1399,7 @@ const api = {
     prComments: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
@@ -1405,6 +1409,7 @@ const api = {
     resolveReviewThread: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       threadId: string
       resolve: boolean
@@ -1493,6 +1498,7 @@ const api = {
     addIssueComment: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       number: number
       body: string
@@ -1503,6 +1509,7 @@ const api = {
     addPRReviewCommentReply: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       prNumber: number
       commentId: number

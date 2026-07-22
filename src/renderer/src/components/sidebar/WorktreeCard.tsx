@@ -768,7 +768,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
     // Why: fallback poll behind activity triggers; stopped while hidden to avoid waking idle workspaces.
     return installWindowVisibilityInterval({
-      run: () => void fetchIssue(repo.path, issueNumber, { repoId: repo.id }),
+      run: () =>
+        void fetchIssue(repo.path, issueNumber, {
+          repoId: repo.id,
+          executionHostId: getRepoExecutionHostId(repo)
+        }),
       intervalMs: 5 * 60_000
     })
   }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
@@ -786,7 +790,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ) {
       return
     }
-    void fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+    void fetchIssue(repo.path, worktree.linkedIssue, {
+      repoId: repo.id,
+      executionHostId: getRepoExecutionHostId(repo)
+    })
   }, [
     newCardStyle,
     hoverDetailsOpen,

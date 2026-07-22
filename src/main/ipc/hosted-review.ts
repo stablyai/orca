@@ -25,25 +25,31 @@ function assertRegisteredRepo(
   executionHostId?: ExecutionHostId
 ): Repo {
   if (repoId) {
-    const repo = executionHostId
-      ? store
-          .getRepos()
-          .find(
-            (candidate) =>
-              candidate.id === repoId && getRepoExecutionHostId(candidate) === executionHostId
-          )
-      : store.getRepo(repoId)
-    if (!repo || repo.path !== repoPath) {
+    const matches = store
+      .getRepos()
+      .filter(
+        (candidate) =>
+          candidate.id === repoId &&
+          candidate.path === repoPath &&
+          (!executionHostId || getRepoExecutionHostId(candidate) === executionHostId)
+      )
+    if (matches.length !== 1) {
       throw new Error('Access denied: unknown repository')
     }
-    return repo
+    return matches[0]
   }
   const resolvedRepoPath = resolve(repoPath)
-  const repo = store.getRepos().find((r) => resolve(r.path) === resolvedRepoPath)
-  if (!repo) {
+  const matches = store
+    .getRepos()
+    .filter(
+      (candidate) =>
+        resolve(candidate.path) === resolvedRepoPath &&
+        (!executionHostId || getRepoExecutionHostId(candidate) === executionHostId)
+    )
+  if (matches.length !== 1) {
     throw new Error('Access denied: unknown repository path')
   }
-  return repo
+  return matches[0]
 }
 
 async function resolveHostedReviewWorktreePath(

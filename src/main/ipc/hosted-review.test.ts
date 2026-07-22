@@ -263,6 +263,39 @@ describe('registerHostedReviewHandlers', () => {
     )
   })
 
+  it('authorizes path-only requests with the requested execution host', async () => {
+    const localRepo = {
+      id: 'local-repo',
+      path: '/workspace/shared',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: 'local' as const
+    }
+    const sshRepo = {
+      id: 'ssh-repo',
+      path: '/workspace/shared',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1' as const
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    getHostedReviewForBranchMock.mockResolvedValueOnce(null)
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await handlers['hostedReview:forBranch'](null, {
+      repoPath: sshRepo.path,
+      executionHostId: sshRepo.executionHostId,
+      branch: 'feature/path-only'
+    })
+
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: sshRepo.connectionId, branch: 'feature/path-only' })
+    )
+  })
+
   it('authorizes duplicate repo ids for eligibility and creation with the requested host', async () => {
     const localRepo = {
       id: 'shared-repo',
@@ -406,9 +439,7 @@ describe('registerHostedReviewHandlers', () => {
   })
 
   it('rejects creation when repoId and repoPath point at different registered repos', async () => {
-    store.getRepo.mockImplementation((repoId: string) =>
-      repoId === repo.id ? { ...repo, path: '/other/repo' } : null
-    )
+    store.getRepos.mockReturnValue([{ ...repo, path: '/other/repo' }])
 
     registerHostedReviewHandlers(store as never, stats as never)
 

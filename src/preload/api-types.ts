@@ -1663,6 +1663,7 @@ export type PreloadApi = {
     prForBranch: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       branch: string
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
@@ -1683,6 +1684,7 @@ export type PreloadApi = {
     issue: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       number: number
     }) => Promise<IssueInfo | null>
@@ -1759,6 +1761,7 @@ export type PreloadApi = {
     prCheckDetails: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       checkRunId?: number
       workflowRunId?: number
@@ -1777,6 +1780,7 @@ export type PreloadApi = {
     prComments: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
@@ -1785,6 +1789,7 @@ export type PreloadApi = {
     resolveReviewThread: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       threadId: string
       resolve: boolean

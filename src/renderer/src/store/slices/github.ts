@@ -53,7 +53,6 @@ import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
-import { findRepoForHost } from './repo-host-identity'
 import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../../../shared/github-api-availability'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
@@ -242,11 +241,22 @@ function getRefreshAliasExecutionHostId(alias: GitHubPRRefreshAlias): string {
 function findRepoForGitHubOwner(
   state: Partial<Pick<AppState, 'repos'>>,
   repoId: string | undefined,
-  repoPath: string
+  repoPath: string,
+  executionHostId?: ExecutionHostId
 ): Repo | undefined {
-  return (state.repos ?? []).find((candidate) =>
-    repoId ? candidate.id === repoId || candidate.path === repoPath : candidate.path === repoPath
+  const repos = state.repos ?? []
+  if (!executionHostId) {
+    return repos.find((candidate) =>
+      repoId ? candidate.id === repoId || candidate.path === repoPath : candidate.path === repoPath
+    )
+  }
+  const matches = repos.filter(
+    (candidate) =>
+      (repoId
+        ? candidate.id === repoId && candidate.path === repoPath
+        : candidate.path === repoPath) && getRepoExecutionHostId(candidate) === executionHostId
   )
+  return matches.length === 1 ? matches[0] : undefined
 }
 
 function getGitHubFocusedRepoOwnerHostId(
@@ -2936,9 +2946,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath, options?.executionHostId)
+    if (options?.executionHostId && !repo) {
+      return null
+    }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
     const cacheKey = prCacheKey(
@@ -3085,6 +3096,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                     .prForBranch({
                       repoPath,
                       repoId,
+                      executionHostId: options?.executionHostId,
                       branch,
                       linkedPRNumber,
                       fallbackPRNumber,
@@ -3226,6 +3238,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             void get().fetchPRForBranch(repoPath, branch, {
               force: true,
               repoId,
+              executionHostId: options.executionHostId,
               worktreeId: options.worktreeId
             })
           }
@@ -3271,7 +3284,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchIssue: async (repoPath, number, options) => {
-    const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath)
+    const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath, options?.executionHostId)
+    if (options?.executionHostId && !repo) {
+      return null
+    }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3318,6 +3334,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             : await window.api.gh.issue({
                 repoPath,
                 repoId,
+                executionHostId: options?.executionHostId,
                 number,
                 sourceContext: options?.sourceContext
               })
@@ -3357,17 +3374,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     options
   ): Promise<PRCheckDetail[]> => {
     const state = get()
-    const repo = options?.repoId
-      ? (findRepoForHost(state.repos ?? [], options.repoId, {
-          hostId: options.executionHostId,
-          settings: state.settings
-        }) ?? undefined)
-      : state.repos?.find(
-          (candidate) =>
-            candidate.path === repoPath &&
-            (!options?.executionHostId ||
-              getRepoExecutionHostId(candidate) === options.executionHostId)
-        )
+    const repo = findRepoForGitHubOwner(state, options?.repoId, repoPath, options?.executionHostId)
     if (options?.executionHostId && !repo) {
       return []
     }
@@ -3524,9 +3531,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchPRCheckDetails: async (repoPath, args, options): Promise<PRCheckRunDetails | null> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath, options?.executionHostId)
+    if (options?.executionHostId && !repo) {
+      return null
+    }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3557,6 +3565,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       : ((await window.api.gh.prCheckDetails({
           repoPath,
           repoId,
+          executionHostId: options?.executionHostId,
           checkRunId: args.checkRunId,
           workflowRunId: args.workflowRunId,
           checkName: args.checkName,
@@ -3567,9 +3576,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath, options?.executionHostId)
+    if (options?.executionHostId && !repo) {
+      return []
+    }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3621,6 +3631,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             : ((await window.api.gh.prComments({
                 repoPath,
                 repoId,
+                executionHostId: options?.executionHostId,
                 prNumber,
                 prRepo: options?.prRepo ?? null,
                 noCache: options?.force,
@@ -3646,9 +3657,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   addPRConversationComment: async (repoPath, prNumber, body, options) => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath, options?.executionHostId)
+    if (options?.executionHostId && !repo) {
+      return { ok: false, error: 'Repository execution host not found.' }
+    }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3691,6 +3703,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           : await window.api.gh.addIssueComment({
               repoPath,
               repoId,
+              executionHostId: options?.executionHostId,
               number: prNumber,
               body,
               type: 'pr',
@@ -3725,9 +3738,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   addPRReviewCommentReply: async (repoPath, prNumber, commentId, body, options) => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath, options?.executionHostId)
+    if (options?.executionHostId && !repo) {
+      return { ok: false, error: 'Repository execution host not found.' }
+    }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3773,6 +3787,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           : await window.api.gh.addPRReviewCommentReply({
               repoPath,
               repoId,
+              executionHostId: options?.executionHostId,
               prNumber,
               commentId,
               body,
@@ -3816,9 +3831,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath, options?.executionHostId)
+    if (options?.executionHostId && !repo) {
+      return false
+    }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3875,6 +3891,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           : await window.api.gh.resolveReviewThread({
               repoPath,
               repoId,
+              executionHostId: options?.executionHostId,
               threadId,
               resolve,
               prRepo: options?.prRepo ?? null,
@@ -3907,6 +3924,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
         force: bypassesGitHubPRRefreshFreshness(reason),
         repoId: candidate.repoId,
+        executionHostId: normalizeExecutionHostId(candidate.executionHostId) ?? undefined,
         worktreeId: candidate.worktreeId,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
         fallbackPRNumber: candidate.fallbackPRNumber ?? null,
@@ -3921,6 +3939,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       await get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
         force: bypassesGitHubPRRefreshFreshness(reason),
         repoId: candidate.repoId,
+        executionHostId: normalizeExecutionHostId(candidate.executionHostId) ?? undefined,
         worktreeId: candidate.worktreeId,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
         fallbackPRNumber: candidate.fallbackPRNumber ?? null,
@@ -3942,6 +3961,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
         void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
           repoId: candidate.repoId,
+          executionHostId: normalizeExecutionHostId(candidate.executionHostId) ?? undefined,
           worktreeId: candidate.worktreeId,
           linkedPRNumber: candidate.linkedPRNumber ?? null,
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
@@ -4344,7 +4364,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           )
           const issueEntry = state.issueCache[issueKey]
           if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
-            void get().fetchIssue(repo.path, wt.linkedIssue, { repoId: repo.id })
+            void get().fetchIssue(repo.path, wt.linkedIssue, {
+              repoId: repo.id,
+              executionHostId: getRepoExecutionHostId(repo)
+            })
           }
         }
       }
@@ -4360,6 +4383,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       if (getRuntimeRepoTarget(state, candidate.repoPath, candidateSettings)) {
         void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
           repoId: candidate.repoId,
+          executionHostId: normalizeExecutionHostId(candidate.executionHostId) ?? undefined,
           worktreeId: candidate.worktreeId,
           linkedPRNumber: candidate.linkedPRNumber ?? null,
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
@@ -4434,6 +4458,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
             force: true,
             repoId: candidate.repoId,
+            executionHostId: normalizeExecutionHostId(candidate.executionHostId) ?? undefined,
             worktreeId: candidate.worktreeId,
             linkedPRNumber: candidate.linkedPRNumber ?? null,
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
@@ -4445,7 +4470,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       }
     }
     if (shouldRefreshIssueDecorations(state) && worktree.linkedIssue) {
-      void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+      void get().fetchIssue(repo.path, worktree.linkedIssue, {
+        repoId: repo.id,
+        executionHostId: getRepoExecutionHostId(repo)
+      })
     }
   },
 
@@ -4601,6 +4629,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
             force: true,
             repoId: candidate.repoId,
+            executionHostId: normalizeExecutionHostId(candidate.executionHostId) ?? undefined,
             worktreeId: candidate.worktreeId,
             linkedPRNumber: candidate.linkedPRNumber ?? null,
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
@@ -4625,7 +4654,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       )
       const issueEntry = state.issueCache[issueKey]
       if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
-        void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+        void get().fetchIssue(repo.path, worktree.linkedIssue, {
+          repoId: repo.id,
+          executionHostId: getRepoExecutionHostId(repo)
+        })
       }
     }
   }

@@ -48,7 +48,7 @@ describe('hosted-review caller host boundaries', () => {
 
   it('scopes PR-check repository selection to the requested execution host', () => {
     const source = readSource('../../store/slices/github.ts')
-    expect(source).toContain('hostId: options.executionHostId')
+    expect(source).toContain('getRepoExecutionHostId(candidate) === executionHostId')
     expect(source).toContain('if (options?.executionHostId && !repo)')
     expect(source).toMatch(/window\.api\.gh\.prChecks\(\{[\s\S]{0,300}executionHostId:/)
   })
@@ -57,5 +57,39 @@ describe('hosted-review caller host boundaries', () => {
     const source = readSource('../TaskPage.tsx')
     expect(source).toContain('findTaskPageRepoForWorkItem(repos, item)')
     expectEveryCallToCarryExecutionHost(source, 'fetchPRChecks')
+  })
+
+  it('propagates the checks-panel owner through every repo-scoped PR operation', () => {
+    const source = readSource('./ChecksPanel.tsx')
+    for (const call of [
+      'fetchPRForBranch',
+      'fetchPRCheckDetails',
+      'fetchPRComments',
+      'addPRConversationComment',
+      'addPRReviewCommentReply',
+      'resolveReviewThread'
+    ]) {
+      expectEveryCallToCarryExecutionHost(source, call)
+    }
+  })
+
+  it('propagates owners from source-control and folder-workspace PR operations', () => {
+    expectEveryCallToCarryExecutionHost(readSource('./SourceControl.tsx'), 'fetchPRForBranch')
+    expectEveryCallToCarryExecutionHost(
+      readSource('./FolderWorkspacePrChecksPanel.tsx'),
+      'fetchPRCheckDetails'
+    )
+  })
+
+  it('propagates canonical owners through background PR and issue refreshes', () => {
+    expectEveryCallToCarryExecutionHost(
+      readSource('../../store/slices/github.ts'),
+      'get().fetchPRForBranch'
+    )
+    expectEveryCallToCarryExecutionHost(
+      readSource('../../store/slices/github.ts'),
+      'get().fetchIssue'
+    )
+    expectEveryCallToCarryExecutionHost(readSource('../sidebar/WorktreeCard.tsx'), 'fetchIssue')
   })
 })
