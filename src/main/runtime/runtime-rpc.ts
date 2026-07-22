@@ -390,8 +390,13 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
 ])
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
+// orchestration.ask must be included: it inserts a decision_gate then blocks on
+// waitForMessage for up to timeoutMs (default 10 min). Without keepalive, the
+// unix-socket idle timer (30s) destroys the connection, the CLI surfaces
+// "closed the connection before responding", and a worker retry creates a
+// duplicate decision_gate while the runtime/terminal stay healthy.
 function isLongPollRequest(request: RpcRequest): boolean {
-  if (request.method === 'terminal.wait') {
+  if (request.method === 'terminal.wait' || request.method === 'orchestration.ask') {
     return true
   }
   if (request.method === 'orchestration.check') {

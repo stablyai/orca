@@ -11,7 +11,7 @@
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
 import { homedir } from 'node:os'
 import { resolve, join } from 'node:path'
-import { unlinkSync, existsSync, statSync } from 'node:fs'
+import { unlinkSync, existsSync, statSync, writeSync } from 'node:fs'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -241,14 +241,19 @@ async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
       stderr?: unknown
       exitCode?: unknown
     }
+    // Why: process.exit() after async stdout.write truncates at the OS pipe
+    // buffer (~64KiB) when the consumer is a pipe/coproc that has not drained
+    // yet — large --json payloads (e.g. agent-context) arrive as incomplete
+    // JSON. writeSync flushes before exit; file redirects often masked this.
+    const exitCode = typeof result.exitCode === 'number' ? result.exitCode : 0
     if (typeof result.stdout === 'string' && result.stdout.length > 0) {
-      process.stdout.write(result.stdout)
+      writeSync(process.stdout.fd, result.stdout)
     }
     if (typeof result.stderr === 'string' && result.stderr.length > 0) {
-      process.stderr.write(result.stderr)
+      writeSync(process.stderr.fd, result.stderr)
     }
     sock.destroy()
-    process.exit(typeof result.exitCode === 'number' ? result.exitCode : 0)
+    process.exit(exitCode)
   })
 
   const connectTimeout = setTimeout(() => {

@@ -3896,6 +3896,50 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('emits keepalive frames while orchestration.ask blocks', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 50
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_ask',
+          authToken: metadata!.authToken,
+          method: 'orchestration.ask',
+          params: {
+            to: 'term_coord',
+            from: 'term_worker',
+            question: 'keepalive coverage?',
+            timeoutMs: 300
+          }
+        })
+        await session.done
+
+        const keepalives = session.frames.filter((f) => f._keepalive === true)
+        const terminals = session.frames.filter((f) => f.ok !== undefined)
+        expect(terminals).toHaveLength(1)
+        expect(terminals[0]).toMatchObject({ id: 'req_ask', ok: true })
+        expect(terminals[0]?.result).toMatchObject({ timedOut: true })
+        expect(keepalives.length).toBeGreaterThanOrEqual(3)
+        // Why: ask inserts the gate before waiting; one gate must remain even
+        // when the wait times out — the duplicate-gate failure mode starts
+        // when a closed socket makes the worker retry ask.
+        const gates = db.getInbox(20).filter((m) => m.type === 'decision_gate')
+        expect(gates).toHaveLength(1)
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
     it('emits keepalive frames while terminal.wait blocks and returns its structured timeout', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()

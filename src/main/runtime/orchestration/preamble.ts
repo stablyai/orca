@@ -32,17 +32,14 @@ export type PreambleParams = {
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
 }
 
-// Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
-// check (threshold 10 min) catches a hung worker within one tick, and
-// infrequent enough to avoid inbox spam on long tasks. One constant so
-// cadence tuning is a single-line change (Q1 in DESIGN_DOC_PREAMBLE_FIX.md).
-const HEARTBEAT_INTERVAL_MIN = 5
-
 // Why: the dispatch preamble teaches agents about Orca's CLI commands for
-// structured communication. Behavioral rules (body summary, heartbeat cadence,
+// structured communication. Behavioral rules (body summary, heartbeat policy,
 // no-AskUserQuestion) live as inline comments above the relevant CLI example,
 // not as a separate prose block — LLM readers anchor on examples and skim
 // trailing prose, so rules must land at the point of use.
+// Heartbeat policy is transition-only / silent supervision: timer ticks spam
+// the coordinator inbox and conflict with check --wait / ask liveness. Phase
+// changes remain the only required heartbeat/status surface.
 export function buildDispatchPreamble(params: PreambleParams): string {
   // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
   // socket. Without this, agents inside the dev Electron app would call the
@@ -81,11 +78,12 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
     --files-modified "path/a,path/b" \\
     --report-path "<optional: path to the full artifact>"
 
-  # BEHAVIOR RULE: send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
-  # while actively working on the task. The coordinator uses this to
-  # distinguish "still thinking" from "hung / crashed." Skip heartbeats only
+  # BEHAVIOR RULE: send heartbeat/status only on meaningful phase transitions
+  # (investigating|implementing|reviewing|waiting), not on a timer. A healthy
+  # long wait is silent — do not emit periodic "alive" ticks. Skip heartbeats
   # while blocked inside \`check --wait\` or \`ask\` — those calls are
-  # themselves liveness signals.
+  # themselves liveness signals. Coordinators distinguish hung workers via
+  # lifecycle mail, terminal liveness sweeps, and those blocking waits.
   #
   # Include BOTH taskId and dispatchId in the payload: the coordinator
   # attributes the heartbeat to the specific dispatch context, not just

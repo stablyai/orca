@@ -74,11 +74,13 @@ describe('buildDispatchPreamble', () => {
     }
   )
 
-  it('includes heartbeat CLI block with taskId and dispatchId and 5-minute cadence', () => {
+  it('includes heartbeat CLI block with taskId and dispatchId and transition-only policy', () => {
     const result = buildDispatchPreamble(baseParams())
     expect(result).toContain('--type heartbeat')
     expect(result).toContain('--subject "alive"')
-    expect(result).toMatch(/5 minutes/)
+    expect(result).toMatch(/meaningful phase transitions/)
+    expect(result).toMatch(/not on a timer/)
+    expect(result).not.toMatch(/heartbeat every \d+ minutes/)
     // Both taskId and dispatchId are rendered as structured payload flags
     // (regression guard for §5.3.4 attribution — dispatchId attribution
     // prevents the zombie-heartbeat-masks-hung-retry race).
