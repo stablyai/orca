@@ -4,14 +4,17 @@ import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { SearchableSetting } from './SearchableSetting'
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const entryMap = useAppStore((state) => state.remoteServerUpdates)
   const entries = [...entryMap.values()]
+  const checking = useAppStore((state) => state.remoteServerUpdatesChecking)
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
+  const updateCheckHint = getUpdateCheckHint()
 
   useEffect(() => {
     void refresh()
@@ -105,9 +108,14 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
           variant="outline"
           size="sm"
           className="gap-2"
-          onClick={() => setDialogOpen(true)}
+          title={updateCheckHint}
+          disabled={checking || running}
+          onClick={(event) => {
+            setDialogOpen(true)
+            void refresh(getUpdateCheckClickOptions(event))
+          }}
         >
-          {running ? (
+          {checking || running ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
             <RefreshCw className="size-3.5" />

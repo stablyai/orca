@@ -27,6 +27,11 @@ export function isPrereleaseAppVersion(value: string): boolean {
   return parsed !== null && parsed.prerelease.length > 0
 }
 
+export function isPerfPrereleaseAppVersion(value: string): boolean {
+  const parsed = parseVersion(value)
+  return parsed?.prerelease.some((identifier) => identifier.toLowerCase() === 'perf') ?? false
+}
+
 function compareIdentifiers(left: string, right: string): number {
   const leftNumeric = /^\d+$/.test(left)
   const rightNumeric = /^\d+$/.test(right)

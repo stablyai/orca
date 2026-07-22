@@ -1,5 +1,6 @@
 import {
   compareAppVersions,
+  isPerfPrereleaseAppVersion,
   isPrereleaseAppVersion,
   isValidAppVersion
 } from '../../../shared/app-version'
@@ -11,7 +12,9 @@ import type {
 } from '../../../shared/remote-server-update'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { UpdateCheckOptions } from '../../../shared/types'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
+import { pollRemoteServerUpdater } from './remote-server-updater-polling'
 
 export type RemoteServerUpdatePhase =
   | 'checking'
@@ -45,7 +48,7 @@ export type RemoteServerUpdateTransport = {
   getUpdaterStatus: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>
   check: (
     environmentId: string,
-    options: { includePrerelease: boolean }
+    options: UpdateCheckOptions
   ) => Promise<RemoteServerUpdaterSnapshot>
   download: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>
   install: (environmentId: string) => Promise<RemoteServerUpdateInstallResult>
@@ -63,6 +66,11 @@ export const DEFAULT_REMOTE_SERVER_UPDATE_TIMING: RemoteServerUpdateTiming = {
   operationTimeoutMs: 10 * 60 * 1000,
   reconnectTimeoutMs: 3 * 60 * 1000,
   pollIntervalMs: 500
+}
+
+export type RemoteServerUpdateRunOptions = {
+  checkOptions?: UpdateCheckOptions
+  timing?: RemoteServerUpdateTiming
 }
 
 export function checkingRemoteServerUpdateEntry(
@@ -86,54 +94,14 @@ export function checkingRemoteServerUpdateEntry(
 export async function inspectRemoteServerUpdate(
   environment: PublicKnownRuntimeEnvironment,
   clientVersion: string,
-  transport: RemoteServerUpdateTransport
+  transport: RemoteServerUpdateTransport,
+  checkOptions?: UpdateCheckOptions,
+  timing: RemoteServerUpdateTiming = DEFAULT_REMOTE_SERVER_UPDATE_TIMING
 ): Promise<RemoteServerUpdateEntry> {
   const base = checkingRemoteServerUpdateEntry(environment)
+  let status: RuntimeStatus
   try {
-    const status = await transport.getRuntimeStatus(environment.id, 10_000)
-    const currentVersion = status.appVersion?.trim() || null
-    const supportsRemoteUpdate = status.capabilities?.includes(REMOTE_SERVER_UPDATE_CAPABILITY)
-    const support = status.remoteUpdateSupport ?? null
-    const versionComparable =
-      currentVersion !== null &&
-      isValidAppVersion(currentVersion) &&
-      isValidAppVersion(clientVersion)
-    const outdated = versionComparable && compareAppVersions(currentVersion, clientVersion) < 0
-
-    if (versionComparable && !outdated) {
-      return {
-        ...base,
-        phase: 'current',
-        currentVersion,
-        targetVersion: clientVersion,
-        runtimeId: status.runtimeId,
-        liveTabCount: status.liveTabCount,
-        liveLeafCount: status.liveLeafCount,
-        support
-      }
-    }
-    if (!supportsRemoteUpdate || !support?.automatic) {
-      return {
-        ...base,
-        phase: 'manual',
-        currentVersion,
-        targetVersion: versionComparable ? clientVersion : null,
-        runtimeId: status.runtimeId,
-        liveTabCount: status.liveTabCount,
-        liveLeafCount: status.liveLeafCount,
-        support
-      }
-    }
-    return {
-      ...base,
-      phase: 'available',
-      currentVersion,
-      targetVersion: clientVersion,
-      runtimeId: status.runtimeId,
-      liveTabCount: status.liveTabCount,
-      liveLeafCount: status.liveLeafCount,
-      support
-    }
+    status = await transport.getRuntimeStatus(environment.id, 10_000)
   } catch (error) {
     return {
       ...base,
@@ -141,42 +109,84 @@ export async function inspectRemoteServerUpdate(
       error: error instanceof Error ? error.message : String(error)
     }
   }
-}
 
-function statusError(snapshot: RemoteServerUpdaterSnapshot): string | null {
-  return snapshot.status.state === 'error' ? snapshot.status.message : null
-}
-
-async function pollUpdater(
-  environmentId: string,
-  transport: RemoteServerUpdateTransport,
-  timing: RemoteServerUpdateTiming,
-  accept: (snapshot: RemoteServerUpdaterSnapshot) => boolean,
-  onSnapshot: (snapshot: RemoteServerUpdaterSnapshot) => void
-): Promise<RemoteServerUpdaterSnapshot> {
-  const now = transport.now ?? Date.now
-  const deadline = now() + timing.operationTimeoutMs
-  while (now() < deadline) {
-    const snapshot = await transport.getUpdaterStatus(environmentId)
-    const error = statusError(snapshot)
-    if (error) {
-      throw new Error(error)
-    }
-    onSnapshot(snapshot)
-    if (accept(snapshot)) {
-      return snapshot
-    }
-    await transport.wait(timing.pollIntervalMs)
+  const currentVersion = status.appVersion?.trim() || null
+  const supportsRemoteUpdate = status.capabilities?.includes(REMOTE_SERVER_UPDATE_CAPABILITY)
+  const support = status.remoteUpdateSupport ?? null
+  const versionComparable =
+    currentVersion !== null && isValidAppVersion(currentVersion) && isValidAppVersion(clientVersion)
+  const outdated = versionComparable && compareAppVersions(currentVersion, clientVersion) < 0
+  const statusFields = {
+    currentVersion,
+    runtimeId: status.runtimeId,
+    liveTabCount: status.liveTabCount,
+    liveLeafCount: status.liveLeafCount,
+    support
   }
-  throw new Error('remote_update_updater_timeout')
+
+  if (!supportsRemoteUpdate || !support?.automatic) {
+    return {
+      ...base,
+      ...statusFields,
+      phase: versionComparable && !outdated ? 'current' : 'manual',
+      targetVersion: versionComparable ? clientVersion : null
+    }
+  }
+
+  if (checkOptions) {
+    try {
+      const first = await transport.check(environment.id, checkOptions)
+      const checked =
+        first.status.state === 'available' || first.status.state === 'not-available'
+          ? first
+          : await pollRemoteServerUpdater(
+              environment.id,
+              transport,
+              timing,
+              (snapshot) =>
+                snapshot.status.state === 'available' || snapshot.status.state === 'not-available',
+              () => undefined
+            )
+      if (checked.status.state === 'available') {
+        return {
+          ...base,
+          ...statusFields,
+          phase: 'available',
+          targetVersion: checked.status.version
+        }
+      }
+      return {
+        ...base,
+        ...statusFields,
+        phase: 'current',
+        targetVersion: currentVersion
+      }
+    } catch (error) {
+      return {
+        ...base,
+        ...statusFields,
+        phase: 'failed',
+        targetVersion: null,
+        error: remoteServerUpdateErrorMessage(error)
+      }
+    }
+  }
+
+  return {
+    ...base,
+    ...statusFields,
+    phase: versionComparable && !outdated ? 'current' : 'available',
+    targetVersion: clientVersion
+  }
 }
 
 export async function runRemoteServerUpdate(
   entry: RemoteServerUpdateEntry,
   transport: RemoteServerUpdateTransport,
   onProgress: (entry: RemoteServerUpdateEntry) => void,
-  timing: RemoteServerUpdateTiming = DEFAULT_REMOTE_SERVER_UPDATE_TIMING
+  options: RemoteServerUpdateRunOptions = {}
 ): Promise<RemoteServerUpdateEntry> {
+  const timing = options.timing ?? DEFAULT_REMOTE_SERVER_UPDATE_TIMING
   let next: RemoteServerUpdateEntry = {
     ...entry,
     phase: 'checking-update',
@@ -185,11 +195,14 @@ export async function runRemoteServerUpdate(
   }
   onProgress(next)
   try {
-    // Why: an RC client cannot propagate its version through a stable-only update check.
-    await transport.check(entry.environmentId, {
-      includePrerelease: entry.targetVersion !== null && isPrereleaseAppVersion(entry.targetVersion)
-    })
-    const available = await pollUpdater(
+    const inferredCheckOptions = {
+      includePrerelease:
+        entry.targetVersion !== null && isPrereleaseAppVersion(entry.targetVersion),
+      includePerfPrerelease:
+        entry.targetVersion !== null && isPerfPrereleaseAppVersion(entry.targetVersion)
+    }
+    await transport.check(entry.environmentId, options.checkOptions ?? inferredCheckOptions)
+    const available = await pollRemoteServerUpdater(
       entry.environmentId,
       transport,
       timing,
@@ -229,7 +242,7 @@ export async function runRemoteServerUpdate(
     }
     onProgress(next)
     await transport.download(entry.environmentId)
-    const downloaded = await pollUpdater(
+    const downloaded = await pollRemoteServerUpdater(
       entry.environmentId,
       transport,
       timing,

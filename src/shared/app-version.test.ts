@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { compareAppVersions, isPrereleaseAppVersion, isValidAppVersion } from './app-version'
+import {
+  compareAppVersions,
+  isPerfPrereleaseAppVersion,
+  isPrereleaseAppVersion,
+  isValidAppVersion
+} from './app-version'
 
 describe('app version comparison', () => {
   it('compares stable and prerelease versions with semver precedence', () => {
@@ -14,5 +19,7 @@ describe('app version comparison', () => {
     expect(isValidAppVersion('1.5.0')).toBe(true)
     expect(isPrereleaseAppVersion('1.5.0-rc.1')).toBe(true)
     expect(isPrereleaseAppVersion('1.5.0')).toBe(false)
+    expect(isPerfPrereleaseAppVersion('1.5.0-rc.1.perf')).toBe(true)
+    expect(isPerfPrereleaseAppVersion('1.5.0-rc.1')).toBe(false)
   })
 })

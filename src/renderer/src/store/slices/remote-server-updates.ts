@@ -4,6 +4,7 @@ import type { RemoteServerUpdaterSnapshot } from '../../../../shared/remote-serv
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { UpdateCheckOptions } from '../../../../shared/types'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import {
   checkingRemoteServerUpdateEntry,
@@ -44,12 +45,13 @@ const transport: RemoteServerUpdateTransport = {
 
 export type RemoteServerUpdatesSlice = {
   remoteServerUpdates: Map<string, RemoteServerUpdateEntry>
+  remoteServerUpdateCheckOptions: UpdateCheckOptions | null
   remoteServerUpdatesChecking: boolean
   remoteServerUpdatesRunning: boolean
   remoteServerUpdateDialogOpen: boolean
   remoteServerUpdatesLastCheckedAt: number | null
   setRemoteServerUpdateDialogOpen: (open: boolean) => void
-  refreshRemoteServerUpdates: () => Promise<void>
+  refreshRemoteServerUpdates: (options?: UpdateCheckOptions) => Promise<void>
   startRemoteServerUpdates: (environmentIds?: readonly string[]) => Promise<void>
 }
 
@@ -60,18 +62,32 @@ export const createRemoteServerUpdatesSlice: StateCreator<
   RemoteServerUpdatesSlice
 > = (set, get) => ({
   remoteServerUpdates: new Map(),
+  remoteServerUpdateCheckOptions: null,
   remoteServerUpdatesChecking: false,
   remoteServerUpdatesRunning: false,
   remoteServerUpdateDialogOpen: false,
   remoteServerUpdatesLastCheckedAt: null,
 
-  setRemoteServerUpdateDialogOpen: (open) => set({ remoteServerUpdateDialogOpen: open }),
+  setRemoteServerUpdateDialogOpen: (open) =>
+    set({
+      remoteServerUpdateDialogOpen: open,
+      ...(open ? {} : { remoteServerUpdateCheckOptions: null })
+    }),
 
-  refreshRemoteServerUpdates: async () => {
+  refreshRemoteServerUpdates: async (options) => {
     if (get().remoteServerUpdatesChecking || get().remoteServerUpdatesRunning) {
       return
     }
-    set({ remoteServerUpdatesChecking: true })
+    const checkOptions = options
+      ? {
+          includePrerelease: Boolean(options.includePrerelease),
+          includePerfPrerelease: Boolean(options.includePerfPrerelease)
+        }
+      : undefined
+    set({
+      remoteServerUpdatesChecking: true,
+      ...(checkOptions ? { remoteServerUpdateCheckOptions: checkOptions } : {})
+    })
     try {
       const listed = await window.api.runtimeEnvironments.list()
       const environments = listed.filter(isUserManagedRuntimeEnvironment)
@@ -92,7 +108,12 @@ export const createRemoteServerUpdatesSlice: StateCreator<
       const clientVersion = await window.api.updater.getVersion()
       await Promise.allSettled(
         environments.map(async (environment) => {
-          const entry = await inspectRemoteServerUpdate(environment, clientVersion, transport)
+          const entry = await inspectRemoteServerUpdate(
+            environment,
+            clientVersion,
+            transport,
+            checkOptions
+          )
           set((state) => {
             const next = new Map(state.remoteServerUpdates)
             next.set(environment.id, entry)
@@ -111,6 +132,7 @@ export const createRemoteServerUpdatesSlice: StateCreator<
       return
     }
     const selected = new Set(environmentIds ?? [])
+    const checkOptions = get().remoteServerUpdateCheckOptions
     const entries = [...get().remoteServerUpdates.values()].filter(
       (entry) =>
         (entry.phase === 'available' || entry.phase === 'failed') &&
@@ -131,13 +153,18 @@ export const createRemoteServerUpdatesSlice: StateCreator<
         entries,
         MAX_CONCURRENT_REMOTE_SERVER_UPDATES,
         async (entry) => {
-          await runRemoteServerUpdate(entry, transport, (progress) => {
-            set((state) => {
-              const next = new Map(state.remoteServerUpdates)
-              next.set(entry.environmentId, progress)
-              return { remoteServerUpdates: next }
-            })
-          })
+          await runRemoteServerUpdate(
+            entry,
+            transport,
+            (progress) => {
+              set((state) => {
+                const next = new Map(state.remoteServerUpdates)
+                next.set(entry.environmentId, progress)
+                return { remoteServerUpdates: next }
+              })
+            },
+            checkOptions ? { checkOptions } : undefined
+          )
         }
       )
     } finally {

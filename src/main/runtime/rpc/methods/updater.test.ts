@@ -42,14 +42,20 @@ describe('runtime updater RPC methods', () => {
     const context = { runtime } as never
     expect(await handler(UPDATER_METHODS, 'updater.getStatus')(undefined, context)).toBe(snapshot)
     expect(
-      await handler(UPDATER_METHODS, 'updater.check')({ includePrerelease: true }, context)
+      await handler(UPDATER_METHODS, 'updater.check')(
+        { includePrerelease: false, includePerfPrerelease: true },
+        context
+      )
     ).toBe(snapshot)
     expect(await handler(UPDATER_METHODS, 'updater.download')(undefined, context)).toBe(snapshot)
     expect(await handler(UPDATER_METHODS, 'updater.install')(undefined, context)).toMatchObject({
       accepted: true,
       runtimeId: 'runtime-rpc'
     })
-    expect(check).toHaveBeenCalledWith('runtime-rpc', { includePrerelease: true })
+    expect(check).toHaveBeenCalledWith('runtime-rpc', {
+      includePrerelease: false,
+      includePerfPrerelease: true
+    })
   })
 
   it('enriches status.get without changing the runtime status source', async () => {

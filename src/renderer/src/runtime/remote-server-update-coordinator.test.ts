@@ -123,6 +123,20 @@ describe('remote server update inventory', () => {
       )
     ).resolves.toMatchObject({ phase: 'offline', error: 'offline' })
   })
+
+  it('checks the explicitly selected prerelease channel on the remote server', async () => {
+    const check = vi.fn(async () => availableSnapshot)
+    const result = await inspectRemoteServerUpdate(environment, '1.4.0', transport({ check }), {
+      includePrerelease: false,
+      includePerfPrerelease: true
+    })
+
+    expect(check).toHaveBeenCalledWith('server-1', {
+      includePrerelease: false,
+      includePerfPrerelease: true
+    })
+    expect(result).toMatchObject({ phase: 'available', targetVersion: '1.5.0' })
+  })
 })
 
 describe('remote server update execution', () => {
@@ -140,7 +154,7 @@ describe('remote server update execution', () => {
         getRuntimeStatus: async () => status('1.5.0', 'runtime-new')
       }),
       (entry) => progress.push(entry),
-      { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 }
+      { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 } }
     )
 
     expect(result).toMatchObject({ phase: 'updated', currentVersion: '1.5.0' })
@@ -160,7 +174,7 @@ describe('remote server update execution', () => {
       availableEntry(),
       transport({ getUpdaterStatus: async () => noUpdate }),
       () => undefined,
-      { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 }
+      { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 } }
     )
     expect(result).toMatchObject({
       phase: 'failed',
@@ -181,9 +195,12 @@ describe('remote server update execution', () => {
         })
       }),
       () => undefined,
-      { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 }
+      { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 } }
     )
-    expect(check).toHaveBeenCalledWith('server-1', { includePrerelease: true })
+    expect(check).toHaveBeenCalledWith('server-1', {
+      includePrerelease: true,
+      includePerfPrerelease: false
+    })
   })
 
   it('keeps stable client updates on the stable channel', async () => {
@@ -198,9 +215,32 @@ describe('remote server update execution', () => {
         })
       }),
       () => undefined,
-      { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 }
+      { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 } }
     )
-    expect(check).toHaveBeenCalledWith('server-1', { includePrerelease: false })
+    expect(check).toHaveBeenCalledWith('server-1', {
+      includePrerelease: false,
+      includePerfPrerelease: false
+    })
+  })
+
+  it('preserves an explicit perf-channel check through installation', async () => {
+    const check = vi.fn(async () => availableSnapshot)
+    await runRemoteServerUpdate(
+      availableEntry(),
+      transport({
+        check,
+        getUpdaterStatus: async () => ({
+          ...availableSnapshot,
+          status: { state: 'error', message: 'stop after check' }
+        })
+      }),
+      () => undefined,
+      { checkOptions: { includePrerelease: false, includePerfPrerelease: true } }
+    )
+    expect(check).toHaveBeenCalledWith('server-1', {
+      includePrerelease: false,
+      includePerfPrerelease: true
+    })
   })
 
   it('surfaces updater errors and rejects a same-process restart', async () => {
@@ -212,7 +252,7 @@ describe('remote server update execution', () => {
       availableEntry(),
       transport({ getUpdaterStatus: async () => updaterError }),
       () => undefined,
-      { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 }
+      { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 } }
     )
     expect(failedDownload).toMatchObject({ phase: 'failed', error: 'download failed' })
 
@@ -227,7 +267,7 @@ describe('remote server update execution', () => {
         getRuntimeStatus: async () => status('1.5.0', 'runtime-old')
       }),
       () => undefined,
-      { operationTimeoutMs: 10, reconnectTimeoutMs: 2, pollIntervalMs: 1 }
+      { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 2, pollIntervalMs: 1 } }
     )
     expect(sameRuntime).toMatchObject({
       phase: 'failed',

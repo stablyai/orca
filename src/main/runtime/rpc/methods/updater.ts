@@ -15,7 +15,10 @@ export const UPDATER_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'updater.check',
-    params: z.object({ includePrerelease: z.boolean().optional() }),
+    params: z.object({
+      includePrerelease: z.boolean().optional(),
+      includePerfPrerelease: z.boolean().optional()
+    }),
     handler: (params, { runtime }) => checkRemoteServerUpdater(runtime.getRuntimeId(), params)
   }),
   defineMethod({

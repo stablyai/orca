@@ -14,6 +14,7 @@ import { Progress } from '@/components/ui/progress'
 import { useAppStore } from '@/store'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
+import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import {
   getRemoteServerManualUpdateHelp,
   RemoteServerUpdateStatus
@@ -109,6 +110,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const start = useAppStore((state) => state.startRemoteServerUpdates)
+  const updateCheckHint = getUpdateCheckHint()
   const eligible = entries.filter(
     (entry) => entry.phase === 'available' || entry.phase === 'failed'
   )
@@ -206,7 +208,8 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
             variant="ghost"
             size="sm"
             className="gap-2"
-            onClick={() => void refresh()}
+            title={updateCheckHint}
+            onClick={(event) => void refresh(getUpdateCheckClickOptions(event))}
             disabled={checking || running}
           >
             {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}
