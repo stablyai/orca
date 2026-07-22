@@ -229,21 +229,12 @@ export function InlineInputRow({
         }}
         onFocus={clearBlurTimeout}
         onBlur={(e) => {
-          // When a Radix menu (context or dropdown) closes, it restores focus
-          // to its trigger button, which steals focus from this input before
-          // the user can type. Detect this by checking relatedTarget — if focus
-          // moved to any menu trigger, it's Radix cleanup, not a user action.
-          if (
-            e.relatedTarget instanceof HTMLElement &&
-            (e.relatedTarget.closest('[data-slot="context-menu-trigger"]') ||
-              e.relatedTarget.closest('[data-slot="dropdown-menu-trigger"]'))
-          ) {
-            scheduleInputRefocus()
-            return
-          }
           // During the grace period after mount, menu close focus management
-          // may shift focus away (often relatedTarget is null). Re-focus
-          // instead of dismissing the still-empty input.
+          // may shift focus away before the user can type. Re-focus instead of
+          // dismissing the still-empty input. Past that window a blur is the
+          // user leaving, so commit like Finder does rather than clinging to
+          // the edit state — every row is itself a context-menu trigger, so
+          // relatedTarget can't tell an ordinary row click from Radix cleanup.
           if (!focusSettled.current) {
             scheduleInputRefocus()
             return
