@@ -234,6 +234,7 @@ import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
 import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
 import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
+import { selfHealRuntimeHostWorkspaceSessions } from './runtime-environment-host-session-self-heal'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
@@ -1819,6 +1820,11 @@ app.whenReady().then(async () => {
     )
   }
   selfHealRuntimeEnvironmentFocus({ store, userDataPath: app.getPath('userData') })
+  // Why: drop terminal workspace-session partitions for runtime environments that
+  // were removed in an older build (before delete-on-remove shipped). Runs before
+  // the main window loads, so the renderer never restores those tabs and never
+  // resubscribes against the now-unknown environment (the 'Unknown environment' flood).
+  selfHealRuntimeHostWorkspaceSessions({ store, userDataPath: app.getPath('userData') })
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)

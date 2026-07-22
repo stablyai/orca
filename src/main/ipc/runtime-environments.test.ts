@@ -60,6 +60,7 @@ vi.mock('./runtime-environment-request-connections', () => ({
 }))
 
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 
 function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
   return encodePairingOffer({
@@ -84,6 +85,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
+    deleteHostWorkspaceSession: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -93,7 +95,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
-      })
+      }),
+      deleteHostWorkspaceSession: vi.fn()
     }
     getPathMock.mockReset()
     getPathMock.mockReturnValue(userDataPath)
@@ -149,6 +152,42 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:unsubscribe'
     ])
     expect(removeAllListenersMock).toHaveBeenCalledWith('runtimeEnvironments:subscriptionBinary')
+  })
+
+  it('prunes the removed environment persisted terminal host session on remove', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const remove = handler<{ selector: string }, { removed: { id: string } }>(
+      'runtimeEnvironments:remove'
+    )
+    await remove(null, { selector: added.environment.id })
+
+    expect(store.deleteHostWorkspaceSession).toHaveBeenCalledWith(
+      toRuntimeExecutionHostId(added.environment.id)
+    )
+  })
+
+  it('does not prune the persisted host session on disconnect (non-destructive)', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    await disconnect(null, { selector: added.environment.id })
+
+    expect(store.deleteHostWorkspaceSession).not.toHaveBeenCalled()
   })
 
   it('stores, resolves, lists, and removes environments under Electron userData', async () => {

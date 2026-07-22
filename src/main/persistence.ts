@@ -5587,6 +5587,62 @@ export class Store {
     this.scheduleSave()
   }
 
+  /** Delete a single non-'local' host's persisted workspace-session partition.
+   *  Why: removing a runtime environment leaves its `runtime:<id>` partition
+   *  (terminal tabs / ptyIds) behind; on the next launch the renderer restores
+   *  those tabs and resubscribes against the now-unknown environment, flooding
+   *  'Unknown environment'. No-op for 'local' (that session lives in the
+   *  workspaceSession field) and for a host that has no partition. */
+  deleteHostWorkspaceSession(hostId?: string | null): void {
+    const resolved = this.resolveHostId(hostId)
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      return
+    }
+    const partitions = this.state.workspaceSessionsByHostId
+    if (!partitions || !(resolved in partitions)) {
+      return
+    }
+    const next = { ...partitions }
+    delete next[resolved]
+    this.state.workspaceSessionsByHostId = next
+    this.scheduleSave()
+  }
+
+  /** Drop every `runtime:<id>` host partition whose environment id is not in
+   *  `knownEnvironmentIds`, returning the removed host ids for logging. Why:
+   *  boot self-heal for installs orphaned before delete-on-remove shipped — a
+   *  runtime environment removed by an older build left its terminal partition
+   *  behind, and restoring it drives the 'Unknown environment' subscribe loop.
+   *  Only 'runtime' hosts are considered; 'local' and 'ssh:' partitions are
+   *  never touched (mirrors the load-time guard in parseWorkspaceSessionsByHostId). */
+  pruneOrphanedRuntimeHostWorkspaceSessions(
+    knownEnvironmentIds: ReadonlySet<string>
+  ): ExecutionHostId[] {
+    const partitions = this.state.workspaceSessionsByHostId
+    if (!partitions) {
+      return []
+    }
+    const removed: ExecutionHostId[] = []
+    const next = { ...partitions }
+    for (const key of Object.keys(next) as ExecutionHostId[]) {
+      const parsed = parseExecutionHostId(key)
+      if (parsed?.kind !== 'runtime') {
+        continue
+      }
+      if (knownEnvironmentIds.has(parsed.environmentId)) {
+        continue
+      }
+      delete next[key]
+      removed.push(key)
+    }
+    if (removed.length === 0) {
+      return []
+    }
+    this.state.workspaceSessionsByHostId = next
+    this.scheduleSave()
+    return removed
+  }
+
   private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
     const prior = this.state.workspaceSession
     session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)

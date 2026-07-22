@@ -3728,6 +3728,120 @@ describe('Store', () => {
     )
   })
 
+  it('deleteHostWorkspaceSession drops a runtime host partition and persists it', async () => {
+    const gone = '83a64365-660b-4723-890e-9e557eb45e40'
+    const kept = '11111111-1111-4111-8111-111111111111'
+    const store = await createStore()
+    const sessionWith = (ptyId: string) => ({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { 'r1::/wt': [makeTerminalTab({ id: 'tab1', ptyId })] },
+      terminalLayoutsByTabId: {}
+    })
+    store.setWorkspaceSession(sessionWith('local@@pty-0'))
+    store.setWorkspaceSession(sessionWith(`remote:${gone}@@pty-1`), toRuntimeExecutionHostId(gone))
+    store.setWorkspaceSession(sessionWith(`remote:${kept}@@pty-2`), toRuntimeExecutionHostId(kept))
+    store.setWorkspaceSession(sessionWith('ssh:builder@@pty-3'), toSshExecutionHostId('builder'))
+
+    store.deleteHostWorkspaceSession(toRuntimeExecutionHostId(gone))
+    store.flush()
+
+    const reloaded = await createStore()
+    // Removed runtime partition is gone from disk.
+    expect(reloaded.getWorkspaceSession(toRuntimeExecutionHostId(gone)).tabsByWorktree).toEqual({})
+    // Every other host partition survives.
+    expect(
+      reloaded.getWorkspaceSession(toRuntimeExecutionHostId(kept)).tabsByWorktree['r1::/wt'][0]
+        .ptyId
+    ).toBe(`remote:${kept}@@pty-2`)
+    expect(
+      reloaded.getWorkspaceSession(toSshExecutionHostId('builder')).tabsByWorktree['r1::/wt'][0]
+        .ptyId
+    ).toBe('ssh:builder@@pty-3')
+    expect(reloaded.getWorkspaceSession().tabsByWorktree['r1::/wt'][0].ptyId).toBe('local@@pty-0')
+  })
+
+  it('deleteHostWorkspaceSession is a no-op for local and for a missing partition', async () => {
+    const store = await createStore()
+    const localSession = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { 'r1::/wt': [makeTerminalTab({ id: 'tab1', ptyId: 'local@@pty-0' })] },
+      terminalLayoutsByTabId: {}
+    }
+    store.setWorkspaceSession(localSession)
+
+    store.deleteHostWorkspaceSession('local')
+    store.deleteHostWorkspaceSession(toRuntimeExecutionHostId('never-existed'))
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().tabsByWorktree['r1::/wt'][0].ptyId).toBe('local@@pty-0')
+  })
+
+  it('pruneOrphanedRuntimeHostWorkspaceSessions drops only runtime hosts absent from the saved set', async () => {
+    const gone = '83a64365-660b-4723-890e-9e557eb45e40'
+    const kept = '11111111-1111-4111-8111-111111111111'
+    const store = await createStore()
+    const sessionWith = (ptyId: string) => ({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { 'r1::/wt': [makeTerminalTab({ id: 'tab1', ptyId })] },
+      terminalLayoutsByTabId: {}
+    })
+    store.setWorkspaceSession(sessionWith('local@@pty-0'))
+    store.setWorkspaceSession(sessionWith(`remote:${gone}@@pty-1`), toRuntimeExecutionHostId(gone))
+    store.setWorkspaceSession(sessionWith(`remote:${kept}@@pty-2`), toRuntimeExecutionHostId(kept))
+    store.setWorkspaceSession(sessionWith('ssh:builder@@pty-3'), toSshExecutionHostId('builder'))
+
+    const removed = store.pruneOrphanedRuntimeHostWorkspaceSessions(new Set([kept]))
+    store.flush()
+
+    expect(removed).toEqual([toRuntimeExecutionHostId(gone)])
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession(toRuntimeExecutionHostId(gone)).tabsByWorktree).toEqual({})
+    // The still-saved runtime host, the ssh host, and local all survive.
+    expect(
+      reloaded.getWorkspaceSession(toRuntimeExecutionHostId(kept)).tabsByWorktree['r1::/wt'][0]
+        .ptyId
+    ).toBe(`remote:${kept}@@pty-2`)
+    expect(
+      reloaded.getWorkspaceSession(toSshExecutionHostId('builder')).tabsByWorktree['r1::/wt'][0]
+        .ptyId
+    ).toBe('ssh:builder@@pty-3')
+    expect(reloaded.getWorkspaceSession().tabsByWorktree['r1::/wt'][0].ptyId).toBe('local@@pty-0')
+  })
+
+  it('pruneOrphanedRuntimeHostWorkspaceSessions with an empty saved set clears runtime hosts but not ssh/local', async () => {
+    const gone = '83a64365-660b-4723-890e-9e557eb45e40'
+    const store = await createStore()
+    const sessionWith = (ptyId: string) => ({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { 'r1::/wt': [makeTerminalTab({ id: 'tab1', ptyId })] },
+      terminalLayoutsByTabId: {}
+    })
+    store.setWorkspaceSession(sessionWith('local@@pty-0'))
+    store.setWorkspaceSession(sessionWith(`remote:${gone}@@pty-1`), toRuntimeExecutionHostId(gone))
+    store.setWorkspaceSession(sessionWith('ssh:builder@@pty-3'), toSshExecutionHostId('builder'))
+
+    const removed = store.pruneOrphanedRuntimeHostWorkspaceSessions(new Set())
+    store.flush()
+
+    expect(removed).toEqual([toRuntimeExecutionHostId(gone)])
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession(toRuntimeExecutionHostId(gone)).tabsByWorktree).toEqual({})
+    expect(
+      reloaded.getWorkspaceSession(toSshExecutionHostId('builder')).tabsByWorktree['r1::/wt'][0]
+        .ptyId
+    ).toBe('ssh:builder@@pty-3')
+    expect(reloaded.getWorkspaceSession().tabsByWorktree['r1::/wt'][0].ptyId).toBe('local@@pty-0')
+  })
+
   it('reassignSshTargetId keeps the live partition when both host keys exist', async () => {
     const store = await createStore()
     const baseSession = {
