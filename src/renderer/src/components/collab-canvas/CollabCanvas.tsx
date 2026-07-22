@@ -35,6 +35,10 @@ import {
   preferredTabIdsFromGroups,
   resolveSessionAgentTerminalTabId
 } from '../../lib/collab-canvas/resolve-session-agent-tab'
+import {
+  selectGroupsForSession,
+  selectUnifiedTabsForSession
+} from '../../lib/collab-canvas/collab-canvas-session-selectors'
 import { resolveLastAgentReply } from '../../lib/collab-canvas/resolve-last-agent-reply'
 import { decideCollabAutoDraft } from '../../lib/collab-canvas/collab-auto-draft'
 import { parseAgentBoardOps } from '../../lib/collab-canvas/parse-agent-board-ops'
@@ -98,11 +102,15 @@ export function CollabCanvas({
   const injectWorktreeKey =
     binding.kind === 'session' ? binding.worktreeId : `panel:${binding.panelId}`
   const sessionWorktreeId = binding.kind === 'session' ? binding.worktreeId : null
+  // Why stable empties: panel boards have no session worktree. Returning a fresh
+  // `[]` from the selector every snapshot fails Object.is and infinite-loops
+  // useSyncExternalStore (React #185) — same class as SidebarPanelRows /
+  // pet-agent-ask. Module-level EMPTY_* is the fixed snapshot identity.
   const unifiedTabs = useAppStore((s) =>
-    sessionWorktreeId ? (s.unifiedTabsByWorktree[sessionWorktreeId] ?? []) : []
+    selectUnifiedTabsForSession(s.unifiedTabsByWorktree, sessionWorktreeId)
   )
   const groups = useAppStore((s) =>
-    sessionWorktreeId ? (s.groupsByWorktree[sessionWorktreeId] ?? []) : []
+    selectGroupsForSession(s.groupsByWorktree, sessionWorktreeId)
   )
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)

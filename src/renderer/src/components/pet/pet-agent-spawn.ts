@@ -44,19 +44,14 @@ const PET_MESH_CONFIG = '$HOME/meshina/configs/omp/mesh-coding.yml'
  * `$HOME` literal for the same reason as the mesh config and session root. */
 const PET_MCP_CONFIG = '$HOME/meshina/configs/omp/mcp.json'
 
-/** MCP tool names that the mesh's `mcp.json` exposes. Listed in PET_TOOLS so
- * the model knows the tools exist as first-class; the actual loading happens
- * via the auto-discovered `~/.omp/agent/mcp.json` (see `PET_MCP_CONFIG`).
- * Listed in HERMES web-tool priority order so the model reaches for Cloak
- * before SearXNG. */
+/** MCP tool names the mesh's `mcp.json` exposes (Cloak → SearXNG priority).
+ * Named in the persona only — never in omp `--tools`. omp 17.x validates
+ * `--tools` against its native allowlist and rejects MCP names with
+ * "Unknown tools in --tools". MCP loads via `~/.omp/agent/mcp.json`. */
 const PET_MCP_TOOLS = 'cloakbrowser_browse,searxng_search'
 
-/** Lean coding core + mesh web reach. `web_search` is omp's built-in (xai
- * provider); `cloakbrowser_browse` and `searxng_search` are MCP tools the
- * mesh's `mcp.json` exposes (see `PET_MCP_CONFIG` / `PET_MCP_TOOLS`). HERMES
- * web priority: Cloak first for fetch/scrape, SearXNG for SERP, built-in
- * `web_search` only as the last-resort fallback. Heavy surface stays off. */
-const PET_TOOLS = `read,bash,edit,write,grep,glob,todo,web_search,${PET_MCP_TOOLS}`
+/** Native omp tools only. MCP tools are NOT listed here (see PET_MCP_TOOLS). */
+const PET_TOOLS = 'read,bash,edit,write,grep,glob,todo,web_search'
 
 /** A short persona so the pet knows what it is and how to reach the mesh's web
  * tools, rather than sitting on a generic assistant prompt unaware of them.

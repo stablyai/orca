@@ -24,6 +24,13 @@ describe('buildCanvasOmpAgentArgs', () => {
   it('fresh drops --continue', () => {
     expect(buildCanvasOmpAgentArgs('b1', { fresh: true })).not.toContain('--continue')
   })
+
+  it('lists only native omp tools under --tools (no MCP names)', () => {
+    const args = buildCanvasOmpAgentArgs('b1')
+    const toolsFlag = args.match(/--tools\s+(\S+)/)
+    expect(toolsFlag?.[1]).toBe('read,bash,edit,write,grep,glob,todo,web_search')
+    expect(toolsFlag?.[1]).not.toMatch(/cloakbrowser|searxng/)
+  })
 })
 
 describe('board agent tab binding', () => {

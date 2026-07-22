@@ -49,6 +49,18 @@ describe('buildPetOmpAgentArgs', () => {
     expect(fresh).toContain('--session-dir')
     expect(fresh).toContain(petSessionDirName(WT))
   })
+
+  it('lists only native omp tools under --tools (no MCP names)', () => {
+    // Regression: cloakbrowser_browse/searxng_search in --tools made omp exit
+    // with "Unknown tools in --tools". MCP loads via ~/.omp/agent/mcp.json;
+    // persona may still name them.
+    const args = buildPetOmpAgentArgs(WT)
+    const toolsFlag = args.match(/--tools\s+(\S+)/)
+    expect(toolsFlag?.[1]).toBe('read,bash,edit,write,grep,glob,todo,web_search')
+    expect(toolsFlag?.[1]).not.toMatch(/cloakbrowser|searxng/)
+    expect(args).toContain('cloakbrowser_browse')
+    expect(args).toContain('searxng_search')
+  })
 })
 
 describe('petSessionDirName', () => {

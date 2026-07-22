@@ -2,7 +2,12 @@ import React from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { Globe, LayoutGrid, SquareTerminal } from 'lucide-react'
 import { useAppStore } from '@/store'
-import type { PanelLayout, PinnedTerminalPanel, PinnedWebPanel } from '../../../../shared/types'
+import type {
+  PanelLayout,
+  PinnedCanvasPanel,
+  PinnedTerminalPanel,
+  PinnedWebPanel
+} from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { detachPanelIntoWindow } from '@/lib/panel-canvas-detach'
@@ -23,6 +28,7 @@ import { buildSplitCandidates } from '@/lib/panel-split-candidates'
 // settings are unset → React #185 (same class as QuickAddPanelPopovers).
 const EMPTY_TERMINAL_PANELS: PinnedTerminalPanel[] = []
 const EMPTY_WEB_PANELS: PinnedWebPanel[] = []
+const EMPTY_CANVAS_PANELS: PinnedCanvasPanel[] = []
 
 /** Inline title editor shown in place of a row while renaming. Commits on
  *  Enter/blur, cancels on Escape; empty titles cancel instead of committing. */
@@ -265,6 +271,93 @@ export function SortableWebPanelButton({
         <span className="min-w-0 flex-1 truncate">{panel.title}</span>
       </button>
     </PanelCanvasContextMenu>
+  )
+}
+
+/**
+ * Collab whiteboard rows under User Panels — rename/delete/reorder parity with
+ * web panels. No panel-canvas split menu yet (layout leaf kind: canvas is later).
+ */
+export function SortableCanvasPanelButton({
+  panel,
+  active,
+  onOpen,
+  indentClass = 'pl-10'
+}: {
+  panel: PinnedCanvasPanel
+  active: boolean
+  onOpen: (panelId: string) => void
+  /** Nested under User Panels → Collab Boards, so indent deeper than web rows. */
+  indentClass?: string
+}): React.JSX.Element {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: panel.id
+  })
+  const [renaming, setRenaming] = React.useState(false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  if (renaming) {
+    return (
+      <RowRenameInput
+        initialTitle={panel.title}
+        indentClass={indentClass}
+        onCommit={(title) => {
+          const panels = useAppStore.getState().settings?.pinnedCanvasPanels ?? EMPTY_CANVAS_PANELS
+          void updateSettings({
+            pinnedCanvasPanels: panels.map((p) => (p.id === panel.id ? { ...p, title } : p))
+          })
+        }}
+        onDone={() => setRenaming(false)}
+      />
+    )
+  }
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          ref={setNodeRef}
+          style={sortableRowStyle(transform, transition)}
+          type="button"
+          {...attributes}
+          {...listeners}
+          onClick={() => onOpen(panel.id)}
+          aria-current={active ? 'page' : undefined}
+          data-pinned-canvas-panel-row={panel.id}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-[13px] font-medium tracking-tight transition-colors',
+            indentClass,
+            isDragging && 'relative z-10 opacity-80 shadow-md',
+            active
+              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+              : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+          )}
+        >
+          <LayoutGrid
+            className={cn('size-4 shrink-0', !active && 'text-worktree-sidebar-foreground/30')}
+            strokeWidth={active ? 2.25 : 1.75}
+          />
+          <span className="min-w-0 flex-1 truncate">{panel.title}</span>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-[12rem]">
+        <ContextMenuItem onSelect={() => setRenaming(true)}>
+          {translate('auto.components.sidebar.SidebarPanelsNav.renamePanel', 'Rename')}
+        </ContextMenuItem>
+        <ContextMenuItem
+          variant="destructive"
+          onSelect={() => {
+            const state = useAppStore.getState()
+            const panels = state.settings?.pinnedCanvasPanels ?? EMPTY_CANVAS_PANELS
+            const nextPanels = panels.filter((p) => p.id !== panel.id)
+            void updateSettings({ pinnedCanvasPanels: nextPanels })
+            if (state.activePinnedCanvasPanelId === panel.id) {
+              state.closePinnedCanvasPanelPage()
+            }
+          }}
+        >
+          {translate('auto.components.sidebar.SidebarPanelsNav.deletePanel', 'Delete panel')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 

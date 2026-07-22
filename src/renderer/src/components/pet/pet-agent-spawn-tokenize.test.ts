@@ -14,7 +14,12 @@ describe('pet omp args tokenize cleanly (Orca launch path)', () => {
     // config + tools + the persona survive as whole tokens
     expect(t).toContain('--config')
     expect(t).toContain('--tools')
-    expect(t).toContain('read,bash,edit,write,grep,glob,todo,web_search,cloakbrowser_browse,searxng_search')
+    // Native omp allowlist only — MCP names in --tools crash omp 17
+    // ("Unknown tools in --tools"). Cloak/SearXNG stay in persona + mcp.json.
+    const toolsIdx = t.indexOf('--tools')
+    expect(toolsIdx).toBeGreaterThan(-1)
+    expect(t[toolsIdx + 1]).toBe('read,bash,edit,write,grep,glob,todo,web_search')
+    expect(t[toolsIdx + 1]).not.toMatch(/cloakbrowser|searxng/)
     const idx = t.indexOf('--append-system-prompt')
     expect(idx).toBeGreaterThan(-1)
     // The persona must be ONE token, not shattered across spaces, and it must
