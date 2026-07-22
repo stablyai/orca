@@ -4,13 +4,7 @@ import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 
-// Why: MobileHero (mobile pairing screen) and MobilePairingSetupSection
-// (Settings → Mobile) both need the same network selector. This wraps the
-// generic AddressPicker with the mobile grammar (IPv4, any RFC 1123
-// hostname — including Tailscale *.ts.net and DDNS domains — optionally
-// with :port) and copy. Discovered interfaces come from the OS; "Add custom
-// address…" opens a dialog for an address the OS didn't surface — the only
-// way to pair across networks.
+// 两个配对入口共用此选择器，因此自定义地址必须覆盖主进程支持的反向代理 URL。
 
 export type NetworkInterfacePickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
@@ -77,16 +71,16 @@ export function NetworkInterfacePicker({
         ),
         description: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.description',
-          'Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.'
+          'Advertise an address your phone can reach — for example a Tailscale hostname, static IP, or reverse-proxy ws(s):// URL.'
         ),
         inputLabel: translate('auto.components.mobile.CustomNetworkAddressDialog.label', 'Address'),
         placeholder: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.placeholder',
-          'my-mac.ts.net, home.example.com, or 192.168.1.50'
+          'home.example.com:8443 or wss://example.com:443'
         ),
         hint: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.hint',
-          'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.'
+          'Enter an IPv4 address, hostname, or full ws(s):// URL. Hosts and URLs may include a port.'
         ),
         cancel: translate('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
         confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address')

@@ -30,7 +30,7 @@ describe('parseManualNetworkAddress', () => {
       for (const bad of ['', '   ', '1.2.3', '1.2.3.4.5', '256.0.0.1']) {
         expect(parseManualNetworkAddress(bad)).toEqual({
           ok: false,
-          error: 'Enter an IPv4 address or hostname, optionally with a :port suffix'
+          error: 'Enter an IPv4 address, hostname, or ws(s):// URL'
         })
       }
     })
@@ -38,7 +38,7 @@ describe('parseManualNetworkAddress', () => {
     it('rejects leading zeros in octets', () => {
       expect(parseManualNetworkAddress('01.02.03.04')).toEqual({
         ok: false,
-        error: 'Enter an IPv4 address or hostname, optionally with a :port suffix'
+        error: 'Enter an IPv4 address, hostname, or ws(s):// URL'
       })
       expect(parseManualNetworkAddress('0.0.0.0').ok).toBe(true)
     })
@@ -164,6 +164,41 @@ describe('parseManualNetworkAddress', () => {
     it('rejects addresses with more than one colon (e.g. IPv6-shaped input)', () => {
       expect(parseManualNetworkAddress('example.com:80:90').ok).toBe(false)
       expect(parseManualNetworkAddress('::1').ok).toBe(false)
+    })
+  })
+
+  describe('WebSocket URL', () => {
+    it('accepts ws:// and wss:// URLs with optional ports', () => {
+      expect(parseManualNetworkAddress('wss://example.com')).toEqual({
+        ok: true,
+        address: 'wss://example.com'
+      })
+      expect(parseManualNetworkAddress('wss://example.com:443')).toEqual({
+        ok: true,
+        address: 'wss://example.com:443'
+      })
+      expect(parseManualNetworkAddress('ws://example.com:8080')).toEqual({
+        ok: true,
+        address: 'ws://example.com:8080'
+      })
+    })
+
+    it('accepts reverse-proxy paths and query strings', () => {
+      expect(parseManualNetworkAddress('wss://example.com/orca?route=runtime').ok).toBe(true)
+    })
+
+    it('rejects URLs the pairing endpoint cannot advertise', () => {
+      for (const bad of [
+        'http://example.com',
+        'wss://',
+        'wss://user:secret@example.com',
+        'wss://example.com/#fragment',
+        'wss://example.com:0',
+        'ws://0.0.0.0:8080',
+        'ws://[::]:8080'
+      ]) {
+        expect(parseManualNetworkAddress(bad).ok).toBe(false)
+      }
     })
   })
 

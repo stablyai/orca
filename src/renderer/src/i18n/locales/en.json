@@ -11602,10 +11602,10 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "Custom network address",
-          "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
+          "description": "Advertise an address your phone can reach — for example a Tailscale hostname, static IP, or reverse-proxy ws(s):// URL.",
           "label": "Address",
-          "placeholder": "my-mac.ts.net, home.example.com, or 192.168.1.50",
-          "hint": "Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.",
+          "placeholder": "home.example.com:8443 or wss://example.com:443",
+          "hint": "Enter an IPv4 address, hostname, or full ws(s):// URL. Hosts and URLs may include a port.",
           "cancel": "Cancel",
           "use": "Use address"
         },

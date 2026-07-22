@@ -11579,10 +11579,10 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "カスタムネットワークアドレス",
-          "description": "同じ Wi-Fi に接続していないときにスマートフォンから到達できるアドレスを指定します。たとえば Tailscale のホスト名や静的 IP です。",
+          "description": "スマートフォンから到達できるアドレスを指定します。たとえば、Tailscale ホスト名、静的 IP、リバースプロキシの ws(s):// URL です。",
           "label": "アドレス",
-          "placeholder": "my-mac.ts.net、home.example.com、または 192.168.1.50",
-          "hint": "IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :ポート を付けられます。",
+          "placeholder": "home.example.com:8443 または wss://example.com:443",
+          "hint": "IPv4 アドレス、ホスト名、または完全な ws(s):// URL を入力してください。ホストと URL にはポートを含めることができます。",
           "cancel": "キャンセル",
           "use": "アドレスを使用"
         },

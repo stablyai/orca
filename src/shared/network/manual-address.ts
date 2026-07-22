@@ -1,6 +1,4 @@
-// Why: pure shared helper so the same validation runs in renderer
-// today and in any future CLI/main-process caller without duplicating
-// the IPv4 + hostname + optional-port grammar.
+// 配对入口共用此校验，避免渲染进程与主进程接受不同的地址格式。
 const IPV4_OCTET = '(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
 const IPV4 = `(?:${IPV4_OCTET}\\.){3}${IPV4_OCTET}`
 const IPV4_REGEX = new RegExp(`^${IPV4}$`)
@@ -16,7 +14,7 @@ const HOSTNAME_REGEX = new RegExp(`^${HOSTNAME}$`, 'i')
 const HOSTNAME_MAX_LENGTH = 253
 const MIN_PORT = 1
 const MAX_PORT = 65535
-const ERROR_MESSAGE = 'Enter an IPv4 address or hostname, optionally with a :port suffix'
+const ERROR_MESSAGE = 'Enter an IPv4 address, hostname, or ws(s):// URL'
 
 export type ParseManualAddressResult = { ok: true; address: string } | { ok: false; error: string }
 
@@ -27,6 +25,11 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   }
   if (/\s/.test(trimmed)) {
     return { ok: false, error: ERROR_MESSAGE }
+  }
+  if (/^wss?:\/\//i.test(trimmed)) {
+    return isValidWebSocketUrl(trimmed)
+      ? { ok: true, address: trimmed }
+      : { ok: false, error: ERROR_MESSAGE }
   }
 
   const { host, port } = splitHostPort(trimmed)
@@ -80,4 +83,24 @@ function isValidPort(port: string): boolean {
   }
   const value = Number(port)
   return value >= MIN_PORT && value <= MAX_PORT
+}
+
+function isValidWebSocketUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    return (
+      (url.protocol === 'ws:' || url.protocol === 'wss:') &&
+      hostname !== '' &&
+      hostname !== '*' &&
+      hostname !== '0.0.0.0' &&
+      hostname !== '::' &&
+      url.username === '' &&
+      url.password === '' &&
+      url.hash === '' &&
+      url.port !== '0'
+    )
+  } catch {
+    return false
+  }
 }
