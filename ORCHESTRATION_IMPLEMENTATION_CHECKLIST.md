@@ -233,6 +233,8 @@ Explicit non-goals:
 - [x] Block the Task while start/stop outcome remains unknown.
 - [x] Allow semantic `--retry-of` only from explicit failed, stopped, abandoned, or proven no-effect
       states.
+- [x] Require the replacement to repeat its intended placement and agent/terminal choice; do not
+      silently inherit a prior attempt's topology.
 - [x] Reject unsafe retry without mutation.
 - [x] Completed Tasks require a follow-up Task rather than retry.
 
@@ -266,8 +268,9 @@ Explicit non-goals:
 - [x] Default worker placement to the Run home.
 - [x] Require `--on` for remote existing worktree/terminal selectors in V1.
 - [x] Resolve remote resources through explicit read-only discovery; never guess by name/path.
-- [x] Return `server_required`, `worktree_not_found_on_server`, `terminal_worktree_mismatch`, and
-      `resource_server_mismatch` before effects.
+- [x] Return `server_required`, `worktree_not_found_on_server`, and
+      `terminal_worktree_mismatch` before related worker effects; treat a mismatched remote
+      Dispatch/home receipt as `resource_server_mismatch` and never adopt it.
 - [x] Pin each remote Dispatch to the authenticated worker-server public-key fingerprint.
 - [x] Store runtime ID only as a process epoch, never durable server identity.
 - [x] Return `peer_changed` with no effect if a saved environment is re-paired to a different server.
@@ -1110,6 +1113,48 @@ Append new entries chronologically. Do not rewrite older entries except to corre
     no additional orchestration subsystem is required for V1.
 - Next:
   - Review and merge PR #9925; keep Phase 4 deferred until exact provider-session association exists.
+
+### 2026-07-22 — Final agent-contract audit
+
+- Changes:
+  - Synchronized the ignored HTML examples with the shipped mutation, Delivery, worker-start, and
+    terminal-read result shapes; removed speculative Phase 4 output fields from the V1 path.
+  - Made semantic retry explicitly repeat placement and agent/terminal choices, while transport
+    recovery reuses only the exact `mutation.requestId` after a lost response.
+  - Corrected worker state/error terminology, the cross-platform structured completion recipe, and
+    the HTML implementation-status footer.
+  - Updated the installed/versioned orchestration guidance to prefer `worker-start`, use
+    `question` mail, and reserve low-level `dispatch --inject` for custom topology.
+  - Fixed `worker-read --cursor 0`; the runtime supported the initial retained-output cursor but the
+    orchestration CLI incorrectly required a positive value.
+- Files:
+  - `src/cli/handlers/orchestration.ts`
+  - `src/cli/handlers/orchestration-worker-cli.test.ts`
+  - `src/cli/specs/orchestration-worker-specs.ts`
+  - `skill-guides/orchestration.md`
+  - `skills/orchestration/SKILL.md`
+  - generated bundled skill guide and skill-bundle manifests
+  - `docs/orchestration-primitives.html` (ignored design source)
+  - `ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md`
+- Verification:
+  - Focused worker CLI suite passed 3 tests, including cursor zero.
+  - Final orchestration runtime/CLI/renderer/skill regression set passed 24 files and 450 tests.
+  - Node, CLI, and web typechecks, bundled-guide and skill-manifest verification, focused
+    formatting, and `git diff --check` passed.
+  - A repository-wide run reached 34,190 passing tests and exposed the one intentionally changed
+    skill assertion; after updating that assertion, the focused configured rerun above passed. The
+    broad run also exhausted several Vitest fork-start deadlines under full local concurrency, while
+    the previously green PR checks remain the authoritative clean full-suite baseline.
+- Findings:
+  - The implementation already returned durable request IDs as `mutation.requestId`; the remaining
+    problem was stale naming and invented provenance fields in the ignored design example.
+  - Stored start options are recovery evidence, not implicit replacement policy. Requiring explicit
+    replacement placement keeps agents in control and avoids recreating a possibly-existing remote
+    worktree by accident.
+  - No new scheduler, retry engine, output adapter, projection layer, or federation subsystem is
+    needed. Phase 4 remains deferred.
+- Next:
+  - Push the audit corrections and confirm PR #9925 is green at the new head.
 
 ### Entry template
 

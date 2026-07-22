@@ -103,4 +103,30 @@ describe('orchestration worker-start CLI contract', () => {
 
     expect(process.exitCode).toBe(1)
   })
+
+  it('allows the initial zero cursor when paging worker output', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        dispatchId: 'ctx_1',
+        terminal: { tail: [], status: 'running', nextCursor: '0' }
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-read']({
+      flags: new Map<string, string | boolean>([
+        ['dispatch', 'ctx_1'],
+        ['cursor', '0'],
+        ['limit', '100']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.workerRead', {
+      dispatch: 'ctx_1',
+      cursor: 0,
+      limit: 100
+    })
+  })
 })

@@ -3,6 +3,7 @@ import type { CommandHandler } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
 import { printResult } from '../format'
 import {
+  getOptionalNonNegativeIntegerFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
@@ -783,7 +784,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       terminal: { tail: string[]; status: string; nextCursor: string | null }
     }>('orchestration.workerRead', {
       dispatch: getRequiredStringFlag(flags, 'dispatch'),
-      cursor: getOptionalPositiveIntegerFlag(flags, 'cursor'),
+      cursor: getOptionalNonNegativeIntegerFlag(flags, 'cursor'),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
     printResult(result, json, (value) => value.terminal.tail.join('\n'))

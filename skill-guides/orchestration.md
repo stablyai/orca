@@ -22,7 +22,7 @@ Use this skill when coordination state matters. For lightweight terminal prompts
 
 ## Tool Boundary
 
-If a task says to use Orca orchestration, the coordinator must create Orca runtime state with `orca orchestration task-create` and `orca orchestration dispatch --inject`.
+If a task says to use Orca orchestration, the coordinator must create or bind a Run, create the Task with `orca orchestration task-create`, then attach the worker with either the preferred `orca orchestration worker-start` composition or the low-level `orca orchestration dispatch --inject` path.
 
 Do not substitute non-Orca subagent tools, generic agent-spawn APIs, or chat-only parallel worker features. Those may create useful workers, but they do not create Orca task/dispatch provenance, injected lifecycle preambles, `worker_done` authority, or decision gates.
 
@@ -192,7 +192,7 @@ orca orchestration reply --id <message_id> --body "<answer>" --json
 Recovery is conditional, never a fixed destructive sequence:
 
 - `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output.
-- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id> ...`.
+- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 
@@ -208,7 +208,7 @@ orca orchestration coordinator-start --spec <text> [--from <handle>] [--poll-int
 orca orchestration coordinator-stop [--json]
 ```
 
-`coordinator-start` is the legacy automatic scheduler loop; it is not the lightweight Run namespace in the new primitives proposal. Prefer the explicit task/dispatch/wait loop. The deprecated `run` and `run-stop` aliases remain temporarily for compatibility. Use `ask` for worker-to-coordinator questions; it creates a `decision_gate` message that the coordinator answers with `reply`. Use `gate-create` only for coordinator-managed task DAG decisions, not for answering a worker's `ask`.
+`coordinator-start` is the legacy automatic scheduler loop; it is not the lightweight Run namespace in the new primitives proposal. Prefer the explicit task/dispatch/wait loop. The deprecated `run` and `run-stop` aliases remain temporarily for compatibility. Use `ask` for worker-to-coordinator questions; it creates a `question` message that the coordinator answers with `reply`. Use `gate-create` only for coordinator-managed task DAG decisions, not for answering a worker's `ask`.
 
 Recovery only: `orca orchestration reset --tasks|--messages|--all --json` clears the selected local orchestration database state. Do not run it during active coordination unless explicitly abandoning that state.
 
@@ -323,11 +323,11 @@ orca terminal create --worktree active --title login-css-worker --command "claud
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration task-create --spec "Fix the login button CSS" --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
-orca orchestration check --wait --types worker_done,escalation,decision_gate --timeout-ms 900000 --json
+orca orchestration check --wait --types worker_done,escalation,question --timeout-ms 900000 --json
 ```
 
 ## Next Action
 
-Coordinator: confirm `orca status --json`, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit manual loop (`task-create` -> worker -> `dispatch --inject` -> `check --wait`). Use `coordinator-start` only when deliberately opting into the legacy automatic loop.
+Coordinator: confirm `orca status --json`, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. Use `coordinator-start` only when deliberately opting into the legacy automatic loop.
 
 Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and send `worker_done` once with the required payload. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.
