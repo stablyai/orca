@@ -80,7 +80,7 @@ export type EmulatorBackend = {
   rotate(deviceId: string, orientation: string): Promise<void>
   exec(deviceId: string, command: string): Promise<unknown>
 
-  // Capability-gated verbs (Android today). The router checks `capabilities`
+  // Capability-gated verbs. The router checks `capabilities`
   // before calling these and rejects unsupported backends with emulator_unsupported.
   installApp?(deviceId: string, apkPath: string, options?: { reinstall?: boolean }): Promise<void>
   launchApp?(deviceId: string, packageName: string, activity?: string): Promise<void>
@@ -90,7 +90,7 @@ export type EmulatorBackend = {
     packageName: string,
     permission?: string
   ): Promise<void>
-  accessibilityTree?(deviceId: string): Promise<unknown>
+  accessibilityTree?(deviceId: string, axUrl?: string): Promise<unknown>
   logcat?(
     deviceId: string,
     options?: { lines?: number; filters?: readonly string[] }

@@ -249,11 +249,10 @@ export class RuntimeEmulatorCommands {
 
   async emulatorAx(params: EmulatorTargetParams): Promise<unknown> {
     const worktreeId = await this.resolveWorktreeId(params.worktree)
-    return this.requireEmulatorBridge().runCapability(
-      'accessibilityTree',
-      { device: params.device ?? params.emulator, worktreeId },
-      (backend, device) => backend.accessibilityTree!(device)
-    )
+    return this.requireEmulatorBridge().accessibilityTree({
+      device: params.device ?? params.emulator,
+      worktreeId
+    })
   }
 
   async emulatorLogcat(

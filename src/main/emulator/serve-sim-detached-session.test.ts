@@ -15,8 +15,30 @@ describe('parseServeSimDetachedSession', () => {
     expect(info).toMatchObject({
       deviceUdid: 'device-1',
       streamUrl: 'http://127.0.0.1:3100/stream.mjpeg',
-      wsUrl: 'ws://127.0.0.1:3100/ws'
+      wsUrl: 'ws://127.0.0.1:3100/ws',
+      axUrl: 'http://127.0.0.1:3100/ax'
     })
+  })
+
+  it('derives the device-scoped AX endpoint and preserves an explicit one', () => {
+    const derived = parseServeSimDetachedSession(
+      {
+        streamUrl: 'http://127.0.0.1:3200/helper/device-1/stream.mjpeg',
+        wsUrl: 'ws://127.0.0.1:3200/helper/device-1/ws'
+      },
+      'device-1'
+    )
+    const explicit = parseServeSimDetachedSession(
+      {
+        streamUrl: 'http://127.0.0.1:3200/stream.mjpeg',
+        wsUrl: 'ws://127.0.0.1:3200/ws',
+        axUrl: 'http://127.0.0.1:3200/custom-ax'
+      },
+      'device-1'
+    )
+
+    expect(derived.axUrl).toBe('http://127.0.0.1:3200/helper/device-1/ax')
+    expect(explicit.axUrl).toBe('http://127.0.0.1:3200/custom-ax')
   })
 
   it('derives the MJPEG stream endpoint from older serve-sim url output', () => {

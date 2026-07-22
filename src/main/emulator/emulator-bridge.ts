@@ -199,6 +199,26 @@ export class EmulatorBridge {
     return backend.exec(device, command)
   }
 
+  async accessibilityTree(opts?: EmulatorTargetOpts): Promise<unknown> {
+    return this.runCapability('accessibilityTree', opts, async (backend, device) => {
+      if (backend.kind !== 'ios') {
+        return backend.accessibilityTree!(device)
+      }
+      const udid = await backend.resolveDeviceId(device)
+      const worktreeId = opts?.worktreeId
+      const session = worktreeId
+        ? this.getActiveForWorktree(worktreeId)
+        : this.sessionRegistry.getSession(udid)
+      if (worktreeId && session && session.deviceUdid !== udid) {
+        throw new EmulatorError(
+          'emulator_no_active',
+          `iOS simulator ${udid} is not active for this worktree (active: ${session.deviceUdid}); attach the requested simulator first.`
+        )
+      }
+      return backend.accessibilityTree!(udid, session?.axUrl)
+    })
+  }
+
   // Runs a capability-gated verb against the resolved target, rejecting backends
   // that do not advertise the capability (e.g. install/logcat on iOS).
   async runCapability<T>(

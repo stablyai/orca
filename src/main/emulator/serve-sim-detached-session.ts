@@ -8,6 +8,17 @@ function streamUrlFromServeSimUrl(url: string): string {
   return url.endsWith('/stream.mjpeg') ? url : `${url.replace(/\/$/, '')}/stream.mjpeg`
 }
 
+function axUrlFromStreamUrl(streamUrl: string | undefined): string | undefined {
+  if (!streamUrl) {
+    return undefined
+  }
+  try {
+    return new URL('ax', streamUrl).toString()
+  } catch {
+    return undefined
+  }
+}
+
 export function parseServeSimDetachedSession(raw: unknown, udid: string): EmulatorSessionInfo {
   if (!raw || typeof raw !== 'object') {
     throw new EmulatorError('emulator_helper_failed', 'serve-sim did not return stream endpoints.')
@@ -24,7 +35,7 @@ export function parseServeSimDetachedSession(raw: unknown, udid: string): Emulat
     deviceUdid: typeof json.device === 'string' ? json.device : udid,
     wsUrl: wsUrl ?? '',
     streamUrl: streamUrl ?? '',
-    axUrl: typeof json.axUrl === 'string' ? json.axUrl : undefined
+    axUrl: typeof json.axUrl === 'string' ? json.axUrl : axUrlFromStreamUrl(streamUrl)
   }
   if (!info.streamUrl || !info.wsUrl) {
     throw new EmulatorError('emulator_helper_failed', 'serve-sim did not return stream endpoints.')
