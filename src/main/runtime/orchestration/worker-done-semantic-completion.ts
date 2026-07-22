@@ -43,7 +43,7 @@ const BLOCKED_SUBJECT_RE = /^\s*blocked\s*:/i
 const BLOCKED_BODY_RE =
   /\b(blocked(?:\s+on|\s+by)?|status\s*[:=]\s*blocked|persist(?:ed|ing)?\s+blocked|leave(?:s|ing)?\s+(?:the\s+)?(?:task|pr)\s+blocked)\b/i
 const LOCAL_BLOCKED_RESOLUTION_RE =
-  /\b(?:was\s+resolved|resolved|unblocked|cleared|lifted)\b/i
+  /\bblocked(?:\s+[\w-]+){0,6}\s+(?:was\s+)?(?:resolved|unblocked|cleared|lifted)\b|\bunblocked\b/i
 const DECISION_REQUIRED_RE =
   /\b(decision[- ]required|awaiting\s+(?:owner\s+)?decision|needs?\s+(?:a\s+)?(?:coordinator|owner)\s+decision|pending\s+decision\s+gate)\b/i
 const UNRESOLVED_ESCALATION_RE =

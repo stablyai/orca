@@ -222,4 +222,19 @@ describe('evaluateWorkerDoneSemanticCompletion', () => {
       appliedStatus: 'blocked'
     })
   })
+
+  it('does not treat an unrelated resolved item as clearing a blocked state', () => {
+    expect(
+      evaluateWorkerDoneSemanticCompletion({
+        subject: 'Still blocked',
+        body:
+          'The task is blocked by owner approval; the documentation issue was resolved. Implementation complete.',
+        filesModified: ['src/main/runtime/orchestration/lifecycle-reconciliation.ts']
+      })
+    ).toMatchObject({
+      complete: false,
+      kind: 'blocked',
+      appliedStatus: 'blocked'
+    })
+  })
 })
