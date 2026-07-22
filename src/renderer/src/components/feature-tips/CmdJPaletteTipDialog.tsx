@@ -13,6 +13,7 @@ import { formatShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { FeatureTipActions } from './FeatureTipActions'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedFeatureTip } from './feature-tip-copy'
 
 export function CmdJPaletteTipDialog({
   open,
@@ -38,10 +39,11 @@ export function CmdJPaletteTipDialog({
     worktreePaletteShortcutLabel !== 'Unassigned'
       ? worktreePaletteShortcutLabel
       : formatShortcutLabel('worktree.palette')
+  const localizedTip = getLocalizedFeatureTip(tip)
   // The tip's title uses "<shortcut>" as a placeholder token; split it so we
   // can render the live label as a styled <kbd> chip inline. Missing token
   // degrades to the plain title.
-  const titleParts = tip.title.split('<shortcut>')
+  const titleParts = localizedTip.title.split('<shortcut>')
   const titlePrefix = titleParts[0]
   const titleSuffix = titleParts.slice(1).join('<shortcut>')
 
@@ -65,7 +67,7 @@ export function CmdJPaletteTipDialog({
                 variant="outline"
                 className="mb-3 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
               >
-                {tip.eyebrow.toUpperCase()}
+                {localizedTip.eyebrow.toUpperCase()}
               </Badge>
               {/* Why: flow the shortcut chip as inline text (not a flex item) so the
                   short Mac label (⌘⇧J) stays on one line, while a wide label like
@@ -84,7 +86,7 @@ export function CmdJPaletteTipDialog({
                 {titleSuffix ? ` ${titleSuffix}` : null}
               </DialogTitle>
               <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
-                <span className="block">{tip.description}</span>
+                <span className="block">{localizedTip.description}</span>
                 <span className="block text-muted-foreground">
                   {translate(
                     'auto.components.feature.tips.CmdJPaletteTipDialog.8241897205',

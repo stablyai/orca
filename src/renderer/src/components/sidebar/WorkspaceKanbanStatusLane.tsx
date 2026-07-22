@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import WorkspaceKanbanCard from './WorkspaceKanbanCard'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
+import { getLocalizedWorkspaceStatusLabel } from './workspace-status-copy'
 import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanStatusLaneProps = {
@@ -61,8 +62,9 @@ export default function WorkspaceKanbanStatusLane({
   onColumnResizeKeyDown
 }: WorkspaceKanbanStatusLaneProps): React.JSX.Element {
   const meta = getWorkspaceStatusVisualMeta(status)
+  const localizedStatusLabel = getLocalizedWorkspaceStatusLabel(status)
   const createTooltip = canCreateWorktree
-    ? `New workspace in ${status.label}`
+    ? `New workspace in ${localizedStatusLabel}`
     : 'Add a project to create workspaces'
   const createButton = (
     <Button
@@ -130,7 +132,7 @@ export default function WorkspaceKanbanStatusLane({
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <meta.icon className={cn('size-3.5 shrink-0', meta.tone)} />
           <div className="min-w-0 truncate text-[12px] font-semibold text-foreground">
-            {status.label}
+            {localizedStatusLabel}
           </div>
           <div className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
             {items.length}

@@ -15,6 +15,7 @@ import { ShortcutBindingSubRow } from './ShortcutBindingSubRow'
 import { ShortcutRecorderButton } from './ShortcutRecorderButton'
 import { ShortcutRemoveButton } from './ShortcutRemoveButton'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
+import { getLocalizedKeybindingTitle } from './keybinding-copy'
 import { translate } from '@/i18n/i18n'
 
 type ShortcutCommandBlockProps = {
@@ -64,6 +65,7 @@ export function ShortcutCommandBlock({
   onDisableAction,
   onEnableAction
 }: ShortcutCommandBlockProps): React.JSX.Element {
+  const title = getLocalizedKeybindingTitle(item)
   const hasBinding = effective.length > 0
   const isMulti = effective.length >= 2
   // An explicit empty override means the user turned the action off entirely.
@@ -92,7 +94,7 @@ export function ShortcutCommandBlock({
   const recorderFor = (binding: string | null, index: number): React.JSX.Element => (
     <ShortcutRecorderButton
       actionId={item.id}
-      title={item.title}
+      title={title}
       platform={platform}
       isDigitIndex={isDigitIndex}
       binding={binding}
@@ -110,7 +112,7 @@ export function ShortcutCommandBlock({
   // forceVisible skips the re-match here that would hide rows it kept.
   return (
     <SearchableSetting
-      title={item.title}
+      title={title}
       description={translate(
         'auto.components.settings.ShortcutCommandBlock.70b5d25583',
         '{{value0}} shortcut',
@@ -128,7 +130,7 @@ export function ShortcutCommandBlock({
               isDisabled ? 'text-muted-foreground' : 'text-foreground'
             )}
           >
-            {item.title}
+            {title}
           </span>
           {modified ? (
             <Badge variant="outline" className="shrink-0 text-[11px]">
@@ -174,7 +176,7 @@ export function ShortcutCommandBlock({
                     aria-label={translate(
                       'auto.components.settings.ShortcutCommandBlock.a0e2ef0e61',
                       'Add another shortcut for {{value0}}',
-                      { value0: item.title }
+                      { value0: title }
                     )}
                     onClick={() => onAppendBinding(item.id)}
                   >
@@ -200,7 +202,7 @@ export function ShortcutCommandBlock({
                     aria-label={translate(
                       'auto.components.settings.ShortcutCommandBlock.07939d084e',
                       'Reset {{value0}} to default',
-                      { value0: item.title }
+                      { value0: title }
                     )}
                     onClick={() => onResetAction(item.id)}
                   >
@@ -226,7 +228,7 @@ export function ShortcutCommandBlock({
                     aria-label={translate(
                       'auto.components.settings.ShortcutCommandBlock.a799f90f82',
                       'Disable {{value0}}',
-                      { value0: item.title }
+                      { value0: title }
                     )}
                     onClick={() => onDisableAction(item.id)}
                   >
@@ -246,7 +248,7 @@ export function ShortcutCommandBlock({
             {isMulti ? (
               <ShortcutRemoveButton
                 actionId={item.id}
-                title={item.title}
+                title={title}
                 bindingIndex={0}
                 onRemove={onRemoveBindingAt}
               />
@@ -266,7 +268,7 @@ export function ShortcutCommandBlock({
                 aria-label={translate(
                   'auto.components.settings.ShortcutCommandBlock.482a60225d',
                   'Enable {{value0}}',
-                  { value0: item.title }
+                  { value0: title }
                 )}
                 onClick={() => onEnableAction(item.id)}
               >
@@ -283,7 +285,7 @@ export function ShortcutCommandBlock({
                     aria-label={translate(
                       'auto.components.settings.ShortcutCommandBlock.01481b964c',
                       'Add shortcut for {{value0}}',
-                      { value0: item.title }
+                      { value0: title }
                     )}
                     onClick={() => onAppendBinding(item.id)}
                   >
@@ -328,7 +330,7 @@ export function ShortcutCommandBlock({
                 // keeps the same recorder element so focus survives the capture.
                 key={index}
                 actionId={item.id}
-                title={item.title}
+                title={title}
                 platform={platform}
                 isDigitIndex={isDigitIndex}
                 binding={binding}
@@ -349,7 +351,7 @@ export function ShortcutCommandBlock({
         <ShortcutBindingSubRow
           key="append-slot"
           actionId={item.id}
-          title={item.title}
+          title={title}
           platform={platform}
           isDigitIndex={isDigitIndex}
           binding={null}

@@ -1,15 +1,15 @@
 import type { JSX, KeyboardEvent } from 'react'
 import { Check } from 'lucide-react'
-import {
-  FEATURE_WALL_WORKFLOWS,
-  type FeatureWallWorkflow,
-  type FeatureWallWorkflowId
+import type {
+  FeatureWallWorkflow,
+  FeatureWallWorkflowId
 } from '../../../../shared/feature-wall-workflows'
 import type { AgentsStep, AgentsStepId } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStep, WorkbenchStepId } from '../../../../shared/workbench-steps'
 import type { ReviewStep, ReviewStepId } from '../../../../shared/review-steps'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedFeatureWallWorkflows } from './feature-wall-workflow-copy'
 
 const SUB_STEP_LABELS = ['a', 'b', 'c', 'd', 'e', 'f'] as const
 
@@ -53,13 +53,15 @@ export function FeatureWallRail(props: {
     reviewStepDone,
     onSelectReviewStep
   } = props
+  // Why: not memoized — createLocalizedCatalog already caches per active locale.
+  const workflows = getLocalizedFeatureWallWorkflows()
   return (
     <nav
       className="scrollbar-sleek h-full max-h-72 overflow-y-auto border-b border-border bg-card p-2 md:max-h-none md:border-b-0"
       aria-label={translate('auto.components.feature.wall.FeatureWallRail.7593d15f94', 'Workflows')}
     >
       <div role="tablist" aria-orientation="vertical" className="flex flex-col gap-1.5 pt-1.5">
-        {FEATURE_WALL_WORKFLOWS.map((workflow, index) => {
+        {workflows.map((workflow, index) => {
           const isSelected = workflow.id === selectedId
           const isDone = workflowDone[workflow.id] === true
           const subSteps =

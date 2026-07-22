@@ -2,14 +2,13 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
 import {
   DEFAULT_FEATURE_WALL_WORKFLOW_ID,
-  FEATURE_WALL_WORKFLOWS,
   getFeatureWallMediaTile,
   type FeatureWallWorkflow,
   type FeatureWallWorkflowId
 } from '../../../../shared/feature-wall-workflows'
-import { getAgentsSteps, type AgentsStepId } from '../../../../shared/agents-orchestration-steps'
-import { getWorkbenchSteps, type WorkbenchStepId } from '../../../../shared/workbench-steps'
-import { getReviewSteps, type ReviewStepId } from '../../../../shared/review-steps'
+import type { AgentsStepId } from '../../../../shared/agents-orchestration-steps'
+import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
+import type { ReviewStepId } from '../../../../shared/review-steps'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
 import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
 import { track } from '@/lib/telemetry'
@@ -22,6 +21,12 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { usePrefersReducedMotion } from './feature-wall-modal-helpers'
 import { toFeatureWallAssetUrl, useFeatureWallAssetBaseUrl } from './feature-wall-assets'
+import { getLocalizedFeatureWallWorkflows } from './feature-wall-workflow-copy'
+import {
+  getLocalizedAgentsSteps,
+  getLocalizedReviewSteps,
+  getLocalizedWorkbenchSteps
+} from './feature-wall-tour-step-copy'
 import { useFeatureWallTaskSourcePresentation } from './use-feature-wall-task-source-presentation'
 import { useFeatureWallCompletion } from './use-feature-wall-completion'
 import { useFeatureWallTourTelemetry } from './use-feature-wall-tour-telemetry'
@@ -73,20 +78,19 @@ export function FeatureWallTourSurface({
   )
   const railRefs = useRef<(HTMLButtonElement | null)[]>([])
 
+  // Why: not memoized with empty deps — createLocalizedCatalog already caches
+  // per active locale, and a render-scoped memo would go stale on a language switch.
+  const workflows = getLocalizedFeatureWallWorkflows()
+  const agentsSteps = getLocalizedAgentsSteps()
+  const workbenchSteps = getLocalizedWorkbenchSteps()
+  const reviewSteps = getLocalizedReviewSteps()
   const selectedIndex = useMemo(
-    () =>
-      Math.max(
-        0,
-        FEATURE_WALL_WORKFLOWS.findIndex((w) => w.id === selectedId)
-      ),
-    [selectedId]
+    () => Math.max(0, workflows.findIndex((w) => w.id === selectedId)),
+    [selectedId, workflows]
   )
-  const selected = FEATURE_WALL_WORKFLOWS[selectedIndex]
+  const selected = workflows[selectedIndex]
   const taskSourcePresentation = useFeatureWallTaskSourcePresentation(isOpen, selected)
   const selectedPresentation = taskSourcePresentation.workflow
-  const agentsSteps = useMemo(() => getAgentsSteps(), [])
-  const workbenchSteps = useMemo(() => getWorkbenchSteps(), [])
-  const reviewSteps = useMemo(() => getReviewSteps(), [])
   const [agentsStepId, setAgentsStepId] = useState<AgentsStepId>(
     () => agentsSteps[0]?.id ?? 'statuses'
   )
@@ -169,7 +173,7 @@ export function FeatureWallTourSurface({
         group_id: DEFAULT_FEATURE_WALL_WORKFLOW_ID,
         source
       })
-      const defaultTile = getFeatureWallMediaTile(FEATURE_WALL_WORKFLOWS[0].primaryTileId)
+      const defaultTile = getFeatureWallMediaTile(workflows[0].primaryTileId)
       if (defaultTile) {
         track('feature_wall_feature_selected', {
           group_id: DEFAULT_FEATURE_WALL_WORKFLOW_ID,
@@ -181,7 +185,7 @@ export function FeatureWallTourSurface({
         track('feature_wall_tile_focused', { tile_id: defaultTile.id })
       }
     }
-  }, [isOpen, source])
+  }, [isOpen, source, workflows])
 
   const handleSelect = useCallback(
     (workflow: FeatureWallWorkflow): void => {
@@ -256,7 +260,7 @@ export function FeatureWallTourSurface({
     onSelectWorkflow: handleSelect
   })
 
-  const isLastWorkflow = selectedIndex >= FEATURE_WALL_WORKFLOWS.length - 1
+  const isLastWorkflow = selectedIndex >= workflows.length - 1
   const agentsStepIndex =
     selected.id === 'agents-orchestration'
       ? agentsSteps.findIndex((step) => step.id === agentsStepId)
@@ -324,7 +328,7 @@ export function FeatureWallTourSurface({
       }
       return
     }
-    const nextWorkflow = FEATURE_WALL_WORKFLOWS[selectedIndex + 1]
+    const nextWorkflow = workflows[selectedIndex + 1]
     if (nextWorkflow) {
       handleSelect(nextWorkflow)
       railRefs.current[selectedIndex + 1]?.focus()
@@ -349,7 +353,8 @@ export function FeatureWallTourSurface({
     source,
     workbenchStepId,
     workbenchStepIndex,
-    workbenchSteps
+    workbenchSteps,
+    workflows
   ])
 
   useFeatureWallTourKeyboardShortcut({

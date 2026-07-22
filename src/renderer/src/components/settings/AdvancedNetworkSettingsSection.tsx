@@ -77,6 +77,22 @@ export function setHttpProxyUrlDraftErrorState(
   }
 }
 
+// Wraps normalizeProxyUrl's raw English message; src/shared stays translate-free (node tsconfig).
+export function translateProxyUrlValidationMessage(message: string): string {
+  switch (message) {
+    case 'Proxy URL is too long.':
+      return translate('networkProxy.validation.tooLong', message)
+    case 'Enter a valid proxy URL.':
+      return translate('networkProxy.validation.invalidUrl', message)
+    case 'Use an http, https, socks, socks4, or socks5 proxy URL.':
+      return translate('networkProxy.validation.unsupportedScheme', message)
+    case 'Proxy URL must include a host.':
+      return translate('networkProxy.validation.missingHost', message)
+    default:
+      return message
+  }
+}
+
 export type HttpProxyBypassRulesDraftState = {
   sourceValue: string
   draft: string
@@ -176,7 +192,11 @@ export function AdvancedNetworkSettingsSection({
     const normalized = normalizeProxyUrl(httpProxyUrlDraft)
     if (!normalized.ok) {
       setHttpProxyUrlDraftState((current) =>
-        setHttpProxyUrlDraftErrorState(current, settings.httpProxyUrl, normalized.message)
+        setHttpProxyUrlDraftErrorState(
+          current,
+          settings.httpProxyUrl,
+          translateProxyUrlValidationMessage(normalized.message)
+        )
       )
       return
     }

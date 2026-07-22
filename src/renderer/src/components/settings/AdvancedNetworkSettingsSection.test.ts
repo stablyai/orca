@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/types'
+import { i18n, setRendererUiLanguage } from '@/i18n/i18n'
+import { UI_LANGUAGE_ENGLISH, UI_LANGUAGE_SPANISH } from '../../../../shared/ui-language'
 import {
   createHttpProxyBypassRulesDraftState,
   createHttpProxyUrlDraftState,
   hasConfiguredNetworkProxy,
   setHttpProxyUrlDraftErrorState,
   shouldOpenNetworkProxyConfig,
+  translateProxyUrlValidationMessage,
   updateHttpProxyBypassRulesDraftState,
   updateHttpProxyUrlDraftState
 } from './AdvancedNetworkSettingsSection'
@@ -63,6 +66,41 @@ describe('AdvancedNetworkSettingsSection proxy drafts', () => {
       sourceValue: '*.internal',
       draft: '*.corp'
     })
+  })
+})
+
+describe('translateProxyUrlValidationMessage', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('returns the English fallback for every distinct validation message', () => {
+    expect(translateProxyUrlValidationMessage('Proxy URL is too long.')).toBe(
+      'Proxy URL is too long.'
+    )
+    expect(translateProxyUrlValidationMessage('Enter a valid proxy URL.')).toBe(
+      'Enter a valid proxy URL.'
+    )
+    expect(
+      translateProxyUrlValidationMessage(
+        'Use an http, https, socks, socks4, or socks5 proxy URL.'
+      )
+    ).toBe('Use an http, https, socks, socks4, or socks5 proxy URL.')
+    expect(translateProxyUrlValidationMessage('Proxy URL must include a host.')).toBe(
+      'Proxy URL must include a host.'
+    )
+  })
+
+  it('passes through an unrecognized message unchanged', () => {
+    expect(translateProxyUrlValidationMessage('some other message')).toBe('some other message')
+  })
+
+  it('translates through i18n.t when the UI language changes', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_SPANISH)
+    expect(translateProxyUrlValidationMessage('Proxy URL is too long.')).not.toBe(
+      'Proxy URL is too long.'
+    )
+    await setRendererUiLanguage(UI_LANGUAGE_ENGLISH)
   })
 })
 

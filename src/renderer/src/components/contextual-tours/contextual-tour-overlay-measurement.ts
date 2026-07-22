@@ -10,6 +10,7 @@ import {
   getMeasurableContextualTourTarget,
   getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
+import { getLocalizedContextualTourStep } from './contextual-tour-step-copy'
 import type { ActiveTourRenderState } from './ContextualTourOverlaySurface'
 import { translate } from '@/i18n/i18n'
 
@@ -115,8 +116,9 @@ export function measureContextualTourOverlayRenderState(args: {
     return { kind: 'cancel' }
   }
 
+  const localizedStep = getLocalizedContextualTourStep(args.tour.id, activeStep)
   const sidebarAlreadyVisible =
-    activeStep.primaryAction?.kind === 'show-worktrees' && args.sidebarOpen
+    localizedStep.primaryAction?.kind === 'show-worktrees' && args.sidebarOpen
   const primaryAction = sidebarAlreadyVisible
     ? ({
         kind: 'next',
@@ -125,8 +127,8 @@ export function measureContextualTourOverlayRenderState(args: {
           'Next'
         )
       } as const)
-    : activeStep.primaryAction
-  const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
+    : localizedStep.primaryAction
+  const secondaryAction = sidebarAlreadyVisible ? undefined : localizedStep.secondaryAction
 
   return {
     kind: 'render',
@@ -135,8 +137,8 @@ export function measureContextualTourOverlayRenderState(args: {
       rect: target.rect,
       targetElement: target.element,
       progress,
-      title: activeStep.title,
-      body: formatContextualTourStepCopy(getContextualTourStepCopy(activeStep), args.keybindings),
+      title: localizedStep.title,
+      body: formatContextualTourStepCopy(getContextualTourStepCopy(localizedStep), args.keybindings),
       control: activeStep.control,
       primaryAction,
       secondaryAction,

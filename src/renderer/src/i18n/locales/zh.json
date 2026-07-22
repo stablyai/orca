@@ -13727,5 +13727,858 @@
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
+  },
+  "agentsOrchestrationSteps": {
+    "statuses": {
+      "name": "可见性",
+      "subtitle": "智能体可见性",
+      "description": "了解哪些智能体正在工作、等待、运行或被阻塞。"
+    },
+    "orchestration": {
+      "name": "编排",
+      "subtitle": "编排",
+      "description": "让智能体管理和协调 Orca 工作区，执行更大规模的任务。"
+    },
+    "usage": {
+      "name": "用量",
+      "subtitle": "用量",
+      "description": "查看所有已连接账户的用量和速率限制，及时了解何时该切换账户。"
+    }
+  },
+  "reviewSteps": {
+    "notes": {
+      "name": "备注",
+      "subtitle": "备注与 diff",
+      "description": "将有针对性的审查备注发送给智能体。"
+    },
+    "pr-view": {
+      "name": "PR 检查",
+      "subtitle": "PR 检查与评论",
+      "description": "在 Checks 标签页中查看 PR 状态。"
+    },
+    "ship": {
+      "name": "使用 AI 交付",
+      "subtitle": "使用 AI 交付",
+      "description": "让 AI 为你准备 commit 和 PR 草稿。"
+    }
+  },
+  "workbenchSteps": {
+    "terminal": {
+      "name": "终端",
+      "subtitle": "终端",
+      "description": "同时查看智能体、测试和开发日志。"
+    },
+    "editor": {
+      "name": "编辑器",
+      "subtitle": "编辑器",
+      "description": "使用类 Notion 风格的 markdown 编辑器记笔记，无需离开 Orca。"
+    },
+    "browser": {
+      "name": "浏览器",
+      "subtitle": "浏览器",
+      "description": "在 Orca 的浏览器中运行你的应用，将选中的 UI 元素发送给智能体，并让智能体与你的网页进行交互。"
+    }
+  },
+  "featureWallWorkflows": {
+    "workspaces": {
+      "title": "工作区",
+      "lede": "Orca 将每个任务拆分到独立的工作区中，让智能体可以并行运行。"
+    },
+    "tasks": {
+      "title": "任务",
+      "lede": "直接从 GitHub 或 Linear 开始工作。"
+    },
+    "agents-orchestration": {
+      "title": "智能体",
+      "lede": "同时运行多个智能体，跟踪它们的进度，并在合适时让自动化来驱动 Orca。"
+    },
+    "workbench": {
+      "title": "工作台",
+      "lede": "把你的终端配置带入 Orca，拆分面板即可让服务器、测试、日志和智能体并排运行。"
+    },
+    "review": {
+      "title": "代码审查",
+      "lede": "查看变更内容，留下有针对性的反馈，并发送回智能体。"
+    }
+  },
+  "featureWallTiles": {
+    "tile-01": {
+      "title": "并行工作区编排"
+    },
+    "tile-02": {
+      "title": "Ghostty 级终端"
+    },
+    "tile-03": {
+      "title": "原生支持 GitHub 与 Linear"
+    },
+    "tile-04": {
+      "title": "支持的 CLI 智能体"
+    },
+    "tile-05": {
+      "title": "内嵌浏览器 + 设计模式"
+    },
+    "tile-06": {
+      "title": "远程工作区"
+    },
+    "tile-07": {
+      "title": "Monaco 编辑器，拖拽至智能体"
+    },
+    "tile-08": {
+      "title": "行内审查，回传给智能体"
+    },
+    "tile-09": {
+      "title": "Orca CLI"
+    },
+    "tile-10": {
+      "title": "键盘原生操作"
+    },
+    "tile-11": {
+      "title": "感知用量与速率限制"
+    },
+    "tile-12": {
+      "title": "PDF、图片、CSV、Markdown"
+    }
+  },
+  "featureTips": {
+    "orca-cli": {
+      "eyebrow": "提示",
+      "title": "让智能体通过 Orca CLI 驱动 Orca",
+      "description": "让智能体协调子工作树，并在工作树之间进行通信。",
+      "ctaLabel": "安装 CLI 与技能"
+    },
+    "cmd-j-palette": {
+      "eyebrow": "提示",
+      "title": "使用 <shortcut> 跳转到工作树",
+      "description": "搜索工作树、切换标签页、调整设置，或新建工作树，全程无需离开键盘。",
+      "ctaLabel": "知道了"
+    },
+    "voice-dictation": {
+      "eyebrow": "提示",
+      "title": "语音听写来了",
+      "description": "对着任意聚焦的面板说话，Orca 会自动转录。按下听写快捷键即可开始和停止。",
+      "ctaLabel": "设置语音"
+    }
+  },
+  "contextualTours": {
+    "workspace-board": {
+      "workspace-board-center": {
+        "title": "在看板上规划工作",
+        "body": "当你想按状态而不是按项目查看工作区时，使用看板。"
+      },
+      "workspace-board-done-lane": {
+        "title": "在泳道间移动工作",
+        "body": "随着状态变化，在泳道之间拖动工作区。"
+      }
+    },
+    "workspace-agent-sessions": {
+      "terminal-pane-split-target": {
+        "title": "拆分终端面板",
+        "body": "使用 {terminal.splitRight} 打开第二个终端面板，或右键点击面板查看拆分选项。",
+        "primaryActionLabel": "拆分终端"
+      },
+      "workspace-create-control": {
+        "title": "并行启动另一项任务",
+        "body": "每个工作树都有自己的 branch，因此并行工作互不干扰。"
+      }
+    },
+    "browser": {
+      "browser-grab-control": {
+        "title": "为智能体抓取页面上下文",
+        "body": "使用抓取工具为智能体复制页面元素的上下文。"
+      },
+      "browser-annotation-control": {
+        "title": "就地标记设计反馈",
+        "body": "为元素添加批注，并将这些备注发送给智能体。"
+      },
+      "browser-import-hint": {
+        "title": "保持登录状态",
+        "body": "将你现有的登录信息带入 Orca，立即保持登录。"
+      }
+    },
+    "tasks": {
+      "tasks-source-filters": {
+        "title": "选择工作来源",
+        "body": "无需切换页面，即可在已连接的提供方和项目筛选之间切换。"
+      },
+      "tasks-search-presets": {
+        "title": "筛选出你需要的工作",
+        "body": "使用预设和搜索缩小 issue、审查、merge request 或任务的范围。"
+      },
+      "tasks-start-workspace": {
+        "title": "从工作项开始",
+        "body": "在任务、issue、审查或 merge request 上点击“开始”或“打开”，将其上下文带入工作区。"
+      }
+    },
+    "automations": {
+      "automations-create": {
+        "title": "什么是自动化？",
+        "body": "自动化会按计划运行智能体工作。点击此按钮添加自动化。"
+      },
+      "automations-runs": {
+        "title": "查看运行结果",
+        "body": "运行记录显示自动化的执行时间、发生的情况，以及在哪里查看其输出。"
+      }
+    },
+    "floating-workspace": {
+      "floating-workspace-new-terminal": {
+        "title": "在所有 repo 中运行智能体",
+        "body": "这里的智能体可以在你选择的任意文件夹中运行。将其指向服务上层目录，即可同时在所有 repo 中工作。"
+      },
+      "floating-workspace-new-markdown": {
+        "title": "或者将其用作草稿本",
+        "body": "打开智能体、临时终端、笔记和浏览器标签页，而不会扰乱你正在专注的工作树。"
+      }
+    },
+    "workspace-creation": {
+      "workspace-creation-project": {
+        "title": "选择一个项目",
+        "body": "Orca 会将每个任务隔离到独立的工作树中，从基础 branch 分出。"
+      },
+      "workspace-creation-name": {
+        "title": "命名，或从现有工作开始",
+        "body": "从关联任务开始，可使用简短的 issue 或 PR 名称。或留空，让 Orca 根据你的第一条智能体消息自动命名。"
+      },
+      "workspace-creation-agent": {
+        "title": "选择启动工作的智能体",
+        "body": "选择在创建此工作树时应打开的智能体。"
+      }
+    }
+  },
+  "keybindings": {
+    "actions": {
+      "worktree": {
+        "quickOpen": {
+          "title": "转到文件"
+        },
+        "palette": {
+          "title": "切换工作树"
+        },
+        "navigateUp": {
+          "title": "上一个工作树"
+        },
+        "navigateDown": {
+          "title": "下一个工作树"
+        },
+        "history": {
+          "back": {
+            "title": "工作树历史后退"
+          },
+          "forward": {
+            "title": "工作树历史前进"
+          }
+        }
+      },
+      "app": {
+        "settings": {
+          "title": "打开设置"
+        },
+        "forceReload": {
+          "title": "强制重新加载"
+        }
+      },
+      "workspace": {
+        "create": {
+          "title": "创建工作树"
+        },
+        "rename": {
+          "title": "重命名工作树"
+        },
+        "delete": {
+          "title": "删除工作区"
+        },
+        "openBoard": {
+          "title": "打开工作区看板"
+        },
+        "selectByIndex": {
+          "title": "选择工作区 1-9"
+        }
+      },
+      "voice": {
+        "dictation": {
+          "title": "语音听写"
+        }
+      },
+      "view": {
+        "tasks": {
+          "title": "打开任务"
+        }
+      },
+      "sidebar": {
+        "left": {
+          "toggle": {
+            "title": "切换侧边栏"
+          }
+        },
+        "right": {
+          "toggle": {
+            "title": "切换右侧边栏"
+          }
+        },
+        "explorer": {
+          "toggle": {
+            "title": "显示资源管理器"
+          }
+        },
+        "search": {
+          "toggle": {
+            "title": "显示搜索"
+          }
+        },
+        "sourceControl": {
+          "toggle": {
+            "title": "显示源代码管理"
+          }
+        },
+        "checks": {
+          "toggle": {
+            "title": "显示检查"
+          }
+        },
+        "ports": {
+          "toggle": {
+            "title": "显示端口"
+          }
+        },
+        "sleepingWorkspaces": {
+          "toggle": {
+            "title": "切换休眠工作区"
+          }
+        },
+        "focusWorktreeList": {
+          "title": "聚焦工作树列表"
+        }
+      },
+      "floatingTerminal": {
+        "toggle": {
+          "title": "切换浮动终端"
+        }
+      },
+      "floatingWorkspace": {
+        "maximize": {
+          "title": "最大化浮动工作区面板"
+        },
+        "minimize": {
+          "title": "最小化浮动工作区面板"
+        }
+      },
+      "zoom": {
+        "in": {
+          "title": "放大"
+        },
+        "out": {
+          "title": "缩小"
+        },
+        "reset": {
+          "title": "重置大小"
+        }
+      },
+      "tab": {
+        "newTerminal": {
+          "title": "新建终端标签页"
+        },
+        "newAgent": {
+          "title": "新建智能体标签页（默认智能体）",
+          "claude": {
+            "title": "新建 Claude 标签页"
+          },
+          "claude-agent-teams": {
+            "title": "新建 Claude Agent Teams 标签页"
+          },
+          "openclaude": {
+            "title": "新建 OpenClaude 标签页"
+          },
+          "codex": {
+            "title": "新建 Codex 标签页"
+          },
+          "devin": {
+            "title": "新建 Devin 标签页"
+          },
+          "ante": {
+            "title": "新建 Ante 标签页"
+          },
+          "autohand": {
+            "title": "新建 Autohand Code 标签页"
+          },
+          "opencode": {
+            "title": "新建 OpenCode 标签页"
+          },
+          "mimo-code": {
+            "title": "新建 MiMo Code 标签页"
+          },
+          "pi": {
+            "title": "新建 Pi 标签页"
+          },
+          "omp": {
+            "title": "新建 OMP 标签页"
+          },
+          "gemini": {
+            "title": "新建 Gemini 标签页"
+          },
+          "antigravity": {
+            "title": "新建 Antigravity 标签页"
+          },
+          "aider": {
+            "title": "新建 Aider 标签页"
+          },
+          "goose": {
+            "title": "新建 Goose 标签页"
+          },
+          "amp": {
+            "title": "新建 Amp 标签页"
+          },
+          "kilo": {
+            "title": "新建 Kilocode 标签页"
+          },
+          "kiro": {
+            "title": "新建 Kiro 标签页"
+          },
+          "crush": {
+            "title": "新建 Charm 标签页"
+          },
+          "aug": {
+            "title": "新建 Auggie 标签页"
+          },
+          "cline": {
+            "title": "新建 Cline 标签页"
+          },
+          "codebuff": {
+            "title": "新建 Codebuff 标签页"
+          },
+          "command-code": {
+            "title": "新建 Command Code 标签页"
+          },
+          "continue": {
+            "title": "新建 Continue 标签页"
+          },
+          "cursor": {
+            "title": "新建 Cursor 标签页"
+          },
+          "droid": {
+            "title": "新建 Droid 标签页"
+          },
+          "kimi": {
+            "title": "新建 Kimi 标签页"
+          },
+          "mistral-vibe": {
+            "title": "新建 Mistral Vibe 标签页"
+          },
+          "qwen-code": {
+            "title": "新建 Qwen Code 标签页"
+          },
+          "rovo": {
+            "title": "新建 Rovo Dev 标签页"
+          },
+          "hermes": {
+            "title": "新建 Hermes 标签页"
+          },
+          "openclaw": {
+            "title": "新建 OpenClaw 标签页"
+          },
+          "copilot": {
+            "title": "新建 GitHub Copilot 标签页"
+          },
+          "grok": {
+            "title": "新建 Grok 标签页"
+          }
+        },
+        "newBrowser": {
+          "title": "新建浏览器标签页"
+        },
+        "newSimulator": {
+          "title": "新建移动模拟器标签页"
+        },
+        "newMarkdown": {
+          "title": "新建 markdown 标签页"
+        },
+        "openMarkdown": {
+          "title": "打开 markdown 标签页"
+        },
+        "close": {
+          "title": "关闭当前标签页"
+        },
+        "closeAll": {
+          "title": "关闭所有编辑器标签页"
+        },
+        "rename": {
+          "title": "重命名当前标签页"
+        },
+        "reopenClosed": {
+          "title": "重新打开已关闭的标签页"
+        },
+        "nextSameType": {
+          "title": "下一个标签页（同类型）"
+        },
+        "previousSameType": {
+          "title": "上一个标签页（同类型）"
+        },
+        "nextAllTypes": {
+          "title": "下一个标签页（所有类型）"
+        },
+        "previousAllTypes": {
+          "title": "上一个标签页（所有类型）"
+        },
+        "previousRecent": {
+          "title": "上一个最近标签页"
+        },
+        "nextTerminal": {
+          "title": "下一个终端标签页"
+        },
+        "previousTerminal": {
+          "title": "上一个终端标签页"
+        },
+        "selectByIndex": {
+          "title": "选择标签页 1-9"
+        },
+        "openQuickCommandsMenu": {
+          "title": "切换快捷命令菜单"
+        }
+      },
+      "browser": {
+        "find": {
+          "title": "在浏览器中查找"
+        },
+        "back": {
+          "title": "浏览器后退"
+        },
+        "forward": {
+          "title": "浏览器前进"
+        },
+        "reload": {
+          "title": "重新加载浏览器页面"
+        },
+        "hardReload": {
+          "title": "强制重新加载浏览器页面"
+        },
+        "focusAddressBar": {
+          "title": "聚焦浏览器地址栏"
+        },
+        "grabElement": {
+          "title": "抓取页面元素"
+        }
+      },
+      "editor": {
+        "find": {
+          "title": "在编辑器中查找"
+        },
+        "replace": {
+          "title": "在编辑器中替换"
+        },
+        "save": {
+          "title": "保存文件"
+        },
+        "markdownPreview": {
+          "title": "显示 Markdown 预览"
+        },
+        "copyContext": {
+          "title": "复制上下文"
+        },
+        "previousChange": {
+          "title": "转到上一处更改"
+        },
+        "nextChange": {
+          "title": "转到下一处更改"
+        },
+        "addReviewNote": {
+          "title": "添加审查备注"
+        }
+      },
+      "fileExplorer": {
+        "undo": {
+          "title": "撤销文件操作"
+        },
+        "redo": {
+          "title": "重做文件操作"
+        },
+        "copyPath": {
+          "title": "复制文件路径"
+        },
+        "copyRelativePath": {
+          "title": "复制相对文件路径"
+        },
+        "delete": {
+          "title": "删除文件"
+        }
+      },
+      "settings": {
+        "search": {
+          "title": "搜索设置"
+        }
+      },
+      "terminal": {
+        "copySelection": {
+          "title": "复制终端选中内容"
+        },
+        "paste": {
+          "title": "粘贴到终端"
+        },
+        "search": {
+          "title": "搜索当前面板"
+        },
+        "clear": {
+          "title": "清除当前面板"
+        },
+        "acceptAutosuggest": {
+          "title": "接受命令自动建议"
+        },
+        "focusNextPane": {
+          "title": "聚焦下一个面板"
+        },
+        "focusPreviousPane": {
+          "title": "聚焦上一个面板"
+        },
+        "equalizePaneSizes": {
+          "title": "均分面板大小"
+        },
+        "expandPane": {
+          "title": "展开/折叠面板"
+        },
+        "setTitle": {
+          "title": "设置标题…"
+        },
+        "clearPaneTitle": {
+          "title": "清除面板标题"
+        },
+        "closePane": {
+          "title": "关闭当前面板"
+        },
+        "splitRight": {
+          "title": "向右拆分终端"
+        },
+        "splitDown": {
+          "title": "向下拆分终端"
+        },
+        "switchInputSource": {
+          "title": "切换输入法/语言（系统原生）"
+        }
+      }
+    },
+    "groups": {
+      "global": {
+        "title": "全局"
+      },
+      "tabs": {
+        "title": "标签页"
+      },
+      "tab-navigation": {
+        "title": "标签页导航"
+      },
+      "quick-commands": {
+        "title": "快捷命令"
+      },
+      "browser": {
+        "title": "浏览器"
+      },
+      "editors": {
+        "title": "编辑器"
+      },
+      "file-explorer": {
+        "title": "文件资源管理器"
+      },
+      "settings": {
+        "title": "设置"
+      },
+      "terminal-panes": {
+        "title": "终端面板"
+      },
+      "agents": {
+        "title": "智能体"
+      }
+    }
+  },
+  "workspaceStatus": {
+    "todo": {
+      "label": "待办"
+    },
+    "in-progress": {
+      "label": "进行中"
+    },
+    "in-review": {
+      "label": "审查中"
+    },
+    "completed": {
+      "label": "已完成"
+    }
+  },
+  "automationSchedule": {
+    "hourly": "每小时 :{{minute}} 分",
+    "daily": "每天 {{time}}",
+    "weekdays": "工作日 {{time}}",
+    "weekly": "{{day}} {{time}}",
+    "custom": "自定义计划",
+    "invalid": "无效的计划",
+    "validCustomCron": "有效的自定义 cron",
+    "advancedPlaceholder": "高级计划"
+  },
+  "nativeChatSlashCommands": {
+    "common": {
+      "clear": {
+        "description": "清除对话"
+      },
+      "help": {
+        "description": "显示可用命令"
+      }
+    },
+    "claude": {
+      "clear": {
+        "description": "清除对话历史"
+      },
+      "compact": {
+        "description": "汇总并压缩对话"
+      },
+      "init": {
+        "description": "初始化 CLAUDE.md"
+      },
+      "review": {
+        "description": "审查当前更改"
+      },
+      "help": {
+        "description": "显示可用命令"
+      }
+    },
+    "codex": {
+      "model": {
+        "description": "选择模型和推理强度"
+      },
+      "ide": {
+        "description": "包含 IDE 上下文"
+      },
+      "permissions": {
+        "description": "选择 Codex 被允许执行的操作"
+      },
+      "keymap": {
+        "description": "重新映射 TUI 快捷键"
+      },
+      "vim": {
+        "description": "切换 Vim 模式"
+      },
+      "experimental": {
+        "description": "切换实验性功能"
+      },
+      "approve": {
+        "description": "批准一次自动审查重试"
+      },
+      "memories": {
+        "description": "配置记忆使用方式"
+      },
+      "skills": {
+        "description": "管理并使用技能"
+      },
+      "import": {
+        "description": "从 Claude Code 导入配置"
+      },
+      "hooks": {
+        "description": "查看生命周期 hooks"
+      },
+      "review": {
+        "description": "审查当前更改"
+      },
+      "rename": {
+        "description": "重命名当前会话"
+      },
+      "new": {
+        "description": "开始新对话"
+      },
+      "archive": {
+        "description": "归档此会话并退出"
+      },
+      "delete": {
+        "description": "删除此会话并退出"
+      },
+      "resume": {
+        "description": "恢复已保存的对话"
+      },
+      "fork": {
+        "description": "复刻当前对话"
+      },
+      "app": {
+        "description": "在 Codex Desktop 中继续"
+      },
+      "init": {
+        "description": "创建 AGENTS.md 文件"
+      },
+      "compact": {
+        "description": "压缩对话"
+      },
+      "plan": {
+        "description": "切换到计划模式"
+      },
+      "goal": {
+        "description": "设置或查看目标"
+      },
+      "agent": {
+        "description": "切换当前活动的智能体会话"
+      },
+      "side": {
+        "description": "开始一个侧边对话"
+      },
+      "copy": {
+        "description": "将最后一条回复复制为 markdown"
+      },
+      "raw": {
+        "description": "切换原始回滚模式"
+      },
+      "diff": {
+        "description": "显示当前工作区的 diff"
+      },
+      "mention": {
+        "description": "提及一个文件"
+      },
+      "status": {
+        "description": "显示会话配置与用量"
+      },
+      "usage": {
+        "description": "查看账户用量"
+      },
+      "title": {
+        "description": "配置终端标题"
+      },
+      "statusline": {
+        "description": "配置状态栏"
+      },
+      "theme": {
+        "description": "选择语法高亮主题"
+      },
+      "pets": {
+        "description": "选择或隐藏终端宠物"
+      },
+      "mcp": {
+        "description": "列出已配置的 MCP 工具"
+      },
+      "plugins": {
+        "description": "浏览插件"
+      },
+      "logout": {
+        "description": "退出 Codex 登录"
+      },
+      "exit": {
+        "description": "退出 Codex"
+      },
+      "feedback": {
+        "description": "将日志发送给维护者"
+      },
+      "ps": {
+        "description": "列出后台终端"
+      },
+      "stop": {
+        "description": "停止所有后台终端"
+      },
+      "clear": {
+        "description": "清除终端并开始新对话"
+      },
+      "personality": {
+        "description": "选择沟通风格"
+      },
+      "subagents": {
+        "description": "切换当前活动的智能体会话"
+      }
+    }
+  },
+  "networkProxy": {
+    "validation": {
+      "tooLong": "代理 URL 过长。",
+      "invalidUrl": "请输入有效的代理 URL。",
+      "unsupportedScheme": "请使用 http、https、socks、socks4 或 socks5 代理 URL。",
+      "missingHost": "代理 URL 必须包含主机。"
+    }
   }
 }

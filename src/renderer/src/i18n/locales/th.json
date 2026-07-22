@@ -13727,5 +13727,858 @@
     "sidebar": {
       "label": "แดชบอร์ดเอเจนต์"
     }
+  },
+  "agentsOrchestrationSteps": {
+    "statuses": {
+      "name": "การมองเห็น",
+      "subtitle": "การมองเห็นเอเจนต์",
+      "description": "ดูได้ว่าเอเจนต์ใดกำลังทำงาน รอ ทำงานสด หรือติดขัดอยู่"
+    },
+    "orchestration": {
+      "name": "การประสานงาน",
+      "subtitle": "การประสานงาน",
+      "description": "ให้เอเจนต์จัดการและประสานงานพื้นที่ทำงานของ Orca เพื่อทำงานที่ใหญ่ขึ้น"
+    },
+    "usage": {
+      "name": "การใช้งาน",
+      "subtitle": "การใช้งาน",
+      "description": "ติดตามการใช้งานและขีดจำกัดอัตราการใช้งานของทุกบัญชีที่เชื่อมต่อ เพื่อให้รู้ว่าควรสลับบัญชีเมื่อใด"
+    }
+  },
+  "reviewSteps": {
+    "notes": {
+      "name": "บันทึก",
+      "subtitle": "บันทึกและ diff",
+      "description": "ส่งบันทึกรีวิวที่เจาะจงไปยังเอเจนต์"
+    },
+    "pr-view": {
+      "name": "การตรวจสอบ PR",
+      "subtitle": "การตรวจสอบและความคิดเห็นของ PR",
+      "description": "ดูสถานะของ PR ได้ในแท็บ Checks"
+    },
+    "ship": {
+      "name": "ส่งงานด้วย AI",
+      "subtitle": "ส่งงานด้วย AI",
+      "description": "ให้ AI เตรียมร่าง commit และ PR ให้คุณ"
+    }
+  },
+  "workbenchSteps": {
+    "terminal": {
+      "name": "เทอร์มินัล",
+      "subtitle": "เทอร์มินัล",
+      "description": "แสดงเอเจนต์ การทดสอบ และบันทึกการพัฒนาให้เห็นพร้อมกัน"
+    },
+    "editor": {
+      "name": "เอดิเตอร์",
+      "subtitle": "เอดิเตอร์",
+      "description": "ใช้เอดิเตอร์ markdown สไตล์ Notion เพื่อจดบันทึกโดยไม่ต้องออกจาก Orca"
+    },
+    "browser": {
+      "name": "เบราว์เซอร์",
+      "subtitle": "เบราว์เซอร์",
+      "description": "รันแอปของคุณในเบราว์เซอร์ของ Orca ส่ง UI element ที่เลือกไปยังเอเจนต์ และให้เอเจนต์โต้ตอบกับเว็บเพจของคุณ"
+    }
+  },
+  "featureWallWorkflows": {
+    "workspaces": {
+      "title": "พื้นที่ทำงาน",
+      "lede": "Orca แบ่งแต่ละงานออกเป็นพื้นที่ทำงานที่แยกจากกัน เพื่อให้เอเจนต์ทำงานพร้อมกันได้"
+    },
+    "tasks": {
+      "title": "งาน",
+      "lede": "เริ่มงานได้โดยตรงจาก GitHub หรือ Linear"
+    },
+    "agents-orchestration": {
+      "title": "เอเจนต์",
+      "lede": "รันเอเจนต์หลายตัวพร้อมกัน ติดตามความคืบหน้า และปล่อยให้การทำงานอัตโนมัติควบคุม Orca เมื่อเป็นประโยชน์"
+    },
+    "workbench": {
+      "title": "เวิร์กเบนช์",
+      "lede": "นำการตั้งค่าเทอร์มินัลของคุณมาไว้ใน Orca แล้วแบ่งพาเนลเพื่อให้เซิร์ฟเวอร์ การทดสอบ log และเอเจนต์ทำงานเคียงข้างกัน"
+    },
+    "review": {
+      "title": "รีวิวโค้ด",
+      "lede": "รีวิวสิ่งที่เปลี่ยนแปลง แสดงความคิดเห็นที่เจาะจง แล้วส่งกลับไปยังเอเจนต์"
+    }
+  },
+  "featureWallTiles": {
+    "tile-01": {
+      "title": "การประสานงานพื้นที่ทำงานแบบขนาน"
+    },
+    "tile-02": {
+      "title": "เทอร์มินัลระดับ Ghostty"
+    },
+    "tile-03": {
+      "title": "รองรับ GitHub และ Linear โดยตรง"
+    },
+    "tile-04": {
+      "title": "รองรับเอเจนต์ CLI หลากหลาย"
+    },
+    "tile-05": {
+      "title": "เบราว์เซอร์ในตัว + โหมดออกแบบ"
+    },
+    "tile-06": {
+      "title": "พื้นที่ทำงานระยะไกล"
+    },
+    "tile-07": {
+      "title": "เอดิเตอร์ Monaco ลากไปยังเอเจนต์ได้"
+    },
+    "tile-08": {
+      "title": "รีวิวแบบอินไลน์ ส่งกลับไปยังเอเจนต์"
+    },
+    "tile-09": {
+      "title": "Orca CLI"
+    },
+    "tile-10": {
+      "title": "ใช้งานด้วยคีย์บอร์ดได้เต็มรูปแบบ"
+    },
+    "tile-11": {
+      "title": "รู้การใช้งานและขีดจำกัดอัตรา"
+    },
+    "tile-12": {
+      "title": "PDF, รูปภาพ, CSV, Markdown"
+    }
+  },
+  "featureTips": {
+    "orca-cli": {
+      "eyebrow": "เคล็ดลับ",
+      "title": "ให้เอเจนต์ควบคุม Orca ด้วย Orca CLI",
+      "description": "ให้เอเจนต์ประสานงาน child worktree และสื่อสารระหว่าง worktree ได้",
+      "ctaLabel": "ติดตั้ง CLI และสกิล"
+    },
+    "cmd-j-palette": {
+      "eyebrow": "เคล็ดลับ",
+      "title": "ไปยัง worktree ด้วย <shortcut>",
+      "description": "ค้นหา worktree สลับแท็บ ปรับการตั้งค่า หรือสร้าง worktree ใหม่ ได้ทั้งหมดโดยไม่ต้องละมือจากคีย์บอร์ด",
+      "ctaLabel": "เข้าใจแล้ว"
+    },
+    "voice-dictation": {
+      "eyebrow": "เคล็ดลับ",
+      "title": "ฟีเจอร์พิมพ์ด้วยเสียงมาแล้ว",
+      "description": "พูดใส่พาเนลที่โฟกัสอยู่ Orca จะถอดเสียงเป็นข้อความให้ กดคีย์ลัดสำหรับการพิมพ์ด้วยเสียงเพื่อเริ่มและหยุด",
+      "ctaLabel": "ตั้งค่าเสียง"
+    }
+  },
+  "contextualTours": {
+    "workspace-board": {
+      "workspace-board-center": {
+        "title": "วางแผนงานบนบอร์ด",
+        "body": "ใช้บอร์ดเมื่อต้องการดูพื้นที่ทำงานตามสถานะแทนที่จะดูตามโปรเจกต์"
+      },
+      "workspace-board-done-lane": {
+        "title": "ย้ายงานผ่านเลน",
+        "body": "ลากพื้นที่ทำงานระหว่างเลนเมื่อสถานะเปลี่ยนไป"
+      }
+    },
+    "workspace-agent-sessions": {
+      "terminal-pane-split-target": {
+        "title": "แบ่งพาเนลเทอร์มินัล",
+        "body": "เปิดพาเนลเทอร์มินัลที่สองด้วย {terminal.splitRight} หรือคลิกขวาที่พาเนลเพื่อดูตัวเลือกการแบ่ง",
+        "primaryActionLabel": "แบ่งเทอร์มินัล"
+      },
+      "workspace-create-control": {
+        "title": "เริ่มงานอื่นแบบขนาน",
+        "body": "แต่ละ worktree จะมี branch ของตัวเอง ทำให้งานที่ทำแบบขนานแยกจากกัน"
+      }
+    },
+    "browser": {
+      "browser-grab-control": {
+        "title": "ดึงบริบทของหน้าเว็บให้เอเจนต์",
+        "body": "ใช้เครื่องมือดึงข้อมูลเพื่อคัดลอกบริบทของ element บนหน้าเว็บให้เอเจนต์"
+      },
+      "browser-annotation-control": {
+        "title": "ทำเครื่องหมายความคิดเห็นด้านดีไซน์ได้ทันที",
+        "body": "ใส่คำอธิบายที่ element แล้วส่งบันทึกเหล่านั้นไปยังเอเจนต์"
+      },
+      "browser-import-hint": {
+        "title": "ยังคงเข้าสู่ระบบอยู่",
+        "body": "นำการเข้าสู่ระบบที่มีอยู่มาไว้ใน Orca เพื่อให้เข้าสู่ระบบได้ทันที"
+      }
+    },
+    "tasks": {
+      "tasks-source-filters": {
+        "title": "เลือกแหล่งที่มาของงาน",
+        "body": "สลับระหว่างผู้ให้บริการที่เชื่อมต่อและตัวกรองโปรเจกต์โดยไม่ต้องเปลี่ยนหน้า"
+      },
+      "tasks-search-presets": {
+        "title": "กรองหางานที่คุณต้องการ",
+        "body": "ใช้ preset และการค้นหาเพื่อจำกัดขอบเขต issue, รีวิว, merge request หรืองาน"
+      },
+      "tasks-start-workspace": {
+        "title": "เริ่มต้นจากรายการงาน",
+        "body": "ใช้ปุ่ม Start หรือ Open บนงาน, issue, รีวิว หรือ merge request เพื่อนำบริบทเข้าสู่พื้นที่ทำงาน"
+      }
+    },
+    "automations": {
+      "automations-create": {
+        "title": "การทำงานอัตโนมัติคืออะไร",
+        "body": "การทำงานอัตโนมัติจะรันงานของเอเจนต์ตามตารางเวลา เพิ่มการทำงานอัตโนมัติได้โดยคลิกปุ่มนี้"
+      },
+      "automations-runs": {
+        "title": "ดูผลลัพธ์",
+        "body": "การรัน (run) จะแสดงว่าการทำงานอัตโนมัติทำงานเมื่อใด เกิดอะไรขึ้น และจะตรวจสอบผลลัพธ์ได้จากที่ใด"
+      }
+    },
+    "floating-workspace": {
+      "floating-workspace-new-terminal": {
+        "title": "รันเอเจนต์ในทุก repo",
+        "body": "เอเจนต์ในนี้สามารถรันในโฟลเดอร์ใดก็ได้ที่คุณเลือก ชี้ไปที่ไดเรกทอรีที่อยู่เหนือบริการของคุณ เพื่อทำงานข้ามทุก repo พร้อมกัน"
+      },
+      "floating-workspace-new-markdown": {
+        "title": "หรือใช้เป็นพื้นที่จดบันทึกชั่วคราว",
+        "body": "เปิดเอเจนต์ เทอร์มินัลชั่วคราว บันทึก และแท็บเบราว์เซอร์ โดยไม่ทำให้ worktree ที่คุณโฟกัสอยู่รก"
+      }
+    },
+    "workspace-creation": {
+      "workspace-creation-project": {
+        "title": "เลือกโปรเจกต์",
+        "body": "Orca แยกแต่ละงานไว้ใน worktree ของตัวเอง โดยแตก branch จาก base ของคุณ"
+      },
+      "workspace-creation-name": {
+        "title": "ตั้งชื่อ หรือเริ่มจากงานที่มีอยู่",
+        "body": "เริ่มจากงานที่เชื่อมโยงไว้เพื่อใช้ชื่อ issue หรือ PR แบบสั้น หรือเว้นว่างไว้เพื่อให้ตั้งชื่ออัตโนมัติจากข้อความแรกที่ส่งถึงเอเจนต์"
+      },
+      "workspace-creation-agent": {
+        "title": "เลือกเอเจนต์ที่จะเริ่มงาน",
+        "body": "เลือกเอเจนต์ที่ควรเปิดเมื่อสร้าง worktree นี้"
+      }
+    }
+  },
+  "keybindings": {
+    "actions": {
+      "worktree": {
+        "quickOpen": {
+          "title": "ไปยังไฟล์"
+        },
+        "palette": {
+          "title": "สลับ worktree"
+        },
+        "navigateUp": {
+          "title": "worktree ก่อนหน้า"
+        },
+        "navigateDown": {
+          "title": "worktree ถัดไป"
+        },
+        "history": {
+          "back": {
+            "title": "ย้อนกลับประวัติ worktree"
+          },
+          "forward": {
+            "title": "ไปข้างหน้าประวัติ worktree"
+          }
+        }
+      },
+      "app": {
+        "settings": {
+          "title": "เปิดการตั้งค่า"
+        },
+        "forceReload": {
+          "title": "โหลดใหม่แบบบังคับ"
+        }
+      },
+      "workspace": {
+        "create": {
+          "title": "สร้าง worktree"
+        },
+        "rename": {
+          "title": "เปลี่ยนชื่อ worktree"
+        },
+        "delete": {
+          "title": "ลบพื้นที่ทำงาน"
+        },
+        "openBoard": {
+          "title": "เปิดบอร์ดพื้นที่ทำงาน"
+        },
+        "selectByIndex": {
+          "title": "เลือกพื้นที่ทำงาน 1–9"
+        }
+      },
+      "voice": {
+        "dictation": {
+          "title": "พิมพ์ด้วยเสียง"
+        }
+      },
+      "view": {
+        "tasks": {
+          "title": "เปิดงาน"
+        }
+      },
+      "sidebar": {
+        "left": {
+          "toggle": {
+            "title": "สลับแถบด้านข้าง"
+          }
+        },
+        "right": {
+          "toggle": {
+            "title": "สลับแถบด้านข้างขวา"
+          }
+        },
+        "explorer": {
+          "toggle": {
+            "title": "แสดงตัวสำรวจไฟล์"
+          }
+        },
+        "search": {
+          "toggle": {
+            "title": "แสดงการค้นหา"
+          }
+        },
+        "sourceControl": {
+          "toggle": {
+            "title": "แสดงการควบคุมซอร์ส"
+          }
+        },
+        "checks": {
+          "toggle": {
+            "title": "แสดงการตรวจสอบ"
+          }
+        },
+        "ports": {
+          "toggle": {
+            "title": "แสดงพอร์ต"
+          }
+        },
+        "sleepingWorkspaces": {
+          "toggle": {
+            "title": "สลับพื้นที่ทำงานที่พักไว้"
+          }
+        },
+        "focusWorktreeList": {
+          "title": "โฟกัสรายการ worktree"
+        }
+      },
+      "floatingTerminal": {
+        "toggle": {
+          "title": "สลับเทอร์มินัลลอย"
+        }
+      },
+      "floatingWorkspace": {
+        "maximize": {
+          "title": "ขยายพาเนลพื้นที่ทำงานลอยใหญ่สุด"
+        },
+        "minimize": {
+          "title": "ย่อพาเนลพื้นที่ทำงานลอย"
+        }
+      },
+      "zoom": {
+        "in": {
+          "title": "ซูมเข้า"
+        },
+        "out": {
+          "title": "ซูมออก"
+        },
+        "reset": {
+          "title": "รีเซ็ตขนาด"
+        }
+      },
+      "tab": {
+        "newTerminal": {
+          "title": "แท็บเทอร์มินัลใหม่"
+        },
+        "newAgent": {
+          "title": "แท็บเอเจนต์ใหม่ (เอเจนต์เริ่มต้น)",
+          "claude": {
+            "title": "แท็บ Claude ใหม่"
+          },
+          "claude-agent-teams": {
+            "title": "แท็บ Claude Agent Teams ใหม่"
+          },
+          "openclaude": {
+            "title": "แท็บ OpenClaude ใหม่"
+          },
+          "codex": {
+            "title": "แท็บ Codex ใหม่"
+          },
+          "devin": {
+            "title": "แท็บ Devin ใหม่"
+          },
+          "ante": {
+            "title": "แท็บ Ante ใหม่"
+          },
+          "autohand": {
+            "title": "แท็บ Autohand Code ใหม่"
+          },
+          "opencode": {
+            "title": "แท็บ OpenCode ใหม่"
+          },
+          "mimo-code": {
+            "title": "แท็บ MiMo Code ใหม่"
+          },
+          "pi": {
+            "title": "แท็บ Pi ใหม่"
+          },
+          "omp": {
+            "title": "แท็บ OMP ใหม่"
+          },
+          "gemini": {
+            "title": "แท็บ Gemini ใหม่"
+          },
+          "antigravity": {
+            "title": "แท็บ Antigravity ใหม่"
+          },
+          "aider": {
+            "title": "แท็บ Aider ใหม่"
+          },
+          "goose": {
+            "title": "แท็บ Goose ใหม่"
+          },
+          "amp": {
+            "title": "แท็บ Amp ใหม่"
+          },
+          "kilo": {
+            "title": "แท็บ Kilocode ใหม่"
+          },
+          "kiro": {
+            "title": "แท็บ Kiro ใหม่"
+          },
+          "crush": {
+            "title": "แท็บ Charm ใหม่"
+          },
+          "aug": {
+            "title": "แท็บ Auggie ใหม่"
+          },
+          "cline": {
+            "title": "แท็บ Cline ใหม่"
+          },
+          "codebuff": {
+            "title": "แท็บ Codebuff ใหม่"
+          },
+          "command-code": {
+            "title": "แท็บ Command Code ใหม่"
+          },
+          "continue": {
+            "title": "แท็บ Continue ใหม่"
+          },
+          "cursor": {
+            "title": "แท็บ Cursor ใหม่"
+          },
+          "droid": {
+            "title": "แท็บ Droid ใหม่"
+          },
+          "kimi": {
+            "title": "แท็บ Kimi ใหม่"
+          },
+          "mistral-vibe": {
+            "title": "แท็บ Mistral Vibe ใหม่"
+          },
+          "qwen-code": {
+            "title": "แท็บ Qwen Code ใหม่"
+          },
+          "rovo": {
+            "title": "แท็บ Rovo Dev ใหม่"
+          },
+          "hermes": {
+            "title": "แท็บ Hermes ใหม่"
+          },
+          "openclaw": {
+            "title": "แท็บ OpenClaw ใหม่"
+          },
+          "copilot": {
+            "title": "แท็บ GitHub Copilot ใหม่"
+          },
+          "grok": {
+            "title": "แท็บ Grok ใหม่"
+          }
+        },
+        "newBrowser": {
+          "title": "แท็บเบราว์เซอร์ใหม่"
+        },
+        "newSimulator": {
+          "title": "แท็บโปรแกรมจำลองมือถือใหม่"
+        },
+        "newMarkdown": {
+          "title": "แท็บ markdown ใหม่"
+        },
+        "openMarkdown": {
+          "title": "เปิดแท็บ markdown"
+        },
+        "close": {
+          "title": "ปิดแท็บที่ใช้งานอยู่"
+        },
+        "closeAll": {
+          "title": "ปิดแท็บเอดิเตอร์ทั้งหมด"
+        },
+        "rename": {
+          "title": "เปลี่ยนชื่อแท็บที่ใช้งานอยู่"
+        },
+        "reopenClosed": {
+          "title": "เปิดแท็บที่ปิดไปอีกครั้ง"
+        },
+        "nextSameType": {
+          "title": "แท็บถัดไป (ประเภทเดียวกัน)"
+        },
+        "previousSameType": {
+          "title": "แท็บก่อนหน้า (ประเภทเดียวกัน)"
+        },
+        "nextAllTypes": {
+          "title": "แท็บถัดไป (ทุกประเภท)"
+        },
+        "previousAllTypes": {
+          "title": "แท็บก่อนหน้า (ทุกประเภท)"
+        },
+        "previousRecent": {
+          "title": "แท็บล่าสุดก่อนหน้า"
+        },
+        "nextTerminal": {
+          "title": "แท็บเทอร์มินัลถัดไป"
+        },
+        "previousTerminal": {
+          "title": "แท็บเทอร์มินัลก่อนหน้า"
+        },
+        "selectByIndex": {
+          "title": "เลือกแท็บ 1–9"
+        },
+        "openQuickCommandsMenu": {
+          "title": "สลับเมนูคำสั่งด่วน"
+        }
+      },
+      "browser": {
+        "find": {
+          "title": "ค้นหาในเบราว์เซอร์"
+        },
+        "back": {
+          "title": "ย้อนกลับในเบราว์เซอร์"
+        },
+        "forward": {
+          "title": "ไปข้างหน้าในเบราว์เซอร์"
+        },
+        "reload": {
+          "title": "โหลดหน้าเบราว์เซอร์ใหม่"
+        },
+        "hardReload": {
+          "title": "โหลดหน้าเบราว์เซอร์ใหม่แบบเต็ม"
+        },
+        "focusAddressBar": {
+          "title": "โฟกัสแถบที่อยู่เบราว์เซอร์"
+        },
+        "grabElement": {
+          "title": "ดึง Element บนหน้าเว็บ"
+        }
+      },
+      "editor": {
+        "find": {
+          "title": "ค้นหาในเอดิเตอร์"
+        },
+        "replace": {
+          "title": "แทนที่ในเอดิเตอร์"
+        },
+        "save": {
+          "title": "บันทึกไฟล์"
+        },
+        "markdownPreview": {
+          "title": "แสดงตัวอย่าง Markdown"
+        },
+        "copyContext": {
+          "title": "คัดลอกบริบท"
+        },
+        "previousChange": {
+          "title": "ไปยังการเปลี่ยนแปลงก่อนหน้า"
+        },
+        "nextChange": {
+          "title": "ไปยังการเปลี่ยนแปลงถัดไป"
+        },
+        "addReviewNote": {
+          "title": "เพิ่มบันทึกรีวิว"
+        }
+      },
+      "fileExplorer": {
+        "undo": {
+          "title": "เลิกทำการดำเนินการไฟล์"
+        },
+        "redo": {
+          "title": "ทำซ้ำการดำเนินการไฟล์"
+        },
+        "copyPath": {
+          "title": "คัดลอกพาธไฟล์"
+        },
+        "copyRelativePath": {
+          "title": "คัดลอกพาธไฟล์แบบสัมพัทธ์"
+        },
+        "delete": {
+          "title": "ลบไฟล์"
+        }
+      },
+      "settings": {
+        "search": {
+          "title": "ค้นหาการตั้งค่า"
+        }
+      },
+      "terminal": {
+        "copySelection": {
+          "title": "คัดลอกข้อความที่เลือกในเทอร์มินัล"
+        },
+        "paste": {
+          "title": "วางลงในเทอร์มินัล"
+        },
+        "search": {
+          "title": "ค้นหาในพาเนลที่ใช้งานอยู่"
+        },
+        "clear": {
+          "title": "ล้างพาเนลที่ใช้งานอยู่"
+        },
+        "acceptAutosuggest": {
+          "title": "ยอมรับคำแนะนำคำสั่งอัตโนมัติ"
+        },
+        "focusNextPane": {
+          "title": "โฟกัสพาเนลถัดไป"
+        },
+        "focusPreviousPane": {
+          "title": "โฟกัสพาเนลก่อนหน้า"
+        },
+        "equalizePaneSizes": {
+          "title": "ปรับขนาดพาเนลให้เท่ากัน"
+        },
+        "expandPane": {
+          "title": "ขยาย / ย่อพาเนล"
+        },
+        "setTitle": {
+          "title": "ตั้งชื่อ…"
+        },
+        "clearPaneTitle": {
+          "title": "ล้างชื่อพาเนล"
+        },
+        "closePane": {
+          "title": "ปิดพาเนลที่ใช้งานอยู่"
+        },
+        "splitRight": {
+          "title": "แบ่งเทอร์มินัลไปทางขวา"
+        },
+        "splitDown": {
+          "title": "แบ่งเทอร์มินัลลงล่าง"
+        },
+        "switchInputSource": {
+          "title": "สลับแหล่งป้อนข้อมูล / ภาษา (ระบบปฏิบัติการ)"
+        }
+      }
+    },
+    "groups": {
+      "global": {
+        "title": "ทั่วไป"
+      },
+      "tabs": {
+        "title": "แท็บ"
+      },
+      "tab-navigation": {
+        "title": "การนำทางแท็บ"
+      },
+      "quick-commands": {
+        "title": "คำสั่งด่วน"
+      },
+      "browser": {
+        "title": "เบราว์เซอร์"
+      },
+      "editors": {
+        "title": "เอดิเตอร์"
+      },
+      "file-explorer": {
+        "title": "ตัวสำรวจไฟล์"
+      },
+      "settings": {
+        "title": "การตั้งค่า"
+      },
+      "terminal-panes": {
+        "title": "พาเนลเทอร์มินัล"
+      },
+      "agents": {
+        "title": "เอเจนต์"
+      }
+    }
+  },
+  "workspaceStatus": {
+    "todo": {
+      "label": "รอดำเนินการ"
+    },
+    "in-progress": {
+      "label": "กำลังดำเนินการ"
+    },
+    "in-review": {
+      "label": "กำลังรีวิว"
+    },
+    "completed": {
+      "label": "เสร็จสิ้น"
+    }
+  },
+  "automationSchedule": {
+    "hourly": "ทุกชั่วโมง เวลา :{{minute}}",
+    "daily": "ทุกวัน เวลา {{time}}",
+    "weekdays": "วันธรรมดา เวลา {{time}}",
+    "weekly": "{{day}} เวลา {{time}}",
+    "custom": "ตารางเวลาแบบกำหนดเอง",
+    "invalid": "ตารางเวลาไม่ถูกต้อง",
+    "validCustomCron": "cron แบบกำหนดเองถูกต้อง",
+    "advancedPlaceholder": "ตารางเวลาขั้นสูง"
+  },
+  "nativeChatSlashCommands": {
+    "common": {
+      "clear": {
+        "description": "ล้างบทสนทนา"
+      },
+      "help": {
+        "description": "แสดงคำสั่งที่ใช้ได้"
+      }
+    },
+    "claude": {
+      "clear": {
+        "description": "ล้างประวัติบทสนทนา"
+      },
+      "compact": {
+        "description": "สรุปและบีบอัดบทสนทนา"
+      },
+      "init": {
+        "description": "สร้างไฟล์ CLAUDE.md เริ่มต้น"
+      },
+      "review": {
+        "description": "รีวิวการเปลี่ยนแปลงปัจจุบัน"
+      },
+      "help": {
+        "description": "แสดงคำสั่งที่ใช้ได้"
+      }
+    },
+    "codex": {
+      "model": {
+        "description": "เลือกโมเดลและระดับความพยายามในการให้เหตุผล"
+      },
+      "ide": {
+        "description": "รวมบริบทของ IDE"
+      },
+      "permissions": {
+        "description": "เลือกสิ่งที่ Codex ได้รับอนุญาตให้ทำ"
+      },
+      "keymap": {
+        "description": "กำหนดคีย์ลัด TUI ใหม่"
+      },
+      "vim": {
+        "description": "สลับโหมด Vim"
+      },
+      "experimental": {
+        "description": "สลับฟีเจอร์ทดลอง"
+      },
+      "approve": {
+        "description": "อนุมัติการลองรีวิวอัตโนมัติอีกครั้ง"
+      },
+      "memories": {
+        "description": "กำหนดค่าการใช้หน่วยความจำ"
+      },
+      "skills": {
+        "description": "จัดการและใช้สกิล"
+      },
+      "import": {
+        "description": "นำเข้าการตั้งค่าจาก Claude Code"
+      },
+      "hooks": {
+        "description": "ดู lifecycle hook"
+      },
+      "review": {
+        "description": "รีวิวการเปลี่ยนแปลงปัจจุบัน"
+      },
+      "rename": {
+        "description": "เปลี่ยนชื่อเธรดปัจจุบัน"
+      },
+      "new": {
+        "description": "เริ่มแชทใหม่"
+      },
+      "archive": {
+        "description": "เก็บเซสชันนี้เข้าคลังและออก"
+      },
+      "delete": {
+        "description": "ลบเซสชันนี้และออก"
+      },
+      "resume": {
+        "description": "ดำเนินแชทที่บันทึกไว้ต่อ"
+      },
+      "fork": {
+        "description": "Fork แชทปัจจุบัน"
+      },
+      "app": {
+        "description": "ดำเนินการต่อใน Codex Desktop"
+      },
+      "init": {
+        "description": "สร้างไฟล์ AGENTS.md"
+      },
+      "compact": {
+        "description": "บีบอัดบทสนทนา"
+      },
+      "plan": {
+        "description": "สลับไปโหมด Plan"
+      },
+      "goal": {
+        "description": "ตั้งค่าหรือดูเป้าหมาย"
+      },
+      "agent": {
+        "description": "สลับเธรดเอเจนต์ที่ใช้งานอยู่"
+      },
+      "side": {
+        "description": "เริ่มบทสนทนาแยก"
+      },
+      "copy": {
+        "description": "คัดลอกคำตอบล่าสุดเป็น markdown"
+      },
+      "raw": {
+        "description": "สลับโหมด scrollback แบบดิบ"
+      },
+      "diff": {
+        "description": "แสดง diff การทำงาน"
+      },
+      "mention": {
+        "description": "กล่าวถึงไฟล์"
+      },
+      "status": {
+        "description": "แสดงการตั้งค่าและการใช้งานเซสชัน"
+      },
+      "usage": {
+        "description": "ดูการใช้งานบัญชี"
+      },
+      "title": {
+        "description": "กำหนดค่าชื่อเทอร์มินัล"
+      },
+      "statusline": {
+        "description": "กำหนดค่าแถบสถานะ"
+      },
+      "theme": {
+        "description": "เลือกธีมไฮไลต์ไวยากรณ์"
+      },
+      "pets": {
+        "description": "เลือกหรือซ่อนสัตว์เลี้ยงในเทอร์มินัล"
+      },
+      "mcp": {
+        "description": "แสดงรายการเครื่องมือ MCP ที่กำหนดค่าไว้"
+      },
+      "plugins": {
+        "description": "เรียกดูปลั๊กอิน"
+      },
+      "logout": {
+        "description": "ออกจากระบบ Codex"
+      },
+      "exit": {
+        "description": "ออกจาก Codex"
+      },
+      "feedback": {
+        "description": "ส่ง log ให้ผู้ดูแลระบบ"
+      },
+      "ps": {
+        "description": "แสดงรายการเทอร์มินัลพื้นหลัง"
+      },
+      "stop": {
+        "description": "หยุดเทอร์มินัลพื้นหลังทั้งหมด"
+      },
+      "clear": {
+        "description": "ล้างเทอร์มินัลและเริ่มแชทใหม่"
+      },
+      "personality": {
+        "description": "เลือกรูปแบบการสื่อสาร"
+      },
+      "subagents": {
+        "description": "สลับเธรดเอเจนต์ที่ใช้งานอยู่"
+      }
+    }
+  },
+  "networkProxy": {
+    "validation": {
+      "tooLong": "URL ของ Proxy ยาวเกินไป",
+      "invalidUrl": "กรอก URL ของ Proxy ที่ถูกต้อง",
+      "unsupportedScheme": "ใช้ URL ของ Proxy แบบ http, https, socks, socks4 หรือ socks5",
+      "missingHost": "URL ของ Proxy ต้องมี host"
+    }
   }
 }

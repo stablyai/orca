@@ -13727,5 +13727,858 @@
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
+  },
+  "agentsOrchestrationSteps": {
+    "statuses": {
+      "name": "可視性",
+      "subtitle": "エージェントの可視性",
+      "description": "どのエージェントが作業中か、待機中か、稼働中か、ブロックされているかを把握できます。"
+    },
+    "orchestration": {
+      "name": "オーケストレーション",
+      "subtitle": "オーケストレーション",
+      "description": "エージェントがOrcaのワークスペースを管理・調整し、より大きなタスクを実行できるようにします。"
+    },
+    "usage": {
+      "name": "使用状況",
+      "subtitle": "使用状況",
+      "description": "接続しているすべてのアカウントの使用状況とレート制限を確認し、切り替えのタイミングを把握できます。"
+    }
+  },
+  "reviewSteps": {
+    "notes": {
+      "name": "ノート",
+      "subtitle": "ノートと差分",
+      "description": "的を絞ったレビューノートをエージェントに送信します。"
+    },
+    "pr-view": {
+      "name": "PRチェック",
+      "subtitle": "PRチェックとコメント",
+      "description": "ChecksタブでPRのステータスを確認できます。"
+    },
+    "ship": {
+      "name": "AIでリリース",
+      "subtitle": "AIでリリース",
+      "description": "AIにcommitとPRのドラフトを準備させましょう。"
+    }
+  },
+  "workbenchSteps": {
+    "terminal": {
+      "name": "ターミナル",
+      "subtitle": "ターミナル",
+      "description": "エージェント、テスト、開発ログを同時に表示しておけます。"
+    },
+    "editor": {
+      "name": "エディタ",
+      "subtitle": "エディタ",
+      "description": "Notion風のMarkdownエディタで、Orcaから離れることなくメモを書けます。"
+    },
+    "browser": {
+      "name": "ブラウザ",
+      "subtitle": "ブラウザ",
+      "description": "Orca内蔵のブラウザでアプリを実行し、選択したUI要素をエージェントに送信して、エージェントにWebページを操作させられます。"
+    }
+  },
+  "featureWallWorkflows": {
+    "workspaces": {
+      "title": "ワークスペース",
+      "lede": "Orcaは各タスクを独立したワークスペースに分割し、エージェントを並行して実行できるようにします。"
+    },
+    "tasks": {
+      "title": "タスク",
+      "lede": "GitHubやLinearから直接作業を開始できます。"
+    },
+    "agents-orchestration": {
+      "title": "エージェント",
+      "lede": "複数のエージェントを同時に実行し、進捗を追跡し、役立つ場面では自動化にOrcaを操作させられます。"
+    },
+    "workbench": {
+      "title": "ワークベンチ",
+      "lede": "普段のターミナル環境をOrcaに持ち込み、ペインを分割してサーバー、テスト、ログ、エージェントを並べて実行できます。"
+    },
+    "review": {
+      "title": "コードレビュー",
+      "lede": "変更内容をレビューし、的を絞ったフィードバックを残して、エージェントに送り返せます。"
+    }
+  },
+  "featureWallTiles": {
+    "tile-01": {
+      "title": "並行ワークスペースのオーケストレーション"
+    },
+    "tile-02": {
+      "title": "Ghosttyクラスのターミナル"
+    },
+    "tile-03": {
+      "title": "GitHubとLinearをネイティブ統合"
+    },
+    "tile-04": {
+      "title": "対応するCLIエージェント"
+    },
+    "tile-05": {
+      "title": "内蔵ブラウザ＋デザインモード"
+    },
+    "tile-06": {
+      "title": "リモートワークスペース"
+    },
+    "tile-07": {
+      "title": "Monacoエディタ、ドラッグでエージェントへ"
+    },
+    "tile-08": {
+      "title": "インラインレビューをエージェントへ"
+    },
+    "tile-09": {
+      "title": "Orca CLI"
+    },
+    "tile-10": {
+      "title": "キーボード中心の操作"
+    },
+    "tile-11": {
+      "title": "使用状況とレート制限を把握"
+    },
+    "tile-12": {
+      "title": "PDF、画像、CSV、Markdown"
+    }
+  },
+  "featureTips": {
+    "orca-cli": {
+      "eyebrow": "ヒント",
+      "title": "Orca CLIでエージェントにOrcaを操作させる",
+      "description": "エージェントが子ワークツリーを調整し、ワークツリー間で通信できるようにします。",
+      "ctaLabel": "CLIとスキルをインストール"
+    },
+    "cmd-j-palette": {
+      "eyebrow": "ヒント",
+      "title": "<shortcut>でワークツリーにジャンプ",
+      "description": "ワークツリーの検索、タブの切り替え、設定の調整、新しいワークツリーの作成まで、キーボードから離れずに行えます。",
+      "ctaLabel": "わかりました"
+    },
+    "voice-dictation": {
+      "eyebrow": "ヒント",
+      "title": "音声入力が登場",
+      "description": "フォーカスしているペインに話しかけると、Orcaが文字起こしします。音声入力のショートカットで開始・停止できます。",
+      "ctaLabel": "音声入力を設定"
+    }
+  },
+  "contextualTours": {
+    "workspace-board": {
+      "workspace-board-center": {
+        "title": "ボードで作業を計画",
+        "body": "プロジェクト別ではなくステータス別にワークスペースを見たいときは、ボードを使用してください。"
+      },
+      "workspace-board-done-lane": {
+        "title": "レーン間で作業を移動",
+        "body": "ステータスが変わったら、レーン間でワークスペースをドラッグしてください。"
+      }
+    },
+    "workspace-agent-sessions": {
+      "terminal-pane-split-target": {
+        "title": "ターミナルペインを分割",
+        "body": "{terminal.splitRight}で2つ目のターミナルペインを開くか、ペインを右クリックして分割オプションを表示してください。",
+        "primaryActionLabel": "ターミナルを分割"
+      },
+      "workspace-create-control": {
+        "title": "別のタスクを並行して開始",
+        "body": "各ワークツリーには専用のbranchが割り当てられるため、並行作業が混ざりません。"
+      }
+    },
+    "browser": {
+      "browser-grab-control": {
+        "title": "エージェント向けにページのコンテキストを取得",
+        "body": "grabツールを使って、ページ要素のコンテキストをエージェント用にコピーできます。"
+      },
+      "browser-annotation-control": {
+        "title": "その場でデザインフィードバックを記入",
+        "body": "要素に注釈を付けて、そのメモをエージェントに送信できます。"
+      },
+      "browser-import-hint": {
+        "title": "ログイン状態を維持",
+        "body": "既存のログイン情報をOrcaに取り込めば、すぐにサインイン状態を維持できます。"
+      }
+    },
+    "tasks": {
+      "tasks-source-filters": {
+        "title": "作業元を選択",
+        "body": "ページを切り替えることなく、接続済みのプロバイダーとプロジェクトフィルターを切り替えられます。"
+      },
+      "tasks-search-presets": {
+        "title": "必要な作業に絞り込み",
+        "body": "プリセットと検索を使って、issue、レビュー、merge request、タスクを絞り込めます。"
+      },
+      "tasks-start-workspace": {
+        "title": "作業項目から開始",
+        "body": "タスク、issue、レビュー、merge requestで「開始」または「開く」を使うと、そのコンテキストをワークスペースに取り込めます。"
+      }
+    },
+    "automations": {
+      "automations-create": {
+        "title": "オートメーションとは？",
+        "body": "オートメーションは、スケジュールに沿ってエージェントの作業を実行します。このボタンをクリックしてオートメーションを追加してください。"
+      },
+      "automations-runs": {
+        "title": "実行結果を確認",
+        "body": "実行履歴には、オートメーションが実行された時刻、実行内容、出力の確認先が表示されます。"
+      }
+    },
+    "floating-workspace": {
+      "floating-workspace-new-terminal": {
+        "title": "すべてのrepoでエージェントを実行",
+        "body": "ここで動くエージェントは、選んだ任意のフォルダで実行されます。各サービスの上位ディレクトリを指定すれば、すべてのrepoを一度にまたいで作業できます。"
+      },
+      "floating-workspace-new-markdown": {
+        "title": "またはスクラッチパッドとして使用",
+        "body": "エージェント、作業用ターミナル、メモ、ブラウザタブを、今集中しているワークツリーを散らかさずに開けます。"
+      }
+    },
+    "workspace-creation": {
+      "workspace-creation-project": {
+        "title": "プロジェクトを選択",
+        "body": "Orcaは各タスクをベースからbranchした専用のワークツリーに分離します。"
+      },
+      "workspace-creation-name": {
+        "title": "名前を付ける、または既存の作業から開始",
+        "body": "リンクされたタスクから開始すると、issueやPRの短い名前が使われます。空欄のままにすると、最初のエージェントメッセージから自動的に名前が付けられます。"
+      },
+      "workspace-creation-agent": {
+        "title": "作業を開始するエージェントを選択",
+        "body": "このワークツリーが作成されたときに開くエージェントを選んでください。"
+      }
+    }
+  },
+  "keybindings": {
+    "actions": {
+      "worktree": {
+        "quickOpen": {
+          "title": "ファイルに移動"
+        },
+        "palette": {
+          "title": "ワークツリーを切り替え"
+        },
+        "navigateUp": {
+          "title": "前のワークツリー"
+        },
+        "navigateDown": {
+          "title": "次のワークツリー"
+        },
+        "history": {
+          "back": {
+            "title": "ワークツリー履歴を戻る"
+          },
+          "forward": {
+            "title": "ワークツリー履歴を進む"
+          }
+        }
+      },
+      "app": {
+        "settings": {
+          "title": "設定を開く"
+        },
+        "forceReload": {
+          "title": "強制リロード"
+        }
+      },
+      "workspace": {
+        "create": {
+          "title": "ワークツリーを作成"
+        },
+        "rename": {
+          "title": "ワークツリーの名前を変更"
+        },
+        "delete": {
+          "title": "ワークスペースを削除"
+        },
+        "openBoard": {
+          "title": "ワークスペースボードを開く"
+        },
+        "selectByIndex": {
+          "title": "ワークスペース1〜9を選択"
+        }
+      },
+      "voice": {
+        "dictation": {
+          "title": "音声入力"
+        }
+      },
+      "view": {
+        "tasks": {
+          "title": "タスクを開く"
+        }
+      },
+      "sidebar": {
+        "left": {
+          "toggle": {
+            "title": "サイドバーの表示切り替え"
+          }
+        },
+        "right": {
+          "toggle": {
+            "title": "右サイドバーの表示切り替え"
+          }
+        },
+        "explorer": {
+          "toggle": {
+            "title": "エクスプローラーを表示"
+          }
+        },
+        "search": {
+          "toggle": {
+            "title": "検索を表示"
+          }
+        },
+        "sourceControl": {
+          "toggle": {
+            "title": "ソース管理を表示"
+          }
+        },
+        "checks": {
+          "toggle": {
+            "title": "チェックを表示"
+          }
+        },
+        "ports": {
+          "toggle": {
+            "title": "ポートを表示"
+          }
+        },
+        "sleepingWorkspaces": {
+          "toggle": {
+            "title": "スリープ中のワークスペースの表示切り替え"
+          }
+        },
+        "focusWorktreeList": {
+          "title": "ワークツリー一覧にフォーカス"
+        }
+      },
+      "floatingTerminal": {
+        "toggle": {
+          "title": "フローティングターミナルの表示切り替え"
+        }
+      },
+      "floatingWorkspace": {
+        "maximize": {
+          "title": "フローティングワークスペースパネルを最大化"
+        },
+        "minimize": {
+          "title": "フローティングワークスペースパネルを最小化"
+        }
+      },
+      "zoom": {
+        "in": {
+          "title": "拡大"
+        },
+        "out": {
+          "title": "縮小"
+        },
+        "reset": {
+          "title": "サイズをリセット"
+        }
+      },
+      "tab": {
+        "newTerminal": {
+          "title": "新しいターミナルタブ"
+        },
+        "newAgent": {
+          "title": "新しいエージェントタブ（既定のエージェント）",
+          "claude": {
+            "title": "新しいClaudeタブ"
+          },
+          "claude-agent-teams": {
+            "title": "新しいClaude Agent Teamsタブ"
+          },
+          "openclaude": {
+            "title": "新しいOpenClaudeタブ"
+          },
+          "codex": {
+            "title": "新しいCodexタブ"
+          },
+          "devin": {
+            "title": "新しいDevinタブ"
+          },
+          "ante": {
+            "title": "新しいAnteタブ"
+          },
+          "autohand": {
+            "title": "新しいAutohand Codeタブ"
+          },
+          "opencode": {
+            "title": "新しいOpenCodeタブ"
+          },
+          "mimo-code": {
+            "title": "新しいMiMo Codeタブ"
+          },
+          "pi": {
+            "title": "新しいPiタブ"
+          },
+          "omp": {
+            "title": "新しいOMPタブ"
+          },
+          "gemini": {
+            "title": "新しいGeminiタブ"
+          },
+          "antigravity": {
+            "title": "新しいAntigravityタブ"
+          },
+          "aider": {
+            "title": "新しいAiderタブ"
+          },
+          "goose": {
+            "title": "新しいGooseタブ"
+          },
+          "amp": {
+            "title": "新しいAmpタブ"
+          },
+          "kilo": {
+            "title": "新しいKilocodeタブ"
+          },
+          "kiro": {
+            "title": "新しいKiroタブ"
+          },
+          "crush": {
+            "title": "新しいCharmタブ"
+          },
+          "aug": {
+            "title": "新しいAuggieタブ"
+          },
+          "cline": {
+            "title": "新しいClineタブ"
+          },
+          "codebuff": {
+            "title": "新しいCodebuffタブ"
+          },
+          "command-code": {
+            "title": "新しいCommand Codeタブ"
+          },
+          "continue": {
+            "title": "新しいContinueタブ"
+          },
+          "cursor": {
+            "title": "新しいCursorタブ"
+          },
+          "droid": {
+            "title": "新しいDroidタブ"
+          },
+          "kimi": {
+            "title": "新しいKimiタブ"
+          },
+          "mistral-vibe": {
+            "title": "新しいMistral Vibeタブ"
+          },
+          "qwen-code": {
+            "title": "新しいQwen Codeタブ"
+          },
+          "rovo": {
+            "title": "新しいRovo Devタブ"
+          },
+          "hermes": {
+            "title": "新しいHermesタブ"
+          },
+          "openclaw": {
+            "title": "新しいOpenClawタブ"
+          },
+          "copilot": {
+            "title": "新しいGitHub Copilotタブ"
+          },
+          "grok": {
+            "title": "新しいGrokタブ"
+          }
+        },
+        "newBrowser": {
+          "title": "新しいブラウザタブ"
+        },
+        "newSimulator": {
+          "title": "新しいモバイルエミュレータータブ"
+        },
+        "newMarkdown": {
+          "title": "新しいMarkdownタブ"
+        },
+        "openMarkdown": {
+          "title": "Markdownタブを開く"
+        },
+        "close": {
+          "title": "アクティブなタブを閉じる"
+        },
+        "closeAll": {
+          "title": "すべてのエディタタブを閉じる"
+        },
+        "rename": {
+          "title": "アクティブなタブの名前を変更"
+        },
+        "reopenClosed": {
+          "title": "閉じたタブを再度開く"
+        },
+        "nextSameType": {
+          "title": "次のタブ（同じ種類）"
+        },
+        "previousSameType": {
+          "title": "前のタブ（同じ種類）"
+        },
+        "nextAllTypes": {
+          "title": "次のタブ（すべての種類）"
+        },
+        "previousAllTypes": {
+          "title": "前のタブ（すべての種類）"
+        },
+        "previousRecent": {
+          "title": "直前のタブ"
+        },
+        "nextTerminal": {
+          "title": "次のターミナルタブ"
+        },
+        "previousTerminal": {
+          "title": "前のターミナルタブ"
+        },
+        "selectByIndex": {
+          "title": "タブ1〜9を選択"
+        },
+        "openQuickCommandsMenu": {
+          "title": "クイックコマンドメニューの表示切り替え"
+        }
+      },
+      "browser": {
+        "find": {
+          "title": "ブラウザ内を検索"
+        },
+        "back": {
+          "title": "ブラウザで戻る"
+        },
+        "forward": {
+          "title": "ブラウザで進む"
+        },
+        "reload": {
+          "title": "ブラウザページを再読み込み"
+        },
+        "hardReload": {
+          "title": "ブラウザページを強制再読み込み"
+        },
+        "focusAddressBar": {
+          "title": "ブラウザのアドレスバーにフォーカス"
+        },
+        "grabElement": {
+          "title": "ページ要素を取得"
+        }
+      },
+      "editor": {
+        "find": {
+          "title": "エディタ内を検索"
+        },
+        "replace": {
+          "title": "エディタ内を置換"
+        },
+        "save": {
+          "title": "ファイルを保存"
+        },
+        "markdownPreview": {
+          "title": "Markdownプレビューを表示"
+        },
+        "copyContext": {
+          "title": "コンテキストをコピー"
+        },
+        "previousChange": {
+          "title": "前の変更に移動"
+        },
+        "nextChange": {
+          "title": "次の変更に移動"
+        },
+        "addReviewNote": {
+          "title": "レビューノートを追加"
+        }
+      },
+      "fileExplorer": {
+        "undo": {
+          "title": "ファイル操作を元に戻す"
+        },
+        "redo": {
+          "title": "ファイル操作をやり直す"
+        },
+        "copyPath": {
+          "title": "ファイルパスをコピー"
+        },
+        "copyRelativePath": {
+          "title": "相対ファイルパスをコピー"
+        },
+        "delete": {
+          "title": "ファイルを削除"
+        }
+      },
+      "settings": {
+        "search": {
+          "title": "設定を検索"
+        }
+      },
+      "terminal": {
+        "copySelection": {
+          "title": "ターミナルの選択範囲をコピー"
+        },
+        "paste": {
+          "title": "ターミナルに貼り付け"
+        },
+        "search": {
+          "title": "アクティブなペインを検索"
+        },
+        "clear": {
+          "title": "アクティブなペインをクリア"
+        },
+        "acceptAutosuggest": {
+          "title": "コマンドの自動提案を確定"
+        },
+        "focusNextPane": {
+          "title": "次のペインにフォーカス"
+        },
+        "focusPreviousPane": {
+          "title": "前のペインにフォーカス"
+        },
+        "equalizePaneSizes": {
+          "title": "ペインサイズを均等化"
+        },
+        "expandPane": {
+          "title": "ペインを展開／折りたたみ"
+        },
+        "setTitle": {
+          "title": "タイトルを設定…"
+        },
+        "clearPaneTitle": {
+          "title": "ペインタイトルをクリア"
+        },
+        "closePane": {
+          "title": "アクティブなペインを閉じる"
+        },
+        "splitRight": {
+          "title": "ターミナルを右に分割"
+        },
+        "splitDown": {
+          "title": "ターミナルを下に分割"
+        },
+        "switchInputSource": {
+          "title": "入力ソース／言語を切り替え（OS標準）"
+        }
+      }
+    },
+    "groups": {
+      "global": {
+        "title": "全般"
+      },
+      "tabs": {
+        "title": "タブ"
+      },
+      "tab-navigation": {
+        "title": "タブ移動"
+      },
+      "quick-commands": {
+        "title": "クイックコマンド"
+      },
+      "browser": {
+        "title": "ブラウザ"
+      },
+      "editors": {
+        "title": "エディタ"
+      },
+      "file-explorer": {
+        "title": "ファイルエクスプローラー"
+      },
+      "settings": {
+        "title": "設定"
+      },
+      "terminal-panes": {
+        "title": "ターミナルペイン"
+      },
+      "agents": {
+        "title": "エージェント"
+      }
+    }
+  },
+  "workspaceStatus": {
+    "todo": {
+      "label": "未着手"
+    },
+    "in-progress": {
+      "label": "進行中"
+    },
+    "in-review": {
+      "label": "レビュー中"
+    },
+    "completed": {
+      "label": "完了"
+    }
+  },
+  "automationSchedule": {
+    "hourly": "毎時:{{minute}}分",
+    "daily": "毎日{{time}}",
+    "weekdays": "平日{{time}}",
+    "weekly": "{{day}} {{time}}",
+    "custom": "カスタムスケジュール",
+    "invalid": "無効なスケジュール",
+    "validCustomCron": "有効なカスタムcron",
+    "advancedPlaceholder": "詳細スケジュール"
+  },
+  "nativeChatSlashCommands": {
+    "common": {
+      "clear": {
+        "description": "会話をクリア"
+      },
+      "help": {
+        "description": "使用可能なコマンドを表示"
+      }
+    },
+    "claude": {
+      "clear": {
+        "description": "会話履歴をクリア"
+      },
+      "compact": {
+        "description": "会話を要約して圧縮"
+      },
+      "init": {
+        "description": "CLAUDE.mdを初期化"
+      },
+      "review": {
+        "description": "現在の変更をレビュー"
+      },
+      "help": {
+        "description": "使用可能なコマンドを表示"
+      }
+    },
+    "codex": {
+      "model": {
+        "description": "モデルと推論の強度を選択"
+      },
+      "ide": {
+        "description": "IDEのコンテキストを含める"
+      },
+      "permissions": {
+        "description": "Codexに許可する操作を選択"
+      },
+      "keymap": {
+        "description": "TUIのショートカットを再割り当て"
+      },
+      "vim": {
+        "description": "Vimモードの切り替え"
+      },
+      "experimental": {
+        "description": "実験的機能の切り替え"
+      },
+      "approve": {
+        "description": "自動レビューの再試行を1回承認"
+      },
+      "memories": {
+        "description": "メモリ利用を設定"
+      },
+      "skills": {
+        "description": "スキルの管理と使用"
+      },
+      "import": {
+        "description": "Claude Codeから設定をインポート"
+      },
+      "hooks": {
+        "description": "ライフサイクルフックを表示"
+      },
+      "review": {
+        "description": "現在の変更をレビュー"
+      },
+      "rename": {
+        "description": "現在のスレッドの名前を変更"
+      },
+      "new": {
+        "description": "新しいチャットを開始"
+      },
+      "archive": {
+        "description": "このセッションをアーカイブして終了"
+      },
+      "delete": {
+        "description": "このセッションを削除して終了"
+      },
+      "resume": {
+        "description": "保存したチャットを再開"
+      },
+      "fork": {
+        "description": "現在のチャットをフォーク"
+      },
+      "app": {
+        "description": "Codex Desktopで続ける"
+      },
+      "init": {
+        "description": "AGENTS.mdファイルを作成"
+      },
+      "compact": {
+        "description": "会話を圧縮"
+      },
+      "plan": {
+        "description": "Planモードに切り替え"
+      },
+      "goal": {
+        "description": "目標を設定または表示"
+      },
+      "agent": {
+        "description": "アクティブなエージェントスレッドを切り替え"
+      },
+      "side": {
+        "description": "サブの会話を開始"
+      },
+      "copy": {
+        "description": "直前の応答をMarkdownとしてコピー"
+      },
+      "raw": {
+        "description": "Rawスクロールバックモードの切り替え"
+      },
+      "diff": {
+        "description": "作業中のdiffを表示"
+      },
+      "mention": {
+        "description": "ファイルをメンション"
+      },
+      "status": {
+        "description": "セッションの設定と使用状況を表示"
+      },
+      "usage": {
+        "description": "アカウントの使用状況を表示"
+      },
+      "title": {
+        "description": "ターミナルのタイトルを設定"
+      },
+      "statusline": {
+        "description": "ステータスラインを設定"
+      },
+      "theme": {
+        "description": "シンタックスハイライトのテーマを選択"
+      },
+      "pets": {
+        "description": "ターミナルペットを選択または非表示"
+      },
+      "mcp": {
+        "description": "設定済みのMCPツールを一覧表示"
+      },
+      "plugins": {
+        "description": "プラグインを参照"
+      },
+      "logout": {
+        "description": "Codexからログアウト"
+      },
+      "exit": {
+        "description": "Codexを終了"
+      },
+      "feedback": {
+        "description": "メンテナーにログを送信"
+      },
+      "ps": {
+        "description": "バックグラウンドのターミナルを一覧表示"
+      },
+      "stop": {
+        "description": "すべてのバックグラウンドターミナルを停止"
+      },
+      "clear": {
+        "description": "ターミナルをクリアして新しいチャットを開始"
+      },
+      "personality": {
+        "description": "コミュニケーションスタイルを選択"
+      },
+      "subagents": {
+        "description": "アクティブなエージェントスレッドを切り替え"
+      }
+    }
+  },
+  "networkProxy": {
+    "validation": {
+      "tooLong": "プロキシURLが長すぎます。",
+      "invalidUrl": "有効なプロキシURLを入力してください。",
+      "unsupportedScheme": "http、https、socks、socks4、socks5のいずれかのプロキシURLを使用してください。",
+      "missingHost": "プロキシURLにはホストを含める必要があります。"
+    }
   }
 }

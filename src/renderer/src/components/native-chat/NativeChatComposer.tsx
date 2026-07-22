@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
@@ -8,7 +8,7 @@ import {
   submitNativeChatPrompt
 } from './native-chat-runtime-send'
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
-import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import { getLocalizedNativeChatSlashCommands } from './native-chat-slash-command-copy'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
   applyMentionSuggestion,
@@ -114,7 +114,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       setCaret(readNativeChatDraftCache(draftScopeKey).length)
     }
 
-    const agentCommands = useMemo(() => getVerifiedNativeChatCommands(agent), [agent])
+    const agentCommands = getLocalizedNativeChatSlashCommands(agent)
     const picker = useNativeChatPickerState({
       agent,
       terminalTabId,

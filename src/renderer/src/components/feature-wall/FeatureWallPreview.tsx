@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import type { JSX } from 'react'
 import { ChevronRight } from 'lucide-react'
-import {
-  getFeatureWallMediaTile,
-  type FeatureWallWorkflow
-} from '../../../../shared/feature-wall-workflows'
+import type { FeatureWallWorkflow } from '../../../../shared/feature-wall-workflows'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedFeatureWallMediaTile } from './feature-wall-tile-copy'
 
 export function PreviewMedia(props: {
   posterUrl: string | null
@@ -59,7 +57,7 @@ export function RelatedFeatures(props: {
 }): JSX.Element | null {
   const { workflow, source } = props
   const items = workflow.relatedTileIds
-    .map((id) => getFeatureWallMediaTile(id))
+    .map((id) => getLocalizedFeatureWallMediaTile(id))
     .filter((tile): tile is NonNullable<typeof tile> => tile !== null)
   if (items.length === 0) {
     return null

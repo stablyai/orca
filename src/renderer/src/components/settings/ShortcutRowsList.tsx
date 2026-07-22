@@ -3,6 +3,7 @@ import type { KeybindingActionId, KeybindingInput } from '../../../../shared/key
 import { cn } from '../../lib/utils'
 import { ShortcutCommandBlock } from './ShortcutCommandBlock'
 import type { ShortcutRowsByGroup } from './ShortcutFilterRail'
+import { getLocalizedKeybindingGroupTitle } from './keybinding-copy'
 import { translate } from '@/i18n/i18n'
 
 const EMPTY_BINDINGS: readonly string[] = []
@@ -60,41 +61,44 @@ export function ShortcutRowsList({
 
   return (
     <div className={cn('flex flex-col gap-8', className)}>
-      {groups.map((group) => (
-        <div key={group.title} className="space-y-3">
-          <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">
-            {group.title}
-          </h3>
-          <div className="flex flex-col gap-3">
-            {group.rows.map((row) => (
-              <ShortcutCommandBlock
-                key={row.item.id}
-                item={row.item}
-                groupTitle={group.title}
-                platform={platform}
-                effective={row.effective}
-                modified={row.modified}
-                error={errors[row.item.id]}
-                warnings={row.warnings}
-                terminalStatus={row.terminalStatus}
-                previousBindings={disableMemory[row.item.id] ?? EMPTY_BINDINGS}
-                recordingBindingIndex={
-                  recordingActionId === row.item.id ? recordingBindingIndex : null
-                }
-                onStartRecordingAt={onStartRecordingAt}
-                onAppendBinding={onAppendBinding}
-                onCancelRecording={onCancelRecording}
-                onCapture={onCapture}
-                onClearError={onClearError}
-                onRemoveBindingAt={onRemoveBindingAt}
-                onResetAction={onResetAction}
-                onDisableAction={onDisableAction}
-                onEnableAction={onEnableAction}
-              />
-            ))}
+      {groups.map((group) => {
+        const groupTitle = getLocalizedKeybindingGroupTitle(group.title)
+        return (
+          <div key={group.title} className="space-y-3">
+            <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">
+              {groupTitle}
+            </h3>
+            <div className="flex flex-col gap-3">
+              {group.rows.map((row) => (
+                <ShortcutCommandBlock
+                  key={row.item.id}
+                  item={row.item}
+                  groupTitle={groupTitle}
+                  platform={platform}
+                  effective={row.effective}
+                  modified={row.modified}
+                  error={errors[row.item.id]}
+                  warnings={row.warnings}
+                  terminalStatus={row.terminalStatus}
+                  previousBindings={disableMemory[row.item.id] ?? EMPTY_BINDINGS}
+                  recordingBindingIndex={
+                    recordingActionId === row.item.id ? recordingBindingIndex : null
+                  }
+                  onStartRecordingAt={onStartRecordingAt}
+                  onAppendBinding={onAppendBinding}
+                  onCancelRecording={onCancelRecording}
+                  onCapture={onCapture}
+                  onClearError={onClearError}
+                  onRemoveBindingAt={onRemoveBindingAt}
+                  onResetAction={onResetAction}
+                  onDisableAction={onDisableAction}
+                  onEnableAction={onEnableAction}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

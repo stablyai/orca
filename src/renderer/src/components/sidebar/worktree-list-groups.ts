@@ -30,6 +30,7 @@ import {
   UNGROUPED_PROJECT_GROUP_KEY
 } from '../../../../shared/project-groups'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
+import { getLocalizedWorkspaceStatusLabel } from './workspace-status-copy'
 import type { AppState } from '../../store/types'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slices/github-cache-key'
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
@@ -1078,8 +1079,12 @@ export function buildRows(
     } else if (groupBy === 'workspace-status') {
       const workspaceStatus = getWorkspaceStatus(w, workspaceStatuses)
       key = getWorkspaceStatusGroupKey(workspaceStatus)
-      label =
-        workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
+      const workspaceStatusDefinition = workspaceStatuses.find(
+        (status) => status.id === workspaceStatus
+      )
+      label = workspaceStatusDefinition
+        ? getLocalizedWorkspaceStatusLabel(workspaceStatusDefinition)
+        : workspaceStatus
     } else {
       const prGroup = getPRGroupKey(w, repoMap, prCache, settings)
       key = `pr:${prGroup}`
@@ -1234,7 +1239,7 @@ export function buildRows(
                 return {
                   type: 'header' as const,
                   key,
-                  label: definition?.label ?? workspaceStatus,
+                  label: definition ? getLocalizedWorkspaceStatusLabel(definition) : workspaceStatus,
                   count: group.items.length,
                   tone: meta.tone,
                   icon: meta.icon,

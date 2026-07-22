@@ -70,11 +70,11 @@ import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
   buildAutomationCronSchedule,
   buildAutomationRrule,
-  formatAutomationSchedule,
   isValidAutomationCronSchedule,
   isValidAutomationSchedule,
   tryParseAutomationRrule
 } from '../../../../shared/automation-schedules'
+import { getLocalizedAutomationScheduleLabel } from './automation-schedule-copy'
 import {
   formatAutomationDateTimeWithRelative,
   getAutomationRunStatusLabel,
@@ -2429,7 +2429,7 @@ export default function AutomationsPage(): React.JSX.Element {
               const nextRunLabel = automation.enabled
                 ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
                 : 'Paused'
-              const scheduleLabel = formatAutomationSchedule(automation.rrule)
+              const scheduleLabel = getLocalizedAutomationScheduleLabel(automation.rrule)
               return (
                 <ContextMenu key={automation.id}>
                   <ContextMenuTrigger asChild>

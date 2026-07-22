@@ -43,6 +43,7 @@ import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
+import { getLocalizedWorkspaceStatusLabel } from './workspace-status-copy'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
@@ -724,7 +725,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                       onSelect={() => handleAssignWorkspaceStatus(status.id)}
                     >
                       <meta.icon className={cn('size-3.5', meta.tone)} />
-                      {status.label}
+                      {getLocalizedWorkspaceStatusLabel(status)}
                     </DropdownMenuRadioItem>
                   )
                 })}

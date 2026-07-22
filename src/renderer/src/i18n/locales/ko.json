@@ -13727,5 +13727,858 @@
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
+  },
+  "agentsOrchestrationSteps": {
+    "statuses": {
+      "name": "가시성",
+      "subtitle": "에이전트 가시성",
+      "description": "어떤 에이전트가 작업 중인지, 대기 중인지, 실행 중인지, 막혀 있는지 확인하세요."
+    },
+    "orchestration": {
+      "name": "오케스트레이션",
+      "subtitle": "오케스트레이션",
+      "description": "에이전트가 Orca 워크스페이스를 관리하고 조정하여 더 큰 작업을 수행하도록 하세요."
+    },
+    "usage": {
+      "name": "사용량",
+      "subtitle": "사용량",
+      "description": "연결된 모든 계정의 사용량과 한도를 확인하고, 언제 전환해야 할지 파악하세요."
+    }
+  },
+  "reviewSteps": {
+    "notes": {
+      "name": "노트",
+      "subtitle": "노트 및 diff",
+      "description": "구체적인 리뷰 노트를 에이전트에게 전달하세요."
+    },
+    "pr-view": {
+      "name": "PR 검사",
+      "subtitle": "PR 검사 및 댓글",
+      "description": "Checks tab에서 PR 상태를 확인하세요."
+    },
+    "ship": {
+      "name": "AI와 함께 배포하기",
+      "subtitle": "AI와 함께 배포하기",
+      "description": "AI가 commit과 PR 초안을 작성하도록 하세요."
+    }
+  },
+  "workbenchSteps": {
+    "terminal": {
+      "name": "터미널",
+      "subtitle": "터미널",
+      "description": "에이전트, 테스트, 개발 로그를 한눈에 확인하세요."
+    },
+    "editor": {
+      "name": "편집기",
+      "subtitle": "편집기",
+      "description": "Notion 스타일의 마크다운 편집기로 Orca를 벗어나지 않고 노트를 작성하세요."
+    },
+    "browser": {
+      "name": "브라우저",
+      "subtitle": "브라우저",
+      "description": "Orca의 브라우저에서 앱을 실행하고, 선택한 UI 요소를 에이전트에게 전달하며, 에이전트가 웹페이지와 상호작용하도록 하세요."
+    }
+  },
+  "featureWallWorkflows": {
+    "workspaces": {
+      "title": "워크스페이스",
+      "lede": "Orca는 각 작업을 독립된 워크스페이스로 분리하여 에이전트가 병렬로 실행되도록 합니다."
+    },
+    "tasks": {
+      "title": "작업",
+      "lede": "GitHub 또는 Linear에서 바로 작업을 시작하세요."
+    },
+    "agents-orchestration": {
+      "title": "에이전트",
+      "lede": "여러 에이전트를 동시에 실행하고 진행 상황을 추적하며, 도움이 될 때는 자동화가 Orca를 운영하도록 하세요."
+    },
+    "workbench": {
+      "title": "워크벤치",
+      "lede": "터미널 설정을 Orca로 그대로 가져온 뒤, 패널을 분할해 서버, 테스트, 로그, 에이전트를 나란히 실행하세요."
+    },
+    "review": {
+      "title": "코드 리뷰",
+      "lede": "변경 사항을 검토하고, 구체적인 피드백을 남긴 뒤 에이전트에게 다시 전달하세요."
+    }
+  },
+  "featureWallTiles": {
+    "tile-01": {
+      "title": "병렬 워크스페이스 오케스트레이션"
+    },
+    "tile-02": {
+      "title": "Ghostty급 터미널"
+    },
+    "tile-03": {
+      "title": "GitHub와 Linear, 네이티브 지원"
+    },
+    "tile-04": {
+      "title": "지원되는 CLI 에이전트"
+    },
+    "tile-05": {
+      "title": "내장 브라우저 + Design Mode"
+    },
+    "tile-06": {
+      "title": "원격 워크스페이스"
+    },
+    "tile-07": {
+      "title": "Monaco 편집기, 에이전트로 드래그"
+    },
+    "tile-08": {
+      "title": "인라인 리뷰, 에이전트로 전달"
+    },
+    "tile-09": {
+      "title": "Orca CLI"
+    },
+    "tile-10": {
+      "title": "키보드 네이티브 지원"
+    },
+    "tile-11": {
+      "title": "사용량 및 한도 인식"
+    },
+    "tile-12": {
+      "title": "PDF, 이미지, CSV, 마크다운"
+    }
+  },
+  "featureTips": {
+    "orca-cli": {
+      "eyebrow": "팁",
+      "title": "에이전트가 Orca CLI로 Orca를 운영하게 하세요",
+      "description": "에이전트가 하위 워크트리를 조정하고 워크트리 간에 통신하도록 하세요.",
+      "ctaLabel": "CLI 및 스킬 설치"
+    },
+    "cmd-j-palette": {
+      "eyebrow": "팁",
+      "title": "<shortcut>로 워크트리 이동",
+      "description": "워크트리를 검색하고, tab을 전환하고, 설정을 조정하거나 새 워크트리를 만드는 것까지, 키보드에서 손을 떼지 않고 할 수 있습니다.",
+      "ctaLabel": "확인했습니다"
+    },
+    "voice-dictation": {
+      "eyebrow": "팁",
+      "title": "음성 받아쓰기 기능이 추가되었습니다",
+      "description": "포커스된 패널에 대고 말하면 Orca가 이를 텍스트로 변환합니다. 받아쓰기 단축키를 눌러 시작하고 종료하세요.",
+      "ctaLabel": "음성 설정하기"
+    }
+  },
+  "contextualTours": {
+    "workspace-board": {
+      "workspace-board-center": {
+        "title": "보드에서 작업 계획하기",
+        "body": "프로젝트별이 아닌 상태별로 워크스페이스를 보고 싶을 때 보드를 사용하세요."
+      },
+      "workspace-board-done-lane": {
+        "title": "레인을 통해 작업 이동하기",
+        "body": "상태가 바뀌면 워크스페이스를 레인 사이로 드래그하세요."
+      }
+    },
+    "workspace-agent-sessions": {
+      "terminal-pane-split-target": {
+        "title": "터미널 패널 분할하기",
+        "body": "{terminal.splitRight}로 두 번째 터미널 패널을 열거나, 패널을 마우스 오른쪽 버튼으로 클릭해 분할 옵션을 확인하세요.",
+        "primaryActionLabel": "터미널 분할"
+      },
+      "workspace-create-control": {
+        "title": "다른 작업을 병렬로 시작하기",
+        "body": "각 워크트리는 고유한 branch를 가지므로 병렬 작업이 서로 분리된 상태로 유지됩니다."
+      }
+    },
+    "browser": {
+      "browser-grab-control": {
+        "title": "에이전트를 위해 페이지 컨텍스트 가져오기",
+        "body": "가져오기 도구를 사용해 페이지 요소의 컨텍스트를 복사하고 에이전트에게 전달하세요."
+      },
+      "browser-annotation-control": {
+        "title": "디자인 피드백을 그 자리에서 표시하기",
+        "body": "요소에 주석을 달고 해당 노트를 에이전트에게 전달하세요."
+      },
+      "browser-import-hint": {
+        "title": "로그인 상태 유지하기",
+        "body": "기존 로그인 정보를 Orca로 가져와 즉시 로그인 상태를 유지하세요."
+      }
+    },
+    "tasks": {
+      "tasks-source-filters": {
+        "title": "작업 소스 선택하기",
+        "body": "페이지를 전환하지 않고도 연결된 제공자와 프로젝트 필터 사이를 전환하세요."
+      },
+      "tasks-search-presets": {
+        "title": "필요한 작업으로 필터링하기",
+        "body": "프리셋과 검색을 사용해 issue, 리뷰, merge request, 작업 범위를 좁히세요."
+      },
+      "tasks-start-workspace": {
+        "title": "작업 항목에서 시작하기",
+        "body": "작업, issue, 리뷰, merge request에서 시작 또는 열기를 사용해 해당 컨텍스트를 워크스페이스로 가져오세요."
+      }
+    },
+    "automations": {
+      "automations-create": {
+        "title": "자동화란 무엇인가요?",
+        "body": "자동화는 일정에 따라 에이전트 작업을 실행합니다. 이 버튼을 클릭해 자동화를 추가하세요."
+      },
+      "automations-runs": {
+        "title": "결과 확인하기",
+        "body": "실행 내역에서 자동화가 언제 실행되었는지, 무슨 일이 있었는지, 결과를 어디서 확인할 수 있는지 볼 수 있습니다."
+      }
+    },
+    "floating-workspace": {
+      "floating-workspace-new-terminal": {
+        "title": "모든 repo에서 에이전트 실행하기",
+        "body": "여기의 에이전트는 원하는 폴더 어디서든 실행됩니다. 서비스들의 상위 디렉터리를 지정하면 모든 repo에서 한 번에 작업할 수 있습니다."
+      },
+      "floating-workspace-new-markdown": {
+        "title": "또는 스크래치패드로 사용하기",
+        "body": "지금 집중하고 있는 워크트리를 어지럽히지 않고 에이전트, 임시 터미널, 노트, 브라우저 tab을 여세요."
+      }
+    },
+    "workspace-creation": {
+      "workspace-creation-project": {
+        "title": "프로젝트 선택하기",
+        "body": "Orca는 각 작업을 기준 branch에서 분기해 별도의 워크트리로 분리합니다."
+      },
+      "workspace-creation-name": {
+        "title": "이름을 지정하거나 기존 작업에서 시작하기",
+        "body": "연결된 작업에서 시작하면 짧은 issue 또는 PR 이름이 사용됩니다. 비워두면 첫 에이전트 메시지를 기반으로 자동으로 이름이 지정됩니다."
+      },
+      "workspace-creation-agent": {
+        "title": "작업을 시작할 에이전트 선택하기",
+        "body": "이 워크트리가 생성될 때 열릴 에이전트를 선택하세요."
+      }
+    }
+  },
+  "keybindings": {
+    "actions": {
+      "worktree": {
+        "quickOpen": {
+          "title": "파일로 이동"
+        },
+        "palette": {
+          "title": "워크트리 전환"
+        },
+        "navigateUp": {
+          "title": "이전 워크트리"
+        },
+        "navigateDown": {
+          "title": "다음 워크트리"
+        },
+        "history": {
+          "back": {
+            "title": "워크트리 기록 뒤로"
+          },
+          "forward": {
+            "title": "워크트리 기록 앞으로"
+          }
+        }
+      },
+      "app": {
+        "settings": {
+          "title": "설정 열기"
+        },
+        "forceReload": {
+          "title": "강제 새로고침"
+        }
+      },
+      "workspace": {
+        "create": {
+          "title": "워크트리 생성"
+        },
+        "rename": {
+          "title": "워크트리 이름 바꾸기"
+        },
+        "delete": {
+          "title": "워크스페이스 삭제"
+        },
+        "openBoard": {
+          "title": "워크스페이스 보드 열기"
+        },
+        "selectByIndex": {
+          "title": "워크스페이스 1–9 선택"
+        }
+      },
+      "voice": {
+        "dictation": {
+          "title": "받아쓰기"
+        }
+      },
+      "view": {
+        "tasks": {
+          "title": "작업 열기"
+        }
+      },
+      "sidebar": {
+        "left": {
+          "toggle": {
+            "title": "사이드바 전환"
+          }
+        },
+        "right": {
+          "toggle": {
+            "title": "오른쪽 사이드바 전환"
+          }
+        },
+        "explorer": {
+          "toggle": {
+            "title": "탐색기 표시"
+          }
+        },
+        "search": {
+          "toggle": {
+            "title": "검색 표시"
+          }
+        },
+        "sourceControl": {
+          "toggle": {
+            "title": "소스 제어 표시"
+          }
+        },
+        "checks": {
+          "toggle": {
+            "title": "Checks 표시"
+          }
+        },
+        "ports": {
+          "toggle": {
+            "title": "포트 표시"
+          }
+        },
+        "sleepingWorkspaces": {
+          "toggle": {
+            "title": "휴면 워크스페이스 전환"
+          }
+        },
+        "focusWorktreeList": {
+          "title": "워크트리 목록에 포커스"
+        }
+      },
+      "floatingTerminal": {
+        "toggle": {
+          "title": "플로팅 터미널 전환"
+        }
+      },
+      "floatingWorkspace": {
+        "maximize": {
+          "title": "플로팅 워크스페이스 패널 최대화"
+        },
+        "minimize": {
+          "title": "플로팅 워크스페이스 패널 최소화"
+        }
+      },
+      "zoom": {
+        "in": {
+          "title": "확대"
+        },
+        "out": {
+          "title": "축소"
+        },
+        "reset": {
+          "title": "크기 재설정"
+        }
+      },
+      "tab": {
+        "newTerminal": {
+          "title": "새 터미널 tab"
+        },
+        "newAgent": {
+          "title": "새 에이전트 tab (기본 에이전트)",
+          "claude": {
+            "title": "새 Claude tab"
+          },
+          "claude-agent-teams": {
+            "title": "새 Claude Agent Teams tab"
+          },
+          "openclaude": {
+            "title": "새 OpenClaude tab"
+          },
+          "codex": {
+            "title": "새 Codex tab"
+          },
+          "devin": {
+            "title": "새 Devin tab"
+          },
+          "ante": {
+            "title": "새 Ante tab"
+          },
+          "autohand": {
+            "title": "새 Autohand Code tab"
+          },
+          "opencode": {
+            "title": "새 OpenCode tab"
+          },
+          "mimo-code": {
+            "title": "새 MiMo Code tab"
+          },
+          "pi": {
+            "title": "새 Pi tab"
+          },
+          "omp": {
+            "title": "새 OMP tab"
+          },
+          "gemini": {
+            "title": "새 Gemini tab"
+          },
+          "antigravity": {
+            "title": "새 Antigravity tab"
+          },
+          "aider": {
+            "title": "새 Aider tab"
+          },
+          "goose": {
+            "title": "새 Goose tab"
+          },
+          "amp": {
+            "title": "새 Amp tab"
+          },
+          "kilo": {
+            "title": "새 Kilocode tab"
+          },
+          "kiro": {
+            "title": "새 Kiro tab"
+          },
+          "crush": {
+            "title": "새 Charm tab"
+          },
+          "aug": {
+            "title": "새 Auggie tab"
+          },
+          "cline": {
+            "title": "새 Cline tab"
+          },
+          "codebuff": {
+            "title": "새 Codebuff tab"
+          },
+          "command-code": {
+            "title": "새 Command Code tab"
+          },
+          "continue": {
+            "title": "새 Continue tab"
+          },
+          "cursor": {
+            "title": "새 Cursor tab"
+          },
+          "droid": {
+            "title": "새 Droid tab"
+          },
+          "kimi": {
+            "title": "새 Kimi tab"
+          },
+          "mistral-vibe": {
+            "title": "새 Mistral Vibe tab"
+          },
+          "qwen-code": {
+            "title": "새 Qwen Code tab"
+          },
+          "rovo": {
+            "title": "새 Rovo Dev tab"
+          },
+          "hermes": {
+            "title": "새 Hermes tab"
+          },
+          "openclaw": {
+            "title": "새 OpenClaw tab"
+          },
+          "copilot": {
+            "title": "새 GitHub Copilot tab"
+          },
+          "grok": {
+            "title": "새 Grok tab"
+          }
+        },
+        "newBrowser": {
+          "title": "새 브라우저 tab"
+        },
+        "newSimulator": {
+          "title": "새 모바일 에뮬레이터 tab"
+        },
+        "newMarkdown": {
+          "title": "새 마크다운 tab"
+        },
+        "openMarkdown": {
+          "title": "마크다운 tab 열기"
+        },
+        "close": {
+          "title": "활성 tab 닫기"
+        },
+        "closeAll": {
+          "title": "모든 편집기 tab 닫기"
+        },
+        "rename": {
+          "title": "활성 tab 이름 바꾸기"
+        },
+        "reopenClosed": {
+          "title": "닫힌 tab 다시 열기"
+        },
+        "nextSameType": {
+          "title": "다음 tab (동일 유형)"
+        },
+        "previousSameType": {
+          "title": "이전 tab (동일 유형)"
+        },
+        "nextAllTypes": {
+          "title": "다음 tab (전체 유형)"
+        },
+        "previousAllTypes": {
+          "title": "이전 tab (전체 유형)"
+        },
+        "previousRecent": {
+          "title": "최근 tab으로 이동"
+        },
+        "nextTerminal": {
+          "title": "다음 터미널 tab"
+        },
+        "previousTerminal": {
+          "title": "이전 터미널 tab"
+        },
+        "selectByIndex": {
+          "title": "Tab 1–9 선택"
+        },
+        "openQuickCommandsMenu": {
+          "title": "빠른 명령 메뉴 전환"
+        }
+      },
+      "browser": {
+        "find": {
+          "title": "브라우저에서 찾기"
+        },
+        "back": {
+          "title": "브라우저 뒤로 가기"
+        },
+        "forward": {
+          "title": "브라우저 앞으로 가기"
+        },
+        "reload": {
+          "title": "브라우저 페이지 새로고침"
+        },
+        "hardReload": {
+          "title": "브라우저 페이지 강력 새로고침"
+        },
+        "focusAddressBar": {
+          "title": "브라우저 주소창에 포커스"
+        },
+        "grabElement": {
+          "title": "페이지 요소 가져오기"
+        }
+      },
+      "editor": {
+        "find": {
+          "title": "편집기에서 찾기"
+        },
+        "replace": {
+          "title": "편집기에서 바꾸기"
+        },
+        "save": {
+          "title": "파일 저장"
+        },
+        "markdownPreview": {
+          "title": "마크다운 미리보기 표시"
+        },
+        "copyContext": {
+          "title": "컨텍스트 복사"
+        },
+        "previousChange": {
+          "title": "이전 변경 사항으로 이동"
+        },
+        "nextChange": {
+          "title": "다음 변경 사항으로 이동"
+        },
+        "addReviewNote": {
+          "title": "리뷰 노트 추가"
+        }
+      },
+      "fileExplorer": {
+        "undo": {
+          "title": "파일 작업 실행 취소"
+        },
+        "redo": {
+          "title": "파일 작업 다시 실행"
+        },
+        "copyPath": {
+          "title": "파일 경로 복사"
+        },
+        "copyRelativePath": {
+          "title": "상대 파일 경로 복사"
+        },
+        "delete": {
+          "title": "파일 삭제"
+        }
+      },
+      "settings": {
+        "search": {
+          "title": "설정 검색"
+        }
+      },
+      "terminal": {
+        "copySelection": {
+          "title": "터미널 선택 영역 복사"
+        },
+        "paste": {
+          "title": "터미널에 붙여넣기"
+        },
+        "search": {
+          "title": "활성 패널 검색"
+        },
+        "clear": {
+          "title": "활성 패널 지우기"
+        },
+        "acceptAutosuggest": {
+          "title": "명령어 자동 제안 수락"
+        },
+        "focusNextPane": {
+          "title": "다음 패널에 포커스"
+        },
+        "focusPreviousPane": {
+          "title": "이전 패널에 포커스"
+        },
+        "equalizePaneSizes": {
+          "title": "패널 크기 균등화"
+        },
+        "expandPane": {
+          "title": "패널 확장 / 축소"
+        },
+        "setTitle": {
+          "title": "제목 설정…"
+        },
+        "clearPaneTitle": {
+          "title": "패널 제목 지우기"
+        },
+        "closePane": {
+          "title": "활성 패널 닫기"
+        },
+        "splitRight": {
+          "title": "터미널 오른쪽으로 분할"
+        },
+        "splitDown": {
+          "title": "터미널 아래로 분할"
+        },
+        "switchInputSource": {
+          "title": "입력 소스 / 언어 전환 (시스템 기본)"
+        }
+      }
+    },
+    "groups": {
+      "global": {
+        "title": "전역"
+      },
+      "tabs": {
+        "title": "Tab"
+      },
+      "tab-navigation": {
+        "title": "Tab 탐색"
+      },
+      "quick-commands": {
+        "title": "빠른 명령"
+      },
+      "browser": {
+        "title": "브라우저"
+      },
+      "editors": {
+        "title": "편집기"
+      },
+      "file-explorer": {
+        "title": "파일 탐색기"
+      },
+      "settings": {
+        "title": "설정"
+      },
+      "terminal-panes": {
+        "title": "터미널 패널"
+      },
+      "agents": {
+        "title": "에이전트"
+      }
+    }
+  },
+  "workspaceStatus": {
+    "todo": {
+      "label": "할 일"
+    },
+    "in-progress": {
+      "label": "진행 중"
+    },
+    "in-review": {
+      "label": "리뷰 중"
+    },
+    "completed": {
+      "label": "완료"
+    }
+  },
+  "automationSchedule": {
+    "hourly": "매시 :{{minute}}분",
+    "daily": "매일 {{time}}",
+    "weekdays": "평일 {{time}}",
+    "weekly": "{{day}} {{time}}",
+    "custom": "사용자 지정 일정",
+    "invalid": "잘못된 일정",
+    "validCustomCron": "유효한 사용자 지정 cron",
+    "advancedPlaceholder": "고급 일정"
+  },
+  "nativeChatSlashCommands": {
+    "common": {
+      "clear": {
+        "description": "대화 지우기"
+      },
+      "help": {
+        "description": "사용 가능한 명령어 표시"
+      }
+    },
+    "claude": {
+      "clear": {
+        "description": "대화 기록 지우기"
+      },
+      "compact": {
+        "description": "대화 요약 및 압축"
+      },
+      "init": {
+        "description": "CLAUDE.md 초기화"
+      },
+      "review": {
+        "description": "현재 변경 사항 검토"
+      },
+      "help": {
+        "description": "사용 가능한 명령어 표시"
+      }
+    },
+    "codex": {
+      "model": {
+        "description": "모델 및 추론 강도 선택"
+      },
+      "ide": {
+        "description": "IDE 컨텍스트 포함"
+      },
+      "permissions": {
+        "description": "Codex가 수행할 수 있는 작업 선택"
+      },
+      "keymap": {
+        "description": "TUI 단축키 재매핑"
+      },
+      "vim": {
+        "description": "Vim 모드 전환"
+      },
+      "experimental": {
+        "description": "실험적 기능 전환"
+      },
+      "approve": {
+        "description": "자동 리뷰 재시도 1회 승인"
+      },
+      "memories": {
+        "description": "메모리 사용 구성"
+      },
+      "skills": {
+        "description": "스킬 관리 및 사용"
+      },
+      "import": {
+        "description": "Claude Code에서 설정 가져오기"
+      },
+      "hooks": {
+        "description": "라이프사이클 훅 보기"
+      },
+      "review": {
+        "description": "현재 변경 사항 검토"
+      },
+      "rename": {
+        "description": "현재 스레드 이름 바꾸기"
+      },
+      "new": {
+        "description": "새 채팅 시작"
+      },
+      "archive": {
+        "description": "이 세션 보관 후 종료"
+      },
+      "delete": {
+        "description": "이 세션 삭제 후 종료"
+      },
+      "resume": {
+        "description": "저장된 채팅 재개"
+      },
+      "fork": {
+        "description": "현재 채팅 분기"
+      },
+      "app": {
+        "description": "Codex Desktop에서 계속하기"
+      },
+      "init": {
+        "description": "AGENTS.md 파일 생성"
+      },
+      "compact": {
+        "description": "대화 압축"
+      },
+      "plan": {
+        "description": "Plan 모드로 전환"
+      },
+      "goal": {
+        "description": "목표 설정 또는 확인"
+      },
+      "agent": {
+        "description": "활성 에이전트 스레드 전환"
+      },
+      "side": {
+        "description": "사이드 대화 시작"
+      },
+      "copy": {
+        "description": "마지막 응답을 마크다운으로 복사"
+      },
+      "raw": {
+        "description": "원본 스크롤백 모드 전환"
+      },
+      "diff": {
+        "description": "작업 diff 표시"
+      },
+      "mention": {
+        "description": "파일 멘션"
+      },
+      "status": {
+        "description": "세션 구성 및 사용량 표시"
+      },
+      "usage": {
+        "description": "계정 사용량 보기"
+      },
+      "title": {
+        "description": "터미널 제목 구성"
+      },
+      "statusline": {
+        "description": "상태 표시줄 구성"
+      },
+      "theme": {
+        "description": "구문 강조 테마 선택"
+      },
+      "pets": {
+        "description": "터미널 펫 선택 또는 숨기기"
+      },
+      "mcp": {
+        "description": "구성된 MCP 도구 목록 표시"
+      },
+      "plugins": {
+        "description": "플러그인 탐색"
+      },
+      "logout": {
+        "description": "Codex 로그아웃"
+      },
+      "exit": {
+        "description": "Codex 종료"
+      },
+      "feedback": {
+        "description": "메인테이너에게 로그 전송"
+      },
+      "ps": {
+        "description": "백그라운드 터미널 목록 표시"
+      },
+      "stop": {
+        "description": "모든 백그라운드 터미널 중지"
+      },
+      "clear": {
+        "description": "터미널을 지우고 새 채팅 시작"
+      },
+      "personality": {
+        "description": "커뮤니케이션 스타일 선택"
+      },
+      "subagents": {
+        "description": "활성 에이전트 스레드 전환"
+      }
+    }
+  },
+  "networkProxy": {
+    "validation": {
+      "tooLong": "프록시 URL이 너무 깁니다.",
+      "invalidUrl": "유효한 프록시 URL을 입력하세요.",
+      "unsupportedScheme": "http, https, socks, socks4, socks5 중 하나의 프록시 URL을 사용하세요.",
+      "missingHost": "프록시 URL에는 호스트가 포함되어야 합니다."
+    }
   }
 }

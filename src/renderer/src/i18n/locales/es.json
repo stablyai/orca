@@ -13727,5 +13727,858 @@
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
+  },
+  "agentsOrchestrationSteps": {
+    "statuses": {
+      "name": "Visibilidad",
+      "subtitle": "Visibilidad de agentes",
+      "description": "Sepa qué agentes están trabajando, esperando, en vivo o bloqueados."
+    },
+    "orchestration": {
+      "name": "Orquestación",
+      "subtitle": "Orquestación",
+      "description": "Permita que los agentes gestionen y coordinen espacios de trabajo de Orca para ejecutar tareas más grandes."
+    },
+    "usage": {
+      "name": "Uso",
+      "subtitle": "Uso",
+      "description": "Supervise su uso y los límites de velocidad en todas las cuentas conectadas, para saber cuándo cambiar."
+    }
+  },
+  "reviewSteps": {
+    "notes": {
+      "name": "Notas",
+      "subtitle": "Notas y diffs",
+      "description": "Envíe notas de revisión específicas a un agente."
+    },
+    "pr-view": {
+      "name": "Checks de PR",
+      "subtitle": "Checks y comentarios de PR",
+      "description": "Vea el estado del PR en la pestaña Checks."
+    },
+    "ship": {
+      "name": "Publique con IA",
+      "subtitle": "Publique con IA",
+      "description": "Deje que la IA prepare borradores de commit y PR por usted."
+    }
+  },
+  "workbenchSteps": {
+    "terminal": {
+      "name": "Terminal",
+      "subtitle": "Terminal",
+      "description": "Mantenga visibles sus agentes, pruebas y registros de desarrollo a la vez."
+    },
+    "editor": {
+      "name": "Editor",
+      "subtitle": "Editor",
+      "description": "Use nuestro editor de markdown al estilo Notion para escribir notas sin salir de Orca."
+    },
+    "browser": {
+      "name": "Navegador",
+      "subtitle": "Navegador",
+      "description": "Ejecute su aplicación en el navegador de Orca, envíe elementos de la interfaz seleccionados a los agentes y permita que sus agentes interactúen con su página web."
+    }
+  },
+  "featureWallWorkflows": {
+    "workspaces": {
+      "title": "Espacios de trabajo",
+      "lede": "Orca divide cada tarea en un espacio de trabajo aislado para que los agentes puedan ejecutarse en paralelo."
+    },
+    "tasks": {
+      "title": "Tareas",
+      "lede": "Inicie el trabajo directamente desde GitHub o Linear."
+    },
+    "agents-orchestration": {
+      "title": "Agentes",
+      "lede": "Ejecute varios agentes a la vez, siga su progreso y deje que la automatización maneje Orca cuando ayude."
+    },
+    "workbench": {
+      "title": "Entorno de trabajo",
+      "lede": "Lleve su configuración de terminal a Orca y luego divida los paneles para mantener servidores, pruebas, registros y agentes ejecutándose uno junto al otro."
+    },
+    "review": {
+      "title": "Revisión de código",
+      "lede": "Revise qué cambió, deje comentarios específicos y envíelos de vuelta al agente."
+    }
+  },
+  "featureWallTiles": {
+    "tile-01": {
+      "title": "Orquestación de espacios de trabajo en paralelo"
+    },
+    "tile-02": {
+      "title": "Terminal de la clase Ghostty"
+    },
+    "tile-03": {
+      "title": "GitHub y Linear, nativo"
+    },
+    "tile-04": {
+      "title": "Agentes CLI compatibles"
+    },
+    "tile-05": {
+      "title": "Navegador integrado + Modo Diseño"
+    },
+    "tile-06": {
+      "title": "Espacios de trabajo remotos"
+    },
+    "tile-07": {
+      "title": "Editor Monaco, arrastrar al agente"
+    },
+    "tile-08": {
+      "title": "Revisión en línea, de vuelta al agente"
+    },
+    "tile-09": {
+      "title": "Orca CLI"
+    },
+    "tile-10": {
+      "title": "Nativo de teclado"
+    },
+    "tile-11": {
+      "title": "Consciente del uso y los límites de velocidad"
+    },
+    "tile-12": {
+      "title": "PDFs, imágenes, CSV, Markdown"
+    }
+  },
+  "featureTips": {
+    "orca-cli": {
+      "eyebrow": "Consejo",
+      "title": "Deje que los agentes manejen Orca con Orca CLI",
+      "description": "Permita que los agentes coordinen worktrees hijos y se comuniquen entre worktrees.",
+      "ctaLabel": "Instalar CLI y Habilidades"
+    },
+    "cmd-j-palette": {
+      "eyebrow": "Consejo",
+      "title": "Salte a un worktree con <shortcut>",
+      "description": "Busque worktrees, cambie de pestaña, ajuste la configuración o cree un nuevo worktree, todo sin soltar el teclado.",
+      "ctaLabel": "Entendido"
+    },
+    "voice-dictation": {
+      "eyebrow": "Consejo",
+      "title": "Llegó el Dictado por Voz",
+      "description": "Hable en cualquier panel enfocado y Orca lo transcribirá. Presione el atajo de dictado para iniciar y detener.",
+      "ctaLabel": "Configurar voz"
+    }
+  },
+  "contextualTours": {
+    "workspace-board": {
+      "workspace-board-center": {
+        "title": "Planifique el trabajo en el tablero",
+        "body": "Use el tablero cuando quiera ver los espacios de trabajo por estado en lugar de por proyecto."
+      },
+      "workspace-board-done-lane": {
+        "title": "Mueva el trabajo por los carriles",
+        "body": "Arrastre los espacios de trabajo entre carriles a medida que cambia su estado."
+      }
+    },
+    "workspace-agent-sessions": {
+      "terminal-pane-split-target": {
+        "title": "Divida un panel de terminal",
+        "body": "Abra un segundo panel de terminal con {terminal.splitRight}, o haga clic derecho en el panel para ver opciones de división.",
+        "primaryActionLabel": "Dividir terminal"
+      },
+      "workspace-create-control": {
+        "title": "Inicie otra tarea en paralelo",
+        "body": "Cada worktree obtiene su propio branch, para que el trabajo en paralelo se mantenga separado."
+      }
+    },
+    "browser": {
+      "browser-grab-control": {
+        "title": "Capture el contexto de la página para los agentes",
+        "body": "Use la herramienta de captura para copiar el contexto de un elemento de la página para los agentes."
+      },
+      "browser-annotation-control": {
+        "title": "Marque comentarios de diseño en el lugar",
+        "body": "Anote elementos y envíe esas notas a un agente."
+      },
+      "browser-import-hint": {
+        "title": "Permanezca conectado",
+        "body": "Traiga sus inicios de sesión existentes a Orca para permanecer conectado de inmediato."
+      }
+    },
+    "tasks": {
+      "tasks-source-filters": {
+        "title": "Elija la fuente del trabajo",
+        "body": "Cambie entre proveedores conectados y filtros de proyecto sin cambiar de página."
+      },
+      "tasks-search-presets": {
+        "title": "Filtre hasta el trabajo que necesita",
+        "body": "Use ajustes predefinidos y la búsqueda para acotar issues, revisiones, merge requests o tareas."
+      },
+      "tasks-start-workspace": {
+        "title": "Comience desde elementos de trabajo",
+        "body": "Use Iniciar o Abrir en una tarea, issue, revisión o merge request para traer su contexto a un espacio de trabajo."
+      }
+    },
+    "automations": {
+      "automations-create": {
+        "title": "¿Qué es una automatización?",
+        "body": "Las automatizaciones ejecutan el trabajo de agentes según un horario. Agregue una automatización haciendo clic en este botón."
+      },
+      "automations-runs": {
+        "title": "Encuentre los resultados",
+        "body": "Las ejecuciones muestran cuándo se ejecutaron las automatizaciones, qué sucedió y dónde inspeccionar su resultado."
+      }
+    },
+    "floating-workspace": {
+      "floating-workspace-new-terminal": {
+        "title": "Ejecute un agente en todos los repos",
+        "body": "Los agentes aquí se ejecutan en cualquier carpeta que elija. Apunte uno al directorio por encima de sus servicios para trabajar en todos sus repos a la vez."
+      },
+      "floating-workspace-new-markdown": {
+        "title": "O úselo como bloc de notas",
+        "body": "Abra agentes, terminales temporales, notas y pestañas de navegador sin saturar el worktree en el que está enfocado."
+      }
+    },
+    "workspace-creation": {
+      "workspace-creation-project": {
+        "title": "Elija un proyecto",
+        "body": "Orca aísla cada tarea en su propio worktree, ramificado desde su base."
+      },
+      "workspace-creation-name": {
+        "title": "Nómbrelo, o comience desde trabajo existente",
+        "body": "Comience desde una tarea vinculada para obtener un nombre corto de issue o PR. O déjelo en blanco para nombrarlo automáticamente a partir de su primer mensaje al agente."
+      },
+      "workspace-creation-agent": {
+        "title": "Elija qué agente inicia el trabajo",
+        "body": "Elija el agente que debe abrirse cuando se cree este worktree."
+      }
+    }
+  },
+  "keybindings": {
+    "actions": {
+      "worktree": {
+        "quickOpen": {
+          "title": "Ir a archivo"
+        },
+        "palette": {
+          "title": "Cambiar worktree"
+        },
+        "navigateUp": {
+          "title": "Worktree anterior"
+        },
+        "navigateDown": {
+          "title": "Worktree siguiente"
+        },
+        "history": {
+          "back": {
+            "title": "Retroceder en historial de worktree"
+          },
+          "forward": {
+            "title": "Avanzar en historial de worktree"
+          }
+        }
+      },
+      "app": {
+        "settings": {
+          "title": "Abrir configuración"
+        },
+        "forceReload": {
+          "title": "Forzar recarga"
+        }
+      },
+      "workspace": {
+        "create": {
+          "title": "Crear worktree"
+        },
+        "rename": {
+          "title": "Renombrar worktree"
+        },
+        "delete": {
+          "title": "Eliminar espacio de trabajo"
+        },
+        "openBoard": {
+          "title": "Abrir tablero de espacios de trabajo"
+        },
+        "selectByIndex": {
+          "title": "Seleccionar espacio de trabajo 1–9"
+        }
+      },
+      "voice": {
+        "dictation": {
+          "title": "Dictado"
+        }
+      },
+      "view": {
+        "tasks": {
+          "title": "Abrir tareas"
+        }
+      },
+      "sidebar": {
+        "left": {
+          "toggle": {
+            "title": "Alternar barra lateral"
+          }
+        },
+        "right": {
+          "toggle": {
+            "title": "Alternar barra lateral derecha"
+          }
+        },
+        "explorer": {
+          "toggle": {
+            "title": "Mostrar explorador"
+          }
+        },
+        "search": {
+          "toggle": {
+            "title": "Mostrar búsqueda"
+          }
+        },
+        "sourceControl": {
+          "toggle": {
+            "title": "Mostrar control de código fuente"
+          }
+        },
+        "checks": {
+          "toggle": {
+            "title": "Mostrar checks"
+          }
+        },
+        "ports": {
+          "toggle": {
+            "title": "Mostrar puertos"
+          }
+        },
+        "sleepingWorkspaces": {
+          "toggle": {
+            "title": "Alternar espacios de trabajo inactivos"
+          }
+        },
+        "focusWorktreeList": {
+          "title": "Enfocar lista de worktrees"
+        }
+      },
+      "floatingTerminal": {
+        "toggle": {
+          "title": "Alternar terminal flotante"
+        }
+      },
+      "floatingWorkspace": {
+        "maximize": {
+          "title": "Maximizar panel de espacio de trabajo flotante"
+        },
+        "minimize": {
+          "title": "Minimizar panel de espacio de trabajo flotante"
+        }
+      },
+      "zoom": {
+        "in": {
+          "title": "Acercar"
+        },
+        "out": {
+          "title": "Alejar"
+        },
+        "reset": {
+          "title": "Restablecer tamaño"
+        }
+      },
+      "tab": {
+        "newTerminal": {
+          "title": "Nueva pestaña de terminal"
+        },
+        "newAgent": {
+          "title": "Nueva pestaña de agente (agente predeterminado)",
+          "claude": {
+            "title": "Nueva pestaña de Claude"
+          },
+          "claude-agent-teams": {
+            "title": "Nueva pestaña de Claude Agent Teams"
+          },
+          "openclaude": {
+            "title": "Nueva pestaña de OpenClaude"
+          },
+          "codex": {
+            "title": "Nueva pestaña de Codex"
+          },
+          "devin": {
+            "title": "Nueva pestaña de Devin"
+          },
+          "ante": {
+            "title": "Nueva pestaña de Ante"
+          },
+          "autohand": {
+            "title": "Nueva pestaña de Autohand Code"
+          },
+          "opencode": {
+            "title": "Nueva pestaña de OpenCode"
+          },
+          "mimo-code": {
+            "title": "Nueva pestaña de MiMo Code"
+          },
+          "pi": {
+            "title": "Nueva pestaña de Pi"
+          },
+          "omp": {
+            "title": "Nueva pestaña de OMP"
+          },
+          "gemini": {
+            "title": "Nueva pestaña de Gemini"
+          },
+          "antigravity": {
+            "title": "Nueva pestaña de Antigravity"
+          },
+          "aider": {
+            "title": "Nueva pestaña de Aider"
+          },
+          "goose": {
+            "title": "Nueva pestaña de Goose"
+          },
+          "amp": {
+            "title": "Nueva pestaña de Amp"
+          },
+          "kilo": {
+            "title": "Nueva pestaña de Kilocode"
+          },
+          "kiro": {
+            "title": "Nueva pestaña de Kiro"
+          },
+          "crush": {
+            "title": "Nueva pestaña de Charm"
+          },
+          "aug": {
+            "title": "Nueva pestaña de Auggie"
+          },
+          "cline": {
+            "title": "Nueva pestaña de Cline"
+          },
+          "codebuff": {
+            "title": "Nueva pestaña de Codebuff"
+          },
+          "command-code": {
+            "title": "Nueva pestaña de Command Code"
+          },
+          "continue": {
+            "title": "Nueva pestaña de Continue"
+          },
+          "cursor": {
+            "title": "Nueva pestaña de Cursor"
+          },
+          "droid": {
+            "title": "Nueva pestaña de Droid"
+          },
+          "kimi": {
+            "title": "Nueva pestaña de Kimi"
+          },
+          "mistral-vibe": {
+            "title": "Nueva pestaña de Mistral Vibe"
+          },
+          "qwen-code": {
+            "title": "Nueva pestaña de Qwen Code"
+          },
+          "rovo": {
+            "title": "Nueva pestaña de Rovo Dev"
+          },
+          "hermes": {
+            "title": "Nueva pestaña de Hermes"
+          },
+          "openclaw": {
+            "title": "Nueva pestaña de OpenClaw"
+          },
+          "copilot": {
+            "title": "Nueva pestaña de GitHub Copilot"
+          },
+          "grok": {
+            "title": "Nueva pestaña de Grok"
+          }
+        },
+        "newBrowser": {
+          "title": "Nueva pestaña de navegador"
+        },
+        "newSimulator": {
+          "title": "Nueva pestaña de emulador móvil"
+        },
+        "newMarkdown": {
+          "title": "Nueva pestaña de markdown"
+        },
+        "openMarkdown": {
+          "title": "Abrir pestaña de markdown"
+        },
+        "close": {
+          "title": "Cerrar pestaña activa"
+        },
+        "closeAll": {
+          "title": "Cerrar todas las pestañas del editor"
+        },
+        "rename": {
+          "title": "Renombrar pestaña activa"
+        },
+        "reopenClosed": {
+          "title": "Reabrir pestaña cerrada"
+        },
+        "nextSameType": {
+          "title": "Pestaña siguiente (mismo tipo)"
+        },
+        "previousSameType": {
+          "title": "Pestaña anterior (mismo tipo)"
+        },
+        "nextAllTypes": {
+          "title": "Pestaña siguiente (todos los tipos)"
+        },
+        "previousAllTypes": {
+          "title": "Pestaña anterior (todos los tipos)"
+        },
+        "previousRecent": {
+          "title": "Pestaña reciente anterior"
+        },
+        "nextTerminal": {
+          "title": "Pestaña de terminal siguiente"
+        },
+        "previousTerminal": {
+          "title": "Pestaña de terminal anterior"
+        },
+        "selectByIndex": {
+          "title": "Seleccionar pestaña 1–9"
+        },
+        "openQuickCommandsMenu": {
+          "title": "Alternar menú de comandos rápidos"
+        }
+      },
+      "browser": {
+        "find": {
+          "title": "Buscar en el navegador"
+        },
+        "back": {
+          "title": "Retroceder en el navegador"
+        },
+        "forward": {
+          "title": "Avanzar en el navegador"
+        },
+        "reload": {
+          "title": "Recargar página del navegador"
+        },
+        "hardReload": {
+          "title": "Recargar página del navegador (forzado)"
+        },
+        "focusAddressBar": {
+          "title": "Enfocar barra de direcciones del navegador"
+        },
+        "grabElement": {
+          "title": "Capturar elemento de la página"
+        }
+      },
+      "editor": {
+        "find": {
+          "title": "Buscar en el editor"
+        },
+        "replace": {
+          "title": "Reemplazar en el editor"
+        },
+        "save": {
+          "title": "Guardar archivo"
+        },
+        "markdownPreview": {
+          "title": "Mostrar vista previa de Markdown"
+        },
+        "copyContext": {
+          "title": "Copiar contexto"
+        },
+        "previousChange": {
+          "title": "Ir al cambio anterior"
+        },
+        "nextChange": {
+          "title": "Ir al cambio siguiente"
+        },
+        "addReviewNote": {
+          "title": "Agregar nota de revisión"
+        }
+      },
+      "fileExplorer": {
+        "undo": {
+          "title": "Deshacer operación de archivo"
+        },
+        "redo": {
+          "title": "Rehacer operación de archivo"
+        },
+        "copyPath": {
+          "title": "Copiar ruta del archivo"
+        },
+        "copyRelativePath": {
+          "title": "Copiar ruta relativa del archivo"
+        },
+        "delete": {
+          "title": "Eliminar archivo"
+        }
+      },
+      "settings": {
+        "search": {
+          "title": "Buscar en configuración"
+        }
+      },
+      "terminal": {
+        "copySelection": {
+          "title": "Copiar selección de terminal"
+        },
+        "paste": {
+          "title": "Pegar en terminal"
+        },
+        "search": {
+          "title": "Buscar en panel activo"
+        },
+        "clear": {
+          "title": "Limpiar panel activo"
+        },
+        "acceptAutosuggest": {
+          "title": "Aceptar autosugerencia de comando"
+        },
+        "focusNextPane": {
+          "title": "Enfocar panel siguiente"
+        },
+        "focusPreviousPane": {
+          "title": "Enfocar panel anterior"
+        },
+        "equalizePaneSizes": {
+          "title": "Igualar tamaños de panel"
+        },
+        "expandPane": {
+          "title": "Expandir / contraer panel"
+        },
+        "setTitle": {
+          "title": "Establecer título…"
+        },
+        "clearPaneTitle": {
+          "title": "Borrar título del panel"
+        },
+        "closePane": {
+          "title": "Cerrar panel activo"
+        },
+        "splitRight": {
+          "title": "Dividir terminal a la derecha"
+        },
+        "splitDown": {
+          "title": "Dividir terminal hacia abajo"
+        },
+        "switchInputSource": {
+          "title": "Cambiar fuente de entrada / idioma (nativo)"
+        }
+      }
+    },
+    "groups": {
+      "global": {
+        "title": "Global"
+      },
+      "tabs": {
+        "title": "Pestañas"
+      },
+      "tab-navigation": {
+        "title": "Navegación de pestañas"
+      },
+      "quick-commands": {
+        "title": "Comandos rápidos"
+      },
+      "browser": {
+        "title": "Navegador"
+      },
+      "editors": {
+        "title": "Editores"
+      },
+      "file-explorer": {
+        "title": "Explorador de archivos"
+      },
+      "settings": {
+        "title": "Configuración"
+      },
+      "terminal-panes": {
+        "title": "Paneles de terminal"
+      },
+      "agents": {
+        "title": "Agentes"
+      }
+    }
+  },
+  "workspaceStatus": {
+    "todo": {
+      "label": "Por hacer"
+    },
+    "in-progress": {
+      "label": "En progreso"
+    },
+    "in-review": {
+      "label": "En revisión"
+    },
+    "completed": {
+      "label": "Completado"
+    }
+  },
+  "automationSchedule": {
+    "hourly": "Cada hora a las :{{minute}}",
+    "daily": "Diario a las {{time}}",
+    "weekdays": "Días laborables a las {{time}}",
+    "weekly": "{{day}} a las {{time}}",
+    "custom": "Horario personalizado",
+    "invalid": "Horario no válido",
+    "validCustomCron": "Cron personalizado válido",
+    "advancedPlaceholder": "Horario avanzado"
+  },
+  "nativeChatSlashCommands": {
+    "common": {
+      "clear": {
+        "description": "Borrar la conversación"
+      },
+      "help": {
+        "description": "Mostrar comandos disponibles"
+      }
+    },
+    "claude": {
+      "clear": {
+        "description": "Borrar el historial de la conversación"
+      },
+      "compact": {
+        "description": "Resumir y compactar la conversación"
+      },
+      "init": {
+        "description": "Inicializar un CLAUDE.md"
+      },
+      "review": {
+        "description": "Revisar los cambios actuales"
+      },
+      "help": {
+        "description": "Mostrar comandos disponibles"
+      }
+    },
+    "codex": {
+      "model": {
+        "description": "Elegir el modelo y el nivel de razonamiento"
+      },
+      "ide": {
+        "description": "Incluir contexto del IDE"
+      },
+      "permissions": {
+        "description": "Elegir qué puede hacer Codex"
+      },
+      "keymap": {
+        "description": "Remapear atajos de la TUI"
+      },
+      "vim": {
+        "description": "Alternar modo Vim"
+      },
+      "experimental": {
+        "description": "Alternar funciones experimentales"
+      },
+      "approve": {
+        "description": "Aprobar un reintento de revisión automática"
+      },
+      "memories": {
+        "description": "Configurar el uso de memoria"
+      },
+      "skills": {
+        "description": "Gestionar y usar Habilidades"
+      },
+      "import": {
+        "description": "Importar configuración desde Claude Code"
+      },
+      "hooks": {
+        "description": "Ver hooks de ciclo de vida"
+      },
+      "review": {
+        "description": "Revisar los cambios actuales"
+      },
+      "rename": {
+        "description": "Renombrar el hilo actual"
+      },
+      "new": {
+        "description": "Iniciar un chat nuevo"
+      },
+      "archive": {
+        "description": "Archivar esta sesión y salir"
+      },
+      "delete": {
+        "description": "Eliminar esta sesión y salir"
+      },
+      "resume": {
+        "description": "Reanudar un chat guardado"
+      },
+      "fork": {
+        "description": "Bifurcar el chat actual"
+      },
+      "app": {
+        "description": "Continuar en Codex Desktop"
+      },
+      "init": {
+        "description": "Crear un archivo AGENTS.md"
+      },
+      "compact": {
+        "description": "Compactar la conversación"
+      },
+      "plan": {
+        "description": "Cambiar al modo Plan"
+      },
+      "goal": {
+        "description": "Establecer o ver el objetivo"
+      },
+      "agent": {
+        "description": "Cambiar el hilo de agente activo"
+      },
+      "side": {
+        "description": "Iniciar una conversación paralela"
+      },
+      "copy": {
+        "description": "Copiar la última respuesta como markdown"
+      },
+      "raw": {
+        "description": "Alternar modo de desplazamiento sin formato"
+      },
+      "diff": {
+        "description": "Mostrar el diff de trabajo"
+      },
+      "mention": {
+        "description": "Mencionar un archivo"
+      },
+      "status": {
+        "description": "Mostrar configuración y uso de la sesión"
+      },
+      "usage": {
+        "description": "Ver el uso de la cuenta"
+      },
+      "title": {
+        "description": "Configurar el título de la terminal"
+      },
+      "statusline": {
+        "description": "Configurar la línea de estado"
+      },
+      "theme": {
+        "description": "Elegir un tema de resaltado de sintaxis"
+      },
+      "pets": {
+        "description": "Elegir u ocultar la mascota de la terminal"
+      },
+      "mcp": {
+        "description": "Listar herramientas MCP configuradas"
+      },
+      "plugins": {
+        "description": "Explorar complementos"
+      },
+      "logout": {
+        "description": "Cerrar sesión de Codex"
+      },
+      "exit": {
+        "description": "Salir de Codex"
+      },
+      "feedback": {
+        "description": "Enviar registros a los mantenedores"
+      },
+      "ps": {
+        "description": "Listar terminales en segundo plano"
+      },
+      "stop": {
+        "description": "Detener todas las terminales en segundo plano"
+      },
+      "clear": {
+        "description": "Borrar la terminal e iniciar un chat nuevo"
+      },
+      "personality": {
+        "description": "Elegir un estilo de comunicación"
+      },
+      "subagents": {
+        "description": "Cambiar el hilo de agente activo"
+      }
+    }
+  },
+  "networkProxy": {
+    "validation": {
+      "tooLong": "La URL del proxy es demasiado larga.",
+      "invalidUrl": "Introduzca una URL de proxy válida.",
+      "unsupportedScheme": "Use una URL de proxy http, https, socks, socks4 o socks5.",
+      "missingHost": "La URL del proxy debe incluir un host."
+    }
   }
 }

@@ -13727,5 +13727,858 @@
     "sidebar": {
       "label": "Agent Dashboard"
     }
+  },
+  "agentsOrchestrationSteps": {
+    "statuses": {
+      "name": "Visibility",
+      "subtitle": "Agent Visibility",
+      "description": "Know which agents are working, waiting, live, or blocked."
+    },
+    "orchestration": {
+      "name": "Orchestration",
+      "subtitle": "Orchestration",
+      "description": "Enable agents to manage and coordinate Orca workspaces to execute larger tasks."
+    },
+    "usage": {
+      "name": "Usage",
+      "subtitle": "Usage",
+      "description": "Watch your usage and rate limits across every connected account, so you know when to switch."
+    }
+  },
+  "reviewSteps": {
+    "notes": {
+      "name": "Notes",
+      "subtitle": "Notes & diffs",
+      "description": "Send focused review notes to an agent."
+    },
+    "pr-view": {
+      "name": "PR checks",
+      "subtitle": "PR checks & comments",
+      "description": "See PR status in the Checks tab."
+    },
+    "ship": {
+      "name": "Ship with AI",
+      "subtitle": "Ship with AI",
+      "description": "Let AI prepare commit and PR drafts for you."
+    }
+  },
+  "workbenchSteps": {
+    "terminal": {
+      "name": "Terminal",
+      "subtitle": "Terminal",
+      "description": "Keep your agents, tests, and dev logs visible at once."
+    },
+    "editor": {
+      "name": "Editor",
+      "subtitle": "Editor",
+      "description": "Use our Notion-style markdown editor to write notes without leaving Orca."
+    },
+    "browser": {
+      "name": "Browser",
+      "subtitle": "Browser",
+      "description": "Run your app in Orca's browser, send selected UI elements to agents, and let your agents interact with your webpage."
+    }
+  },
+  "featureWallWorkflows": {
+    "workspaces": {
+      "title": "Workspaces",
+      "lede": "Orca splits each task into an isolated workspace so agents can run in parallel."
+    },
+    "tasks": {
+      "title": "Tasks",
+      "lede": "Start work directly from GitHub or Linear."
+    },
+    "agents-orchestration": {
+      "title": "Agents",
+      "lede": "Run several agents at once, track their progress, and let automation drive Orca when it helps."
+    },
+    "workbench": {
+      "title": "Workbench",
+      "lede": "Bring your terminal setup into Orca, then split panes to keep servers, tests, logs, and agents running side by side."
+    },
+    "review": {
+      "title": "Code Review",
+      "lede": "Review what changed, leave focused feedback, and send it back to the agent."
+    }
+  },
+  "featureWallTiles": {
+    "tile-01": {
+      "title": "Parallel workspace orchestration"
+    },
+    "tile-02": {
+      "title": "Ghostty-class terminal"
+    },
+    "tile-03": {
+      "title": "GitHub & Linear, native"
+    },
+    "tile-04": {
+      "title": "Supported CLI agents"
+    },
+    "tile-05": {
+      "title": "Embedded browser + Design Mode"
+    },
+    "tile-06": {
+      "title": "Remote workspaces"
+    },
+    "tile-07": {
+      "title": "Monaco editor, drag-to-agent"
+    },
+    "tile-08": {
+      "title": "Inline review, back to the agent"
+    },
+    "tile-09": {
+      "title": "Orca CLI"
+    },
+    "tile-10": {
+      "title": "Keyboard-native"
+    },
+    "tile-11": {
+      "title": "Usage & rate-limit aware"
+    },
+    "tile-12": {
+      "title": "PDFs, images, CSV, Markdown"
+    }
+  },
+  "featureTips": {
+    "orca-cli": {
+      "eyebrow": "Tip",
+      "title": "Let agents drive Orca with the Orca CLI",
+      "description": "Enable agents to coordinate child worktrees and communicate between worktrees.",
+      "ctaLabel": "Install CLI & Skills"
+    },
+    "cmd-j-palette": {
+      "eyebrow": "Tip",
+      "title": "Jump to a worktree with <shortcut>",
+      "description": "Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.",
+      "ctaLabel": "Got it"
+    },
+    "voice-dictation": {
+      "eyebrow": "Tip",
+      "title": "Voice Dictation is here",
+      "description": "Speak into any focused pane and Orca will transcribe it. Press the dictation shortcut to start and stop.",
+      "ctaLabel": "Set Up Voice"
+    }
+  },
+  "contextualTours": {
+    "workspace-board": {
+      "workspace-board-center": {
+        "title": "Plan work on the board",
+        "body": "Use the board when you want to see workspaces by status instead of by project."
+      },
+      "workspace-board-done-lane": {
+        "title": "Move work through lanes",
+        "body": "Drag workspaces between lanes as their status changes."
+      }
+    },
+    "workspace-agent-sessions": {
+      "terminal-pane-split-target": {
+        "title": "Split a terminal pane",
+        "body": "Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.",
+        "primaryActionLabel": "Split terminal"
+      },
+      "workspace-create-control": {
+        "title": "Start another task in parallel",
+        "body": "Each worktree gets its own branch, so parallel work stays separate."
+      }
+    },
+    "browser": {
+      "browser-grab-control": {
+        "title": "Grab page context for agents",
+        "body": "Use the grab tool to copy a page element's context for agents."
+      },
+      "browser-annotation-control": {
+        "title": "Mark design feedback in place",
+        "body": "Annotate elements and send those notes to an agent."
+      },
+      "browser-import-hint": {
+        "title": "Stay logged in",
+        "body": "Bring your existing logins into Orca to stay signed in immediately."
+      }
+    },
+    "tasks": {
+      "tasks-source-filters": {
+        "title": "Choose the work source",
+        "body": "Switch between connected providers and project filters without changing pages."
+      },
+      "tasks-search-presets": {
+        "title": "Filter to the work you need",
+        "body": "Use presets and search to narrow issues, reviews, merge requests, or tasks."
+      },
+      "tasks-start-workspace": {
+        "title": "Start from work items",
+        "body": "Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace."
+      }
+    },
+    "automations": {
+      "automations-create": {
+        "title": "What is an automation?",
+        "body": "Automations run agent work on a schedule. Add an automation by clicking this button."
+      },
+      "automations-runs": {
+        "title": "Find the results",
+        "body": "Runs show when automations executed, what happened, and where to inspect their output."
+      }
+    },
+    "floating-workspace": {
+      "floating-workspace-new-terminal": {
+        "title": "Run an agent across every repo",
+        "body": "Agents here run in any folder you choose. Point one at the directory above your services to work across all your repos at once."
+      },
+      "floating-workspace-new-markdown": {
+        "title": "Or use it as a scratchpad",
+        "body": "Open agents, scratch terminals, notes, and browser tabs without cluttering the worktree you’re focused on."
+      }
+    },
+    "workspace-creation": {
+      "workspace-creation-project": {
+        "title": "Pick a project",
+        "body": "Orca isolates each task in its own worktree, branched off your base."
+      },
+      "workspace-creation-name": {
+        "title": "Name it, or start from existing work",
+        "body": "Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message."
+      },
+      "workspace-creation-agent": {
+        "title": "Choose what agent starts the work",
+        "body": "Pick the agent that should be opened when this worktree is created."
+      }
+    }
+  },
+  "keybindings": {
+    "actions": {
+      "worktree": {
+        "quickOpen": {
+          "title": "Go to File"
+        },
+        "palette": {
+          "title": "Switch worktree"
+        },
+        "navigateUp": {
+          "title": "Previous worktree"
+        },
+        "navigateDown": {
+          "title": "Next worktree"
+        },
+        "history": {
+          "back": {
+            "title": "Worktree History Back"
+          },
+          "forward": {
+            "title": "Worktree History Forward"
+          }
+        }
+      },
+      "app": {
+        "settings": {
+          "title": "Open Settings"
+        },
+        "forceReload": {
+          "title": "Force Reload"
+        }
+      },
+      "workspace": {
+        "create": {
+          "title": "Create worktree"
+        },
+        "rename": {
+          "title": "Rename worktree"
+        },
+        "delete": {
+          "title": "Delete Workspace"
+        },
+        "openBoard": {
+          "title": "Open Workspace Board"
+        },
+        "selectByIndex": {
+          "title": "Select Workspace 1–9"
+        }
+      },
+      "voice": {
+        "dictation": {
+          "title": "Dictation"
+        }
+      },
+      "view": {
+        "tasks": {
+          "title": "Open Tasks"
+        }
+      },
+      "sidebar": {
+        "left": {
+          "toggle": {
+            "title": "Toggle Sidebar"
+          }
+        },
+        "right": {
+          "toggle": {
+            "title": "Toggle Right Sidebar"
+          }
+        },
+        "explorer": {
+          "toggle": {
+            "title": "Show Explorer"
+          }
+        },
+        "search": {
+          "toggle": {
+            "title": "Show Search"
+          }
+        },
+        "sourceControl": {
+          "toggle": {
+            "title": "Show Source Control"
+          }
+        },
+        "checks": {
+          "toggle": {
+            "title": "Show Checks"
+          }
+        },
+        "ports": {
+          "toggle": {
+            "title": "Show Ports"
+          }
+        },
+        "sleepingWorkspaces": {
+          "toggle": {
+            "title": "Toggle Sleeping Workspaces"
+          }
+        },
+        "focusWorktreeList": {
+          "title": "Focus worktree list"
+        }
+      },
+      "floatingTerminal": {
+        "toggle": {
+          "title": "Toggle Floating Terminal"
+        }
+      },
+      "floatingWorkspace": {
+        "maximize": {
+          "title": "Maximize Floating Workspace Panel"
+        },
+        "minimize": {
+          "title": "Minimize Floating Workspace Panel"
+        }
+      },
+      "zoom": {
+        "in": {
+          "title": "Zoom In"
+        },
+        "out": {
+          "title": "Zoom Out"
+        },
+        "reset": {
+          "title": "Reset Size"
+        }
+      },
+      "tab": {
+        "newTerminal": {
+          "title": "New terminal tab"
+        },
+        "newAgent": {
+          "title": "New agent tab (default agent)",
+          "claude": {
+            "title": "New Claude tab"
+          },
+          "claude-agent-teams": {
+            "title": "New Claude Agent Teams tab"
+          },
+          "openclaude": {
+            "title": "New OpenClaude tab"
+          },
+          "codex": {
+            "title": "New Codex tab"
+          },
+          "devin": {
+            "title": "New Devin tab"
+          },
+          "ante": {
+            "title": "New Ante tab"
+          },
+          "autohand": {
+            "title": "New Autohand Code tab"
+          },
+          "opencode": {
+            "title": "New OpenCode tab"
+          },
+          "mimo-code": {
+            "title": "New MiMo Code tab"
+          },
+          "pi": {
+            "title": "New Pi tab"
+          },
+          "omp": {
+            "title": "New OMP tab"
+          },
+          "gemini": {
+            "title": "New Gemini tab"
+          },
+          "antigravity": {
+            "title": "New Antigravity tab"
+          },
+          "aider": {
+            "title": "New Aider tab"
+          },
+          "goose": {
+            "title": "New Goose tab"
+          },
+          "amp": {
+            "title": "New Amp tab"
+          },
+          "kilo": {
+            "title": "New Kilocode tab"
+          },
+          "kiro": {
+            "title": "New Kiro tab"
+          },
+          "crush": {
+            "title": "New Charm tab"
+          },
+          "aug": {
+            "title": "New Auggie tab"
+          },
+          "cline": {
+            "title": "New Cline tab"
+          },
+          "codebuff": {
+            "title": "New Codebuff tab"
+          },
+          "command-code": {
+            "title": "New Command Code tab"
+          },
+          "continue": {
+            "title": "New Continue tab"
+          },
+          "cursor": {
+            "title": "New Cursor tab"
+          },
+          "droid": {
+            "title": "New Droid tab"
+          },
+          "kimi": {
+            "title": "New Kimi tab"
+          },
+          "mistral-vibe": {
+            "title": "New Mistral Vibe tab"
+          },
+          "qwen-code": {
+            "title": "New Qwen Code tab"
+          },
+          "rovo": {
+            "title": "New Rovo Dev tab"
+          },
+          "hermes": {
+            "title": "New Hermes tab"
+          },
+          "openclaw": {
+            "title": "New OpenClaw tab"
+          },
+          "copilot": {
+            "title": "New GitHub Copilot tab"
+          },
+          "grok": {
+            "title": "New Grok tab"
+          }
+        },
+        "newBrowser": {
+          "title": "New browser tab"
+        },
+        "newSimulator": {
+          "title": "New mobile emulator tab"
+        },
+        "newMarkdown": {
+          "title": "New markdown tab"
+        },
+        "openMarkdown": {
+          "title": "Open markdown tab"
+        },
+        "close": {
+          "title": "Close active tab"
+        },
+        "closeAll": {
+          "title": "Close all editor tabs"
+        },
+        "rename": {
+          "title": "Rename active tab"
+        },
+        "reopenClosed": {
+          "title": "Reopen closed tab"
+        },
+        "nextSameType": {
+          "title": "Next tab (same type)"
+        },
+        "previousSameType": {
+          "title": "Previous tab (same type)"
+        },
+        "nextAllTypes": {
+          "title": "Next tab (all types)"
+        },
+        "previousAllTypes": {
+          "title": "Previous tab (all types)"
+        },
+        "previousRecent": {
+          "title": "Previous recent tab"
+        },
+        "nextTerminal": {
+          "title": "Next terminal tab"
+        },
+        "previousTerminal": {
+          "title": "Previous terminal tab"
+        },
+        "selectByIndex": {
+          "title": "Select Tab 1–9"
+        },
+        "openQuickCommandsMenu": {
+          "title": "Toggle Quick Commands menu"
+        }
+      },
+      "browser": {
+        "find": {
+          "title": "Find in Browser"
+        },
+        "back": {
+          "title": "Go Back in Browser"
+        },
+        "forward": {
+          "title": "Go Forward in Browser"
+        },
+        "reload": {
+          "title": "Reload Browser Page"
+        },
+        "hardReload": {
+          "title": "Hard Reload Browser Page"
+        },
+        "focusAddressBar": {
+          "title": "Focus Browser Address Bar"
+        },
+        "grabElement": {
+          "title": "Grab Page Element"
+        }
+      },
+      "editor": {
+        "find": {
+          "title": "Find in editor"
+        },
+        "replace": {
+          "title": "Replace in editor"
+        },
+        "save": {
+          "title": "Save File"
+        },
+        "markdownPreview": {
+          "title": "Show Markdown Preview"
+        },
+        "copyContext": {
+          "title": "Copy Context"
+        },
+        "previousChange": {
+          "title": "Go to Previous Change"
+        },
+        "nextChange": {
+          "title": "Go to Next Change"
+        },
+        "addReviewNote": {
+          "title": "Add Review Note"
+        }
+      },
+      "fileExplorer": {
+        "undo": {
+          "title": "Undo file operation"
+        },
+        "redo": {
+          "title": "Redo file operation"
+        },
+        "copyPath": {
+          "title": "Copy file path"
+        },
+        "copyRelativePath": {
+          "title": "Copy relative file path"
+        },
+        "delete": {
+          "title": "Delete file"
+        }
+      },
+      "settings": {
+        "search": {
+          "title": "Search Settings"
+        }
+      },
+      "terminal": {
+        "copySelection": {
+          "title": "Copy terminal selection"
+        },
+        "paste": {
+          "title": "Paste into terminal"
+        },
+        "search": {
+          "title": "Search active pane"
+        },
+        "clear": {
+          "title": "Clear active pane"
+        },
+        "acceptAutosuggest": {
+          "title": "Accept command autosuggestion"
+        },
+        "focusNextPane": {
+          "title": "Focus next pane"
+        },
+        "focusPreviousPane": {
+          "title": "Focus previous pane"
+        },
+        "equalizePaneSizes": {
+          "title": "Equalize pane sizes"
+        },
+        "expandPane": {
+          "title": "Expand / collapse pane"
+        },
+        "setTitle": {
+          "title": "Set Title…"
+        },
+        "clearPaneTitle": {
+          "title": "Clear Pane Title"
+        },
+        "closePane": {
+          "title": "Close active pane"
+        },
+        "splitRight": {
+          "title": "Split terminal right"
+        },
+        "splitDown": {
+          "title": "Split terminal down"
+        },
+        "switchInputSource": {
+          "title": "Switch input source / language (native)"
+        }
+      }
+    },
+    "groups": {
+      "global": {
+        "title": "Global"
+      },
+      "tabs": {
+        "title": "Tabs"
+      },
+      "tab-navigation": {
+        "title": "Tab Navigation"
+      },
+      "quick-commands": {
+        "title": "Quick Commands"
+      },
+      "browser": {
+        "title": "Browser"
+      },
+      "editors": {
+        "title": "Editors"
+      },
+      "file-explorer": {
+        "title": "File Explorer"
+      },
+      "settings": {
+        "title": "Settings"
+      },
+      "terminal-panes": {
+        "title": "Terminal Panes"
+      },
+      "agents": {
+        "title": "Agents"
+      }
+    }
+  },
+  "workspaceStatus": {
+    "todo": {
+      "label": "Todo"
+    },
+    "in-progress": {
+      "label": "In progress"
+    },
+    "in-review": {
+      "label": "In review"
+    },
+    "completed": {
+      "label": "Done"
+    }
+  },
+  "automationSchedule": {
+    "hourly": "Hourly at :{{minute}}",
+    "daily": "Daily at {{time}}",
+    "weekdays": "Weekdays at {{time}}",
+    "weekly": "{{day}} at {{time}}",
+    "custom": "Custom schedule",
+    "invalid": "Invalid schedule",
+    "validCustomCron": "Valid custom cron",
+    "advancedPlaceholder": "Advanced schedule"
+  },
+  "nativeChatSlashCommands": {
+    "common": {
+      "clear": {
+        "description": "Clear the conversation"
+      },
+      "help": {
+        "description": "Show available commands"
+      }
+    },
+    "claude": {
+      "clear": {
+        "description": "Clear conversation history"
+      },
+      "compact": {
+        "description": "Summarize and compact the conversation"
+      },
+      "init": {
+        "description": "Initialize a CLAUDE.md"
+      },
+      "review": {
+        "description": "Review the current changes"
+      },
+      "help": {
+        "description": "Show available commands"
+      }
+    },
+    "codex": {
+      "model": {
+        "description": "Choose the model and reasoning effort"
+      },
+      "ide": {
+        "description": "Include IDE context"
+      },
+      "permissions": {
+        "description": "Choose what Codex is allowed to do"
+      },
+      "keymap": {
+        "description": "Remap TUI shortcuts"
+      },
+      "vim": {
+        "description": "Toggle Vim mode"
+      },
+      "experimental": {
+        "description": "Toggle experimental features"
+      },
+      "approve": {
+        "description": "Approve one auto-review retry"
+      },
+      "memories": {
+        "description": "Configure memory use"
+      },
+      "skills": {
+        "description": "Manage and use skills"
+      },
+      "import": {
+        "description": "Import setup from Claude Code"
+      },
+      "hooks": {
+        "description": "View lifecycle hooks"
+      },
+      "review": {
+        "description": "Review the current changes"
+      },
+      "rename": {
+        "description": "Rename the current thread"
+      },
+      "new": {
+        "description": "Start a new chat"
+      },
+      "archive": {
+        "description": "Archive this session and exit"
+      },
+      "delete": {
+        "description": "Delete this session and exit"
+      },
+      "resume": {
+        "description": "Resume a saved chat"
+      },
+      "fork": {
+        "description": "Fork the current chat"
+      },
+      "app": {
+        "description": "Continue in Codex Desktop"
+      },
+      "init": {
+        "description": "Create an AGENTS.md file"
+      },
+      "compact": {
+        "description": "Compact the conversation"
+      },
+      "plan": {
+        "description": "Switch to Plan mode"
+      },
+      "goal": {
+        "description": "Set or view the goal"
+      },
+      "agent": {
+        "description": "Switch the active agent thread"
+      },
+      "side": {
+        "description": "Start a side conversation"
+      },
+      "copy": {
+        "description": "Copy the last response as markdown"
+      },
+      "raw": {
+        "description": "Toggle raw scrollback mode"
+      },
+      "diff": {
+        "description": "Show the working diff"
+      },
+      "mention": {
+        "description": "Mention a file"
+      },
+      "status": {
+        "description": "Show session configuration and usage"
+      },
+      "usage": {
+        "description": "View account usage"
+      },
+      "title": {
+        "description": "Configure the terminal title"
+      },
+      "statusline": {
+        "description": "Configure the status line"
+      },
+      "theme": {
+        "description": "Choose a syntax highlighting theme"
+      },
+      "pets": {
+        "description": "Choose or hide the terminal pet"
+      },
+      "mcp": {
+        "description": "List configured MCP tools"
+      },
+      "plugins": {
+        "description": "Browse plugins"
+      },
+      "logout": {
+        "description": "Log out of Codex"
+      },
+      "exit": {
+        "description": "Exit Codex"
+      },
+      "feedback": {
+        "description": "Send logs to maintainers"
+      },
+      "ps": {
+        "description": "List background terminals"
+      },
+      "stop": {
+        "description": "Stop all background terminals"
+      },
+      "clear": {
+        "description": "Clear the terminal and start a new chat"
+      },
+      "personality": {
+        "description": "Choose a communication style"
+      },
+      "subagents": {
+        "description": "Switch the active agent thread"
+      }
+    }
+  },
+  "networkProxy": {
+    "validation": {
+      "tooLong": "Proxy URL is too long.",
+      "invalidUrl": "Enter a valid proxy URL.",
+      "unsupportedScheme": "Use an http, https, socks, socks4, or socks5 proxy URL.",
+      "missingHost": "Proxy URL must include a host."
+    }
   }
 }

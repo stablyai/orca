@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import type { FeatureTip, FeatureTipAction } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedFeatureTip } from './feature-tip-copy'
 
 function getPrimaryBusyLabel(action: FeatureTipAction): string {
   if (action === 'setup-cli') {
@@ -26,6 +27,7 @@ export function FeatureTipActions({
   showSkip?: boolean
   fullWidth?: boolean
 }): JSX.Element {
+  const localizedTip = getLocalizedFeatureTip(currentTip)
   return (
     <>
       {showSkip ? (
@@ -44,7 +46,7 @@ export function FeatureTipActions({
             {getPrimaryBusyLabel(currentTip.action)}
           </>
         ) : (
-          currentTip.ctaLabel
+          localizedTip.ctaLabel
         )}
       </Button>
     </>

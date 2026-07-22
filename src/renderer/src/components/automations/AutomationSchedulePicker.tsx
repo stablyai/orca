@@ -14,13 +14,13 @@ import type { AutomationSchedulePreset } from '../../../../shared/automations-ty
 import {
   buildAutomationCronSchedule,
   buildAutomationRrule,
-  formatAutomationSchedule,
   isValidAutomationSchedule
 } from '../../../../shared/automation-schedules'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationCustomCronPanel } from './AutomationCustomCronPanel'
 import { Field } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedAutomationScheduleLabel } from './automation-schedule-copy'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
 
@@ -88,11 +88,11 @@ function updateTimePart(
 function getDraftScheduleLabel(draft: AutomationDraft): string {
   if (draft.preset === 'custom') {
     return draft.customSchedule.trim()
-      ? formatAutomationSchedule(draft.customSchedule)
-      : 'Advanced schedule'
+      ? getLocalizedAutomationScheduleLabel(draft.customSchedule)
+      : translate('automationSchedule.advancedPlaceholder', 'Advanced schedule')
   }
   const { hour, minute } = parseTime(draft.time)
-  return formatAutomationSchedule(
+  return getLocalizedAutomationScheduleLabel(
     buildAutomationRrule({
       preset: draft.preset,
       hour,

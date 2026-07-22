@@ -25,6 +25,7 @@ import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
 import { FeatureTipActions } from './FeatureTipActions'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
+import { getLocalizedFeatureTip } from './feature-tip-copy'
 import {
   getOrcaCliFeatureTipTelemetrySource,
   trackCmdJPaletteFeatureTipAcknowledged,
@@ -266,6 +267,8 @@ export default function FeatureTipsModal(): JSX.Element | null {
     return null
   }
 
+  const localizedTip = getLocalizedFeatureTip(currentTip)
+
   if (currentTip.action === 'setup-cli') {
     return (
       <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -286,10 +289,10 @@ export default function FeatureTipsModal(): JSX.Element | null {
                     skillTerminalOpen ? 'max-w-2xl' : 'max-w-[22rem]'
                   }`}
                 >
-                  {currentTip.title}
+                  {localizedTip.title}
                 </DialogTitle>
                 <DialogDescription className="mt-3 max-w-2xl text-sm leading-relaxed">
-                  {currentTip.description}
+                  {localizedTip.description}
                 </DialogDescription>
                 <div
                   aria-hidden={skillTerminalOpen}
@@ -399,10 +402,10 @@ export default function FeatureTipsModal(): JSX.Element | null {
         <DialogHeader className="items-center gap-4 px-8 text-center sm:text-center">
           <FeatureTipVisual tip={currentTip} />
           <DialogTitle className="text-2xl font-semibold tracking-tight">
-            {currentTip.title}
+            {localizedTip.title}
           </DialogTitle>
           <DialogDescription className="max-w-sm text-sm leading-relaxed">
-            {currentTip.description}
+            {localizedTip.description}
           </DialogDescription>
         </DialogHeader>
 
