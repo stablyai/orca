@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import { detectSpeakBackAnnouncement } from './desktop-speak-back-detect'
 import { DesktopMeshSpeaker } from './desktop-mesh-speech'
+import { prepareReplyForSpeech } from './prepare-reply-for-speech'
 import { summarizeForSpeech } from './summarize-for-speech'
 import { isSpeakBackEnabled, subscribeToSpeakBackEnabled } from './desktop-speak-back-store'
 
@@ -66,16 +67,19 @@ export function useDesktopSessionSpeakBack(
       spokenRef.current.add(announcement.dedupeKey)
 
       void (async () => {
+        // Strip collab inject / MCP awareness noise before summary or fallback
+        // so a synth outage does not read board UUIDs and shape ids aloud.
+        const cleaned = prepareReplyForSpeech(announcement.reply) || announcement.reply
         try {
           const summary = await summarizeForSpeech(announcement.reply, { hostEndpoint })
           await speaker.speak(summary, { voice: kokoroVoice })
         } catch {
-          // A summarizer or synth outage should degrade to the raw reply, never
-          // to silence — silence is indistinguishable from the feature being
-          // broken. If even that throws, the connection banner already reports
-          // real disconnects.
+          // A summarizer or synth outage should degrade to the cleaned reply,
+          // never to silence — silence is indistinguishable from the feature
+          // being broken. If even that throws, the connection banner already
+          // reports real disconnects.
           try {
-            await speaker.speak(announcement.reply, { voice: kokoroVoice })
+            await speaker.speak(cleaned.slice(0, 500), { voice: kokoroVoice })
           } catch {
             // Give up quietly; the next finished turn tries again.
           }

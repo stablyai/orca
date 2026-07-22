@@ -5,8 +5,13 @@
 // agent's turn-end message is routinely hundreds of words of paths, hashes and
 // command output; read verbatim that is minutes of unusable monologue. The full
 // text stays on screen — this only decides what is SPOKEN.
+//
+// Collab boards (G2-P): the same pipeline speaks doodle-turn replies. Strip
+// inject echoes first (prepareReplyForSpeech) and use a prompt that covers
+// visual/board turns, not only "files changed".
 
 import { meshVoiceBaseUrlFor, SUMMARY_MODEL } from './mesh-speech-config'
+import { prepareReplyForSpeech } from './prepare-reply-for-speech'
 
 const MAX_SUMMARY_TOKENS = 1600
 
@@ -19,13 +24,17 @@ export const SPEAK_VERBATIM_UNDER_CHARS = 220
 const MAX_INPUT_CHARS = 6000
 
 const SYSTEM_PROMPT = [
-  "You compress a coding agent's reply into something spoken aloud to the",
-  'operator who asked for it. Two or three short sentences, maximum.',
-  'Plain spoken English: no markdown, no lists, no code, no file paths, no',
-  'commit hashes, no URLs — they are unlistenable read out loud.',
-  'Lead with the outcome: what got done, and whether anything failed or needs',
-  'the operator. Say "it failed" plainly if it failed. Do not invent detail',
-  'that is not in the reply, and do not add pleasantries.'
+  "You compress an agent's reply into something spoken aloud to the operator.",
+  'Two or three short sentences, maximum.',
+  'Plain spoken English: no markdown, no lists, no code fences, no file paths,',
+  'no commit hashes, no URLs, no board UUIDs, no shape ids — they are unlistenable.',
+  'Lead with what matters: the outcome, the answer, or what the agent saw.',
+  'If the reply is about a whiteboard sketch, doodle, diagram, or collab board,',
+  'say what the agent understood from the drawing and what it proposes next.',
+  'If it is a normal coding turn, say what got done and whether anything failed',
+  'or needs the operator. Say "it failed" plainly if it failed.',
+  'Ignore system notices, tool-availability pings, and paste metadata.',
+  'Do not invent detail that is not in the reply, and do not add pleasantries.'
 ].join(' ')
 
 /**
@@ -39,7 +48,14 @@ export async function summarizeForSpeech(
   options: { hostEndpoint?: string | null; signal?: AbortSignal } = {}
 ): Promise<string> {
   const { hostEndpoint, signal } = options
-  const text = reply.trim()
+  const text = prepareReplyForSpeech(reply)
+  if (!text) {
+    throw new Error('summary empty after prepare')
+  }
+  // Mobile parity: short clean answers skip the local model (faster, less drift).
+  if (text.length <= SPEAK_VERBATIM_UNDER_CHARS) {
+    return text
+  }
   const res = await fetch(`${meshVoiceBaseUrlFor(hostEndpoint)}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
