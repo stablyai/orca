@@ -26,6 +26,7 @@ import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
+import { monacoFindOptions } from './monaco-find-options'
 
 export default function DiffViewer({
   modelKey,
@@ -429,11 +430,7 @@ export default function DiffViewer({
               renderOverviewRuler: true,
               scrollbar: diffEditorScrollbarOptions,
               padding: { top: 0 },
-              find: {
-                addExtraSpaceOnTop: false,
-                autoFindInSelection: 'never',
-                seedSearchStringFromSelection: 'never'
-              }
+              find: monacoFindOptions
             }}
           />
         )}

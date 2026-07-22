@@ -1,6 +1,4 @@
-// Why: the E2EE channel sits between the WebSocket transport and the RPC handler.
-// It owns the handshake state machine and transparent encrypt/decrypt so the RPC
-// handler only sees plaintext JSON, identical to the Unix socket path.
+// Why: this channel keeps E2EE framing out of RPC handlers, which consume plaintext across transports.
 import type { WebSocket } from 'ws'
 import { deriveSharedKey, encrypt, decrypt, encryptBytes, decryptBytes } from './e2ee-crypto'
 import {
@@ -53,9 +51,7 @@ export class E2EEChannel {
   private readonly requireV2: boolean
   private v2Session: DesktopMobileE2EEV2Session | null = null
   private v2OutboundQueue: WsOutboundBackpressureQueue<V2OutboundItem> | null = null
-  // Why: the RPC handler is set after the channel is ready, so the channel
-  // can forward decrypted messages. Kept as a callback rather than constructor
-  // param because the handler needs the encrypt function for replies.
+  // Why: the handler is set after readiness because its reply closure needs this channel's encryption state.
   private messageHandler:
     | ((
         plaintext: string,
@@ -173,8 +169,10 @@ export class E2EEChannel {
   }
 
   private trackDecryptFailure(): void {
-    this.consecutiveFailures++
-    if (this.consecutiveFailures >= MAX_CONSECUTIVE_DECRYPT_FAILURES) {
+    // Why: a wrong key cannot recover on this socket; close so the client uses its bounded auth retry budget.
+    if (this.state === 'awaiting_auth') {
+      this.onError(4001, 'Unauthorized')
+    } else if (++this.consecutiveFailures >= MAX_CONSECUTIVE_DECRYPT_FAILURES) {
       this.onError(4003, 'Too many decryption failures')
     }
   }

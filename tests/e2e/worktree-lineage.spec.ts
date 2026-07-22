@@ -1,4 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
+import { mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -11,6 +13,20 @@ import { worktreeRow } from './worktree-row-locators'
 
 function worktreeOption(page: Page, worktreeId: string) {
   return worktreeRow(page, worktreeId)
+}
+
+async function captureSidebarEvidence(page: Page, name: string): Promise<void> {
+  if (process.env.ORCA_CAPTURE_EVIDENCE !== '1') {
+    return
+  }
+  const outputDir = resolve(process.cwd(), 'pr-evidence')
+  mkdirSync(outputDir, { recursive: true })
+  await page
+    .locator('[data-worktree-sidebar]')
+    .first()
+    .screenshot({
+      path: resolve(outputDir, name)
+    })
 }
 
 test.describe('Worktree Lineage', () => {
@@ -85,6 +101,27 @@ test.describe('Worktree Lineage', () => {
       )
       .toBe(false)
     await expect(childRow).toBeVisible()
+  })
+
+  test('renders legacy-only inline lineage when side-map hydration is absent', async ({
+    orcaPage
+  }) => {
+    const { parentId, childId } = await seedLineageScenario(orcaPage, { inlineOnly: true })
+    const parentRow = worktreeOption(orcaPage, parentId)
+    const childRow = worktreeOption(orcaPage, childId)
+
+    await expect(parentRow.getByRole('button', { name: 'Hide 1 child workspace' })).toBeVisible()
+    await expect(childRow).toBeVisible()
+    await expect
+      .poll(async () => {
+        const [parentBox, childBox] = await Promise.all([
+          parentRow.boundingBox(),
+          childRow.boundingBox()
+        ])
+        return parentBox && childBox ? childBox.y > parentBox.y : false
+      })
+      .toBe(true)
+    await captureSidebarEvidence(orcaPage, 'legacy-inline-lineage-nested.png')
   })
 
   test('injects filtered parents structurally without showing a parent badge', async ({

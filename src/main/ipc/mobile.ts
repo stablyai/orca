@@ -63,6 +63,7 @@ export type MobileHandlerDependencies = {
   firewallEnvironment?: WindowsMobileFirewallEnvironment
   openWindowsNetworkSettings?: () => Promise<void>
   getRelayStatus?: () => RelayBrokerStatus
+  consumePendingUnpairedDeviceAuthFailure?: (webContentsId: number) => boolean
 }
 
 export function registerMobileHandlers(
@@ -252,6 +253,13 @@ export function registerMobileHandlers(
   ipcMain.handle('mobile:getRelayStatus', () => ({
     status: dependencies.getRelayStatus?.() ?? 'offline'
   }))
+
+  ipcMain.handle('mobile:consumePendingUnpairedDeviceAuthFailure', (event) => {
+    if (!isWindowRenderer(event)) {
+      return false
+    }
+    return dependencies.consumePendingUnpairedDeviceAuthFailure?.(event.sender.id) ?? false
+  })
 }
 
 function isWindowRenderer(event: IpcMainInvokeEvent): boolean {

@@ -29,6 +29,26 @@ describe('mobile session startup', () => {
     expect(autoCreateEffect).toContain('void handleCreateTerminal()')
   })
 
+  it('stops fallback list polling in the background and reconciles on resume', () => {
+    const pollEffect = sliceBetween(
+      "const refreshOnForeground = () => {\n        if (AppState.currentState !== 'active')",
+      '// Why: pick up Settings → Terminal text size on return'
+    )
+
+    expect(pollEffect).toContain(
+      "if (AppState.currentState !== 'active') {\n          return\n        }\n        void fetchSessionTabs()"
+    )
+    expect(pollEffect).toContain('void fetchTerminals()')
+    expect(pollEffect).toContain("AppState.addEventListener('change'")
+    expect(pollEffect).toContain("if (state === 'active') {\n          refreshOnForeground()")
+    expect(pollEffect).toContain('const interval = setInterval(refreshOnForeground, 2000)')
+    expect(pollEffect.lastIndexOf('\n      refreshOnForeground()')).toBeGreaterThan(
+      pollEffect.indexOf("AppState.addEventListener('change'")
+    )
+    expect(pollEffect).toContain('clearInterval(interval)')
+    expect(pollEffect).toContain('appStateSubscription.remove()')
+  })
+
   it('loads session tabs without waiting for desktop activation', () => {
     const startupEffect = sliceBetween(
       'void (async () => {',

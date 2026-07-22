@@ -113,6 +113,26 @@ describe('E2EEChannel', () => {
       expect(ctx.onReady).not.toHaveBeenCalled()
     })
 
+    it('rejects an auth frame encrypted to a stale desktop key', () => {
+      const ctx = setup()
+      ctx.channel.handleRawMessage(
+        JSON.stringify({
+          type: 'e2ee_hello',
+          publicKeyB64: publicKeyToBase64(ctx.clientKeys.publicKey)
+        })
+      )
+      const staleServer = generateKeyPair()
+      const staleSharedKey = deriveSharedKey(ctx.clientKeys.secretKey, staleServer.publicKey)
+
+      ctx.channel.handleRawMessage(
+        encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), staleSharedKey)
+      )
+
+      expect(ctx.onError).toHaveBeenCalledOnce()
+      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Unauthorized')
+      expect(ctx.onReady).not.toHaveBeenCalled()
+    })
+
     it('rejects malformed JSON', () => {
       const ctx = setup()
       ctx.channel.handleRawMessage('not json')

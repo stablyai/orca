@@ -1092,6 +1092,51 @@ async function setWorktreeLineageForRuntime(
   }
 }
 
+function projectLocalWorktreeLineageUpdate(
+  worktreesByRepo: Record<string, Worktree[]>,
+  worktreeId: string,
+  lineage: WorktreeLineage | null
+): Record<string, Worktree[]> {
+  let nextByRepo = worktreesByRepo
+  for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
+    let repoChanged = false
+    const projected = worktrees.map((worktree) => {
+      const current = worktree as WorktreeWithLineage
+      const hadChild = current.childWorktreeIds?.includes(worktreeId) ?? false
+      const isParent =
+        lineage?.parentWorktreeId === worktree.id &&
+        lineage.parentWorktreeInstanceId === worktree.instanceId
+      let childWorktreeIds = current.childWorktreeIds
+      if (hadChild) {
+        childWorktreeIds = childWorktreeIds?.filter((id) => id !== worktreeId)
+      }
+      if (isParent && !childWorktreeIds?.includes(worktreeId)) {
+        childWorktreeIds = [...(childWorktreeIds ?? []), worktreeId]
+      }
+      if (worktree.id === worktreeId) {
+        repoChanged = true
+        return {
+          ...worktree,
+          parentWorktreeId: lineage?.parentWorktreeId ?? null,
+          lineage
+        }
+      }
+      if (hadChild || isParent) {
+        repoChanged = true
+        return { ...worktree, childWorktreeIds }
+      }
+      return worktree
+    })
+    if (repoChanged) {
+      if (nextByRepo === worktreesByRepo) {
+        nextByRepo = { ...worktreesByRepo }
+      }
+      nextByRepo[repoId] = projected
+    }
+  }
+  return nextByRepo
+}
+
 function applyWorktreeLineageUpdate(
   set: Parameters<StateCreator<AppState>>[0],
   worktreeId: string,
@@ -1104,6 +1149,18 @@ function applyWorktreeLineageUpdate(
     } else {
       delete next[worktreeId]
     }
+    const worktreesByRepo =
+      result.target.kind === 'local'
+        ? projectLocalWorktreeLineageUpdate(s.worktreesByRepo, worktreeId, result.lineage)
+        : result.updatedRemoteWorktree
+          ? replaceWorktreeInRepoLists(
+              s.worktreesByRepo,
+              withRepoHostOwnership(
+                result.updatedRemoteWorktree,
+                repoHostId(s, getRepoIdFromWorktreeId(result.updatedRemoteWorktree.id))
+              )
+            )
+          : s.worktreesByRepo
     return {
       worktreeLineageById: next,
       workspaceLineageByChildKey: projectWorktreeLineageToWorkspaceLineage(
@@ -1111,16 +1168,7 @@ function applyWorktreeLineageUpdate(
         result.lineage,
         s.workspaceLineageByChildKey
       ),
-      worktreesByRepo:
-        result.target.kind === 'local' || !result.updatedRemoteWorktree
-          ? s.worktreesByRepo
-          : replaceWorktreeInRepoLists(
-              s.worktreesByRepo,
-              withRepoHostOwnership(
-                result.updatedRemoteWorktree,
-                repoHostId(s, getRepoIdFromWorktreeId(result.updatedRemoteWorktree.id))
-              )
-            ),
+      worktreesByRepo,
       sortEpoch: s.sortEpoch + 1
     }
   })
