@@ -2902,6 +2902,39 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.envToDelete ?? []).not.toEqual(expect.arrayContaining(['CODEX_HOME']))
       })
 
+      it('strips inherited Claude child-session stamps from daemon spawns', async () => {
+        // Why: a daemon forked from inside a Claude Code session inherits these
+        // stamps and would mark every terminal as a nested Claude child, which
+        // silently disables transcript persistence for real user sessions.
+        const spawnOptions = await daemonSpawnAndGetOptions(undefined, undefined, undefined, {
+          CLAUDE_CODE_CHILD_SESSION: '1',
+          CLAUDE_CODE_SESSION_ID: '85935aed-98a7-4094-89a8-85c75e1a5a95',
+          CLAUDE_CODE_BRIDGE_SESSION_ID: 'session_01UCkWN5nDXNyD1V7cfamCxa'
+        })
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining([
+            'CLAUDE_CODE_CHILD_SESSION',
+            'CLAUDE_CODE_SESSION_ID',
+            'CLAUDE_CODE_BRIDGE_SESSION_ID'
+          ])
+        )
+      })
+
+      it('preserves an explicitly requested Claude child-session stamp', async () => {
+        // Why: only inherited values are poison; a caller deliberately spawning a
+        // nested Claude child passes the stamp in args.env and must keep it.
+        const spawnOptions = await daemonSpawnAndGetOptions(
+          { CLAUDE_CODE_CHILD_SESSION: '1' },
+          undefined,
+          undefined,
+          { CLAUDE_CODE_CHILD_SESSION: '1' }
+        )
+        expect(spawnOptions.envToDelete ?? []).not.toEqual(
+          expect.arrayContaining(['CLAUDE_CODE_CHILD_SESSION'])
+        )
+        expect(spawnOptions.env.CLAUDE_CODE_CHILD_SESSION).toBe('1')
+      })
+
       it('prepends the bare-orca CLI shim dir to PATH for packaged Linux spawns', async () => {
         const originalPlatform = process.platform
         Object.defineProperty(process, 'platform', {
