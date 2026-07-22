@@ -335,6 +335,96 @@ describe('worktree base directory poller', () => {
     )
   })
 
+  it('pauses polling while the window is hidden and catches up on reveal', async () => {
+    const root = await makeRoot()
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('base', root)
+    let visible = false
+    const becameVisibleListeners = new Set<() => void>()
+    let ticks = 0
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: POLL_MS,
+        onFullScan: () => ticks++,
+        visibility: {
+          isWindowVisible: () => visible,
+          onWindowBecameVisible: (listener) => {
+            becameVisibleListeners.add(listener)
+            return () => becameVisibleListeners.delete(listener)
+          }
+        }
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    // External change while hidden: nothing may be scanned or emitted.
+    const worktree = join(root, 'external-hidden')
+    await mkdir(worktree)
+    await writeFile(join(worktree, '.git'), 'gitdir: elsewhere')
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 8))
+    expect(ticks).toBe(0)
+    expect(received.flat()).toHaveLength(0)
+
+    // Reveal: the catch-up tick surfaces the change immediately.
+    visible = true
+    for (const listener of becameVisibleListeners) {
+      listener()
+    }
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === join(worktree, '.git'))
+    )
+
+    await poller.unsubscribe()
+    expect(becameVisibleListeners.size).toBe(0)
+  })
+
+  it('pauses the git-common poll while hidden and catches up on reveal', async () => {
+    const commonDir = await makeRoot()
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('git-common', commonDir)
+    let visible = false
+    const becameVisibleListeners = new Set<() => void>()
+    let ticks = 0
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: POLL_MS,
+        platform: 'linux',
+        onFullScan: () => ticks++,
+        visibility: {
+          isWindowVisible: () => visible,
+          onWindowBecameVisible: (listener) => {
+            becameVisibleListeners.add(listener)
+            return () => becameVisibleListeners.delete(listener)
+          }
+        }
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    const entry = join(commonDir, 'worktrees', 'external-hidden')
+    await mkdir(entry, { recursive: true })
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 8))
+    expect(ticks).toBe(0)
+    expect(received.flat()).toHaveLength(0)
+
+    visible = true
+    for (const listener of becameVisibleListeners) {
+      listener()
+    }
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === entry)
+    )
+
+    await poller.unsubscribe()
+    expect(becameVisibleListeners.size).toBe(0)
+  })
+
   it('emits deletes for all known worktrees when the root vanishes', async () => {
     const root = await makeRoot()
     const worktree = join(root, 'external-5')

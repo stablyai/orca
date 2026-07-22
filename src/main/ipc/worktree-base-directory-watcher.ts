@@ -18,6 +18,7 @@ import {
   clearWorktreeBaseDirectoryWatchTargetWarnings
 } from './worktree-base-directory-watch-targets'
 import { startWorktreeBaseDirectoryPoller } from './worktree-base-directory-poller'
+import { createMainWindowVisibilityGate } from '../window/visibility-gated-interval'
 
 type ActiveWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow
@@ -165,17 +166,19 @@ async function subscribeTarget(
   mainWindow: BrowserWindow
 ): Promise<ActiveWatch> {
   let activeWatch: ActiveWatch | null = null
+  // Why: replaceWatch mutates the registered watch (repos, mainWindow) in
+  // place, so long-lived callbacks must re-resolve the live watch each time.
+  const liveWatch = (): ActiveWatch | null => activeWatches.get(target.key) ?? activeWatch
   if (target.connectionId) {
     const provider = getSshFilesystemProvider(target.connectionId)
     if (!provider) {
       throw new Error(`SSH filesystem provider unavailable for ${target.connectionId}`)
     }
     const unwatch = await provider.watch(target.path, (events) => {
-      const currentWatch = activeWatches.get(target.key) ?? activeWatch
-      if (!currentWatch || currentWatch.disposed) {
-        return
+      const currentWatch = liveWatch()
+      if (currentWatch && !currentWatch.disposed) {
+        handleRemoteWatchEvents(currentWatch, events)
       }
-      handleRemoteWatchEvents(currentWatch, events)
     })
     activeWatch = createActiveWatch(target, mainWindow, {
       unsubscribe: async () => unwatch()
@@ -189,13 +192,17 @@ async function subscribeTarget(
   // exactly those paths and registers zero fseventsd clients.
   const subscription = await startWorktreeBaseDirectoryPoller(
     target,
-    () => (activeWatches.get(target.key) ?? activeWatch)?.repos ?? target.repos,
+    () => liveWatch()?.repos ?? target.repos,
     (events) => {
-      const currentWatch = activeWatches.get(target.key) ?? activeWatch
-      if (!currentWatch || currentWatch.disposed) {
-        return
+      const currentWatch = liveWatch()
+      if (currentWatch && !currentWatch.disposed) {
+        handleLocalWatchEvents(currentWatch, null, events)
       }
-      handleLocalWatchEvents(currentWatch, null, events)
+    },
+    {
+      // Why: this poll only feeds visible UI; pause it while the window is
+      // hidden/minimized and catch up with one scan on reveal.
+      visibility: createMainWindowVisibilityGate(() => liveWatch()?.mainWindow ?? null)
     }
   )
   activeWatch = createActiveWatch(target, mainWindow, subscription)

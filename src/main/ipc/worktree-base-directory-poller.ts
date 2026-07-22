@@ -6,6 +6,8 @@ import type {
   WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
 import { startGitCommonWatch } from './worktree-git-common-watch'
+import type { WindowVisibilityGate } from '../window/visibility-gated-interval'
+import { startVisibilityGatedInterval } from '../window/visibility-gated-interval'
 
 export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path: string }
 
@@ -16,6 +18,9 @@ export type WorktreeBasePollerOptions = {
   platform?: NodeJS.Platform
   /** Test hook: called whenever a full snapshot scan runs (vs. a gated skip). */
   onFullScan?: () => void
+  // Why: these polls exist to catch external git changes for visible UI; the
+  // gate pauses them while the window is hidden and catches up on reveal.
+  visibility?: WindowVisibilityGate
 }
 
 // Why: these targets used to be recursive FSEvents subscriptions spanning the
@@ -145,7 +150,8 @@ async function startBasePoller(
   getRepos: () => ReadonlyMap<string, WorktreeBaseRepoWatchConfig>,
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
-  onFullScan?: () => void
+  onFullScan?: () => void,
+  visibility?: WindowVisibilityGate
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
@@ -222,25 +228,28 @@ async function startBasePoller(
     }
   }
 
-  const timer = setInterval(() => {
-    if (disposed || ticking) {
-      return
-    }
-    ticking = true
-    void tick()
-      .catch(() => {
-        // Transient fs error: keep the previous snapshot and retry next tick.
-      })
-      .finally(() => {
-        ticking = false
-      })
-  }, pollIntervalMs)
-  timer.unref?.()
+  const gatedInterval = startVisibilityGatedInterval(
+    () => {
+      if (disposed || ticking) {
+        return
+      }
+      ticking = true
+      void tick()
+        .catch(() => {
+          // Transient fs error: keep the previous snapshot and retry next tick.
+        })
+        .finally(() => {
+          ticking = false
+        })
+    },
+    pollIntervalMs,
+    visibility
+  )
 
   return {
     unsubscribe: async () => {
       disposed = true
-      clearInterval(timer)
+      gatedInterval.dispose()
     }
   }
 }
@@ -257,7 +266,21 @@ export async function startWorktreeBaseDirectoryPoller(
   const pollIntervalMs = options.pollIntervalMs ?? WORKTREE_BASE_POLL_INTERVAL_MS
   const platform = options.platform ?? process.platform
   if (target.kind === 'git-common') {
-    return startGitCommonWatch(target, onEvents, pollIntervalMs, platform, options.onFullScan)
+    return startGitCommonWatch(
+      target,
+      onEvents,
+      pollIntervalMs,
+      platform,
+      options.onFullScan,
+      options.visibility
+    )
   }
-  return startBasePoller(target, getRepos, onEvents, pollIntervalMs, options.onFullScan)
+  return startBasePoller(
+    target,
+    getRepos,
+    onEvents,
+    pollIntervalMs,
+    options.onFullScan,
+    options.visibility
+  )
 }

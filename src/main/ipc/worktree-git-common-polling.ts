@@ -4,6 +4,8 @@ import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription
 } from './worktree-base-directory-poller'
+import type { WindowVisibilityGate } from '../window/visibility-gated-interval'
+import { startVisibilityGatedInterval } from '../window/visibility-gated-interval'
 
 // Shared with the darwin primary-metadata poll so the platforms cannot drift
 // on which shallow leaves count as watchable metadata. `logs/HEAD` catches
@@ -229,45 +231,49 @@ export async function startGitCommonPolling(
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
   onFullScan?: () => void,
-  includePrimary = true
+  includePrimary = true,
+  visibility?: WindowVisibilityGate
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
   let tickCount = 0
   let snapshot = await snapshotGitCommon(commonDirPath, undefined, includePrimary)
 
-  const timer = setInterval(() => {
-    if (disposed || ticking) {
-      return
-    }
-    ticking = true
-    tickCount++
-    const forceIndexRead = tickCount % INDEX_BACKSTOP_TICKS === 0
-    onFullScan?.()
-    void snapshotGitCommon(commonDirPath, snapshot, includePrimary, forceIndexRead)
-      .then((next) => {
-        if (disposed) {
-          return
-        }
-        const events = diffGitCommon(commonDirPath, snapshot, next)
-        snapshot = next
-        if (events.length > 0) {
-          onEvents(events)
-        }
-      })
-      .catch(() => {
-        // Transient fs error: keep the previous snapshot and retry next tick.
-      })
-      .finally(() => {
-        ticking = false
-      })
-  }, pollIntervalMs)
-  timer.unref?.()
+  const gatedInterval = startVisibilityGatedInterval(
+    () => {
+      if (disposed || ticking) {
+        return
+      }
+      ticking = true
+      tickCount++
+      const forceIndexRead = tickCount % INDEX_BACKSTOP_TICKS === 0
+      onFullScan?.()
+      void snapshotGitCommon(commonDirPath, snapshot, includePrimary, forceIndexRead)
+        .then((next) => {
+          if (disposed) {
+            return
+          }
+          const events = diffGitCommon(commonDirPath, snapshot, next)
+          snapshot = next
+          if (events.length > 0) {
+            onEvents(events)
+          }
+        })
+        .catch(() => {
+          // Transient fs error: keep the previous snapshot and retry next tick.
+        })
+        .finally(() => {
+          ticking = false
+        })
+    },
+    pollIntervalMs,
+    visibility
+  )
 
   return {
     unsubscribe: async () => {
       disposed = true
-      clearInterval(timer)
+      gatedInterval.dispose()
     }
   }
 }

@@ -10,6 +10,8 @@ import {
   PRIMARY_CHECKOUT_METADATA_FILES,
   startGitCommonPolling
 } from './worktree-git-common-polling'
+import type { WindowVisibilityGate } from '../window/visibility-gated-interval'
+import { startVisibilityGatedInterval } from '../window/visibility-gated-interval'
 
 // Watches a repo's `<common>/.git/worktrees` metadata plus the primary
 // checkout's shallow branch/index files — the only paths the git-common event
@@ -69,42 +71,46 @@ async function startSnapshotDiffPoller(
   takeSnapshot: () => Promise<Map<string, number>>,
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
-  onFullScan?: () => void
+  onFullScan?: () => void,
+  visibility?: WindowVisibilityGate
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
   let snapshot = await takeSnapshot()
 
-  const timer = setInterval(() => {
-    if (disposed || ticking) {
-      return
-    }
-    ticking = true
-    onFullScan?.()
-    void takeSnapshot()
-      .then((next) => {
-        if (disposed) {
-          return
-        }
-        const events = diffMtimeMap(snapshot, next)
-        snapshot = next
-        if (events.length > 0) {
-          onEvents(events)
-        }
-      })
-      .catch(() => {
-        // Transient fs error: keep the previous snapshot and retry next tick.
-      })
-      .finally(() => {
-        ticking = false
-      })
-  }, pollIntervalMs)
-  timer.unref?.()
+  const gatedInterval = startVisibilityGatedInterval(
+    () => {
+      if (disposed || ticking) {
+        return
+      }
+      ticking = true
+      onFullScan?.()
+      void takeSnapshot()
+        .then((next) => {
+          if (disposed) {
+            return
+          }
+          const events = diffMtimeMap(snapshot, next)
+          snapshot = next
+          if (events.length > 0) {
+            onEvents(events)
+          }
+        })
+        .catch(() => {
+          // Transient fs error: keep the previous snapshot and retry next tick.
+        })
+        .finally(() => {
+          ticking = false
+        })
+    },
+    pollIntervalMs,
+    visibility
+  )
 
   return {
     unsubscribe: async () => {
       disposed = true
-      clearInterval(timer)
+      gatedInterval.dispose()
     }
   }
 }
@@ -246,7 +252,8 @@ export async function startGitCommonWatch(
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
   platform: NodeJS.Platform,
-  onFullScan?: () => void
+  onFullScan?: () => void,
+  visibility?: WindowVisibilityGate
 ): Promise<WorktreeBaseSubscription> {
   if (platform === 'darwin') {
     const [narrowWatch, primaryMetadataPoll] = await Promise.all([
@@ -255,7 +262,8 @@ export async function startGitCommonWatch(
         () => snapshotPrimaryCheckoutMetadata(target.path),
         onEvents,
         pollIntervalMs,
-        onFullScan
+        onFullScan,
+        visibility
       )
     ])
     return {
@@ -264,5 +272,5 @@ export async function startGitCommonWatch(
       }
     }
   }
-  return startGitCommonPolling(target.path, onEvents, pollIntervalMs, onFullScan)
+  return startGitCommonPolling(target.path, onEvents, pollIntervalMs, onFullScan, true, visibility)
 }
