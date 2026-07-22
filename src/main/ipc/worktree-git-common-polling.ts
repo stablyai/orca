@@ -143,9 +143,17 @@ async function snapshotGitCommon(
     entryPaths = entries
       .filter((entry) => entry.isDirectory())
       .map((entry) => join(worktreesDir, entry.name))
-  } catch {
-    // Missing worktrees dir is normal for repos without linked worktrees.
-    entryPaths = []
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      // Dir genuinely absent (no linked worktrees, or all removed) → authoritative empty listing.
+      entryPaths = []
+    } else {
+      // Why: a TRANSIENT readdir failure (EIO/ESTALE/EMFILE, network/SSH hiccup) must not masquerade as
+      // "every worktree removed" — that would emit false delete events (and false creates next tick).
+      // Reuse the known entries so per-entry stats still run; a real removal surfaces as that entry's own
+      // stat miss (handled in snapshotGitCommonEntry), and the next successful readdir catches any add.
+      entryPaths = previous ? [...previous.entries.keys()] : []
+    }
   }
 
   const entries = new Map<string, GitCommonEntrySnapshot>()

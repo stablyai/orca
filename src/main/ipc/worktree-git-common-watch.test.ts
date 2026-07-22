@@ -337,11 +337,37 @@ describe('worktree git-common polling gate (non-darwin)', () => {
     await vi.waitFor(() => {
       expect(received.flat()).toContainEqual({ type: 'create', path: entry })
     })
+    // The add is caught by the every-tick listing, NOT the 15-tick index backstop: detection lands well
+    // before a backstop could fire, so onFullScan must not have run. (On the old gated impl a coarse-FS
+    // signature collision would have deferred this to the backstop.)
+    expect(fullScans).not.toHaveBeenCalled()
 
     await rm(entry, { recursive: true })
     await vi.waitFor(() => {
       expect(received.flat()).toContainEqual({ type: 'delete', path: entry })
     })
+  })
+
+  it('does not fabricate worktree deletions when the readdir fails non-ENOENT (transient)', async () => {
+    // Why: a transient readdir failure (EIO/ESTALE/EMFILE/ENOTDIR, network/SSH hiccup) must not be read
+    // as "every linked worktree removed". Simulate a non-ENOENT failure by replacing the worktrees dir
+    // with a file so readdir throws ENOTDIR; the known entry must NOT be reported deleted. On the old
+    // catch-all (entryPaths = []) this emitted a false delete for every entry.
+    const commonDir = await makePollingCommonDir()
+    const entry = join(commonDir, 'worktrees', 'keep')
+    await mkdir(entry)
+    await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/main')
+    const received: WorktreeBasePollEvent[][] = []
+    await startPollingWatch(commonDir, received)
+
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+    const worktreesDir = join(commonDir, 'worktrees')
+    await rm(worktreesDir, { recursive: true, force: true })
+    await writeFile(worktreesDir, 'not-a-dir')
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+
+    expect(received.flat()).not.toContainEqual({ type: 'delete', path: entry })
+    await rm(worktreesDir, { force: true })
   })
 
   it('detects an in-place structural (HEAD) write on a known entry every tick, without the index backstop', async () => {
