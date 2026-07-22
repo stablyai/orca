@@ -11,7 +11,10 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
-import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+import {
+  detectExplicitIdleStatusFromTitle,
+  hasActiveAgentBackgroundWork
+} from './terminal-wait-detection'
 import { isOmpIdleStateTitle } from './omp-terminal-readiness'
 import {
   hasQuietReadyRules,
@@ -118,6 +121,11 @@ export type TuiIdleEvaluationInput = {
   record: TuiIdleEvidenceRecord
   /** Tier 0: a blocking prompt in the line tail. */
   readTailBlockedReason: () => RuntimeTerminalWaitBlockedReason | null
+  /**
+   * Wait text scanned for a live background-task HUD (#9905). Absent when a caller
+   * builds the input by hand and is not exercising that veto.
+   */
+  readBackgroundWorkText?: () => string
   /** Defer multi-KB body scans until the cheaper memoized title check fails. */
   readPositiveBodyEvidence: () => boolean
   /** Tier 1b body evidence: a Muse ready screen, or a rule-file one held to quiet. Thunk, as above. */
@@ -183,6 +191,22 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
 
 function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   const hookVerdict = input.readHookTurn ? evaluateHookTurn(input.agent, input.readHookTurn) : null
+  // Why ahead of ready hooks and ready lanes: Grok can show an idle title, a ready
+  // composer, and a done hook row while its Tasks HUD still lists live work (#9905).
+  // A blocked prompt still wins, so a permission wait is not hidden behind that HUD.
+  if (
+    input.readBackgroundWorkText &&
+    hasActiveAgentBackgroundWork(input.readBackgroundWorkText())
+  ) {
+    if (hookVerdict?.kind === 'blocked') {
+      return hookVerdict
+    }
+    const blockedReason = input.readTailBlockedReason()
+    if (blockedReason) {
+      return { kind: 'blocked', reason: blockedReason }
+    }
+    return WORKING
+  }
   if (hookVerdict) {
     return hookVerdict
   }

@@ -127,6 +127,7 @@ export function ptyTuiIdleEvidence(
   return {
     record,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    readBackgroundWorkText: waitText,
     readPositiveBodyEvidence: () =>
       (agent !== 'qoder' &&
         agent !== 'qoder-cn' &&
