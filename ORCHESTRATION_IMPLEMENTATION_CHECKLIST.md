@@ -29,7 +29,7 @@ Status meanings:
 - [x] Phase 0 command/skill compatibility work complete.
 - [x] Phase 1 local Run, mailbox, lifecycle, and idempotency primitives complete.
 - [x] Phase 2 same-server composed worker lifecycle complete.
-- [ ] Phase 3 connected-server federation complete.
+- [x] Phase 3 connected-server federation complete.
 - [x] Phase 4 explicitly deferred because its exact-source prerequisite does not exist.
 
 ## Scope invariants
@@ -357,7 +357,7 @@ Explicit non-goals:
 
 ### Cross-platform
 
-- [ ] Native macOS, Linux, and Windows tests cover each new CLI/RPC contract.
+- [x] Native macOS, Linux, and Windows tests cover each new CLI/RPC contract.
 - [x] WSL and SSH host identity/capability state is scoped to the actual execution host.
 - [x] Paths use platform utilities; examples are PowerShell/cmd/POSIX safe.
 - [x] Named-pipe, Unix-socket, WebSocket, WSL, and SSH bridges carry Dispatch capabilities safely.
@@ -1092,6 +1092,24 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Run the remaining full validation and Linux CI, then finish the ignored HTML synchronization and
     PR evidence without adding new orchestration concepts.
+
+### 2026-07-22 — Phase 3 and cross-platform gates closed
+
+- Changes:
+  - Marked connected-server federation and the native cross-platform quality gate complete after
+    branch-head Linux CI joined the real macOS/Windows acceptance evidence.
+- Files:
+  - `ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md`
+- Verification:
+  - PR #9925 completed with 17 successful checks and no failures: full Linux verify, Ubuntu and
+    Windows native smoke, packaged Windows crash survival, and macOS/Ubuntu/Windows skill round trips.
+  - Linux verify passed lint, generated-skill checks, max-lines enforcement, typecheck, repository-
+    wide tests, unpacked-app build, and packaged CLI smoke.
+- Findings:
+  - Every implementation phase is now either complete or explicitly deferred with its prerequisite;
+    no additional orchestration subsystem is required for V1.
+- Next:
+  - Review and merge PR #9925; keep Phase 4 deferred until exact provider-session association exists.
 
 ### Entry template
 
