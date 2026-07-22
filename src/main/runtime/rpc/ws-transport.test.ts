@@ -107,7 +107,8 @@ describe('WebSocketTransport', () => {
     await waitForHeartbeatLifecycle(transport, 1, true)
     const firstServerSocket = Array.from(lifecycle.wss.clients)[0]
     expect(firstServerSocket).toBeDefined()
-    expect(lifecycle.heartbeat.alive.has(firstServerSocket!)).toBe(true)
+    // Note: arming probes immediately, so `alive` membership is racy here (the client's protocol-level
+    // pong re-adds the socket right after the arm sweep clears it). Assert the arm/disarm lifecycle only.
     const firstTimer = lifecycle.heartbeat.timer
 
     const secondClient = await connectWs(transport)

@@ -15,11 +15,11 @@ describe('RemoteRuntimeServerHeartbeat', () => {
     const heartbeat = new RemoteRuntimeServerHeartbeat(100, () => now)
     heartbeat.noteAlive(responsiveSocket)
     heartbeat.noteAlive(deadSocket)
+    // start() probes immediately: both are pinged now (probe #1) and cleared to await a pong.
     heartbeat.start(() => [responsiveSocket, deadSocket])
-
-    now += 100
-    await vi.advanceTimersByTimeAsync(100)
+    // Only the responsive socket pongs the immediate probe.
     heartbeat.noteAlive(responsiveSocket)
+
     now += 100
     await vi.advanceTimersByTimeAsync(100)
 
@@ -36,14 +36,17 @@ describe('RemoteRuntimeServerHeartbeat', () => {
     const socket = { ping: vi.fn(), terminate: vi.fn() } as unknown as WebSocket
     const heartbeat = new RemoteRuntimeServerHeartbeat(100, () => now)
     heartbeat.noteAlive(socket)
+    // start() probes immediately (ping #1); the socket pongs it.
     heartbeat.start(() => [socket])
+    heartbeat.noteAlive(socket)
 
     now += 100
-    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(100) // ping #2, socket pongs
+    heartbeat.noteAlive(socket)
     now += 3_600_000
-    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(100) // resumed-from-pause: re-grants a probe (ping #3), no reap
 
-    expect(socket.ping).toHaveBeenCalledTimes(2)
+    expect(socket.ping).toHaveBeenCalledTimes(3)
     expect(socket.terminate).not.toHaveBeenCalled()
 
     now += 100
