@@ -167,6 +167,7 @@ module.exports = {
     }
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
+    chmodMacPlaybackSuppressionHelper(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
@@ -178,8 +179,14 @@ module.exports = {
     }
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
-      await signMacNotificationStatusHelper(
+      await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
+        'orca-notification-status',
+        context.packager
+      )
+      await signMacStandaloneHelper(
+        join(resourcesDir, 'playback-suppression', 'orca-playback-suppression'),
+        'orca-playback-suppression',
         context.packager
       )
     }
@@ -202,6 +209,10 @@ module.exports = {
       {
         from: 'native/windows-cli-launcher/.build/orca.exe',
         to: 'bin/orca.exe'
+      },
+      {
+        from: 'native/playback-suppression-windows/.build/orca-playback-suppression.exe',
+        to: 'playback-suppression/orca-playback-suppression.exe'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
@@ -276,6 +287,10 @@ module.exports = {
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
+      },
+      {
+        from: 'native/playback-suppression-macos/.build/release/orca-playback-suppression',
+        to: 'playback-suppression/orca-playback-suppression'
       },
       featureWallResources
     ],
@@ -431,6 +446,16 @@ function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
   }
 }
 
+function chmodMacPlaybackSuppressionHelper(resourcesDir, electronPlatformName) {
+  if (electronPlatformName !== 'darwin') {
+    return
+  }
+  const helperPath = join(resourcesDir, 'playback-suppression', 'orca-playback-suppression')
+  if (existsSync(helperPath)) {
+    chmodSync(helperPath, 0o755)
+  }
+}
+
 async function signMacComputerUseHelper(helperAppPath, packager) {
   if (!existsSync(helperAppPath)) {
     if (isMacRelease) {
@@ -458,10 +483,10 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
   })
 }
 
-async function signMacNotificationStatusHelper(helperPath, packager) {
+async function signMacStandaloneHelper(helperPath, helperName, packager) {
   if (!existsSync(helperPath)) {
     if (isMacRelease) {
-      throw new Error(`Missing orca-notification-status helper at ${helperPath}`)
+      throw new Error(`Missing ${helperName} helper at ${helperPath}`)
     }
     return
   }
@@ -474,12 +499,10 @@ async function signMacNotificationStatusHelper(helperPath, packager) {
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
     (isMacRelease ? null : '-')
   if (!identity) {
-    throw new Error('Missing signing identity for orca-notification-status helper')
+    throw new Error(`Missing signing identity for ${helperName} helper`)
   }
-  // Why: macOS keys notification records to the code-signing identifier; the
-  // binary embeds the app's CFBundleIdentifier in __TEXT,__info_plist so this
-  // (and any later) `codesign --force` derives the correct identifier. Sign
-  // before the outer Orca.app is sealed, like the computer-use helper.
+  // Why: standalone Mach-O helpers must be signed before the outer app bundle
+  // is sealed or hardened-runtime release builds can reject their execution.
   const args = ['--force', '--sign', identity]
   if (isMacRelease) {
     args.push('--options', 'runtime', '--timestamp')

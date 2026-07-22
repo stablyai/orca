@@ -28,6 +28,9 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery ?? '')
   const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
+  const [playbackSuppressionCapability, setPlaybackSuppressionCapability] = useState<
+    boolean | null
+  >(null)
   const [permissionPending, setPermissionPending] = useState(false)
   const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false)
   const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
@@ -75,6 +78,25 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       cancelled = true
     }
   }, [refreshModelStates, updateVoiceSettings, voiceSettings.openAiApiKeyConfigured])
+
+  useEffect(() => {
+    let cancelled = false
+    void window.api.speech
+      .getPlaybackSuppressionCapability()
+      .then((capability) => {
+        if (!cancelled) {
+          setPlaybackSuppressionCapability(capability)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPlaybackSuppressionCapability(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const cleanup = window.api.speech.onDownloadProgress(() => {
@@ -202,6 +224,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     <div ref={handlePaneRef} className="space-y-1">
       <VoiceDictationSettingsSection
         voiceSettings={voiceSettings}
+        playbackSuppressionCapability={playbackSuppressionCapability}
         permissionPending={permissionPending}
         onToggleVoiceDictation={() => void toggleVoiceDictation()}
         onUpdateVoiceSettings={updateVoiceSettings}

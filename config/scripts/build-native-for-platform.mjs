@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process'
 
 if (process.platform === 'win32') {
   runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
+  runNodeScript('config/scripts/build-playback-suppression-windows.mjs')
   process.exit(0)
 }
 
@@ -14,6 +15,7 @@ if (process.platform !== 'darwin') {
 
 runPnpmScript('build:computer-macos')
 runPnpmScript('build:notification-status-macos')
+runPnpmScript('build:playback-suppression-macos')
 process.exit(0)
 
 function runPnpmScript(scriptName) {

@@ -3,9 +3,11 @@ import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { SettingsSwitch } from './SettingsFormControls'
 
 type VoiceDictationSettingsSectionProps = {
   voiceSettings: VoiceSettings
+  playbackSuppressionCapability: boolean | null
   permissionPending: boolean
   onToggleVoiceDictation: () => void
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
@@ -13,6 +15,7 @@ type VoiceDictationSettingsSectionProps = {
 
 export function VoiceDictationSettingsSection({
   voiceSettings,
+  playbackSuppressionCapability,
   permissionPending,
   onToggleVoiceDictation,
   onUpdateVoiceSettings
@@ -54,6 +57,48 @@ export function VoiceDictationSettingsSection({
             }`}
           />
         </button>
+      </div>
+
+      <Separator />
+
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="space-y-0.5">
+          <Label>
+            {translate(
+              'auto.components.settings.VoicePane.6b0ed79a8f',
+              'Mute other audio while dictating'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {playbackSuppressionCapability === true
+              ? translate(
+                  'auto.components.settings.VoicePane.66296e0568',
+                  "Temporarily mute this computer's output while the microphone is active."
+                )
+              : playbackSuppressionCapability !== null
+                ? translate(
+                    'auto.components.settings.VoicePane.a2f0263871',
+                    'System audio muting is not available on this computer.'
+                  )
+                : translate(
+                    'auto.components.settings.VoicePane.50504af1f2',
+                    'Checking system audio support…'
+                  )}
+          </p>
+        </div>
+        <SettingsSwitch
+          checked={voiceSettings.muteSystemAudioDuringDictation}
+          ariaLabel={translate(
+            'auto.components.settings.VoicePane.6b0ed79a8f',
+            'Mute other audio while dictating'
+          )}
+          disabled={!voiceSettings.enabled || playbackSuppressionCapability !== true}
+          onChange={() =>
+            onUpdateVoiceSettings({
+              muteSystemAudioDuringDictation: !voiceSettings.muteSystemAudioDuringDictation
+            })
+          }
+        />
       </div>
 
       <Separator />

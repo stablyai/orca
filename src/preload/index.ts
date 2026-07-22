@@ -4429,6 +4429,14 @@ const api = {
   },
 
   speech: {
+    getPlaybackSuppressionCapability: (): Promise<boolean> =>
+      ipcRenderer.invoke('speech:getPlaybackSuppressionCapability'),
+    acquirePlaybackSuppression: (
+      sessionId: string
+    ): Promise<{ active: true } | { active: false; reason: 'canceled' | 'unavailable' }> =>
+      ipcRenderer.invoke('speech:acquirePlaybackSuppression', sessionId),
+    releasePlaybackSuppression: (sessionId: string): Promise<void> =>
+      ipcRenderer.invoke('speech:releasePlaybackSuppression', sessionId),
     getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
     getModelStates: (): Promise<SpeechModelState[]> => ipcRenderer.invoke('speech:getModelStates'),
     getOpenAiApiKeyStatus: (): Promise<{ configured: boolean }> =>

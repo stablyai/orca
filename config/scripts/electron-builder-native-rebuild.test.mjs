@@ -42,7 +42,7 @@ describe('electron-builder native rebuild hook', () => {
     ])
   })
 
-  it('builds the native CLI launcher before packaging Windows resources', () => {
+  it('builds the native Windows helpers before packaging their resources', () => {
     const calls = []
     const result = runElectronBuilderNativeRebuild(
       {
@@ -57,6 +57,11 @@ describe('electron-builder native rebuild hook', () => {
       [
         process.execPath,
         ['config/scripts/build-windows-cli-launcher.mjs'],
+        expect.objectContaining({ stdio: 'inherit' })
+      ],
+      [
+        process.execPath,
+        ['config/scripts/build-playback-suppression-windows.mjs'],
         expect.objectContaining({ stdio: 'inherit' })
       ],
       [

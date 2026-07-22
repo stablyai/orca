@@ -14,6 +14,10 @@ function runElectronBuilderNativeRebuild(context, runner = execFileSync) {
       cwd: projectDir,
       stdio: 'inherit'
     })
+    runner(process.execPath, ['config/scripts/build-playback-suppression-windows.mjs'], {
+      cwd: projectDir,
+      stdio: 'inherit'
+    })
   }
   runner(process.execPath, args, {
     cwd: projectDir,

@@ -4,7 +4,11 @@ import { writeFile, unlink } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
-import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import {
+  getPlaybackSuppressionService,
+  getSpeechModelManager,
+  getSpeechSttService
+} from '../speech/speech-runtime-service'
 import {
   clearOpenAiSpeechApiKey,
   hasOpenAiSpeechApiKey,
@@ -13,6 +17,12 @@ import {
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
+  // Why: a hard exit can bypass renderer cleanup; initialize the local audio
+  // service at startup so a recent same-device mute is repaired immediately.
+  void getPlaybackSuppressionService()
+    .getCapability()
+    .catch(() => undefined)
+
   ipcMain.handle('speech:getCatalog', () => {
     return SPEECH_MODEL_CATALOG
   })
@@ -87,6 +97,49 @@ export function registerSpeechHandlers(store: Store): void {
 
   const getDesktopOwner = (senderId: number, sessionId: string): string =>
     `desktop:${senderId}:${sessionId}`
+
+  const suppressionOwnersBySender = new Map<number, Set<string>>()
+  const suppressionCleanupRegistered = new Set<number>()
+
+  ipcMain.handle('speech:getPlaybackSuppressionCapability', () => {
+    return getPlaybackSuppressionService().getCapability()
+  })
+
+  ipcMain.handle('speech:acquirePlaybackSuppression', async (event, sessionId: string) => {
+    const senderId = event.sender.id
+    const owner = getDesktopOwner(senderId, sessionId)
+    let owners = suppressionOwnersBySender.get(senderId)
+    if (!owners) {
+      owners = new Set()
+      suppressionOwnersBySender.set(senderId, owners)
+    }
+    owners.add(owner)
+    if (!suppressionCleanupRegistered.has(senderId)) {
+      suppressionCleanupRegistered.add(senderId)
+      event.sender.once('destroyed', () => {
+        const staleOwners = suppressionOwnersBySender.get(senderId) ?? []
+        suppressionOwnersBySender.delete(senderId)
+        suppressionCleanupRegistered.delete(senderId)
+        for (const staleOwner of staleOwners) {
+          void getPlaybackSuppressionService()
+            .release(staleOwner)
+            .catch(() => undefined)
+        }
+      })
+    }
+    const result = await getPlaybackSuppressionService().acquire(owner)
+    if (!result.active) {
+      owners.delete(owner)
+    }
+    return result
+  })
+
+  ipcMain.handle('speech:releasePlaybackSuppression', async (event, sessionId: string) => {
+    const senderId = event.sender.id
+    const owner = getDesktopOwner(senderId, sessionId)
+    suppressionOwnersBySender.get(senderId)?.delete(owner)
+    await getPlaybackSuppressionService().release(owner)
+  })
 
   ipcMain.handle(
     'speech:startDictation',
