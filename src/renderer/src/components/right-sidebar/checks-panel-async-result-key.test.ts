@@ -27,6 +27,23 @@ describe('checksPanelAsyncResultKey', () => {
     ).toBe('repo-id::feature/test::acme/widgets::12::none')
   })
 
+  it('includes non-default GitHub hosts in PR repo identity', () => {
+    const githubDotComKey = checksPanelAsyncResultKey('repo-id', 'feature/test', 12, {
+      owner: 'Acme',
+      repo: 'Widgets',
+      host: 'github.com'
+    })
+    const enterpriseKey = checksPanelAsyncResultKey('repo-id', 'feature/test', 12, {
+      owner: 'Acme',
+      repo: 'Widgets',
+      host: 'github.acme-corp.com'
+    })
+
+    expect(githubDotComKey).toBe('repo-id::feature/test::acme/widgets::12::none')
+    expect(enterpriseKey).toBe('repo-id::feature/test::github.acme-corp.com/acme/widgets::12::none')
+    expect(enterpriseKey).not.toBe(githubDotComKey)
+  })
+
   it('includes PR head SHA so stale checks cannot commit after a new head is discovered', () => {
     expect(checksPanelAsyncResultKey('repo-id', 'feature/test', 12, null, 'head-a')).toBe(
       'repo-id::feature/test::none::12::head-a'

@@ -11,6 +11,13 @@ import {
   type RemoteOrcaCliResult
 } from './ssh-remote-cli-host-passthrough'
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
+import {
+  optionalRemoteCliNumber,
+  optionalRemoteCliString,
+  parseRemoteCliArgs,
+  requiredRemoteCliString,
+  resolveRemoteCliHandle
+} from './ssh-remote-cli-args'
 import { getRemoteLinearHelp, tryDispatchRemoteLinearCli } from './ssh-remote-linear-cli'
 import {
   getRemoteOrchestrationPayload,
@@ -31,25 +38,6 @@ const HOST_INTERACTIVE_COMMANDS: Record<string, string> = {
   'agent-teams-tmux':
     'orca agent-teams-tmux is a tmux pane shim for the Orca host machine and cannot run through the SSH relay bridge.'
 }
-
-const REMOTE_BOOLEAN_FLAGS = new Set([
-  'all',
-  'attachments',
-  'children',
-  'comments',
-  'current',
-  'full',
-  'help',
-  'inject',
-  'json',
-  'me',
-  'relations',
-  'parent-current',
-  'unread',
-  'wait'
-])
-const REPEATED_FLAG_SEPARATOR = '\u0000'
-const REPEATABLE_REMOTE_STRING_FLAGS = new Set(['label'])
 
 export async function runRemoteOrcaCli(
   runtime: OrcaRuntimeService,
@@ -174,19 +162,19 @@ async function dispatchRemoteCli(
     }
     case 'terminal list':
       return await call(dispatcher, 'terminal.list', {
-        worktree: optionalString(parsed.flags, 'worktree'),
-        limit: optionalNumber(parsed.flags, 'limit')
+        worktree: optionalRemoteCliString(parsed.flags, 'worktree'),
+        limit: optionalRemoteCliNumber(parsed.flags, 'limit')
       })
     case 'orchestration send': {
-      const type = optionalString(parsed.flags, 'type')
+      const type = optionalRemoteCliString(parsed.flags, 'type')
       return await call(dispatcher, 'orchestration.send', {
         from: resolveRemoteOrchestrationSender(parsed.flags, env, type),
-        to: requiredString(parsed.flags, 'to'),
-        subject: requiredString(parsed.flags, 'subject'),
-        body: optionalString(parsed.flags, 'body'),
+        to: requiredRemoteCliString(parsed.flags, 'to'),
+        subject: requiredRemoteCliString(parsed.flags, 'subject'),
+        body: optionalRemoteCliString(parsed.flags, 'body'),
         type,
-        priority: optionalString(parsed.flags, 'priority'),
-        threadId: optionalString(parsed.flags, 'thread-id'),
+        priority: optionalRemoteCliString(parsed.flags, 'priority'),
+        threadId: optionalRemoteCliString(parsed.flags, 'thread-id'),
         payload: getRemoteOrchestrationPayload(parsed.flags),
         // Why: the legacy in-process bridge must preserve the same pane
         // authority as the full host CLI passthrough.
@@ -195,24 +183,24 @@ async function dispatchRemoteCli(
     }
     case 'orchestration check':
       return await call(dispatcher, 'orchestration.check', {
-        terminal: resolveHandle(parsed.flags, env, 'terminal'),
+        terminal: resolveRemoteCliHandle(parsed.flags, env, 'terminal'),
         unread: parsed.flags.has('unread') ? true : undefined,
         all: parsed.flags.has('all') ? true : undefined,
-        types: optionalString(parsed.flags, 'types'),
+        types: optionalRemoteCliString(parsed.flags, 'types'),
         inject: parsed.flags.has('inject') ? true : undefined,
         wait: parsed.flags.has('wait') ? true : undefined,
-        timeoutMs: optionalNumber(parsed.flags, 'timeout-ms')
+        timeoutMs: optionalRemoteCliNumber(parsed.flags, 'timeout-ms')
       })
     case 'orchestration reply':
       return await call(dispatcher, 'orchestration.reply', {
-        id: requiredString(parsed.flags, 'id'),
-        body: requiredString(parsed.flags, 'body'),
-        from: resolveHandle(parsed.flags, env, 'from')
+        id: requiredRemoteCliString(parsed.flags, 'id'),
+        body: requiredRemoteCliString(parsed.flags, 'body'),
+        from: resolveRemoteCliHandle(parsed.flags, env, 'from')
       })
     case 'orchestration inbox':
       return await call(dispatcher, 'orchestration.inbox', {
-        limit: optionalNumber(parsed.flags, 'limit'),
-        terminal: optionalString(parsed.flags, 'terminal')
+        limit: optionalRemoteCliNumber(parsed.flags, 'limit'),
+        terminal: optionalRemoteCliString(parsed.flags, 'terminal')
       })
     default:
       // Why: only reachable when the full host CLI could not be launched;
@@ -235,86 +223,6 @@ async function call(
     method,
     params
   })
-}
-
-function parseRemoteCliArgs(argv: string[]): ParsedRemoteCli {
-  const commandPath: string[] = []
-  const flags = new Map<string, string | boolean>()
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i]
-    if (!token.startsWith('--')) {
-      commandPath.push(token)
-      continue
-    }
-    const assignment = token.slice(2)
-    // Why: the SSH relay-backed shim should accept the same `--flag=value`
-    // form as the local CLI, including values that themselves start with `--`.
-    const equalsIndex = assignment.indexOf('=')
-    if (equalsIndex !== -1) {
-      setRemoteFlag(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
-      continue
-    }
-
-    const flag = assignment
-    const next = argv[i + 1]
-    if (!REMOTE_BOOLEAN_FLAGS.has(flag) && next && !next.startsWith('--')) {
-      setRemoteFlag(flags, flag, next)
-      i += 1
-    } else {
-      setRemoteFlag(flags, flag, true)
-    }
-  }
-  return { commandPath, flags }
-}
-
-function setRemoteFlag(
-  flags: Map<string, string | boolean>,
-  name: string,
-  value: string | boolean
-): void {
-  const previous = flags.get(name)
-  if (
-    typeof previous === 'string' &&
-    typeof value === 'string' &&
-    REPEATABLE_REMOTE_STRING_FLAGS.has(name)
-  ) {
-    flags.set(name, `${previous}${REPEATED_FLAG_SEPARATOR}${value}`)
-    return
-  }
-  flags.set(name, value)
-}
-
-function resolveHandle(
-  flags: Map<string, string | boolean>,
-  env: Record<string, string>,
-  flagName: string
-): string {
-  return optionalString(flags, flagName) ?? env.ORCA_TERMINAL_HANDLE ?? 'unknown'
-}
-
-function requiredString(flags: Map<string, string | boolean>, name: string): string {
-  const value = optionalString(flags, name)
-  if (!value) {
-    throw new Error(`Missing --${name}`)
-  }
-  return value
-}
-
-function optionalString(flags: Map<string, string | boolean>, name: string): string | undefined {
-  const value = flags.get(name)
-  return typeof value === 'string' && value.length > 0 ? value : undefined
-}
-
-function optionalNumber(flags: Map<string, string | boolean>, name: string): number | undefined {
-  const value = optionalString(flags, name)
-  if (value === undefined) {
-    return undefined
-  }
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) {
-    throw new RemoteCliArgumentError('invalid_argument', `Invalid numeric value for --${name}`)
-  }
-  return parsed
 }
 
 function buildLocalError(message: string, code = 'runtime_error'): RpcResponse {

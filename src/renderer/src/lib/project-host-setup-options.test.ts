@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../shared/execution-host'
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import type {
+  ExecutionHostHealth,
+  ExecutionHostRegistryEntry
+} from '../../../shared/execution-host-registry'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
@@ -157,6 +160,29 @@ describe('buildProjectHostSetupOptions', () => {
     expect(options.some((o) => String(o.hostId).includes('runtime-ssh-'))).toBe(false)
   })
 
+  it('omits hidden host categories from setup-needed choices', () => {
+    const runtimeSshHostId = 'ssh:runtime-ssh-orca-e37aa3a9' as ExecutionHostId
+    const ephemeralHostId = 'runtime:90d880b2-de1b-44be-b7b8-8e15274e184e' as ExecutionHostId
+
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo')],
+      hosts: [
+        host('local'),
+        host(runtimeSshHostId),
+        host(ephemeralHostId, {
+          source: 'ephemeral-vm',
+          capabilities: FULL_HOST_MODEL_RUNTIME_CAPABILITIES
+        })
+      ],
+      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL })
+    ])
+  })
+
   it('omits setups that are not ready or cannot create through an eligible repo', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
@@ -192,6 +218,110 @@ describe('buildProjectHostSetupOptions', () => {
       })
     ])
   })
+
+  it.each([
+    ['connecting' as const, 'Connecting to host'],
+    ['disconnected' as const, 'Connect this host to set up projects'],
+    ['error' as const, 'Host connection needs attention']
+  ])(
+    'marks %s hosts unavailable before project setup guidance',
+    (health: ExecutionHostHealth, detail: string) => {
+      const options = buildProjectHostSetupOptions({
+        projectId: 'project-1',
+        eligibleRepos: [repo('local-repo')],
+        hosts: [host('local'), host('ssh:builder', { label: 'Builder', health })],
+        projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
+      })
+
+      expect(options.at(-1)).toMatchObject({
+        id: 'needs-setup:ssh:builder',
+        kind: 'needs-setup',
+        label: 'Builder',
+        detail,
+        isAvailable: false
+      })
+    }
+  )
+
+  it.each([
+    ['connecting' as const, false],
+    ['disconnected' as const, false],
+    ['error' as const, true]
+  ])('flags only errored %s hosts for attention', (health: ExecutionHostHealth, attention) => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo')],
+      hosts: [host('local'), host('ssh:builder', { label: 'Builder', health })],
+      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
+    })
+
+    expect(options.at(-1)).toMatchObject({ kind: 'needs-setup', attention })
+  })
+
+  it.each([
+    ['ssh:builder' as const, { kind: 'ssh', targetId: 'builder' }],
+    ['runtime:gpu' as const, { kind: 'runtime', environmentId: 'gpu' }]
+  ])('adds a connect action for disconnected %s setup-needed hosts', (hostId, connectAction) => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo')],
+      hosts: [
+        host('local'),
+        host(hostId, {
+          label: 'Builder',
+          health: 'disconnected'
+        })
+      ],
+      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
+    })
+
+    expect(options.at(-1)).toMatchObject({
+      id: `needs-setup:${hostId}`,
+      kind: 'needs-setup',
+      connectAction
+    })
+  })
+
+  it('adds a connect action for errored setup-needed hosts', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo')],
+      hosts: [
+        host('local'),
+        host('ssh:builder', {
+          label: 'Builder',
+          health: 'error'
+        })
+      ],
+      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
+    })
+
+    expect(options.at(-1)).toMatchObject({
+      id: 'needs-setup:ssh:builder',
+      kind: 'needs-setup',
+      connectAction: { kind: 'ssh', targetId: 'builder' }
+    })
+  })
+
+  it.each(['available' as const, 'connecting' as const, 'blocked' as const])(
+    'does not add a connect action for %s setup-needed hosts',
+    (health) => {
+      const options = buildProjectHostSetupOptions({
+        projectId: 'project-1',
+        eligibleRepos: [repo('local-repo')],
+        hosts: [
+          host('local'),
+          host('ssh:builder', {
+            label: 'Builder',
+            health
+          })
+        ],
+        projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
+      })
+
+      expect(options.at(-1)).not.toHaveProperty('connectAction')
+    }
+  )
 
   it('shows pending setup status for known hosts with non-ready setup metadata', () => {
     const options = buildProjectHostSetupOptions({

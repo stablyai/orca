@@ -1,18 +1,26 @@
 // ─── Events (Daemon → Client, on stream socket) ────────────────────
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export type DataEvent = {
   type: 'event'
   event: 'data'
   sessionId: string
-  payload: { data: string; sequenceChars?: number }
+  payload: {
+    data: string
+    seq?: number
+    rawLength?: number
+    transformed?: boolean
+    /** Legacy v23 name retained for old adapter fixtures. */
+    sequenceChars?: number
+  }
 }
 
 export type ExitEvent = {
   type: 'event'
   event: 'exit'
   sessionId: string
-  payload: { code: number }
+  payload: { code: number; incarnationId?: PtyIncarnationId }
 }
 
 export type TerminalErrorEvent = {

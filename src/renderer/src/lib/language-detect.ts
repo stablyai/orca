@@ -69,7 +69,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.graphql': 'graphql',
   '.gql': 'graphql',
   '.dockerfile': 'dockerfile',
-  '.proto': 'protobuf',
+  '.proto': 'proto',
   '.lua': 'lua',
   '.r': 'r',
   '.R': 'r',

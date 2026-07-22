@@ -15,8 +15,8 @@ function resolveNodePtyConsoleListAgent(): string {
 }
 
 /**
- * Runs node-pty's fixed native console-list helper with bounded error/exit
- * handling. A root-only result is its failure fallback, not shell proof.
+ * Returns normalized console membership, or null when the probe is unavailable.
+ * A root-only set proves the shell is alone because successful raw results include the helper.
  */
 export function readWindowsConptyProcessIds(
   rootPid: number,
@@ -45,23 +45,33 @@ export function readWindowsConptyProcessIds(
       settled = true
       clearTimeout(timeout)
       child.removeListener('message', onMessage)
-      child.removeListener('error', onFailure)
-      child.removeListener('exit', onFailure)
+      // Why: kill failures can emit asynchronously after timeout settlement;
+      // teardown listeners stay until exit so they cannot crash the daemon.
       resolve(value)
     }
     const onFailure = (): void => finish(null)
+    const onExit = (): void => {
+      child.removeListener('error', onFailure)
+      finish(null)
+    }
     const onMessage = (message: ProcessListMessage): void => {
       const value = message?.consoleProcessList
+      const helperPid = child.pid
       if (
         !Array.isArray(value) ||
-        value.length <= 1 ||
+        helperPid === undefined ||
         !value.includes(rootPid) ||
+        !value.includes(helperPid) ||
         value.some((pid) => !Number.isSafeInteger(pid) || pid <= 0)
       ) {
         finish(null)
         return
       }
-      finish(new Set(value))
+      // Why: GetConsoleProcessList includes this helper; removing it makes a
+      // root-only set authoritative shell-only evidence instead of a false child.
+      const consoleProcessIds = new Set(value)
+      consoleProcessIds.delete(helperPid)
+      finish(consoleProcessIds)
     }
     const timeout = setTimeout(() => {
       child.kill()
@@ -69,6 +79,6 @@ export function readWindowsConptyProcessIds(
     }, deps.timeoutMs ?? CONPTY_PROCESS_LIST_TIMEOUT_MS)
     child.once('message', onMessage)
     child.once('error', onFailure)
-    child.once('exit', onFailure)
+    child.once('exit', onExit)
   })
 }

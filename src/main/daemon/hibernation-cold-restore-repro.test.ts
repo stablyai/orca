@@ -6,38 +6,14 @@ import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { HeadlessEmulator } from './headless-emulator'
 
-// Reproduction for the "blank pane after agent hibernation" bug.
-//
-// Verified root cause (NOT the meta.endedAt gate — see below):
-// Agent hibernation force-kills the agent PTY via the immediate path
-// (pty:kill -> shutdown({ immediate: true, keepHistory: true }) ->
-// TerminalHost.kill(immediate) -> forceKillAndDisposeSubprocess), which reaps
-// synchronously WITHOUT firing onExit. So closeSession never runs and
-// meta.endedAt stays null — detectColdRestore does NOT reject the session.
-//
-// The actual blank comes from cold-restore CONTENT, not eligibility:
-// Claude/Codex TUIs run in terminal alternate-screen mode. For an alt-screen
-// snapshot, HistoryReader.coldRestoreInfoFromSnapshot returns scrollbackAnsi=''
-// (history-reader.ts:190-191), and DaemonPtyAdapter then skips the cold-restore
-// payload entirely on `if (scrollback)` (daemon-pty-adapter.ts:230) — "no
-// content is better than a confusing empty restore." Result: the daemon sends
-// nothing back on wake and the preserved pane repaints blank, even though a
-// full snapshotAnsi of the agent's last screen is intact on disk.
-//
-// This test drives a real HeadlessEmulator into alt-screen mode, checkpoints it
-// through the real HistoryManager, and asserts the empty-scrollback outcome the
-// adapter treats as "no cold restore".
-//
-// Scope note: this file documents the bug MECHANISM at the emulator/reader layer
-// and replicates the adapter's payload decision inline, so its post-fix
-// assertions would still pass if the production line were reverted. The actual
-// regression guard that exercises DaemonPtyAdapter.spawn() end-to-end lives in
-// daemon-pty-adapter.test.ts ("cold-restores an alt-screen agent snapshot…").
+// Reproduces the "blank pane after agent hibernation" bug: alt-screen TUI snapshots have scrollbackAnsi='', so the adapter's
+// `if (scrollback)` gate (daemon-pty-adapter.ts:230) dropped the cold-restore payload and repainted blank despite an intact snapshotAnsi.
+// Not the meta.endedAt gate: hibernation's immediate kill never fires onExit, so endedAt stays null (session not rejected).
+// This test inlines the adapter's decision, so it'd pass even if the fix were reverted; the real end-to-end guard is daemon-pty-adapter.test.ts.
 
 const ALT_SCREEN_ON = '\x1b[?1049h'
 
-// Note: HistoryManager.checkpoint() takes the emulator's TerminalSnapshot directly
-// and stamps generation / checkpointedAt itself, so em.getSnapshot() is passed as-is.
+// Note: checkpoint() stamps generation/checkpointedAt itself, so em.getSnapshot() is passed as-is.
 
 describe('agent hibernation cold-restore (alt-screen TUI)', () => {
   let dir: string
@@ -65,8 +41,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     expect(info).not.toBeNull()
     // Adapter uses rehydrateSequences + snapshotAnsi for non-alt-screen → non-empty.
     expect(info!.modes.alternateScreen).toBe(false)
-    // Normal-screen restores carry their buffer as scrollback; assert both so a
-    // regression that empties scrollbackAnsi can't slip past this control.
+    // Normal-screen restores carry their buffer as scrollback; assert both so a regression emptying scrollbackAnsi can't slip past.
     expect(info!.scrollbackAnsi).toContain('hello')
     expect(info!.snapshotAnsi).toContain('hello')
   })
@@ -75,8 +50,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     const manager = new HistoryManager(dir)
     const reader = new HistoryReader(dir)
     const em = new HeadlessEmulator({ cols: 80, rows: 24 })
-    // Why: Claude/Codex enter the alternate screen. Once in alt-screen, the
-    // serialized snapshot is the TUI buffer and scrollbackAnsi is empty.
+    // Why: in alt-screen (Claude/Codex TUIs) the serialized snapshot is the TUI buffer and scrollbackAnsi is empty.
     em.writeSync(ALT_SCREEN_ON)
     em.writeSync('\x1b[2J\x1b[H Claude Code — Opus 4.8\r\n > ')
     expect(em.isAlternateScreen).toBe(true)
@@ -86,20 +60,15 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     em.dispose()
 
     const info = reader.detectColdRestore(sessionId)
-    // The session IS eligible (endedAt is null — hibernation's immediate kill
-    // never stamps it), and the snapshot of the agent's screen is intact...
+    // Session is eligible (endedAt null) and the agent's snapshot is intact.
     expect(info).not.toBeNull()
     expect(info!.modes.alternateScreen).toBe(true)
     expect(info!.snapshotAnsi.length).toBeGreaterThan(0)
 
-    // scrollbackAnsi is empty for alt-screen (the bug's trigger). Pre-fix the
-    // adapter's `isAltScreen ? scrollbackAnsi || null : ...` dropped the
-    // payload here, leaving the pane blank.
+    // scrollbackAnsi is empty for alt-screen — the bug's trigger; pre-fix the adapter dropped the payload here, leaving the pane blank.
     expect(info!.scrollbackAnsi).toBe('')
 
-    // Replicate the adapter's POST-FIX payload decision: alt-screen falls
-    // back to snapshotAnsi (the agent's last frame) when scrollbackAnsi is
-    // empty, so the pane is no longer blank on wake.
+    // Replicate the adapter's post-fix decision: alt-screen falls back to snapshotAnsi when scrollbackAnsi is empty, so the pane isn't blank.
     const isAltScreen = info!.modes.alternateScreen
     const adapterScrollback = isAltScreen
       ? info!.scrollbackAnsi || info!.snapshotAnsi || null
@@ -125,13 +94,8 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
       : info!.rehydrateSequences + info!.snapshotAnsi
     expect(adapterScrollback).not.toBeNull()
 
-    // Drive the renderer's cold-restore branch into a FRESH shell emulator:
-    // clear, write the payload, then POST_REPLAY_MODE_RESET. The pane must end
-    // in the normal buffer (no \x1b[?1049h fed) so it won't fight the agent's
-    // own repaint when the resume command relaunches it.
-    // Keep in sync with POST_REPLAY_MODE_RESET in
-    // src/renderer/src/components/terminal-pane/layout-serialization.ts (copied
-    // as a literal because a main-process test must not import a renderer module).
+    // Must end in the normal buffer (no alt-screen re-entry) so it won't fight the agent's own repaint when resume relaunches it.
+    // POST_REPLAY_MODE_RESET copied literally from renderer layout-serialization.ts (main-process test can't import renderer) — keep in sync.
     const POST_REPLAY_MODE_RESET =
       '\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b[?2004l'
     const fresh = new HeadlessEmulator({ cols: 80, rows: 24 })
@@ -147,10 +111,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     const manager = new HistoryManager(dir)
     const reader = new HistoryReader(dir)
     const em = new HeadlessEmulator({ cols: 80, rows: 24 })
-    // Alt-screen entered but nothing drawn. SerializeAddon still emits a bare
-    // cursor-home (\x1b[H), so the payload is non-null but visually empty —
-    // safe to write into the fresh shell and crucially never re-enters
-    // alt-screen (rehydrateSequences is omitted).
+    // Alt-screen but nothing drawn: SerializeAddon emits only a bare cursor-home, so the payload never re-enters alt-screen.
     em.writeSync(ALT_SCREEN_ON)
 
     await manager.openSession(sessionId, { cwd: '/home/user/project', cols: 80, rows: 24 })

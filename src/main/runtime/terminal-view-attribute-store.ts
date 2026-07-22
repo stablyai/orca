@@ -1,6 +1,6 @@
 /**
- * Phase 5 slice 2 (docs/reference/terminal-query-authority.md §View-attribute
- * bridge): main-side cache of the renderer's `pty:terminalViewAttributes`
+ * Phase 5 slice 2 (View-attribute bridge): main-side cache of the renderer's
+ * `pty:terminalViewAttributes`
  * push. One app-global snapshot, not per-PTY — per-pane font zoom never
  * affects these attributes and the color/cursor settings are global.
  *
@@ -13,6 +13,7 @@ import {
   terminalViewAttributesEqual,
   type TerminalViewAttributes
 } from '../../shared/terminal-view-attributes'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
 // Why module state (pattern of pty-hidden-delivery-gate.ts): pty.ts receives
 // the push, the runtime emulators consult it at reply time via the getter.
@@ -48,6 +49,20 @@ export function setTerminalViewAttributes(attributes: TerminalViewAttributes): v
 
 export function getTerminalViewAttributes(): TerminalViewAttributes | null {
   return currentAttributes
+}
+
+function rgbToCssHex(rgb: readonly [number, number, number]): string {
+  return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+}
+
+export function getTerminalViewColorQueryReplyColors(): TerminalOscColorQueryReplyColors | null {
+  if (!currentAttributes) {
+    return null
+  }
+  return {
+    foreground: rgbToCssHex(currentAttributes.foreground),
+    background: rgbToCssHex(currentAttributes.background)
+  }
 }
 
 /** Test seam: reset module state between tests. */

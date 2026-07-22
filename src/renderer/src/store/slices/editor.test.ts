@@ -2234,6 +2234,69 @@ describe('createEditorSlice conflict status reconciliation', () => {
     expect(store.getState().gitStatusByWorktree['wt-clean']).toEqual([])
   })
 
+  it('keeps the capped state sticky until a complete result recovers', () => {
+    const store = createEditorStore()
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      didHitLimit: true,
+      statusLength: 2
+    })
+
+    expect(store.getState().gitStatusHugeByWorktree['wt-huge']).toEqual({ limit: 1 })
+
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'src/index.ts', status: 'modified', area: 'unstaged' }]
+    })
+
+    expect(store.getState().gitStatusHugeByWorktree['wt-huge']).toBeUndefined()
+  })
+
+  it('preserves omitted conflict state when a capped result is incomplete', () => {
+    const store = createEditorStore()
+    const conflict = {
+      path: 'src/conflict.ts',
+      status: 'modified' as const,
+      area: 'unstaged' as const,
+      conflictKind: 'both_modified' as const,
+      conflictStatus: 'unresolved' as const,
+      conflictStatusSource: 'git' as const
+    }
+    store.getState().trackConflictPath('wt-huge', conflict.path, conflict.conflictKind)
+    store.getState().openConflictFile('wt-huge', '/repo', conflict, 'typescript')
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'merge',
+      entries: [conflict]
+    })
+
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      didHitLimit: true,
+      statusLength: 2
+    })
+
+    expect(store.getState().trackedConflictPathsByWorktree['wt-huge']).toEqual({
+      'src/conflict.ts': 'both_modified'
+    })
+    expect(store.getState().gitConflictOperationByWorktree['wt-huge']).toBe('merge')
+    expect(
+      store.getState().openFiles.find((file) => file.relativePath === 'src/conflict.ts')?.conflict
+    ).toMatchObject({
+      conflictKind: 'both_modified',
+      conflictStatus: 'unresolved'
+    })
+
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().trackedConflictPathsByWorktree['wt-huge']).toEqual({})
+    expect(store.getState().gitConflictOperationByWorktree['wt-huge']).toBe('unknown')
+  })
+
   it('treats a blank git status HEAD as unknown without invalidating branch compare', () => {
     const store = createEditorStore()
     const summary = {

@@ -107,23 +107,42 @@ export function NativeChatInteractiveCard({
             return
           }
           submittingRef.current = true
-          const settleMs = sendAnswer(card.prompt, selections)
-          if (settleMs <= 0) {
-            // Keep the actionable card visible when its PTY disappeared between
-            // render and submit; the next live target update can make it retryable.
-            submittingRef.current = false
-            return
-          }
-          setSubmitting(true)
-          // Hold the card until the paced write finishes, then mark it answered
-          // (which hides it and restores the composer).
-          dismissTimerRef.current = setTimeout(() => {
-            cancelPending()
+          const dismissAnsweredCard = (): void => {
             setDismissedKey(cardKey)
             submittingRef.current = false
             setSubmitting(false)
             dismissTimerRef.current = null
-          }, settleMs)
+          }
+          const keepRejectedAnswerVisible = (): void => {
+            submittingRef.current = false
+            setSubmitting(false)
+          }
+          const result = sendAnswer(card.prompt, selections, (delivered) => {
+            if (delivered) {
+              dismissAnsweredCard()
+            } else {
+              keepRejectedAnswerVisible()
+            }
+          })
+          if (result.settleAfterMs <= 0) {
+            // Keep the actionable card visible when its PTY disappeared between
+            // render and submit; the next live target update can make it retryable.
+            keepRejectedAnswerVisible()
+            return
+          }
+          setSubmitting(true)
+          if (result.waitsForVerifiedDelivery) {
+            // Why: remote acceptance can outlive the keystroke pacing window.
+            // Keep the card until delivery is proven instead of cancelling the
+            // inference callback at the old fixed dismissal deadline.
+            return
+          }
+          // Hold the card until the paced write finishes, then mark it answered
+          // (which hides it and restores the composer).
+          dismissTimerRef.current = setTimeout(() => {
+            cancelPending()
+            dismissAnsweredCard()
+          }, result.settleAfterMs)
         }}
         onCancel={() => {
           clearDismissTimer()

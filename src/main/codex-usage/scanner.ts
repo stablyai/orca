@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { getCodexAccountHomeSessionDirectories } from '../codex/codex-account-home-discovery'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
@@ -133,11 +134,14 @@ export function getCodexSessionsDirectory(): string {
 }
 
 export function getCodexSessionDirectories(): string[] {
-  // Why: upgraded users still have ordinary Codex history under ~/.codex, while
-  // new Orca-launched sessions are written under Orca's managed runtime home.
-  return [getCodexSessionsDirectory(), join(getSystemCodexHomePath(), 'sessions')].filter(
-    (dirPath, index, allDirPaths) => allDirPaths.indexOf(dirPath) === index
-  )
+  // Why: sessions now live in three lanes — the shared runtime mirror, the real
+  // ~/.codex, and per-account self-contained homes; missing any lane silently
+  // undercounts usage for multi-account users.
+  return [
+    getCodexSessionsDirectory(),
+    join(getSystemCodexHomePath(), 'sessions'),
+    ...getCodexAccountHomeSessionDirectories()
+  ].filter((dirPath, index, allDirPaths) => allDirPaths.indexOf(dirPath) === index)
 }
 
 function hasLegacyCopiedSessionBridgeMarkers(): boolean {

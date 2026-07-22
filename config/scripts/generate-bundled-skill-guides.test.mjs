@@ -6,8 +6,10 @@ import { BUNDLED_SKILL_GUIDES } from '../../src/cli/bundled-skill-guides'
 import {
   CANONICAL_GUIDE_NAMES,
   GUIDE_ALIASES,
+  STUB_TOPICS,
   assertAliasContract,
   buildArtifacts,
+  frontmatterBlock,
   normalizeMarkdown,
   parseFrontmatter,
   verifyArtifacts,
@@ -24,6 +26,9 @@ async function createFixture() {
     cp(path.join(projectDir, 'skill-guides'), path.join(root, 'skill-guides'), {
       recursive: true
     }),
+    cp(path.join(projectDir, 'skill-stubs'), path.join(root, 'skill-stubs'), {
+      recursive: true
+    }),
     cp(path.join(projectDir, 'skills'), path.join(root, 'skills'), { recursive: true }),
     mkdir(path.join(root, 'src', 'cli'), { recursive: true })
   ])
@@ -37,11 +42,30 @@ afterEach(async () => {
 })
 
 describe('bundled skill guide generator', () => {
-  it('keeps every first-phase fat projection byte-identical to its authoritative source', async () => {
+  it('keeps every fat (non-stub) projection byte-identical to its authoritative source', async () => {
     for (const name of CANONICAL_GUIDE_NAMES) {
+      if (STUB_TOPICS.includes(name)) {
+        continue
+      }
       const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`))
       const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'))
       expect(projection, name).toEqual(source)
+    }
+  })
+
+  it('projects stub topics as hybrid discovery stubs that reuse the guide frontmatter', async () => {
+    expect(STUB_TOPICS.length).toBeGreaterThan(0)
+    for (const name of STUB_TOPICS) {
+      const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
+      const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'), 'utf8')
+
+      // The routing frontmatter is the unchanged discovery surface.
+      expect(projection.startsWith(frontmatterBlock(source, `${name}.md`))).toBe(true)
+      // The stub is a thin hybrid pointer, not the full guide.
+      expect(projection).not.toEqual(source)
+      expect(projection.length).toBeLessThan(source.length)
+      expect(projection).toContain('discovery stub')
+      expect(projection).toContain(`skills get ${name}`)
     }
   })
 
@@ -96,6 +120,11 @@ describe('bundled skill guide generator', () => {
       const source = await readFile(sourcePath, 'utf8')
       await writeFile(sourcePath, source.replaceAll('\n', '\r\n'))
     }
+    for (const name of STUB_TOPICS) {
+      const stubPath = path.join(root, 'skill-stubs', `${name}.md`)
+      const stubSource = await readFile(stubPath, 'utf8')
+      await writeFile(stubPath, stubSource.replaceAll('\n', '\r\n'))
+    }
 
     const actual = await buildArtifacts(root)
     expect(actual.map((artifact) => artifact.content)).toEqual(
@@ -106,6 +135,7 @@ describe('bundled skill guide generator', () => {
   it('pins guide sources, projections, and embedded output to LF in Git', async () => {
     const attributes = await readFile(path.join(projectDir, '.gitattributes'), 'utf8')
     expect(normalizeMarkdown(attributes)).toContain('/skill-guides/*.md text eol=lf\n')
+    expect(normalizeMarkdown(attributes)).toContain('/skill-stubs/*.md text eol=lf\n')
     expect(normalizeMarkdown(attributes)).toContain('/skills/*/SKILL.md text eol=lf\n')
     expect(normalizeMarkdown(attributes)).toContain(
       '/src/cli/bundled-skill-guides.ts text eol=lf\n'

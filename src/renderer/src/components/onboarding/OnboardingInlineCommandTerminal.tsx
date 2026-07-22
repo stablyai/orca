@@ -294,6 +294,7 @@ export function OnboardingInlineCommandTerminal({
               cwd={cwd}
               isActive
               isVisible
+              showSplitButton={false}
               onPtyExit={() => {
                 onTerminalExit?.()
                 closeTab(tabId, { recordInteraction: false, reason: 'pty-exit' })

@@ -1,23 +1,32 @@
-/* eslint-disable max-lines -- Why: the update card owns the full updater lifecycle in one
-   renderer surface. Keeping the state machine and its presentation variants together avoids
-   scattering tightly coupled update behavior across multiple files. */
-import { useCallback, useEffect, useRef, useState } from 'react'
+/* eslint-disable max-lines -- Why: keeps the updater state machine and its presentation variants in one file. */
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
-import { AlertCircle, Check, Loader2, Minus, Network, RotateCw, X } from 'lucide-react'
+import {
+  AlertCircle,
+  Check,
+  ChevronRight,
+  Loader2,
+  Minus,
+  Network,
+  RotateCw,
+  ShieldAlert,
+  X
+} from 'lucide-react'
 import type { ChangelogData } from '../../../shared/types'
+import {
+  isWindowsSignatureCheckUnavailableFailure,
+  isWindowsSignatureMismatchFailure
+} from '../../../shared/updater-windows-signature-check'
 import { translate } from '@/i18n/i18n'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function releaseUrlForVersion(version: string | null): string {
-  // Why: when no version is cached (typically a failed check), point at the
-  // plain releases listing rather than /releases/latest — /latest also breaks
-  // when GitHub's release API is degraded, and the listing is the most
-  // reliable manual fallback.
+  // Why: fall back to the plain releases listing (not /releases/latest) — /latest also breaks when GitHub's API is degraded.
   return version
     ? `https://github.com/stablyai/orca/releases/tag/v${version}`
     : 'https://github.com/stablyai/orca/releases'
@@ -37,11 +46,16 @@ export function isHttp2ProtocolError(message: string): boolean {
 }
 
 type ErrorCardModel = {
-  variant?: 'default' | 'http1Compatibility'
+  variant?: 'default' | 'http1Compatibility' | 'security'
   title: string
   summary: string
-  message: string
+  /** Optional guidance box between the summary and the raw error output. */
+  explainer?: string
+  /** Raw error text, shown only when the user expands "Show details". */
+  detail?: string
   releaseUrl: string
+  /** Overrides the secondary button label (defaults to "Download Manually"). */
+  manualLabel?: string
   primaryAction?: {
     label: string
     pendingLabel?: string
@@ -116,26 +130,15 @@ export function UpdateCard() {
   const [installError, setInstallError] = useState<string | null>(null)
   const [compatibilityRelaunching, setCompatibilityRelaunching] = useState(false)
   const [compatibilitySetupError, setCompatibilitySetupError] = useState<string | null>(null)
-  // Why: the version-based dismiss gate at the bottom of the visibility
-  // section intentionally keeps error cards visible so a download failure
-  // still surfaces even if the user previously dismissed the "available"
-  // card for the same version.  But this means the error card's own X
-  // button cannot hide the card via dismissUpdate alone.  A separate
-  // local flag tracks whether the user has explicitly closed the error
-  // card in this render cycle.
+  // Why: the dismiss gate keeps error cards visible, so a separate local flag tracks the error card's own X close.
   const [errorDismissed, setErrorDismissed] = useState(false)
-  // Why: "not-available" is transient feedback ("You're up to date") that
-  // should auto-dismiss. A local flag avoids polluting the store with
-  // timer state that no other component cares about.
+  // Why: local flag (not store) for the transient "up to date" auto-dismiss — no other component needs it.
   const [autoDismissed, setAutoDismissed] = useState(false)
-  // Why: tracks whether the card is exiting so we can play the fade-out
-  // animation before unmounting.
+  // Tracks card exit so the fade-out animation plays before unmount.
   const [exiting, setExiting] = useState(false)
   const changelog: ChangelogData | null = storeChangelog
 
-  // Why: the 'error' variant of UpdateStatus does not carry a `version` field,
-  // but the card needs the version for the "Download Manually" fallback URL
-  // and for dismiss persistence. Cache it from states that do carry it.
+  // Why: the 'error' variant carries no version, but the card needs it for the fallback URL and dismiss; cache from states that have it.
   const versionRef = useRef<string | null>(null)
   if ('version' in status && status.version) {
     versionRef.current = status.version
@@ -144,17 +147,11 @@ export function UpdateCard() {
     status.state === 'idle' ||
     status.state === 'not-available'
   ) {
-    // Why: a new check cycle has started or completed without an available update.
-    // Clear the cached version so a later check failure cannot dismiss or link to
-    // an unrelated older release that happened to be cached locally.
+    // Why: clear the cached version so a later check failure can't link/dismiss against an unrelated older release.
     versionRef.current = null
   }
 
-  // Why: reset component-local state when a new update cycle begins. Without
-  // this, stale flags from a previous version leak forward — e.g., a failed
-  // image load for version A would suppress the hero for version B, or a
-  // hasStartedDownload flag from version A would cause a Settings-initiated
-  // download for version B to auto-restart.
+  // Why: reset component-local state on a new version so stale flags (media load, hasStartedDownload) don't leak forward.
   const prevVersionRef = useRef<string | null>(null)
   if (status.state === 'available' && status.version !== prevVersionRef.current) {
     prevVersionRef.current = status.version
@@ -164,8 +161,7 @@ export function UpdateCard() {
     setInstallError(null)
   }
 
-  // Why: reset autoDismissed when a new status arrives so the card is
-  // visible again for the next user-initiated check cycle.
+  // Why: reset per-cycle flags when a new status arrives so the card shows again next check cycle.
   const prevStateRef = useRef(status.state)
   if (status.state !== prevStateRef.current) {
     prevStateRef.current = status.state
@@ -183,8 +179,7 @@ export function UpdateCard() {
   const shouldAutoDismissLatest =
     status.state === 'not-available' && 'userInitiated' in status && Boolean(status.userInitiated)
 
-  // Why: auto-dismiss "You're on the latest version" after 3 seconds.
-  // The timer resets if the status changes before it fires.
+  // Auto-dismiss "You're on the latest version" after 3s; timer resets if status changes first.
   useEffect(() => {
     if (!shouldAutoDismissLatest) {
       return
@@ -193,11 +188,8 @@ export function UpdateCard() {
     return () => clearTimeout(timer)
   }, [shouldAutoDismissLatest])
 
-  // Why: quitAndInstall is a side effect that must not run during render —
-  // React StrictMode double-invokes render functions, which would call
-  // quitAndInstall twice. useEffect with a state guard is the safe path.
-  // Gated on hasStartedDownload so a Settings-initiated download doesn't
-  // auto-restart the app — the user expects to click "Restart" in Settings.
+  // Why: quitAndInstall must run in an effect, not render — StrictMode's double render would fire it twice.
+  // Gated on hasStartedDownload so Settings-initiated downloads don't auto-restart (user expects "Restart" there).
   useEffect(() => {
     if (status.state === 'downloaded' && hasStartedDownload.current) {
       void window.api.updater.quitAndInstall().catch((error) => {
@@ -225,8 +217,7 @@ export function UpdateCard() {
       if (node !== null) {
         return
       }
-      // Why: exit timers are owned by the visible update-card surface, so
-      // stale callbacks should be cancelled as soon as that surface unmounts.
+      // Why: cancel exit timers when the card surface unmounts so stale callbacks don't fire.
       clearAnimationTimers()
     },
     [clearAnimationTimers]
@@ -255,26 +246,17 @@ export function UpdateCard() {
     return null
   }
 
-  // Error: show card for user-initiated check failures or for failures tied to
-  // a concrete cached update version (card-initiated and Settings-initiated
-  // download/install flows). Background check failures stay silent.
+  // Error: show for user-initiated failures or failures tied to a cached version; background failures stay silent.
   if (status.state === 'error' && !shouldShowDetailedErrorCard && !isUserInitiated) {
     return null
   }
 
-  // Why: the version-based dismiss gate below intentionally keeps error cards
-  // visible, but when the user explicitly clicks X on the error card itself
-  // the card must disappear. This gate handles that case.
+  // Why: the dismiss gate below keeps error cards visible, so an explicit X on the error card needs this gate to hide it.
   if (status.state === 'error' && errorDismissed) {
     return null
   }
 
-  // Dismiss gate: if the user previously dismissed this version, hide the card
-  // for passive reminder states. Keep active in-progress/error states visible so
-  // explicit install actions can still surface progress and failures.
-  // Why: bypass the gate when the current cycle was user-initiated — the user
-  // explicitly asked to check, so they expect to see the result even if they
-  // dismissed the same version earlier.
+  // Dismiss gate: hide previously-dismissed versions for passive states, keep in-progress/error visible, and bypass for user-initiated checks.
   if (versionRef.current && dismissedVersion === versionRef.current && !updateUserInitiatedCycle) {
     if (status.state !== 'downloading' && status.state !== 'error') {
       return null
@@ -294,19 +276,16 @@ export function UpdateCard() {
 
   const handleUpdate = () => {
     hasStartedDownload.current = true
-    // Why: clicking "Update" implies the user is not worried about interruption,
-    // so dismiss the reassurance tip permanently.
+    // Why: clicking Update implies the user isn't worried about interruption, so retire the reassurance tip.
     if (!reassuranceSeen) {
       markReassuranceSeen()
     }
     void window.api.updater.download()
   }
 
-  // Why: the 'error' variant has no version field, so dismiss needs an
-  // optional explicit version override for error/install-failure states.
+  // Why: the 'error' variant has no version field, so dismiss needs an explicit version override.
   const handleClose = () => {
-    // Why: dismissUpdate clears the store-level manual-check bypass so the
-    // dismiss gate re-engages immediately after closing a requested result.
+    // Why: dismissUpdate clears the store manual-check bypass so the dismiss gate re-engages after closing.
     if (status.state === 'error') {
       setErrorDismissed(true)
       if (cachedVersion) {
@@ -337,7 +316,12 @@ export function UpdateCard() {
       })
   }
 
+  // Why: order matters — the wrong-publisher security-stop must beat the "check couldn't run" case so integrity failures aren't softened to "try again".
   const isHttp2UpdateError = status.state === 'error' && isHttp2ProtocolError(status.message)
+  const isSignatureMismatchError =
+    status.state === 'error' && isWindowsSignatureMismatchFailure(status.message)
+  const isSignatureCheckBlockedError =
+    status.state === 'error' && isWindowsSignatureCheckUnavailableFailure(status.message)
   const errorCard: ErrorCardModel | null =
     status.state === 'error'
       ? isHttp2UpdateError
@@ -345,7 +329,11 @@ export function UpdateCard() {
             variant: 'http1Compatibility',
             title: translate('auto.components.UpdateCard.1339b82cee', 'HTTP/2 Download Blocked'),
             summary: 'Orca can retry through HTTP/1.1 compatibility mode.',
-            message: compatibilitySetupError ?? status.message,
+            explainer: translate(
+              'auto.components.UpdateCard.90559b14e3',
+              'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
+            ),
+            detail: compatibilitySetupError ?? status.message,
             releaseUrl: releaseUrlForVersion(cachedVersion),
             primaryAction: {
               label: translate('auto.components.UpdateCard.933c6fdf5b', 'Enable & Restart'),
@@ -354,35 +342,66 @@ export function UpdateCard() {
               onClick: handleEnableHttp1Compatibility
             }
           }
-        : {
-            // Why: title is scoped to the operation that failed so check-time
-            // failures (commonly GitHub-side) don't read as a bug in Orca.
-            title: cachedVersion ? 'Update Error' : 'Update Check Failed',
-            summary: cachedVersion
-              ? 'Could not complete the update.'
-              : 'Could not check for updates.',
-            message: status.message,
-            releaseUrl: releaseUrlForVersion(cachedVersion),
-            // Why: check-time failures are often transient (offline, GitHub
-            // hiccup), so offer a Re-check next to "Download Manually" instead
-            // of forcing the user into the manual fallback.
-            primaryAction: cachedVersion
-              ? {
+        : isSignatureMismatchError
+          ? {
+              // Security stop: installer signed by the wrong publisher — no retry, only a verified-download path.
+              variant: 'security',
+              title: translate('auto.components.UpdateCard.5b309b19f3', "Update Wasn't Installed"),
+              summary: translate(
+                'auto.components.UpdateCard.092f09fc14',
+                "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version."
+              ),
+              detail: status.message,
+              // Why: linking the rejected version would let users bypass the publisher check by re-running it.
+              releaseUrl: releaseUrlForVersion(null),
+              manualLabel: translate(
+                'auto.components.UpdateCard.c9ff9b9ec2',
+                'Check official releases'
+              )
+            }
+          : isSignatureCheckBlockedError
+            ? {
+                title: translate(
+                  'auto.components.UpdateCard.e944c2de43',
+                  'Update Verification Blocked'
+                ),
+                summary: translate(
+                  'auto.components.UpdateCard.a05992a26b',
+                  "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases."
+                ),
+                detail: status.message,
+                releaseUrl: releaseUrlForVersion(cachedVersion),
+                primaryAction: {
                   label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
                   onClick: handleUpdate
                 }
-              : {
-                  label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
-                  onClick: () => {
-                    void window.api.updater.check({ includePrerelease: false })
-                  }
-                }
-          }
+              }
+            : {
+                // Why: title is scoped to the failed operation so check-time (GitHub-side) failures don't read as an Orca bug.
+                title: cachedVersion ? 'Update Error' : 'Update Check Failed',
+                summary: cachedVersion
+                  ? 'Could not complete the update.'
+                  : 'Could not check for updates.',
+                detail: status.message,
+                releaseUrl: releaseUrlForVersion(cachedVersion),
+                // Why: check-time failures are often transient, so offer a Re-check instead of forcing manual download.
+                primaryAction: cachedVersion
+                  ? {
+                      label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
+                      onClick: handleUpdate
+                    }
+                  : {
+                      label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
+                      onClick: () => {
+                        void window.api.updater.check({ includePrerelease: false })
+                      }
+                    }
+              }
       : installError
         ? {
             title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
             summary: 'Could not restart to install the update.',
-            message: installError,
+            detail: installError,
             releaseUrl: releaseUrlForVersion(cachedVersion),
             primaryAction: {
               label: translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
@@ -406,9 +425,7 @@ export function UpdateCard() {
     }, 150)
   }
 
-  // Why: long-running phases (downloading, downloaded, error) minimize to the
-  // status bar instead of persistently dismissing. A dismiss during an active
-  // download would orphan the in-flight download with no surfaced recovery.
+  // Why: dismissing an active download would orphan it, so long-running phases minimize to the status bar.
   const handleCollapseWithAnimation = () => {
     if (prefersReducedMotion) {
       setCollapsed(true)
@@ -494,8 +511,10 @@ export function UpdateCard() {
         <ErrorCardContent
           title={errorCard.title}
           summary={errorCard.summary}
-          message={errorCard.message}
+          explainer={errorCard.explainer}
+          detail={errorCard.detail}
           releaseUrl={errorCard.releaseUrl}
+          manualLabel={errorCard.manualLabel}
           variant={errorCard.variant}
           primaryAction={errorCard.primaryAction}
           onClose={handleCollapseWithAnimation}
@@ -579,9 +598,7 @@ export function UpdateCard() {
     )
   })()
 
-  // Why: show a one-time reassurance tip above the card so first-time users
-  // know updating won't kill their running terminals. Once seen, persisted
-  // to disk so it never reappears.
+  // One-time reassurance tip that updating won't kill running terminals; persisted once seen.
   const showReassurance =
     !reassuranceSeen && (status.state === 'available' || status.state === 'downloading')
 
@@ -654,9 +671,7 @@ function RichCardContent({
   const showMedia =
     release.mediaUrl &&
     !mediaFailed &&
-    // Why: when prefers-reduced-motion is active, hide animated GIFs entirely
-    // rather than showing a frozen frame (GIFs cannot be reliably paused
-    // cross-browser). Static images are shown normally since they produce no motion.
+    // Why: GIFs can't be reliably paused cross-browser, so hide them entirely under reduced-motion.
     !(prefersReducedMotion && isAnimatedGif(release.mediaUrl))
 
   return (
@@ -817,8 +832,7 @@ function DownloadingContent({
       <div className="flex items-start justify-between gap-2">
         {release ? (
           <h3 className="text-sm font-semibold">
-            {translate('auto.components.UpdateCard.f58b5c57a6', 'New:')}
-            {release.title}
+            {translate('auto.components.UpdateCard.f58b5c57a6', 'New:')} {release.title}
           </h3>
         ) : (
           <h3 className="text-sm font-semibold">
@@ -892,16 +906,20 @@ function ErrorCardContent({
   variant = 'default',
   title,
   summary,
-  message,
+  explainer,
+  detail,
   releaseUrl,
+  manualLabel,
   primaryAction,
   onClose
 }: {
-  variant?: 'default' | 'http1Compatibility'
+  variant?: 'default' | 'http1Compatibility' | 'security'
   title: string
   summary: string
-  message: string
+  explainer?: string
+  detail?: string
   releaseUrl: string
+  manualLabel?: string
   primaryAction?: {
     label: string
     pendingLabel?: string
@@ -910,12 +928,22 @@ function ErrorCardContent({
   }
   onClose: () => void
 }) {
+  // Why: raw error starts collapsed so the card leads with the plain summary, not a stack dump.
+  const [showDetails, setShowDetails] = useState(false)
+  const detailId = useId()
   const isCompatibility = variant === 'http1Compatibility'
-  const Icon = isCompatibility ? Network : AlertCircle
+  const isSecurity = variant === 'security'
+  const Icon = isCompatibility ? Network : isSecurity ? ShieldAlert : AlertCircle
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 text-muted-foreground">
+        <div
+          className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/50 ${
+            isSecurity
+              ? 'border-destructive/30 text-destructive'
+              : 'border-border text-muted-foreground'
+          }`}
+        >
           <Icon className="size-4" />
         </div>
         <div className="min-w-0 flex-1 space-y-1">
@@ -933,25 +961,43 @@ function ErrorCardContent({
         </Button>
       </div>
 
-      {isCompatibility ? (
+      {explainer ? (
         <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2">
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {translate(
-              'auto.components.UpdateCard.90559b14e3',
-              'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
-            )}
-          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{explainer}</p>
         </div>
       ) : null}
 
-      <div className="rounded-md bg-muted/40 px-3 py-2">
-        <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
-          {translate('auto.components.UpdateCard.3553a8672f', 'Last error')}
-        </p>
-        <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
-          {message}
-        </p>
-      </div>
+      {/* Caret disclosure that reveals the raw error while the plain summary stays the lead. */}
+      {detail ? (
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="-ml-2 self-start text-muted-foreground hover:text-foreground"
+            onClick={() => setShowDetails((prev) => !prev)}
+            aria-expanded={showDetails}
+            aria-controls={detailId}
+          >
+            <ChevronRight
+              className={`size-3.5 transition-transform motion-reduce:transition-none ${showDetails ? 'rotate-90' : ''}`}
+            />
+            {showDetails
+              ? translate('auto.components.UpdateCard.5194358929', 'Hide details')
+              : translate('auto.components.UpdateCard.8bc9e17d8f', 'Show details')}
+          </Button>
+          {showDetails ? (
+            <div id={detailId} className="rounded-md bg-muted/40 px-3 py-2">
+              <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
+                {translate('auto.components.UpdateCard.3553a8672f', 'Last error')}
+              </p>
+              <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
+                {detail}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex gap-2">
         {primaryAction && (
@@ -976,9 +1022,9 @@ function ErrorCardContent({
           variant="outline"
           size="sm"
           onClick={() => void window.api.shell.openUrl(releaseUrl)}
-          className={primaryAction ? 'flex-1' : 'w-full'}
+          className="flex-1"
         >
-          {translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
+          {manualLabel ?? translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
         </Button>
       </div>
     </div>

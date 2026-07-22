@@ -15,6 +15,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Why: the freshness registry is derived from immutable release tags,
+          # so shallow PR checkouts cannot verify historical official identities.
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install native build tools
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 zlib1g-dev zsh
@@ -81,6 +86,9 @@ jobs:
       # projections from the repository, so stale output would split those two truths.
       - name: Verify bundled skill guides
         run: pnpm run verify:bundled-skill-guides
+
+      - name: Verify skill freshness manifest
+        run: pnpm run verify:skill-bundle-manifest
 
       # Why: project-owned type declarations must live in .ts so tsc
       # actually checks them. TypeScript's skipLibCheck: true (inherited

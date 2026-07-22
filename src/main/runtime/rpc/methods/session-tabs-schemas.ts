@@ -1,7 +1,9 @@
 import { z } from 'zod'
+import { MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal-quick-commands'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import { OptionalBoolean } from '../schemas'
 
 export const WorktreeTabSelector = z.object({
@@ -21,7 +23,20 @@ export const ActivateTab = WorktreeTabSelector.extend({
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing tab id')),
   leafId: z.string().max(128).optional(),
-  notifyClients: OptionalBoolean
+  notifyClients: OptionalBoolean,
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
+})
+
+export const CloseTab = ActivateTab.extend({
+  // Why: optional preserves authenticated legacy user closes; lifecycle intent
+  // uses the additive evidence-bearing method instead.
+  reason: z.literal('user').optional()
+})
+
+export const CloseLifecycleTab = ActivateTab.extend({
+  reason: z.enum(['pty-exit', 'cleanup']),
+  publicationEpoch: z.string().min(1).max(128),
+  terminal: z.string().min(1).max(256)
 })
 
 export type TerminalPaneLayoutNodeInput =
@@ -115,6 +130,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   command: z.string().optional(),
   cwd: z.string().min(1).optional(),
   env: z.record(z.string(), z.string()).optional(),
+  envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   launchConfig: sleepingAgentLaunchConfigSchema,
   launchToken: z.string().min(1).max(128).optional(),
@@ -122,6 +138,13 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     .custom<TuiAgent>(isTuiAgent, {
       message: 'Unknown agent preset'
     })
+    .optional(),
+  // Why: agent prompts must be quoted and injected for the host shell (native,
+  // WSL, or SSH) instead of pasted from the mobile client before the TUI is ready.
+  agentPrompt: z
+    .string()
+    .max(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
+    .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
     .optional(),
   // Why: `agent` is the legacy preset field; `launchAgent` is the launch-plan
   // identity used when preserving resume config across runtime boundaries.
@@ -132,9 +155,26 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     .optional(),
   viewMode: z.enum(['terminal', 'chat']).optional(),
   activate: z.boolean().optional(),
+  select: z.boolean().optional(),
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
   // Why: idempotency key so a retried create (double-tap, reconnect replay)
   // returns the in-flight operation instead of spawning a duplicate terminal.
   clientMutationId: z.string().min(1).max(128).optional()
+}).superRefine((value, context) => {
+  if (value.agentPrompt !== undefined && value.agent === undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['agentPrompt'],
+      message: 'Agent prompt requires an agent preset'
+    })
+  }
+  if (value.agentPrompt !== undefined && value.command !== undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['agentPrompt'],
+      message: 'Agent prompt cannot be combined with a startup command'
+    })
+  }
 })
 
 const MoveTabBase = {

@@ -114,7 +114,7 @@ describe('buildDefaultTerminalOptions', () => {
     expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
   })
 
-  it('enables xterm contrast correction for low-contrast CLI colors', () => {
+  it('defaults minimumContrastRatio to the light-background value (applyTerminalAppearance re-gates it)', () => {
     expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
   })
 
@@ -515,6 +515,7 @@ describe('openTerminal — addon and provider wiring', () => {
         }
       }),
       attachCustomWheelEventHandler: vi.fn(),
+      onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
       write: vi.fn(() => {
         events.push('write')
       }),
@@ -604,6 +605,22 @@ describe('openTerminal — addon and provider wiring', () => {
 
     expect(events).toContain('deregisterCharacterJoiner:3')
     expect(pane.arabicShapingJoinerCleanup).toBeNull()
+  })
+
+  // Why: a link streamed under a stationary pointer must re-linkify on the next
+  // move; openTerminal wires the hover-cache reset and disposePane must detach it.
+  it('installs the streamed-output linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+    const disposable = pane.linkifierHoverResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(pane.terminal.onWriteParsed).toHaveBeenCalledTimes(1)
+
+    const disposeSpy = vi.spyOn(disposable!, 'dispose')
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+    expect(pane.linkifierHoverResetDisposable).toBeNull()
   })
 
   // Why: the DOM renderer misrenders joined spans (per-character

@@ -41,6 +41,7 @@ import {
   forceDeleteLocalBranch,
   listWorktrees,
   removeWorktree,
+  WORKTREE_LIST_TIMEOUT_MS,
   WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
 } from './worktree'
 
@@ -278,6 +279,121 @@ branch refs/heads/main
     await removeWorktree('/repo', '/repo-feature', true)
 
     expect(getGitCalls()).toContain('git worktree remove --force /repo-feature')
+  })
+
+  it('force-retries removal when git refuses a clean worktree containing an initialised submodule', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree list --porcelain#2': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+`
+      },
+      'git worktree remove /repo-feature': {
+        error: new Error('git worktree remove failed'),
+        stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+      },
+      'git status --porcelain --untracked-files=all': { stdout: '' }
+    })
+
+    await removeWorktree('/repo', '/repo-feature')
+
+    const calls = getGitCalls()
+    expectGitCallOrder(
+      calls,
+      'git worktree remove /repo-feature',
+      'git status --porcelain --untracked-files=all'
+    )
+    expectGitCallOrder(
+      calls,
+      'git status --porcelain --untracked-files=all',
+      'git worktree remove --force /repo-feature'
+    )
+    expect(calls).toContain('git branch -d -- feature/test')
+  })
+
+  it('surfaces uncommitted changes instead of force-removing a dirty submodule worktree', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree remove /repo-feature': {
+        error: new Error('git worktree remove failed'),
+        stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+      },
+      'git status --porcelain --untracked-files=all': { stdout: ' M sub\n' }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
+      'Worktree has uncommitted or untracked changes.'
+    )
+    expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
+  })
+
+  it('does not force-retry when the caller already forced removal', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree remove --force /repo-feature': {
+        error: new Error('git worktree remove failed'),
+        stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature', true)).rejects.toThrow()
+    expect(
+      getGitCalls().filter((call) => call === 'git worktree remove --force /repo-feature')
+    ).toHaveLength(1)
+  })
+
+  it('does not force-retry unrelated non-force remove failures', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree remove /repo-feature': {
+        error: new Error('git worktree remove failed'),
+        stderr: 'fatal: contains modified or untracked files, use --force to delete it'
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
+      'git worktree remove failed'
+    )
+    expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
+    expect(getGitCalls()).not.toContain('git status --porcelain --untracked-files=all')
   })
 
   it('rejects a locked worktree with stable app-owned copy before invoking remove', async () => {
@@ -894,7 +1010,8 @@ describe('listWorktrees', () => {
     ])
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
       cwd: 'C:\\Users\\me\\repo',
-      wslDistro: 'Ubuntu'
+      wslDistro: 'Ubuntu',
+      timeout: WORKTREE_LIST_TIMEOUT_MS
     })
     expect(translateWslOutputPathsMock).toHaveBeenCalledWith(
       expect.any(String),
@@ -915,7 +1032,8 @@ describe('listWorktrees', () => {
     await expect(listWorktrees('/workspace/deleted-repo')).resolves.toEqual([])
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/workspace/deleted-repo'
+      cwd: '/workspace/deleted-repo',
+      timeout: WORKTREE_LIST_TIMEOUT_MS
     })
     expect(statMock).toHaveBeenCalledWith('/workspace/deleted-repo')
     expect(warnSpy).toHaveBeenCalledWith(
@@ -937,7 +1055,8 @@ describe('listWorktrees', () => {
     await expect(listWorktrees('/private/tmp/orca-issue-1582-test/my-repo')).resolves.toEqual([])
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/private/tmp/orca-issue-1582-test/my-repo'
+      cwd: '/private/tmp/orca-issue-1582-test/my-repo',
+      timeout: WORKTREE_LIST_TIMEOUT_MS
     })
     expect(warnSpy).not.toHaveBeenCalled()
     warnSpy.mockRestore()

@@ -33,6 +33,9 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
+  isUnconfirmedSshCommandTermination: (error: unknown) =>
+    error instanceof Error &&
+    (error as Error & { sshChannelCloseConfirmed?: boolean }).sshChannelCloseConfirmed === false,
   execCommand: vi.fn()
 }))
 
@@ -101,8 +104,10 @@ describe('cross-version isolation', () => {
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64', // tagged POSIX platform probe
       '/home/u', // echo $HOME
       'MISSING', // isRelayAlreadyInstalled (v2 dir doesn't exist)
+      'OPEN', // no sibling GC claim
       '', // mkdir -p remoteRelayDir (v2)
       'OK', // mkdir lock OK
+      'OPEN', // GC did not claim while the install lock was acquired
       'MISSING', // re-probe after lock → still missing → proceed with install
       '', // mkdir remoteDir (uploadRelay)
       '', // chmod +x node
@@ -111,9 +116,9 @@ describe('cross-version isolation', () => {
       'ORCA-NPTY-PROBE-OK\n', // node -e require() load-test (post-install verify)
       '', // rm -f probe-stderr (best-effort cleanup after probe resolved)
       '', // touch .install-complete (finalizeInstall)
-      '', // rm -rf .install-lock
       'DEAD', // launch socket probe
       'READY', // socket poll
+      '', // release .install-lock after relay liveness is observable
       // GC scan begins here
       'relay-0.1.0+v1hash\nrelay-0.1.0+v2hash\n', // ls listing
       'OPEN', // v1 lock probe (siblings only — current dir is v2)

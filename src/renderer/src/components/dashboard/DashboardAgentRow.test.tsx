@@ -146,6 +146,14 @@ describe('DashboardAgentRow', () => {
     expect(markup).not.toContain('You are working inside Orca')
   })
 
+  it('shows the active model beside the agent label', () => {
+    const markup = renderRow(makeAgent({}, { model: 'gpt-5.4-mini' }))
+
+    expect(markup).toContain('title="gpt-5.4-mini"')
+    expect(markup).toContain('>gpt-5.4-mini</span>')
+    expect(classTokens(markup)).toContain('font-mono')
+  })
+
   it('uses the hover background as the focused-pane row highlight', () => {
     const markup = renderToStaticMarkup(
       <TooltipProvider>

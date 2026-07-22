@@ -9,6 +9,10 @@ import {
   enforceTerminalCurrentScrollIntent,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  isTerminalLinkifierHoverActive,
+  resetTerminalLinkifierHoverState
+} from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
 import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 
@@ -54,6 +58,12 @@ export function resumeTerminalVisibility({
   captureViewportPositions,
   withSuppressedScrollTracking
 }: ResumeTerminalVisibilityArgs): void {
+  // Why: hiding the surface fired mouseleave, which cleared xterm's current
+  // link but left its hover cell cache; without this reset a link stays dead
+  // until a scroll when the pointer returns to the same cell on reveal.
+  for (const pane of manager.getPanes()) {
+    resetTerminalLinkifierHoverState(pane.terminal)
+  }
   syncTerminalViewportIntents(manager)
   // Why: WebGL resume can disturb xterm's viewport bookkeeping before the
   // post-resume fit runs. Capture numeric viewport positions first; the
@@ -136,6 +146,13 @@ export function recoverVisibleTerminalWindowWake({
   for (const pane of manager.getPanes()) {
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: WINDOW_WAKE_FLUSH_CHARS })
+    // Why: window blur fires mouseleave, clearing xterm's current link but not
+    // its hover cell cache; on refocus the stationary pointer sits on the same
+    // cell, so the link stays dead until a scroll. Skip while a link is hovered
+    // to avoid flickering its underline (same guard as the on-write reset).
+    if (!isTerminalLinkifierHoverActive(pane.terminal)) {
+      resetTerminalLinkifierHoverState(pane.terminal)
+    }
   }
   syncTerminalViewportIntents(manager)
   manager.resumeRendering()

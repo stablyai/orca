@@ -269,6 +269,39 @@ describe('file explorer deletion owner provenance', () => {
     )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
+
+  it('permanently deletes a paired-server worktree through its stamped runtime', async () => {
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'web-server-b' } as never,
+      repos: [
+        makeRepo({
+          id: LOCAL_REPO_ID,
+          path: '/tmp/project',
+          executionHostId: 'runtime:web-server-a'
+        })
+      ],
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [makeWorktree('runtime:web-server-a')]
+      }
+    })
+    const owner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
+    expect(owner).toEqual({ kind: 'runtime', environmentId: 'web-server-a' })
+
+    const { result } = renderDelete(LOCAL_WORKTREE_ID)
+    await requestDelete(result, localNode, owner)
+
+    await vi.waitFor(() =>
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({ selector: 'web-server-a', method: 'files.delete' })
+      )
+    )
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'This permanently deletes the file on the remote host. This cannot be undone.'
+      })
+    )
+    expect(fsDeletePath).not.toHaveBeenCalled()
+  })
 })
 
 function duplicateHostRepos(): Repo[] {

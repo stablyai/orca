@@ -1,8 +1,4 @@
-// Why: reproduce the renderer-level Pi spinner pipeline from the
-// `pty:data` IPC event all the way down to onTitleChange. The electron
-// verification showed spinner frames arrive via IPC but the store never sees
-// "⠋ Pi" — this file pins the integration between the singleton dispatcher
-// and the transport's per-pty handler.
+// Why: reproduce the renderer Pi spinner pipeline (pty:data IPC → onTitleChange); electron verification showed frames arrive but the store never sees "⠋ Pi".
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -18,9 +14,7 @@ function flushPtySideEffects(): Promise<void> {
 describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
 
-  // The singleton dispatcher subscribes a SINGLE global `window.api.pty.onData`
-  // callback on first `ensurePtyDispatcher()`. We simulate the main process
-  // delivering IPC events by invoking that captured callback directly.
+  // The singleton dispatcher subscribes one global onData callback; we capture it to simulate main delivering IPC events directly.
   let dispatcherCallback:
     | ((payload: { id: string; data: string; rawLength?: number; background?: boolean }) => void)
     | null = null
@@ -51,11 +45,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
                 background?: boolean
               }) => void
             ) => {
-              // Only the first subscriber wins in production — the dispatcher
-              // calls onData exactly once (ensurePtyDispatcher guards with the
-              // `ptyDispatcherAttached` flag). Subsequent transport calls go
-              // through the same cached subscription, so we capture the first
-              // one and ignore the rest.
+              // Only the first subscriber wins in production (ensurePtyDispatcher's ptyDispatcherAttached guard), so capture the first callback and ignore the rest.
               if (!dispatcherCallback) {
                 dispatcherCallback = cb
               }
@@ -97,10 +87,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   })
 
   it('signals main that the pty:data listener is live exactly once per page load', async () => {
-    // Why: main holds every pty send until this handshake arrives, so a send that
-    // silently became a no-op (it is optional-chained) would pin the delivery gate
-    // until the 10s self-heal watchdog. Assert it fires, and fires only once — the
-    // second transport attach must not re-signal (ptyDispatcherAttached guard).
+    // Why: main gates all pty sends on this handshake, so a silent no-op would stall delivery until the 10s watchdog; assert it fires exactly once.
     const { ensurePtyDispatcher } = await import('./pty-dispatcher')
 
     ensurePtyDispatcher()
@@ -118,9 +105,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
 
     expect(dispatcherCallback).not.toBeNull()
 
-    // Simulate the main process firing `pty:data` IPC for pty-pi. The
-    // dispatcher looks up `ptyDataHandlers.get('pty-pi')` and calls it with
-    // the data — the same path exercised by a real Pi session.
+    // Simulate main firing pty:data IPC — dispatcher routes to ptyDataHandlers.get('pty-pi'), the same path a real Pi session uses.
     dispatcherCallback?.({ id: 'pty-pi', data: idleTitle() })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠙') })
@@ -134,10 +119,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   })
 
   it('pipeline survives a chunk carrying shell output interleaved with spinner frames', async () => {
-    // Why: node-pty batches at 8ms on the main side, so the renderer often
-    // sees multiple OSC sequences and body bytes in one chunk. The transport
-    // handler extracts the LAST OSC title in each chunk — working frames that
-    // land as the last title in any chunk must surface through onTitleChange.
+    // Why: node-pty's 8ms batching packs multiple OSC titles + body into one chunk; the handler takes the LAST title, which must still surface working frames.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
 
@@ -157,20 +139,14 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   })
 
   it('attach()-flow pipeline delivers working frames to onTitleChange', async () => {
-    // Why: the reattach code path (daemon-backed or intra-session remount)
-    // calls transport.attach() instead of transport.connect(). If the handler
-    // registration drifted between the two paths, Pi sessions restored after
-    // a tab remount would stop emitting spinner signals — consistent with
-    // the electron-level observation where poll-sampled runtimePaneTitlesByTabId
-    // never flipped to "⠋ Pi" during a live working window.
+    // Why: reattach uses attach() not connect(); if handler registration drifted between them, remounted Pi sessions would stop emitting spinner signals.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
 
     const transport = createIpcPtyTransport({ onTitleChange })
     transport.attach({ existingPtyId: 'pty-pi', callbacks: {} })
 
-    // Eager-buffer replay in attach() can flush initial titles through the
-    // same handler; only assert about frames we push AFTER attach resolves.
+    // attach()'s eager-buffer replay can flush initial titles; only assert on frames pushed after attach resolves.
     onTitleChange.mockClear()
 
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
@@ -183,10 +159,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   })
 
   it('reproduces "Pi is idle" state: after working→idle, onTitleChange ends on Pi', async () => {
-    // Why: the user-visible bug is that the store shows "Pi" (idle) even
-    // during working — meaning intermediate "⠋ Pi" updates never landed OR
-    // they landed and were then overwritten and dedupe-filtered. Assert that
-    // BOTH labels reach onTitleChange during a working→idle cycle, in order.
+    // Why: bug shows the store stuck at idle "Pi" while working — assert both working and idle labels reach onTitleChange, in order.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
 
@@ -208,16 +181,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     transport.disconnect()
   })
 
-  // Why: regression test for the cursor spinner "solid after 500ms" bug.
-  // cursor-agent re-emits its native `OSC 0: "Cursor Agent"` title on every
-  // internal redraw mid-turn. Orca's main process injects synthesized
-  // "⠋ Cursor Agent" spinner frames from the hook server; the renderer must
-  // drop cursor's bare native title so it cannot overwrite the synthesized
-  // working title in `runtimePaneTitlesByTabId` (which drives `getWorktreeStatus`'s
-  // solid/spinning dot decision). If the bare title leaked through, the last
-  // title in the store would flip to "Cursor Agent" (which `detectAgentStatusFromTitle`
-  // classifies as null / not-working) and the sidebar would snap solid
-  // mid-turn.
+  // Why: regression for cursor's "solid after 500ms" bug — cursor re-emits its bare native title mid-turn; it must not overwrite the synthesized spinner frame.
   it('drops cursor-agent native "Cursor Agent" title so it cannot overwrite the synthesized spinner', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
@@ -225,9 +189,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     const transport = createIpcPtyTransport({ onTitleChange })
     await transport.connect({ url: '', callbacks: {} })
 
-    // Simulate the realistic interleave: Orca injects a synthesized working
-    // frame, cursor-agent re-emits its bare native title shortly after, Orca
-    // injects the next spinner frame, etc.
+    // Realistic interleave: synthesized working frame, cursor's bare native title, next spinner frame, etc.
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠋ Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠙ Cursor Agent${BEL}` })
@@ -235,8 +197,6 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
-    // The two bare "Cursor Agent" titles must NOT reach the title-change
-    // pipeline. The two synthesized spinner frames must.
     expect(seenTitles).not.toContain('Cursor Agent')
     expect(seenTitles).toContain('⠋ Cursor Agent')
     expect(seenTitles).toContain('⠙ Cursor Agent')
@@ -245,8 +205,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   })
 
   it('still surfaces the synthesized "Cursor ready" idle title after working', async () => {
-    // Why: make sure the bare-title drop does not accidentally catch the
-    // decorated "Cursor ready" done frame Orca synthesizes on the `stop` hook.
+    // Why: the bare-title drop must not also catch the decorated "Cursor ready" done frame Orca synthesizes on the stop hook.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
 

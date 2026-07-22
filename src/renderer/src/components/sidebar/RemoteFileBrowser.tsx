@@ -56,29 +56,21 @@ export function RemoteFileBrowser({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [fileHint, setFileHint] = useState(false)
-  // Preview state drives the list while path mode is active. It is kept
-  // separate from committed state so typing `Documents/` does not silently
-  // change the `Select folder` target before the user commits.
+  // Drives the list during path mode; separate from committed state so typing doesn't move the Select target before commit.
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const genRef = useRef(0)
   const previewGenRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Why: paste resolution intentionally runs next tick; closing the picker
-  // before then should cancel stale preview work.
+  // Why: paste resolution runs next tick; closing the picker before then must cancel stale preview work.
   const pasteResolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Cache directory listings by absolute resolved path for the lifetime of
-  // the picker so ordinary typing issues at most one remote call per newly
-  // committed segment. targetId does not change within a picker instance.
+  // Per-picker listing cache keyed by resolved path, so typing issues at most one remote call per committed segment.
   const listingCacheRef = useRef<Map<string, BrowseResult>>(new Map())
-  // Resolved remote home, cached after the first `browseDir('~')`. Used to
-  // anchor `~` and `~/...` paths without hardcoding a home directory.
+  // Resolved remote home, cached after the first browseDir('~'); anchors `~`/`~/...` without hardcoding a home dir.
   const homePathRef = useRef<string | null>(null)
-  // The committed-path portion of the raw input that the current preview
-  // reflects (everything up to and including the final `/`). If the user's
-  // next keystroke leaves this unchanged, we can skip re-resolving.
+  // Committed-path portion (through the final `/`) the preview reflects; if unchanged next keystroke, skip re-resolving.
   const lastCommittedPrefixRef = useRef<string>('')
 
   const clearFileHint = useCallback(() => {
@@ -99,8 +91,7 @@ export function RemoteFileBrowser({
       if (node !== null) {
         return
       }
-      // Why: remote browse generations and input timers are scoped to this
-      // picker owner; clear them when the owner detaches.
+      // Why: browse generations and timers are scoped to this picker owner; clear them when it detaches.
       invalidateBrowseRequests()
       for (const timerRef of [
         fileHintTimerRef,
@@ -130,10 +121,7 @@ export function RemoteFileBrowser({
             dirPath
           )
       listingCacheRef.current.set(result.resolvedPath, result)
-      // Also cache under the requested dirPath when it differs from the
-      // server-resolved canonical path (e.g. `~`, `~/foo`, or a relative
-      // input). Without this, the next identical request would miss the
-      // cache and re-hit the SSH backend.
+      // Also key by the requested dirPath (e.g. `~`, relative) so an identical request doesn't re-hit the SSH backend.
       if (dirPath !== result.resolvedPath) {
         listingCacheRef.current.set(dirPath, result)
       }
@@ -154,9 +142,7 @@ export function RemoteFileBrowser({
         }
         setResolvedPath(result.resolvedPath)
         setEntries(result.entries)
-        // Only the bare-tilde listing returns the home directory itself;
-        // `~/sub` resolves to `.../sub`, which must not overwrite the home
-        // anchor used for resolving later `~/...` inputs.
+        // Only bare `~` yields the home dir itself; `~/sub` resolves elsewhere and must not overwrite the home anchor.
         if (dirPath === '~') {
           homePathRef.current = result.resolvedPath
         }
@@ -175,10 +161,7 @@ export function RemoteFileBrowser({
     [fetchListing]
   )
 
-  // All user-initiated navigation goes through this wrapper so filter +
-  // preview + hint state is always cleared. Bumping previewGenRef here
-  // ensures any in-flight path preview whose target is no longer relevant
-  // can't overwrite committed state after a breadcrumb or row click.
+  // Central nav clears filter/preview/hint and bumps previewGenRef so a stale in-flight preview won't clobber committed state.
   const navigate = useCallback(
     (dirPath: string) => {
       setFilter('')
@@ -231,9 +214,7 @@ export function RemoteFileBrowser({
     }, FILE_HINT_MS)
   }, [])
 
-  // Resolve a path-mode input and push the result into preview state.
-  // Exposed as a ref-callback so it can run immediately on paste or on the
-  // debounce tick without re-creating on every keystroke.
+  // Resolve a path-mode input into preview state; stable callback so paste and the debounce tick share one instance.
   const resolvePathInput = useCallback(
     async (raw: string) => {
       const parsed = parsePathInput(raw)
@@ -253,8 +234,7 @@ export function RemoteFileBrowser({
         return
       }
 
-      // Pick the base path. For `~` we must know the resolved home; if we
-      // haven't fetched it yet, fetch once (and cache it) before resolving.
+      // Pick the base path; `~` needs the resolved home, so fetch and cache it once before resolving.
       let basePath: string
       if (parsed.base === 'root') {
         basePath = '/'
@@ -355,10 +335,7 @@ export function RemoteFileBrowser({
     [resolvedPath, fetchListing]
   )
 
-  // Called on every user edit to the input. Filter-mode edits stay local;
-  // path-mode edits trigger a debounced resolve. Partial trailing-segment
-  // changes that don't change committed segments only update the preview
-  // filter, so typing `Documents/orc` → `Documents/orca` is free.
+  // Filter-mode edits stay local; path-mode edits trigger a debounced resolve, but trailing-filter-only edits stay local too.
   const handleInputChange = useCallback(
     (raw: string) => {
       clearFileHint()
@@ -381,8 +358,7 @@ export function RemoteFileBrowser({
       }
 
       if (!isPathMode(raw)) {
-        // Leaving path mode: drop preview immediately so the committed
-        // directory re-appears without a flicker.
+        // Leaving path mode: drop preview immediately so the committed directory reappears without a flicker.
         if (preview) {
           setPreview(null)
           previewGenRef.current++
@@ -395,10 +371,7 @@ export function RemoteFileBrowser({
       }
 
       const parsed = parsePathInput(raw)
-      // Partial trailing-segment edits: if the committed-path portion of the
-      // input is unchanged from what the preview already resolved, update
-      // only the local filter. This is the fast path that guarantees typing
-      // `Documents/orc` → `Documents/orca` issues no `browseDir` call.
+      // Fast path: unchanged committed prefix updates only the local filter, so intra-segment typing issues no browseDir call.
       if (
         parsed.mode === 'path' &&
         preview &&
@@ -406,11 +379,7 @@ export function RemoteFileBrowser({
         !parsed.invalid &&
         committedPrefix(raw) === lastCommittedPrefixRef.current
       ) {
-        // Intentionally allow this fast path to run even while
-        // preview.loading is true: the committed prefix is unchanged, so
-        // the in-flight resolve will land on the same listing and only the
-        // trailing filter needs updating. Blocking on loading would make
-        // keystrokes during a slow resolve feel unresponsive.
+        // Runs even while preview.loading: unchanged prefix hits the same listing, so blocking keystrokes would only feel laggy.
         setPreview({ ...preview, filter: parsed.trailingFilter })
         return
       }
@@ -434,9 +403,7 @@ export function RemoteFileBrowser({
       if (shouldDeferRemoteFileBrowserPasteResolve(e.clipboardData.getData('text/plain'))) {
         return
       }
-      // Paste resolves immediately; no debounce. React's onChange still fires
-      // after the paste is applied to the input value, so we defer to the
-      // next tick so `filter` reflects the pasted value.
+      // Paste resolves immediately (no debounce), but defer a tick so onChange has applied the pasted value to filter.
       if (pasteResolveTimerRef.current) {
         clearTimeout(pasteResolveTimerRef.current)
       }
@@ -455,23 +422,17 @@ export function RemoteFileBrowser({
     [resolvePathInput]
   )
 
-  // Select always returns the committed current directory. Disabled while a
-  // path-mode preview is visible so the user can't silently select the old
-  // committed directory while the list shows a different preview directory.
+  // Select always returns the committed directory; disabled during a path preview to avoid a mismatched selection.
   const handleSelect = useCallback(() => {
     onSelect(resolvedPath)
   }, [resolvedPath, onSelect])
 
-  // Single-click navigates; double-click on a folder selects it.
-  // When preview is active, row clicks must be relative to the preview path,
-  // not the committed `resolvedPath`.
+  // When a preview is active, row clicks resolve relative to the preview path, not the committed resolvedPath.
   const listParentPath = preview?.resolvedPath ?? resolvedPath
 
   const handleRowClick = useCallback(
     (entry: DirEntry) => {
-      // Stale entries from the previous resolved listing can remain on
-      // screen while a new preview resolves; clicking them would navigate
-      // relative to a path that no longer matches what the user is typing.
+      // Stale rows from the prior listing may still show while a preview resolves; clicking them would navigate a mismatched path.
       if (preview?.loading) {
         return
       }
@@ -492,8 +453,7 @@ export function RemoteFileBrowser({
 
   const handleRowDoubleClick = useCallback(
     (entry: DirEntry) => {
-      // Same rationale as handleRowClick: do not act on stale rows while
-      // the preview listing is being re-resolved.
+      // Same as handleRowClick: don't act on stale rows while the preview listing re-resolves.
       if (!entry.isDirectory || preview?.loading) {
         return
       }
@@ -516,15 +476,13 @@ export function RemoteFileBrowser({
             return
           }
           const parsed = parsePathInput(filter)
-          // Fully-resolved directory (trailing `/` or bare base marker):
-          // navigate to the preview path itself.
+          // Fully-resolved directory (trailing `/` or bare base marker): navigate to the preview path itself.
           if (parsed.mode === 'path' && parsed.trailingFilter === '') {
             e.preventDefault()
             navigate(preview.resolvedPath)
             return
           }
-          // Trailing filter — try to resolve it to a single folder match in
-          // the preview listing, mirroring filter-mode Enter.
+          // Trailing filter: resolve to a single folder match in the preview listing, mirroring filter-mode Enter.
           const filtered = filterEntries(preview.entries, preview.filter)
           const action = decideEnterAction(filtered)
           if (action.type === 'navigate') {
@@ -556,8 +514,7 @@ export function RemoteFileBrowser({
           setFilter('')
           setPreview(null)
           previewGenRef.current++
-          // Cancel any pending debounced resolve so it can't fire after
-          // the user has already dismissed the preview with Escape.
+          // Cancel any pending debounced resolve so it can't fire after Escape dismisses the preview.
           if (debounceTimerRef.current) {
             clearTimeout(debounceTimerRef.current)
             debounceTimerRef.current = null
@@ -568,8 +525,7 @@ export function RemoteFileBrowser({
         }
       }
       if (e.key === 'Backspace' && filter === '' && !preview) {
-        // Backspace in an empty input climbs to the parent — only when the
-        // caret is in empty text, so in-word Backspaces are untouched.
+        // Backspace in an empty input climbs to the parent; in-word backspaces are untouched.
         if (resolvedPath !== '/') {
           e.preventDefault()
           navigateUp()
@@ -592,8 +548,7 @@ export function RemoteFileBrowser({
 
   const pathSegments = resolvedPath.split('/').filter(Boolean)
 
-  // What the list should render: preview listing (with its own filter and
-  // error) during path mode, committed listing otherwise.
+  // Render the preview listing (own filter/error) during path mode, the committed listing otherwise.
   const isPreviewActive = preview !== null
   const showPreviewLoading = isPreviewActive && preview!.loading
   const displayEntries = isPreviewActive ? previewFilteredEntries : filteredEntries
@@ -612,9 +567,7 @@ export function RemoteFileBrowser({
         { value0: noMatchesFilter }
       )
 
-  // Disable Select folder while a non-empty path-mode preview is visible so
-  // the committed directory isn't silently selected while the list shows a
-  // different preview directory.
+  // Disable Select during a non-empty path preview so the committed dir isn't silently selected under a different-looking list.
   const selectDisabled = loading || (isPreviewActive && filter !== '')
 
   return (
@@ -729,8 +682,7 @@ export function RemoteFileBrowser({
               </p>
             </div>
           ) : displayEntries.length === 0 && !preview?.error ? (
-            // Directory has contents; filter hides them all. Distinguishing
-            // filter emptiness from directory emptiness keeps copy accurate.
+            // Directory has contents but the filter hides them all — distinct from an empty directory so copy stays accurate.
             <div className="flex items-center justify-center h-full">
               <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
               <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
@@ -800,9 +752,7 @@ export function RemoteFileBrowser({
   )
 }
 
-// Returns the portion of `raw` before its final `/`, used to decide whether
-// a keystroke only changed the trailing filter (cheap local update) or
-// changed a committed segment (requires re-resolving).
+// Portion of raw before the final `/`; lets callers tell a trailing-filter-only edit from a committed-segment change.
 function committedPrefix(raw: string): string {
   const i = raw.lastIndexOf('/')
   return i === -1 ? '' : raw.slice(0, i + 1)

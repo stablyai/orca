@@ -24,11 +24,11 @@ function getRuntimeTarget(settings: Parameters<typeof getActiveRuntimeTarget>[0]
   return target.kind === 'environment' ? target : null
 }
 
-function useRuntimeSettingsForSlug(owner: string, repo: string) {
+function useRuntimeSettingsForSlug(owner: string, repo: string, host?: string) {
   const { lookupSlug } = useRepoSlugIndex()
   const matchedRepo = useMemo(
-    () => lookupSlug(`${owner}/${repo}`)[0] ?? null,
-    [lookupSlug, owner, repo]
+    () => lookupSlug(`${owner}/${repo}`, host)[0] ?? null,
+    [lookupSlug, owner, repo, host]
   )
   return useAppStore(
     useShallow((s) =>
@@ -40,17 +40,19 @@ function useRuntimeSettingsForSlug(owner: string, repo: string) {
 export function CommentsList({
   owner,
   repo,
+  host,
   comments,
   sourceSettings,
   onChange
 }: {
   owner: string
   repo: string
+  host?: string
   comments: PRComment[]
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onChange: (next: PRComment[]) => void
 }): React.JSX.Element {
-  const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo)
+  const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo, host)
   const runtimeSettings = sourceSettings ?? fallbackRuntimeSettings
   return (
     <div className="flex flex-col gap-3">
@@ -73,6 +75,7 @@ export function CommentsList({
               const args = {
                 owner,
                 repo,
+                ...(host ? { host } : {}),
                 commentId: c.id
               }
               const res = target
@@ -94,6 +97,7 @@ export function CommentsList({
               const args = {
                 owner,
                 repo,
+                ...(host ? { host } : {}),
                 commentId: c.id,
                 body: next
               }
@@ -187,19 +191,21 @@ function CommentRow({
 export function NewCommentForm({
   owner,
   repo,
+  host,
   number,
   sourceSettings,
   onAdded
 }: {
   owner: string
   repo: string
+  host?: string
   number: number
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onAdded: (c: PRComment) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo)
+  const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo, host)
   const runtimeSettings = sourceSettings ?? fallbackRuntimeSettings
   const canSubmitComment = hasBoundedCommentBodyText(draft)
   return (
@@ -234,7 +240,13 @@ export function NewCommentForm({
             setSubmitting(true)
             try {
               const target = getRuntimeTarget(runtimeSettings)
-              const args = { owner, repo, number, body: bodyState.body }
+              const args = {
+                owner,
+                repo,
+                ...(host ? { host } : {}),
+                number,
+                body: bodyState.body
+              }
               const res = target
                 ? await callRuntimeRpc<GitHubProjectCommentMutationResult>(
                     target,

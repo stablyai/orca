@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs'
 import { open } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
@@ -67,6 +68,8 @@ function resumableStateFactoryFor(
       return candidate.file.path.endsWith('.jsonl')
         ? () => createGeminiJsonlSessionResumeState(candidate.file)
         : null
+    case 'antigravity':
+      return () => createAntigravitySessionResumeState(candidate.file)
     case 'devin':
     case 'grok':
     case 'hermes':
@@ -92,6 +95,52 @@ const cache = new Map<string, SessionParseCacheEntry>()
 
 export function resetSessionParseCacheForTests(): void {
   cache.clear()
+}
+
+// Persisted subset of a cache entry: the non-serializable `resume` parser
+// state is dropped (see session-parse-cache-persistence.ts).
+export type PersistedSessionParseCacheEntry = Omit<SessionParseCacheEntry, 'resume'>
+
+export function snapshotSessionParseCacheForPersistence(): [
+  string,
+  PersistedSessionParseCacheEntry
+][] {
+  return [...cache].map(([path, entry]): [string, PersistedSessionParseCacheEntry] => [
+    path,
+    {
+      mtimeMs: entry.mtimeMs,
+      sizeBytes: entry.sizeBytes,
+      platform: entry.platform,
+      session: entry.session
+    }
+  ])
+}
+
+// Seeded entries carry `resume: null`: after a restart an unchanged file is a
+// cache hit; a file that changed while the app was closed pays one full
+// (not incremental) re-parse.
+export function seedSessionParseCache(
+  entries: Iterable<[string, PersistedSessionParseCacheEntry]>
+): void {
+  const list = [...entries]
+  // Snapshot order is oldest→newest (LRU); an over-cap list keeps the newest
+  // tail rather than seeding the oldest entries and dropping the tail.
+  for (const [path, entry] of list.slice(Math.max(0, list.length - MAX_CACHE_ENTRIES))) {
+    if (cache.size >= MAX_CACHE_ENTRIES) {
+      return
+    }
+    // In-process entries are always fresher than persisted ones; never clobber.
+    if (cache.has(path)) {
+      continue
+    }
+    cache.set(path, {
+      mtimeMs: entry.mtimeMs,
+      sizeBytes: entry.sizeBytes,
+      platform: entry.platform,
+      session: entry.session,
+      resume: null
+    })
+  }
 }
 
 function storeEntry(path: string, entry: SessionParseCacheEntry): void {

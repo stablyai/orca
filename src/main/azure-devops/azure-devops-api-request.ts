@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
 
@@ -72,7 +73,11 @@ function apiUrl(
 export async function requestAzureDevOpsJsonAtBase<T>(
   baseUrl: string,
   path: string,
-  options: AzureDevOpsRequestOptions = {}
+  options: AzureDevOpsRequestOptions = {},
+  // Why: the existing-review lookup behind Create must distinguish a real
+  // transport/auth failure from an accepted "no PR". When true, a failed request
+  // throws instead of collapsing to null so callers never report false not_found.
+  throwOnFailure = false
 ): Promise<T | null> {
   const config = getAzureDevOpsAuthConfig()
   try {
@@ -84,10 +89,17 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      await cancelUnreadResponseBody(response)
+      if (throwOnFailure) {
+        throw new Error(`Azure DevOps request failed: HTTP ${response.status}`)
+      }
       return null
     }
     return (await response.json()) as T
-  } catch {
+  } catch (error) {
+    if (throwOnFailure) {
+      throw error
+    }
     return null
   }
 }
@@ -95,7 +107,8 @@ export async function requestAzureDevOpsJsonAtBase<T>(
 export function requestAzureDevOpsJson<T>(
   repo: AzureDevOpsRepoRef,
   path: string,
-  options: AzureDevOpsRequestOptions = {}
+  options: AzureDevOpsRequestOptions = {},
+  throwOnFailure = false
 ): Promise<T | null> {
-  return requestAzureDevOpsJsonAtBase(configuredApiBaseUrl(repo), path, options)
+  return requestAzureDevOpsJsonAtBase(configuredApiBaseUrl(repo), path, options, throwOnFailure)
 }

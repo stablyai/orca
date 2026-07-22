@@ -8,6 +8,8 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   // mobile source scan below, but still must stay mobile-authorized.
   'accounts.selectClaude',
   'accounts.selectCodex',
+  'terminal.createAgentSession',
+  'terminal.ensureAgentSession',
   'github.updateIssue',
   'github.updatePRState',
   'gitlab.updateIssue',

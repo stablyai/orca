@@ -10,6 +10,7 @@ import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
   state: {
+    appPlatform: 'linux' as NodeJS.Platform,
     availableStatusBarToggles: [] as {
       description: string
       id: StatusBarItem
@@ -179,12 +180,16 @@ describe('AppearancePane', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.availableStatusBarToggles = []
+    mocks.state.appPlatform = 'linux'
     mocks.state.settingsSearchQuery = 'automations'
     mocks.state.usagePercentageDisplay = 'used'
     // UIZoomControl reads window.api.ui on mount; the inline-expansion pane can
     // render the full Interface section, so provide a minimal renderer bridge
     // without clobbering happy-dom's window.location.
     ;(window as unknown as { api: unknown }).api = {
+      platform: {
+        get: () => ({ platform: mocks.state.appPlatform })
+      },
       ui: {
         getZoomLevel: () => 0,
         onTerminalZoom: () => () => {},
@@ -357,6 +362,23 @@ describe('AppearancePane', () => {
     expect(
       searchedContainer.querySelector('button[role="switch"][aria-label="Show Tasks Button"]')
     ).not.toBeNull()
+  })
+
+  it('shows and updates the menu bar icon preference only on desktop macOS', async () => {
+    mocks.state.appPlatform = 'darwin'
+    mocks.state.settingsSearchQuery = 'menu bar'
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Show Menu Bar Icon"]'
+    )
+
+    expect(toggle).not.toBeNull()
+    expect(container.textContent).not.toContain('Minimize to Tray on Close')
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(updateSettings).toHaveBeenCalledWith({ showMenuBarIcon: false })
   })
 
   it('keeps description-only search matches visible after helper text is hidden', async () => {

@@ -5,11 +5,21 @@ import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
 import type { CustomPet } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
-import { selectPetAnimationName, type PetAnimationName } from './pet-agent-state'
+import {
+  selectPetAnimationName,
+  type PetAnimationName,
+  type PetDragAnimation
+} from './pet-agent-state'
+import { usePetPointerInteraction } from './usePetPointerInteraction'
+import { buildSpriteAnimationCss } from './sprite-animation-css'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
-function usePetAnimationName(dragging: boolean): PetAnimationName {
+function usePetAnimationName(
+  dragging: boolean,
+  dragAnimation: PetDragAnimation,
+  hovering: boolean
+): PetAnimationName {
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
@@ -22,6 +32,8 @@ function usePetAnimationName(dragging: boolean): PetAnimationName {
     entries: Object.values(agentStatusByPaneKey),
     retainedCount: Object.keys(retainedAgentsByPaneKey).length,
     dragging,
+    dragAnimation,
+    hovering,
     now: Date.now(),
     staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
   })
@@ -37,15 +49,19 @@ function SpriteFrame({
   sprite,
   animate,
   maxSize,
-  animationName
+  animationName,
+  restartKey
 }: {
   url: string
   sprite: Sprite
   animate: boolean
   maxSize: number
   animationName: PetAnimationName
+  // Why: folded into the keyframes name, so bumping it mints a fresh animation
+  // that restarts from frame 0 even when the state row is unchanged.
+  restartKey: number
 }): React.JSX.Element {
-  const animKeyframesId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+  const baseId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const anim =
     sprite.animations?.[animationName] ||
     (sprite.defaultAnimation && sprite.animations?.[sprite.defaultAnimation]) ||
@@ -54,6 +70,11 @@ function SpriteFrame({
   // Why: clamp to >=1 so an empty/invalid manifest can't produce steps(0),
   // which is rejected as invalid CSS and freezes the animation.
   const frames = Math.max(1, anim?.frames ?? sprite.columns ?? 1)
+  // Why: name the @keyframes by the RESOLVED track (+restartKey for same-row
+  // grabs), so a genuine row change starts at frame 0 while a state that falls
+  // back to the same row (e.g. hover on a pet without a jumping row) doesn't
+  // needlessly restart.
+  const animKeyframesId = `${baseId}-${row}-${frames}-${restartKey}`
   // Why: allow fractional downscaling so frames larger than maxSize shrink to
   // fit instead of overflowing the overlay; mirrors DetectedSpriteFrame's math.
   const scale = Math.min(maxSize / sprite.frameWidth, maxSize / sprite.frameHeight)
@@ -63,11 +84,15 @@ function SpriteFrame({
   const bgH = sprite.sheetHeight * scale
   const startX = 0
   const startY = -(row * sprite.frameHeight * scale)
-  const endX = -(frames * sprite.frameWidth * scale)
-  const duration = Math.max(0.1, frames / Math.max(0.1, sprite.fps))
-  // Why: sprite keyframes are runtime CSS, not user-visible copy; translated
-  // CSS keywords make the browser discard the animation.
-  const keyframesCss = `@keyframes pet-${animKeyframesId} { from { background-position: ${startX}px ${startY}px; } to { background-position: ${endX}px ${startY}px; } }`
+  const { keyframesCss, animationCss } = buildSpriteAnimationCss({
+    keyframesId: animKeyframesId,
+    frames,
+    fps: sprite.fps,
+    frameWidth: sprite.frameWidth,
+    scale,
+    rowOffsetY: startY,
+    frameDurationsMs: anim?.frameDurationsMs
+  })
   return (
     <>
       <style>{keyframesCss}</style>
@@ -80,7 +105,7 @@ function SpriteFrame({
           backgroundSize: `${bgW}px ${bgH}px`,
           backgroundPosition: `${startX}px ${startY}px`,
           imageRendering: 'pixelated',
-          animation: `pet-${animKeyframesId} ${duration}s steps(${frames}) infinite`,
+          animation: animationCss,
           animationPlayState: animate ? 'running' : 'paused'
         }}
       />
@@ -324,8 +349,10 @@ export function PetOverlay(): React.JSX.Element {
     },
     [size]
   )
-  const [dragging, setDragging] = useState(false)
-  const dragOffsetRef = useRef<Position>({ x: 0, y: 0 })
+  const { dragging, dragAnimation, hovering, dragGeneration, handlers } = usePetPointerInteraction(
+    position,
+    (next) => setPosition(clampToViewport(next, size))
+  )
 
   useEffect(() => {
     const onResize = (): void => setPosition((prev) => clampToViewport(prev, size))
@@ -344,46 +371,12 @@ export function PetOverlay(): React.JSX.Element {
     }
   }, [dragging, position])
 
-  const animate = documentVisible && !reducedMotion && !dragging
-  const animationName = usePetAnimationName(dragging)
-
-  // Why: setPointerCapture routes subsequent pointer events to this element
-  // even when the cursor leaves the OS window, so dragging can't get stuck in
-  // the "true" state if the user releases outside the app.
-  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
-    if (event.button !== 0) {
-      return
-    }
-    dragOffsetRef.current = {
-      x: event.clientX - position.x,
-      y: event.clientY - position.y
-    }
-    event.currentTarget.setPointerCapture(event.pointerId)
-    setDragging(true)
-    event.preventDefault()
-  }
-
-  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
-    if (!dragging) {
-      return
-    }
-    setPosition(
-      clampToViewport(
-        {
-          x: event.clientX - dragOffsetRef.current.x,
-          y: event.clientY - dragOffsetRef.current.y
-        },
-        size
-      )
-    )
-  }
-
-  const endDrag = (event: React.PointerEvent<HTMLDivElement>): void => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-    setDragging(false)
-  }
+  const motionAllowed = documentVisible && !reducedMotion
+  // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
+  // horizontal drag keeps animating so the running rows show. Bob always pauses.
+  const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
+  const bobAnimate = motionAllowed && !dragging
+  const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
 
   return (
     // Why: the outer box and middle layer stay pointer-events-none so app chrome
@@ -401,15 +394,12 @@ export function PetOverlay(): React.JSX.Element {
     >
       <div className="pointer-events-none flex size-full items-center justify-end">
         <div
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+          {...handlers}
           className="pointer-events-auto flex h-fit w-fit select-none"
           style={{
             cursor: dragging ? 'grabbing' : 'grab',
             animation: 'pet-bob 1.2s ease-in-out infinite',
-            animationPlayState: animate ? 'running' : 'paused',
+            animationPlayState: bobAnimate ? 'running' : 'paused',
             touchAction: 'none',
             // Why: floor so the wrapper stays grabbable while w-fit/h-fit would
             // otherwise collapse to 0×0 during the image-load window.
@@ -419,15 +409,19 @@ export function PetOverlay(): React.JSX.Element {
         >
           <style>{PET_BOB_KEYFRAMES_CSS}</style>
           {sprite ? (
+            // Why: remount per pet so a switched-to sprite starts a fresh
+            // animation instead of inheriting the prior pet's currentTime.
             <SpriteFrame
+              key={url}
               url={url}
               sprite={sprite}
-              animate={animate}
+              animate={spriteAnimate}
               maxSize={size}
               animationName={animationName}
+              restartKey={dragGeneration}
             />
           ) : detected ? (
-            <DetectedSpriteFrame detected={detected} animate={animate} maxSize={size} />
+            <DetectedSpriteFrame detected={detected} animate={spriteAnimate} maxSize={size} />
           ) : (
             // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
             // fit-content, so max-w/h-full has no fixed box to resolve against

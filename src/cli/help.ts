@@ -416,6 +416,12 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear search' && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
+  if (command === 'linear list-issues' && flag === 'cursor') {
+    return '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+  }
+  if (command === 'linear list-issues' && flag === 'workspace') {
+    return '--workspace <id|all>  Connected Linear workspace id, or all'
+  }
   if (command.startsWith('linear ') && flag === 'workspace') {
     return '--workspace <id>      Connected Linear workspace id'
   }
@@ -586,6 +592,9 @@ export function formatFlagHelp(flag: string): string {
   }
   if (flag === 'relations') {
     return '--relations            Include blocking, related, and duplicate links'
+  }
+  if (flag === 'activity') {
+    return '--activity             Include issue field-change history'
   }
   if (flag === 'full') {
     return '--full                 Include all supported V1 issue context within caps'
