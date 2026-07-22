@@ -9789,7 +9789,8 @@
               "834cb3f23d": "Fix with AI",
               "783a808870": "Close"
             },
-            "97e7124eac": "Could not refresh Source Control. Try again."
+            "97e7124eac": "Could not refresh Source Control. Try again.",
+            "a4e93c21d7": "Current branch: {{value0}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

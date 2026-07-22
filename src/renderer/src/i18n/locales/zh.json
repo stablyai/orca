@@ -9766,7 +9766,8 @@
               "834cb3f23d": "使用 AI 修复",
               "783a808870": "关闭"
             },
-            "97e7124eac": "无法刷新 Source Control。请重试。"
+            "97e7124eac": "无法刷新 Source Control。请重试。",
+            "a4e93c21d7": "当前分支：{{value0}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",

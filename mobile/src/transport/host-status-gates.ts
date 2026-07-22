@@ -8,6 +8,7 @@ export type HostStatusGates = {
   hostCapabilities: string[]
   floatingWorkspaceEnabled: boolean
   compatVerdict: CompatVerdict
+  statusPending: boolean
 }
 
 type LoadedHostStatusGates = HostStatusGates & {
@@ -42,6 +43,14 @@ export function useHostStatusGates(args: {
           return
         }
         if (!response.ok) {
+          setLoaded({
+            hostId,
+            client: requestClient,
+            hostCapabilities: [],
+            floatingWorkspaceEnabled: false,
+            compatVerdict: { kind: 'ok' },
+            statusPending: false
+          })
           return
         }
         const status = (response as RpcSuccess).result as DesktopStatus & {
@@ -56,7 +65,8 @@ export function useHostStatusGates(args: {
           client: requestClient,
           hostCapabilities: status.capabilities ?? [],
           floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
-          compatVerdict: verdict
+          compatVerdict: verdict,
+          statusPending: false
         })
         if (verdict.kind === 'blocked') {
           // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
@@ -68,7 +78,17 @@ export function useHostStatusGates(args: {
           })
         }
       } catch {
-        // Why: sendRequest can throw on transport tear-down; the fail-closed return below keeps gated actions hidden.
+        // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
+        if (!cancelled) {
+          setLoaded({
+            hostId,
+            client: requestClient,
+            hostCapabilities: [],
+            floatingWorkspaceEnabled: false,
+            compatVerdict: { kind: 'ok' },
+            statusPending: false
+          })
+        }
       }
     })()
     return () => {
@@ -87,12 +107,14 @@ export function useHostStatusGates(args: {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,
       floatingWorkspaceEnabled: false,
-      compatVerdict: { kind: 'ok' }
+      compatVerdict: { kind: 'ok' },
+      statusPending: connState === 'connected' && client !== null
     }
   }
   return {
     hostCapabilities: loaded.hostCapabilities,
     floatingWorkspaceEnabled: loaded.floatingWorkspaceEnabled,
-    compatVerdict: loaded.compatVerdict
+    compatVerdict: loaded.compatVerdict,
+    statusPending: false
   }
 }

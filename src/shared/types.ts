@@ -3419,6 +3419,19 @@ export type LegacyPaneKeyAliasEntry = {
   updatedAt: number
 }
 
+/** Last tab selection a paired client made in a worktree; restores phone navigation across host restarts. */
+export type PersistedMobileClientTabSelection = {
+  activeTabId: string | null
+  activeGroupId: string | null
+  activeTabIdByGroupId: Readonly<Record<string, string>>
+}
+
+/** deviceId → worktreeId → selection. */
+export type PersistedMobileClientTabSelections = Record<
+  string,
+  Record<string, PersistedMobileClientTabSelection>
+>
+
 // ─── Persistence shape ──────────────────────────────────────────────
 export type PersistedState = {
   schemaVersion: number
@@ -3429,6 +3442,8 @@ export type PersistedState = {
   folderWorkspaces: FolderWorkspace[]
   /** Sparse-checkout presets keyed by repoId. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
+  /** Per paired device last tab selection by worktree; keeps mobile navigation across host restarts. */
+  mobileClientTabSelectionsByDeviceId?: PersistedMobileClientTabSelections
   worktreeMeta: Record<string, WorktreeMeta>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>

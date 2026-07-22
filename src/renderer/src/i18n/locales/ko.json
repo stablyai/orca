@@ -9766,7 +9766,8 @@
               "834cb3f23d": "AI로 수정",
               "783a808870": "닫기"
             },
-            "97e7124eac": "Source Control을 새로 고칠 수 없습니다. 다시 시도하세요."
+            "97e7124eac": "Source Control을 새로 고칠 수 없습니다. 다시 시도하세요.",
+            "a4e93c21d7": "현재 브랜치: {{value0}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
