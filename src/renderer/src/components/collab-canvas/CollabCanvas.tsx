@@ -26,6 +26,7 @@ import {
 import { createInlineAssetStore } from '../../lib/collab-canvas/collab-canvas-assets'
 import { buildCollabCanvasInjectPayload } from '../../lib/collab-canvas/collab-canvas-bridge'
 import { exportCollabSelectionFromEditor } from '../../lib/collab-canvas/export-selection'
+import { materializeCollabAtlasToTempFile } from '../../lib/collab-canvas/materialize-atlas'
 import {
   injectCollabPayloadIntoTerminal,
   injectSessionBoardAwareness
@@ -179,13 +180,25 @@ export function CollabCanvas({
         toast('Select shapes on the board first')
         return
       }
-      const payload = buildCollabCanvasInjectPayload(selection)
+      // Materialize PNG so the agent gets a real image path (terminal screenshot path),
+      // not just "atlas: attached" prose it cannot see.
+      const atlas = await materializeCollabAtlasToTempFile(selection.atlasDataUri)
+      if (!atlas.ok && selection.atlasDataUri) {
+        toast(`Sketch image path failed (${atlas.reason}) — sending text digest only`)
+      }
+      const payload = buildCollabCanvasInjectPayload(selection, {
+        atlasFilePath: atlas.ok ? atlas.filePath : null
+      })
       const result = injectCollabPayloadIntoTerminal(payload, { tabId })
       if (!result.ok) {
         toast(`Inject failed: ${result.reason}`)
         return
       }
-      toast('Sent selection to session agent')
+      toast(
+        atlas.ok
+          ? 'Sent sketch + path to session agent'
+          : 'Sent selection text to session agent'
+      )
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       toast(`Send failed: ${msg}`)

@@ -61,7 +61,7 @@ describe('injectSessionBoardAwareness', () => {
     const ev = dispatch.mock.calls[0][0] as CustomEvent
     expect(ev.type).toBe(PASTE_TERMINAL_TEXT_EVENT)
     expect(ev.detail.tabId).toBe('term-1')
-    expect(ev.detail.text).toContain('[collab-canvas awareness]')
+    expect(ev.detail.text).toContain('OPERATOR — collab board is open')
     expect(ev.detail.text).toContain('board-a')
     expect(ev.detail.text).toContain('no second agent')
   })

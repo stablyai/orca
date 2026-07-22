@@ -19,31 +19,39 @@ const selection: CollabCanvasSelectionExport = {
 }
 
 describe('buildCollabCanvasInjectText', () => {
-  it('embeds board, worktree, and selection digest for the terminal', () => {
-    const text = buildCollabCanvasInjectText(selection)
-    expect(text).toContain('[collab-canvas]')
-    expect(text).toContain('board: board-1')
-    expect(text).toContain('worktree: wt-1')
+  it('embeds board, worktree, and selection digest as an operator ask', () => {
+    const text = buildCollabCanvasInjectText(selection, {
+      atlasFilePath: '/tmp/orca-paste-board.png'
+    })
+    expect(text).toContain('OPERATOR — collab board selection')
+    expect(text).toContain('Board id: board-1')
+    expect(text).toContain('Worktree: wt-1')
     expect(text).toContain('draw a red box around the login form')
-    expect(text).toContain('atlas: attached (image)')
-    expect(text).toContain('shapes: 2')
+    expect(text).toContain('Sketch image (open this path): /tmp/orca-paste-board.png')
+    expect(text).toContain('Selected shapes: 2')
+    expect(text).not.toContain('[collab-canvas]')
   })
 
   it('marks missing atlas explicitly', () => {
     const text = buildCollabCanvasInjectText({ ...selection, atlasDataUri: null })
-    expect(text).toContain('atlas: none')
+    expect(text).toContain('Sketch image: none')
   })
 })
 
 describe('buildCollabCanvasInjectPayload', () => {
   it('builds a session inject that reuses the terminal agent', () => {
-    const payload = buildCollabCanvasInjectPayload(selection)
+    const payload = buildCollabCanvasInjectPayload(selection, {
+      atlasFilePath: '/tmp/atlas.png'
+    })
     expect(payload.kind).toBe('collab-canvas-inject')
     expect(payload.usesExistingSessionAgent).toBe(true)
     expect(payload.boardId).toBe('board-1')
     expect(payload.worktreeId).toBe('wt-1')
     expect(payload.atlasDataUri).toBe(selection.atlasDataUri)
-    expect(payload.terminalText).toBe(buildCollabCanvasInjectText(selection))
+    expect(payload.terminalText).toBe(
+      buildCollabCanvasInjectText(selection, { atlasFilePath: '/tmp/atlas.png' })
+    )
+    expect(payload.terminalText).toContain('/tmp/atlas.png')
   })
 
   it('rejects empty board or worktree ids', () => {

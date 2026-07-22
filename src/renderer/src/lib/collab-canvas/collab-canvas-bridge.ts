@@ -78,20 +78,45 @@ export type AgentReplyForDraft = {
 const DEFAULT_DRAFT_W = 280
 const DEFAULT_DRAFT_H = 160
 
-/** Build the text an agent terminal receives for a board selection. */
-export function buildCollabCanvasInjectText(selection: CollabCanvasSelectionExport): string {
+/**
+ * Build the text an agent terminal receives for a board selection.
+ *
+ * Framed as an **operator message**, not a system notice — agents that already
+ * saw MCP/tool awareness pings will otherwise ignore doodles as more protocol.
+ *
+ * When `atlasFilePath` is set (PNG on disk from materialize), the path is the
+ * primary multimodal handle — same pattern as terminal screenshot paste.
+ */
+export function buildCollabCanvasInjectText(
+  selection: CollabCanvasSelectionExport,
+  options?: { atlasFilePath?: string | null }
+): string {
+  const atlasPath = options?.atlasFilePath?.trim() || null
+  const hasAtlasClaim = Boolean(selection.atlasDataUri) || Boolean(atlasPath)
   const lines = [
-    '[collab-canvas]',
-    `board: ${selection.boardId}`,
-    `worktree: ${selection.worktreeId}`,
-    `shapes: ${selection.selectedShapeIds.length}`,
+    '',
+    'OPERATOR — collab board selection (please answer this, not as a system notice)',
+    '',
+    'I selected ink on the collaborative whiteboard beside this session.',
+    'Look at the sketch and respond: what do you see, and what should we do next?',
+    'Keep the reply short and concrete so I can place it as an agent-draft on the board.',
+    '',
+    `Board id: ${selection.boardId}`,
+    `Worktree: ${selection.worktreeId}`,
+    `Selected shapes: ${selection.selectedShapeIds.length}`,
     selection.bounds
-      ? `bounds: ${Math.round(selection.bounds.x)},${Math.round(selection.bounds.y)} ${Math.round(selection.bounds.w)}×${Math.round(selection.bounds.h)}`
-      : 'bounds: (none)',
-    selection.atlasDataUri ? 'atlas: attached (image)' : 'atlas: none',
-    '--- selection digest ---',
+      ? `Bounds: ${Math.round(selection.bounds.x)},${Math.round(selection.bounds.y)} ${Math.round(selection.bounds.w)}×${Math.round(selection.bounds.h)}`
+      : 'Bounds: (none)',
+    atlasPath
+      ? `Sketch image (open this path): ${atlasPath}`
+      : hasAtlasClaim
+        ? 'Sketch image: export failed to materialize a file path (text digest only).'
+        : 'Sketch image: none (text digest only).',
+    '',
+    'Selection digest:',
     selection.textDigest.trim() || '(empty selection)',
-    '--- end collab-canvas ---'
+    '',
+    'End of collab board selection — your turn.'
   ]
   return lines.join('\n')
 }
@@ -99,9 +124,13 @@ export function buildCollabCanvasInjectText(selection: CollabCanvasSelectionExpo
 /**
  * Selection → inject payload for the worktree's live agent terminal.
  * Session boards always set usesExistingSessionAgent.
+ *
+ * Pass `atlasFilePath` after materializing the PNG so the terminal paste
+ * includes a real path agents can multimodal-read.
  */
 export function buildCollabCanvasInjectPayload(
-  selection: CollabCanvasSelectionExport
+  selection: CollabCanvasSelectionExport,
+  options?: { atlasFilePath?: string | null }
 ): CollabCanvasInjectPayload {
   if (!selection.boardId.trim()) {
     throw new Error('buildCollabCanvasInjectPayload: boardId required')
@@ -113,7 +142,7 @@ export function buildCollabCanvasInjectPayload(
     kind: 'collab-canvas-inject',
     boardId: selection.boardId,
     worktreeId: selection.worktreeId,
-    terminalText: buildCollabCanvasInjectText(selection),
+    terminalText: buildCollabCanvasInjectText(selection, options),
     atlasDataUri: selection.atlasDataUri,
     usesExistingSessionAgent: true
   }
