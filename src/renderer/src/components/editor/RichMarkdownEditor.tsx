@@ -31,6 +31,7 @@ import {
   getSelectedHtmlSuperscriptLinkStatus
 } from './rich-markdown-selected-link-actions'
 import type { RichMarkdownEditorProps } from './rich-markdown-editor-props'
+import { flushAndSaveRichMarkdownPreview } from './rich-markdown-editor-config'
 
 export default function RichMarkdownEditor({
   fileId,
@@ -83,6 +84,7 @@ export default function RichMarkdownEditor({
   const onContentChangeRef = useRef(onContentChange)
   const onDirtyStateHintRef = useRef(onDirtyStateHint)
   const onSaveRef = useRef(onSave)
+  const isDirtyRef = useRef(false)
   const onOpenDocLinkRef = useRef(onOpenDocLink)
   const handleLocalImagePickRef = useRef<() => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
@@ -130,7 +132,10 @@ export default function RichMarkdownEditor({
   // ProseMirror handler reads them, avoiding the one-render stale window that
   // useEffect would introduce. Refs are mutable and never trigger re-renders.
   onContentChangeRef.current = onContentChange
-  onDirtyStateHintRef.current = onDirtyStateHint
+  onDirtyStateHintRef.current = (dirty) => {
+    isDirtyRef.current = dirty
+    onDirtyStateHint(dirty)
+  }
   onSaveRef.current = onSave
   onOpenDocLinkRef.current = onOpenDocLink
   isEditingLinkRef.current = isEditingLink
@@ -164,6 +169,10 @@ export default function RichMarkdownEditor({
       console.error('[editor] rich markdown serialize (flush) failed', error)
     }
   }, [reconcileRoundTripRef])
+
+  const flushAndSavePreview = useCallback(() => {
+    flushAndSaveRichMarkdownPreview(fileId, isDirtyRef.current)
+  }, [fileId])
 
   useEffect(() => {
     // Why: autosave/restart paths live outside the editor component tree, so a
@@ -228,6 +237,7 @@ export default function RichMarkdownEditor({
     markdownCommentsRef: review.markdownCommentsRef,
     markdownSourceLineOffsetRef: review.markdownSourceLineOffsetRef,
     flushPendingSerialization,
+    flushAndSavePreview,
     openSearchRef,
     openAnnotationPopoverRef,
     syncAnnotationTarget: review.syncAnnotationTarget,
@@ -264,8 +274,8 @@ export default function RichMarkdownEditor({
   // switch or mode change. React runs layout-effect cleanups before effect
   // cleanups, guaranteeing the editor is still alive when we serialize.
   React.useLayoutEffect(() => {
-    return flushPendingSerialization
-  }, [flushPendingSerialization])
+    return flushAndSavePreview
+  }, [flushAndSavePreview])
 
   useEditorScrollRestore(scrollContainerRef, scrollCacheKey, editor)
 
