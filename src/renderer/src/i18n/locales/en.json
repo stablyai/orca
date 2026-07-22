@@ -9317,7 +9317,7 @@
           "description": "Check and update paired Orca servers from this client.",
           "updating": "Updating servers…",
           "reviewUpdates": "{{value0}} updates available",
-          "reviewServers": "Server updates",
+          "reviewServers": "Check for Server Updates",
           "serverCountOne": "1 paired server",
           "reviewUpdateOne": "1 update available"
         },

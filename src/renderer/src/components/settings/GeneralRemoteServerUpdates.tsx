@@ -1,5 +1,5 @@
 import type React from 'react'
-import { Download, Loader2 } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
@@ -102,32 +102,25 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       <div>
         <Button
           type="button"
-          variant={available > 0 ? 'default' : 'outline'}
+          variant="outline"
           size="sm"
           className="gap-2"
           onClick={() => setDialogOpen(true)}
         >
-          {running ? <Loader2 className="animate-spin" /> : <Download />}
+          {running ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="size-3.5" />
+          )}
           {running
             ? translate(
                 'auto.components.settings.GeneralRemoteServerUpdates.updating',
                 'Updating servers…'
               )
-            : available > 0
-              ? available === 1
-                ? translate(
-                    'auto.components.settings.GeneralRemoteServerUpdates.reviewUpdateOne',
-                    '1 update available'
-                  )
-                : translate(
-                    'auto.components.settings.GeneralRemoteServerUpdates.reviewUpdates',
-                    '{{value0}} updates available',
-                    { value0: available }
-                  )
-              : translate(
-                  'auto.components.settings.GeneralRemoteServerUpdates.reviewServers',
-                  'Server updates'
-                )}
+            : translate(
+                'auto.components.settings.GeneralRemoteServerUpdates.reviewServers',
+                'Check for Server Updates'
+              )}
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">{summary}</p>
