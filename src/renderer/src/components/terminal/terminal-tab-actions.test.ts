@@ -756,7 +756,9 @@ describe('closeOtherTerminalTabs', () => {
       environmentId: 'web-runtime',
       reason: 'user'
     })
-    expect(closeTab).not.toHaveBeenCalled()
+    expect(closeTab).toHaveBeenCalledTimes(2)
+    expect(closeTab).toHaveBeenNthCalledWith(1, 'close-a', { remoteCloseOwnedByHost: true })
+    expect(closeTab).toHaveBeenNthCalledWith(2, 'close-b', { remoteCloseOwnedByHost: true })
   })
 })
 
@@ -770,19 +772,16 @@ describe('closeTerminalTabsToRight', () => {
     const closeTab = vi.fn()
     const closeFile = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
-    getStateMock
-      .mockReturnValueOnce({
-        settings: { activeRuntimeEnvironmentId: 'web-runtime' },
-        tabsByWorktree: {
-          'wt-1': [{ id: 'term-a' }, { id: 'term-b' }, { id: 'term-c' }]
-        },
-        openFiles: [{ id: 'file-b', worktreeId: 'wt-1' }],
-        tabBarOrderByWorktree: { 'wt-1': ['term-a', 'file-b', 'term-b', 'term-c'] },
-        closeTab
-      })
-      .mockReturnValue({
-        closeFile
-      })
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-a' }, { id: 'term-b' }, { id: 'term-c' }]
+      },
+      openFiles: [{ id: 'file-b', worktreeId: 'wt-1' }],
+      tabBarOrderByWorktree: { 'wt-1': ['term-a', 'file-b', 'term-b', 'term-c'] },
+      closeTab,
+      closeFile
+    })
 
     closeTerminalTabsToRight('term-a', 'wt-1')
 
@@ -800,6 +799,8 @@ describe('closeTerminalTabsToRight', () => {
       reason: 'user'
     })
     expect(closeFile).toHaveBeenCalledWith('file-b')
-    expect(closeTab).not.toHaveBeenCalled()
+    expect(closeTab).toHaveBeenCalledTimes(2)
+    expect(closeTab).toHaveBeenNthCalledWith(1, 'term-b', { remoteCloseOwnedByHost: true })
+    expect(closeTab).toHaveBeenNthCalledWith(2, 'term-c', { remoteCloseOwnedByHost: true })
   })
 })

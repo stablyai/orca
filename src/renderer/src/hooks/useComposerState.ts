@@ -178,6 +178,7 @@ import {
   getComposerRepoWorktreeBranches
 } from './composer-branch-selection'
 import { isCurrentComposerDropOwner } from './composer-drop-owner'
+import { applyComposerNativeFileDrop } from './composer-native-file-drop'
 import {
   collectComposerDropUploadResult,
   shouldReportComposerDropUploadFailure
@@ -2502,26 +2503,25 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       if (!isCurrentComposerDropOwner(composerDropStack, instanceId)) {
         return
       }
-      void (async () => {
-        const isStillDropOwner = (): boolean =>
-          isCurrentComposerDropOwner(composerDropStack, instanceId)
-        const uploaded = await uploadComposerPathsRef.current(
-          data.paths,
-          selectedRepoSettingsRef.current,
-          connectionIdRef.current,
-          selectedRepoPathRef.current,
-          isStillDropOwner
-        )
-        if (!isStillDropOwner()) {
-          return
-        }
-        if (uploaded) {
-          addComposerAttachmentsRef.current(uploaded.filePaths)
-          insertComposerFolderPathsRef.current(uploaded.folderPaths)
-          return
-        }
-        await applyLocalComposerDropRef.current(data.paths, isStillDropOwner)
-      })()
+      const isStillDropOwner = (): boolean =>
+        isCurrentComposerDropOwner(composerDropStack, instanceId)
+      void applyComposerNativeFileDrop({
+        paths: data.paths,
+        isCurrentOwner: isStillDropOwner,
+        uploadPaths: (paths) =>
+          uploadComposerPathsRef.current(
+            paths,
+            selectedRepoSettingsRef.current,
+            connectionIdRef.current,
+            selectedRepoPathRef.current,
+            isStillDropOwner
+          ),
+        applyLocalPaths: applyLocalComposerDropRef.current,
+        addAttachments: addComposerAttachmentsRef.current,
+        insertFolderPaths: insertComposerFolderPathsRef.current,
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : 'Failed to drop files.')
+      })
     })
     return () => {
       unsubscribe()

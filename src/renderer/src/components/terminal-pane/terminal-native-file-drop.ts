@@ -49,6 +49,17 @@ export type NativeTerminalFileDropArgs = {
 export async function handleNativeTerminalFileDrop(
   args: NativeTerminalFileDropArgs
 ): Promise<void> {
+  try {
+    await handleNativeTerminalFileDropWithCapturedOwner(args)
+  } catch (err) {
+    // Why: native drop listeners fire-and-forget, so owner-capture failures must terminate here.
+    toast.error(extractIpcErrorMessage(err, 'Failed to drop files.'))
+  }
+}
+
+async function handleNativeTerminalFileDropWithCapturedOwner(
+  args: NativeTerminalFileDropArgs
+): Promise<void> {
   const { manager, paneTransports, worktreeId, tabId, cwd, data } = args
   if (data.paths.length === 0) {
     return

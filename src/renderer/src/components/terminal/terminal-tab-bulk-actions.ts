@@ -6,6 +6,7 @@ import {
 import { closeWebRuntimeSessionTab, isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '../tab-bar/reconcile-order'
+import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
 
 const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
   'editor',
@@ -48,7 +49,8 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
       continue
     }
     if (closeHostTerminalTabs) {
-      // Why: paired web tabs are host-owned; local-only bulk close lets the host republish them.
+      // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
+      closeLocalTerminalTabState(tab.id, { remoteCloseOwnedByHost: true })
       void closeWebRuntimeSessionTab({
         worktreeId: activeWorktreeId,
         tabId: tab.id,
@@ -95,7 +97,8 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
     }
     if (terminalIdSet.has(id)) {
       if (closeHostTerminalTabs) {
-        // Why: paired web tabs are host-owned; local-only bulk close lets the host republish them.
+        // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
+        closeLocalTerminalTabState(id, { remoteCloseOwnedByHost: true })
         void closeWebRuntimeSessionTab({
           worktreeId: activeWorktreeId,
           tabId: id,
