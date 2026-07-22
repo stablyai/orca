@@ -1256,6 +1256,25 @@ const editorExternalChangeConflictActionSchema = z
   })
   .strict()
 
+// Why: fires once per process if the native git addon (N-API) fails to load
+// or its startup ping check mismatches, so blob reads fall back to the git
+// CLI. Enum-only — no addon error text, which may embed a filesystem path.
+const gitNativeLoadFailedSchema = z
+  .object({
+    error_class: z.enum(['load_error', 'ping_mismatch'])
+  })
+  .strict()
+
+// Why: fires when a native git blob read disagrees with the git-CLI shadow
+// read used to validate it, so a spike flags a correctness regression in the
+// native path before it reaches users at scale. Deliberately path/content-free.
+const gitNativeShadowDivergenceSchema = z
+  .object({
+    read_kind: z.enum(['rev', 'index']),
+    divergence: z.enum(['presence', 'too_large', 'bytes'])
+  })
+  .strict()
+
 // ── Event registry: the one record the validator consumes ───────────────
 // Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
 export const eventSchemas = {
@@ -1345,7 +1364,10 @@ export const eventSchemas = {
 
   smart_sort_class_distribution: smartSortClassDistributionSchema,
   smart_sort_class_1_promotion: smartSortClass1PromotionSchema,
-  smart_to_recent_switch: smartToRecentSwitchSchema
+  smart_to_recent_switch: smartToRecentSwitchSchema,
+
+  git_native_load_failed: gitNativeLoadFailedSchema,
+  git_native_shadow_divergence: gitNativeShadowDivergenceSchema
 } as const
 
 export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[N]> }

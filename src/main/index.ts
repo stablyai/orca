@@ -174,6 +174,7 @@ import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branc
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
+import { configureNativeGitBlobReads, resolveNativeGitMode } from './git/blob-reader'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
@@ -1814,6 +1815,10 @@ app.whenReady().then(async () => {
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
   })
+  // Why: resolve the setting lazily so runtime changes apply without restart while the environment override still wins.
+  configureNativeGitBlobReads(() =>
+    resolveNativeGitMode(store?.getSettings().experimentalNativeGit)
+  )
   // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.
   attachClaudeLivePtyPersistence(store)
   const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()

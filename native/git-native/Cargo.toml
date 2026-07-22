@@ -1,0 +1,30 @@
+[package]
+name = "git-native"
+version = "0.1.0"
+edition = "2021"
+# Oldest rustc verified to compile this crate.
+rust-version = "1.95"
+publish = false
+
+[lib]
+# "lib" for cargo tests.
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+# "dyn-symbols" (a napi default) resolves napi_* at runtime; without it, cargo
+# test binaries fail to link because Node's symbols only exist inside Node.
+napi = { version = "3", default-features = false, features = ["napi8", "dyn-symbols"] }
+napi-derive = "3"
+# Local-only object reads: default features pull a full network stack we never use.
+# "revision" gates rev_parse_single; "index" gates repo.index() (used by Task 3).
+gix = { version = "0.73", default-features = false, features = ["revision", "index"] }
+
+[build-dependencies]
+napi-build = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+strip = "symbols"

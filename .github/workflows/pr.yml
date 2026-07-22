@@ -154,8 +154,28 @@ jobs:
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
 
+      # Why: build the git-native addon and run its Rust tests so the parity
+      # suite has a real artifact to compare against, then gate the JS test run
+      # with ORCA_REQUIRE_GIT_NATIVE=1 below so a missing artifact fails loudly
+      # instead of silently skipping the rollout gate.
+      - name: Install Rust (git-native)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache git-native cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native/git-native
+
+      - name: Build git-native
+        run: node config/scripts/build-git-native.mjs
+
+      - name: Run git-native cargo tests
+        run: cargo test --manifest-path native/git-native/Cargo.toml
+
       - name: Test
         run: pnpm test
+        env:
+          ORCA_REQUIRE_GIT_NATIVE: '1'
 
       - name: Build unpacked app
         run: pnpm build:unpack

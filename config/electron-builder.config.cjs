@@ -35,7 +35,15 @@ const relayExtraResource = {
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
-const commonExtraResources = [relayExtraResource, skillFreshnessResources]
+// Why: native Git is optional, so packaging includes it only when built and otherwise preserves CLI fallback.
+// Keep the resource path aligned with git-native-module.ts's packaged lookup.
+const gitNativeResources = existsSync(
+  join(__dirname, '..', 'native', 'git-native', '.build', 'git-native.node')
+)
+  ? [{ from: 'native/git-native/.build/git-native.node', to: 'git-native/git-native.node' }]
+  : []
+
+const commonExtraResources = [relayExtraResource, ...gitNativeResources, skillFreshnessResources]
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
