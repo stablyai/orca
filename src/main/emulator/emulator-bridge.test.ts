@@ -383,6 +383,36 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     )
   })
 
+  it('reads iOS accessibility from an attached device without a worktree', async () => {
+    const tree = [{ type: 'Application', children: [] }]
+    netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
+    listSimulatorDevicesMock.mockResolvedValue([
+      {
+        name: 'iPhone attached',
+        udid: 'device-1',
+        state: 'Booted',
+        runtime: 'iOS 26.0'
+      }
+    ])
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    await expect(commands.emulatorAx({ device: 'device-1' })).resolves.toEqual(tree)
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3100/device-1/ax',
+      expect.any(Object)
+    )
+  })
+
   it('reports when the requested iOS device differs from the active session', async () => {
     listSimulatorDevicesMock.mockResolvedValue([
       {

@@ -205,14 +205,17 @@ export class EmulatorBridge {
         return backend.accessibilityTree!(device)
       }
       const udid = await backend.resolveDeviceId(device)
-      const active = this.getActiveForWorktree(opts?.worktreeId)
-      if (active && active.deviceUdid !== udid) {
+      const worktreeId = opts?.worktreeId
+      const session = worktreeId
+        ? this.getActiveForWorktree(worktreeId)
+        : this.sessionRegistry.getSession(udid)
+      if (worktreeId && session && session.deviceUdid !== udid) {
         throw new EmulatorError(
           'emulator_no_active',
-          `iOS simulator ${udid} is not active for this worktree (active: ${active.deviceUdid}); attach the requested simulator first.`
+          `iOS simulator ${udid} is not active for this worktree (active: ${session.deviceUdid}); attach the requested simulator first.`
         )
       }
-      return backend.accessibilityTree!(udid, active?.axUrl)
+      return backend.accessibilityTree!(udid, session?.axUrl)
     })
   }
 
