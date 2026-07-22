@@ -147,7 +147,9 @@ export function CollabCanvas({
           agent: 'omp',
           worktreeId,
           agentArgs: buildCanvasOmpAgentArgs(binding.boardId, { fresh }),
-          launchSource: 'pet'
+          launchSource: 'pet',
+          // Tab title: not stock "omp" — matches pet's "Pet assistant" labeling.
+          quickCommandLabel: 'Board Agent'
         })
         if (result?.tabId) {
           setCanvasBoardAgentTabId(binding.boardId, result.tabId)
