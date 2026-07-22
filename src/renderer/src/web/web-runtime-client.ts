@@ -766,6 +766,12 @@ export class WebRuntimeClient {
 
   private startHeartbeat(): void {
     this.clearHeartbeatTimer()
+    // Why: this runs at 'connected', right after the handshake's inbound frames — a genuine liveness
+    // baseline. Only the fresh-connect moment resets lastInboundFrameAt; the visible re-arm below must not.
+    const now = this.now()
+    this.lastInboundFrameAt = now
+    this.lastHeartbeatTickAt = now
+    this.heartbeatProbeSentAt = null
     this.heartbeatCleanup = installWindowVisibilityInterval({
       run: () => this.runHeartbeatTick(),
       runOnVisible: () => this.rebaselineHeartbeat(),
@@ -774,9 +780,12 @@ export class WebRuntimeClient {
   }
 
   private rebaselineHeartbeat(): void {
-    const now = this.now()
-    this.lastInboundFrameAt = now
-    this.lastHeartbeatTickAt = now
+    // Why: the interval is merely parked while hidden, so on becoming visible reset the tick clock (don't
+    // let the parked gap trip the suspended-loop rebaseline) and drop a probe that was in flight when we
+    // hid. But PRESERVE lastInboundFrameAt: if the socket went silent while hidden, keeping the real
+    // last-heard time lets the next tick detect the staleness and probe promptly, instead of masking a
+    // dead connection for another full idle window (#9883 review).
+    this.lastHeartbeatTickAt = this.now()
     this.heartbeatProbeSentAt = null
   }
 

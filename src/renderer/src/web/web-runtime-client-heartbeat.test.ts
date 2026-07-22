@@ -164,7 +164,7 @@ describe('WebRuntimeClient liveness heartbeat', () => {
     client.close()
   })
 
-  it('re-arms once and rebaselines liveness when visible again', () => {
+  it('re-arms once and resets the tick clock but preserves the liveness baseline when visible again', () => {
     const { client, internals, setNow, setVisible } = makeConnectedClient()
     internals.startHeartbeat()
     internals.heartbeatProbeSentAt = 1_000
@@ -178,27 +178,43 @@ describe('WebRuntimeClient liveness heartbeat', () => {
 
     expect(setIntervalMock).toHaveBeenCalledTimes(2)
     expect(intervalCallbacks.size).toBe(1)
-    expect(internals.lastInboundFrameAt).toBe(601_000)
+    // lastInboundFrameAt is NOT rebaselined on a visible re-arm: it stays at the fresh-connect baseline
+    // (1_000) so a socket that went silent while hidden is still detectable on the next tick.
+    expect(internals.lastInboundFrameAt).toBe(1_000)
+    // The tick clock resets so the parked hidden gap isn't misread as a suspended loop; the probe clears.
     expect(internals.lastHeartbeatTickAt).toBe(601_000)
     expect(internals.heartbeatProbeSentAt).toBeNull()
     client.close()
   })
 
-  it('does not close or probe from a stale hidden-gap baseline', () => {
+  it('probes and then closes a connection that went silent while hidden, once visible again', () => {
     const { client, internals, socket, setNow, setVisible } = makeConnectedClient()
     internals.startHeartbeat()
-    internals.heartbeatProbeSentAt = 1_000
 
+    // Hide, let a long silent gap elapse, then become visible again. The connection produced no inbound
+    // frames the whole time, so the preserved baseline (1_000) must drive prompt liveness detection.
     setVisible(false)
     dispatchVisibilityChange()
     setNow(601_000)
     setVisible(true)
     dispatchVisibilityChange()
+
+    // First visible tick: idle far exceeds the threshold, so send a liveness probe (not an immediate close).
     setNow(611_000)
     runActiveHeartbeatTick()
-
     expect(socket.close).not.toHaveBeenCalled()
-    expect(socket.send).not.toHaveBeenCalled()
+    expect(socket.send).toHaveBeenCalledTimes(1)
+    expect(internals.heartbeatProbeSentAt).toBe(611_000)
+
+    // Normal-cadence ticks: still within grace → no close yet.
+    setNow(621_000)
+    runActiveHeartbeatTick()
+    expect(socket.close).not.toHaveBeenCalled()
+
+    // Probe now unanswered past grace (20s) → force the reconnect.
+    setNow(631_000)
+    runActiveHeartbeatTick()
+    expect(socket.close).toHaveBeenCalledTimes(1)
     client.close()
   })
 
