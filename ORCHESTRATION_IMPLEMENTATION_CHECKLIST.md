@@ -909,6 +909,31 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Rebuild both branch servers with these fixes and repeat the real Mac-home to Windows-worker flow.
 
+### 2026-07-22 — Headless Windows dev-worker CLI routing
+
+- Changes:
+  - Made every `orca-dev` entry path install profile-scoped `orca-dev` and `orca` terminal wrappers,
+    including Windows `.cmd` wrappers and headless `orca-dev serve`.
+  - Kept the wrapper generation shared with the Electron dev runner so interactive and headless dev
+    servers expose the same exact CLI and user-data profile to worker terminals.
+- Files:
+  - `config/scripts/dev-cli-terminal-wrapper.mjs`
+  - `config/scripts/orca-dev.mjs`
+  - `config/scripts/run-electron-vite-dev.mjs`
+  - Focused cross-platform wrapper tests
+- Verification:
+  - Wrapper, CLI provenance, dev-runner, preamble, and orchestration handler suites: 55 tests passed.
+  - Focused oxlint and formatting checks passed.
+- Findings:
+  - The rebuilt prompt submitted automatically on Windows, but the worker then found no
+    profile-scoped `orca-dev` command because headless serve bypassed the Electron dev runner and the
+    runner itself had never written Windows wrappers into the PATH directory used by Orca terminals.
+  - This is a dev/acceptance launcher defect, not a new federation primitive or production routing
+    requirement.
+- Next:
+  - Rebuild and restart the Windows branch server, then repeat the same Dispatch and require an
+    automatically relayed `worker_done` before checking any federation acceptance row.
+
 ### Entry template
 
 ```text

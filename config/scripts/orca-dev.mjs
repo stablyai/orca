@@ -3,6 +3,7 @@
 import { spawnSync } from 'node:child_process'
 import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
+import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 
 const scriptPath = realpathSync(import.meta.filename)
 const scriptDir = path.dirname(scriptPath)
@@ -24,6 +25,13 @@ if (!process.env.ORCA_APP_EXECUTABLE && isRunnableFile(electronExecutable)) {
   process.env.ORCA_APP_EXECUTABLE = electronExecutable
   process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1'
 }
+
+// Why: headless `orca-dev serve` skips the Electron dev runner that normally installs terminal CLI shims.
+prepareDevCliTerminalWrappers({
+  repoRoot,
+  userDataPath: process.env.ORCA_USER_DATA_PATH,
+  electronExecutable: process.env.ORCA_APP_EXECUTABLE ?? electronExecutable
+})
 
 const result = spawnSync(process.execPath, [cliEntry, ...process.argv.slice(2)], {
   stdio: 'inherit',
