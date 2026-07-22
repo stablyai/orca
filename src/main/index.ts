@@ -61,6 +61,7 @@ import {
   configureElectronNetworkCompatibility,
   configureDevUserDataPath,
   configureOrcaUserDataPathEnv,
+  enableLinuxComputerUseAccessibility,
   enableMainProcessGpuFeatures,
   installDevParentDisconnectQuit,
   installDevParentSignalQuit,
@@ -451,6 +452,9 @@ installUncaughtPipeErrorGuard()
 // electron. The daemon inherits `process.env` via fork (daemon-init.ts:93).
 process.env.ORCA_APP_VERSION = app.getVersion()
 patchPackagedProcessPath()
+// Why: computer-use dogfood on Linux needs AT-SPI to list the Orca window.
+// Force Chromium accessibility before ready so Electron registers on the bus.
+enableLinuxComputerUseAccessibility()
 // Why: patchPackagedProcessPath seeds a minimal list of well-known system
 // dirs synchronously so early IPC (e.g. preflight before the shell spawn
 // completes) doesn't miss homebrew/nix. Kick off the login-shell probe in

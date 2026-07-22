@@ -66,6 +66,30 @@ export function configureElectronNetworkCompatibility(
   app.commandLine.appendSwitch('disable-http2')
 }
 
+/**
+ * Enable Chromium/Electron accessibility so Linux AT-SPI computer-use can see
+ * the Orca window. Must run before app.whenReady(). Without this, `orca computer
+ * list-apps` only sees gnome-shell / kgx and never the Electron process.
+ *
+ * Opt out: ORCA_DISABLE_FORCE_ACCESSIBILITY=1
+ */
+export function enableLinuxComputerUseAccessibility(): void {
+  if (process.platform !== 'linux') {
+    return
+  }
+  if (parseBooleanEnvFlag(process.env.ORCA_DISABLE_FORCE_ACCESSIBILITY) === true) {
+    return
+  }
+  // Chromium switch: expose the AX tree even without a screen reader attached.
+  app.commandLine.appendSwitch('force-renderer-accessibility')
+  try {
+    // Electron API: register as an AT-SPI application on Linux.
+    app.accessibilitySupportEnabled = true
+  } catch {
+    // Some Electron builds throw if set too early; the switch still helps.
+  }
+}
+
 function getProcessPathDelimiter(): string {
   return process.platform === 'win32' ? ';' : ':'
 }
