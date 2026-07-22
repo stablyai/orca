@@ -225,7 +225,6 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../../shared/setup-agent-sequencing'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
-import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
@@ -334,6 +333,8 @@ import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalState,
   RuntimeStatus,
+  RuntimeSurvivingSessionReconciliation,
+  RuntimeSurvivingSessionReconciliationSummary,
   RuntimeSyncWindowGraphResult,
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason,
@@ -1097,6 +1098,34 @@ type RuntimePtyWorktreeRecord = {
   tailWaitState?: TerminalTailWaitState
 }
 
+type RuntimeLocalProcessInventorySnapshot =
+  | {
+      state: 'pending'
+    }
+  | {
+      state: 'ready'
+      processes: PtyProcessInfo[]
+    }
+  | {
+      state: 'stale'
+      processes?: PtyProcessInfo[]
+    }
+
+const EMPTY_SURVIVING_SESSION_RECONCILIATION_SUMMARY: RuntimeSurvivingSessionReconciliationSummary =
+  {
+    active: 0,
+    restorable: 0,
+    ambiguous: 0
+  }
+
+function hasProcessInventoryBaseline(
+  snapshot: RuntimeLocalProcessInventorySnapshot
+): snapshot is Extract<RuntimeLocalProcessInventorySnapshot, { processes?: PtyProcessInfo[] }> & {
+  processes: PtyProcessInfo[]
+} {
+  return 'processes' in snapshot && snapshot.processes !== undefined
+}
+
 type TerminalCreateOptions = {
   command?: string
   claudeAgentTeamsSourceCommand?: string
@@ -1326,6 +1355,8 @@ type RuntimePtyController = {
   // Why: exact-id mobile polls should not enumerate every local and SSH PTY.
   hasPty?(ptyId: string): boolean | null
   listProcesses?(): Promise<PtyProcessInfo[]>
+  getLocalProcessInventorySnapshot?(): RuntimeLocalProcessInventorySnapshot
+  refreshLocalProcessInventory?(): Promise<void>
   serializeBuffer?(
     ptyId: string,
     opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
@@ -3250,6 +3281,7 @@ export class OrcaRuntimeService {
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
     }
+    const survivingSessionReconciliation = this.getSurvivingSessionReconciliationStatus()
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -3258,6 +3290,7 @@ export class OrcaRuntimeService {
       desktopWindowStatus: hasRenderer ? 'available' : this.getDesktopWindowStatusFn(),
       liveTabCount: this.tabs.size,
       liveLeafCount: this.leaves.size,
+      survivingSessionReconciliation,
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
       // Why: headless orca serve cannot create/stream BrowserViews, so clients
@@ -3291,6 +3324,7 @@ export class OrcaRuntimeService {
     // instead of tunneling back through renderer IPC, or live handles could
     // drift from the process they are supposed to control during reloads.
     this.ptyController = controller
+    void controller?.refreshLocalProcessInventory?.().catch(() => undefined)
   }
 
   setNotifier(notifier: RuntimeNotifier | null): void {
@@ -3648,7 +3682,6 @@ export class OrcaRuntimeService {
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
     }
-
     // Why: createTerminal waits for the renderer's graph sync to populate the
     // new leaf so it can return a handle. Drain callbacks after leaves update.
     for (const cb of [...this.graphSyncCallbacks]) {
@@ -21311,6 +21344,102 @@ export class OrcaRuntimeService {
     return { stopped }
   }
 
+  private getSurvivingSessionReconciliationStatus():
+    | RuntimeSurvivingSessionReconciliation
+    | undefined {
+    const snapshot = this.ptyController?.getLocalProcessInventorySnapshot?.()
+    if (!snapshot) {
+      return undefined
+    }
+    if (snapshot.state !== 'ready') {
+      void this.ptyController?.refreshLocalProcessInventory?.().catch(() => undefined)
+    }
+    if (snapshot.state === 'pending') {
+      return { state: 'pending' }
+    }
+    if (!hasProcessInventoryBaseline(snapshot)) {
+      return { state: 'stale' }
+    }
+    const summary = this.classifySurvivingSessionInventory(snapshot.processes)
+    return snapshot.state === 'ready' ? { state: 'ready', summary } : { state: 'stale', summary }
+  }
+
+  private classifySurvivingSessionInventory(
+    sessions: readonly Pick<PtyProcessInfo, 'id' | 'worktreeId'>[]
+  ): RuntimeSurvivingSessionReconciliationSummary {
+    const terminalTabsByPtyId = new Map<string, RuntimeMobileSessionTerminalTab[]>()
+    for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
+      for (const tab of snapshot.tabs) {
+        if (tab.type !== 'terminal' || !tab.ptyId) {
+          continue
+        }
+        const tabs = terminalTabsByPtyId.get(tab.ptyId) ?? []
+        tabs.push(tab)
+        terminalTabsByPtyId.set(tab.ptyId, tabs)
+      }
+    }
+
+    const sleepingPaneKeysByWorktree = new Map<string, Set<string>>()
+    const sessionHosts = new Set<string>()
+    for (const repo of this.store?.getRepos?.() ?? []) {
+      sessionHosts.add(getRepoExecutionHostId(repo))
+    }
+    if (sessionHosts.size === 0) {
+      sessionHosts.add('local')
+    }
+    for (const host of sessionHosts) {
+      const records = this.store?.getWorkspaceSession?.(host).sleepingAgentSessionsByPaneKey
+      if (!records) {
+        continue
+      }
+      for (const record of Object.values(records)) {
+        const keys = sleepingPaneKeysByWorktree.get(record.worktreeId) ?? new Set<string>()
+        keys.add(record.paneKey)
+        sleepingPaneKeysByWorktree.set(record.worktreeId, keys)
+      }
+    }
+
+    if (sessions.length === 0) {
+      return EMPTY_SURVIVING_SESSION_RECONCILIATION_SUMMARY
+    }
+
+    const result: RuntimeSurvivingSessionReconciliationSummary = {
+      ...EMPTY_SURVIVING_SESSION_RECONCILIATION_SUMMARY
+    }
+    for (const session of sessions) {
+      const currentHandle =
+        this.handleByPtyId.get(session.id) ?? this.findHandleForPtyRecord(session.id)
+      const active = Boolean(
+        this.leafExistsForPty(session.id) ||
+        (currentHandle && this.handles.get(currentHandle)?.runtimeId === this.runtimeId)
+      )
+      if (active) {
+        result.active += 1
+        continue
+      }
+
+      const tabs = terminalTabsByPtyId.get(session.id) ?? []
+      const paneKeys = new Set(
+        tabs.flatMap((tab) => [
+          this.getMobileTerminalPaneKey(tab),
+          `${tab.parentTabId}:${tab.leafId}`
+        ])
+      )
+      const worktreeId = session.worktreeId ?? parsePtySessionId(session.id).worktreeId
+      const restorable =
+        tabs.some((tab) => this.hasServeOrSshOwnedBinding(tab)) ||
+        (worktreeId !== null &&
+          [...paneKeys].some((paneKey) => sleepingPaneKeysByWorktree.get(worktreeId)?.has(paneKey)))
+      if (restorable) {
+        result.restorable += 1
+        continue
+      }
+
+      result.ambiguous += 1
+    }
+    return result
+  }
+
   async stopExactTerminalsForWorktree(
     worktreeSelector: string,
     expectedPtyIds: readonly string[],
@@ -23820,10 +23949,10 @@ export class OrcaRuntimeService {
       }
       return null
     }
-    const paneKeys = new Set([`${tab.parentTabId}:${tab.leafId}`])
-    if (tab.leafId === `pane:${FIRST_PANE_ID}`) {
-      paneKeys.add(`${tab.parentTabId}:${FIRST_PANE_ID}`)
-    }
+    const paneKeys = new Set([
+      this.getMobileTerminalPaneKey(tab),
+      `${tab.parentTabId}:${tab.leafId}`
+    ])
     for (const pty of this.ptysById.values()) {
       if (pty.tabId === tab.parentTabId && pty.paneKey && paneKeys.has(pty.paneKey)) {
         return pty

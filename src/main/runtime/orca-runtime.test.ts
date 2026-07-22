@@ -102,6 +102,7 @@ import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
+import type { PtyProcessInfo } from '../providers/types'
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1705,6 +1706,333 @@ describe('OrcaRuntimeService', () => {
     expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
   })
 
+  const createSurvivingSessionControllerHarness = () => {
+    type Snapshot =
+      | { state: 'pending' }
+      | { state: 'ready'; processes: PtyProcessInfo[] }
+      | { state: 'stale'; processes?: PtyProcessInfo[] }
+
+    let snapshot: Snapshot = { state: 'pending' }
+    let refreshStarts = 0
+    let pending: {
+      promise: Promise<void>
+      resolve: (processes: PtyProcessInfo[]) => void
+      reject: (error?: Error) => void
+    } | null = null
+
+    const refreshLocalProcessInventory = vi.fn(() => {
+      if (pending) {
+        return pending.promise
+      }
+      refreshStarts += 1
+      let settle = () => {}
+      let fail = (_error: Error) => {}
+      const promise = new Promise<void>((resolve, reject) => {
+        settle = resolve
+        fail = reject
+      })
+      pending = {
+        promise,
+        resolve: (processes) => {
+          snapshot = { state: 'ready', processes }
+          pending = null
+          settle()
+        },
+        reject: (error = new Error('refresh failed')) => {
+          const retained = 'processes' in snapshot ? snapshot.processes : undefined
+          snapshot = retained ? { state: 'stale', processes: retained } : { state: 'stale' }
+          pending = null
+          fail(error)
+        }
+      }
+      return promise
+    })
+
+    return {
+      controller: {
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        getLocalProcessInventorySnapshot: () => snapshot,
+        refreshLocalProcessInventory
+      },
+      refreshLocalProcessInventory,
+      getRefreshStarts() {
+        return refreshStarts
+      },
+      setReady(processes: PtyProcessInfo[]) {
+        snapshot = { state: 'ready', processes }
+      },
+      invalidate() {
+        const retained = 'processes' in snapshot ? snapshot.processes : undefined
+        snapshot =
+          retained !== undefined
+            ? { state: 'stale', processes: retained }
+            : snapshot.state === 'pending'
+              ? { state: 'pending' }
+              : { state: 'stale' }
+      },
+      async resolveRefresh(processes: PtyProcessInfo[]) {
+        pending?.resolve(processes)
+        await Promise.resolve()
+      },
+      async rejectRefresh(error?: Error) {
+        pending?.reject(error)
+        await Promise.resolve()
+      }
+    }
+  }
+
+  const buildSurvivingSessionReconciliationHarness = async () => {
+    const activePtyId = `${TEST_WORKTREE_ID}@@active`
+    const restorablePtyId = `${TEST_WORKTREE_ID}@@restorable`
+    const ambiguousPtyId = 'repo-1::/removed@@ambiguous'
+    const restorablePaneKey = makePaneKey('tab-1', HEADLESS_SECOND_LEAF_ID)
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorkspaceSession: () => ({
+        ...getDefaultWorkspaceSession(),
+        sleepingAgentSessionsByPaneKey: {
+          [restorablePaneKey]: {
+            paneKey: restorablePaneKey,
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'session-1' },
+            prompt: 'resume',
+            state: 'done',
+            capturedAt: 1,
+            updatedAt: 1,
+            origin: 'worktree-sleep'
+          }
+        }
+      })
+    } as never)
+    runtime.setPtyController(controllerHarness.controller)
+    await controllerHarness.resolveRefresh([
+      { id: activePtyId, cwd: TEST_WORKTREE_PATH, title: '' },
+      { id: restorablePtyId, cwd: TEST_WORKTREE_PATH, title: '' },
+      { id: ambiguousPtyId, cwd: '/tmp/removed', title: '' }
+    ])
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [],
+      leaves: [
+        {
+          tabId: 'tab-active',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: activePtyId
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:test',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'tab-1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1',
+              title: 'sleeping agent',
+              parentTabId: 'tab-1',
+              leafId: HEADLESS_SECOND_LEAF_ID,
+              ptyId: restorablePtyId,
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    return {
+      runtime,
+      controllerHarness,
+      activePtyId,
+      ambiguousPtyId
+    }
+  }
+
+  it('loads pre-existing local PTYs before any spawn callback', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = createRuntime()
+
+    runtime.setPtyController(controllerHarness.controller)
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({ state: 'pending' })
+
+    await controllerHarness.resolveRefresh([
+      { id: `${TEST_WORKTREE_ID}@@preexisting`, cwd: TEST_WORKTREE_PATH, title: 'shell' }
+    ])
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 0, ambiguous: 1 }
+    })
+  })
+
+  it('reports pending until local PTY inventory is ready', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = createRuntime()
+
+    runtime.setPtyController(controllerHarness.controller)
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({ state: 'pending' })
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({ state: 'pending' })
+    expect(controllerHarness.getRefreshStarts()).toBe(1)
+
+    await controllerHarness.resolveRefresh([])
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 0, ambiguous: 0 }
+    })
+  })
+
+  it('labels failed and invalidated local PTY inventory stale', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = createRuntime()
+
+    runtime.setPtyController(controllerHarness.controller)
+    await controllerHarness.resolveRefresh([
+      { id: `${TEST_WORKTREE_ID}@@stale`, cwd: TEST_WORKTREE_PATH, title: 'shell' }
+    ])
+    controllerHarness.invalidate()
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'stale',
+      summary: { active: 0, restorable: 0, ambiguous: 1 }
+    })
+    expect(controllerHarness.refreshLocalProcessInventory).toHaveBeenCalledTimes(2)
+
+    await controllerHarness.rejectRefresh()
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'stale',
+      summary: { active: 0, restorable: 0, ambiguous: 1 }
+    })
+
+    await controllerHarness.resolveRefresh([])
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 0, ambiguous: 0 }
+    })
+  })
+
+  it('reclassifies ready local inventory from current runtime bindings on every status read', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = createRuntime()
+    const ptyId = `${TEST_WORKTREE_ID}@@reclassify`
+
+    runtime.setPtyController(controllerHarness.controller)
+    await controllerHarness.resolveRefresh([{ id: ptyId, cwd: TEST_WORKTREE_PATH, title: 'shell' }])
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 0, ambiguous: 1 }
+    })
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId: 'tab-active',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-active',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId
+        }
+      ]
+    })
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 1, restorable: 0, ambiguous: 0 }
+    })
+  })
+
+  it('surfaces surviving session reconciliation on runtime status', async () => {
+    const { runtime } = await buildSurvivingSessionReconciliationHarness()
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 1, restorable: 1, ambiguous: 1 }
+    })
+  })
+
+  it('treats legacy mobile pane ids as restorable during reconciliation', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorkspaceSession: () => ({
+        ...getDefaultWorkspaceSession(),
+        sleepingAgentSessionsByPaneKey: {
+          'tab-legacy:2': {
+            paneKey: 'tab-legacy:2',
+            tabId: 'tab-legacy',
+            worktreeId: TEST_WORKTREE_ID,
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'session-legacy' },
+            prompt: 'resume',
+            state: 'done',
+            capturedAt: 1,
+            updatedAt: 1,
+            origin: 'worktree-sleep'
+          }
+        }
+      })
+    } as never)
+
+    runtime.setPtyController(controllerHarness.controller)
+    await controllerHarness.resolveRefresh([
+      { id: `${TEST_WORKTREE_ID}@@legacy-restorable`, cwd: TEST_WORKTREE_PATH, title: '' }
+    ])
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'legacy-pane:test',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'tab-legacy',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-legacy',
+              title: 'sleeping agent',
+              parentTabId: 'tab-legacy',
+              leafId: 'pane:2',
+              ptyId: `${TEST_WORKTREE_ID}@@legacy-restorable`,
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 1, ambiguous: 0 }
+    })
+  })
+
   it('reports the configured Windows terminal shell on status', () => {
     const runtime = new OrcaRuntimeService({
       ...store,
@@ -2570,6 +2898,48 @@ describe('OrcaRuntimeService', () => {
     })
     const split = internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
     expect(split.tabs.filter((tab) => tab.type === 'terminal')).toHaveLength(2)
+  })
+
+  it('finds legacy mobile pane ids when snapshot PTY ids are absent', () => {
+    const runtime = createRuntime()
+    const internals = runtime as unknown as {
+      recordPtyWorktree: (
+        ptyId: string,
+        worktreeId: string,
+        state?: Record<string, unknown>
+      ) => { worktreeId: string; tabId: string | null; paneKey: string | null }
+      findPtyForMobileTerminalTab: (
+        worktreeId: string,
+        tab: {
+          type: 'terminal'
+          id: string
+          parentTabId: string
+          leafId: string
+          title: string
+          isActive: boolean
+        }
+      ) => { worktreeId: string; tabId: string | null; paneKey: string | null } | null
+    }
+    internals.recordPtyWorktree('pty-legacy-pane', TEST_WORKTREE_ID, {
+      connected: true,
+      tabId: 'tab-legacy',
+      paneKey: 'tab-legacy:2'
+    })
+
+    const match = internals.findPtyForMobileTerminalTab(TEST_WORKTREE_ID, {
+      type: 'terminal',
+      id: 'tab-legacy',
+      parentTabId: 'tab-legacy',
+      leafId: 'pane:2',
+      title: 'legacy',
+      isActive: true
+    })
+
+    expect(match).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'tab-legacy',
+      paneKey: 'tab-legacy:2'
+    })
   })
 
   it('keeps targeted terminal lists from adopting controller PTYs for other worktrees', async () => {

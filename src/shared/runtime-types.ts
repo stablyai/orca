@@ -61,6 +61,25 @@ export type RuntimeTerminalDriverState =
 
 export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
+export type RuntimeSurvivingSessionReconciliationSummary = {
+  active: number
+  restorable: number
+  ambiguous: number
+}
+
+export type RuntimeSurvivingSessionReconciliation =
+  | {
+      state: 'pending'
+    }
+  | {
+      state: 'ready'
+      summary: RuntimeSurvivingSessionReconciliationSummary
+    }
+  | {
+      state: 'stale'
+      summary?: RuntimeSurvivingSessionReconciliationSummary
+    }
+
 export type RuntimeStatus = {
   runtimeId: string
   rendererGraphEpoch: number
@@ -69,6 +88,7 @@ export type RuntimeStatus = {
   desktopWindowStatus?: RuntimeDesktopWindowStatus
   liveTabCount: number
   liveLeafCount: number
+  survivingSessionReconciliation?: RuntimeSurvivingSessionReconciliation
   // Why: optional so clients can read both new and pre-contract runtimes.
   // Absence is treated as protocol 0 by the compat evaluator.
   runtimeProtocolVersion?: number
