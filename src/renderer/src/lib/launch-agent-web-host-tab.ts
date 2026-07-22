@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import {
+  createWebRuntimeAgentSessionTerminal,
   createWebRuntimeSessionTerminal,
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
@@ -32,27 +33,36 @@ export function launchAgentInWebHostTab(args: {
   worktreeId: string
   environmentId: string | null
   groupId?: string
+  cwd?: string | null
   hasPrompt: boolean
   startupPlan: AgentStartupPlan
+  promptAfterReady?: {
+    content: string
+    submit: boolean
+    forcePaste: boolean
+  }
   viewMode?: Tab['viewMode']
   onPromptDelivered?: () => void
-}): void {
+}): Promise<{ delivered: boolean; failureNotified: boolean }> {
   const {
     agent,
     worktreeId,
     environmentId,
     groupId,
+    cwd,
     hasPrompt,
     startupPlan,
+    promptAfterReady,
     viewMode,
     onPromptDelivered
   } = args
   removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
-  void createWebRuntimeSessionTerminal({
+  const launch = {
     worktreeId,
     environmentId,
     targetGroupId: groupId,
     activate: true,
+    ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     ...(hasPrompt
       ? {
@@ -65,7 +75,20 @@ export function launchAgentInWebHostTab(args: {
             : {})
         }
       : { agent })
-  }).then((created) => {
+  }
+  const creation = promptAfterReady
+    ? createWebRuntimeAgentSessionTerminal({
+        ...launch,
+        agent,
+        promptAfterReady: promptAfterReady.content,
+        submitPrompt: promptAfterReady.submit,
+        forcePromptPaste: promptAfterReady.forcePaste
+      })
+    : createWebRuntimeSessionTerminal(launch)
+
+  return creation.then((result) => {
+    const created = typeof result === 'boolean' ? result : result.created
+    const promptDelivered = typeof result === 'boolean' ? result : result.promptDelivered
     // Why: created means the host accepted the launch, not that a local tab
     // exists; keep pruning stale local rows until the snapshot mirrors.
     removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
@@ -77,11 +100,12 @@ export function launchAgentInWebHostTab(args: {
           { value0: agent }
         )
       )
-      return
+      return { delivered: false, failureNotified: true }
     }
     useAppStore.getState().setActiveTabType('terminal')
-    if (hasPrompt) {
+    if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }
+    return { delivered: promptDelivered, failureNotified: false }
   })
 }

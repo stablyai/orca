@@ -13583,6 +13583,32 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "在新会话中继续…",
+      "dialogTitle": "在新会话中继续",
+      "dialogDescription": "从当前进度启动一个新的智能体会话，原会话保持不变。",
+      "untitledSession": "当前会话",
+      "originalAgent": "原智能体：{{agent}}",
+      "agent": "智能体",
+      "selectAgent": "选择智能体",
+      "detectingAgents": "正在此工作区主机上检测智能体…",
+      "detectionFailed": "无法检测此工作区主机上的智能体。",
+      "noAgents": "未在此工作区主机上检测到已启用的智能体。",
+      "context": "上下文",
+      "modeFocused": "聚焦续接（推荐）",
+      "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
+      "modeFull": "完整会话记录",
+      "modeFullDescription": "让新智能体在继续前读取完整的已保存会话。这可能需要更长时间，并消耗大量上下文、套餐用量或 API 额度。",
+      "startsIn": "启动目录：",
+      "startSession": "启动新会话",
+      "starting": "正在启动…",
+      "noContext": "没有可用于在新会话中继续的上下文。",
+      "agentDisabled": "{{agent}} 已在智能体设置中停用。",
+      "agentUnavailable": "未在此工作区主机上检测到 {{agent}}。",
+      "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
+      "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
+      "launchFailed": "无法启动新的 {{agent}} 会话。"
     }
   },
   "dashboardPopout": {
@@ -13613,7 +13639,8 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "focusWorktree": "Focus worktree"
+      "focusWorktree": "Focus worktree",
+      "close": "Close"
     }
   },
   "dashboard": {

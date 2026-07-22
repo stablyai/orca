@@ -8,6 +8,7 @@ import {
   closeWebRuntimeSessionTab,
   consumePendingWebRuntimeSplitMirrorTelemetry,
   createWebRuntimeSessionBrowserTab,
+  createWebRuntimeAgentSessionTerminal,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
   moveWebRuntimeSessionTab,
@@ -31,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   acceptReplayedWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
   trackTerminalPaneSplit: vi.fn(),
+  deliverLaunchPromptToAgentTab: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn()
 }))
 
@@ -55,6 +57,10 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
+}))
+
+vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+  deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab
 }))
 
 const ENVIRONMENT_ID = 'web-env-1'
@@ -151,6 +157,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     })
     mocks.applyFreshWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
     mocks.resolveHostSessionTabIdForWebSessionTab.mockReturnValue(null)
+    mocks.deliverLaunchPromptToAgentTab.mockResolvedValue(true)
   })
 
   afterEach(() => {
@@ -596,6 +603,58 @@ describe('createWebRuntimeSessionTerminal', () => {
     ).resolves.toBe(true)
 
     expect(setStateResults).not.toContainEqual({ activeWorktreeId: WORKTREE_ID })
+  })
+
+  it('waits for the paired Agent input before submitting a generated prompt', async () => {
+    const terminal = {
+      type: 'terminal' as const,
+      id: 'host-tab-2::leaf-1',
+      parentTabId: 'host-tab-2',
+      leafId: 'leaf-1',
+      title: 'Claude',
+      terminal: null,
+      status: 'pending-handle' as const,
+      isActive: true
+    }
+    const snapshot = {
+      ...makeSnapshot(),
+      snapshotVersion: 2,
+      tabs: [terminal]
+    }
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create-terminal',
+        ok: true,
+        result: {
+          tab: terminal,
+          publicationEpoch: snapshot.publicationEpoch,
+          snapshotVersion: snapshot.snapshotVersion
+        }
+      })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: snapshot })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await expect(
+      createWebRuntimeAgentSessionTerminal({
+        worktreeId: WORKTREE_ID,
+        agent: 'claude',
+        command: 'claude',
+        promptAfterReady: 'continue the unfinished task',
+        submitPrompt: true,
+        forcePromptPaste: true
+      })
+    ).resolves.toEqual({ created: true, promptDelivered: true })
+
+    expect(mocks.deliverLaunchPromptToAgentTab).toHaveBeenCalledWith({
+      tabId: 'web-terminal-host-tab-2',
+      content: 'continue the unfinished task',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true
+    })
   })
 })
 

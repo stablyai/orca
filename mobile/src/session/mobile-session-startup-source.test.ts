@@ -48,6 +48,27 @@ describe('mobile session startup', () => {
     expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
   })
 
+  it('fails runtime capability gates closed before probing a replacement client', () => {
+    const capabilityEffect = sliceBetween(
+      'const hostQueryReplyInputSupportedRef = useRef(false)',
+      '// Why: read deviceToken from host record'
+    )
+    const probeStart = capabilityEffect.indexOf('startRuntimeCapabilityProbe(client,')
+
+    expect(probeStart).toBeGreaterThanOrEqual(0)
+    for (const reset of [
+      'setBrowserScreencastSupported(null)',
+      'setAgentSessionHistorySupported(null)',
+      'setQuickCommandsSupported(null)',
+      'setShowQuickCommands(false)',
+      'hostQueryReplyInputSupportedRef.current = false'
+    ]) {
+      const resetIndex = capabilityEffect.lastIndexOf(reset)
+      expect(resetIndex).toBeGreaterThanOrEqual(0)
+      expect(resetIndex).toBeLessThan(probeStart)
+    }
+  })
+
   it('activates an already-selected pending terminal tab after hydration', () => {
     expect(source).toContain(
       'const pendingTerminalActivationAttemptRef = useRef<string | null>(null)'

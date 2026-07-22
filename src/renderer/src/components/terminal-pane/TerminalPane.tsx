@@ -64,6 +64,7 @@ import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import NativeChatView from '../native-chat/NativeChatView'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
+import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
 import {
@@ -84,6 +85,7 @@ import {
   resolveTerminalTabStripDropTarget
 } from './terminal-pane-tab-detach'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
@@ -158,6 +160,7 @@ import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
+import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import {
   updateTerminalRemoteRuntimeRecoveryUiState,
   type VisiblePtyRecoveryState
@@ -381,6 +384,8 @@ export default function TerminalPane({
   // Why: each Add action starts with a fresh draft so the terminal menu doesn't reuse cancelled quick-command text.
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
+  const [agentSessionContinuation, setAgentSessionContinuation] =
+    useState<AgentSessionContinuationRequest | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
   const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
     Record<number, VisiblePtyRecoveryState>
@@ -2501,6 +2506,7 @@ export default function TerminalPane({
     onClearPaneTitle: handleClearPaneTitleShortcut,
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,
+    onAgentSessionContinuationReady: setAgentSessionContinuation,
     forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
@@ -2815,6 +2821,27 @@ export default function TerminalPane({
   const activePaneIsChatLeaf = Boolean(
     isChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
   )
+  // A split can host different agents, so continuation resolves the specific leaf before using tab-wide hints.
+  const resolveAgentForLeaf = (leafId: string | null): string | null => {
+    const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
+    if (detectedAgent) {
+      return detectedAgent
+    }
+    return (
+      nativeChatLaunchAgentForLeaf({
+        launchAgent: terminalTab?.launchAgent,
+        launchAgentLeafId: getTabWideAgentHintLeafId(),
+        leafId,
+        leafIds: getNativeChatLeafIds()
+      }) ?? resolveTitleAgentForLeaf(leafId)
+    )
+  }
+  const activePaneCanContinueInNewSession = canContinueAgentSessionInNewSession(
+    resolveAgentForLeaf(activePane?.leafId ?? null)
+  )
+  const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
+    resolveAgentForLeaf(contextMenuLeafId)
+  )
   // Each toggle gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
   const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
@@ -2924,6 +2951,14 @@ export default function TerminalPane({
                   isPaneExpanded: expandedPaneId === chatPane.id,
                   onToggleExpand: () =>
                     contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
+                  canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
+                    resolveAgentForLeaf(chatPane.leafId)
+                  ),
+                  onContinueAgentSessionInNewSession: () =>
+                    contextMenu.runForPane(
+                      chatPane.id,
+                      contextMenu.onContinueAgentSessionInNewSession
+                    ),
                   onForkAgentSession: () =>
                     void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
                   onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
@@ -2959,6 +2994,8 @@ export default function TerminalPane({
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
+        onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
         canToggleNativeChat={contextMenuCanToggleChat}
         isNativeChatView={contextMenuIsChatView}
@@ -2997,6 +3034,17 @@ export default function TerminalPane({
           }
         }}
       />
+      {agentSessionContinuation ? (
+        <AgentSessionContinuationDialog
+          open
+          request={agentSessionContinuation}
+          onOpenChange={(open) => {
+            if (!open) {
+              setAgentSessionContinuation(null)
+            }
+          }}
+        />
+      ) : null}
       <TerminalPaneHeaderOverlay
         tabId={tabId}
         worktreeId={worktreeId}
@@ -3020,6 +3068,10 @@ export default function TerminalPane({
         canToggleNativeChat={activePaneCanToggleChat}
         isChatViewMode={activePaneIsChatLeaf}
         onToggleNativeChat={handleToggleNativeChat}
+        canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
+        onContinueAgentSessionInNewSession={(pane) =>
+          contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)
+        }
         onSplitPane={splitTerminalPaneFromHeader}
         onBeginPaneDrag={beginPaneDragFromHeader}
         onActivatePaneTitleInteraction={activatePaneTitleInteraction}

@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { SquareArrowOutUpRight } from 'lucide-react'
+import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { agentStateLabel } from '@/components/AgentStateDot'
@@ -46,6 +46,10 @@ export function AgentTerminalDialog({
           // Why: sm:max-w-lg in DialogContent's base classes would defeat a bare
           // max-w-*, so the full-width override must carry the same breakpoint.
           className="flex w-[calc(100vw-40px)] max-w-none flex-col gap-0 p-0 sm:max-w-none"
+          // Why: the default close X sits at top-4/right-4 (tuned for p-6
+          // dialogs), which misaligns against this p-0 compact header; render
+          // it inside the header row instead so it centers with the title.
+          showCloseButton={false}
           // Why: Esc must reach the agent (interrupt) when typing in the
           // terminal, not dismiss the dialog; xterm has already consumed the
           // keystroke by the time Radix sees it. Click-outside still closes.
@@ -70,6 +74,12 @@ export function AgentTerminalDialog({
             <span className="text-[11px] text-muted-foreground">
               {formatAgentTypeLabel(card.agentType)} · {agentStateLabel(card.dotState)}
             </span>
+            <DialogClose className="ml-auto rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:outline-hidden">
+              <XIcon className="size-4" />
+              <span className="sr-only">
+                {translate('dashboardPopout.terminal.close', 'Close')}
+              </span>
+            </DialogClose>
           </div>
           {card.ptyId ? (
             <AgentTerminalPreview ptyId={card.ptyId} />

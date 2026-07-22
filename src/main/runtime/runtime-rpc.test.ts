@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this integration-style RPC test keeps the request/response contract together so regressions in the external CLI surface are easier to spot. */
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -25,6 +25,7 @@ import {
 } from '../../shared/terminal-stream-protocol'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 import { DeviceRegistry } from './device-registry'
+import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -366,6 +367,95 @@ describe('OrcaRuntimeRpcServer', () => {
     }
 
     await server.stop()
+  })
+
+  it('reports why pairing is unavailable before the WebSocket listener is ready', () => {
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    expect(server.createPairingOffer({ name: 'Early test' })).toMatchObject({
+      available: false,
+      reason: 'websocket_unavailable',
+      guidance: expect.any(String)
+    })
+  })
+
+  it('reports an E2EE identity initialization failure after the local transport starts', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    mkdirSync(join(userDataPath, E2EE_KEYPAIR_FILENAME))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await server.start()
+      expect(server.createPairingOffer({ name: 'E2EE failure test' })).toMatchObject({
+        available: false,
+        reason: 'e2ee_key_unavailable',
+        guidance: expect.any(String)
+      })
+    } finally {
+      errorSpy.mockRestore()
+      await server.stop()
+    }
+  })
+
+  it('reports a registry persistence failure without retaining a ghost credential', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await server.start()
+    mkdirSync(join(userDataPath, DEVICE_REGISTRY_FILENAME))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      expect(server.createPairingOffer({ name: 'Registry failure test' })).toMatchObject({
+        available: false,
+        reason: 'device_registry_unavailable',
+        guidance: expect.any(String)
+      })
+      expect(server.getDeviceRegistry()?.listDevices()).toHaveLength(0)
+    } finally {
+      errorSpy.mockRestore()
+      await server.stop()
+    }
+  })
+
+  it('rejects wildcard advertised addresses before minting a device credential', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(server.getDeviceRegistry()?.listDevices()).toHaveLength(0)
+      expect(server.createPairingOffer({ address: '0.0.0.0', name: 'Invalid test' })).toMatchObject(
+        {
+          available: false,
+          reason: 'invalid_advertised_endpoint',
+          guidance: expect.any(String)
+        }
+      )
+      expect(server.getDeviceRegistry()?.listDevices()).toHaveLength(0)
+    } finally {
+      await server.stop()
+    }
   })
 
   it('includes a web client URL when the web bundle is served by the runtime', async () => {

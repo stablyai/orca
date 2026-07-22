@@ -46,6 +46,7 @@ import {
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
+import { startRuntimeCapabilityProbe } from '../../../../src/transport/runtime-capability-probe'
 import {
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
@@ -250,7 +251,6 @@ import type {
   MobileSessionTabType,
   RenderableDiffLine,
   RuntimeRepoSummary,
-  RuntimeStatusResult,
   SessionTabsResult,
   Terminal,
   TerminalCreateResult,
@@ -2317,40 +2317,23 @@ export default function SessionScreen() {
     }
     // Why: a client swap can keep the route connected while moving to an older
     // host; clear the prior capability before exposing host-specific actions.
+    setBrowserScreencastSupported(null)
+    setAgentSessionHistorySupported(null)
     setQuickCommandsSupported(null)
     setShowQuickCommands(false)
-    let stale = false
-    void client
-      .sendRequest('status.get')
-      .then((response) => {
-        if (stale || !response.ok) {
-          return
-        }
-        const status = (response as RpcSuccess).result as RuntimeStatusResult
-        setBrowserScreencastSupported(
-          status.capabilities?.includes('browser.screencast.v1') === true
-        )
-        setAgentSessionHistorySupported(
-          status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY) === true
-        )
-        setQuickCommandsSupported(supportsMobileQuickCommands(status.capabilities))
-        // Why: hosts without this capability strip inputKind from terminal.send,
-        // so a forwarded xterm reply would become floor-stealing shell input.
-        hostQueryReplyInputSupportedRef.current =
-          status.capabilities?.includes(TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY) === true
-      })
-      .catch(() => {
-        if (!stale) {
-          setBrowserScreencastSupported(false)
-          setAgentSessionHistorySupported(false)
-          setQuickCommandsSupported(false)
-          setShowQuickCommands(false)
-          hostQueryReplyInputSupportedRef.current = false
-        }
-      })
-    return () => {
-      stale = true
-    }
+    hostQueryReplyInputSupportedRef.current = false
+    // Why: the probe retries — a relay→direct cutover or request timeout rejects
+    // status.get without changing connState, which used to latch these hidden.
+    return startRuntimeCapabilityProbe(client, (capabilities) => {
+      setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
+      setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
+      setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
+      // Why: hosts without this capability strip inputKind from terminal.send,
+      // so a forwarded xterm reply would become floor-stealing shell input.
+      hostQueryReplyInputSupportedRef.current = capabilities.includes(
+        TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+      )
+    })
   }, [client, connState])
 
   // Why: read deviceToken from host record so code can pass client.id on subscribe/send for driver-state-machine identity.

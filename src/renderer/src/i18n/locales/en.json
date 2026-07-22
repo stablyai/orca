@@ -13606,6 +13606,32 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "Continue in New Session…",
+      "dialogTitle": "Continue in New Session",
+      "dialogDescription": "Start a fresh Agent session from this stopping point. The original session stays unchanged.",
+      "untitledSession": "Current session",
+      "originalAgent": "Original Agent: {{agent}}",
+      "agent": "Agent",
+      "selectAgent": "Select an Agent",
+      "detectingAgents": "Detecting Agents on this workspace host…",
+      "detectionFailed": "Could not detect Agents on this workspace host.",
+      "noAgents": "No enabled Agents were detected on this workspace host.",
+      "context": "Context",
+      "modeFocused": "Focused handoff (Recommended)",
+      "modeFocusedDescription": "Uses the latest status and current workspace, reading older transcript details only when needed.",
+      "modeFull": "Full session transcript",
+      "modeFullDescription": "Asks the new Agent to read the complete saved session before continuing. This can take longer and use significant context, plan usage, or API credits.",
+      "startsIn": "Starts in:",
+      "startSession": "Start New Session",
+      "starting": "Starting…",
+      "noContext": "No session context is available to continue in a new session.",
+      "agentDisabled": "{{agent}} is disabled in Agent settings.",
+      "agentUnavailable": "{{agent}} was not detected on this workspace host.",
+      "sent": "Session context sent to {{agent}} in a new session.",
+      "deliveryFailed": "The new {{agent}} session started, but its context could not be sent.",
+      "launchFailed": "Could not start a new {{agent}} session."
     }
   },
   "dashboardPopout": {
@@ -13636,7 +13662,8 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "focusWorktree": "Open worktree"
+      "focusWorktree": "Open worktree",
+      "close": "Close"
     }
   },
   "dashboard": {

@@ -260,7 +260,7 @@ function printReadyLine(line) {
   if (!payload || payload.type !== 'orca_server_ready') {
     return false
   }
-  console.log(`Orca server ready: ${payload.endpoint ?? 'websocket unavailable'}`)
+  console.log(`Orca server ready: ${payload.boundEndpoint ?? 'websocket unavailable'}`)
   if (payload.pairing?.endpoint) {
     console.log(`Pairing endpoint: ${payload.pairing.endpoint}`)
   }

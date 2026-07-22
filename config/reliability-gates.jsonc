@@ -171,7 +171,8 @@
         "headless orca serve",
         "single-instance desktop activation",
         "CLI open",
-        "persistent terminal reattach"
+        "persistent terminal reattach",
+        "update install handoff"
       ],
       "platforms": [
         "macos",
@@ -191,18 +192,23 @@
         "daemon",
         "ssh"
       ],
-      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, and SSH identity transfer. A macOS Electron journey starts one headless owner in an isolated profile, creates and writes to a daemon PTY, activates the GUI through a second process, and verifies the original owner/runtime/daemon/PTY identities plus pre- and post-promotion I/O. Live packaged, Linux, and Windows journeys remain uncollected.",
+      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/issues/8457"
+        "https://github.com/stablyai/orca/issues/8457",
+        "https://github.com/stablyai/orca/issues/9563"
       ],
-      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation opens a window in that same process only after the persistent PTY provider and runtime RPC are ready; every live persisted local or SSH terminal remains bound to the same PTY/session, and a committed Cmd+Q still exits the promoted app.",
-      "oracle": "Unit tests coalesce early activation, fail closed on a fallback local provider, preserve the production single-instance path for serve, expose explicit desktop window state to local and remote clients, persist headless tab/leaf bindings, transfer local and SSH reattach metadata, and retain quit intent. The Electron journey asserts one main-process PID, runtime id, daemon PID, and PTY id across activation; confirms output written before promotion is visible afterward; confirms new terminal input still works; and requires the activating second process to exit.",
+      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation preserves its daemon-backed sessions. On macOS, a CLI-supervised serve update keeps the node-mode parent alive across ShipIt's atomic bundle swap, restarts with the original serve arguments only after the target bundle is present, and clears handoff state only after that target version reports runtime readiness. Unsupported or failed handoffs leave the current serving owner intact or recover it once without an install retry loop.",
+      "oracle": "Unit tests coalesce early activation, preserve daemon and SSH identity, and reproduce the update race with a staged target, old serving child, persistent CLI parent, atomic .app replacement, and replacement readiness message. They assert the parent does not exit for launchd to respawn the old app, the native updater does not launch an interactive GUI, the replacement version is verified before handoff completion, mismatches become durable failures without retries, and unsupported/preflight-failed installs do not invoke native quit or PTY cleanup. The Electron journey independently verifies headless promotion retains owner/runtime/daemon/PTY identity and terminal I/O.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
       ],
       "testFiles": [
+        "src/main/updater.headless-serve-install.test.ts",
+        "src/main/serve-update-handoff.test.ts",
+        "src/cli/runtime/launch.test.ts",
         "src/main/startup/serve-desktop-activation.test.ts",
         "src/main/startup/serve-desktop-activation-wiring.test.ts",
         "src/main/startup/single-instance-lock.test.ts",
@@ -213,6 +219,35 @@
         "tests/e2e/headless-serve-desktop-activation.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/updater.headless-serve-install.test.ts",
+          "assertions": [
+            "a ready update in headless serve is deferred before native install, paired-client disconnect, or active-session cleanup",
+            "a supervised serve persists handoff after checkpoints but before native quit and uses no native GUI relaunch",
+            "unsupported serve refuses updater staging and install-on-quit while preserving availability checks",
+            "a failed handoff preflight preserves the serving owner before native quit or PTY cleanup",
+            "macOS installer-readiness timeout cannot quit a headless serving owner",
+            "ordinary macOS app quit is not reinterpreted as an install request in headless serve mode",
+            "repeated requests emit one deterministic status and lifecycle diagnostic while interactive installs remain unchanged"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/launch.test.ts",
+          "assertions": [
+            "the CLI parent remains alive after the old serving child exits instead of letting launchd respawn it",
+            "an atomic app-bundle replacement starts one target-version serve child with the original arguments",
+            "handoff completes only after the replacement reports target-version runtime readiness",
+            "a replacement version mismatch or readiness timeout is persisted and exits without an in-process retry loop"
+          ]
+        },
+        {
+          "file": "src/main/serve-update-handoff.test.ts",
+          "assertions": [
+            "install intent and failure state are written atomically under canonical user data",
+            "an injected handoff path outside canonical user data cannot authorize an update",
+            "a target-version startup clears stale failure state"
+          ]
+        },
         {
           "file": "src/main/startup/serve-desktop-activation.test.ts",
           "assertions": [
@@ -273,6 +308,15 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-07-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "Seven focused files passed with 133 tests. The lifecycle harness keeps the CLI parent alive across an atomic .app replacement, starts one target-version serve replacement, and requires its bounded readiness message. Unsupported and failed-preflight paths make zero native install and PTY-cleanup calls; supervised native install leaves the modeled daemon session intact and suppresses native GUI relaunch."
+        },
+        {
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
@@ -301,11 +345,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The first Electron red run proved that bypassing the dev single-instance lock created a second owner. After enforcing one owner, the next red run retained owner/runtime/daemon identity but exposed a new PTY because the headless tab/leaf binding was not persisted. The final implementation persists that binding before renderer hydration and both subsequent Electron runs kept the original PTY and transcript. Focused unit tests were also observed red before the activation gate, promotion metadata transfer, and headless spawn-persistence changes were added."
+        "evidence": "The original updater regression was observed red with one native install call, one paired-client disconnect, one cleanup start, no replacement owner, and a stranded staged installer. The root-cause harness was then observed red because the Electron child received no handoff path and the CLI parent exited, allowing launchd to spawn the old version while ShipIt still required zero running target apps. A live canary then exposed MacUpdater ignoring quitAndInstall relaunch arguments and starting a second desktop owner; disabling its independent relaunch for supervised mode produced one stable LaunchAgent parent, one verified replacement, and a surviving session across the real ShipIt swap. The final deterministic harness keeps that parent, observes the atomic bundle swap, and verifies the new serving version before clearing state. Earlier activation evidence also fixed second-owner and replacement-PTY failures."
       },
       "performanceBudget": {
-        "required": false,
-        "evidence": "Activation adds no polling in the app owner and performs one bounded pass over live PTY records plus persisted terminal bindings only when a headless owner opens its first window. Desktop-only bell, command, PR-link, and mode scanners are rebuilt only while a real renderer graph is ready, preserving the prior pure-headless output path. CLI open keeps its existing 250ms bounded startup poll."
+        "required": true,
+        "evidence": "Normal serve and desktop paths add only constant-time mode checks plus one IPC listener on the macOS CLI child. During an actual install handoff only, the CLI watches the stable app parent directory and performs a bounded 250ms version-file poll for at most 120 seconds; there are no subprocesses, network calls, provider scans, or startup waits. Activation performance is unchanged."
       },
       "promotionCriteria": [
         "Collect at least 100 consecutive CI or soak passes or 14 days without an unexplained flake.",
@@ -314,6 +358,7 @@
       ],
       "knownGaps": [
         "The Electron journey uses an isolated development bundle rather than the installed application so it cannot disturb a real user session.",
+        "The live ShipIt/LaunchAgent canary used a disposable minimal Electron bundle plus the compiled production supervisor; a full packaged Orca update has not yet been run.",
         "Linux and Windows single-instance activation have unit coverage but no live Electron evidence yet.",
         "SSH identity transfer is deterministic unit coverage only; the live Electron journey currently exercises the local daemon provider."
       ],

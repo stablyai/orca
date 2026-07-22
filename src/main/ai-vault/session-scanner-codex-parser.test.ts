@@ -16,6 +16,51 @@ function jsonLines(records: unknown[]): string {
 }
 
 describe('parseCodexSessionFile', () => {
+  it('uses user-message events instead of later injected user-role records', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-last-prompt-'))
+    tempRoots.push(root)
+    const sessionPath = join(root, 'sessions', '2026', '07', '21', 'rollout-last-prompt.jsonl')
+    await mkdir(dirname(sessionPath), { recursive: true })
+
+    await writeFile(
+      sessionPath,
+      jsonLines([
+        {
+          timestamp: '2026-07-21T10:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'last-prompt-session', cwd: '/repo/app' }
+        },
+        {
+          timestamp: '2026-07-21T10:00:01.000Z',
+          type: 'event_msg',
+          payload: { type: 'user_message', message: 'Review the PR and fix real regressions' }
+        },
+        {
+          timestamp: '2026-07-21T10:00:02.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: '<skill>performance instructions</skill>' }]
+          }
+        }
+      ])
+    )
+
+    const sessionStat = await stat(sessionPath)
+    const session = await parseCodexSessionFile(
+      {
+        path: sessionPath,
+        mtimeMs: sessionStat.mtimeMs,
+        modifiedAt: sessionStat.mtime.toISOString()
+      },
+      'darwin',
+      root
+    )
+
+    expect(session?.lastUserPrompt).toBe('Review the PR and fix real regressions')
+  })
+
   it('does not double-count usage when token count formats switch', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-token-switch-'))
     tempRoots.push(root)
