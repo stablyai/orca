@@ -324,8 +324,8 @@ Explicit non-goals:
 - [x] Mac Run home -> Windows worker: start, completion, failure, question/reply, read, and stop.
 - [x] Windows Run home -> Mac worker: the same flows through a saved Mac pairing.
 - [ ] Native, WSL, SSH, and relay-backed execution-host paths preserve ownership and CLI capability.
-- [ ] Run home restarts alone; worker server restarts alone; both restart.
-- [ ] Disconnect before send proves no effect.
+- [x] Run home restarts alone; worker server restarts alone; both restart.
+- [x] Disconnect before send proves no effect.
 - [ ] Disconnect after possible acceptance returns unknown and deduplicates exact retry.
 - [ ] Duplicate and reordered relay frames/acknowledgments converge without loss or duplication.
 - [x] Re-pair/key change cannot retarget an active Dispatch.
@@ -992,6 +992,34 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Validate active-Dispatch restart/disconnect and exact-retry behavior, then exercise WSL/SSH/relay
     execution-host propagation without broadening the federation protocol.
+
+### 2026-07-22 — Federated restart and pre-acceptance disconnect accepted
+
+- Changes:
+  - Restarted the Windows Run home alone, the macOS worker server alone, and both servers while each
+    had an active federated Dispatch.
+  - Stopped the macOS worker server before a Windows-home start request could be accepted.
+- Files:
+  - `ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md`
+- Verification:
+  - Home-only restart preserved `ctx_f0693ff30c27`; `worker-show` found the same exact running macOS
+    worker under the unchanged worker epoch, and routed stop succeeded.
+  - Worker-only restart preserved `ctx_3bbb0142f9aa` at its Run home while the new macOS epoch
+    truthfully reported the missing terminal as non-exact; routed stop returned `stop_unknown`
+    without adopting or closing another process.
+  - Restarting both sides preserved `ctx_d46f68fa1400` and its attachment; inspection used the new
+    worker epoch, reported `missing` with `exactWorker=false`, and stop again returned
+    `stop_unknown` safely.
+  - With macOS already unreachable, retry request `disconnect-before-send-01` created neither a
+    Dispatch nor an attachment for `task_04fd0dc61065`; the Task remained ready.
+- Findings:
+  - Durable home state and worker identity fencing survive independent epochs without requiring Run
+    replication or authority failover.
+  - A failed connection before remote acceptance is a clean no-effect result; it must not be
+    promoted to an ambiguous outcome or consume the Task.
+- Next:
+  - Disconnect the worker route after possible acceptance, then follow the returned exact recovery
+    command and prove that retry deduplicates to one remote effect.
 
 ### Entry template
 

@@ -167,6 +167,44 @@ describe('OrchestrationDb worker Dispatch state', () => {
     expect(d.getTask(task.id)?.status).toBe('blocked')
   })
 
+  it('allows explicit stop recovery from uncertain local and remote starts', () => {
+    const d = createDb()
+    const task = d.createTask({ spec: 'uncertain local start' })
+    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    d.markWorkerStartUnknown(started.dispatch.id, 'agent_readiness', 'connection lost')
+
+    expect(d.beginWorkerStop(started.dispatch.id)).toMatchObject({
+      disposition: 'stopping',
+      worker: { state: 'stopping' }
+    })
+
+    d.createRemoteDispatchAttachment({
+      dispatchId: 'ctx_remote_unknown',
+      taskId: 'task_remote_unknown',
+      homePeerFingerprint: 'home_peer',
+      protocolVersion: 1,
+      runtimeEpoch: 'worker_epoch',
+      mutationReceipt: {
+        callerFingerprint: 'home_peer',
+        requestId: 'remote_unknown_start',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'remote_unknown_payload'
+      }
+    })
+    d.recordRemoteAttachmentStage({
+      dispatchId: 'ctx_remote_unknown',
+      stage: 'agent_readiness',
+      state: 'start_unknown',
+      terminalHandle: 'term_remote_worker'
+    })
+
+    expect(d.beginRemoteAttachmentStop('ctx_remote_unknown')).toMatchObject({
+      state: 'stopping',
+      stage: 'stop_requested',
+      capability_hash: null
+    })
+  })
+
   it('returns already-settled when completion wins before stop', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'race' })

@@ -2406,7 +2406,7 @@ export class OrchestrationDb {
     if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(attachment.state)) {
       return attachment
     }
-    if (attachment.state !== 'ready') {
+    if (!['ready', 'start_unknown'].includes(attachment.state)) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Remote Dispatch ${dispatchId} cannot stop from ${attachment.state}.`
@@ -2417,7 +2417,7 @@ export class OrchestrationDb {
         `UPDATE remote_dispatch_attachments
          SET state = 'stopping', stage = 'stop_requested', capability_hash = NULL,
              updated_at = datetime('now')
-         WHERE dispatch_id = ? AND state = 'ready'`
+         WHERE dispatch_id = ? AND state IN ('ready', 'start_unknown')`
       )
       .run(dispatchId)
     return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow
@@ -2906,7 +2906,7 @@ export class OrchestrationDb {
         this.db.exec('COMMIT')
         return { disposition: 'already_settled', worker, dispatch }
       }
-      if (worker.state !== 'ready') {
+      if (!['ready', 'start_unknown'].includes(worker.state)) {
         throw new OrchestrationError(
           'dispatch_inactive',
           `Dispatch ${dispatchId} cannot stop from ${worker.state}.`
@@ -2916,7 +2916,7 @@ export class OrchestrationDb {
         .prepare(
           `UPDATE worker_dispatches
            SET state = 'stopping', stage = 'stop_requested', updated_at = datetime('now')
-           WHERE dispatch_id = ? AND state = 'ready'`
+           WHERE dispatch_id = ? AND state IN ('ready', 'start_unknown')`
         )
         .run(dispatchId)
       this.db
