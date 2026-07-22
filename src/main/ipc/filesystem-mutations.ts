@@ -362,8 +362,10 @@ export type StagedExternalImportEntry =
   | { relativePath: string; kind: 'directory' }
   | { relativePath: string; kind: 'file'; contentBase64: string }
 
-const REMOTE_IMPORT_MAX_FILE_BYTES = 25 * 1024 * 1024
-const REMOTE_IMPORT_MAX_TOTAL_BYTES = 100 * 1024 * 1024
+const REMOTE_IMPORT_MAX_FILE_MB = 25
+const REMOTE_IMPORT_MAX_TOTAL_MB = 100
+const REMOTE_IMPORT_MAX_FILE_BYTES = REMOTE_IMPORT_MAX_FILE_MB * 1024 * 1024
+const REMOTE_IMPORT_MAX_TOTAL_BYTES = REMOTE_IMPORT_MAX_TOTAL_MB * 1024 * 1024
 
 class RuntimeUploadSymlinkError extends Error {}
 
@@ -650,10 +652,11 @@ function assertRemoteUploadBudget(
   totalBytes: number
 ): void {
   if (fileBytes > REMOTE_IMPORT_MAX_FILE_BYTES) {
-    throw new Error(`'${relativePath}' is too large for remote import`)
+    const fileLabel = relativePath ? `'${relativePath}'` : 'File'
+    throw new Error(`${fileLabel} exceeds the ${REMOTE_IMPORT_MAX_FILE_MB} MB remote import limit`)
   }
   if (totalBytes > REMOTE_IMPORT_MAX_TOTAL_BYTES) {
-    throw new Error('Remote import is too large')
+    throw new Error(`Remote import exceeds the ${REMOTE_IMPORT_MAX_TOTAL_MB} MB total limit`)
   }
 }
 
