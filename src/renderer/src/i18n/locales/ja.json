@@ -1819,7 +1819,12 @@
         "61ed600d29": "「{{value0}}」には未保存の変更があります。閉じる前に保存しますか?",
         "cdc9ac4b2d": "エディタ",
         "e57db40c11": "{{value0}} の起動コマンドを作成できませんでした。",
-        "5b2c1a9e44": "エージェント CLI が検出されません。インストールするか、設定で既定のエージェントを選択してください。"
+        "5b2c1a9e44": "エージェント CLI が検出されません。インストールするか、設定で既定のエージェントを選択してください。",
+        "workspaceEmptyState": {
+          "newTerminal": "新規ターミナル",
+          "newMarkdown": "新規 Markdown ノート",
+          "newBrowser": "新規ブラウザ"
+        }
       },
       "TerminalSearch": {
         "db234b7519": "閉じる",
@@ -2754,7 +2759,12 @@
             "1ff1c77616": "ブラウザ",
             "586d2ac445": "ターミナル",
             "addSplitPane": "分割ペインを追加",
-            "closePaneColumn": "分割ペインを閉じる"
+            "closePaneColumn": "分割ペインを閉じる",
+            "emptyState": {
+              "newTerminal": "新規ターミナル",
+              "newMarkdown": "新規 Markdown ノート",
+              "newBrowser": "新規ブラウザ"
+            }
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "このセッションを再開するにはターミナルペインにドロップしてください。",

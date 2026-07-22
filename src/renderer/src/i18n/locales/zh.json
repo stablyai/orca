@@ -1819,7 +1819,12 @@
         "61ed600d29": "“{{value0}}”有未保存的更改。您想在关闭前保存吗？",
         "cdc9ac4b2d": "编辑",
         "e57db40c11": "无法为 {{value0}} 构建启动命令。",
-        "5b2c1a9e44": "未检测到智能体 CLI，请安装一个，或在设置中选择默认智能体。"
+        "5b2c1a9e44": "未检测到智能体 CLI，请安装一个，或在设置中选择默认智能体。",
+        "workspaceEmptyState": {
+          "newTerminal": "新建终端",
+          "newMarkdown": "新建 Markdown 笔记",
+          "newBrowser": "新建浏览器"
+        }
       },
       "TerminalSearch": {
         "db234b7519": "关闭",
@@ -2754,7 +2759,12 @@
             "1ff1c77616": "浏览器",
             "586d2ac445": "终端",
             "addSplitPane": "添加拆分窗格",
-            "closePaneColumn": "关闭拆分窗格"
+            "closePaneColumn": "关闭拆分窗格",
+            "emptyState": {
+              "newTerminal": "新建终端",
+              "newMarkdown": "新建 Markdown 笔记",
+              "newBrowser": "新建浏览器"
+            }
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "拖放到终端面板以恢复此会话。",

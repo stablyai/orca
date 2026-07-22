@@ -1,7 +1,7 @@
-import { Suspense, useMemo } from 'react'
+import { memo, Suspense, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { Ellipsis, X } from 'lucide-react'
+import { Ellipsis, FileText, Globe, TerminalSquare, X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import {
   DropdownMenu,
@@ -10,6 +10,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Button } from '@/components/ui/button'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import TabBar from '../tab-bar/TabBar'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
@@ -21,6 +24,86 @@ import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+
+const TabGroupEmptyState = memo(function TabGroupEmptyState({
+  worktreeId,
+  groupId
+}: {
+  worktreeId: string
+  groupId: string
+}): React.JSX.Element {
+  const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
+  const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
+  const newMarkdownShortcut = useShortcutKeyDetails('tab.newMarkdown')
+  const commands = useTabGroupWorkspaceModel({ groupId, worktreeId }).commands
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <div className="flex w-[360px] flex-col items-center gap-1.5">
+        <Button
+          type="button"
+          variant="ghost"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={commands.newTerminalTab}
+        >
+          <TerminalSquare className="size-3.5 opacity-90" />
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.tab.group.TabGroupPanel.emptyState.newTerminal',
+              'New Terminal'
+            )}
+          </span>
+          {newTerminalShortcut.keys.length > 0 ? (
+            <ShortcutKeyCombo
+              keys={newTerminalShortcut.keys}
+              doubleTap={newTerminalShortcut.doubleTap}
+            />
+          ) : null}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={commands.newFileTab}
+        >
+          <FileText className="size-3.5 opacity-90" />
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.tab.group.TabGroupPanel.emptyState.newMarkdown',
+              'New Markdown Note'
+            )}
+          </span>
+          {newMarkdownShortcut.keys.length > 0 ? (
+            <ShortcutKeyCombo
+              keys={newMarkdownShortcut.keys}
+              doubleTap={newMarkdownShortcut.doubleTap}
+            />
+          ) : null}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={commands.newBrowserTab}
+        >
+          <Globe className="size-3.5 opacity-90" />
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.tab.group.TabGroupPanel.emptyState.newBrowser',
+              'New Browser'
+            )}
+          </span>
+          {newBrowserShortcut.keys.length > 0 ? (
+            <ShortcutKeyCombo
+              keys={newBrowserShortcut.keys}
+              doubleTap={newBrowserShortcut.doubleTap}
+            />
+          ) : null}
+        </Button>
+      </div>
+    </div>
+  )
+})
 
 export default function TabGroupPanel({
   groupId,
@@ -55,6 +138,9 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const autoCreateTerminalOnWorkspaceActivation = useAppStore(
+    (state) => state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
+  )
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
@@ -324,6 +410,13 @@ export default function TabGroupPanel({
           )}
 
         {/* Why: terminal/browser/simulator panes render at the worktree level (overlay layers); per-group rendering remounted xterm/webview/simulator on split moves. */}
+        {activeTab === null &&
+          terminalTabs.length === 0 &&
+          editorItems.length === 0 &&
+          browserItems.length === 0 &&
+          !autoCreateTerminalOnWorkspaceActivation && (
+            <TabGroupEmptyState worktreeId={worktreeId} groupId={groupId} />
+          )}
       </div>
     </div>
   )

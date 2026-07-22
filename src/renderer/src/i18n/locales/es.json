@@ -1819,7 +1819,12 @@
         "61ed600d29": "\"{{value0}}\" tiene cambios no guardados. ¿Quieres guardar antes de cerrar?",
         "cdc9ac4b2d": "editor",
         "e57db40c11": "No se pudo generar el comando de inicio para {{value0}}.",
-        "5b2c1a9e44": "No se detectó ninguna CLI de agente; instala una o elige un agente predeterminado en Ajustes."
+        "5b2c1a9e44": "No se detectó ninguna CLI de agente; instala una o elige un agente predeterminado en Ajustes.",
+        "workspaceEmptyState": {
+          "newTerminal": "Nueva terminal",
+          "newMarkdown": "Nueva nota Markdown",
+          "newBrowser": "Nuevo navegador"
+        }
       },
       "TerminalSearch": {
         "db234b7519": "Cerrar",
@@ -2754,7 +2759,12 @@
             "1ff1c77616": "navegador",
             "586d2ac445": "terminal",
             "addSplitPane": "Agregar panel dividido",
-            "closePaneColumn": "Cerrar panel dividido"
+            "closePaneColumn": "Cerrar panel dividido",
+            "emptyState": {
+              "newTerminal": "Nueva terminal",
+              "newMarkdown": "Nueva nota Markdown",
+              "newBrowser": "Nuevo navegador"
+            }
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Suelta sobre un panel de terminal para reanudar esta sesión.",

@@ -1819,7 +1819,12 @@
         "61ed600d29": "'{{value0}}'에 저장되지 않은 변경사항이 있습니다. 닫기 전에 저장하시겠습니까?",
         "cdc9ac4b2d": "편집기",
         "e57db40c11": "{{value0}} 실행 명령을 만들 수 없습니다.",
-        "5b2c1a9e44": "agent CLI를 찾지 못했습니다. 하나를 설치하거나 설정에서 기본 agent를 선택하세요."
+        "5b2c1a9e44": "agent CLI를 찾지 못했습니다. 하나를 설치하거나 설정에서 기본 agent를 선택하세요.",
+        "workspaceEmptyState": {
+          "newTerminal": "새 터미널",
+          "newMarkdown": "새 Markdown 노트",
+          "newBrowser": "새 브라우저"
+        }
       },
       "TerminalSearch": {
         "db234b7519": "닫기",
@@ -2754,7 +2759,12 @@
             "1ff1c77616": "브라우저",
             "586d2ac445": "터미널",
             "addSplitPane": "분할 창 추가",
-            "closePaneColumn": "분할 창 닫기"
+            "closePaneColumn": "분할 창 닫기",
+            "emptyState": {
+              "newTerminal": "새 터미널",
+              "newMarkdown": "새 Markdown 노트",
+              "newBrowser": "새 브라우저"
+            }
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "이 세션을 재개하려면 terminal 창에 놓으세요.",

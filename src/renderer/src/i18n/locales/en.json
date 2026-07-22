@@ -1842,7 +1842,12 @@
         "61ed600d29": "\"{{value0}}\" has unsaved changes. Do you want to save before closing?",
         "cdc9ac4b2d": "editor",
         "e57db40c11": "Could not build launch command for {{value0}}.",
-        "5b2c1a9e44": "No agent CLI detected — install one or pick a default agent in Settings."
+        "5b2c1a9e44": "No agent CLI detected — install one or pick a default agent in Settings.",
+        "workspaceEmptyState": {
+          "newTerminal": "New Terminal",
+          "newMarkdown": "New Markdown Note",
+          "newBrowser": "New Browser"
+        }
       },
       "TerminalSearch": {
         "db234b7519": "Close",
@@ -2777,7 +2782,12 @@
             "1ff1c77616": "browser",
             "586d2ac445": "terminal",
             "addSplitPane": "Add split pane",
-            "closePaneColumn": "Close split pane"
+            "closePaneColumn": "Close split pane",
+            "emptyState": {
+              "newTerminal": "New Terminal",
+              "newMarkdown": "New Markdown Note",
+              "newBrowser": "New Browser"
+            }
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
