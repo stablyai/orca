@@ -1,5 +1,9 @@
 import type { GitHubWorkItem, Worktree } from '../../../shared/types'
-import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { basename } from './path'
 
 type GitHubWorkItemType = GitHubWorkItem['type']
@@ -21,7 +25,8 @@ export function findGithubWorkItemWorkspaceAttachment(
         worktree.repoId !== repoId ||
         worktree.isArchived ||
         (executionHostId &&
-          (normalizeExecutionHostId(worktree.hostId) ?? 'local') !== executionHostId)
+          (normalizeExecutionHostId(worktree.hostId) ?? LOCAL_EXECUTION_HOST_ID) !==
+            executionHostId)
       ) {
         return false
       }

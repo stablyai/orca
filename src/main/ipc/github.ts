@@ -172,6 +172,7 @@ function validateRegisteredRepo(
         : 'Access denied: unknown repository path'
     }
   }
+  // Repo identities are host-scoped, so ambiguous cross-host collisions must fail closed.
   const hostMatches = executionHostId
     ? pathMatches.filter((repo) => getRepoExecutionHostId(repo) === executionHostId)
     : pathMatches
