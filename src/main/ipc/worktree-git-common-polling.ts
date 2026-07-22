@@ -280,7 +280,13 @@ export async function startGitCommonPolling(
       ticking = false
     }
     if (!disposed) {
-      const nextDelay = Math.max(0, pollIntervalMs - (Date.now() - startedAt))
+      // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
+      // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
+      // minutes); the upper clamp caps the wait at one interval, the lower clamp keeps a long scan from going negative.
+      const nextDelay = Math.max(
+        0,
+        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
+      )
       timer = setTimeout(() => void tick(), nextDelay)
       timer.unref?.()
     }
