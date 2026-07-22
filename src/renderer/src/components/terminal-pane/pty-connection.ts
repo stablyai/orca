@@ -2075,17 +2075,25 @@ export function connectPanePty(
     ORCA_WORKTREE_ID: deps.worktreeId,
     ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
   }
-  // Why: agents in any worktree of a Spotlight-enabled repo must be able to
-  // find the dev server's mirrored log without knowing the root checkout path.
+  // Why: agents must find the dev-server log by path. ORCA_SPOTLIGHT_ROOT is set
+  // UNGATED — even before Spotlight is enabled — because env vars freeze at spawn,
+  // so a terminal started before the toggle was on would otherwise never get a
+  // handle to the root. The log path itself stays gated on the enabled flag.
   const spotlightLogRepo = state.repos.find(
     (repo) => repo.id === getRepoIdFromWorktreeId(deps.worktreeId)
   )
   const spotlightLogEnv: Record<string, string> =
-    spotlightLogRepo?.spotlightTestingEnabled === true &&
-    !spotlightLogRepo.connectionId?.trim() &&
-    !isFolderRepo(spotlightLogRepo)
+    spotlightLogRepo && !spotlightLogRepo.connectionId?.trim() && !isFolderRepo(spotlightLogRepo)
       ? {
-          ORCA_SPOTLIGHT_LOG: resolveRuntimePath(spotlightLogRepo.path, SPOTLIGHT_LOG_RELATIVE_PATH)
+          ORCA_SPOTLIGHT_ROOT: spotlightLogRepo.path,
+          ...(spotlightLogRepo.spotlightTestingEnabled === true
+            ? {
+                ORCA_SPOTLIGHT_LOG: resolveRuntimePath(
+                  spotlightLogRepo.path,
+                  SPOTLIGHT_LOG_RELATIVE_PATH
+                )
+              }
+            : {})
         }
       : {}
   const paneEnv = {
