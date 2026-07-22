@@ -854,6 +854,7 @@ import {
   getSshGitProviderGeneration,
   requireSshGitProvider
 } from '../providers/ssh-git-dispatch'
+import { addRemoteRepoFromPath } from '../repos/add-remote-repo-from-path'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { githubAvatarIcon } from '../../shared/repo-icon'
@@ -14420,6 +14421,32 @@ export class OrcaRuntimeService {
   ): Promise<Repo> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
+    }
+    const parsedHost = parseExecutionHostId(executionHostId ?? null)
+    if (parsedHost?.kind === 'ssh') {
+      const result = await addRemoteRepoFromPath(this.store, {
+        connectionId: parsedHost.targetId,
+        remotePath: path,
+        kind
+      })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      this.invalidateResolvedWorktreeCache()
+      this.invalidateWorktreeScanCacheForRepo(result.repo.id)
+      this.notifyReposChanged()
+      return this.store.getRepo(result.repo.id) ?? result.repo
+    }
+    // Why: Windows path.resolve / local probes turn `/home/...` into `C:\home\...` and hide SSH imports.
+    if (
+      process.platform === 'win32' &&
+      !parsedHost &&
+      path.startsWith('/') &&
+      !path.startsWith('//')
+    ) {
+      throw new Error(
+        `Path looks like a remote POSIX path (${path}). Pass hostId ssh:<connectionId> to import it on an SSH host.`
+      )
     }
     if (!isAbsolute(path)) {
       // Why: remote clients may run in a different cwd than the server. Require

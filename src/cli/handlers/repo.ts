@@ -1,7 +1,12 @@
 import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
-import { getOptionalPositiveIntegerFlag, getRequiredStringFlag } from '../flags'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../flags'
+import { isNonLocalRepoAddHost, resolveRepoAddHostId } from '../repo-add-host'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 
 export const REPO_HANDLERS: Record<string, CommandHandler> = {
@@ -11,8 +16,13 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
   },
   'repo add': async ({ flags, client, cwd, json }) => {
     const repoPath = getRequiredStringFlag(flags, 'path')
+    const rawHost = getOptionalStringFlag(flags, 'host')
+    const hostId = rawHost === undefined ? undefined : resolveRepoAddHostId(rawHost)
+    const treatPathAsRemote =
+      client.isRemote || (hostId !== undefined && isNonLocalRepoAddHost(hostId))
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.add', {
-      path: resolveRepoPathArgument(repoPath, cwd, client.isRemote, 'Remote repo add')
+      path: resolveRepoPathArgument(repoPath, cwd, treatPathAsRemote, 'Remote repo add'),
+      ...(hostId !== undefined ? { hostId } : {})
     })
     printResult(result, json, formatRepoShow)
   },

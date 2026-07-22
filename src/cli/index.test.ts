@@ -2714,6 +2714,58 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('routes repo.add --host ssh through hostId without resolving against the desktop cwd', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_add', {
+        repo: {
+          id: 'repo-ssh-1',
+          path: '/home/minhun/dev/orca-r11-reconnect',
+          displayName: 'orca-r11-reconnect',
+          connectionId: 'ssh-1784350275544-cv3c0t'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'repo',
+        'add',
+        '--path',
+        '/home/minhun/dev/orca-r11-reconnect',
+        '--host',
+        'ssh-1784350275544-cv3c0t',
+        '--json'
+      ],
+      process.platform === 'win32' ? 'C:\\Users\\me' : '/tmp/desktop-cwd'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('repo.add', {
+      path: '/home/minhun/dev/orca-r11-reconnect',
+      hostId: 'ssh:ssh-1784350275544-cv3c0t'
+    })
+  })
+
+  it('rejects invalid repo.add --host values with an --environment hint', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['repo', 'add', '--path', '/home/me/orca', '--host', 'env:not-a-host', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--environment selects a paired Orca server'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it.each(['C:\\repo', 'C:/repo', '\\\\server\\share\\repo', '//server/share/repo'])(
     'sends remote repo.add server absolute path %s unchanged',
     async (serverPath) => {

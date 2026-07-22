@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
@@ -11,7 +12,29 @@ const RepoSelector = z.object({
 
 const RepoPath = z.object({
   path: requiredString('Missing repo path'),
-  kind: z.enum(['git', 'folder']).optional()
+  kind: z.enum(['git', 'folder']).optional(),
+  hostId: z
+    .unknown()
+    .transform((value, ctx) => {
+      if (value === undefined || value === null || value === '') {
+        return undefined
+      }
+      if (typeof value !== 'string') {
+        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+        return z.NEVER
+      }
+      const hostId = normalizeExecutionHostId(value)
+      if (!hostId) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'Invalid host ID. Use local, ssh:<connectionId>, or runtime:<environmentId>. --environment selects a paired Orca server, not an SSH connectionId.'
+        })
+        return z.NEVER
+      }
+      return hostId
+    })
+    .optional()
 })
 
 const RepoCreate = z.object({
@@ -178,7 +201,7 @@ export const REPO_METHODS: RpcMethod[] = [
     name: 'repo.add',
     params: RepoPath,
     handler: async (params, { runtime }) => ({
-      repo: await runtime.addRepo(params.path, params.kind)
+      repo: await runtime.addRepo(params.path, params.kind, params.hostId)
     })
   }),
   defineMethod({

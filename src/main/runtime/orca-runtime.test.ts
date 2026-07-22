@@ -6611,44 +6611,83 @@ describe('OrcaRuntimeService', () => {
     expect(repos[0]).not.toHaveProperty('executionHostId')
   })
 
-  it('only a runtime host adopts an unstamped repo; local/ssh imports never stamp it', async () => {
-    // Local and legacy runtime repos both have null executionHostId/connectionId, so only a runtime host may backfill; local/ssh imports leave it untouched.
-    for (const importHostId of ['local', 'ssh:ssh-target-9'] as const) {
-      const repos: Record<string, unknown>[] = [
-        {
-          id: 'repo-local-1',
-          path: '/workspace',
-          displayName: 'workspace',
-          badgeColor: 'blue',
-          addedAt: 1,
-          kind: 'folder'
-        }
-      ]
-      const runtimeStore = {
-        ...store,
-        getRepos: () => [...repos] as never,
-        addRepo: (repo: Record<string, unknown>) => {
-          repos.push(repo)
-        },
-        getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-        updateRepo: (id: string, updates: Record<string, unknown>) => {
-          const index = repos.findIndex((repo) => repo.id === id)
-          if (index === -1) {
-            return null
-          }
-          repos[index] = { ...repos[index], ...updates }
-          return repos[index] as never
-        }
+  it('only a runtime host adopts an unstamped repo; local imports never stamp it', async () => {
+    // Local and legacy runtime repos both have null executionHostId/connectionId, so only a runtime host may backfill; local imports leave it untouched.
+    const repos: Record<string, unknown>[] = [
+      {
+        id: 'repo-local-1',
+        path: '/workspace',
+        displayName: 'workspace',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'folder'
       }
-      const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-      const repo = await runtime.addRepo('/workspace', 'folder', importHostId)
-
-      // The matched repo is returned unchanged — no new repo, no executionHostId stamped.
-      expect(repos).toHaveLength(1)
-      expect(repo.id).toBe('repo-local-1')
-      expect(repos[0]).not.toHaveProperty('executionHostId')
+    ]
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+      updateRepo: (id: string, updates: Record<string, unknown>) => {
+        const index = repos.findIndex((repo) => repo.id === id)
+        if (index === -1) {
+          return null
+        }
+        repos[index] = { ...repos[index], ...updates }
+        return repos[index] as never
+      }
     }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const repo = await runtime.addRepo('/workspace', 'folder', 'local')
+
+    // The matched repo is returned unchanged — no new repo, no executionHostId stamped.
+    expect(repos).toHaveLength(1)
+    expect(repo.id).toBe('repo-local-1')
+    expect(repos[0]).not.toHaveProperty('executionHostId')
+  })
+
+  it('routes SSH hostId repo.add through the remote connection path without desktop path probing', async () => {
+    const isGitRepoAsync = vi.fn().mockResolvedValue({
+      isRepo: true,
+      rootPath: '/home/minhun/dev/orca-r11-reconnect'
+    })
+    sshGitProviders.set('ssh-1784350275544-cv3c0t', { isGitRepoAsync })
+    const repos: Record<string, unknown>[] = []
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+      getSshTarget: vi.fn().mockReturnValue({ label: 'relay-host' })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const repo = await runtime.addRepo(
+      '/home/minhun/dev/orca-r11-reconnect',
+      'git',
+      'ssh:ssh-1784350275544-cv3c0t'
+    )
+
+    expect(isGitRepoAsync).toHaveBeenCalledWith('/home/minhun/dev/orca-r11-reconnect')
+    expect(repo).toMatchObject({
+      path: '/home/minhun/dev/orca-r11-reconnect',
+      connectionId: 'ssh-1784350275544-cv3c0t',
+      kind: 'git'
+    })
+    expect(repos).toHaveLength(1)
+    expect(repos[0]).not.toHaveProperty('executionHostId')
+  })
+
+  it('rejects disconnected SSH hostIds instead of probing the desktop filesystem', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+    await expect(
+      runtime.addRepo('/home/minhun/dev/orca-r11-reconnect', 'git', 'ssh:ssh-missing')
+    ).rejects.toThrow('SSH connection "ssh-missing" not found or not connected')
   })
 
   it('keeps project clone setup on the cloned host-qualified repo', async () => {

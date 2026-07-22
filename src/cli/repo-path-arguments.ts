@@ -1,4 +1,5 @@
 import { resolve as resolvePath } from 'node:path'
+import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
 import { RuntimeClientError } from './runtime-client'
 
 function isAbsoluteServerPath(value: string): boolean {
@@ -6,7 +7,9 @@ function isAbsoluteServerPath(value: string): boolean {
     value.startsWith('/') ||
     /^[A-Za-z]:[\\/]/.test(value) ||
     value.startsWith('\\\\') ||
-    value.startsWith('//')
+    value.startsWith('//') ||
+    value === '~' ||
+    value.startsWith('~/')
   )
 }
 
@@ -17,6 +20,18 @@ export function resolveRepoPathArgument(
   remotePathSubject = 'Remote repo path'
 ): string {
   if (!isRemote) {
+    // Why: win32 path.resolve turns `/home/foo` into `C:\home\foo`, which is never the
+    // intended local path and hides SSH/remote-host imports behind a bogus desktop probe.
+    if (
+      process.platform === 'win32' &&
+      inputPath.startsWith('/') &&
+      !isWindowsAbsolutePathLike(inputPath)
+    ) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `${remotePathSubject} looks like a remote POSIX path on the Windows desktop. Pass --host ssh:<connectionId> (not --environment) so Orca validates it on that SSH host.`
+      )
+    }
     return resolvePath(cwd, inputPath)
   }
   // Why: the local CLI cwd is unrelated to a paired runtime's filesystem.
