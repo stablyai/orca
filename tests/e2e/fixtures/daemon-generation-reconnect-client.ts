@@ -9,6 +9,7 @@ import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/sessi
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
 import { createDesktopDiscoveredDaemonRouter } from './daemon-generation-desktop-discovery'
 import { dispatchFixtureCloseBursts } from './daemon-generation-runtime-close'
+import { DAEMON_GENERATION_WORKTREE_ID } from './daemon-generation-fixture-contract'
 
 type ClientGeneration = {
   protocolVersion: number
@@ -34,7 +35,7 @@ type ClientConfig = {
   cwd: string
 }
 
-const WORKTREE_ID = 'fixture-worktree'
+const WORKTREE_ID = DAEMON_GENERATION_WORKTREE_ID
 const PARENT_TAB_ID = 'remote-reconnect-tab'
 const MAX_OUTPUT_CHARS = 32_768
 
@@ -158,6 +159,7 @@ function createRuntimeClosePath(
       pendingShutdowns.push(shutdown)
       return true
     },
+    listProcesses: (options) => router.listProcesses(options),
     hasPty: (ptyId) => router.hasPty(ptyId),
     getForegroundProcess: (ptyId) => router.getForegroundProcess(ptyId)
   })

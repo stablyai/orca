@@ -930,7 +930,7 @@
       "invariant": "Reconnect, replay, or lifecycle observations must never kill a live PTY. Destructive close requires explicit user intent; lifecycle close requires the exact observed publication, terminal, environment, and authoritative liveness, never signals a process, and leaves renderer-owned or partial-split retirement to its owner. Missing or incompatible evidence keeps and audits. Legacy daemon hello and warm reattachment remain non-destructive.",
       "oracle": "Start five isolated native-Windows daemon generations on distinct versioned named pipes, let the production desktop scanner discover v21-v24 from a v25 client, attach live and stale-mirror canaries with exact root/descendant PID-start identities, reconnect and relaunch the production router path, issue repeated desktop and remote-profile lifecycle closes, and require every daemon, root, and descendant to remain alive with zero session-killed events. Unit contracts require unknown/stale/reused/cross-profile claims and live PTYs to refuse without kill or renderer-close calls, old servers to return method_not_found with no destructive fallback, explicit user close to remain destructive, and dead whole-headless state to retire without signalling its retained PTY id.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/methods/session-tabs-schemas.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/methods/session-tabs-schemas.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
         "pnpm exec playwright test tests/e2e/daemon-generation-reconnect-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -942,6 +942,7 @@
         "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
         "src/renderer/src/components/terminal/terminal-tab-actions.test.ts",
         "src/renderer/src/components/terminal/terminal-close-incarnation.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
         "tests/e2e/daemon-generation-reconnect-safety.spec.ts"
       ],
       "assertionRefs": [
@@ -973,6 +974,12 @@
           "assertions": [
             "identical worktree and tab ids in another runtime cannot suppress, reconcile, or clear this profile's intent"
           ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+          "assertions": [
+            "parked lifecycle closes carry the exact exiting PTY and cannot borrow a replacement or sibling incarnation"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -1000,7 +1007,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Production adds no polling, subprocess, PowerShell/CIM, or process-per-session work. Close retains one existing bounded controller inventory refresh, scans only addressed parent leaves, and coalesces client snapshot refresh per environment/worktree. Test-only Windows inventory is capped at 5 seconds and 8 MiB per query; all waits and cleanup are bounded."
+        "evidence": "Production adds no polling, subprocess, PowerShell/CIM, or process-per-session work. Concurrent lifecycle closes share one bounded host controller inventory, scan only addressed parent leaves, and reuse the environment/worktree client snapshot deduper. Test-only Windows inventory is capped at 5 seconds and 8 MiB per query; all waits and cleanup are bounded."
       },
       "promotionCriteria": [
         "Collect 100 clean native-Windows runs over 14 days with zero unexplained flakes.",

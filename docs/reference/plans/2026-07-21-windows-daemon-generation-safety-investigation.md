@@ -549,6 +549,46 @@ formatting, and diff checks pass. The full lint command remains blocked only by
 pre-existing current-main switch-exhaustiveness and localization findings; no
 remaining in-scope review finding is open.
 
+## Additional clean review after `v1.4.150-rc.0` integration
+
+This additional requested `$internal-review-until-clean` pass completed at
+2026-07-21 18:56 PDT (2026-07-22 01:56 UTC) against merge base
+`4d0e3f51ce0325a8f4670b4074618494984ab63d`. Round 1 found and fixed four
+in-scope evidence/performance gaps:
+
+- the native harness omitted production `DaemonPtyRouter.listProcesses`, so
+  its synthetic lifecycle closes could pass through `unknown-liveness`; it now
+  routes the production inventory, uses worktree-prefixed daemon session IDs,
+  and requires every close to return `live-host-pty` with a republished
+  snapshot;
+- concurrent reconnect closes each started a full cross-generation PTY
+  inventory; the host now shares one in-flight inventory and a deterministic
+  count test proves two concurrent closes call `listProcesses` once;
+- the renderer introduced a second snapshot-refresh map; it now reuses the
+  existing environment/worktree remote-session deduper used by PTY reconnect;
+- the reliability gate omitted the parked-tab callback path; its exact exiting
+  PTY incarnation assertion is now part of the gate.
+
+The review also added a wire-compatibility assertion proving that the additive
+`{ reason: 'user' }` field is stripped by the previous `ActivateTab` server
+schema. The repeated elegance and performance interrogation found no remaining
+avoidable infrastructure, polling, subprocess churn, listener/handle leak, or
+unbounded reconnect work. Round 2 re-read the full production and fixture diff,
+constructed stale-publication, stale-handle, concurrent-close, mixed-client,
+and old-server failure paths, and found no remaining proven in-scope issue.
+
+Fresh verification includes all three typechecks; reliability-manifest,
+max-lines, changed-file lint, formatting, and diff checks; 175 remote snapshot
+and PTY transport tests; and the isolated lifecycle/reconnect adjudication
+group. The strengthened native five-generation Windows harness passed after a
+fresh Electron E2E build in 137.2 seconds, required `live-host-pty` for every
+synthetic close, left every daemon/root/descendant alive, and left no
+`orca-9749-dg-*` directory. The full focused gate reached 992/993 passing tests;
+the only failure remains the untouched Windows `/tmp` versus `\\tmp`
+`createRepo` baseline. The newly merged headless-update group reached 143/144
+passing tests plus 25 skips; its only failure is an untouched LF-only
+source-text assertion that does not match CRLF on Windows.
+
 ## Completion evidence matrix
 
 | Original acceptance requirement                                                                                                             | Authoritative evidence                                                                                                                                                                                                                                                                                                                                             | Status                                                                   |
@@ -565,7 +605,7 @@ remaining in-scope review finding is open.
 | No production PowerShell/CIM hot path, polling/listener/handle leak, or reconnect storm                                                     | Process enumeration exists only in fixture helpers; production adds no subprocess or timer. Refreshes coalesce by environment/worktree, listener ownership is unchanged, every fixture allocation has bounded cleanup, and 25-burst stress evidence is recorded above.                                                                                             | Proven                                                                   |
 | Cross-platform, SSH, WSL, remote-server, and multiple-client compatibility                                                                  | 215 deterministic tests cover remote runtime/server, shared control, SSH provider, WSL host context, and PTY transport. Platform-specific fixture behavior is runtime-gated.                                                                                                                                                                                       | Deterministic proof complete; live Linux SSH/WSL unavailable             |
 | Practical Electron restart behavior                                                                                                         | A real isolated Electron application created a daemon-backed terminal, wrote and restored output across clean app quit/relaunch, preserved the exact daemon PID, and accepted both keyboard and direct terminal input after reattachment.                                                                                                                          | Proven on native Windows (`electron-headless`, 24.0 s)                   |
-| Internal review-until-clean and final gates                                                                                                 | Three review rounds ran; round 1 fixed four safety defects, round 2 was clean, and round 3 fixed the Windows scanner-test model before a clean re-review. Typecheck, lint, format, reliability manifest, max-lines ratchet, Electron build, native harness, and focused suites pass apart from the documented untouched baseline.                                  | Proven                                                                   |
+| Internal review-until-clean and final gates                                                                                                 | The original three review rounds and both additional PR review loops are clean. The latest loop fixed four oracle/performance/gate gaps, then completed a clean full-diff re-review. Typecheck, lint, format, reliability manifest, max-lines ratchet, Electron build, native harness, and focused suites pass apart from the documented untouched baselines.      | Proven                                                                   |
 | Public GitHub and real daemon safety                                                                                                        | No public GitHub mutation occurred. Fixture guards reject non-temporary roots and known Orca user-data paths; no installed pipe/token/session was discovered or contacted.                                                                                                                                                                                         | Proven                                                                   |
 
 Live Linux SSH validation remains an explicit gap: the required throwaway

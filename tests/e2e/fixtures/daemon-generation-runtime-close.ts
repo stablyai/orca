@@ -44,6 +44,20 @@ async function dispatchSyntheticExitClose(options: {
       `Synthetic close ${requestId} failed: ${response.error.code}: ${response.error.message} ${JSON.stringify(response.error.data ?? null)}`
     )
   }
+  const result = response.result as {
+    refused?: unknown
+    refusalReason?: unknown
+    snapshotRepublished?: unknown
+  }
+  if (
+    result.refused !== true ||
+    result.refusalReason !== 'live-host-pty' ||
+    result.snapshotRepublished !== true
+  ) {
+    throw new Error(
+      `Synthetic close ${requestId} bypassed live-host adjudication: ${JSON.stringify(result)}`
+    )
+  }
 }
 
 export async function dispatchFixtureCloseBursts(options: {

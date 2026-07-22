@@ -33,6 +33,13 @@ describe('CloseTab (session.tabs.close params)', () => {
     expect(parsed.reason).toBeUndefined()
   })
 
+  it('keeps a new explicit-user payload parseable by the previous server schema', () => {
+    // Why: old hosts use ActivateTab here and must strip the additive field,
+    // not reject a manual close from an updated client.
+    const parsed = ActivateTab.parse({ worktree: WT, tabId: 'tab-1', reason: 'user' })
+    expect(parsed).toEqual({ worktree: WT, tabId: 'tab-1' })
+  })
+
   it('rejects an unknown close reason', () => {
     expect(() =>
       CloseTab.parse({ worktree: WT, tabId: 'tab-1', reason: 'transport-glitch' })

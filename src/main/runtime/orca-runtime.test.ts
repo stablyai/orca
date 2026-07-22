@@ -22130,6 +22130,7 @@ describe('OrcaRuntimeService', () => {
       kill: ReturnType<typeof vi.fn>
       closeTerminal: ReturnType<typeof vi.fn>
       closeTerminalTab: ReturnType<typeof vi.fn>
+      listProcesses: ReturnType<typeof vi.fn>
       processes: { id: string; cwd: string; title: string }[]
     } {
       const servePtyId = 'serve-live-1'
@@ -22158,12 +22159,13 @@ describe('OrcaRuntimeService', () => {
       const kill = vi.fn(() => true)
       const closeTerminal = vi.fn()
       const closeTerminalTab = vi.fn(async () => {})
+      const listProcesses = vi.fn(async () => processes)
       const runtime = new OrcaRuntimeService(runtimeStore as never)
       runtime.setPtyController({
         write: () => true,
         kill,
         getForegroundProcess: async () => null,
-        listProcesses: async () => processes
+        listProcesses
       })
       runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
       runtime.syncWindowGraph(1, {
@@ -22186,7 +22188,15 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
-      return { runtime, getSession, kill, closeTerminal, closeTerminalTab, processes }
+      return {
+        runtime,
+        getSession,
+        kill,
+        closeTerminal,
+        closeTerminalTab,
+        listProcesses,
+        processes
+      }
     }
 
     it.each(['pty-exit', 'cleanup'] as const)(
@@ -22225,6 +22235,29 @@ describe('OrcaRuntimeService', () => {
         ).toBe(true)
       }
     )
+
+    it('coalesces a reconnect close burst onto one authoritative PTY inventory', async () => {
+      const { runtime, listProcesses, processes } = makeAdoptedLiveTabRuntime()
+      const inventory = deferred<typeof processes>()
+      listProcesses.mockImplementation(() => inventory.promise)
+
+      const closes = Promise.all([
+        runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {
+          reason: 'pty-exit'
+        }),
+        runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {
+          reason: 'cleanup'
+        })
+      ])
+      await vi.waitFor(() => expect(listProcesses).toHaveBeenCalledTimes(1))
+      inventory.resolve(processes)
+
+      await expect(closes).resolves.toEqual([
+        expect.objectContaining({ refused: true, refusalReason: 'live-host-pty' }),
+        expect.objectContaining({ refused: true, refusalReason: 'live-host-pty' })
+      ])
+      expect(listProcesses).toHaveBeenCalledTimes(1)
+    })
 
     it('keeps an explicit user close destructive while the PTY is live', async () => {
       const { runtime, closeTerminalTab } = makeAdoptedLiveTabRuntime()

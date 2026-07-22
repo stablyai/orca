@@ -30,6 +30,7 @@ import {
   toWebTerminalSurfaceTabId
 } from './web-terminal-surface-id'
 import { deliverLaunchPromptToAgentTab } from '../lib/agent-launch-prompt-delivery'
+import { listRemoteRuntimeSessionTabsDeduped } from './remote-runtime-session-tabs-inflight'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -289,44 +290,28 @@ function findLocalBrowserPageForRemotePage(
   return null
 }
 
-const pendingSessionTabSnapshotRefreshes = new Map<string, Promise<void>>()
-
 async function refreshWebRuntimeSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string
 ): Promise<void> {
-  const key = `${environmentId}:${worktreeId}`
-  const pending = pendingSessionTabSnapshotRefreshes.get(key)
-  if (pending) {
-    return pending
-  }
-  const refresh = performWebRuntimeSessionTabsSnapshotRefresh(environmentId, worktreeId).finally(
-    () => {
-      if (pendingSessionTabSnapshotRefreshes.get(key) === refresh) {
-        pendingSessionTabSnapshotRefreshes.delete(key)
-      }
-    }
-  )
-  pendingSessionTabSnapshotRefreshes.set(key, refresh)
-  return refresh
-}
-
-async function performWebRuntimeSessionTabsSnapshotRefresh(
-  environmentId: string,
-  worktreeId: string
-): Promise<void> {
   try {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method: 'session.tabs.list',
-      params: {
-        worktree: toRuntimeWorktreeSelector(worktreeId)
-      },
-      timeoutMs: 15_000
+    const snapshot = await listRemoteRuntimeSessionTabsDeduped({
+      environmentId,
+      worktreeId,
+      load: async () => {
+        const response = await window.api.runtimeEnvironments.call({
+          selector: environmentId,
+          method: 'session.tabs.list',
+          params: {
+            worktree: toRuntimeWorktreeSelector(worktreeId)
+          },
+          timeoutMs: 15_000
+        })
+        return unwrapRuntimeRpcResult(
+          response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
+        )
+      }
     })
-    const snapshot = unwrapRuntimeRpcResult(
-      response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
-    )
     const { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsStorePatch } =
       await import('./web-session-tabs-sync')
     applyWebSessionTabsStorePatch((state) => {

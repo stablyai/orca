@@ -2329,6 +2329,7 @@ export class OrcaRuntimeService {
     createMobileSessionTabsNotifyCoalescer((worktreeId) =>
       this.notifyMobileSessionTabsChangedNow(worktreeId)
     )
+  private pendingMobileSessionPtyInventoryRefresh: Promise<Set<string> | null> | null = null
   private leaves = new Map<string, RuntimeLeafRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
@@ -4921,6 +4922,27 @@ export class OrcaRuntimeService {
 
   private async refreshMobileSessionPtyRecords(
     targetWorktreeId: string | null = null
+  ): Promise<Set<string> | null> {
+    if (targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+      const pending = this.pendingMobileSessionPtyInventoryRefresh
+      if (pending) {
+        return pending
+      }
+      // Why: reconnect exit bursts share one authoritative daemon inventory
+      // instead of multiplying a full cross-generation list RPC per stale tab.
+      const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
+        if (this.pendingMobileSessionPtyInventoryRefresh === refresh) {
+          this.pendingMobileSessionPtyInventoryRefresh = null
+        }
+      })
+      this.pendingMobileSessionPtyInventoryRefresh = refresh
+      return refresh
+    }
+    return await this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
+  }
+
+  private async performMobileSessionPtyRecordsRefresh(
+    targetWorktreeId: string | null
   ): Promise<Set<string> | null> {
     if (!this.ptyController?.listProcesses && !this.ptyController?.hasPty) {
       return null
