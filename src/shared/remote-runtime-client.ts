@@ -81,7 +81,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
   pairing: PairingOffer,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  envelope?: { orchestrationCapability?: string; orchestrationRequestId?: string }
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RemoteRuntimeClientError(
@@ -96,11 +97,13 @@ export async function sendRemoteRuntimeRequest<TResult>(
   })
   const pendingRequest = {
     preparedRequest: prepareRemoteRuntimeRequest(new Map(), () =>
-      serializeRemoteRuntimeRpcRequest({
-        requestId,
+      serializeRemoteRuntimePayload({
+        id: requestId,
         deviceToken: pairing.deviceToken,
         method,
-        params
+        params,
+        orchestrationCapability: envelope?.orchestrationCapability,
+        orchestrationRequestId: envelope?.orchestrationRequestId
       })
     )
   }

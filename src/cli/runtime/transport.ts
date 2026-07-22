@@ -9,7 +9,8 @@ export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  envelope?: { orchestrationCapability?: string; orchestrationRequestId?: string }
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
@@ -183,7 +184,9 @@ export async function sendRequest<TResult>(
           id: requestId,
           authToken: metadata.authToken,
           method,
-          params
+          params,
+          orchestrationCapability: envelope?.orchestrationCapability,
+          orchestrationRequestId: envelope?.orchestrationRequestId
         })}\n`
       )
     })

@@ -264,7 +264,21 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(1)
 
-      const resetAll = await runBuiltCli(userDataPath, ['orchestration', 'reset', '--json'])
+      const bareReset = await runBuiltCli(userDataPath, ['orchestration', 'reset', '--json'])
+      expect(bareReset.exitCode).toBe(1)
+      expect(JSON.parse(bareReset.stdout)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument' }
+      })
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(1)
+
+      const resetAll = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'reset',
+        '--all',
+        '--json'
+      ])
       expect(resetAll.exitCode, resetAll.stderr).toBe(0)
       expect(JSON.parse(resetAll.stdout)).toMatchObject({ ok: true, result: { reset: 'all' } })
       expect(db.getInbox()).toHaveLength(0)

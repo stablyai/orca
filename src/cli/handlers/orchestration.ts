@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: orchestration CLI handlers share flag-parsing helpers and dispatch/preamble logic; splitting by verb would fragment the RuntimeClient call shape without reducing complexity. */
 import type { CommandHandler } from '../dispatch'
+import type { RuntimeClient } from '../runtime-client'
 import { printResult } from '../format'
 import {
   getOptionalPositiveIntegerFlag,
@@ -18,7 +19,7 @@ import { parsePositiveSafeIntegerText } from '../../shared/timer-delay'
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
 function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
-  return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
+  return `${type} messages belong to one exact Dispatch and cannot target a group address.`
 }
 
 // Why: test-only escape hatch so subprocess tests avoid the full 15 s window; bogus values fall back to the default.
@@ -83,6 +84,10 @@ type LifecycleSendRejection = {
 type OrchestrationSendResult =
   | { message: { id: string }; lifecycle?: LifecycleSendRejection }
   | { messages: { id: string }[]; recipients: number }
+  | {
+      relay: { messageId: string; sequence: number; dispatchId: string; accepted: true }
+      lifecycle?: { action: 'completed' | 'failed' }
+    }
 
 function getOptionalStructuredMessagePayload(
   flags: Map<string, string | boolean>
@@ -90,12 +95,14 @@ function getOptionalStructuredMessagePayload(
   const rawPayload = getOptionalStringFlag(flags, 'payload')
   const taskId = getOptionalStringFlag(flags, 'task-id')
   const dispatchId = getOptionalStringFlag(flags, 'dispatch-id')
+  const outcome = getOptionalStringFlag(flags, 'outcome')
   const filesModified = getOptionalStringFlag(flags, 'files-modified')
   const reportPath = getOptionalStringFlag(flags, 'report-path')
   const phase = getOptionalStringFlag(flags, 'phase')
   const hasStructuredPayload =
     taskId !== undefined ||
     dispatchId !== undefined ||
+    outcome !== undefined ||
     filesModified !== undefined ||
     reportPath !== undefined ||
     phase !== undefined
@@ -115,6 +122,15 @@ function getOptionalStructuredMessagePayload(
   }
   if (dispatchId) {
     payload.dispatchId = dispatchId
+  }
+  if (outcome) {
+    if (outcome !== 'succeeded' && outcome !== 'failed') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Invalid --outcome. Expected succeeded or failed.'
+      )
+    }
+    payload.outcome = outcome
   }
   if (filesModified) {
     payload.filesModified = filesModified
@@ -163,29 +179,6 @@ async function resolveOrchestrationTerminalHandle(
   return await getTerminalHandle(flags, cwd, client)
 }
 
-async function resolveTaskCreatorTerminalHandle(
-  client: Parameters<CommandHandler>[0]['client']
-): Promise<string | undefined> {
-  const envHandle = process.env.ORCA_TERMINAL_HANDLE
-  if (!envHandle || envHandle.length === 0) {
-    return undefined
-  }
-  let live: boolean
-  try {
-    live = await isLiveTerminalHandle(envHandle, client)
-  } catch (err) {
-    if (isOptionalTaskCreatorHandleError(err)) {
-      // Why: creator handles are best-effort lineage metadata; graph unavailability must not block task creation.
-      return undefined
-    }
-    throw err
-  }
-  if (live) {
-    return envHandle
-  }
-  return await resolveOrchestrationPaneTerminalHandle(client, { optional: true })
-}
-
 async function isLiveTerminalHandle(
   handle: string,
   client: Parameters<CommandHandler>[0]['client']
@@ -216,11 +209,6 @@ function isStaleTerminalIdentityError(err: unknown): boolean {
 
 function isNoActiveTerminalError(err: unknown): boolean {
   return getClientErrorCode(err) === 'no_active_terminal'
-}
-
-function isOptionalTaskCreatorHandleError(err: unknown): boolean {
-  const code = getClientErrorCode(err)
-  return code === 'no_active_sender_terminal' || code === 'runtime_unavailable'
 }
 
 async function resolveOrchestrationPaneTerminalHandle(
@@ -340,11 +328,111 @@ function rejectLifecycleGroupRecipient(type: string | undefined, to: string): vo
   }
 }
 
+function callMutation<TResult>(
+  client: RuntimeClient,
+  flags: Map<string, string | boolean>,
+  method: string,
+  params: unknown,
+  options?: { timeoutMs?: number; orchestrationCapability?: string }
+) {
+  const requestId = getOptionalStringFlag(flags, 'retry-request')
+  if (!requestId) {
+    return options
+      ? client.call<TResult>(method, params, options)
+      : client.call<TResult>(method, params)
+  }
+  return client.call<TResult>(method, params, {
+    ...options,
+    orchestrationRequestId: requestId
+  })
+}
+
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration run-create': async ({ flags, client, cwd, json }) => {
+    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await callMutation<{
+      run: { id: string; objective: string; consumer_generation: number }
+    }>(client, flags, 'orchestration.runCreate', {
+      objective: getRequiredStringFlag(flags, 'objective'),
+      from
+    })
+    printResult(result, json, (r) => `Run ${r.run.id} created and bound: ${r.run.objective}`)
+  },
+
+  'orchestration run-use': async ({ flags, client, cwd, json }) => {
+    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await callMutation<{
+      run: { id: string; objective: string; consumer_generation: number }
+    }>(client, flags, 'orchestration.runUse', {
+      id: getRequiredStringFlag(flags, 'id'),
+      from
+    })
+    printResult(result, json, (r) => `Using Run ${r.run.id}: ${r.run.objective}`)
+  },
+
+  'orchestration run-current': async ({ flags, client, cwd, json }) => {
+    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await client.call<{
+      run: { id: string; objective: string } | null
+    }>('orchestration.runCurrent', { from })
+    printResult(result, json, (r) =>
+      r.run ? `${r.run.id} ${r.run.objective}` : 'No Run is bound to this terminal.'
+    )
+  },
+
+  'orchestration run-list': async ({ client, json }) => {
+    const result = await client.call<{
+      runs: { id: string; objective: string; legacy: number }[]
+    }>('orchestration.runList', {})
+    printResult(result, json, (r) =>
+      r.runs.length === 0
+        ? 'No Runs found.'
+        : r.runs
+            .map(
+              (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
+            )
+            .join('\n')
+    )
+  },
+
+  'orchestration run-show': async ({ flags, client, json }) => {
+    const result = await client.call<{
+      run: {
+        id: string
+        objective: string
+        consumer_generation: number
+        legacy: number
+        created_at: string
+      }
+    }>('orchestration.runShow', { id: getRequiredStringFlag(flags, 'id') })
+    printResult(
+      result,
+      json,
+      (r) =>
+        `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
+        `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}`
+    )
+  },
+
   'orchestration send': async ({ flags, client, cwd, json }) => {
-    const to = getRequiredStringFlag(flags, 'to')
+    const to = getOptionalStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
-    rejectLifecycleGroupRecipient(type, to)
+    if (to) {
+      rejectLifecycleGroupRecipient(type, to)
+    }
+    const outcome = getOptionalStringFlag(flags, 'outcome')
+    if (type === 'worker_done' && outcome === undefined && !flags.has('payload')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'worker_done requires --outcome succeeded or --outcome failed.'
+      )
+    }
+    if (type !== 'worker_done' && outcome !== undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--outcome is only valid with --type worker_done.'
+      )
+    }
 
     if (
       (type === 'worker_done' || type === 'heartbeat') &&
@@ -357,9 +445,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
     // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness probe (worker_done must survive the mid-restart window) and no remint (older runtimes require from === the stale assignee_handle).
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await client.call<OrchestrationSendResult>('orchestration.send', {
+    const sendParams = {
       from,
       to,
+      run: getOptionalStringFlag(flags, 'run'),
       subject: getRequiredStringFlag(flags, 'subject'),
       body: getOptionalStringFlag(flags, 'body'),
       type,
@@ -369,7 +458,15 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
       senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
       devMode: isDevCliInvocation()
-    })
+    }
+    const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')
+    const result = await callMutation<OrchestrationSendResult>(
+      client,
+      flags,
+      'orchestration.send',
+      sendParams,
+      dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined
+    )
     if ('message' in result.result && result.result.lifecycle?.action === 'rejected') {
       // Why: a rejected lifecycle signal isn't completion; non-zero exit stops workers from treating it as such.
       process.exitCode = 1
@@ -380,6 +477,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
           return `Rejected ${r.message.id}: ${r.lifecycle.reason}`
         }
         return `Sent ${r.message.id}`
+      }
+      if ('relay' in r) {
+        return `Queued ${r.relay.messageId} for Run home (Dispatch ${r.relay.dispatchId})`
       }
       return `Sent ${r.messages.length} messages to ${r.recipients} recipients`
     })
@@ -404,17 +504,24 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       messages: MessageSummary[]
       count: number
       formatted?: string
+      deliveryId?: string | null
+      runId?: string
+      timedOut?: boolean
+      cancelled?: boolean
+      connectionLost?: boolean
     }
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>
     try {
-      result = await client.call<CheckResult>('orchestration.check', {
+      result = await callMutation<CheckResult>(client, flags, 'orchestration.check', {
         terminal,
         // Why: peek also sends unread:false so pre-peek runtimes degrade to non-consuming all mode instead of destructive mark-read.
         unread: flags.has('unread') ? true : peek ? false : undefined,
         peek: peek ? true : undefined,
         all: flags.has('all') ? true : undefined,
         types: getOptionalStringFlag(flags, 'types'),
-        inject: flags.has('inject') ? true : undefined,
+        format: flags.has('format') ? true : undefined,
+        run: getOptionalStringFlag(flags, 'run'),
+        ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,
         timeoutMs
       })
@@ -454,21 +561,36 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         return r.formatted
       }
       if (r.count === 0) {
+        if (r.timedOut) {
+          return 'Wait timed out; no messages were consumed.'
+        }
+        if (r.cancelled) {
+          return r.connectionLost
+            ? 'Wait cancelled because the connection closed; no messages were consumed.'
+            : 'Wait cancelled; no messages were consumed.'
+        }
         return 'No messages.'
       }
-      return r.messages
+      const rendered = r.messages
         .map((m) => `${m.id} [${m.type ?? 'status'}] from=${m.from_handle} "${m.subject}"`)
         .join('\n')
+      return r.deliveryId ? `Delivery ${r.deliveryId}\n${rendered}` : rendered
     })
   },
 
   'orchestration reply': async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await client.call<{ message: { id: string } }>('orchestration.reply', {
-      id: getRequiredStringFlag(flags, 'id'),
-      body: getRequiredStringFlag(flags, 'body'),
-      from
-    })
+    const result = await callMutation<{ message: { id: string } }>(
+      client,
+      flags,
+      'orchestration.reply',
+      {
+        id: getRequiredStringFlag(flags, 'id'),
+        body: getRequiredStringFlag(flags, 'body'),
+        run: getOptionalStringFlag(flags, 'run'),
+        from
+      }
+    )
     printResult(result, json, (r) => `Replied ${r.message.id}`)
   },
 
@@ -505,9 +627,11 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     })
   },
 
-  'orchestration task-create': async ({ flags, client, json }) => {
-    const callerTerminalHandle = await resolveTaskCreatorTerminalHandle(client)
-    const result = await client.call<{ task: { id: string; status: string } }>(
+  'orchestration task-create': async ({ flags, client, cwd, json }) => {
+    const callerTerminalHandle = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await callMutation<{ task: { id: string; status: string } }>(
+      client,
+      flags,
       'orchestration.taskCreate',
       {
         spec: getRequiredStringFlag(flags, 'spec'),
@@ -515,14 +639,19 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         displayName: getOptionalStringFlag(flags, 'display-name'),
         deps: getOptionalStringFlag(flags, 'deps'),
         parent: getOptionalStringFlag(flags, 'parent'),
+        run: getOptionalStringFlag(flags, 'run'),
         callerTerminalHandle
       }
     )
     printResult(result, json, (r) => `Created ${r.task.id} [${r.task.status}]`)
   },
 
-  'orchestration task-list': async ({ flags, client, json }) => {
+  'orchestration task-list': async ({ flags, client, cwd, json }) => {
     const brief = flags.has('brief')
+    const run = getOptionalStringFlag(flags, 'run')
+    const callerTerminalHandle = run
+      ? undefined
+      : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       tasks: {
         id: string
@@ -538,7 +667,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     }>('orchestration.taskList', {
       status: getOptionalStringFlag(flags, 'status'),
       ready: flags.has('ready') ? true : undefined,
-      brief: brief ? true : undefined
+      brief: brief ? true : undefined,
+      run,
+      callerTerminalHandle
     })
     // Why: only older runtimes (no spec_truncated) skip server-side abbreviation and need this client-side fallback.
     const needsClientAbbreviation =
@@ -566,7 +697,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     })
   },
 
-  'orchestration task-update': async ({ flags, client, json }) => {
+  'orchestration task-update': async ({ flags, client, cwd, json }) => {
     const status = getRequiredStringFlag(flags, 'status')
     if (!TASK_STATUS_VALUES.includes(status as (typeof TASK_STATUS_VALUES)[number])) {
       throw new RuntimeClientError(
@@ -574,15 +705,120 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         `invalid status '${status}', expected one of: ${TASK_STATUS_VALUES.join(', ')}`
       )
     }
-    const result = await client.call<{ task: { id: string; status: string } }>(
+    const result = await callMutation<{ task: { id: string; status: string } }>(
+      client,
+      flags,
       'orchestration.taskUpdate',
       {
         id: getRequiredStringFlag(flags, 'id'),
         status,
-        result: getOptionalStringFlag(flags, 'result')
+        result: getOptionalStringFlag(flags, 'result'),
+        run: getOptionalStringFlag(flags, 'run'),
+        callerTerminalHandle: await resolveCoordinatorTerminalHandle(flags, cwd, client)
       }
     )
     printResult(result, json, (r) => `Updated ${r.task.id} -> ${r.task.status}`)
+  },
+
+  'orchestration worker-start': async ({ flags, client, cwd, json }) => {
+    const result = await callMutation<{
+      runId: string
+      taskId: string
+      dispatchId: string
+      state: string
+      failedStage?: string
+      lastError?: string
+      effects: unknown[]
+      residualResources: unknown[]
+    }>(client, flags, 'orchestration.workerStart', {
+      task: getRequiredStringFlag(flags, 'task'),
+      on: getOptionalStringFlag(flags, 'on'),
+      worktree: getOptionalStringFlag(flags, 'worktree'),
+      name: getOptionalStringFlag(flags, 'name'),
+      repo: getOptionalStringFlag(flags, 'repo'),
+      baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+      displayName: getOptionalStringFlag(flags, 'display-name'),
+      comment: getOptionalStringFlag(flags, 'comment'),
+      setup: getOptionalStringFlag(flags, 'setup'),
+      agent: getOptionalStringFlag(flags, 'agent'),
+      terminal: getOptionalStringFlag(flags, 'terminal'),
+      retryOf: getOptionalStringFlag(flags, 'retry-of'),
+      timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
+      run: getOptionalStringFlag(flags, 'run'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
+      devMode: isDevCliInvocation()
+    })
+    if (result.result.state !== 'ready') {
+      process.exitCode = 1
+    }
+    printResult(result, json, (worker) => {
+      const base = `Worker ${worker.dispatchId} [${worker.state}] for ${worker.taskId}`
+      return worker.lastError
+        ? `${base}\n${worker.failedStage ?? 'start'}: ${worker.lastError}`
+        : base
+    })
+  },
+
+  'orchestration worker-show': async ({ flags, client, json }) => {
+    const result = await client.call<{
+      dispatch: { id: string; task_id: string; status: string }
+      worker: { state: string; stage: string; agent_terminal_handle: string | null }
+    }>('orchestration.workerShow', {
+      dispatch: getRequiredStringFlag(flags, 'dispatch')
+    })
+    printResult(
+      result,
+      json,
+      (value) =>
+        `${value.dispatch.id} task=${value.dispatch.task_id} [${value.worker.state}] stage=${value.worker.stage}`
+    )
+  },
+
+  'orchestration worker-read': async ({ flags, client, json }) => {
+    const result = await client.call<{
+      dispatchId: string
+      terminal: { tail: string[]; status: string; nextCursor: string | null }
+    }>('orchestration.workerRead', {
+      dispatch: getRequiredStringFlag(flags, 'dispatch'),
+      cursor: getOptionalPositiveIntegerFlag(flags, 'cursor'),
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+    })
+    printResult(result, json, (value) => value.terminal.tail.join('\n'))
+  },
+
+  'orchestration worker-stop': async ({ flags, client, json }) => {
+    const result = await callMutation<{
+      dispatchId: string
+      state: string
+      processAction: string
+      lastError?: string
+    }>(client, flags, 'orchestration.workerStop', {
+      dispatch: getRequiredStringFlag(flags, 'dispatch')
+    })
+    if (result.result.state === 'stop_unknown') {
+      process.exitCode = 1
+    }
+    printResult(
+      result,
+      json,
+      (value) =>
+        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}`
+    )
+  },
+
+  'orchestration worker-abandon': async ({ flags, client, json }) => {
+    const result = await callMutation<{
+      dispatchId: string
+      state: string
+      warning: string
+    }>(client, flags, 'orchestration.workerAbandon', {
+      dispatch: getRequiredStringFlag(flags, 'dispatch')
+    })
+    printResult(
+      result,
+      json,
+      (value) => `Worker ${value.dispatchId} [${value.state}]\nWarning: ${value.warning}`
+    )
   },
 
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
@@ -591,13 +827,14 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const returnPreamble = flags.has('return-preamble') ? true : undefined
     // Why: --to is only required for non-dry-run; the RPC handler re-enforces.
     const to = dryRun ? getOptionalStringFlag(flags, 'to') : getRequiredStringFlag(flags, 'to')
-    const result = await client.call<{
+    const result = await callMutation<{
       dispatch: { id: string; task_id: string; status: string } | null
       injected?: boolean
       dryRun?: boolean
       preamble?: string
-    }>('orchestration.dispatch', {
+    }>(client, flags, 'orchestration.dispatch', {
       task: getRequiredStringFlag(flags, 'task'),
+      run: getOptionalStringFlag(flags, 'run'),
       to,
       from,
       inject: flags.has('inject') ? true : undefined,
@@ -618,23 +855,46 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const parsedTimeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const timeoutMs = clampOrchestrationAskTimeoutMs(parsedTimeoutMs)
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await client.call<{
+    const question = getOptionalStringFlag(flags, 'question')
+    const resume = getOptionalStringFlag(flags, 'resume')
+    if ((question ? 1 : 0) + (resume ? 1 : 0) !== 1) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Choose exactly one of --question or --resume.'
+      )
+    }
+    if (resume && flags.has('options')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--options is only valid when creating a new question.'
+      )
+    }
+    const result = await callMutation<{
       answer: string | null
       messageId: string | null
       threadId: string
       timedOut: boolean
       timeoutMs?: number
+      cancelled?: boolean
+      connectionLost?: boolean
     }>(
+      client,
+      flags,
       'orchestration.ask',
       {
-        to: getRequiredStringFlag(flags, 'to'),
-        question: getRequiredStringFlag(flags, 'question'),
+        to: getOptionalStringFlag(flags, 'to'),
+        run: getOptionalStringFlag(flags, 'run'),
+        question,
+        resume,
         options: getOptionalStringFlag(flags, 'options'),
         timeoutMs: parsedTimeoutMs === undefined ? undefined : timeoutMs,
         from
       },
       // Why: extend past timeoutMs so the RPC transport's 60s default doesn't abort before the runtime's own timeout resolves.
-      { timeoutMs: resolveOrchestrationAskClientTimeoutMs(parsedTimeoutMs) }
+      {
+        timeoutMs: resolveOrchestrationAskClientTimeoutMs(parsedTimeoutMs),
+        orchestrationCapability: getOptionalStringFlag(flags, 'dispatch-capability')
+      }
     )
     // Why: bypass printResult so --json emits a bare JSON object (no envelope) pipeable via `jq -r .answer`, unlike other verbs.
     if (json) {
@@ -647,6 +907,16 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         // Why: report the server's effective budget — it clamps large values, so the requested one would overstate the wait.
         const waitedMs = result.result.timeoutMs ?? timeoutMs
         console.error(`ask timeout after ${waitedMs}ms (thread ${result.result.threadId})`)
+      }
+      process.exitCode = 1
+    }
+    if (result.result.cancelled) {
+      if (!json) {
+        console.error(
+          result.result.connectionLost
+            ? `ask connection closed (question ${result.result.messageId})`
+            : `ask cancelled (question ${result.result.messageId})`
+        )
       }
       process.exitCode = 1
     }
@@ -678,7 +948,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     })
   },
 
-  'orchestration run': async ({ flags, client, cwd, json }) => {
+  'orchestration coordinator-start': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       runId: string
@@ -693,7 +963,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (r) => `Run ${r.runId} started (${r.status})`)
   },
 
-  'orchestration run-stop': async ({ client, json }) => {
+  'orchestration coordinator-stop': async ({ client, json }) => {
     const result = await client.call<{
       runId: string
       stopped: boolean
@@ -702,9 +972,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration gate-create': async ({ flags, client, json }) => {
-    const result = await client.call<{
+    const result = await callMutation<{
       gate: { id: string; task_id: string; status: string }
-    }>('orchestration.gateCreate', {
+    }>(client, flags, 'orchestration.gateCreate', {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
       options: getOptionalStringFlag(flags, 'options')
@@ -717,9 +987,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration gate-resolve': async ({ flags, client, json }) => {
-    const result = await client.call<{
+    const result = await callMutation<{
       gate: { id: string; task_id: string; status: string; resolution: string }
-    }>('orchestration.gateResolve', {
+    }>(client, flags, 'orchestration.gateResolve', {
       id: getRequiredStringFlag(flags, 'id'),
       resolution: getRequiredStringFlag(flags, 'resolution')
     })
@@ -745,9 +1015,17 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration reset': async ({ flags, client, json }) => {
-    const hasScopeFlag = flags.has('all') || flags.has('tasks') || flags.has('messages')
-    const result = await client.call<{ reset: string }>('orchestration.reset', {
-      all: flags.has('all') || !hasScopeFlag ? true : undefined,
+    const scopeCount = [flags.has('all'), flags.has('tasks'), flags.has('messages')].filter(
+      Boolean
+    ).length
+    if (scopeCount !== 1) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Choose exactly one reset scope: --all, --tasks, or --messages.'
+      )
+    }
+    const result = await callMutation<{ reset: string }>(client, flags, 'orchestration.reset', {
+      all: flags.has('all') ? true : undefined,
       tasks: flags.has('tasks') ? true : undefined,
       messages: flags.has('messages') ? true : undefined
     })

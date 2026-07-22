@@ -1012,6 +1012,7 @@ class InMemoryOrchestrationMessages {
     this.sequence += 1
     const row: MessageRow = {
       id: `msg_${this.sequence}`,
+      run_id: 'run_test',
       from_handle: msg.from,
       to_handle: msg.to,
       subject: msg.subject,
@@ -27108,7 +27109,7 @@ describe('OrcaRuntimeService', () => {
 
     const waitPromise = runtime.waitForMessage('term_abc', { timeoutMs: 5000 })
     runtime.notifyMessageArrived('term_abc')
-    await waitPromise
+    await expect(waitPromise).resolves.toBe('notified')
   })
 
   it('does not resolve type-filtered message waiters for unrelated message types', async () => {
@@ -27152,10 +27153,24 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
 
     const start = Date.now()
-    await runtime.waitForMessage('term_abc', { timeoutMs: 100 })
+    await expect(runtime.waitForMessage('term_abc', { timeoutMs: 100 })).resolves.toBe('timed_out')
     const elapsed = Date.now() - start
     expect(elapsed).toBeGreaterThanOrEqual(90)
     expect(elapsed).toBeLessThan(500)
+  })
+
+  it('allows only one exclusive mailbox waiter and supports explicit cancellation', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const first = runtime.waitForMessage('run:run_1', {
+      timeoutMs: 5000,
+      exclusive: true
+    })
+
+    await expect(
+      runtime.waitForMessage('run:run_1', { timeoutMs: 5000, exclusive: true })
+    ).resolves.toBe('waiter_exists')
+    runtime.cancelMessageWaiters('run:run_1')
+    await expect(first).resolves.toBe('cancelled')
   })
 
   it('rejects leaf PTY waits when the request signal aborts', async () => {

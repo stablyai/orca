@@ -79,7 +79,8 @@ describe('runRemoteOrcaCli', () => {
             message.read_at = new Date(0).toISOString()
           }
         }
-      })
+      }),
+      getActiveDispatchForIdentity: vi.fn(() => undefined)
     }
     const runtime = {
       getRuntimeId: () => 'runtime-test',
@@ -155,7 +156,7 @@ describe('runRemoteOrcaCli', () => {
     expect(db.getUnreadMessages('term_windows')[0]?.from_handle).toBe('term_ssh')
   })
 
-  it('forwards remote pane identity through the legacy orchestration fallback', async () => {
+  it('does not trust caller-supplied remote pane identity in the legacy fallback', async () => {
     const { runtime, db } = createRuntime()
 
     const result = await runRemoteOrcaCli(
@@ -173,7 +174,7 @@ describe('runRemoteOrcaCli', () => {
 
     expect(result.exitCode).toBe(0)
     expect(db.insertMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ senderPaneKey: 'tab_ssh:leaf_ssh' })
+      expect.objectContaining({ senderPaneKey: undefined })
     )
   })
 
@@ -183,8 +184,14 @@ describe('runRemoteOrcaCli', () => {
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-    const task = db.createTask({ spec: 'remote work' })
+    const run = db.createRun({
+      objective: 'Remote lifecycle rejection',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
     const dispatch = db.createDispatchContext(task.id, 'term_ssh', 'tab_owner:leaf_owner')
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_foreign:leaf_foreign')
 
     try {
       const result = await runRemoteOrcaCli(
@@ -202,7 +209,11 @@ describe('runRemoteOrcaCli', () => {
             '--type',
             'worker_done',
             '--payload',
-            JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
+            JSON.stringify({
+              taskId: task.id,
+              dispatchId: dispatch.id,
+              outcome: 'succeeded'
+            }),
             '--json'
           ],
           cwd: '/home/alice/repo',
@@ -231,8 +242,14 @@ describe('runRemoteOrcaCli', () => {
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-    const task = db.createTask({ spec: 'remote work' })
+    const run = db.createRun({
+      objective: 'Remote lifecycle success',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
     const dispatch = db.createDispatchContext(task.id, 'term_ssh', 'tab_owner:leaf_owner')
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_owner:leaf_owner')
 
     try {
       const result = await runRemoteOrcaCli(
@@ -251,6 +268,8 @@ describe('runRemoteOrcaCli', () => {
             task.id,
             '--dispatch-id',
             dispatch.id,
+            '--outcome',
+            'succeeded',
             '--files-modified',
             'src/a.ts, src/b.ts',
             '--json'

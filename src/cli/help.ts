@@ -85,6 +85,11 @@ Terminals:
   terminal close            Close a terminal pane/session, or its whole tab with --tab
 
 Orchestration:
+  orchestration run-create  Create and bind a lightweight orchestration Run
+  orchestration run-use     Bind this coordinator terminal to an existing Run
+  orchestration run-current Show this terminal's bound Run
+  orchestration run-list    List lightweight orchestration Runs
+  orchestration run-show    Show one lightweight orchestration Run
   orchestration send        Send an inter-agent message
   orchestration check       Check messages for a terminal
   orchestration reply       Reply to a message
@@ -94,8 +99,8 @@ Orchestration:
   orchestration task-update Update a task status
   orchestration dispatch    Dispatch a task to a terminal
   orchestration dispatch-show Show dispatch context for a task
-  orchestration run         Start the coordinator loop
-  orchestration run-stop    Stop the active coordinator run
+  orchestration coordinator-start Start the legacy automatic coordinator loop
+  orchestration coordinator-stop Stop the legacy automatic coordinator loop
   orchestration gate-create Create a decision gate blocking a task
   orchestration gate-resolve Resolve a pending decision gate
   orchestration gate-list   List decision gates

@@ -74,6 +74,44 @@ function findUnusedPid(seed = 200_000): number {
 // Windows does not support Unix domain sockets in the same way, causing
 // EACCES errors on listen(), so the suite is skipped on that platform.
 describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
+  it('adds an opaque durable request ID only to orchestration mutations', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const requests: Record<string, unknown>[] = []
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        requests.push(request)
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const client = new RuntimeClient(userDataPath, 500)
+    await client.call(
+      'orchestration.send',
+      { subject: 'hello' },
+      {
+        orchestrationRequestId: 'mutation_explicit'
+      }
+    )
+    await client.call('orchestration.taskList', {})
+
+    expect(requests[0]?.orchestrationRequestId).toBe('mutation_explicit')
+    expect(requests[1]?.orchestrationRequestId).toBeUndefined()
+  })
+
   it('returns the full RPC envelope for successful calls', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')

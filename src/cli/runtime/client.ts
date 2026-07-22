@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
@@ -52,19 +53,34 @@ export class RuntimeClient {
     params?: unknown,
     options?: {
       timeoutMs?: number
+      orchestrationCapability?: string
+      orchestrationRequestId?: string
     }
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
+    const orchestrationRequestId = isOrchestrationMutation(method, params)
+      ? (options?.orchestrationRequestId ?? randomUUID())
+      : undefined
+    const envelope = {
+      orchestrationCapability: options?.orchestrationCapability,
+      orchestrationRequestId
+    }
     if (this.remotePairing) {
       if (method !== 'status.get') {
         await this.ensureRemoteRuntimeCompatible(effectiveTimeoutMs)
       }
-      const response = await sendWebSocketRequest<TResult>(
-        this.remotePairing,
-        method,
-        params,
-        effectiveTimeoutMs
-      )
+      let response
+      try {
+        response = await sendWebSocketRequest<TResult>(
+          this.remotePairing,
+          method,
+          params,
+          effectiveTimeoutMs,
+          envelope
+        )
+      } catch (error) {
+        throw attachMutationRecovery(error, orchestrationRequestId)
+      }
       if (response.ok === false) {
         throw new RuntimeRpcFailureError(response)
       }
@@ -76,7 +92,12 @@ export class RuntimeClient {
       return response
     }
     const metadata = readMetadata(this.userDataPath)
-    const response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs)
+    let response
+    try {
+      response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs, envelope)
+    } catch (error) {
+      throw attachMutationRecovery(error, orchestrationRequestId)
+    }
     if (response.ok === false) {
       throw new RuntimeRpcFailureError(response)
     }
@@ -211,6 +232,53 @@ export class RuntimeClient {
       'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
     )
   }
+}
+
+const ORCHESTRATION_MUTATION_METHODS = new Set([
+  'orchestration.runCreate',
+  'orchestration.runUse',
+  'orchestration.send',
+  'orchestration.reply',
+  'orchestration.taskCreate',
+  'orchestration.taskUpdate',
+  'orchestration.dispatch',
+  'orchestration.workerStart',
+  'orchestration.workerStop',
+  'orchestration.workerAbandon',
+  'orchestration.ask',
+  'orchestration.gateCreate',
+  'orchestration.gateResolve',
+  'orchestration.reset'
+])
+
+function isOrchestrationMutation(method: string, params: unknown): boolean {
+  if (method === 'orchestration.check') {
+    return Boolean(
+      params && typeof params === 'object' && typeof (params as { ack?: unknown }).ack === 'string'
+    )
+  }
+  if (method === 'orchestration.dispatch') {
+    return !(
+      params &&
+      typeof params === 'object' &&
+      (params as { dryRun?: unknown }).dryRun === true
+    )
+  }
+  return ORCHESTRATION_MUTATION_METHODS.has(method)
+}
+
+function attachMutationRecovery(error: unknown, requestId: string | undefined): unknown {
+  if (!requestId || !(error instanceof RuntimeClientError)) {
+    return error
+  }
+  return new RuntimeClientError(
+    error.code,
+    `${error.message} Orchestration mutation request ID: ${requestId}.`,
+    {
+      ...(error.data && typeof error.data === 'object' ? error.data : {}),
+      orchestrationRequestId: requestId
+    }
+  )
 }
 
 function throwDesktopActivationBlocked(): never {

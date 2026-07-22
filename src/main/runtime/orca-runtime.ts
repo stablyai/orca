@@ -96,6 +96,12 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationError } from './orchestration/orchestration-error'
+import type {
+  OrchestrationEnvironmentTransport,
+  OrchestrationWorkerServer
+} from './orchestration/environment-transport'
+import { syncFederatedDispatch } from './orchestration/federation-sync'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
   Automation,
@@ -1698,10 +1704,12 @@ type TerminalWaiter = {
 type MessageWaiter = {
   handle: string
   typeFilter: string[] | undefined
-  resolve: (result: void) => void
+  resolve: (result: MessageWaitResult) => void
   timeout: NodeJS.Timeout | null
   abortCleanup: (() => void) | null
 }
+
+export type MessageWaitResult = 'notified' | 'timed_out' | 'cancelled' | 'waiter_exists'
 
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
@@ -2438,6 +2446,8 @@ export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
+  private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
+  private readonly orchestrationFederationTimers = new Map<string, ReturnType<typeof setInterval>>()
   private rendererGraphEpoch = 0
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
@@ -2969,6 +2979,7 @@ export class OrcaRuntimeService {
       buildAgentHookPtyEnv?: () => Record<string, string>
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
+      orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
     }
   ) {
     this.store = store
@@ -2980,6 +2991,7 @@ export class OrcaRuntimeService {
     this.clientSessionTabSelections.setPersistListener((state) => {
       this.store?.setMobileClientTabSelections?.(state)
     })
+    this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -3438,6 +3450,86 @@ export class OrcaRuntimeService {
 
   getRuntimeId(): string {
     return this.runtimeId
+  }
+
+  resolveOrchestrationWorkerServer(selector: string): OrchestrationWorkerServer {
+    if (!this.orchestrationEnvironmentTransport) {
+      throw new OrchestrationError(
+        'server_required',
+        'Connected-server orchestration is unavailable in this runtime.'
+      )
+    }
+    return this.orchestrationEnvironmentTransport.resolve(selector)
+  }
+
+  async callOrchestrationWorkerServer(
+    selector: string,
+    method: string,
+    params: unknown,
+    timeoutMs?: number,
+    envelope?: { orchestrationRequestId?: string; orchestrationCapability?: string }
+  ): Promise<unknown> {
+    if (!this.orchestrationEnvironmentTransport) {
+      throw new OrchestrationError(
+        'server_required',
+        'Connected-server orchestration is unavailable in this runtime.'
+      )
+    }
+    const response = await this.orchestrationEnvironmentTransport.call(
+      selector,
+      method,
+      params,
+      timeoutMs,
+      envelope
+    )
+    if (response.ok === false) {
+      throw new OrchestrationError(response.error.code, response.error.message, response.error.data)
+    }
+    return response.result
+  }
+
+  async syncOrchestrationFederation(runId?: string): Promise<void> {
+    if (!this.orchestrationEnvironmentTransport) {
+      return
+    }
+    const dispatches = this.getOrchestrationDb().listActiveFederatedDispatches(runId)
+    await Promise.allSettled(
+      dispatches.map((dispatch) => syncFederatedDispatch(this, dispatch.dispatch_id))
+    )
+  }
+
+  ensureOrchestrationFederationRelay(runId?: string): void {
+    if (!this.orchestrationEnvironmentTransport) {
+      return
+    }
+    for (const dispatch of this.getOrchestrationDb().listActiveFederatedDispatches(runId)) {
+      if (this.orchestrationFederationTimers.has(dispatch.dispatch_id)) {
+        continue
+      }
+      const tick = () => {
+        const worker = this.getOrchestrationDb().getWorkerDispatch(dispatch.dispatch_id)
+        if (!worker || !['starting', 'ready', 'stopping'].includes(worker.state)) {
+          const activeTimer = this.orchestrationFederationTimers.get(dispatch.dispatch_id)
+          if (activeTimer) {
+            clearInterval(activeTimer)
+          }
+          this.orchestrationFederationTimers.delete(dispatch.dispatch_id)
+          return
+        }
+        void syncFederatedDispatch(this, dispatch.dispatch_id).catch(() => undefined)
+      }
+      const timer = setInterval(tick, 1_000)
+      timer.unref?.()
+      this.orchestrationFederationTimers.set(dispatch.dispatch_id, timer)
+      tick()
+    }
+  }
+
+  stopOrchestrationFederationRelay(): void {
+    for (const timer of this.orchestrationFederationTimers.values()) {
+      clearInterval(timer)
+    }
+    this.orchestrationFederationTimers.clear()
   }
 
   getStartedAt(): number {
@@ -13568,6 +13660,28 @@ export class OrcaRuntimeService {
     }
   }
 
+  getTerminalProcessIncarnation(handle: string): string | null {
+    const record = this.handles.get(handle)
+    if (!record?.ptyId) {
+      return null
+    }
+    // Why: runtime epoch + PTY generation prevents a restored same-looking pane from inheriting old Dispatch authority.
+    return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
+  }
+
+  validateOrchestrationAgentLauncher(agent: TuiAgent): void {
+    const settings = this.store?.getSettings()
+    if (!settings) {
+      throw new Error('runtime_unavailable')
+    }
+    if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
+      throw new OrchestrationError(
+        'agent_unconfigured',
+        `Agent launcher ${agent} is disabled or unavailable.`
+      )
+    }
+  }
+
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
     // Why: the renderer context menu only knows the stable pane key; main owns
     // the runtime terminal handle that agents and CLI commands can address.
@@ -18360,6 +18474,7 @@ export class OrcaRuntimeService {
     runHooks?: boolean
     activate?: boolean
     setupDecision?: 'run' | 'skip' | 'inherit'
+    awaitTerminalProvisioning?: boolean
     createdWithAgent?: TuiAgent
     startupAgent?: TuiAgent
     startupPrompt?: string
@@ -19290,7 +19405,7 @@ export class OrcaRuntimeService {
     } else if (this.ptyController?.spawn && (setup || defaultTabs || didSpawnStartup)) {
       // Why: inactive terminal materialization matches normal worktree creation,
       // but setup/default tab failures must not gate automation dispatch.
-      void this.provisionManagedWorktreeTerminals({
+      const provisioning = this.provisionManagedWorktreeTerminals({
         worktreeSelector: `id:${worktree.id}`,
         worktreeId: worktree.id,
         worktreePath,
@@ -19307,8 +19422,13 @@ export class OrcaRuntimeService {
       })
       // Why: runtime owns setup spawning here, so the RPC result must omit setup
       // to keep the headless/mobile caller from launching it a second time.
-      if (setup) {
-        didSpawnSetup = true
+      if (args.awaitTerminalProvisioning) {
+        didSpawnSetup = (await provisioning).setupSpawned
+      } else {
+        void provisioning
+        if (setup) {
+          didSpawnSetup = true
+        }
       }
     } else if (this.ptyController?.spawn) {
       try {
@@ -19348,6 +19468,24 @@ export class OrcaRuntimeService {
       },
       ...(lineageInput ? { lineage, workspaceLineage, warnings: lineageWarnings } : {}),
       ...(returnedSetup ? { setup: returnedSetup } : {}),
+      ...(args.awaitTerminalProvisioning
+        ? {
+            setupReceipt: {
+              requested: effectiveDecision,
+              hookFound: Boolean(hooks?.scripts.setup),
+              startupPolicy: setup?.waitForAgentStartup
+                ? ('wait-for-setup' as const)
+                : ('start-immediately' as const),
+              state: !hooks?.scripts.setup
+                ? ('not_configured' as const)
+                : effectiveDecision === 'skip'
+                  ? ('skipped' as const)
+                  : didSpawnSetup
+                    ? ('running' as const)
+                    : ('spawn_failed' as const)
+            }
+          }
+        : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(warning ? { warning } : {}),
       ...(addResult.localBaseRefRefresh
@@ -19397,6 +19535,7 @@ export class OrcaRuntimeService {
       runHooks?: boolean
       activate?: boolean
       setupDecision?: 'run' | 'skip' | 'inherit'
+      awaitTerminalProvisioning?: boolean
       createdWithAgent?: TuiAgent
       pendingFirstAgentMessageRename?: boolean
       automationProvenance?: AutomationWorkspaceProvenance
@@ -19602,7 +19741,7 @@ export class OrcaRuntimeService {
     ) {
       // Why: inactive terminal materialization matches normal worktree creation,
       // but setup/default tab failures must not gate automation dispatch.
-      void this.provisionManagedWorktreeTerminals({
+      const provisioning = this.provisionManagedWorktreeTerminals({
         worktreeSelector: `path:${result.worktree.path}`,
         worktreeId: result.worktree.id,
         worktreePath: result.worktree.path,
@@ -19619,8 +19758,13 @@ export class OrcaRuntimeService {
       })
       // Why: runtime owns setup spawning here, so omit setup from the RPC result
       // to keep the headless/mobile caller from launching it a second time.
-      if (result.setup) {
-        didSpawnSetup = true
+      if (args.awaitTerminalProvisioning) {
+        didSpawnSetup = (await provisioning).setupSpawned
+      } else {
+        void provisioning
+        if (result.setup) {
+          didSpawnSetup = true
+        }
       }
     } else if (!shouldActivate && this.ptyController?.spawn) {
       try {
@@ -19665,7 +19809,25 @@ export class OrcaRuntimeService {
           }
         : resultForRenderer
 
-    return warning ? { ...resultWithStartupTerminal, warning } : resultWithStartupTerminal
+    const setupReceipt = {
+      requested: (args.runHooks ? 'run' : (args.setupDecision ?? 'inherit')) as
+        | 'run'
+        | 'skip'
+        | 'inherit',
+      hookFound: Boolean(result.setup),
+      startupPolicy: result.setup?.waitForAgentStartup
+        ? ('wait-for-setup' as const)
+        : ('start-immediately' as const),
+      state: !result.setup
+        ? ('not_configured' as const)
+        : didSpawnSetup
+          ? ('running' as const)
+          : ('spawn_failed' as const)
+    }
+    const resultWithSetupReceipt = args.awaitTerminalProvisioning
+      ? { ...resultWithStartupTerminal, setupReceipt }
+      : resultWithStartupTerminal
+    return warning ? { ...resultWithSetupReceipt, warning } : resultWithSetupReceipt
   }
 
   /**
@@ -27057,15 +27219,25 @@ export class OrcaRuntimeService {
       if (messageType && waiter.typeFilter && !waiter.typeFilter.includes(messageType)) {
         continue
       }
-      this.resolveMessageWaiter(waiter)
+      this.resolveMessageWaiter(waiter, 'notified')
     }
   }
 
   waitForMessage(
     handle: string,
-    options?: { typeFilter?: string[]; timeoutMs?: number; signal?: AbortSignal }
-  ): Promise<void> {
+    options?: {
+      typeFilter?: string[]
+      timeoutMs?: number
+      signal?: AbortSignal
+      exclusive?: boolean
+    }
+  ): Promise<MessageWaitResult> {
     return new Promise((resolve) => {
+      const currentWaiters = this.messageWaitersByHandle.get(handle)
+      if (options?.exclusive && currentWaiters && currentWaiters.size > 0) {
+        resolve('waiter_exists')
+        return
+      }
       const timeoutMs = options?.timeoutMs ?? MESSAGE_WAIT_DEFAULT_TIMEOUT_MS
 
       const waiter: MessageWaiter = {
@@ -27080,11 +27252,11 @@ export class OrcaRuntimeService {
       const signal = options?.signal
       const onAbort = (): void => {
         this.removeMessageWaiter(waiter)
-        resolve()
+        resolve('cancelled')
       }
       if (signal) {
         if (signal.aborted) {
-          resolve()
+          resolve('cancelled')
           return
         }
         waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
@@ -27093,7 +27265,7 @@ export class OrcaRuntimeService {
 
       waiter.timeout = setTimeout(() => {
         this.removeMessageWaiter(waiter)
-        resolve()
+        resolve('timed_out')
       }, timeoutMs)
 
       let waiters = this.messageWaitersByHandle.get(handle)
@@ -27105,9 +27277,19 @@ export class OrcaRuntimeService {
     })
   }
 
-  private resolveMessageWaiter(waiter: MessageWaiter): void {
+  cancelMessageWaiters(handle: string): void {
+    const waiters = this.messageWaitersByHandle.get(handle)
+    if (!waiters) {
+      return
+    }
+    for (const waiter of [...waiters]) {
+      this.resolveMessageWaiter(waiter, 'cancelled')
+    }
+  }
+
+  private resolveMessageWaiter(waiter: MessageWaiter, result: MessageWaitResult): void {
     this.removeMessageWaiter(waiter)
-    waiter.resolve()
+    waiter.resolve(result)
   }
 
   private removeMessageWaiter(waiter: MessageWaiter): void {
