@@ -89,7 +89,7 @@ describe('SshRelaySession orphaned relay PTY reaping', () => {
   it('establish reaps orphaned pane-bound relay PTYs the app no longer tracks', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockShutdown = vi.fn().mockResolvedValue(undefined)
-    const staleStartedAtMs = Date.now() - 60_000
+    const staleAgeMs = 60_000
     vi.mocked(getSshPtyProvider).mockReturnValue({
       attachForReconnect: vi.fn().mockResolvedValue(undefined),
       listProcesses: vi.fn().mockResolvedValue([
@@ -98,14 +98,14 @@ describe('SshRelaySession orphaned relay PTY reaping', () => {
           cwd: '/home/me',
           title: 'shell',
           paneKey: 'tab-a:leaf-a',
-          startedAtMs: staleStartedAtMs
+          ageMs: staleAgeMs
         },
         {
           id: 'ssh:target-1@@pty-9',
           cwd: '/home/me',
           title: 'shell',
           paneKey: 'tab-b:leaf-b',
-          startedAtMs: staleStartedAtMs
+          ageMs: staleAgeMs
         }
       ]),
       shutdown: mockShutdown,
@@ -127,7 +127,7 @@ describe('SshRelaySession orphaned relay PTY reaping', () => {
   it('spares bare shells, young spawns, missing start times, and leased PTYs', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockShutdown = vi.fn().mockResolvedValue(undefined)
-    const staleStartedAtMs = Date.now() - 60_000
+    const staleAgeMs = 60_000
     vi.mocked(getSshPtyProvider).mockReturnValue({
       attachForReconnect: vi.fn().mockResolvedValue(undefined),
       listProcesses: vi.fn().mockResolvedValue([
@@ -136,7 +136,7 @@ describe('SshRelaySession orphaned relay PTY reaping', () => {
           id: 'ssh:target-1@@pty-2',
           cwd: '/home/me',
           title: 'shell',
-          startedAtMs: staleStartedAtMs
+          ageMs: staleAgeMs
         },
         // In-flight spawn racing the sweep: too young to reap.
         {
@@ -144,7 +144,7 @@ describe('SshRelaySession orphaned relay PTY reaping', () => {
           cwd: '/home/me',
           title: 'shell',
           paneKey: 'tab-a:leaf-a',
-          startedAtMs: Date.now()
+          ageMs: 0
         },
         // Durable lease: known, reattached instead of reaped.
         {
@@ -152,9 +152,9 @@ describe('SshRelaySession orphaned relay PTY reaping', () => {
           cwd: '/home/me',
           title: 'shell',
           paneKey: 'tab-b:leaf-b',
-          startedAtMs: staleStartedAtMs
+          ageMs: staleAgeMs
         },
-        // Pre-startedAtMs relay entry: age unknown, never reaped.
+        // Pre-ageMs relay entry: age unknown, never reaped.
         { id: 'ssh:target-1@@pty-5', cwd: '/home/me', title: 'shell', paneKey: 'tab-c:leaf-c' }
       ]),
       shutdown: mockShutdown,
@@ -191,7 +191,7 @@ describe('SshRelaySession orphaned relay PTY reaping', () => {
           cwd: '/home/me',
           title: 'shell',
           paneKey: 'tab-a:leaf-a',
-          startedAtMs: Date.now() - 60_000
+          ageMs: 60_000
         }
       ]),
       shutdown: mockShutdown,
@@ -202,6 +202,44 @@ describe('SshRelaySession orphaned relay PTY reaping', () => {
     await session.reconnect(mockConn)
 
     expect(mockShutdown).toHaveBeenCalledWith('ssh:target-1@@pty-7', {
+      immediate: true,
+      keepHistory: false
+    })
+  })
+
+  it('a foreign-connection entry cannot abort the sweep or the session', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockShutdown = vi.fn().mockResolvedValue(undefined)
+    const staleAgeMs = 60_000
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: vi.fn().mockResolvedValue(undefined),
+      listProcesses: vi.fn().mockResolvedValue([
+        // toRelaySshPtyId throws on this id; the sweep must skip it, not die.
+        {
+          id: 'ssh:other-target@@pty-1',
+          cwd: '/home/me',
+          title: 'shell',
+          paneKey: 'tab-x:leaf-x',
+          ageMs: staleAgeMs
+        },
+        {
+          id: 'ssh:target-1@@pty-9',
+          cwd: '/home/me',
+          title: 'shell',
+          paneKey: 'tab-b:leaf-b',
+          ageMs: staleAgeMs
+        }
+      ]),
+      shutdown: mockShutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+
+    expect(session.getState()).toBe('ready')
+    expect(mockShutdown).toHaveBeenCalledTimes(1)
+    expect(mockShutdown).toHaveBeenCalledWith('ssh:target-1@@pty-9', {
       immediate: true,
       keepHistory: false
     })

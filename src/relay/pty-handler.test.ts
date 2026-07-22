@@ -2332,15 +2332,15 @@ describe('PtyHandler', () => {
       const sessions = (await dispatcher.callRequest('pty.listProcesses')) as {
         id: string
         paneKey?: string
-        startedAtMs?: number
+        ageMs?: number
       }[]
 
       const panePty = sessions.find((session) => session.id === 'pty-1')
       const barePty = sessions.find((session) => session.id === 'pty-2')
       expect(panePty?.paneKey).toBe('tab-1:leaf-1')
-      expect(typeof panePty?.startedAtMs).toBe('number')
+      expect(typeof panePty?.ageMs).toBe('number')
       expect(barePty?.paneKey).toBeUndefined()
-      expect(typeof barePty?.startedAtMs).toBe('number')
+      expect(typeof barePty?.ageMs).toBe('number')
     } finally {
       fgSpy.mockRestore()
     }

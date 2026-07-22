@@ -248,7 +248,7 @@ type PtyProcessSummary = {
   terminalHandle?: string
   agentSessionOwners?: AgentSessionOwnerBinding[]
   paneKey?: string
-  startedAtMs?: number
+  ageMs?: number
 }
 
 type SerializedPtyEntry = {
@@ -1448,7 +1448,8 @@ export class PtyHandler {
           ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }
           : {}),
         ...(managed.paneKey ? { paneKey: managed.paneKey } : {}),
-        ...(managed.startedAtMs !== undefined ? { startedAtMs: managed.startedAtMs } : {})
+        // Why: report age computed on this host's clock so client/remote clock skew can't distort it.
+        ...(managed.startedAtMs !== undefined ? { ageMs: Date.now() - managed.startedAtMs } : {})
       })
     }
     return results

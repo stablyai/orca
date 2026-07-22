@@ -1180,17 +1180,17 @@ export class SshRelaySession {
       if (!session.paneKey) {
         continue
       }
-      if (
-        typeof session.startedAtMs !== 'number' ||
-        Date.now() - session.startedAtMs < ORPHANED_RELAY_PTY_MIN_AGE_MS
-      ) {
+      // Why: ageMs is measured on the relay host's clock, so local/remote clock skew can't defeat the guard.
+      if (typeof session.ageMs !== 'number' || session.ageMs < ORPHANED_RELAY_PTY_MIN_AGE_MS) {
         continue
       }
-      const relayPtyId = toRelaySshPtyId(this.targetId, session.id)
-      if (knownRelayPtyIds.has(relayPtyId)) {
-        continue
-      }
+      // Why: toRelaySshPtyId throws on a foreign connection id; keep it inside the
+      // per-session try so one bad entry can't abort the sweep or the session.
       try {
+        const relayPtyId = toRelaySshPtyId(this.targetId, session.id)
+        if (knownRelayPtyIds.has(relayPtyId)) {
+          continue
+        }
         await ptyProvider.shutdown(session.id, { immediate: true, keepHistory: false })
         this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
         console.warn(
@@ -1198,7 +1198,7 @@ export class SshRelaySession {
         )
       } catch (err) {
         console.warn(
-          `[ssh-relay-session] Failed to reap orphaned relay PTY ${relayPtyId} for ${this.targetId}: ${
+          `[ssh-relay-session] Failed to reap orphaned relay PTY ${session.id} for ${this.targetId}: ${
             err instanceof Error ? err.message : String(err)
           }`
         )
