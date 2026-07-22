@@ -172,4 +172,26 @@ describe('DictationSetupPollController', () => {
 
     poller.dispose()
   })
+
+  it('does not resurrect polling when an in-flight refresh resolves true after setPolling(false)', async () => {
+    const request = deferred<boolean>()
+    const refresh = vi.fn(() => request.promise)
+    const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
+    poller.setPolling(true)
+    poller.setVisible(true)
+    poller.setForeground(true)
+    expect(refresh).toHaveBeenCalledOnce()
+
+    // Explicit stop lands while the read is still on the wire.
+    poller.setPolling(false)
+    // The stale read then resolves "keep polling" — the fence must drop it, not restart the poll.
+    request.resolve(true)
+    await flushPromises()
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
+    expect(refresh).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+
+    poller.dispose()
+  })
 })

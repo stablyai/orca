@@ -13,6 +13,10 @@ export class DictationSetupPollController {
   private immediateRefreshPending = false
   private refreshWaiters: Array<() => void> = []
   private disposed = false
+  // Why: an explicit setPolling is a newer lifecycle intent than a read that was already on the wire.
+  // Bumped on every setPolling so an in-flight refresh resolving after an explicit stop/start can be
+  // fenced out instead of clobbering that intent (e.g. a late `true` resurrecting a just-stopped poll).
+  private pollingRevision = 0
 
   constructor(
     private readonly refresh: () => Promise<RefreshResult>,
@@ -28,6 +32,7 @@ export class DictationSetupPollController {
   }
 
   setPolling(polling: boolean): void {
+    this.pollingRevision += 1
     this.update({ polling })
   }
 
@@ -89,6 +94,9 @@ export class DictationSetupPollController {
   }
 
   private async runRefresh(): Promise<void> {
+    // Snapshot the lifecycle intent this read is answering; an explicit setPolling during the read makes
+    // its result stale.
+    const revisionAtStart = this.pollingRevision
     let shouldContinue: RefreshResult
     try {
       shouldContinue = await this.refresh()
@@ -99,7 +107,9 @@ export class DictationSetupPollController {
       this.inFlight = false
     }
 
-    if (shouldContinue !== undefined) {
+    // Fence: only let the read drive polling if no explicit setPolling superseded it mid-flight, so a
+    // late `true` can't resurrect a poll the caller just stopped (nor a late `false` cancel a restart).
+    if (shouldContinue !== undefined && this.pollingRevision === revisionAtStart) {
       this.state.polling = shouldContinue
     }
     if (this.disposed || !this.isEligible()) {
