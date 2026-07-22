@@ -12,12 +12,16 @@ import {
   DEFAULT_KOKORO_VOICE,
   KOKORO_SAMPLE_RATE,
   KOKORO_TTS_MODEL,
-  MESH_VOICE_BASE_URL
+  meshVoiceBaseUrlFor
 } from './mesh-speech-config'
 
 /** text → mesh Kokoro → raw 16-bit LE PCM at 24 kHz. */
-export async function synthesizeViaMesh(text: string, signal?: AbortSignal): Promise<ArrayBuffer> {
-  const res = await fetch(`${MESH_VOICE_BASE_URL}/v1/audio/speech`, {
+export async function synthesizeViaMesh(
+  text: string,
+  options: { hostEndpoint?: string | null; signal?: AbortSignal } = {}
+): Promise<ArrayBuffer> {
+  const { hostEndpoint, signal } = options
+  const res = await fetch(`${meshVoiceBaseUrlFor(hostEndpoint)}/v1/audio/speech`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,
@@ -56,6 +60,18 @@ export class DesktopMeshSpeaker {
   private context: AudioContext | null = null
   private source: AudioBufferSourceNode | null = null
   private abort: AbortController | null = null
+  // Why: the host that owns the speak-back is the same Tailscale node the
+  // voice routes to. Read on speak() and updated by the consumer so swapping
+  // a paired device retargets synth without re-instantiating the speaker.
+  private hostEndpoint: string | null = null
+
+  setHostEndpoint(hostEndpoint: string | null | undefined): void {
+    this.hostEndpoint = hostEndpoint ?? null
+  }
+
+  getHostEndpoint(): string | null {
+    return this.hostEndpoint
+  }
 
   private ensureContext(): AudioContext {
     if (!this.context) {
@@ -72,7 +88,7 @@ export class DesktopMeshSpeaker {
     this.stop()
     const controller = new AbortController()
     this.abort = controller
-    const pcm = await synthesizeViaMesh(clean, controller.signal)
+    const pcm = await synthesizeViaMesh(clean, { hostEndpoint: this.hostEndpoint, signal: controller.signal })
     if (controller.signal.aborted) {
       return
     }

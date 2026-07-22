@@ -18,6 +18,7 @@ type Props = {
   onMicPressOut: () => void
   inputLockReason: MobileNativeChatInputLockReason | null
   keyboardInset: number
+  hostEndpoint?: string | null
 }
 
 /** Keeps the terminal mounted underneath chat so its PTY subscription survives
@@ -32,10 +33,11 @@ export function MobileNativeChatOverlay({
   onMicPressIn,
   onMicPressOut,
   inputLockReason,
-  keyboardInset
+  keyboardInset,
+  hostEndpoint
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
-  const { speak } = useMeshSpeak()
+  const { speak } = useMeshSpeak({ hostEndpoint })
   // A2a: per-session speak-back. Toggle auto-speaks each completed agent reply;
   // the per-message speaker button (onSpeak) plays any reply on demand. TTS is
   // the mesh Kokoro route — the delta over Orca's STT-only native voice.

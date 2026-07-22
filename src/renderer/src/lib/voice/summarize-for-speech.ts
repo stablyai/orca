@@ -6,7 +6,7 @@
 // command output; read verbatim that is minutes of unusable monologue. The full
 // text stays on screen — this only decides what is SPOKEN.
 
-import { MESH_VOICE_BASE_URL, SUMMARY_MODEL } from './mesh-speech-config'
+import { meshVoiceBaseUrlFor, SUMMARY_MODEL } from './mesh-speech-config'
 
 const MAX_SUMMARY_TOKENS = 1600
 
@@ -34,12 +34,13 @@ const SYSTEM_PROMPT = [
  * transport failure so the caller can decide whether to fall back to the raw
  * reply rather than go silent.
  */
-export async function summarizeForSpeech(reply: string, signal?: AbortSignal): Promise<string> {
+export async function summarizeForSpeech(
+  reply: string,
+  options: { hostEndpoint?: string | null; signal?: AbortSignal } = {}
+): Promise<string> {
+  const { hostEndpoint, signal } = options
   const text = reply.trim()
-  if (text.length <= SPEAK_VERBATIM_UNDER_CHARS) {
-    return text
-  }
-  const res = await fetch(`${MESH_VOICE_BASE_URL}/v1/chat/completions`, {
+  const res = await fetch(`${meshVoiceBaseUrlFor(hostEndpoint)}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,

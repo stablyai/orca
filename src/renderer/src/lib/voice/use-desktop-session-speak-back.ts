@@ -17,10 +17,12 @@ import { isSpeakBackEnabled, subscribeToSpeakBackEnabled } from './desktop-speak
  *
  * Mount once, near the app root. Does nothing until the toolbar toggle is on.
  */
-export function useDesktopSessionSpeakBack(): void {
+export function useDesktopSessionSpeakBack(options: {
+  hostEndpoint?: string | null
+} = {}): void {
+  const hostEndpoint = options.hostEndpoint ?? null
   const enabled = useSyncExternalStore(subscribeToSpeakBackEnabled, isSpeakBackEnabled)
   const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
-
   const speakerRef = useRef<DesktopMeshSpeaker | null>(null)
   // Per-pane memory of the last observed working-ness, so we speak on the
   // working→done edge and not on every re-render that re-sees a 'done' row.
@@ -42,6 +44,7 @@ export function useDesktopSessionSpeakBack(): void {
       speakerRef.current = new DesktopMeshSpeaker()
     }
     const speaker = speakerRef.current
+    speaker.setHostEndpoint(hostEndpoint)
 
     for (const entry of Object.values(agentStatusByPaneKey)) {
       const wasWorking = workingRef.current.get(entry.paneKey) === true
@@ -55,7 +58,8 @@ export function useDesktopSessionSpeakBack(): void {
 
       void (async () => {
         try {
-          await speaker.speak(await summarizeForSpeech(announcement.reply))
+          const summary = await summarizeForSpeech(announcement.reply, { hostEndpoint })
+          await speaker.speak(summary)
         } catch {
           // A summarizer or synth outage should degrade to the raw reply, never
           // to silence — silence is indistinguishable from the feature being
@@ -69,7 +73,7 @@ export function useDesktopSessionSpeakBack(): void {
         }
       })()
     }
-  }, [enabled, agentStatusByPaneKey])
+  }, [enabled, agentStatusByPaneKey, hostEndpoint])
 
   useEffect(
     () => () => {

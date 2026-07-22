@@ -166,6 +166,9 @@ export function HostScreen({
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
   const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
   const [hostName, setHostName] = useState('')
+  // Why: the mesh-voice route is keyed off the host's Tailscale endpoint, so the
+  // voice feature needs the same URL the WebSocket connects to.
+  const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [compatVerdict, setCompatVerdict] = useState<CompatVerdict>({ kind: 'ok' })
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
@@ -370,6 +373,7 @@ export function HostScreen({
         return
       }
       setHostName(host.name)
+      setHostEndpoint(host.endpoint)
       void updateLastConnected(host.id)
     })
     return () => {
@@ -1286,6 +1290,7 @@ export function HostScreen({
         <HostFabRow
           client={client}
           hostName={hostName}
+          hostEndpoint={hostEndpoint}
           worktrees={worktrees}
           connected={connState === 'connected'}
           onNewWorkspace={openNewWorktreeModal}

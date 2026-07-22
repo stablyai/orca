@@ -33,13 +33,15 @@ export type SessionSpeakBack = {
 export function useSessionSpeakBack(options: {
   client: RpcClient | null
   worktreeId: string | null
+  hostEndpoint?: string | null
   enabled: boolean
 }): SessionSpeakBack {
-  const { client, worktreeId, enabled } = options
+  const { client, worktreeId, hostEndpoint, enabled } = options
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { speak } = useMeshSpeak()
-
+  const { speak } = useMeshSpeak({ hostEndpoint })
+  const hostEndpointRef = useRef(hostEndpoint)
+  hostEndpointRef.current = hostEndpoint
   // Why refs: the poll loop must not restart on every render, and the spoken
   // set must survive re-renders so one finished turn is never spoken twice.
   const spokenRef = useRef<Set<string>>(new Set())
@@ -73,7 +75,7 @@ export function useSessionSpeakBack(options: {
     setError(null)
     void (async () => {
       try {
-        speakRef.current(await summarizeForSpeech(reply))
+        speakRef.current(await summarizeForSpeech(reply, { hostEndpoint: hostEndpointRef.current }))
       } catch (err) {
         // Why fall back to the raw reply: a summarizer outage should degrade to
         // "too long but audible", never to silence — silence is

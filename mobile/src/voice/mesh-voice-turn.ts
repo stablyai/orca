@@ -4,12 +4,12 @@
 // module only synthesizes speech from text via the mesh Kokoro route so the
 // agent/transcript can be spoken back through the phone.
 // See plans/active/2026-07-20-orca-mobile-voice-pet-canvas.md.
+//
+// The endpoint is the active HostProfile's `endpoint` host on the canonical
+// :4000 LiteLLM synth proxy port. `mesh-voice-endpoint.ts` owns the
+// resolution and the single DEFAULT fallback for an unpaired phone.
 
-// node-a LiteLLM (canonical audio path, fixed 2026-07-20). A3/settings can make
-// this host-configurable.
-export const MESH_VOICE_BASE_URL = 'http://100.92.56.51:4000'
-// Voice is operator-selectable in Settings -> Voice; read through the cached
-// preference so the speech path never awaits storage mid-utterance.
+import { meshVoiceBaseUrlFor } from './mesh-voice-endpoint'
 import { currentKokoroVoice } from './kokoro-voices'
 
 const TTS_MODEL = 'mesh-tts-kokoro'
@@ -40,8 +40,11 @@ export function resamplePcm16le(input: Uint8Array, fromRate: number, toRate: num
 }
 
 // text -> mesh Kokoro -> 16 kHz 16-bit LE PCM ready for playPCMData.
-export async function synthesizeViaMesh(text: string): Promise<Uint8Array> {
-  const res = await fetch(`${MESH_VOICE_BASE_URL}/v1/audio/speech`, {
+export async function synthesizeViaMesh(
+  text: string,
+  hostEndpoint?: string | null
+): Promise<Uint8Array> {
+  const res = await fetch(`${meshVoiceBaseUrlFor(hostEndpoint)}/v1/audio/speech`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

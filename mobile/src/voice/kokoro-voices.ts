@@ -1,14 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { kokoroDirectBaseUrlFor } from './mesh-voice-endpoint'
 
 // Which Kokoro voice the mesh speaks in. Fetched live from the TTS service so
 // the list stays true to what is actually installed rather than drifting from a
 // hardcoded copy — probed 2026-07-21, the Nord reaches it in ~400ms and the
 // service reports 67 voices.
-
+//
 // Kokoro's own API, not LiteLLM: the :4000 proxy does not expose /audio/voices
 // (verified — it 404s), so the catalogue comes straight from the backend while
-// synthesis still goes through the canonical proxy.
-const KOKORO_DIRECT_BASE_URL = 'http://100.92.56.51:8880'
+// synthesis still goes through the canonical proxy. The hostname follows the
+// selected HostProfile; see `mesh-voice-endpoint.ts` for the resolution rules
+// and the single DEFAULT fallback.
 
 export const DEFAULT_KOKORO_VOICE = 'af_heart'
 
@@ -63,9 +65,12 @@ export const FALLBACK_VOICE_IDS = [
   'bm_george'
 ]
 
-export async function fetchKokoroVoices(signal?: AbortSignal): Promise<KokoroVoice[]> {
+export async function fetchKokoroVoices(
+  hostEndpoint?: string | null,
+  signal?: AbortSignal
+): Promise<KokoroVoice[]> {
   try {
-    const res = await fetch(`${KOKORO_DIRECT_BASE_URL}/v1/audio/voices`, { signal })
+    const res = await fetch(`${kokoroDirectBaseUrlFor(hostEndpoint)}/v1/audio/voices`, { signal })
     if (!res.ok) {
       throw new Error(`voices ${res.status}`)
     }

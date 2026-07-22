@@ -4904,6 +4904,7 @@ export default function SessionScreen() {
                   onMicPressOut={handleDictationPressOut}
                   inputLockReason={nativeChatInputLockReason}
                   keyboardInset={keyboardLift}
+                  hostEndpoint={hostEndpoint}
                 />
                 {toastMessage && (
                   <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>

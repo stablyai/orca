@@ -8,7 +8,7 @@
 //
 // Operator decision 2026-07-21: summarize rather than speak verbatim.
 
-import { MESH_VOICE_BASE_URL } from './mesh-voice-turn'
+import { meshVoiceBaseUrlFor } from './mesh-voice-endpoint'
 
 // Same arm + ceiling reasoning as ask-herm.ts: every Config A arm emits
 // chain-of-thought first, the ceiling is free when unused, and suppression is
@@ -39,13 +39,14 @@ const SYSTEM_PROMPT = [
  *  transport failure so the caller can decide whether to fall back. */
 export async function summarizeForSpeech(
   reply: string,
-  signal?: AbortSignal
+  options: { hostEndpoint?: string | null; signal?: AbortSignal } = {}
 ): Promise<string> {
+  const { hostEndpoint, signal } = options
   const text = reply.trim()
   if (text.length <= SPEAK_VERBATIM_UNDER_CHARS) {
     return text
   }
-  const res = await fetch(`${MESH_VOICE_BASE_URL}/v1/chat/completions`, {
+  const res = await fetch(`${meshVoiceBaseUrlFor(hostEndpoint)}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,

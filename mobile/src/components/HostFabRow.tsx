@@ -19,6 +19,7 @@ import type { Worktree } from '../worktree/workspace-list-types'
 type HostFabRowProps = {
   client: RpcClient | null
   hostName: string
+  hostEndpoint?: string | null
   worktrees: Worktree[]
   connected: boolean
   onNewWorkspace: () => void
@@ -29,12 +30,13 @@ type HostFabRowProps = {
 export function HostFabRow({
   client,
   hostName,
+  hostEndpoint,
   worktrees,
   connected,
   onNewWorkspace
 }: HostFabRowProps): React.JSX.Element {
   const insets = useSafeAreaInsets()
-  const voice = useHostVoiceAsk({ client, hostName, worktrees, enabled: connected })
+  const voice = useHostVoiceAsk({ client, hostName, hostEndpoint, worktrees, enabled: connected })
   // Flattened from the array this screen already has. worktree.ps streams the
   // per-agent rows here for the voice feature; the pet's bubble reads the same
   // ones rather than opening a second poller that could disagree.

@@ -16,17 +16,19 @@ import { useMeshSpeak } from './use-mesh-speak'
 // section above it, which selects the on-device model that transcribes YOU.
 // Input and output are different halves of the pipeline and different services.
 
-export function MeshVoicePicker(): React.JSX.Element {
+export function MeshVoicePicker({
+  hostEndpoint
+}: { hostEndpoint?: string | null } = {}): React.JSX.Element {
   const [voices, setVoices] = React.useState<KokoroVoice[] | null>(null)
   const [selected, setSelected] = React.useState(DEFAULT_KOKORO_VOICE)
-  const { speak, isSpeaking } = useMeshSpeak()
+  const { speak, isSpeaking } = useMeshSpeak({ hostEndpoint })
 
   React.useEffect(() => {
     const controller = new AbortController()
     let cancelled = false
     void (async () => {
       const [list, stored] = await Promise.all([
-        fetchKokoroVoices(controller.signal),
+        fetchKokoroVoices(hostEndpoint ?? null, controller.signal),
         loadKokoroVoice()
       ])
       if (!cancelled) {
@@ -38,7 +40,7 @@ export function MeshVoicePicker(): React.JSX.Element {
       cancelled = true
       controller.abort()
     }
-  }, [])
+  }, [hostEndpoint])
 
   const choose = React.useCallback(
     (voice: KokoroVoice) => {

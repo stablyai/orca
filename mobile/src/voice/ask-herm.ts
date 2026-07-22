@@ -11,7 +11,7 @@
 // §MESH UTILIZATION DOCTRINE) and is already reachable phone-direct over
 // Tailscale for TTS. Swap to a real Herm head endpoint when one exists.
 
-import { MESH_VOICE_BASE_URL } from './mesh-voice-turn'
+import { meshVoiceBaseUrlFor } from './mesh-voice-endpoint'
 
 // Default arm = LFM on D's iGPU. Two reasons: "what's running on this host" is a
 // compressive fold over a short list, which is exactly the hybrid-attention
@@ -140,9 +140,10 @@ function renderContext(context: HermWorkspaceContext): string {
 export async function askHerm(
   question: string,
   context: HermWorkspaceContext,
-  signal?: AbortSignal
+  options: { hostEndpoint?: string | null; signal?: AbortSignal } = {}
 ): Promise<string> {
-  const res = await fetch(`${MESH_VOICE_BASE_URL}/v1/chat/completions`, {
+  const { hostEndpoint, signal } = options
+  const res = await fetch(`${meshVoiceBaseUrlFor(hostEndpoint)}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,

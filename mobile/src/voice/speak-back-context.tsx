@@ -1,5 +1,7 @@
 import React from 'react'
 import { useAllHostClients } from '../transport/client-context'
+import { loadHosts } from '../transport/host-store'
+import type { HostProfile } from '../transport/types'
 import { loadSpeakReplies, saveSpeakReplies } from '../storage/speak-replies-preference'
 import { useSessionSpeakBack } from './use-session-speak-back'
 
@@ -40,16 +42,18 @@ function splitKey(key: string): { hostId: string; worktreeId: string } {
 function ArmedWorkspaceWatcher({
   hostId,
   worktreeId,
+  hostEndpoint,
   onBusyChange
 }: {
   hostId: string
   worktreeId: string
+  hostEndpoint?: string | null
   onBusyChange: (key: string, busy: boolean) => void
 }): null {
   const hostIds = React.useMemo(() => [hostId], [hostId])
   const clients = useAllHostClients(hostIds)
   const client = clients[0]?.client ?? null
-  const { busy } = useSessionSpeakBack({ client, worktreeId, enabled: true })
+  const { busy } = useSessionSpeakBack({ client, worktreeId, hostEndpoint, enabled: true })
   const key = speakBackKey(hostId, worktreeId)
 
   React.useEffect(() => {
@@ -66,6 +70,23 @@ function ArmedWorkspaceWatcher({
 export function SpeakBackProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const [armed, setArmedSet] = React.useState<ReadonlySet<string>>(() => new Set())
   const [busyKeys, setBusyKeys] = React.useState<ReadonlySet<string>>(() => new Set())
+  // Why: per-host endpoint lookup is what lets the watcher route its
+  // mesh-voice calls to the right Tailscale node. Re-fetched on demand when
+  // the armed set grows so a host added since the last load still resolves.
+  const hostEndpointByIdRef = React.useRef<Map<string, string>>(new Map())
+  const ensureHostsLoaded = React.useCallback(async (): Promise<Map<string, string>> => {
+    try {
+      const hosts: HostProfile[] = await loadHosts()
+      const next = new Map<string, string>()
+      for (const h of hosts) {
+        next.set(h.id, h.endpoint)
+      }
+      hostEndpointByIdRef.current = next
+      return next
+    } catch {
+      return hostEndpointByIdRef.current
+    }
+  }, [])
 
   const onBusyChange = React.useCallback((key: string, busy: boolean) => {
     setBusyKeys((current) => {
@@ -85,6 +106,12 @@ export function SpeakBackProvider({ children }: { children: React.ReactNode }): 
   const setArmed = React.useCallback((hostId: string, worktreeId: string, enabled: boolean) => {
     const key = speakBackKey(hostId, worktreeId)
     void saveSpeakReplies(hostId, worktreeId, enabled)
+    if (!hostEndpointByIdRef.current.has(hostId)) {
+      // Why: cheapest possible refresh — a new host that wasn't in the cache
+      // yet triggers a single loadHosts() instead of a full re-fetch on every
+      // arm event.
+      void ensureHostsLoaded()
+    }
     setArmedSet((current) => {
       if (current.has(key) === enabled) {
         return current
@@ -97,7 +124,7 @@ export function SpeakBackProvider({ children }: { children: React.ReactNode }): 
       }
       return next
     })
-  }, [])
+  }, [ensureHostsLoaded])
 
   const isArmed = React.useCallback(
     (hostId: string, worktreeId: string) => armed.has(speakBackKey(hostId, worktreeId)),
@@ -118,6 +145,7 @@ export function SpeakBackProvider({ children }: { children: React.ReactNode }): 
             key={key}
             hostId={hostId}
             worktreeId={worktreeId}
+            hostEndpoint={hostEndpointByIdRef.current.get(hostId) ?? null}
             onBusyChange={onBusyChange}
           />
         )
