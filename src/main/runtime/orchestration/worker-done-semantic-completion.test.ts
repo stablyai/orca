@@ -193,4 +193,33 @@ describe('evaluateWorkerDoneSemanticCompletion', () => {
       appliedStatus: 'failed'
     })
   })
+
+  it('still rejects a later current failure after a recovered earlier failure', () => {
+    expect(
+      evaluateWorkerDoneSemanticCompletion({
+        subject: 'Partial recovery',
+        body:
+          'Migration failed, then succeeded after retry; deployment failed; implementation is complete.',
+        filesModified: ['src/main/runtime/orchestration/lifecycle-reconciliation.ts']
+      })
+    ).toMatchObject({
+      complete: false,
+      kind: 'failure',
+      appliedStatus: 'failed'
+    })
+  })
+
+  it('treats pending production deploy approval as an incomplete outcome', () => {
+    expect(
+      evaluateWorkerDoneSemanticCompletion({
+        subject: 'Implementation complete',
+        body: 'Implementation complete. Production deploy is pending owner approval.',
+        filesModified: ['src/main/runtime/orchestration/lifecycle-reconciliation.ts']
+      })
+    ).toMatchObject({
+      complete: false,
+      kind: 'remaining_gates',
+      appliedStatus: 'blocked'
+    })
+  })
 })
