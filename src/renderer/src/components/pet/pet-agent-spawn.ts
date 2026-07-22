@@ -161,11 +161,16 @@ export function usePetAgentSpawn(): {
     try {
       // Rotate to a clean session on the 1–3h cadence; otherwise resume.
       const fresh = resolveSpawnFreshness(petSessionDirName(activeWorktreeId))
+      // Why quickCommandLabel: tab title must read as pet assistant, not another
+      // anonymous "Terminal N" / omp coding session mixed into project work.
+      // Still launched in the active worktree so cwd + session-dir stay project-
+      // bound (tools see the repo); the label + launchSource are the distinction.
       const result = launchAgentInNewTab({
         agent: 'omp',
         worktreeId: activeWorktreeId,
         agentArgs: buildPetOmpAgentArgs(activeWorktreeId, { fresh }),
-        launchSource: 'pet'
+        launchSource: 'pet',
+        quickCommandLabel: 'Pet assistant'
       })
       // Why bind here and not from agent status: an omp pane reports `agents:
       // []` until its first prompt, so a pet that waited for status would spawn

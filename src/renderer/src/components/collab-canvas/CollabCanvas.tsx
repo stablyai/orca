@@ -44,10 +44,8 @@ import { decideCollabAutoDraft } from '../../lib/collab-canvas/collab-auto-draft
 import { parseAgentBoardOps } from '../../lib/collab-canvas/parse-agent-board-ops'
 import { applyAgentBoardOps } from '../../lib/collab-canvas/apply-agent-board-ops'
 import { prepareReplyForSpeech } from '../../lib/voice/prepare-reply-for-speech'
-import {
-  COLLAB_CANVAS_SHAPE_UTILS,
-  mountAgentDraftOnEditor
-} from '../../lib/collab-canvas/agent-draft-shape-util'
+import { mountAgentDraftOnEditor } from '../../lib/collab-canvas/agent-draft-shape-util'
+import { buildCollabCanvasSchemaUtils } from '../../lib/collab-canvas/collab-canvas-sync-schema'
 import {
   buildCanvasOmpAgentArgs,
   getCanvasBoardAgentTabId,
@@ -82,14 +80,15 @@ export function CollabCanvas({
 
   // Stable across renders: a new asset store identity would churn the sync client.
   const assets = useMemo(() => createInlineAssetStore(), [])
-  // Why shapeUtils on useSync (not only <Tldraw>): the remote store validates
-  // records with its schema on put(). Without agent-draft in that schema,
-  // auto-draft / createShape throws ValidationError ("got agent-draft") and
-  // the React boundary fires (dogfood 2026-07-22 after omp reply).
+  // Why shapeUtils on useSync (not only <Tldraw>): remote store validates on
+  // put — agent-draft must be in the schema. Must also include tldraw defaults
+  // (see buildCollabCanvasSchemaUtils) or arrow migrations break mount.
+  const collabSchemaUtils = useMemo(() => buildCollabCanvasSchemaUtils(), [])
   const store = useSync({
     uri,
     assets,
-    shapeUtils: COLLAB_CANVAS_SHAPE_UTILS
+    shapeUtils: collabSchemaUtils.shapeUtils,
+    bindingUtils: collabSchemaUtils.bindingUtils
   })
 
   const editorRef = useRef<Editor | null>(null)
@@ -535,7 +534,8 @@ export function CollabCanvas({
             without us hand-rolling input handling. */}
         <Tldraw
           store={store}
-          shapeUtils={[...COLLAB_CANVAS_SHAPE_UTILS]}
+          shapeUtils={collabSchemaUtils.shapeUtils}
+          bindingUtils={collabSchemaUtils.bindingUtils}
           onMount={(editor) => {
             editorRef.current = editor
           }}
