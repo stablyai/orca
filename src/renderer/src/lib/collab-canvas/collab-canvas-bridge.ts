@@ -58,7 +58,7 @@ export type AgentDraftShapeProps = {
   visual: {
     strokeStyle: 'dashed'
     fill: 'none'
-    label: 'Agent draft'
+    label: string
     /** CSS-ish accent token; UI maps to theme. */
     accent: 'agent-draft'
   }
