@@ -501,6 +501,7 @@ describe('orca root help', () => {
 describe('orca cli worktree awareness', () => {
   const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
   const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
+  const originalDevCliInvocation = process.env.ORCA_DEV_CLI_INVOCATION
   const originalPairingCode = process.env.ORCA_PAIRING_CODE
   const originalRemotePairing = process.env.ORCA_REMOTE_PAIRING
   const originalEnvironment = process.env.ORCA_ENVIRONMENT
@@ -511,6 +512,7 @@ describe('orca cli worktree awareness', () => {
     callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.ORCA_DEV_CLI_INVOCATION
     delete process.env.ORCA_WORKSPACE_ID
     delete process.env.ORCA_WORKTREE_ID
     // Isolate the pane key so claude-teams tests that set it don't leak a
@@ -554,6 +556,11 @@ describe('orca cli worktree awareness', () => {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = originalUserDataPath
+    }
+    if (originalDevCliInvocation === undefined) {
+      delete process.env.ORCA_DEV_CLI_INVOCATION
+    } else {
+      process.env.ORCA_DEV_CLI_INVOCATION = originalDevCliInvocation
     }
     if (originalPairingCode === undefined) {
       delete process.env.ORCA_PAIRING_CODE
@@ -3621,6 +3628,33 @@ describe('orca cli worktree awareness', () => {
       inject: true,
       devMode: true
     })
+  })
+
+  it('passes dev mode from an explicit dev CLI marker with a custom profile path', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    process.env.ORCA_USER_DATA_PATH = '/tmp/federation-acceptance-profile'
+    process.env.ORCA_DEV_CLI_INVOCATION = '1'
+    callMock.mockResolvedValueOnce({
+      id: 'req_dispatch',
+      ok: true,
+      result: {
+        dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' }
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['orchestration', 'dispatch', '--task', 'task_1', '--to', 'term_worker', '--inject'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.dispatch',
+      expect.objectContaining({ devMode: true })
+    )
   })
 
   it('uses the resolved enclosing worktree for terminal consumers', async () => {

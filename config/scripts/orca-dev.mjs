@@ -16,6 +16,8 @@ if (!existsSync(cliEntry)) {
 }
 
 process.env.ORCA_USER_DATA_PATH = process.env.ORCA_DEV_USER_DATA_PATH ?? getDefaultDevUserDataPath()
+// Why: custom dev profiles do not necessarily contain "orca-dev" in their path; carry explicit provenance into the CLI.
+process.env.ORCA_DEV_CLI_INVOCATION = '1'
 
 const electronExecutable = getElectronExecutable()
 if (!process.env.ORCA_APP_EXECUTABLE && isRunnableFile(electronExecutable)) {

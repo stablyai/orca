@@ -298,7 +298,10 @@ function throwNoActiveSenderTerminal(): never {
 }
 
 function isDevCliInvocation(): boolean {
-  return process.env.ORCA_USER_DATA_PATH?.includes('orca-dev') ?? false
+  return (
+    process.env.ORCA_DEV_CLI_INVOCATION === '1' ||
+    (process.env.ORCA_USER_DATA_PATH?.includes('orca-dev') ?? false)
+  )
 }
 
 function getOptionalPositiveIntegerValueFlag(

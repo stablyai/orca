@@ -880,6 +880,35 @@ Append new entries chronologically. Do not rewrite older entries except to corre
   - Exercise federation disconnect/reorder/restart semantics, then run branch-head Mac/Windows
     acceptance without replacing either production Orca runtime.
 
+### 2026-07-22 — Native Mac-to-Windows acceptance gaps
+
+- Changes:
+  - Built and launched branch-head Mac and Windows servers on isolated profiles and paired them over
+    the existing authenticated WebSocket transport.
+  - Used a temporary, exact Tailscale TCP proxy because Windows Firewall correctly blocked the new
+    test-binary port; production Orca and firewall policy were left unchanged.
+  - Added explicit dev-CLI provenance so custom profile paths still generate `orca-dev` worker
+    commands.
+  - Increased only the Windows ConPTY bracketed-paste render gap before Enter from 500 ms to 1.5 s.
+- Files:
+  - `config/scripts/orca-dev.mjs`
+  - `src/cli/handlers/orchestration.ts`
+  - `src/shared/agent-prompt-injection.ts`
+  - Focused wrapper, CLI, and prompt-injection tests
+- Verification:
+  - Native Windows discovery, exact worktree routing, pre-effect failure, retry, ready receipt,
+    worker-read, and remote worker-stop all returned truthful branch-head receipts.
+  - Focused dev-provenance and prompt-injection suite: 160 tests passed.
+- Findings:
+  - A fresh Windows agent profile surfaces trust/login/update prompts as typed `agent_readiness`
+    failures with residual terminals, as designed.
+  - The first authenticated Windows worker proved that 500 ms could leave a long preamble in the
+    Codex input buffer, and that a custom dev profile could incorrectly call the production CLI.
+  - Phase 3 remains open until the fixes are rebuilt on Windows and the full completion/question/
+    failure/restart matrix succeeds without a manual Enter or CLI substitution.
+- Next:
+  - Rebuild both branch servers with these fixes and repeat the real Mac-home to Windows-worker flow.
+
 ### Entry template
 
 ```text
