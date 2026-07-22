@@ -13,8 +13,8 @@ describe('composer agent detection host boundary', () => {
       "selectedWorkspaceTarget.status === 'ready'\n      ? selectedWorkspaceTarget.target.repo"
     )
     expect(SOURCE).toContain('const selectedRepoExecutionHostId = selectedRepo')
-    expect(SOURCE).toContain(
-      'const selectedRepoExecutionHost = parseExecutionHostId(selectedRepoExecutionHostId)'
+    expect(SOURCE).toMatch(
+      /const selectedRepoExecutionHost = useMemo\(\s*\(\) => parseExecutionHostId\(selectedRepoExecutionHostId\)/
     )
     expect(SOURCE).toContain('ensureDetectedAgents(repoId ? { repoId } : undefined)')
     expect(SOURCE).toContain('selectedRepoExecutionHostIdRef.current ?? undefined')

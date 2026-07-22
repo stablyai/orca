@@ -26,6 +26,7 @@ export function getRuntimeWorkItemLaunchContext(
   }
   return {
     environmentId: host.environmentId,
+    // Why: runtime status can arrive after host selection; Linux is the portable runtime default until then.
     platform:
       state.runtimeStatusByEnvironmentId.get(host.environmentId)?.status?.hostPlatform ?? 'linux'
   }
@@ -93,6 +94,7 @@ export async function ensureWorkItemHostAgents(
     localTarget?: LocalDetectionTarget
   }
 ): Promise<TuiAgent[]> {
+  // Why: runtime ownership is authoritative even when legacy SSH metadata remains on the repo.
   if (options.runtimeEnvironmentId) {
     return await store.ensureRuntimeDetectedAgents(options.runtimeEnvironmentId)
   }

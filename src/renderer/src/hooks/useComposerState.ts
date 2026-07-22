@@ -18,7 +18,6 @@ import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
@@ -750,18 +749,22 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       ? selectedWorkspaceTarget.target.repo
       : eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
+  const selectedRepoExecutionHostId = selectedRepo ? getRepoExecutionHostId(selectedRepo) : null
+  const selectedRepoExecutionHost = useMemo(
+    () => parseExecutionHostId(selectedRepoExecutionHostId),
+    [selectedRepoExecutionHostId]
+  )
   const selectedRepoAgentLaunchPlatform = useMemo(() => {
     if (!selectedRepo) {
       return CLIENT_PLATFORM
     }
-    const executionHost = parseExecutionHostId(getRepoExecutionHostId(selectedRepo))
     const runtimePlatform =
-      executionHost?.kind === 'runtime'
-        ? (runtimeStatusByEnvironmentId.get(executionHost.environmentId)?.status?.hostPlatform ??
-          'linux')
+      selectedRepoExecutionHost?.kind === 'runtime'
+        ? (runtimeStatusByEnvironmentId.get(selectedRepoExecutionHost.environmentId)?.status
+            ?.hostPlatform ?? 'linux')
         : null
     const projectRuntime =
-      selectedRepo.connectionId || executionHost?.kind === 'runtime'
+      selectedRepo.connectionId || selectedRepoExecutionHost?.kind === 'runtime'
         ? undefined
         : getLocalRepoProjectExecutionRuntimeContext(
             {
@@ -782,11 +785,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     repos,
     runtimeStatusByEnvironmentId,
     selectedRepo,
+    selectedRepoExecutionHost,
     settings,
     worktreesByRepo
   ])
-  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only `orca-ide` rename must not apply to remote launch commands.
-  const selectedRepoIsRemote = selectedRepo ? repoIsRemote(selectedRepo) : false
+  // Why: SSH and runtime hosts use plain `orca`; the local Linux-only `orca-ide` rename must stay off non-local launches.
+  const selectedRepoIsRemote = selectedRepo ? selectedRepoExecutionHost?.kind !== 'local' : false
   const selectedRepoStartupShell = resolveLocalWindowsAgentStartupShell({
     platform: selectedRepoAgentLaunchPlatform,
     isRemote: selectedRepoIsRemote,
@@ -870,8 +874,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projectGroupTarget: isProjectGroupTarget,
     initialRecipeId: initialEphemeralVmRecipeId
   })
-  const selectedRepoExecutionHostId = selectedRepo ? getRepoExecutionHostId(selectedRepo) : null
-  const selectedRepoExecutionHost = parseExecutionHostId(selectedRepoExecutionHostId)
   const selectedRepoConnectionId =
     selectedRepoExecutionHost?.kind === 'ssh'
       ? selectedRepoExecutionHost.targetId

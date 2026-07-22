@@ -4864,6 +4864,51 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
   })
 
+  it('routes a manually linked GitHub PR through the SSH worktree owner', async () => {
+    const store = createTestStore()
+    const pushTarget = { remoteName: 'fork', branchName: 'owner/ssh-pr' }
+    const wt = makeWorktree({
+      id: 'repo1::/remote/wt1',
+      repoId: 'repo1',
+      path: '/remote/wt1',
+      hostId: 'ssh:builder'
+    })
+    mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
+      baseBranch: 'fork/owner/ssh-pr',
+      pushTarget
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/local/repo1',
+          displayName: 'Local Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: LOCAL_EXECUTION_HOST_ID
+        },
+        {
+          id: 'repo1',
+          path: '/remote/repo1',
+          displayName: 'SSH Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'ssh:builder'
+        }
+      ],
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: 2548 })
+
+    expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
+      repoId: 'repo1',
+      prNumber: 2548,
+      executionHostId: 'ssh:builder'
+    })
+    expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
+  })
+
   it('clears a stale push target when unlinking the GitHub PR that supplied it', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }
@@ -4888,6 +4933,54 @@ describe('worktree remote runtime mutations', () => {
       updates: { linkedPR: null, pushTarget: undefined }
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
+  })
+
+  it('refreshes an unlinked review against the SSH owner when repo ids overlap', async () => {
+    const store = createTestStore()
+    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+    const wt = makeWorktree({
+      id: 'repo1::/remote/wt1',
+      repoId: 'repo1',
+      path: '/remote/wt1',
+      branch: 'refs/heads/review-branch',
+      hostId: 'ssh:builder',
+      linkedPR: 2548,
+      pushTarget: { remoteName: 'fork', branchName: 'owner/old-pr' }
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/local/repo1',
+          displayName: 'Local Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: LOCAL_EXECUTION_HOST_ID
+        },
+        {
+          id: 'repo1',
+          path: '/remote/repo1',
+          displayName: 'SSH Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'ssh:builder'
+        }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchHostedReviewForBranch
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: null })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/remote/repo1', 'review-branch', {
+      repoId: 'repo1',
+      linkedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
+      force: true
+    })
   })
 
   it('skips duplicate hosted-review work when the unlinking caller owns the refresh', async () => {

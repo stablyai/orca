@@ -653,7 +653,7 @@ describe('useComposerState host-context boundaries', () => {
     expect(HOOK_SOURCE).toContain('getLocalRepoProjectExecutionRuntimeContext')
     expect(HOOK_SOURCE).toContain('getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)')
     expect(HOOK_SOURCE).toContain(
-      'runtimeStatusByEnvironmentId.get(executionHost.environmentId)?.status?.hostPlatform'
+      'runtimeStatusByEnvironmentId.get(selectedRepoExecutionHost.environmentId)?.status'
     )
 
     const fullSubmit = sourceBetween(
@@ -671,6 +671,17 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(quickSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
     expect(quickSubmit).not.toContain('platform: CLIENT_PLATFORM')
+  })
+
+  it('treats runtime-owned repos as remote when planning agent startup', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const selectedRepoAgentLaunchPlatform',
+      'const selectedRepoStartupShell'
+    )
+
+    expect(section).toContain("selectedRepoExecutionHost?.kind !== 'local'")
+    expect(section).not.toContain('repoIsRemote(selectedRepo)')
   })
 
   it('prepares linked quick-create drafts for the selected default agent', () => {

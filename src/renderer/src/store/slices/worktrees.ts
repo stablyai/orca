@@ -3799,6 +3799,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
       return
     }
+    const ownerState = get()
+    const worktreeOwnerSettings = settingsForWorktreeOwner(ownerState, worktreeId)
+    const worktreeOwnerRepo = existingWorktree
+      ? findRepoForHost(ownerState.repos, existingWorktree.repoId, {
+          hostId: existingWorktree.hostId,
+          settings: ownerState.settings
+        })
+      : null
+    const worktreeOwnerHostId = existingWorktree
+      ? getWorktreeExecutionHostId(existingWorktree, worktreeOwnerRepo ?? undefined)
+      : LOCAL_EXECUTION_HOST_ID
     const normalizedUpdates = existingWorktree
       ? clearOlderHostedReviewLinksForReplacement(updates, existingWorktree)
       : updates
@@ -3812,9 +3823,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       existingWorktree &&
       !existingWorktree.pushTarget
         ? await resolveGitHubReviewPushTarget(
-            settingsForWorktreeOwner(get(), worktreeId),
+            worktreeOwnerSettings,
             existingWorktree.repoId,
-            linkedPrForPushTarget
+            linkedPrForPushTarget,
+            worktreeOwnerHostId
           )
         : undefined
     const existingHostedReviewPushTargetLookup = existingWorktree
@@ -3844,9 +3856,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         (worktreeForUpdate?.linkedAzureDevOpsPR ?? null) !== null) ||
       (normalizedUpdates.linkedGiteaPR === null &&
         (worktreeForUpdate?.linkedGiteaPR ?? null) !== null)
-    const reviewRepo = shouldRefreshHostedReview
-      ? get().repos.find((repo) => repo.id === worktreeForUpdate?.repoId)
-      : undefined
+    const reviewState = get()
+    const reviewRepo =
+      shouldRefreshHostedReview && worktreeForUpdate
+        ? (findRepoForHost(reviewState.repos, worktreeForUpdate.repoId, {
+            hostId: getWorktreeExecutionHostId(worktreeForUpdate, worktreeOwnerRepo ?? undefined),
+            settings: reviewState.settings
+          }) ?? undefined)
+        : undefined
     const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.
