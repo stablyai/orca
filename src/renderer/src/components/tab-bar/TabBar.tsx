@@ -23,6 +23,8 @@ import type {
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
+import { useWorktreeById } from '../../store/selectors'
+import { getWorktreeGitIdentityDisplay } from '../../lib/worktree-git-identity-display'
 import { buildStatusMap } from '../right-sidebar/status-display'
 import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
@@ -295,6 +297,19 @@ function TabBarInner({
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
+  // Why: a session the user renamed (Worktree.displayName) should surface on its
+  // tabs too, not just the sidebar; feed it to the title resolver as a fallback.
+  // Pass the branch (same source the sidebar uses) so the resolver can ignore an
+  // auto-default name that still matches the branch.
+  const worktree = useWorktreeById(worktreeId)
+  const worktreeGitIdentity = worktree ? getWorktreeGitIdentityDisplay(worktree) : null
+  const sessionNameFallback = worktree
+    ? {
+        displayName: worktree.displayName,
+        branchName:
+          worktreeGitIdentity?.kind === 'branch' ? worktreeGitIdentity.branchName : null
+      }
+    : undefined
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
   )
@@ -1074,7 +1089,8 @@ function TabBarInner({
                   title: resolveTerminalTabTitle(
                     item.data,
                     generatedTabTitlesEnabled,
-                    item.data.title
+                    item.data.title,
+                    sessionNameFallback
                   )
                 }
                 const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)

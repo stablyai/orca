@@ -73,6 +73,47 @@ describe('tab title resolution', () => {
     ).toBe('Manual label')
   })
 
+  it('fills in a renamed session name for tabs without their own title', () => {
+    expect(
+      resolveTerminalTabTitle({ customTitle: null, title: 'zsh' }, false, '', {
+        displayName: 'auth refactor',
+        branchName: 'feature/auth'
+      })
+    ).toBe('auth refactor')
+  })
+
+  it('ignores a session name that is still just the branch default', () => {
+    expect(
+      resolveTerminalTabTitle({ customTitle: null, title: 'zsh' }, false, '', {
+        displayName: 'feature/auth',
+        branchName: 'feature/auth'
+      })
+    ).toBe('zsh')
+  })
+
+  it('keeps per-tab, generated, and meaningful live titles ahead of the session name', () => {
+    const sessionName = { displayName: 'auth refactor', branchName: 'main' }
+    expect(
+      resolveTerminalTabTitle({ customTitle: 'Manual', title: 'zsh' }, false, '', sessionName)
+    ).toBe('Manual')
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: null, generatedTitle: 'Refactor auth', title: 'zsh' },
+        true,
+        '',
+        sessionName
+      )
+    ).toBe('Refactor auth')
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: null, title: 'OC | Native Stable Session' },
+        true,
+        '',
+        sessionName
+      )
+    ).toBe('OC | Native Stable Session')
+  })
+
   it('uses the same priority for unified tab labels', () => {
     expect(
       resolveUnifiedTabLabel(
