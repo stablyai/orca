@@ -1,6 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
 
+type DraftUpdate = string | ((previous: string) => string)
+
 /**
  * Composer draft state backed by the scope cache so a typed-but-unsent message
  * survives the composer unmounting on a TUI/GUI toggle. `scopeKey` is the stable
@@ -9,7 +11,9 @@ import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-ch
  */
 export function useNativeChatDraft(scopeKey: string): {
   draft: string
-  setDraft: (next: string | ((previous: string) => string)) => void
+  setDraft: (next: DraftUpdate) => void
+  setDraftWithoutPersist: (next: DraftUpdate) => void
+  persistDraft: (text: string) => void
 } {
   const [draft, setDraftState] = useState(() => readNativeChatDraftCache(scopeKey))
 
@@ -22,18 +26,30 @@ export function useNativeChatDraft(scopeKey: string): {
     setDraftState(readNativeChatDraftCache(scopeKey))
   }
 
-  // Persist every mutation through the cache. Accepts the same value/updater
-  // forms as a useState setter so call sites are drop-in.
-  const setDraft = useCallback(
-    (next: string | ((previous: string) => string)) => {
+  const updateDraft = useCallback(
+    (next: DraftUpdate, persist: boolean) => {
       setDraftState((previous) => {
         const resolved = typeof next === 'function' ? next(previous) : next
-        writeNativeChatDraftCache(scopeKey, resolved)
+        if (persist) {
+          writeNativeChatDraftCache(scopeKey, resolved)
+        }
         return resolved
       })
     },
     [scopeKey]
   )
 
-  return { draft, setDraft }
+  // Persist every normal mutation through the cache. Composition updates use
+  // the non-persisting setter until compositionend confirms the text.
+  const setDraft = useCallback((next: DraftUpdate) => updateDraft(next, true), [updateDraft])
+  const setDraftWithoutPersist = useCallback(
+    (next: DraftUpdate) => updateDraft(next, false),
+    [updateDraft]
+  )
+  const persistDraft = useCallback(
+    (text: string) => writeNativeChatDraftCache(scopeKey, text),
+    [scopeKey]
+  )
+
+  return { draft, setDraft, setDraftWithoutPersist, persistDraft }
 }

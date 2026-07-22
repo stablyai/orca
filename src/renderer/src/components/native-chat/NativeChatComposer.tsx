@@ -1,4 +1,12 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
@@ -82,14 +90,17 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     // Why: local, SSH, and runtime reconnects can replace or temporarily clear
     // the PTY id. Pane identity is the stable ownership key for unsent input.
     const draftScopeKey = paneKey
-    const { draft, setDraft } = useNativeChatDraft(draftScopeKey)
+    const isComposingRef = useRef(false)
+    // Why: compositionend is followed by one more change with the committed text, so the next draft update must skip duplicate side effects.
+    const skipNextChangeRef = useRef<string | null>(null)
+    const { draft, setDraft, setDraftWithoutPersist, persistDraft } =
+      useNativeChatDraft(draftScopeKey)
     const [caret, setCaret] = useState(draft.length)
     const [history, setHistory] = useState<HistoryState>(EMPTY_HISTORY)
     const [activeSuggestion, setActiveSuggestion] = useState(0)
     const [notice, setNotice] = useState<string | null>(null)
     const [dictationPressed, setDictationPressed] = useState(false)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
-    const isComposingRef = useRef(false)
     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,
       targetPtyId,
@@ -113,6 +124,10 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       lastDraftScopeKey.current = draftScopeKey
       setCaret(readNativeChatDraftCache(draftScopeKey).length)
     }
+    useLayoutEffect(() => {
+      isComposingRef.current = false
+      skipNextChangeRef.current = null
+    }, [draftScopeKey])
 
     const agentCommands = useMemo(() => getVerifiedNativeChatCommands(agent), [agent])
     const picker = useNativeChatPickerState({
@@ -366,6 +381,18 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         isDictating={isDictating}
         isDictationHoldMode={isDictationHoldMode}
         onDraftChange={(value, element) => {
+          if (isComposingRef.current) {
+            setDraftWithoutPersist(value)
+            syncCaret(element)
+            return
+          }
+          if (skipNextChangeRef.current === value) {
+            skipNextChangeRef.current = null
+            setDraftWithoutPersist(value)
+            syncCaret(element)
+            return
+          }
+          skipNextChangeRef.current = null
           setDraft(value)
           setHistory((prev) => ({ entries: prev.entries, index: null }))
           syncCaret(element)
@@ -380,9 +407,19 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         onKeyDown={handleKeyDown}
         onCompositionStart={() => {
           isComposingRef.current = true
+          skipNextChangeRef.current = null
         }}
-        onCompositionEnd={() => {
+        onCompositionEnd={(event) => {
           isComposingRef.current = false
+          const element = event.currentTarget
+          const value = element.value
+          setDraftWithoutPersist(value)
+          persistDraft(value)
+          setHistory((prev) => ({ entries: prev.entries, index: null }))
+          syncCaret(element)
+          handleDraftOrCaretChange(value, element.selectionStart ?? value.length)
+          setActiveSuggestion(0)
+          skipNextChangeRef.current = value
         }}
         onPaste={handlePaste}
         pickerListboxId={picker.listboxId}
