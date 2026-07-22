@@ -198,7 +198,7 @@ describe('usePrimarySelectionPaste', () => {
     expect(textarea.value).toBe('alpha beta')
   })
 
-  it('swallows the terminal-armed native middle-click paste that has no pending DOM target', async () => {
+  it('swallows terminal-armed native paste follow-up even when it has no pending DOM target', async () => {
     setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
     shouldSuppressNativePasteMock.mockReturnValue(true)
     await renderProbe()

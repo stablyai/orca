@@ -54,7 +54,7 @@ export function setPrimarySelectionEnabled(nextEnabled: boolean): void {
 
 // Why: the integrated terminal injects the primary selection into the PTY
 // itself on middle-click, so arm a short window to swallow Chromium's follow-up
-// native X11 paste instead of forwarding the same selection to the PTY twice.
+// native paste event instead of forwarding text to the PTY twice.
 export function armPrimarySelectionNativePasteSuppression(now: number = Date.now()): void {
   if (!enabled) {
     return

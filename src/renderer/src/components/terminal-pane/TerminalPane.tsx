@@ -2631,9 +2631,9 @@ export default function TerminalPane({
       }
       event.preventDefault()
       event.stopPropagation()
-      // Why: preventDefault on mousedown does not stop Chromium's native X11
-      // middle-click primary paste (fired on release), so arm the shared window
-      // to swallow it and avoid inserting the selection into the PTY twice.
+      // Why: preventDefault on mousedown does not stop Chromium's native
+      // middle-click paste follow-up, so arm the shared window to swallow it and
+      // avoid inserting text into the PTY twice.
       armPrimarySelectionNativePasteSuppression()
       clickedPane.terminal.focus()
       void readPrimarySelectionText().then(async (text) => {

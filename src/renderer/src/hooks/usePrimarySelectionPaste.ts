@@ -98,7 +98,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       }
       // Why: the integrated terminal owns its middle-click paste and cannot mark
       // a pending DOM target, so honor its armed window to swallow the follow-up
-      // native X11 paste that xterm would otherwise forward to the PTY.
+      // native paste event that xterm would otherwise forward to the PTY.
       if (shouldSuppressPrimarySelectionNativePaste()) {
         suppressEvent(event)
       }
