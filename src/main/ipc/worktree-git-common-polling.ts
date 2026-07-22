@@ -132,21 +132,20 @@ async function snapshotGitCommon(
     dirSignature(worktreesDir),
     includePrimary ? snapshotPrimaryCheckoutSignatures(commonDirPath) : new Map<string, string>()
   ])
-  const shouldReadWorktreesDir =
-    forceFullScan || !previous || previous.worktreesDirSignature !== worktreesDirSignature
+  // Why: enumerate the worktrees dir EVERY tick rather than gating the readdir on its stat signature.
+  // A single readdir of a small dir is negligible next to the per-entry structural stats that already
+  // run each tick, and the signature gate could miss a same-granule add+remove on a coarse-mtime/FAT
+  // filesystem (its size/mtime/ino/ctime all collide), leaving a linked worktree add/remove undetected
+  // until the ~30s index backstop (#9882 review). The listing is the authoritative add/remove signal.
   let entryPaths: string[]
-  if (shouldReadWorktreesDir) {
-    try {
-      const entries = await readdir(worktreesDir, { withFileTypes: true })
-      entryPaths = entries
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => join(worktreesDir, entry.name))
-    } catch {
-      // Missing worktrees dir is normal for repos without linked worktrees.
-      entryPaths = []
-    }
-  } else {
-    entryPaths = [...previous.entries.keys()]
+  try {
+    const entries = await readdir(worktreesDir, { withFileTypes: true })
+    entryPaths = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(worktreesDir, entry.name))
+  } catch {
+    // Missing worktrees dir is normal for repos without linked worktrees.
+    entryPaths = []
   }
 
   const entries = new Map<string, GitCommonEntrySnapshot>()
@@ -156,13 +155,14 @@ async function snapshotGitCommon(
       entries.set(entryPath, await snapshotGitCommonEntry(entryPath, previousEntry, forceFullScan))
     })
   )
-  // Why: structural leaves are re-stat'd every tick now, so the only gated work is the worktrees-dir
-  // readdir; onFullScan reflects that enumeration running (vs a gated skip when the dir is unchanged).
+  // Why: the expensive per-entry `index` read stays gated on each entry's own dir signature; onFullScan
+  // now reflects an ungated index-metadata backstop fan-out (forceFullScan) — the real periodic cost —
+  // rather than the always-run worktrees-dir readdir.
   return {
     worktreesDirSignature,
     entries,
     primarySignatures,
-    didFullScan: shouldReadWorktreesDir
+    didFullScan: forceFullScan
   }
 }
 

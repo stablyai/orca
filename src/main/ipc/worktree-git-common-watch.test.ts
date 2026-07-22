@@ -304,7 +304,10 @@ describe('worktree git-common polling gate (non-darwin)', () => {
     cleanups.push(() => watch.unsubscribe())
   }
 
-  it('skips worktrees readdir and entry metadata fan-out on idle ticks', async () => {
+  it('skips the ungated index-metadata backstop on idle ticks', async () => {
+    // Why: idle ticks still re-stat structural leaves and list the (small) worktrees dir cheaply, but the
+    // heavier ungated per-entry index fan-out (onFullScan) must NOT run until the backstop — and no
+    // spurious events are emitted while nothing changes.
     const commonDir = await makePollingCommonDir()
     const entry = join(commonDir, 'worktrees', 'idle')
     await mkdir(join(entry, 'logs'), { recursive: true })
@@ -320,7 +323,10 @@ describe('worktree git-common polling gate (non-darwin)', () => {
     expect(received.flat()).toHaveLength(0)
   })
 
-  it('fans out when linked worktrees are added and removed', async () => {
+  it('detects linked worktree add and remove from the every-tick readdir', async () => {
+    // Why: the worktrees-dir listing runs every tick (not gated on its stat signature), so an add/remove
+    // surfaces within one poll interval even on a coarse-mtime filesystem whose dir signature would not
+    // move — without waiting on the index backstop (onFullScan).
     const commonDir = await makePollingCommonDir()
     const received: WorktreeBasePollEvent[][] = []
     const fullScans = vi.fn()
@@ -331,20 +337,17 @@ describe('worktree git-common polling gate (non-darwin)', () => {
     await vi.waitFor(() => {
       expect(received.flat()).toContainEqual({ type: 'create', path: entry })
     })
-    const scansAfterAdd = fullScans.mock.calls.length
-    expect(scansAfterAdd).toBeGreaterThan(0)
 
     await rm(entry, { recursive: true })
     await vi.waitFor(() => {
       expect(received.flat()).toContainEqual({ type: 'delete', path: entry })
     })
-    expect(fullScans.mock.calls.length).toBeGreaterThan(scansAfterAdd)
   })
 
-  it('detects an in-place structural (HEAD) write on a known entry every tick, without a readdir', async () => {
+  it('detects an in-place structural (HEAD) write on a known entry every tick, without the index backstop', async () => {
     // Why: a raw HEAD/gitdir/config.worktree rewrite does not bump the entry-dir mtime, so the
     // structural leaves are re-stat'd every tick (never gated) — the change surfaces within one tick
-    // and does NOT require the gated worktrees-dir readdir (onFullScan).
+    // and does NOT require the ungated index-metadata backstop (onFullScan).
     const commonDir = await makePollingCommonDir()
     const entry = join(commonDir, 'worktrees', 'structural')
     await mkdir(entry)
