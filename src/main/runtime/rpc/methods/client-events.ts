@@ -32,6 +32,10 @@ export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
           connectionId
         )
 
+        // Why: listener-first snapshotting closes the subscribe race while restoring state missed during disconnects.
+        for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
+          emit(event)
+        }
         emit({ type: 'ready', subscriptionId })
       })
     }

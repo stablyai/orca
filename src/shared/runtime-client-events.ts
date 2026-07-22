@@ -14,6 +14,14 @@ export type RuntimeClientEvent =
   // overlays never learn the host connected (STA-1468).
   | { type: 'sshStateChanged'; targetId: string; state: SshConnectionState }
   | {
+      type: 'worktreeTerminalSleepState'
+      worktreeId: string
+      generation: number
+      phase: 'started' | 'committed' | 'cancelled' | 'woken'
+      ptyIds: string[]
+      terminalHandles: string[]
+    }
+  | {
       type: 'linearLinkedIssueUpdated'
       worktreeId: string
       identifier: string

@@ -4,6 +4,7 @@ import { createServer as createHttpServer, type Server as HttpServer } from 'nod
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'
+import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
 
 const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 // Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
@@ -30,6 +31,8 @@ export type WebSocketTransportOptions = {
   tlsKey?: string
   // Why: test-only override. Production uses HEARTBEAT_INTERVAL_MS.
   heartbeatIntervalMs?: number
+  // Why: deterministic suspension tests must advance wall time independently from timer callbacks.
+  heartbeatNow?: () => number
   // Why: test-only override. Production uses PRE_AUTH_TIMEOUT_MS.
   preAuthTimeoutMs?: number
   // Why: the pairing server can also serve the browser client, avoiding a second static server.
@@ -45,16 +48,13 @@ export class WebSocketTransport implements RpcTransport {
   private readonly port: number
   private readonly tlsCert: string | undefined
   private readonly tlsKey: string | undefined
-  private readonly heartbeatIntervalMs: number
+  private readonly heartbeat: RemoteRuntimeServerHeartbeat
   private readonly preAuthTimeoutMs: number
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
-  // Why: a socket absent from this set at the next heartbeat sweep is presumed dead and terminated.
-  private wsAlive = new WeakSet<WebSocket>()
   private messageHandler: WebSocketMessageHandler | null = null
   private connectionCloseHandler:
     | ((clientId: string | null, ws: WebSocket, hasOtherConnections: boolean) => void)
@@ -69,6 +69,7 @@ export class WebSocketTransport implements RpcTransport {
     tlsCert,
     tlsKey,
     heartbeatIntervalMs,
+    heartbeatNow,
     preAuthTimeoutMs,
     staticRoot,
     fallbackPort,
@@ -78,7 +79,11 @@ export class WebSocketTransport implements RpcTransport {
     this.port = port
     this.tlsCert = tlsCert
     this.tlsKey = tlsKey
-    this.heartbeatIntervalMs = heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS
+    this.heartbeat = new RemoteRuntimeServerHeartbeat(
+      heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS,
+      heartbeatNow,
+      MAX_WS_CONNECTIONS
+    )
     this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
@@ -194,7 +199,7 @@ export class WebSocketTransport implements RpcTransport {
 
     this.httpServer = httpServer
     this.wss = wss
-    this.startHeartbeat()
+    this.heartbeat.start(() => this.wss?.clients ?? [])
   }
 
   // Why: force-terminate soon after the 1013 close since a half-open phone may never ack and would hold the descriptor past the WS cap; the 'error' listener absorbs a reset while closing.
@@ -206,56 +211,12 @@ export class WebSocketTransport implements RpcTransport {
     ws.once('close', () => clearTimeout(terminateTimer))
   }
 
-  // Why: the only reliable reaper of half-open mobile sockets stranded by background suspension without a TCP FIN.
-  private startHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      return
-    }
-    this.heartbeatTimer = setInterval(() => {
-      const wss = this.wss
-      if (!wss) {
-        return
-      }
-      let reaped = 0
-      for (const ws of wss.clients) {
-        if (!this.wsAlive.has(ws)) {
-          // Why: terminate() frees the slot immediately; close() on a dead socket can hang for the OS-level TCP timeout.
-          ws.terminate()
-          reaped++
-          continue
-        }
-        this.wsAlive.delete(ws)
-        try {
-          ws.ping()
-        } catch {
-          // Why: ping() can throw on a mid-teardown socket; the close handler runs regardless, so swallow it.
-        }
-      }
-      // Why: steady reaping or riding the cap are early overload signals; stay quiet on healthy ticks.
-      if (reaped > 0 || wss.clients.size >= MAX_WS_CONNECTIONS) {
-        console.warn(
-          `[ws-transport] heartbeat reaped ${reaped}; ${wss.clients.size} tracked sockets`
-        )
-      }
-    }, this.heartbeatIntervalMs)
-    if (typeof this.heartbeatTimer.unref === 'function') {
-      this.heartbeatTimer.unref()
-    }
-  }
-
-  private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer)
-      this.heartbeatTimer = null
-    }
-  }
-
   async stop(): Promise<void> {
     const wss = this.wss
     const httpServer = this.httpServer
     this.wss = null
     this.httpServer = null
-    this.stopHeartbeat()
+    this.heartbeat.stop()
 
     if (wss) {
       for (const client of wss.clients) {
@@ -282,11 +243,11 @@ export class WebSocketTransport implements RpcTransport {
   private handleConnection(ws: WebSocket): void {
     let finalized = false
     const onPong = (): void => {
-      this.wsAlive.add(ws)
+      this.heartbeat.noteAlive(ws)
     }
     const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
       // Why: any inbound frame counts as proof of life, so an actively-talking client isn't reaped mid-request.
-      this.wsAlive.add(ws)
+      this.heartbeat.noteAlive(ws)
       const msg =
         typeof data === 'string'
           ? data
@@ -338,7 +299,7 @@ export class WebSocketTransport implements RpcTransport {
     this.preAuthTimers.set(ws, preAuthTimer)
 
     // Why: seed alive so the first heartbeat tick doesn't reap a fresh socket before its first pong.
-    this.wsAlive.add(ws)
+    this.heartbeat.noteAlive(ws)
 
     ws.on('pong', onPong)
     ws.on('message', onMessage)

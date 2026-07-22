@@ -39,7 +39,8 @@ import type {
   RuntimeTerminalDriverState
 } from '../../../shared/runtime-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
-import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
+import { zoomLevelToPercent } from '@/components/settings/SettingsConstants'
+import { stepUIZoomLevel } from '../../../shared/ui-zoom-level'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveZoomTarget } from './resolve-zoom-target'
@@ -102,6 +103,7 @@ import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import type { AppState } from '../store/types'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '../store/pinned-tab-close-guard'
 import {
@@ -237,7 +239,6 @@ function acquireBrowserAutomationBootstrapLease(
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
-const ZOOM_STEP = 0.5
 const PENDING_AGENT_STATUS_RETRY_MS = 100
 const PENDING_AGENT_STATUS_TTL_MS = 15_000
 const MAX_PENDING_AGENT_STATUS_EVENTS = 100
@@ -963,6 +964,10 @@ export function useIpcEvents(): void {
       null
 
     const handleRuntimeClientEvent = (environmentId: string, event: RuntimeClientEvent): void => {
+      if (event.type === 'worktreeTerminalSleepState') {
+        applyHostWorktreeTerminalSleepState(environmentId, event)
+        return
+      }
       if (event.type === 'reposChanged') {
         runtimeProjectRefreshScheduler.request(environmentId)
         return
@@ -1387,6 +1392,7 @@ export function useIpcEvents(): void {
           cwd,
           env,
           launchConfig,
+          resumeProviderSession,
           launchToken,
           launchAgent,
           viewMode,
@@ -1572,6 +1578,7 @@ export function useIpcEvents(): void {
                 command,
                 ...(env ? { env } : {}),
                 ...(launchConfig ? { launchConfig } : {}),
+                ...(resumeProviderSession ? { resumeProviderSession } : {}),
                 ...(launchToken ? { launchToken } : {}),
                 ...(launchAgent ? { launchAgent } : {})
               })
@@ -1723,6 +1730,9 @@ export function useIpcEvents(): void {
               ...(data.env ? { env: data.env } : {}),
               ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
               ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
+              ...(data.resumeProviderSession
+                ? { resumeProviderSession: data.resumeProviderSession }
+                : {}),
               ...(data.launchToken ? { launchToken: data.launchToken } : {}),
               ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
               ...(data.startupCommandDelivery
@@ -2424,13 +2434,13 @@ export function useIpcEvents(): void {
           return
         }
         void (async () => {
-          if (
-            await createWebRuntimeSessionTerminal({
-              worktreeId,
-              environmentId: getWorktreeRuntimeEnvironmentId(worktreeId),
-              activate: true
-            })
-          ) {
+          const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
+          const outcome = await createWebRuntimeSessionTerminal({
+            worktreeId,
+            environmentId,
+            activate: true
+          })
+          if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
             return
           }
           const newTab = store.createTab(worktreeId)
@@ -2482,7 +2492,8 @@ export function useIpcEvents(): void {
               void closeWebRuntimeSessionTab({
                 worktreeId,
                 tabId,
-                environmentId
+                environmentId,
+                reason: 'user'
               })
               return
             }
@@ -2810,9 +2821,7 @@ export function useIpcEvents(): void {
         }
 
         const current = window.api.ui.getZoomLevel()
-        const rawNext =
-          direction === 'in' ? current + ZOOM_STEP : direction === 'out' ? current - ZOOM_STEP : 0
-        const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, rawNext))
+        const next = stepUIZoomLevel(current, direction)
 
         applyUIZoom(next)
         void window.api.ui.set({ uiZoomLevel: next })
@@ -2891,6 +2900,7 @@ export function useIpcEvents(): void {
         state: data.state,
         prompt: data.prompt,
         agentType: data.agentType,
+        model: data.model,
         toolName: data.toolName,
         toolInput: data.toolInput,
         // Why: the live AskUserQuestion prompt rides this field; omitting it drops the native question card on web/mobile.

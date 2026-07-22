@@ -21,6 +21,7 @@ const SNAPSHOT = {
       repoName: 'Orca',
       worktreeName: 'Dashboard',
       startedAt: 1_699_999_000_000,
+      finishedAt: null,
       stateChangedAt: 1_699_999_500_000,
       unseen: true,
       askSummary: '{"question":"Proceed?"}'

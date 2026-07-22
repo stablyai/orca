@@ -1783,7 +1783,9 @@
         "jiraSortDescending": "降序",
         "jiraSortBy": "排序方式",
         "jiraToggleSortDirection": "按{{value0}}排序",
-        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
+        "noGithubSourceDetected": "No GitHub source detected for",
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -2712,6 +2714,13 @@
             "removedTitle": "SSH 主机已移除",
             "removedBody": "此工作区的 SSH 主机已被移除，无法再连接。请移除工作区以清理 — 远程文件不会受影响。",
             "removeWorkspaceButton": "移除工作区"
+          },
+          "TerminalRemoteRuntimeReconnectBanner": {
+            "retryingTitle": "Reconnecting to remote runtime",
+            "disconnectedTitle": "Remote runtime disconnected",
+            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
+            "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
+            "reconnectButton": "Reconnect"
           }
         }
       },
@@ -3287,7 +3296,9 @@
             "noUsageData": "No usage data",
             "detailed": "Detailed",
             "compact": "Compact",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "detailedTooltip": "完整使用情况，包含条形图、标签和百分比",
+            "compactTooltip": "精简使用情况：仅显示最吃紧的窗口"
           }
         }
       },
@@ -4584,7 +4595,6 @@
           "modalDescription": "从终端安装 Linear 技能。",
           "modalPrompt": "允许智能体读取和编辑已附加的 Linear ticket。",
           "dontShowAgain": "不再显示",
-          "notNow": "暂不",
           "missingBoth": "缺少 Orca CLI 和 Linear 智能体技能。",
           "missingCli": "缺少 Orca CLI。",
           "missingSkill": "缺少 Linear 智能体技能。",
@@ -4846,7 +4856,7 @@
           "dbb9626ed1": "取消",
           "854ebbcc45": "Orca 将删除此已保存账户的托管 Claude 身份验证。如果当前处于活动状态，Orca 将回退到系统默认的 Claude 登录名。",
           "63843e37e2": "删除 Claude 账户？",
-          "99c8f9e498": "Orca 将删除此已保存账户的托管 Codex 主目录。如果当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。",
+          "380a7736cc": "移除此账户会永久删除其托管的 Codex 主目录，包括其中存储的所有 Codex 会话历史记录和 MCP 登录信息。此操作无法撤销。如果该账户当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。",
           "0d47394635": "删除 Codex 账户？",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "登录 opencode.ai 后在 URL 中找到此内容（例如",
@@ -6971,7 +6981,6 @@
           "cf4437a2f7": "ANSI 黑色",
           "adfdee23cb": "黑色的",
           "68e9f07de0": "ANSI 标准",
-          "fb8c6f1967": "粗体文本的颜色。如果未设置，则返回正常颜色。",
           "862e463f7f": "粗体文字",
           "b2c0857c49": "所选文本的文本颜色",
           "8b450b5305": "选择前景",
@@ -6987,7 +6996,8 @@
           "79f6bfb76e": "前景",
           "cf37ff69f6": "根据",
           "8abdab9f7c": "立即重启",
-          "907131d741": "正在重新启动..."
+          "907131d741": "正在重新启动...",
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
         },
         "UIZoomControl": {
           "c2c64b24d0": "重置"
@@ -7804,7 +7814,9 @@
             "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。",
             "e61157e926": "编辑器自动换行",
-            "005be5c699": "在文件编辑器中自动换行长行，而无需水平滚动。"
+            "005be5c699": "在文件编辑器中自动换行长行，而无需水平滚动。",
+            "editorFontFamily": "Editor Font Family",
+            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
           }
         },
         "git": {
@@ -9244,10 +9256,17 @@
           "howToUse": "How to use it",
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
-          "terminalAriaLabel": "Linear skill install terminal"
+          "terminalAriaLabel": "Linear skill install terminal",
+          "manageConnectionHint": "Review connected Linear workspaces and API keys in",
+          "manageConnectionLink": "Integrations settings"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
+        },
+        "EditorFontFamilySetting": {
+          "title": "Editor Font Family",
+          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+          "placeholder": "Same as terminal font"
         }
       },
       "right": {
@@ -9513,7 +9532,7 @@
           "SearchHeader": {
             "6234a5ef85": "使用正则表达式",
             "4567e6e0b6": "匹配整个单词",
-            "464ae3974f": "火柴盒",
+            "464ae3974f": "区分大小写",
             "693cbeadd0": "搜索"
           },
           "SearchQueryRow": {
@@ -10317,7 +10336,8 @@
             "worktreeUnavailable": "工作树不再可用。",
             "openSupportedWorkspace": "在恢复会话之前，请先打开一个工作区。",
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。",
-            "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。"
+            "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。",
+            "prepareSessionResumeFailed": "Could not prepare this session for resume."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -12309,6 +12329,15 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "请选择较少的内容，或使用代码模式剪切保留的 HTML 引用。"
+        },
+        "editor": {
+          "save": {
+            "failure": {
+              "notice": {
+                "8c59ce5075": "Failed to save the file. Please try again."
+              }
+            }
+          }
         }
       },
       "diff": {
@@ -13419,6 +13448,11 @@
           "91b5c8d7e6": "GitLab"
         }
       }
+    },
+    "runtime": {
+      "webRuntimeSession": {
+        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      }
     }
   },
   "components": {
@@ -13555,6 +13589,32 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "在新会话中继续…",
+      "dialogTitle": "在新会话中继续",
+      "dialogDescription": "从当前进度启动一个新的智能体会话，原会话保持不变。",
+      "untitledSession": "当前会话",
+      "originalAgent": "原智能体：{{agent}}",
+      "agent": "智能体",
+      "selectAgent": "选择智能体",
+      "detectingAgents": "正在此工作区主机上检测智能体…",
+      "detectionFailed": "无法检测此工作区主机上的智能体。",
+      "noAgents": "未在此工作区主机上检测到已启用的智能体。",
+      "context": "上下文",
+      "modeFocused": "聚焦续接（推荐）",
+      "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
+      "modeFull": "完整会话记录",
+      "modeFullDescription": "让新智能体在继续前读取完整的已保存会话。这可能需要更长时间，并消耗大量上下文、套餐用量或 API 额度。",
+      "startsIn": "启动目录：",
+      "startSession": "启动新会话",
+      "starting": "正在启动…",
+      "noContext": "没有可用于在新会话中继续的上下文。",
+      "agentDisabled": "{{agent}} 已在智能体设置中停用。",
+      "agentUnavailable": "未在此工作区主机上检测到 {{agent}}。",
+      "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
+      "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
+      "launchFailed": "无法启动新的 {{agent}} 会话。"
     }
   },
   "dashboardPopout": {
@@ -13585,8 +13645,8 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "close": "Close",
-      "focusWorktree": "Focus worktree"
+      "focusWorktree": "Focus worktree",
+      "close": "Close"
     }
   },
   "dashboard": {

@@ -38,6 +38,10 @@ import {
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../scrollback-limits'
 import { assertTerminalAgentSendable } from '../terminal-agent-send-guard'
+import {
+  navigationTargetsHost,
+  resolveRuntimeNavigationTarget
+} from '../../../../shared/runtime-navigation'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
@@ -820,6 +824,10 @@ const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
 
+const TerminalFocus = TerminalHandle.extend({
+  navigation: z.enum(['caller', 'host']).optional()
+})
+
 const TerminalListParams = z.object({
   worktree: OptionalString,
   limit: OptionalFiniteNumber,
@@ -902,6 +910,8 @@ const TerminalWait = TerminalHandle.extend({
 
 const TerminalCreateParams = z.object({
   worktree: OptionalString,
+  clientMutationId: z.string().min(1).max(128).optional(),
+  reconcileExisting: z.boolean().optional(),
   command: OptionalString,
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
@@ -911,6 +921,13 @@ const TerminalCreateParams = z.object({
       agentCommand: z.string().optional(),
       agentArgs: z.string(),
       agentEnv: z.record(z.string(), z.string())
+    })
+    .optional(),
+  resumeProviderSession: z
+    .object({
+      key: z.enum(['session_id', 'conversation_id']),
+      id: z.string().min(1).max(512),
+      transcriptPath: z.string().min(1).max(32_768).optional()
     })
     .optional(),
   launchToken: OptionalString,
@@ -944,6 +961,8 @@ const TerminalSplit = TerminalHandle.extend({
 const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
 })
+
+const TerminalSleep = TerminalStop
 
 const TerminalStopExact = TerminalStop.extend({
   expectedPtyIds: z.array(requiredString('Missing PTY ID')).min(1),
@@ -1347,26 +1366,37 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.create',
     params: TerminalCreateParams,
-    handler: async (params, { runtime }) => ({
-      terminal: await runtime.createTerminal(params.worktree, {
-        command: params.command,
-        startupCommandDelivery: params.startupCommandDelivery,
-        env: params.env,
-        envToDelete: params.envToDelete,
-        ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
-        ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-        ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
-        ...(params.terminalColorQueryReplies
-          ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
-          : {}),
-        title: params.title,
-        focus: params.focus === true,
-        rendererBacked: params.rendererBacked === true,
-        activate: params.activate === true,
-        presentation: params.presentation,
-        tabId: params.tabId,
-        leafId: params.leafId
-      })
+    handler: async (params, { runtime, pairedDeviceId, clientId }) => ({
+      terminal: await runtime.dedupeTerminalCreate(
+        pairedDeviceId ?? clientId ?? 'local',
+        params.worktree,
+        params.clientMutationId,
+        params.reconcileExisting === true,
+        (canonicalWorktreeSelector, preAllocatedHandle) =>
+          runtime.createTerminal(canonicalWorktreeSelector, {
+            command: params.command,
+            startupCommandDelivery: params.startupCommandDelivery,
+            env: params.env,
+            envToDelete: params.envToDelete,
+            ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+            ...(params.resumeProviderSession
+              ? { resumeProviderSession: params.resumeProviderSession }
+              : {}),
+            ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+            ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+            ...(params.terminalColorQueryReplies
+              ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
+              : {}),
+            title: params.title,
+            focus: params.focus === true,
+            rendererBacked: params.rendererBacked === true,
+            activate: params.activate === true,
+            presentation: params.presentation,
+            tabId: params.tabId,
+            leafId: params.leafId,
+            ...(preAllocatedHandle ? { preAllocatedHandle } : {})
+          })
+      )
     })
   }),
   defineMethod({
@@ -1385,6 +1415,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.stop',
     params: TerminalStop,
     handler: async (params, { runtime }) => runtime.stopTerminalsForWorktree(params.worktree)
+  }),
+  defineMethod({
+    name: 'terminal.sleep',
+    params: TerminalSleep,
+    handler: async (params, { runtime }) => runtime.sleepTerminalsForWorktree(params.worktree)
   }),
   defineMethod({
     name: 'terminal.stopExact',
@@ -1421,9 +1456,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.focus',
-    params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      focus: await runtime.focusTerminal(params.terminal)
+    params: TerminalFocus,
+    handler: async (params, { runtime, clientKind }) => ({
+      focus: await runtime.focusTerminal(params.terminal, {
+        navigateHost: navigationTargetsHost(
+          resolveRuntimeNavigationTarget({ navigation: params.navigation, clientKind })
+        )
+      })
     })
   }),
   defineMethod({

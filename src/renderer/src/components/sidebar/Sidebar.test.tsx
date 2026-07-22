@@ -2,7 +2,8 @@
 
 import type { CSSProperties, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { cleanup, render } from '@testing-library/react'
+import { tmpdir } from 'node:os'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -119,7 +120,7 @@ afterEach(cleanup)
 describe('Sidebar', () => {
   it('applies left sidebar appearance variables to the workspace sidebar surface', () => {
     setSidebarState({
-      ...getDefaultSettings('/tmp'),
+      ...getDefaultSettings(tmpdir()),
       leftSidebarAppearanceMode: 'match-terminal',
       terminalColorOverrides: {
         background: '#101820',
@@ -136,7 +137,7 @@ describe('Sidebar', () => {
   })
 
   it('passes status bar visibility into the workspace board drawer', () => {
-    setSidebarState(getDefaultSettings('/tmp'), false)
+    setSidebarState(getDefaultSettings(tmpdir()), false)
 
     const markup = renderSidebar()
 
@@ -145,7 +146,7 @@ describe('Sidebar', () => {
   })
 
   it('does not start a full worktree scan while the startup session is hydrating', () => {
-    setSidebarState(getDefaultSettings('/tmp'))
+    setSidebarState(getDefaultSettings(tmpdir()))
     const fetchAllWorktrees = vi.fn().mockResolvedValue(undefined)
     mocks.state = {
       ...mocks.state,
@@ -168,8 +169,8 @@ describe('Sidebar', () => {
     expect(fetchAllWorktrees).toHaveBeenCalledTimes(1)
   })
 
-  it('does not scan when runtime hosts come online during the startup refresh', () => {
-    setSidebarState(getDefaultSettings('/tmp'))
+  it('does not scan when runtime hosts come online during the startup refresh', async () => {
+    setSidebarState(getDefaultSettings(tmpdir()))
     const fetchAllWorktrees = vi.fn().mockResolvedValue(undefined)
     mocks.state = {
       ...mocks.state,
@@ -199,6 +200,6 @@ describe('Sidebar', () => {
       ])
     }
     view.rerender(sidebarElement())
-    expect(fetchAllWorktrees).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(fetchAllWorktrees).toHaveBeenCalledTimes(1))
   })
 })

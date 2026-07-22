@@ -5,6 +5,32 @@ import { getProviderSessionClaimKey } from '../../lib/sleeping-agent-pane-owners
 import { createTestStore, makeTab } from './store-test-helpers'
 
 describe('recordAgentProviderSession', () => {
+  it('preserves the root session while a child permission hook moves Codex to waiting', () => {
+    const store = createTestStore()
+    const providerSession = { key: 'session_id' as const, id: 'root-session' }
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'coordinate reviewers', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 10, stateStartedAt: 10 },
+        undefined,
+        { providerSession }
+      )
+    store.getState().setAgentStatus('tab-1:leaf-1', {
+      state: 'waiting',
+      prompt: 'coordinate reviewers',
+      agentType: 'codex',
+      subagents: [{ id: 'child-1', state: 'waiting', startedAt: 11 }]
+    })
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toEqual(
+      providerSession
+    )
+  })
+
   it('uses the session file as part of Pi resume ownership only', () => {
     const base = {
       paneKey: 'tab-1:leaf-1',

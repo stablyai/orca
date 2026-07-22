@@ -82,6 +82,199 @@ describe('agent status cleanup for a lost SSH connection', () => {
     expect(store.getState().retentionSuppressedPaneKeys[oldA]).toBe(true)
   })
 
+  it('clears worktree-attributed orphans on the connection even when their connectionId stamp is missing', () => {
+    // Why: #9030 — after a relay/daemon restart main drops the rows but renderer entries whose
+    // connectionId never matched (unstamped over SSH) stayed "fresh" 30 min and un-clickable;
+    // the host is proven via the owning worktree's repo so those orphans clear too.
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo-a',
+          path: '/a',
+          displayName: 'A',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-a'
+        },
+        {
+          id: 'repo-b',
+          path: '/b',
+          displayName: 'B',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-b'
+        }
+      ],
+      worktreesByRepo: {
+        'repo-a': [{ id: 'wt-a', repoId: 'repo-a' }],
+        'repo-b': [{ id: 'wt-b', repoId: 'repo-b' }]
+      }
+    } as unknown as Partial<AppState>)
+
+    const orphanA = 'tab-a:11111111-1111-4111-8111-111111111111'
+    const freshOrphanA = 'tab-a2:22222222-2222-4222-8222-222222222222'
+    const otherHostB = 'tab-b:33333333-3333-4333-8333-333333333333'
+    // Orphan on ssh-a's worktree, no connectionId stamp — the #9030 shape.
+    store
+      .getState()
+      .setAgentStatus(
+        orphanA,
+        { state: 'working', prompt: 'orphan', agentType: 'codex' },
+        undefined,
+        { updatedAt: 10 },
+        { worktreeId: 'wt-a' }
+      )
+    // Same host, but updated after the cutoff — a genuinely fresh row must survive.
+    store
+      .getState()
+      .setAgentStatus(
+        freshOrphanA,
+        { state: 'working', prompt: 'fresh', agentType: 'codex' },
+        undefined,
+        { updatedAt: 40 },
+        { worktreeId: 'wt-a' }
+      )
+    // Worktree-attributed row on a different live host must be untouched.
+    store
+      .getState()
+      .setAgentStatus(
+        otherHostB,
+        { state: 'working', prompt: 'other host', agentType: 'codex' },
+        undefined,
+        { updatedAt: 10 },
+        { worktreeId: 'wt-b' }
+      )
+
+    store.getState().clearTransientAgentStatuses('ssh-a', 30)
+
+    expect(store.getState().agentStatusByPaneKey[orphanA]).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey[freshOrphanA]).toBeDefined()
+    expect(store.getState().agentStatusByPaneKey[otherHostB]).toBeDefined()
+  })
+
+  it('does not clear a live row on another host that shares a repo id', () => {
+    // Why: a repo id can live on multiple hosts and share one worktreesByRepo bucket; scoping by bare
+    // repo id would clear the other host's live rows, so ownership must come from the worktree (#9030).
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'shared',
+          path: '/a',
+          displayName: 'A',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-a'
+        },
+        {
+          id: 'shared',
+          path: '/b',
+          displayName: 'B',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-b'
+        }
+      ],
+      worktreesByRepo: {
+        shared: [
+          { id: 'wt-a', repoId: 'shared', hostId: 'ssh:ssh-a' },
+          { id: 'wt-b', repoId: 'shared', hostId: 'ssh:ssh-b' }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    const orphanA = 'tab-a:11111111-1111-4111-8111-111111111111'
+    const liveB = 'tab-b:22222222-2222-4222-8222-222222222222'
+    store
+      .getState()
+      .setAgentStatus(
+        orphanA,
+        { state: 'working', prompt: 'orphan', agentType: 'codex' },
+        undefined,
+        { updatedAt: 10 },
+        { worktreeId: 'wt-a' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        liveB,
+        { state: 'working', prompt: 'live b', agentType: 'codex' },
+        undefined,
+        { updatedAt: 10 },
+        { worktreeId: 'wt-b' }
+      )
+
+    store.getState().clearTransientAgentStatuses('ssh-a', 30)
+
+    expect(store.getState().agentStatusByPaneKey[orphanA]).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey[liveB]).toBeDefined()
+  })
+
+  it('does not clear a live row whose worktree id collides across hosts', () => {
+    // Why: worktree id is `${repoId}::${path}` with no host component, so the same project mirrored at
+    // the same path on two hosts shares one id. An explicit stamp for the other host must win, and an
+    // unstamped row on a collided id is ambiguous — left alone rather than hiding a live row (#9030).
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'shared',
+          path: '/p',
+          displayName: 'A',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-a'
+        },
+        {
+          id: 'shared',
+          path: '/p',
+          displayName: 'B',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-b'
+        }
+      ],
+      worktreesByRepo: {
+        shared: [
+          { id: 'shared::/p', repoId: 'shared', hostId: 'ssh:ssh-a' },
+          { id: 'shared::/p', repoId: 'shared', hostId: 'ssh:ssh-b' }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    const liveOnB = 'tab-b:11111111-1111-4111-8111-111111111111'
+    const collidedOrphan = 'tab-x:22222222-2222-4222-8222-222222222222'
+    // Live agent explicitly on the OTHER host — an old-but-quiet update, before the cutoff.
+    store
+      .getState()
+      .setAgentStatus(
+        liveOnB,
+        { state: 'working', prompt: 'live b', agentType: 'codex' },
+        undefined,
+        { updatedAt: 10 },
+        { connectionId: 'ssh-b', worktreeId: 'shared::/p' }
+      )
+    // Unstamped row on the collided id — host can't be proven, so it must be left alone.
+    store
+      .getState()
+      .setAgentStatus(
+        collidedOrphan,
+        { state: 'working', prompt: 'ambiguous', agentType: 'codex' },
+        undefined,
+        { updatedAt: 10 },
+        { worktreeId: 'shared::/p' }
+      )
+
+    store.getState().clearTransientAgentStatuses('ssh-a', 30)
+
+    expect(store.getState().agentStatusByPaneKey[liveOnB]).toBeDefined()
+    expect(store.getState().agentStatusByPaneKey[collidedOrphan]).toBeDefined()
+  })
+
   it('retains an accepted connection stamp across later unstamped pings', () => {
     const store = createTestStore()
     const paneKey = 'tab-a:11111111-1111-4111-8111-111111111111'

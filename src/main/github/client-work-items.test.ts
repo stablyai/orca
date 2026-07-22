@@ -111,7 +111,6 @@ import {
   _resetMergeQueueCacheForTests,
   _resetOwnerRepoCache
 } from './client'
-import { _resetGhCwdRepoNegativeCache } from './gh-cwd-repo-negative-cache'
 import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github-work-items-query-bounds'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
@@ -154,7 +153,6 @@ describe('listWorkItems', () => {
     )
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
-    _resetGhCwdRepoNegativeCache()
   })
 
   it('routes GHES work-item listing through the Enterprise host', async () => {
@@ -172,22 +170,36 @@ describe('listWorkItems', () => {
     expect(calls.every(([, options]) => options?.host === 'github.acme-corp.com')).toBe(true)
   })
 
-  it('stops re-spawning gh for a repo whose cwd resolution already failed with no remotes', async () => {
+  it('does not run unscoped work-item queries when a local repository has no GitHub source', async () => {
     getIssueOwnerRepoMock.mockResolvedValue(null)
     getOwnerRepoMock.mockResolvedValue(null)
-    ghExecFileAsyncMock.mockRejectedValue(
-      Object.assign(new Error('Command failed: gh pr list\nno git remotes found'), {
-        stderr: 'no git remotes found'
-      })
+
+    // Why: unresolved sources must return empty null-source envelopes (not throw, not query) so the renderer can
+    // distinguish "no GitHub source detected" from genuine zero via `sources` (#9660 follow-up).
+    await expect(listWorkItems('/private-repo', 36)).resolves.toMatchObject({
+      items: [],
+      sources: { issues: null, prs: null }
+    })
+    await expect(listWorkItems('/private-repo', 36, 'is:open')).resolves.toMatchObject({
+      items: [],
+      sources: { issues: null, prs: null }
+    })
+
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('queries only the resolved PR source when the issue source is unavailable', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await expect(listWorkItems('/private-repo', 36)).resolves.toMatchObject({ items: [] })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['pr', 'list', '--repo', 'acme/widgets']),
+      { cwd: '/private-repo' }
     )
-
-    await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
-    // The first refresh pays the two cwd-fallback spawns (issue + pr list).
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
-
-    await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
-    // The second refresh is served from the negative cache — zero new spawns.
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   it('runs both issue and PR GitHub searches for a mixed query and merges the results by recency', async () => {

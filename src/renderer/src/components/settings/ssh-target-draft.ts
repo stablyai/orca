@@ -137,6 +137,14 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
   }
 }
 
+export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
+  return (
+    form.proxyCommand.trim().length > 0 ||
+    form.jumpHost.trim().length > 0 ||
+    !form.systemSshConnectionReuse
+  )
+}
+
 export function parseRelayGracePeriodSeconds(draft: EditingTarget): number {
   return draft.relayKeepAliveUntilReset ? 0 : Number.parseInt(draft.relayGracePeriodSeconds, 10)
 }

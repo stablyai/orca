@@ -441,6 +441,27 @@ function mockConnectedAdoptionClientOnce(): void {
   })
 }
 
+function mockOnlyDaemonSocketAlive(socketSuffix: string): void {
+  netConnectMock.mockImplementation((options?: { path?: string }) => {
+    const live = options?.path?.endsWith(socketSuffix) ?? false
+    const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+    return {
+      on(event: string, callback: () => void) {
+        handlers[event]?.push(callback)
+        if ((live && event === 'connect') || (!live && event === 'error')) {
+          queueMicrotask(() => callback())
+        }
+        return this
+      },
+      removeListener(event: string, callback: () => void) {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
+        return this
+      },
+      destroy() {}
+    }
+  })
+}
+
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   beforeEach(() => {
     probeSocketExistsMock.mockReturnValue(false)
@@ -575,23 +596,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   it('disconnects uninstalled adapter leases when startup aborts during legacy discovery', async () => {
     const mod = await importFresh()
     probeSocketExistsMock.mockImplementation((p?: string) => p?.endsWith('daemon-v9.sock') ?? false)
-    netConnectMock.mockImplementation(() => {
-      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
-      return {
-        on(event: string, cb: () => void) {
-          handlers[event]?.push(cb)
-          if (event === 'connect') {
-            queueMicrotask(() => cb())
-          }
-          return this
-        },
-        removeListener(event: string, cb: () => void) {
-          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
-          return this
-        },
-        destroy() {}
-      }
-    })
+    mockOnlyDaemonSocketAlive('daemon-v9.sock')
     let resolveDiscovery!: (sessions: { sessionId: string }[]) => void
     const discovery = new Promise<{ sessionId: string }[]>((resolve) => {
       resolveDiscovery = resolve
@@ -622,23 +627,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     probeSocketExistsMock.mockImplementation(
       (path?: string) => path?.endsWith('daemon-v9.sock') ?? false
     )
-    netConnectMock.mockImplementation(() => {
-      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
-      return {
-        on(event: string, callback: () => void) {
-          handlers[event]?.push(callback)
-          if (event === 'connect') {
-            queueMicrotask(() => callback())
-          }
-          return this
-        },
-        removeListener(event: string, callback: () => void) {
-          handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
-          return this
-        },
-        destroy() {}
-      }
-    })
+    mockOnlyDaemonSocketAlive('daemon-v9.sock')
     const discoveryError = new Error('router subscription failed')
     const currentCleanupError = new Error('current cleanup failed')
     const legacyCleanupError = new Error('legacy cleanup failed')
@@ -881,23 +870,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   it('routes affected v9 daemon sessions through a legacy adapter on launch', async () => {
     const mod = await importFresh()
     probeSocketExistsMock.mockImplementation((p?: string) => p?.endsWith('daemon-v9.sock') ?? false)
-    netConnectMock.mockImplementation(() => {
-      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
-      return {
-        on(event: string, cb: () => void) {
-          handlers[event]?.push(cb)
-          if (event === 'connect') {
-            queueMicrotask(() => cb())
-          }
-          return this
-        },
-        removeListener(event: string, cb: () => void) {
-          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
-          return this
-        },
-        destroy() {}
-      }
-    })
+    mockOnlyDaemonSocketAlive('daemon-v9.sock')
 
     await mod.initDaemonPtyProvider()
 

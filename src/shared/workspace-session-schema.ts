@@ -295,7 +295,22 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     )
     .optional(),
   defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
-  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema
+  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema,
+  terminalPtyIncarnationsByPaneKey: z.record(z.string(), z.string().min(1).max(128)).optional(),
+  terminalTopologyRevisionByRepoId: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  terminalSurfaceTombstonesByPaneKey: z
+    .record(
+      z.string(),
+      z.object({
+        worktreeId: z.string(),
+        parentTabId: terminalTabIdSchema,
+        leafId: z.string(),
+        ptyId: z.string(),
+        incarnationId: z.string().min(1).max(128),
+        retiredAt: z.number().finite().nonnegative()
+      })
+    )
+    .optional()
 })
 
 export type ParsedWorkspaceSession =

@@ -45,6 +45,10 @@ export type DashboardCard = {
   worktreeName: string
   /** "Started … ago" display. */
   startedAt: number
+  /** When the agent last entered `done`, or null if it never finished. Drives
+   *  the card's time column: finished cards read time-since-finish (parity with
+   *  the left worktree sidebar), active cards fall back to startedAt. */
+  finishedAt: number | null
   /** When the agent entered its current state — column ordering key (cards
    *  that moved into a bucket most recently sort first). 0 when unknown. */
   stateChangedAt: number

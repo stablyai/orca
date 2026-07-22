@@ -28,6 +28,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }: React.PropsWithChildren<{ onSelect?: () => void }>) => <div {...props}>{children}</div>
 }))
 
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { UsageRosterPanel, UsageRow } from './UsageRosterPanel'
 
 const signedOutCodex: ProviderRateLimits = {
@@ -90,37 +91,39 @@ describe('UsageRow', () => {
     const sessionReset = mocks.now + 2 * 60_000
     const weeklyReset = mocks.now + 7 * 24 * 60 * 60_000
     const markup = renderToStaticMarkup(
-      <UsageRosterPanel
-        providers={[
-          {
-            ...signedOutCodex,
-            session: {
-              usedPercent: 25,
-              windowMinutes: 300,
-              resetsAt: sessionReset,
-              resetDescription: null
-            },
-            weekly: {
-              usedPercent: 10,
-              windowMinutes: 10_080,
-              resetsAt: weeklyReset,
-              resetDescription: null
-            },
-            status: 'ok',
-            error: null
-          }
-        ]}
-        display="used"
-        statusBarUsageMode="verbose"
-        onStatusBarUsageModeChange={() => {}}
-        isRefreshing={false}
-        onRefresh={() => {}}
-        onOpenProvider={() => {}}
-        onSignIn={() => {}}
-        canSignIn={() => true}
-        onManageAccounts={() => {}}
-        onUsageDetails={() => {}}
-      />
+      <TooltipProvider>
+        <UsageRosterPanel
+          providers={[
+            {
+              ...signedOutCodex,
+              session: {
+                usedPercent: 25,
+                windowMinutes: 300,
+                resetsAt: sessionReset,
+                resetDescription: null
+              },
+              weekly: {
+                usedPercent: 10,
+                windowMinutes: 10_080,
+                resetsAt: weeklyReset,
+                resetDescription: null
+              },
+              status: 'ok',
+              error: null
+            }
+          ]}
+          display="used"
+          statusBarUsageMode="verbose"
+          onStatusBarUsageModeChange={() => {}}
+          isRefreshing={false}
+          onRefresh={() => {}}
+          onOpenProvider={() => {}}
+          onSignIn={() => {}}
+          canSignIn={() => true}
+          onManageAccounts={() => {}}
+          onUsageDetails={() => {}}
+        />
+      </TooltipProvider>
     )
 
     expect(mocks.useResetCountdownClock).toHaveBeenCalledOnce()
@@ -153,19 +156,21 @@ describe('UsageRosterPanel density picker', () => {
   ): void {
     act(() => {
       root.render(
-        <UsageRosterPanel
-          providers={[]}
-          display="used"
-          statusBarUsageMode={statusBarUsageMode}
-          onStatusBarUsageModeChange={onStatusBarUsageModeChange}
-          isRefreshing={false}
-          onRefresh={() => {}}
-          onOpenProvider={() => {}}
-          onSignIn={() => {}}
-          canSignIn={() => true}
-          onManageAccounts={() => {}}
-          onUsageDetails={() => {}}
-        />
+        <TooltipProvider>
+          <UsageRosterPanel
+            providers={[]}
+            display="used"
+            statusBarUsageMode={statusBarUsageMode}
+            onStatusBarUsageModeChange={onStatusBarUsageModeChange}
+            isRefreshing={false}
+            onRefresh={() => {}}
+            onOpenProvider={() => {}}
+            onSignIn={() => {}}
+            canSignIn={() => true}
+            onManageAccounts={() => {}}
+            onUsageDetails={() => {}}
+          />
+        </TooltipProvider>
       )
     })
   }

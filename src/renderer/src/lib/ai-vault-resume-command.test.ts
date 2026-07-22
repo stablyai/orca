@@ -344,7 +344,8 @@ describe('ai vault resume command runtime', () => {
         agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
         agentArgs: '--dangerously-skip-permissions --effort max',
         agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
-      }
+      },
+      providerSession: { key: 'session_id', id: 'session-1' }
     })
   })
 
@@ -511,7 +512,8 @@ describe('ai vault resume command runtime', () => {
       })
     ).toMatchObject({
       command: "cd '/home/alice/repo' && codex 'resume' 'session one'",
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      providerSession: { key: 'session_id', id: 'session one' }
     })
   })
 

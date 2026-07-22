@@ -202,9 +202,32 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalled()
     expect(mocks.suspendWorkspace).not.toHaveBeenCalled()
     expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
+    expect(mocks.state.setActiveWorktree).toHaveBeenLastCalledWith('wt-1')
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to sleep workspace',
-      expect.objectContaining({ description: 'boom' })
+      expect.objectContaining({
+        description:
+          'The workspace was kept open. Try again; if the problem continues, check the host connection.'
+      })
+    )
+  })
+
+  it('restores the active workspace when terminal convergence fails', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+    mocks.state.shutdownWorktreeTerminals.mockRejectedValueOnce(
+      new Error('terminal_worktree_sleep_still_live')
+    )
+
+    await runSleepWorktree('wt-1')
+
+    expect(mocks.state.setActiveWorktree.mock.calls).toEqual([[null], ['wt-1']])
+    expect(mocks.suspendWorkspace).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Failed to sleep workspace',
+      expect.objectContaining({
+        description:
+          'The host could not confirm terminal shutdown. The workspace was kept open; check the connection and try again.'
+      })
     )
   })
 
@@ -228,7 +251,10 @@ describe('runSleepWorktree', () => {
     expect(mocks.suspendWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-2' })
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to sleep some workspaces',
-      expect.objectContaining({ description: 'first failed' })
+      expect.objectContaining({
+        description:
+          'The workspace was kept open. Try again; if the problem continues, check the host connection.'
+      })
     )
   })
 

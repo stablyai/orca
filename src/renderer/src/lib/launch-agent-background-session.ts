@@ -25,15 +25,14 @@ import {
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { retireProvider, retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createRuntimeAgentBackgroundTerminal } from '@/lib/runtime-agent-background-create'
 import {
   subscribeToRuntimeTerminalData,
   toRemoteRuntimePtyId
 } from '@/runtime/runtime-terminal-stream'
-import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
@@ -190,27 +189,25 @@ export async function launchAgentBackgroundSession(
     if (runtimeTarget.kind === 'environment') {
       // Why: runtime environments execute on the server; using local pty.spawn
       // would silently run automation on the client for a remote workspace.
-      const created = await callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
-        runtimeTarget,
-        'terminal.create',
-        {
-          worktree: toRuntimeWorktreeSelector(worktreeId),
+      const created = await createRuntimeAgentBackgroundTerminal({
+        environmentId: runtimeTarget.environmentId,
+        worktreeId,
+        tabId: tab.id,
+        leafId,
+        agent,
+        ...(hasPrompt && !isFollowupPath ? { prompt: trimmedPrompt } : {}),
+        ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
+        legacy: {
           command: startupPlan.launchCommand,
-          launchConfig: startupPlan.launchConfig,
-          launchToken,
-          launchAgent: agent,
+          env: paneEnv,
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
             : {}),
-          env: paneEnv,
-          title,
-          tabId: tab.id,
-          leafId,
-          // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
-          presentation: 'background'
-        },
-        { timeoutMs: 15_000 }
-      )
+          launchConfig: startupPlan.launchConfig,
+          launchToken,
+          ...(title ? { title } : {})
+        }
+      })
       runtimeTerminalHandle = created.terminal.handle
       ptyId = toRemoteRuntimePtyId(runtimeTerminalHandle, runtimeTarget.environmentId)
     } else {

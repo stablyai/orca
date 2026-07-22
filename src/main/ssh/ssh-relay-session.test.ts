@@ -69,7 +69,9 @@ vi.mock('../ipc/pty', () => ({
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
-  setPtyOwnership: vi.fn()
+  setPtyOwnership: vi.fn(),
+  restorePtyIncarnation: vi.fn(),
+  isCurrentPtyExit: vi.fn(() => true)
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({

@@ -738,7 +738,7 @@ export type UISlice = {
     pane: SettingsNavTarget
     repoId: string | null
     sectionId?: string
-    intent?: 'add-quick-command'
+    intent?: 'add-quick-command' | 'add-remote-orca-server' | 'add-ssh-host'
   } | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void

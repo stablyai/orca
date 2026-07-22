@@ -163,6 +163,7 @@ vi.mock('./pty', () => ({
   setPtyOwnership: vi.fn(),
   getSshPtyProvider: vi.fn(),
   getPtyIdsForConnection: vi.fn().mockReturnValue([]),
+  isCurrentPtyExit: vi.fn().mockReturnValue(true),
   isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
 }))
 
@@ -815,7 +816,7 @@ describe('SSH IPC handlers', () => {
       'hello'.length,
       undefined
     )
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7, undefined)
   })
 
   it('mirrors SSH state broadcasts onto the runtime client-event stream', async () => {
@@ -1192,7 +1193,7 @@ describe('SSH IPC handlers', () => {
       'hello'.length,
       undefined
     )
-    expect(secondRuntime.onPtyExit).toHaveBeenCalledWith('remote-pty', 9)
+    expect(secondRuntime.onPtyExit).toHaveBeenCalledWith('remote-pty', 9, undefined)
     expect(firstRuntime.onPtyData).not.toHaveBeenCalled()
     expect(firstRuntime.onPtyExit).not.toHaveBeenCalled()
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(

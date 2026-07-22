@@ -12,6 +12,7 @@ import {
   hasAiVaultSessionDragData,
   readAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
+import { getAiVaultAgentProviderSession } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { useAppStore } from '@/store'
 import { resolveDropZone } from './tab-drop-zone'
@@ -227,6 +228,11 @@ export default function AiVaultSessionDropLayer({
           if (!startup) {
             throw new Error('Orca could not prepare this legacy Codex session. Retry resume.')
           }
+          const providerSession = getAiVaultAgentProviderSession({
+            agent: payload.agent,
+            sessionId: payload.sessionId,
+            filePath: payload.sessionFilePath
+          })
           const launchResult = launchAiVaultSessionInNewTab({
             agent: payload.agent,
             worktreeId,
@@ -234,18 +240,20 @@ export default function AiVaultSessionDropLayer({
             ...(startup.env ? { env: startup.env } : {}),
             ...(startup.envToDelete ? { envToDelete: startup.envToDelete } : {}),
             ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+            ...(providerSession ? { providerSession } : {}),
             targetGroupId: dropTarget.groupId,
             splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
           })
           if (launchResult.tabId === null) {
-            void launchResult.runtimeLaunch.then((created) => {
-              if (!created) {
+            void launchResult.runtimeLaunch.then((outcome) => {
+              if (outcome.status === 'failed') {
                 toast.error(
-                  translate(
-                    'auto.lib.launch.agent.in.new.tab.11cce5cc77',
-                    'Could not launch {{value0}} in a new terminal.',
-                    { value0: payload.agent }
-                  )
+                  outcome.message ||
+                    translate(
+                      'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+                      'Could not launch {{value0}} in a new terminal.',
+                      { value0: payload.agent }
+                    )
                 )
                 return
               }
@@ -257,7 +265,12 @@ export default function AiVaultSessionDropLayer({
         })
         .catch((error: unknown) => {
           toast.error(
-            error instanceof Error ? error.message : 'Could not prepare this session for resume.'
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.right.sidebar.AiVaultPanel.prepareSessionResumeFailed',
+                  'Could not prepare this session for resume.'
+                )
           )
         })
       return true

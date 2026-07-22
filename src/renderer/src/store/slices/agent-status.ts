@@ -27,6 +27,10 @@ import {
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
 import type { TerminalTab } from '../../../../shared/types'
+import {
+  getRepoExecutionHostId,
+  getWorktreeExecutionHostId
+} from '../../../../shared/execution-host'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import {
   getAgentRowGeneratedTitleText,
@@ -1051,6 +1055,39 @@ function mergeCurrentOrchestrationContext(
   return orchestrationContextsEqual(existing, merged) ? existing : merged
 }
 
+// Why: relay/daemon teardown drops main's rows, but renderer entries whose connectionId stamp never
+// matched (unstamped over SSH) survive and stay "fresh" 30 min (#9030). Resolve each worktree's host
+// via the canonical hostId-first precedence and keep only ids UNAMBIGUOUSLY on this connection — a
+// worktree id is `${repoId}::${path}` (no host component), so the same project mirrored at the same
+// path on two hosts yields one shared id that must not clear another host's live rows.
+function collectWorktreeIdsForConnection(state: AppState, connectionId: string): Set<string> {
+  const hostIdsOnConnection = new Set(
+    state.repos
+      .filter((repo) => repo.connectionId === connectionId)
+      .map((repo) => getRepoExecutionHostId(repo))
+  )
+  if (hostIdsOnConnection.size === 0) {
+    return new Set()
+  }
+  const repoById = new Map(state.repos.map((repo) => [repo.id, repo] as const))
+  const onConnection = new Set<string>()
+  const onOtherHost = new Set<string>()
+  for (const [repoId, worktrees] of Object.entries(state.worktreesByRepo)) {
+    const repo = repoById.get(repoId)
+    for (const worktree of worktrees) {
+      const bucket = hostIdsOnConnection.has(getWorktreeExecutionHostId(worktree, repo))
+        ? onConnection
+        : onOtherHost
+      bucket.add(worktree.id)
+    }
+  }
+  // A worktree id that also lives on another host is ambiguous — leave it rather than hide a live row.
+  for (const id of onOtherHost) {
+    onConnection.delete(id)
+  }
+  return onConnection
+}
+
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
   set,
   get
@@ -1651,14 +1688,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           payload.state === 'done' ? existing?.orchestration : undefined
         const orchestration =
           payloadMergedOrchestration ?? runtimeMergedOrchestration ?? completedFallbackOrchestration
-        const canReuseExistingIdentity =
+        // Why: waiting/blocked are still the same resumable turn; child permission hooks omit the root session id.
+        const canReuseExistingProviderSession =
           existing?.agentType === identity.agentType &&
-          !isAgentCompletionState(existing.state) &&
-          !isAgentCompletionState(payload.state)
+          existing.state !== 'done' &&
+          payload.state !== 'done'
         const providerSession =
           metadata?.providerSession ??
-          (canReuseExistingIdentity ? existing.providerSession : undefined)
-        const existingProviderSession = canReuseExistingIdentity
+          (canReuseExistingProviderSession ? existing.providerSession : undefined)
+        const existingProviderSession = canReuseExistingProviderSession
           ? existing.providerSession
           : undefined
         const providerSessionChanged =
@@ -1716,6 +1754,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           updatedAt,
           stateStartedAt,
           agentType: identity.agentType,
+          model:
+            payload.model ??
+            (existing?.agentType === identity.agentType ? existing.model : undefined),
           paneKey,
           terminalHandle: statusTerminalHandle,
           worktreeId:
@@ -1785,6 +1826,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.updatedAt !== existing.updatedAt ||
             entry.stateStartedAt !== existing.stateStartedAt ||
             entry.agentType !== existing.agentType ||
+            entry.model !== existing.model ||
             entry.terminalTitle !== existing.terminalTitle ||
             entry.toolName !== existing.toolName ||
             entry.toolInput !== existing.toolInput ||
@@ -2077,10 +2119,21 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
       let removed = false
       set((s) => {
+        const worktreeIdsOnConnection = collectWorktreeIdsForConnection(s, connectionId)
         let next: Record<string, AgentStatusEntry> | null = null
         for (const [paneKey, existing] of Object.entries(s.agentStatusByPaneKey)) {
-          // Why: undefined connectionId is an unstamped legacy/renderer-owned row whose host can't be proven, so leave it to normal pane teardown.
-          if (existing.connectionId !== connectionId || existing.updatedAt > clearedAt) {
+          if (existing.updatedAt > clearedAt) {
+            continue
+          }
+          // Why: clear rows stamped for this connection, plus UNSTAMPED (never-stamped) worktree
+          // rows unambiguously on it (#9030). An explicit stamp — another host's connectionId, or a
+          // local `null` — is authoritative and never overridden by worktree inference.
+          const belongsToConnection =
+            existing.connectionId === connectionId ||
+            (existing.connectionId === undefined &&
+              existing.worktreeId !== undefined &&
+              worktreeIdsOnConnection.has(existing.worktreeId))
+          if (!belongsToConnection) {
             continue
           }
           next ??= { ...s.agentStatusByPaneKey }

@@ -14,7 +14,10 @@ import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
-import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../shared/agent-session-resume'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type {
@@ -797,6 +800,7 @@ const api = {
       envToDelete?: string[]
       command?: string
       launchConfig?: SleepingAgentLaunchConfig
+      resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
       startupCommandDelivery?: StartupCommandDelivery
@@ -1038,7 +1042,9 @@ const api = {
     getSideEffectSnapshot: (id: string): Promise<TerminalSideEffectBatch | null> =>
       ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
 
-    onExit: (callback: (data: { id: string; code: number }) => void): (() => void) => {
+    onExit: (
+      callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
+    ): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { id: string; code: number }) =>
         callback(data)
       ipcRenderer.on('pty:exit', listener)
@@ -3487,6 +3493,7 @@ const api = {
         cwd?: string
         env?: Record<string, string>
         launchConfig?: SleepingAgentLaunchConfig
+        resumeProviderSession?: AgentProviderSessionMetadata
         launchToken?: string
         launchAgent?: TuiAgent
         viewMode?: 'terminal' | 'chat'
@@ -3510,6 +3517,7 @@ const api = {
           cwd?: string
           env?: Record<string, string>
           launchConfig?: SleepingAgentLaunchConfig
+          resumeProviderSession?: AgentProviderSessionMetadata
           launchToken?: string
           launchAgent?: TuiAgent
           viewMode?: 'terminal' | 'chat'

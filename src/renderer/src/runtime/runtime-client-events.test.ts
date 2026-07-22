@@ -98,4 +98,39 @@ describe('subscribeRuntimeClientEvents', () => {
     expect(onReplayed).toHaveBeenCalledTimes(2)
     expect(onEvent).toHaveBeenCalledWith({ type: 'worktreesChanged', repoId: 'repo-1' })
   })
+
+  it('forwards every host terminal sleep disposition through the response decoder', async () => {
+    let capturedOnResponse: ((response: unknown) => void) | undefined
+    const subscribe = vi.fn(async (_args, nextCallbacks) => {
+      capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+    const onEvent = vi.fn()
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
+
+    await subscribeRuntimeClientEvents('env-1', onEvent)
+    if (!capturedOnResponse) {
+      throw new Error('Expected subscription callbacks')
+    }
+    for (const phase of ['started', 'committed', 'cancelled', 'woken'] as const) {
+      capturedOnResponse({
+        ok: true,
+        result: {
+          type: 'worktreeTerminalSleepState',
+          worktreeId: 'repo::worktree',
+          generation: 17,
+          phase,
+          ptyIds: ['pty-1'],
+          terminalHandles: ['terminal-1']
+        }
+      })
+    }
+
+    expect(onEvent.mock.calls.map(([event]) => event.phase)).toEqual([
+      'started',
+      'committed',
+      'cancelled',
+      'woken'
+    ])
+  })
 })

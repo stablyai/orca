@@ -178,9 +178,9 @@ export default function RichMarkdownEditor({
       if (didSerialize) {
         onContentChangeRef.current(markdown)
       }
-    } catch {
-      // Why: save/restart flows should never crash the UI just because the
-      // editor was torn down between scheduling and flushing a debounced sync.
+    } catch (error) {
+      // Why: teardown and reconcile failures are handled above; other failures must stay observable.
+      console.error('[editor] rich markdown serialize (flush) failed', error)
     }
   }, [reconcileRoundTripRef])
 

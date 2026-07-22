@@ -25,8 +25,7 @@ import type {
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  TerminalTab,
-  TuiAgent
+  TerminalTab
 } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -52,6 +51,8 @@ import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { clearWebSessionFocusIntent, peekWebSessionFocusIntent } from './web-session-focus-intent'
 import {
+  clearWebSessionCloseIntentsForEnvironment,
+  clearWebSessionCloseIntentsForRuntimeWorktree,
   isWebSessionCloseIntentPending,
   reconcileWebSessionCloseIntents
 } from './web-session-close-intent'
@@ -68,6 +69,13 @@ import {
 } from './web-runtime-wake-terminal-respawn'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import { queueAcceptedWebSessionTerminalSnapshot } from './web-session-terminal-handle-events'
+import {
+  clearWebAgentSessionHandoff,
+  clearWebAgentSessionHandoffsForEnvironment,
+  clearWebAgentSessionHandoffsForWorktree,
+  isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
+  resolveWebAgentSessionHandoff
+} from './web-agent-session-handoff'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -86,6 +94,7 @@ type SnapshotFreshness = {
 }
 
 const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
+const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const lastHostTerminalTabCountByWorktree = new Map<string, number>()
 const hostSessionTabIdByLocalKey = new Map<string, string>()
 
@@ -144,7 +153,8 @@ export type WebSessionTabsSyncState = Pick<
   | 'unifiedTabsByWorktree'
   | 'unreadTerminalTabs'
   | 'sortEpoch'
->
+> &
+  Partial<Pick<AppState, 'automaticAgentResumeClaimsByTabId' | 'pendingStartupByTabId'>>
 
 function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -176,12 +186,27 @@ export function getLastKnownHostTerminalTabCount(
   )
 }
 
-// Why: a post-reconnect replay re-emits the snapshot with unchanged epoch/version; dropping the freshness entry lets the monotonic gate accept it instead of freezing the mirror (#7718).
+export function getLatestWebSessionTabsPublicationEpoch(
+  environmentId: string,
+  worktreeId: string
+): string | null {
+  return (
+    latestSessionTabsSnapshotByWorktree.get(sessionTabsFreshnessKey(environmentId, worktreeId))
+      ?.publicationEpoch ?? null
+  )
+}
+
+// Why: a replay may repeat the current epoch/version; permit only that exact
+// identity once so an older concurrent frame cannot bypass monotonic ordering.
 export function acceptReplayedWebSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string
 ): void {
-  latestSessionTabsSnapshotByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const current = latestSessionTabsSnapshotByWorktree.get(key)
+  if (current) {
+    replayableSessionTabsSnapshotByWorktree.set(key, current)
+  }
 }
 
 export function shouldApplyWebSessionTabsSnapshot(
@@ -201,14 +226,25 @@ export function shouldApplyWebSessionTabsSnapshot(
   }
   rememberHostTerminalTabCount(environmentId, snapshot)
   const current = latestSessionTabsSnapshotByWorktree.get(key)
+  const replayable = replayableSessionTabsSnapshotByWorktree.get(key)
+  const isExactCurrentReplay = Boolean(
+    current &&
+    replayable &&
+    current.publicationEpoch === replayable.publicationEpoch &&
+    current.snapshotVersion === replayable.snapshotVersion &&
+    snapshot.publicationEpoch === replayable.publicationEpoch &&
+    snapshot.snapshotVersion === replayable.snapshotVersion
+  )
   // Why: snapshotVersion is monotonic only within one publicationEpoch (resets on host restart); reject as stale only within the same epoch, since a different epoch is a new generation and must apply.
   if (
     current &&
     current.publicationEpoch === snapshot.publicationEpoch &&
-    snapshot.snapshotVersion <= current.snapshotVersion
+    snapshot.snapshotVersion <= current.snapshotVersion &&
+    !isExactCurrentReplay
   ) {
     return false
   }
+  replayableSessionTabsSnapshotByWorktree.delete(key)
   latestSessionTabsSnapshotByWorktree.set(key, {
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
@@ -283,6 +319,7 @@ export function shouldSyncAllRuntimeSessionTabs(args: {
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
+  replayableSessionTabsSnapshotByWorktree.clear()
   lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
 }
@@ -300,9 +337,12 @@ export function _getWebSessionTabsTrackingCountsForTest(): {
 function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
+  replayableSessionTabsSnapshotByWorktree.delete(key)
   lastHostTerminalTabCountByWorktree.delete(key)
   clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
   clearWebSessionReorderIntentsForWorktree(worktreeId)
+  clearWebSessionCloseIntentsForRuntimeWorktree(environmentId, worktreeId)
+  clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
   const keyPrefix = `${environmentId}:${worktreeId}:`
   for (const key of hostSessionTabIdByLocalKey.keys()) {
     if (key.startsWith(keyPrefix)) {
@@ -322,6 +362,11 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
       latestSessionTabsSnapshotByWorktree.delete(key)
     }
   }
+  for (const key of replayableSessionTabsSnapshotByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      replayableSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
   for (const key of lastHostTerminalTabCountByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       lastHostTerminalTabCountByWorktree.delete(key)
@@ -332,7 +377,9 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
       hostSessionTabIdByLocalKey.delete(key)
     }
   }
+  clearWebAgentSessionHandoffsForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
+  clearWebSessionCloseIntentsForEnvironment(trimmedEnvironmentId)
 }
 
 function hostSessionTabMappingKey(args: {
@@ -351,7 +398,16 @@ export function resolveHostSessionTabIdForWebSessionTab(
     tabId: string
   }
 ): string | null {
-  return hostSessionTabIdByLocalKey.get(hostSessionTabMappingKey(args)) ?? null
+  return (
+    hostSessionTabIdByLocalKey.get(hostSessionTabMappingKey(args)) ??
+    // Why: structured create returns canonical identity before its confirming
+    // snapshot; an immediate user close must already target that host tab.
+    resolveWebAgentSessionHandoff({
+      environmentId: args.environmentId,
+      worktreeId: args.worktreeId,
+      provisionalTabId: args.tabId
+    })
+  )
 }
 
 function isReadyTerminalTab(
@@ -455,14 +511,11 @@ function shouldReplaceTerminalTab(
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>,
-  nextMirroredLaunchAgents: ReadonlySet<TuiAgent>
+  exactProvisionalHandoffs: ReadonlySet<string>
 ): boolean {
-  if (
-    tab.launchAgent &&
-    !isMirroredTerminalSurfaceId(tab.id) &&
-    nextMirroredLaunchAgents.has(tab.launchAgent)
-  ) {
-    // Why: agent quick-launch created a local-only tab before the host snapshot landed; retire only the matching agent's stale row.
+  if (exactProvisionalHandoffs.has(tab.id)) {
+    // Why: agent kind is not session identity; retire only the provisional tab
+    // whose request or structured response identifies this exact host surface.
     return true
   }
   if (isMirroredTerminalSurfaceId(tab.id)) {
@@ -1630,32 +1683,38 @@ export function applyWebSessionTabsSnapshot(
   const snapshotHostTabId = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): string =>
     tab.type === 'terminal' ? tab.parentTabId : tab.id
   reconcileWebSessionCloseIntents(
+    environmentId,
     worktreeId,
     new Set(rawSnapshot.tabs.map((tab) => snapshotHostTabId(tab)))
   )
   const snapshot: RuntimeMobileSessionTabsResult = rawSnapshot.tabs.some((tab) =>
-    isWebSessionCloseIntentPending(worktreeId, snapshotHostTabId(tab), now)
+    isWebSessionCloseIntentPending(environmentId, worktreeId, snapshotHostTabId(tab), now)
   )
     ? {
         ...rawSnapshot,
         tabs: rawSnapshot.tabs.filter(
-          (tab) => !isWebSessionCloseIntentPending(worktreeId, snapshotHostTabId(tab), now)
+          (tab) =>
+            !isWebSessionCloseIntentPending(environmentId, worktreeId, snapshotHostTabId(tab), now)
         )
       }
     : rawSnapshot
-  // Why: follow the snapshot's active tab over the user's focus only when this client initiated the activation; unsolicited server-active must not steal focus (#5435).
+  // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
   const focusIntentHostTabId = peekWebSessionFocusIntent(worktreeId)
-  const honorSnapshotActiveFocus =
-    focusIntentHostTabId !== null &&
-    snapshot.activeTabId !== null &&
-    (snapshot.activeTabId === focusIntentHostTabId ||
-      snapshot.tabs.some(
-        (tab) =>
-          tab.id === snapshot.activeTabId &&
-          tab.type === 'browser' &&
-          tab.browserPageId === focusIntentHostTabId
-      ))
-  if (honorSnapshotActiveFocus) {
+  const callerFocusIntentTab =
+    focusIntentHostTabId === null
+      ? null
+      : (snapshot.tabs.find(
+          (tab) =>
+            tab.id === focusIntentHostTabId ||
+            (tab.type === 'browser' && tab.browserPageId === focusIntentHostTabId)
+        ) ?? null)
+  const followIntentTab =
+    snapshot.navigationIntent === 'follow'
+      ? (snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ?? null)
+      : null
+  const navigationIntentTab = callerFocusIntentTab ?? followIntentTab
+  const honorSnapshotActiveFocus = navigationIntentTab !== null
+  if (callerFocusIntentTab) {
     clearWebSessionFocusIntent(worktreeId)
   }
   const currentTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
@@ -1668,10 +1727,27 @@ export function applyWebSessionTabsSnapshot(
   const nextMirroredTerminalIds = new Set(
     terminalSurfaceTabs.map((tab) => toWebTerminalSurfaceTabId(tab.parentTabId))
   )
-  const nextMirroredLaunchAgents = new Set(
-    terminalSurfaceTabs
-      .map((tab) => tab.launchAgent)
-      .filter((agent): agent is TuiAgent => Boolean(agent))
+  const nextHostTerminalTabIds = new Set(terminalSurfaceTabs.map((tab) => tab.parentTabId))
+  const exactProvisionalHandoffs = new Set(
+    currentTerminalTabs
+      .filter((tab) => !isMirroredTerminalSurfaceId(tab.id))
+      .filter((tab) => {
+        if (nextHostTerminalTabIds.has(tab.id)) {
+          return true
+        }
+        const handoff = {
+          environmentId,
+          worktreeId,
+          provisionalTabId: tab.id
+        }
+        const hostTabId = resolveWebAgentSessionHandoff(handoff)
+        return (
+          hostTabId !== null &&
+          (nextHostTerminalTabIds.has(hostTabId) ||
+            isWebAgentSessionHandoffPostCreateSnapshotConfirmed(handoff))
+        )
+      })
+      .map((tab) => tab.id)
   )
   const retainedTerminalTabs = currentTerminalTabs.filter(
     (tab) =>
@@ -1680,7 +1756,7 @@ export function applyWebSessionTabsSnapshot(
         environmentId,
         nextRemotePtyIds,
         nextMirroredTerminalIds,
-        nextMirroredLaunchAgents
+        exactProvisionalHandoffs
       )
   )
   const mirroredTerminalTabs = buildMirroredTerminalTabs(
@@ -1701,6 +1777,9 @@ export function applyWebSessionTabsSnapshot(
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
+  for (const provisionalTabId of exactProvisionalHandoffs) {
+    clearWebAgentSessionHandoff({ environmentId, worktreeId, provisionalTabId })
+  }
 
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
@@ -1860,15 +1939,31 @@ export function applyWebSessionTabsSnapshot(
     : null
   const activeMirroredEditorFileId = activeMirroredEditor?.file.id ?? null
   const activeMirroredEditorTabId = activeMirroredEditor?.unifiedTab.id ?? null
+  const intentMirroredTerminalId =
+    navigationIntentTab?.type === 'terminal'
+      ? toWebTerminalSurfaceTabId(navigationIntentTab.parentTabId)
+      : null
+  const intentMirroredBrowser =
+    navigationIntentTab?.type === 'browser'
+      ? (mirroredBrowserTabs.find(
+          (entry) =>
+            entry.hostTabId === navigationIntentTab.id ||
+            entry.remotePageId === navigationIntentTab.browserPageId
+        ) ?? null)
+      : null
+  const intentMirroredEditor =
+    navigationIntentTab?.type === 'markdown' || navigationIntentTab?.type === 'file'
+      ? (mirroredEditorTabs.find((entry) => entry.hostTabId === navigationIntentTab.id) ?? null)
+      : null
   const currentActiveTerminalStillExists =
     state.activeTabIdByWorktree[worktreeId] &&
     (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabIdByWorktree[worktreeId])
       ? state.activeTabIdByWorktree[worktreeId]
       : null
-  // Why: on a client-initiated activation (honorSnapshotActiveFocus), the snapshot's active terminal wins over sticky current focus.
+  // Why: caller intent targets the requested tab even when an older host leaves its own active tab unchanged.
   const intentTerminalId =
-    honorSnapshotActiveFocus && snapshot.activeTabType === 'terminal'
-      ? activeMirroredTerminalId
+    honorSnapshotActiveFocus && navigationIntentTab?.type === 'terminal'
+      ? intentMirroredTerminalId
       : null
   const nextActiveTerminalId =
     intentTerminalId ??
@@ -1883,8 +1978,8 @@ export function applyWebSessionTabsSnapshot(
       ? state.activeBrowserTabIdByWorktree[worktreeId]
       : null
   const intentBrowserWorkspaceId =
-    honorSnapshotActiveFocus && snapshot.activeTabType === 'browser'
-      ? activeMirroredBrowserWorkspaceId
+    honorSnapshotActiveFocus && navigationIntentTab?.type === 'browser'
+      ? (intentMirroredBrowser?.workspace.id ?? null)
       : null
   const nextActiveBrowserWorkspaceId =
     intentBrowserWorkspaceId ??
@@ -1901,7 +1996,11 @@ export function applyWebSessionTabsSnapshot(
     )
       ? state.activeFileIdByWorktree[worktreeId]
       : null
+  const intentEditorFileId = honorSnapshotActiveFocus
+    ? (intentMirroredEditor?.file.id ?? null)
+    : null
   const nextActiveEditorFileId =
+    intentEditorFileId ??
     currentActiveEditorStillExists ??
     (snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
       ? (activeMirroredEditorFileId ?? mirroredEditorTabs[0]?.file.id)
@@ -1914,12 +2013,12 @@ export function applyWebSessionTabsSnapshot(
   })
   // Why: a client-initiated activation also drives the visible unified tab, overriding the sticky current-visible tab.
   const intentUnifiedTabId = honorSnapshotActiveFocus
-    ? snapshot.activeTabType === 'browser'
-      ? activeMirroredBrowserTabId
-      : snapshot.activeTabType === 'terminal'
+    ? navigationIntentTab?.type === 'browser'
+      ? (intentMirroredBrowser?.unifiedTab.id ?? null)
+      : navigationIntentTab?.type === 'terminal'
         ? intentTerminalId
-        : snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
-          ? activeMirroredEditorTabId
+        : navigationIntentTab?.type === 'markdown' || navigationIntentTab?.type === 'file'
+          ? (intentMirroredEditor?.unifiedTab.id ?? null)
           : null
     : null
   const nextActiveUnifiedTabId =
@@ -2091,6 +2190,27 @@ export function applyWebSessionTabsSnapshot(
     }
   }
 
+  const pendingStartupByTabId = state.pendingStartupByTabId ?? {}
+  let nextPendingStartupByTabId = pendingStartupByTabId
+  const automaticAgentResumeClaimsByTabId = state.automaticAgentResumeClaimsByTabId ?? {}
+  let nextAutomaticAgentResumeClaimsByTabId = automaticAgentResumeClaimsByTabId
+  for (const removedId of exactProvisionalHandoffs) {
+    if (nextPendingStartupByTabId[removedId]) {
+      nextPendingStartupByTabId =
+        nextPendingStartupByTabId === pendingStartupByTabId
+          ? { ...pendingStartupByTabId }
+          : nextPendingStartupByTabId
+      delete nextPendingStartupByTabId[removedId]
+    }
+    if (nextAutomaticAgentResumeClaimsByTabId[removedId]) {
+      nextAutomaticAgentResumeClaimsByTabId =
+        nextAutomaticAgentResumeClaimsByTabId === automaticAgentResumeClaimsByTabId
+          ? { ...automaticAgentResumeClaimsByTabId }
+          : nextAutomaticAgentResumeClaimsByTabId
+      delete nextAutomaticAgentResumeClaimsByTabId[removedId]
+    }
+  }
+
   let nextBrowserPagesByWorkspace = state.browserPagesByWorkspace
   let nextRemoteBrowserPageHandlesByPageId = state.remoteBrowserPageHandlesByPageId
   let nextBrowserCertificateFailuresByPageId = state.browserCertificateFailuresByPageId
@@ -2255,6 +2375,14 @@ export function applyWebSessionTabsSnapshot(
       ? { ...state.activeFileIdByWorktree, [worktreeId]: nextActiveEditorFileId }
       : state.activeFileIdByWorktree
   const isActiveWorktree = state.activeWorktreeId === worktreeId
+  const focusIntentVisibleTabType =
+    navigationIntentTab?.type === 'browser' && intentBrowserWorkspaceId
+      ? ('browser' as const)
+      : navigationIntentTab?.type === 'terminal' && intentTerminalId
+        ? ('terminal' as const)
+        : intentEditorFileId
+          ? ('editor' as const)
+          : null
   const snapshotVisibleTabType =
     snapshot.activeTabType === 'browser' && nextActiveBrowserWorkspaceId
       ? ('browser' as const)
@@ -2290,7 +2418,10 @@ export function applyWebSessionTabsSnapshot(
             : ('terminal' as const)
   // Why: don't keep pointing shortcuts at a removed browser/editor; a client-initiated activation lets the snapshot's type switch the visible pane.
   const nextVisibleTabType = honorSnapshotActiveFocus
-    ? (snapshotVisibleTabType ?? currentVisibleTabTypeStillValid ?? fallbackVisibleTabType)
+    ? (focusIntentVisibleTabType ??
+      currentVisibleTabTypeStillValid ??
+      snapshotVisibleTabType ??
+      fallbackVisibleTabType)
     : (currentVisibleTabTypeStillValid ?? snapshotVisibleTabType ?? fallbackVisibleTabType)
   const currentActiveTerminalStillValid =
     state.activeTabId && (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabId)
@@ -2354,6 +2485,12 @@ export function applyWebSessionTabsSnapshot(
       : {}),
     ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
       ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+      : {}),
+    ...(nextPendingStartupByTabId !== pendingStartupByTabId
+      ? { pendingStartupByTabId: nextPendingStartupByTabId }
+      : {}),
+    ...(nextAutomaticAgentResumeClaimsByTabId !== automaticAgentResumeClaimsByTabId
+      ? { automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId }
       : {}),
     ...(nextBrowserPagesByWorkspace !== state.browserPagesByWorkspace
       ? { browserPagesByWorkspace: nextBrowserPagesByWorkspace }

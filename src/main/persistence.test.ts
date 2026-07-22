@@ -3420,6 +3420,22 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('r2::/other')!.displayName).toBe('other')
   })
 
+  it('does not retain topology authority for historically removed repos', async () => {
+    const store = await createStore()
+
+    for (let index = 0; index < 25; index += 1) {
+      const repoId = `removed-${index}`
+      store.addRepo(makeRepo({ id: repoId, path: `/repo-${index}` }))
+      store.setWorkspaceSession({
+        ...store.getWorkspaceSession(),
+        terminalTopologyRevisionByRepoId: { [repoId]: 1 }
+      })
+      store.removeProject(repoId)
+    }
+
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId).toEqual({})
+  })
+
   it('removeProject removes the derived project host setup compatibility record', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
@@ -8021,6 +8037,95 @@ describe('Store', () => {
     })
   })
 
+  it('admits a fresh host spawn after retirement while rejecting an older renderer topology', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      terminalTopologyRevisionByRepoId: { wt1: 1 }
+    })
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'fresh-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty',
+      incarnationId: 'fresh-incarnation'
+    })
+
+    const admitted = structuredClone(store.getWorkspaceSession())
+    expect(admitted.terminalTopologyRevisionByRepoId?.wt1).toBe(2)
+    expect(admitted.tabsByWorktree.wt1).toEqual([
+      expect.objectContaining({ id: 'fresh-tab', ptyId: 'fresh-pty' })
+    ])
+
+    store.setWorkspaceSession({
+      ...admitted,
+      tabsByWorktree: {
+        ...admitted.tabsByWorktree,
+        wt1: admitted.tabsByWorktree.wt1.map((tab) => ({
+          ...tab,
+          title: 'Fresh title',
+          sortOrder: 7
+        }))
+      },
+      terminalLayoutsByTabId: {
+        ...admitted.terminalLayoutsByTabId,
+        'fresh-tab': {
+          ...admitted.terminalLayoutsByTabId['fresh-tab'],
+          titlesByLeafId: { [TEST_LEAF_1]: 'Fresh pane title' }
+        }
+      }
+    })
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1[0]).toMatchObject({
+      id: 'fresh-tab',
+      ptyId: 'fresh-pty',
+      title: 'Fresh title',
+      sortOrder: 7
+    })
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId['fresh-tab'].titlesByLeafId).toEqual({
+      [TEST_LEAF_1]: 'Fresh pane title'
+    })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'retired-tab',
+            worktreeId: 'wt1',
+            title: 'Retired',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'retired-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'retired-tab': {
+          root: { type: 'leaf', leafId: TEST_LEAF_2 },
+          activeLeafId: TEST_LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_2]: 'retired-pty' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: {
+        [`retired-tab:${TEST_LEAF_2}`]: 'retired-incarnation'
+      },
+      terminalTopologyRevisionByRepoId: { wt1: 1 }
+    })
+
+    const afterStaleWrite = store.getWorkspaceSession()
+    expect(afterStaleWrite.tabsByWorktree.wt1).toEqual([
+      expect.objectContaining({ id: 'fresh-tab', ptyId: 'fresh-pty' })
+    ])
+    expect(afterStaleWrite.terminalLayoutsByTabId['retired-tab']).toBeUndefined()
+    expect(
+      afterStaleWrite.terminalPtyIncarnationsByPaneKey?.[`retired-tab:${TEST_LEAF_2}`]
+    ).toBeUndefined()
+  })
+
   it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
     const store = await createStore()
     store.setWorkspaceSession({
@@ -8076,6 +8181,227 @@ describe('Store', () => {
       [TEST_LEAF_1]: 'pty-1',
       [TEST_LEAF_2]: 'pty-2'
     })
+  })
+
+  it('advances host topology when a live spawn adds a split leaf after retirement', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalTopologyRevisionByRepoId: { wt1: 1 }
+    })
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_2,
+      ptyId: 'pty-2'
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.terminalTopologyRevisionByRepoId?.wt1).toBe(2)
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_1]: 'pty-1',
+      [TEST_LEAF_2]: 'pty-2'
+    })
+  })
+
+  it('keeps worktree deletion authoritative against stale writes and later same-path reuse', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta('wt1', { displayName: 'Worktree' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'old-tab', worktreeId: 'wt1', ptyId: 'old-pty' })]
+      },
+      terminalLayoutsByTabId: {
+        'old-tab': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'old-pty' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: {
+        [`old-tab:${TEST_LEAF_1}`]: 'old-incarnation'
+      },
+      terminalTopologyRevisionByRepoId: { wt1: 1 }
+    })
+    const stale = structuredClone(store.getWorkspaceSession())
+
+    store.removeWorktreeMeta('wt1')
+
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toBeUndefined()
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId['old-tab']).toBeUndefined()
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.wt1).toBe(2)
+
+    store.setWorkspaceSession(stale)
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'fresh-tab',
+      leafId: TEST_LEAF_2,
+      ptyId: 'fresh-pty',
+      incarnationId: 'fresh-incarnation'
+    })
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toEqual([
+      expect.objectContaining({ id: 'fresh-tab', ptyId: 'fresh-pty' })
+    ])
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.wt1).toBe(3)
+  })
+
+  it('fences a delayed terminal snapshot after an empty worktree is deleted', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo::/empty-worktree'
+    store.setWorktreeMeta(worktreeId, { displayName: 'Empty worktree' })
+    const stale = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'late-tab', worktreeId, ptyId: 'late-pty' })]
+      }
+    }
+
+    store.removeWorktreeMeta(worktreeId)
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo).toBe(1)
+
+    store.setWorkspaceSession(stale)
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toEqual([])
+  })
+
+  it('advances deletion authority when only a legacy retirement fence existed', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo::/legacy-tombstone'
+    store.setWorktreeMeta(worktreeId, { displayName: 'Legacy worktree' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      terminalSurfaceTombstonesByPaneKey: {
+        'old-tab:old-leaf': {
+          worktreeId,
+          parentTabId: 'old-tab',
+          leafId: 'old-leaf',
+          ptyId: 'old-pty',
+          incarnationId: 'old-incarnation',
+          retiredAt: 1
+        }
+      }
+    })
+    const revisionBeforeDelete =
+      store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo ?? 0
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo).toBe(
+      revisionBeforeDelete + 1
+    )
+  })
+
+  it('enforces one repo epoch across siblings and admits a fresh sibling spawn', async () => {
+    const store = await createStore()
+    const worktreeA = 'repo::/worktree-a'
+    const worktreeB = 'repo::/worktree-b'
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeA]: [makeTerminalTab({ id: 'tab-a', worktreeId: worktreeA, ptyId: 'pty-a' })],
+        [worktreeB]: [makeTerminalTab({ id: 'tab-b', worktreeId: worktreeB, ptyId: 'pty-b' })]
+      },
+      terminalTopologyRevisionByRepoId: { repo: 1 }
+    })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeB]: [makeTerminalTab({ id: 'stale-tab', worktreeId: worktreeB })]
+      }
+    })
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeA]?.[0]?.id).toBe('tab-a')
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeB]?.[0]?.id).toBe('tab-b')
+
+    store.persistPtyBinding({
+      worktreeId: worktreeB,
+      tabId: 'fresh-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty'
+    })
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeB].map((tab) => tab.id)).toEqual([
+      'tab-b',
+      'fresh-tab'
+    ])
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo).toBe(2)
+  })
+
+  it('keeps one deletion watermark for many historical worktrees in the same repo', async () => {
+    const store = await createStore()
+
+    for (let index = 0; index < 25; index += 1) {
+      const worktreeId = `repo::/worktree-${index}`
+      store.setWorktreeMeta(worktreeId, { displayName: `Worktree ${index}` })
+      store.persistPtyBinding({
+        worktreeId,
+        tabId: `tab-${index}`,
+        leafId: TEST_LEAF_1,
+        ptyId: `pty-${index}`
+      })
+      store.removeWorktreeMeta(worktreeId)
+    }
+
+    const session = store.getWorkspaceSession()
+    expect(Object.keys(session.terminalTopologyRevisionByRepoId ?? {})).toEqual(['repo'])
+    expect(session.tabsByWorktree).toEqual({})
+  })
+
+  it('does not remove colliding worktree ids from other execution-host partitions', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo::/same-path'
+    store.setWorktreeMeta(worktreeId, { displayName: 'Local worktree' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'local-tab', worktreeId })]
+      }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'remote-a-tab', worktreeId })]
+        }
+      },
+      'runtime:env-a'
+    )
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'remote-b-tab', worktreeId })]
+        }
+      },
+      'runtime:env-b'
+    )
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]?.[0]?.id).toBe(
+      'remote-a-tab'
+    )
+    expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]?.[0]?.id).toBe(
+      'remote-b-tab'
+    )
   })
 
   it('preserves a sync-persisted UUID root when a stale empty layout write arrives', async () => {
@@ -9931,6 +10257,7 @@ describe('Store.migrateWorktreeIdentity', () => {
       activeGroupIdByWorktree: { [OLD]: 'group1' },
       lastVisitedAtByWorktreeId: { [OLD]: 123 },
       defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
+      terminalTopologyRevisionByRepoId: { repo1: 4 },
       sleepingAgentSessionsByPaneKey: {
         'tab1:leaf': {
           paneKey: 'tab1:leaf',
@@ -9953,7 +10280,18 @@ describe('Store.migrateWorktreeIdentity', () => {
         activeWorkspaceKey: OLD_WORKSPACE_KEY,
         activeWorktreeId: OLD,
         tabsByWorktree: { [OLD]: [makeTerminalTab({ id: 'host-tab', worktreeId: OLD })] },
-        terminalLayoutsByTabId: {}
+        terminalLayoutsByTabId: {},
+        terminalTopologyRevisionByRepoId: { repo1: 8 },
+        terminalSurfaceTombstonesByPaneKey: {
+          'host-tab:leaf': {
+            worktreeId: OLD,
+            parentTabId: 'host-tab',
+            leafId: 'leaf',
+            ptyId: 'host-pty',
+            incarnationId: 'host-incarnation',
+            retiredAt: 1
+          }
+        }
       },
       'runtime:env-a'
     )
@@ -9997,12 +10335,15 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(session.activeGroupIdByWorktree?.[NEW]).toBe('group1')
     expect(session.lastVisitedAtByWorktreeId?.[NEW]).toBe(123)
     expect(session.defaultTerminalTabsAppliedByWorktreeId?.[NEW]).toBe(true)
+    expect(session.terminalTopologyRevisionByRepoId?.repo1).toBe(4)
     expect(session.sleepingAgentSessionsByPaneKey?.['tab1:leaf']?.worktreeId).toBe(NEW)
 
     const hostSession = store.getWorkspaceSession('runtime:env-a')
     expect(hostSession.tabsByWorktree[OLD]).toBeUndefined()
     expect(hostSession.tabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(hostSession.activeWorkspaceKey).toBe(NEW_WORKSPACE_KEY)
+    expect(hostSession.terminalTopologyRevisionByRepoId?.repo1).toBe(9)
+    expect(hostSession.terminalSurfaceTombstonesByPaneKey).toEqual({})
   })
 
   it('rewrites parentWorktreeId back-references in other lineage entries', async () => {
@@ -10147,6 +10488,48 @@ describe('Store host-partitioned workspace sessions', () => {
     // Local was never given that tab id.
     expect(store.getWorkspaceSession('local').activeTabId).toBeNull()
     expect(store.getWorkspaceSession('local').activeRepoId).toBe('repo-local')
+  })
+
+  it('preserves and enforces equal repo-id topology authority independently per host', async () => {
+    const store = await createStore()
+    const worktreeId = 'duplicate::/worktree'
+    const staleTabs = {
+      [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId, ptyId: 'stale-pty' })]
+    }
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        terminalTopologyRevisionByRepoId: { duplicate: 2 }
+      },
+      'runtime:env-a'
+    )
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'live-tab', worktreeId, ptyId: 'live-pty' })]
+        },
+        terminalTopologyRevisionByRepoId: { duplicate: 7 }
+      },
+      'runtime:env-b'
+    )
+
+    store.setWorkspaceSession(
+      { ...getDefaultWorkspaceSession(), tabsByWorktree: staleTabs },
+      'runtime:env-a'
+    )
+    store.patchWorkspaceSession({ tabsByWorktree: staleTabs }, 'runtime:env-a')
+
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toEqual([])
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalTopologyRevisionByRepoId?.duplicate
+    ).toBe(2)
+    expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]?.[0]?.id).toBe(
+      'live-tab'
+    )
+    expect(
+      store.getWorkspaceSession('runtime:env-b').terminalTopologyRevisionByRepoId?.duplicate
+    ).toBe(7)
   })
 
   it('defaults an omitted hostId to the local partition', async () => {

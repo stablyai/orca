@@ -1783,7 +1783,9 @@
         "jiraSortDescending": "降順",
         "jiraSortBy": "並べ替え",
         "jiraToggleSortDirection": "{{value0}}に並べ替え",
-        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
+        "noGithubSourceDetected": "No GitHub source detected for",
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -2712,6 +2714,13 @@
             "removedTitle": "SSHホストが削除されました",
             "removedBody": "このワークスペースのSSHホストが削除されたため、接続できません。ワークスペースを削除してクリアしてください — リモートファイルはそのまま残ります。",
             "removeWorkspaceButton": "ワークスペースを削除"
+          },
+          "TerminalRemoteRuntimeReconnectBanner": {
+            "retryingTitle": "Reconnecting to remote runtime",
+            "disconnectedTitle": "Remote runtime disconnected",
+            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
+            "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
+            "reconnectButton": "Reconnect"
           }
         }
       },
@@ -3287,7 +3296,9 @@
             "noUsageData": "No usage data",
             "detailed": "Detailed",
             "compact": "Compact",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
+            "compactTooltip": "凝縮された使用状況: 最も狭いウィンドウのみ"
           }
         }
       },
@@ -4584,7 +4595,6 @@
           "modalDescription": "terminal から Linear スキルをインストールします。",
           "modalPrompt": "Agents が添付された Linear チケットを読み書きできるようにします。",
           "dontShowAgain": "今後表示しない",
-          "notNow": "後で",
           "missingBoth": "Orca CLI と Linear agent スキルがありません。",
           "missingCli": "Orca CLI がありません。",
           "missingSkill": "Linear agent スキルがありません。",
@@ -4846,7 +4856,7 @@
           "dbb9626ed1": "キャンセル",
           "854ebbcc45": "Orca は、この保存されたアカウントの管理対象 Claude 認証を削除します。現在アクティブな場合、Orca はシステムのデフォルトの Claude ログインに戻ります。",
           "63843e37e2": "Claude アカウントを削除しますか?",
-          "99c8f9e498": "Orca は、この保存されたアカウントの管理対象 Codex ホームを削除します。現在アクティブな場合、Orca はシステムのデフォルトの Codex ログインに戻ります。",
+          "380a7736cc": "このアカウントを削除すると、管理対象の Codex ホームと、その中に保存されているすべての Codex セッション履歴および MCP ログインが完全に削除されます。この操作は元に戻せません。アカウントが現在アクティブな場合、Orca はシステムのデフォルトの Codex ログインに戻ります。",
           "0d47394635": "Codex アカウントを削除しますか?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "opencode.ai にログインした後、URL でこれを見つけます (例:",
@@ -7008,7 +7018,6 @@
           "cf4437a2f7": "ANSI黒色",
           "adfdee23cb": "黒",
           "68e9f07de0": "ANSI標準",
-          "fb8c6f1967": "太字のテキストの色。設定されていない場合は、通常の色に戻ります。",
           "862e463f7f": "太字のテキスト",
           "b2c0857c49": "選択したテキストの文字色",
           "8b450b5305": "選択範囲の前景",
@@ -7024,7 +7033,8 @@
           "79f6bfb76e": "前景",
           "cf37ff69f6": "ベース",
           "8abdab9f7c": "今すぐ再起動",
-          "907131d741": "再起動中…"
+          "907131d741": "再起動中…",
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
         },
         "UIZoomControl": {
           "c2c64b24d0": "リセット"
@@ -7841,7 +7851,9 @@
             "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
             "e61157e926": "エディターのワードラップ",
-            "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。"
+            "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
+            "editorFontFamily": "Editor Font Family",
+            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
           }
         },
         "git": {
@@ -9244,10 +9256,17 @@
           "howToUse": "How to use it",
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
-          "terminalAriaLabel": "Linear skill install terminal"
+          "terminalAriaLabel": "Linear skill install terminal",
+          "manageConnectionHint": "Review connected Linear workspaces and API keys in",
+          "manageConnectionLink": "Integrations settings"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
+        },
+        "EditorFontFamilySetting": {
+          "title": "Editor Font Family",
+          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+          "placeholder": "Same as terminal font"
         }
       },
       "right": {
@@ -10317,7 +10336,8 @@
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
             "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
-            "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。"
+            "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。",
+            "prepareSessionResumeFailed": "Could not prepare this session for resume."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -12309,6 +12329,15 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "保持されたHTML引用を切り取るには、選択範囲を小さくするかコードモードを使用してください。"
+        },
+        "editor": {
+          "save": {
+            "failure": {
+              "notice": {
+                "8c59ce5075": "Failed to save the file. Please try again."
+              }
+            }
+          }
         }
       },
       "diff": {
@@ -13419,6 +13448,11 @@
           "91b5c8d7e6": "GitLab"
         }
       }
+    },
+    "runtime": {
+      "webRuntimeSession": {
+        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      }
     }
   },
   "components": {
@@ -13555,6 +13589,32 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "新しいセッションで続ける…",
+      "dialogTitle": "新しいセッションで続ける",
+      "dialogDescription": "この時点から新しいエージェントセッションを開始します。元のセッションは変更されません。",
+      "untitledSession": "現在のセッション",
+      "originalAgent": "元のエージェント: {{agent}}",
+      "agent": "エージェント",
+      "selectAgent": "エージェントを選択",
+      "detectingAgents": "このワークスペースホストでエージェントを検出中…",
+      "detectionFailed": "このワークスペースホストでエージェントを検出できませんでした。",
+      "noAgents": "このワークスペースホストで有効なエージェントが検出されませんでした。",
+      "context": "コンテキスト",
+      "modeFocused": "要点を引き継ぐ（推奨）",
+      "modeFocusedDescription": "最新の状態と現在のワークスペースを使い、必要な場合だけ過去の詳細を読みます。",
+      "modeFull": "セッション全文",
+      "modeFullDescription": "続行前に、保存されたセッション全体を新しいエージェントに読ませます。時間がかかり、多くのコンテキスト、プラン使用量、またはAPIクレジットを消費する可能性があります。",
+      "startsIn": "開始場所:",
+      "startSession": "新しいセッションを開始",
+      "starting": "開始中…",
+      "noContext": "新しいセッションで続けるためのコンテキストがありません。",
+      "agentDisabled": "エージェント設定で {{agent}} が無効になっています。",
+      "agentUnavailable": "このワークスペースホストで {{agent}} が検出されませんでした。",
+      "sent": "セッションコンテキストを新しい {{agent}} セッションに送信しました。",
+      "deliveryFailed": "新しい {{agent}} セッションは開始しましたが、コンテキストを送信できませんでした。",
+      "launchFailed": "新しい {{agent}} セッションを開始できませんでした。"
     }
   },
   "dashboardPopout": {
@@ -13585,8 +13645,8 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "close": "Close",
-      "focusWorktree": "Focus worktree"
+      "focusWorktree": "Focus worktree",
+      "close": "Close"
     }
   },
   "dashboard": {

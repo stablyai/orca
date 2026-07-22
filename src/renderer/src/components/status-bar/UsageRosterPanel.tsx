@@ -236,11 +236,19 @@ export function UsageRosterPanel({
           options={[
             {
               value: 'verbose',
-              label: translate('auto.components.status.bar.UsageRosterPanel.detailed', 'Detailed')
+              label: translate('auto.components.status.bar.UsageRosterPanel.detailed', 'Detailed'),
+              tooltip: translate(
+                'auto.components.status.bar.UsageRosterPanel.detailedTooltip',
+                'Full usage with bars, labels, and percentages'
+              )
             },
             {
               value: 'compact',
-              label: translate('auto.components.status.bar.UsageRosterPanel.compact', 'Compact')
+              label: translate('auto.components.status.bar.UsageRosterPanel.compact', 'Compact'),
+              tooltip: translate(
+                'auto.components.status.bar.UsageRosterPanel.compactTooltip',
+                'Condensed usage: only the tightest window'
+              )
             }
           ]}
         />

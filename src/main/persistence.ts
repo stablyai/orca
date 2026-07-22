@@ -77,6 +77,11 @@ import {
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
+import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
+import {
+  removeRepoFromHostWorkspaceSessions,
+  removeRepoFromWorkspaceSession
+} from './orca-profiles/profile-project-session-state'
 import { hardenExistingSecureFile } from '../shared/secure-file'
 import {
   LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -2343,7 +2348,8 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
 
 function removeWorkspaceSessionOwner(
   session: WorkspaceSessionState | undefined,
-  ownerKey: string
+  ownerKey: string,
+  options: { advanceTerminalTopologyRevision?: boolean } = {}
 ): WorkspaceSessionState | undefined {
   if (!session) {
     return session
@@ -2357,6 +2363,30 @@ function removeWorkspaceSessionOwner(
     delete next.terminalLayoutsByTabId[tab.id]
     if (next.activeTabId === tab.id) {
       next.activeTabId = null
+    }
+  }
+  if (next.terminalPtyIncarnationsByPaneKey) {
+    const removedTabIds = new Set(removedTerminalTabs.map((tab) => tab.id))
+    next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
+        const separator = paneKey.lastIndexOf(':')
+        return separator < 1 || !removedTabIds.has(paneKey.slice(0, separator))
+      })
+    )
+  }
+  if (next.terminalSurfaceTombstonesByPaneKey) {
+    next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
+        ([, tombstone]) => tombstone.worktreeId !== ownerKey
+      )
+    )
+  }
+  const repoId = getRepoIdFromWorktreeId(ownerKey)
+  const previousTopologyRevision = next.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
+  if (options.advanceTerminalTopologyRevision) {
+    next.terminalTopologyRevisionByRepoId = {
+      ...next.terminalTopologyRevisionByRepoId,
+      [repoId]: previousTopologyRevision + 1
     }
   }
 
@@ -4137,6 +4167,11 @@ export class Store {
     // Why: presets are repo-scoped and unreachable once the repo is gone, so drop them with it.
     delete this.state.sparsePresetsByRepo[id]
     this.pruneWorktreeStateForRepo(id, null)
+    this.state.workspaceSession = removeRepoFromWorkspaceSession(this.state.workspaceSession, id)
+    this.state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
+      this.state.workspaceSessionsByHostId,
+      id
+    )
     this.scheduleSave()
   }
 
@@ -4153,6 +4188,21 @@ export class Store {
     this.syncProjectHostSetupCompatibilityState()
     // Why: prune only this host's worktree metas if the id survives elsewhere; otherwise prune everything (matches removeProject).
     this.pruneWorktreeStateForRepo(id, idStillPresent ? hostId : null)
+    if (!idStillPresent) {
+      this.state.workspaceSession = removeRepoFromWorkspaceSession(this.state.workspaceSession, id)
+      this.state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
+        this.state.workspaceSessionsByHostId,
+        id
+      )
+    } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
+      const session = this.state.workspaceSessionsByHostId?.[hostId]
+      if (session) {
+        this.state.workspaceSessionsByHostId = {
+          ...this.state.workspaceSessionsByHostId,
+          [hostId]: removeRepoFromWorkspaceSession(session, id)
+        }
+      }
+    }
     this.scheduleSave()
   }
 
@@ -4772,6 +4822,11 @@ export class Store {
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
     delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    this.state.workspaceSession = removeWorkspaceSessionOwner(
+      this.state.workspaceSession,
+      worktreeId,
+      { advanceTerminalTopologyRevision: true }
+    )!
     this.scheduleSave()
   }
 
@@ -4912,6 +4967,21 @@ export class Store {
         }
         if (sleepingChanged) {
           session.sleepingAgentSessionsByPaneKey = nextSleeping
+          sessionChanged = true
+        }
+      }
+      if (session.terminalSurfaceTombstonesByPaneKey) {
+        let tombstonesChanged = false
+        const nextTombstones = { ...session.terminalSurfaceTombstonesByPaneKey }
+        for (const [paneKey, tombstone] of Object.entries(nextTombstones)) {
+          if (tombstone.worktreeId !== oldWorktreeId) {
+            continue
+          }
+          nextTombstones[paneKey] = { ...tombstone, worktreeId: newWorktreeId }
+          tombstonesChanged = true
+        }
+        if (tombstonesChanged) {
+          session.terminalSurfaceTombstonesByPaneKey = nextTombstones
           sessionChanged = true
         }
       }
@@ -5502,6 +5572,11 @@ export class Store {
 
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
   private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
+    // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
+    session = sanitizeWorkspaceSessionTerminalRetirements(
+      session,
+      this.state.workspaceSessionsByHostId?.[hostId]
+    )
     const pruned = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
@@ -5513,12 +5588,13 @@ export class Store {
   }
 
   private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
+    const prior = this.state.workspaceSession
+    session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
 
     // Why (Issue #217): merge existing bindings when the incoming binding is empty, so a stale pre-spawn snapshot can't overwrite the durable PTY binding.
-    const prior = this.state.workspaceSession
     const normalized = normalizeWorkspaceSessionPaneIdentities(
       session,
       prior?.terminalLayoutsByTabId
@@ -5798,6 +5874,7 @@ export class Store {
     tabId: string
     leafId: string
     ptyId: string
+    incarnationId?: string
     startupCwd?: string
   }): void {
     const session = this.state.workspaceSession
@@ -5805,11 +5882,38 @@ export class Store {
       return
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
+    const paneKey = `${args.tabId}:${args.leafId}`
+    let terminalMembershipChanged = false
+    const advanceTopologyAfterMembershipChange = (): void => {
+      const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+      const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
+      if (!terminalMembershipChanged || currentRevision <= 0) {
+        return
+      }
+      // Why: a real host-admitted spawn after a retirement must be distinguishable from a stale renderer replay.
+      session.terminalTopologyRevisionByRepoId = {
+        ...session.terminalTopologyRevisionByRepoId,
+        [repoId]: currentRevision + 1
+      }
+    }
+    if (args.incarnationId) {
+      session.terminalPtyIncarnationsByPaneKey = {
+        ...session.terminalPtyIncarnationsByPaneKey,
+        [paneKey]: args.incarnationId
+      }
+      if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
+        session.terminalSurfaceTombstonesByPaneKey = {
+          ...session.terminalSurfaceTombstonesByPaneKey
+        }
+        delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
+      }
+    }
     const tabs = session.tabsByWorktree?.[args.worktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
       tab.ptyId = args.ptyId
     } else {
+      terminalMembershipChanged = true
       // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
       const nextTabs = [
         ...(tabs ?? []),
@@ -5831,6 +5935,7 @@ export class Store {
     }
     if (!isTerminalLeafId(args.leafId)) {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
+      advanceTopologyAfterMembershipChange()
       try {
         this.flushOrThrow()
       } catch (err) {
@@ -5842,11 +5947,13 @@ export class Store {
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
       if (!layout.root) {
+        terminalMembershipChanged = true
         // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
         layout.root = { type: 'leaf', leafId: args.leafId }
         layout.activeLeafId = args.leafId
         layout.expandedLeafId = null
       } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
+        terminalMembershipChanged = true
         // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
         layout.root = {
           type: 'split',
@@ -5864,6 +5971,7 @@ export class Store {
         [args.leafId]: args.ptyId
       }
     } else {
+      terminalMembershipChanged = true
       // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
       session.terminalLayoutsByTabId = {
         ...session.terminalLayoutsByTabId,
@@ -5875,6 +5983,7 @@ export class Store {
         }
       }
     }
+    advanceTopologyAfterMembershipChange()
     try {
       this.flushOrThrow()
     } catch (err) {

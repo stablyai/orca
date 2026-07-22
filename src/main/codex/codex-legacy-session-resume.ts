@@ -162,7 +162,7 @@ function isLegacyRolloutRelativePath(relativePath: string): boolean {
     /^\d{4}$/.test(parts[0] ?? '') &&
     /^\d{2}$/.test(parts[1] ?? '') &&
     /^\d{2}$/.test(parts[2] ?? '') &&
-    /^rollout-.+\.jsonl$/.test(parts[3] ?? '')
+    /^rollout-.+\.jsonl(?:\.zst)?$/.test(parts[3] ?? '')
   )
 }
 

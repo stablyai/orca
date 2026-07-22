@@ -19,7 +19,9 @@ describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
   let onReplay: ((payload: { id: string; data: string }) => void) | null = null
-  let onExit: ((payload: { id: string; code: number }) => void) | null = null
+  let onExit:
+    | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
+    | null = null
 
   function flushPtySideEffects(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 0))
@@ -50,10 +52,18 @@ describe('createIpcPtyTransport', () => {
             onReplay = callback
             return () => {}
           }),
-          onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
-            onExit = callback
-            return () => {}
-          })
+          onExit: vi.fn(
+            (
+              callback: (payload: {
+                id: string
+                code: number
+                preserveRendererBinding?: boolean
+              }) => void
+            ) => {
+              onExit = callback
+              return () => {}
+            }
+          )
         }
       }
     } as unknown as typeof window
@@ -102,6 +112,21 @@ describe('createIpcPtyTransport', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] })
     )
+  })
+
+  it('forwards automatic resume provenance to the PTY spawn', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const resumeProviderSession = {
+      key: 'session_id' as const,
+      id: 'session-a',
+      transcriptPath: '/Users/example/.codex/sessions/2026/07/20/rollout-a.jsonl'
+    }
+    const transport = createIpcPtyTransport({ resumeProviderSession })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ resumeProviderSession }))
   })
 
   it('leaves the transport silently unbound after a failed connect — sendInput drops with no write IPC (frozen-terminal repro)', async () => {
@@ -1560,16 +1585,31 @@ describe('createIpcPtyTransport', () => {
     expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
 
     // Simulate shutdownWorktreeTerminals: unregister data handlers before kill.
-    unregisterPtyDataHandlers(['pty-1'])
+    const snapshots = unregisterPtyDataHandlers(['pty-1'])
 
     // Final burst after the handler was removed: its title change and BEL must not produce a notification.
     onData?.({ id: 'pty-1', data: ']0;Claude done' })
     expect(onAgentBecameIdle).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
 
+    for (const snapshot of snapshots) {
+      snapshot.commit()
+    }
+
     // Exit handler should still work (exit handlers are kept alive)
     onExit?.({ id: 'pty-1', code: -1 })
     expect(onPtyExit).toHaveBeenCalledWith('pty-1')
+  })
+
+  it('marks a host reversible-stop exit before delivering it to the pane', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { consumeCommittedPtyShutdownExit } = await import('./pty-shutdown-exit-deferral')
+    const transport = createIpcPtyTransport()
+    await transport.connect({ url: '', callbacks: {} })
+
+    onExit?.({ id: 'pty-1', code: 0, preserveRendererBinding: true })
+
+    expect(consumeCommittedPtyShutdownExit('pty-1')).toBe(true)
   })
 
   it('restores data handlers when an intentional shutdown fails before exit', async () => {
@@ -1588,9 +1628,62 @@ describe('createIpcPtyTransport', () => {
     expect(onDataCallback).not.toHaveBeenCalled()
 
     restorePtyDataHandlersAfterFailedShutdown(snapshots)
+    expect(onDataCallback).toHaveBeenCalledWith('final burst while detached')
     onData?.({ id: 'pty-1', data: 'live again' })
 
     expect(onDataCallback).toHaveBeenCalledWith('live again')
+  })
+
+  it('retains rollback replay until a pane detached during sleep registers again', async () => {
+    const {
+      createIpcPtyTransport,
+      restorePtyDataHandlersAfterFailedShutdown,
+      unregisterPtyDataHandlers
+    } = await import('./pty-transport')
+    const first = createIpcPtyTransport()
+    await first.connect({ url: '', callbacks: { onReplayData: vi.fn() } })
+
+    const snapshots = unregisterPtyDataHandlers(['pty-1'])
+    onReplay?.({ id: 'pty-1', data: 'rollback replay while hidden' })
+    first.destroy?.()
+    restorePtyDataHandlersAfterFailedShutdown(snapshots)
+
+    const replayedAfterAttach = vi.fn()
+    const replacement = createIpcPtyTransport()
+    await replacement.connect({
+      url: '',
+      callbacks: { onReplayData: replayedAfterAttach }
+    })
+
+    expect(replayedAfterAttach).toHaveBeenCalledWith('rollback replay while hidden')
+  })
+
+  it('keeps handlers suspended until every overlapping shutdown owner rolls back', async () => {
+    const {
+      createIpcPtyTransport,
+      restorePtyDataHandlersAfterFailedShutdown,
+      unregisterPtyDataHandlers
+    } = await import('./pty-transport')
+    const { ptyDataSidecars } = await import('./pty-dispatcher')
+    const onDataCallback = vi.fn()
+    const sidecar = vi.fn()
+    const transport = createIpcPtyTransport()
+
+    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
+
+    const first = unregisterPtyDataHandlers(['pty-1'])
+    const second = unregisterPtyDataHandlers(['pty-1'])
+    ptyDataSidecars.set('pty-1', new Set([sidecar]))
+    onData?.({ id: 'pty-1', data: 'buffered while both owners are pending' })
+
+    restorePtyDataHandlersAfterFailedShutdown(first)
+    expect(onDataCallback).not.toHaveBeenCalled()
+    expect(sidecar).not.toHaveBeenCalled()
+
+    restorePtyDataHandlersAfterFailedShutdown(second)
+    expect(onDataCallback).toHaveBeenCalledWith('buffered while both owners are pending')
+    expect(sidecar).toHaveBeenCalledWith('buffered while both owners are pending')
+    ptyDataSidecars.delete('pty-1')
   })
 
   it('unregisterPtyDataHandlers cancels staleTitleTimer so it cannot fire stale idle transition', async () => {
@@ -1619,13 +1712,16 @@ describe('createIpcPtyTransport', () => {
       vi.advanceTimersByTime(0)
 
       // Unregister must cancel the staleTitleTimer and reset the tracker so no stale idle transition fires.
-      unregisterPtyDataHandlers(['pty-1'])
+      const snapshots = unregisterPtyDataHandlers(['pty-1'])
 
       // Advance past the 3 s stale-title timeout
       vi.advanceTimersByTime(4000)
 
       // The staleTitleTimer must NOT have fired onAgentBecameIdle
       expect(onAgentBecameIdle).not.toHaveBeenCalled()
+      for (const snapshot of snapshots) {
+        snapshot.commit()
+      }
     } finally {
       vi.useRealTimers()
     }
@@ -1898,19 +1994,32 @@ describe('createRemoteRuntimePtyTransport', () => {
       unsubscribe: unsubscribeFn,
       sendBinary: vi.fn()
     }
-    runtimeCall.mockResolvedValue({
-      id: 'rpc-create',
-      ok: true,
-      result: {
-        terminal: {
-          handle: 'term-remote',
-          worktreeId: 'repo1::/remote/wt',
-          title: null,
-          surface: 'background'
-        }
-      },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
+    runtimeCall.mockImplementation(async (args: { method?: string }) =>
+      args.method === 'status.get'
+        ? {
+            id: 'rpc-status',
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: ['agent-session.host-authority.v1']
+            },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+        : {
+            id: 'rpc-create',
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'term-remote',
+                worktreeId: 'repo1::/remote/wt',
+                title: null,
+                surface: 'background'
+              }
+            },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+    )
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
@@ -1990,6 +2099,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       method: 'terminal.create',
       params: {
         worktree: 'id:repo1::/remote/wt',
+        clientMutationId: expect.any(String),
         command: 'claude',
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',
@@ -2045,6 +2155,154 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onReplayData).toHaveBeenCalledWith('hello')
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
+  })
+
+  it('suspends passive remote output until host sleep is cancelled', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { applyHostWorktreeTerminalSleepState } = await import('./pty-shutdown-exit-deferral')
+    const onData = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    await transport.connect({ url: '', callbacks: { onData } })
+    const { streamId } = latestRemoteSubscribePayload()
+    const started = {
+      type: 'worktreeTerminalSleepState' as const,
+      worktreeId: 'repo1::/remote/wt',
+      generation: 7,
+      phase: 'started' as const,
+      ptyIds: ['host-pty-1'],
+      terminalHandles: ['term-remote']
+    }
+
+    applyHostWorktreeTerminalSleepState('env-1', started)
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId,
+        seq: 1,
+        payload: encodeTerminalStreamText('teardown output')
+      })
+    )
+    expect(onData).not.toHaveBeenCalled()
+
+    applyHostWorktreeTerminalSleepState('env-1', { ...started, phase: 'cancelled' })
+    expect(onData).toHaveBeenCalledWith('teardown output', expect.objectContaining({ seq: 1 }))
+  })
+
+  it('routes provider resumes through the host authority without sending the client command', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: "claude '--resume' 'provider-session'",
+      env: { CLIENT_ONLY: 'must-not-cross' },
+      launchAgent: 'claude',
+      agentArgsOverride: '--permission-mode plan',
+      resumeProviderSession: { key: 'session_id', id: 'provider-session' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.ensureAgentSession',
+      params: {
+        kind: 'explicit',
+        worktree: 'id:repo1::/remote/wt',
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'provider-session' },
+        agentArgs: '--permission-mode plan',
+        placement: {
+          tabId: 'tab-1',
+          leafId: '11111111-1111-4111-8111-111111111111'
+        },
+        presentation: 'background'
+      },
+      timeoutMs: 15_000
+    })
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.create',
+        params: expect.objectContaining({ command: expect.any(String) })
+      })
+    )
+  })
+
+  it('treats an explicitly killed remote session as normal retirement', async () => {
+    runtimeCall.mockImplementation(async (args: { method?: string }) =>
+      args.method === 'terminal.create'
+        ? {
+            id: 'rpc-create',
+            ok: false,
+            error: {
+              code: 'terminal_gone',
+              message: 'Session "pty-dead" was explicitly killed'
+            }
+          }
+        : {
+            id: 'rpc-status',
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: ['agent-session.host-authority.v1']
+            }
+          }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt'
+    })
+    const onError = vi.fn()
+
+    await expect(transport.connect({ url: '', callbacks: { onError } })).resolves.toBeUndefined()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('routes fresh agents through an idempotent host-built launch', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: "codex 'fix the race'",
+      env: { CLIENT_ONLY: 'must-not-cross' },
+      launchAgent: 'codex',
+      agentPrompt: 'fix the race',
+      agentPromptDelivery: 'draft',
+      agentLaunchPreferences: { model: 'gpt-5', effort: 'high' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.createAgentSession',
+      params: {
+        clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
+        worktree: 'id:repo1::/remote/wt',
+        agent: 'codex',
+        prompt: 'fix the race',
+        promptDelivery: 'draft',
+        launchPreferences: { model: 'gpt-5', effort: 'high' },
+        placement: {
+          tabId: 'tab-1',
+          leafId: '11111111-1111-4111-8111-111111111111'
+        },
+        presentation: 'background'
+      },
+      timeoutMs: 15_000
+    })
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.create',
+        params: expect.objectContaining({ command: expect.any(String) })
+      })
+    )
   })
 
   it('forwards input over the stream and disconnects without closing shared remote sessions', async () => {

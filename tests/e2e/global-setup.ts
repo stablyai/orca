@@ -19,10 +19,12 @@ import os from 'node:os'
 /** Temp file where the test repo path is stored for the fixture to read. */
 export const TEST_REPO_PATH_FILE = path.join(os.tmpdir(), 'orca-e2e-test-repo-path.txt')
 const ELECTRON_E2E_BUILD_TIMEOUT_MS = 300_000
+const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
   const root = process.cwd()
   const outMain = path.join(root, 'out', 'main', 'index.js')
+  const outWeb = path.join(root, 'out', 'web', 'web-index.html')
 
   // ── 1. Build the Electron app ──────────────────────────────────────
   if (process.env.SKIP_BUILD && existsSync(outMain)) {
@@ -40,6 +42,20 @@ export default function globalSetup(): void {
       timeout: ELECTRON_E2E_BUILD_TIMEOUT_MS
     })
     console.error('[e2e] Build complete.')
+  }
+  if (process.env.ORCA_E2E_WEB_CLIENT === '1') {
+    if (process.env.SKIP_BUILD && existsSync(outWeb)) {
+      console.error('[e2e] SKIP_BUILD set and web client exists — skipping web build')
+    } else {
+      // Why: paired-browser specs need the web bundle served by the runtime; ordinary Electron E2E does not.
+      console.error('[e2e] Building paired runtime web client...')
+      execSync('pnpm run build:web', {
+        cwd: root,
+        stdio: 'inherit',
+        timeout: WEB_E2E_BUILD_TIMEOUT_MS
+      })
+      console.error('[e2e] Web client build complete.')
+    }
   }
   if (process.env.ORCA_E2E_SSH_LOCALHOST === '1' || process.env.ORCA_E2E_SSH_DOCKER === '1') {
     // Why: the SSH specs deploy Orca's relay from out/relay. The

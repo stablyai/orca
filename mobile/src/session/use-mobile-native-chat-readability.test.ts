@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { FLOATING_WORKSPACE_WORKTREE_ID } from './floating-workspace'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
 
 describe('useMobileNativeChatReadability', () => {
@@ -18,15 +19,19 @@ describe('useMobileNativeChatReadability', () => {
     renderer = null
   })
 
-  async function mount(connectionId: string | null): Promise<void> {
+  async function mount(
+    connectionId: string | null,
+    worktreeId = 'repo::/worktree'
+  ): Promise<ReturnType<typeof vi.fn>> {
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { repos: [{ id: 'repo', connectionId }] }
+    })
     const client = {
-      sendRequest: vi.fn().mockResolvedValue({
-        ok: true,
-        result: { repos: [{ id: 'repo', connectionId }] }
-      })
+      sendRequest
     } as unknown as RpcClient
     function Harness(): null {
-      readable = useMobileNativeChatReadability(client, 'repo::/worktree')
+      readable = useMobileNativeChatReadability(client, worktreeId)
       return null
     }
     const original = console.error
@@ -44,6 +49,7 @@ describe('useMobileNativeChatReadability', () => {
     } finally {
       consoleSpy.mockRestore()
     }
+    return sendRequest
   }
 
   it('admits local and runtime-owned transcript hosts', async () => {
@@ -59,6 +65,13 @@ describe('useMobileNativeChatReadability', () => {
   it('fails closed for Model-A SSH transcript hosts', async () => {
     await mount('model-a-ssh')
     expect(readable).toBe(false)
+  })
+
+  it('treats the host-local floating workspace as readable without listing repos', async () => {
+    const sendRequest = await mount(null, FLOATING_WORKSPACE_WORKTREE_ID)
+
+    expect(readable).toBe(true)
+    expect(sendRequest).not.toHaveBeenCalled()
   })
 
   it('fails closed immediately while a reused route resolves its new worktree', async () => {

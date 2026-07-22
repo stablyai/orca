@@ -61,7 +61,7 @@ describe('githubHostExecOptions', () => {
 
 describe('resolveGitHubRepoExecution', () => {
   it('combines local repository and GitHub host execution options', async () => {
-    const ownerRepo = { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com' }
+    const ownerRepo = { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com:8443' }
     isGitHubHostAuthenticatedMock.mockResolvedValue(true)
 
     await expect(
@@ -71,11 +71,11 @@ describe('resolveGitHubRepoExecution', () => {
       ghOptions: {
         cwd: '/repo',
         wslDistro: 'Ubuntu',
-        host: 'github.acme-corp.com'
+        host: 'github.acme-corp.com:8443'
       }
     })
     expect(isGitHubHostAuthenticatedMock).toHaveBeenCalledWith(
-      'github.acme-corp.com',
+      'github.acme-corp.com:8443',
       '/repo',
       null,
       { wslDistro: 'Ubuntu' }

@@ -123,7 +123,11 @@ function collectSessionWorktreeIds(
   addOwnerKeys(session.activeGroupIdByWorktree)
   addOwnerKeys(session.lastVisitedAtByWorktreeId)
   addOwnerKeys(session.defaultTerminalTabsAppliedByWorktreeId)
+  addOwnerKeys(session.terminalTopologyRevisionByRepoId)
   addOwnerKeys(session.activeFileIdByWorktree)
+  for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
+    add(tombstone.worktreeId)
+  }
   add(session.activeWorktreeId)
   const activeScope = session.activeWorkspaceKey
     ? parseWorkspaceKey(session.activeWorkspaceKey)

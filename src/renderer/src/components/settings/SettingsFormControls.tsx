@@ -7,6 +7,7 @@ import { ScrollArea } from '../ui/scroll-area'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
 import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
@@ -138,6 +139,8 @@ type SegmentedOption<T extends string | number> = {
   label: React.ReactNode
   disabled?: boolean
   ariaLabel?: string
+  /** Optional hover label describing what the option does. */
+  tooltip?: React.ReactNode
 }
 
 type SettingsSegmentedControlProps<T extends string | number> = {
@@ -169,7 +172,7 @@ export function SettingsSegmentedControl<T extends string | number>({
     >
       {options.map((opt) => {
         const active = opt.value === value
-        return (
+        const button = (
           <button
             key={String(opt.value)}
             type="button"
@@ -195,6 +198,15 @@ export function SettingsSegmentedControl<T extends string | number>({
           >
             {opt.label}
           </button>
+        )
+        if (opt.tooltip == null) {
+          return button
+        }
+        return (
+          <Tooltip key={String(opt.value)}>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipContent>{opt.tooltip}</TooltipContent>
+          </Tooltip>
         )
       })}
     </div>

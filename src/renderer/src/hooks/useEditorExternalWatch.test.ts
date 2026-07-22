@@ -33,6 +33,7 @@ import {
   __clearSelfWriteRegistryForTests,
   recordSelfWrite
 } from '@/components/editor/editor-self-write-registry'
+import { __clearEditorPathMovesForTests } from '@/components/editor/editor-path-move-inflight'
 
 describe('getWatchedTargetKey', () => {
   it('changes when a worktree gains an SSH connection id', () => {
@@ -225,6 +226,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     __clearSelfWriteRegistryForTests()
+    __clearEditorPathMovesForTests()
   })
 
   function payload(events: FsChangedPayload['events']): FsChangedPayload {

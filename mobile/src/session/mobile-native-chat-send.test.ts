@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { sendMobileNativeChatMessage } from './mobile-native-chat-send'
+import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import {
+  sendMobileNativeChatMessage,
+  sendMobileNativeChatMessageWithOutcome
+} from './mobile-native-chat-send'
 
 function clientWithResponse(response: unknown): RpcClient {
   return {
@@ -54,6 +58,54 @@ describe('sendMobileNativeChatMessage', () => {
     await expect(
       sendMobileNativeChatMessage({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe(false)
+  })
+
+  it('reports a definite rejection when the RPC failed before the frame was written', async () => {
+    const client = {
+      sendRequest: vi.fn().mockRejectedValue(new Error('Connection interrupted'))
+    } as unknown as RpcClient
+
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hello' })
+    ).resolves.toBe('rejected')
+  })
+
+  it('reports an unknown outcome when the RPC failed after the frame hit the wire', async () => {
+    const client = {
+      sendRequest: vi
+        .fn()
+        .mockRejectedValue(markRpcDeliveryUnknown(new Error('Connection interrupted')))
+    } as unknown as RpcClient
+
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hello' })
+    ).resolves.toBe('unknown')
+    // The boolean wrapper still treats unknown as not-accepted.
+    await expect(
+      sendMobileNativeChatMessage({ client, terminal: 'term', text: 'hello' })
+    ).resolves.toBe(false)
+  })
+
+  it('reports acceptance and host rejection as definite outcomes', async () => {
+    const accepted = clientWithResponse({
+      id: 'request',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime' }
+    })
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({ client: accepted, terminal: 'term', text: 'hi' })
+    ).resolves.toBe('accepted')
+
+    const rejected = clientWithResponse({
+      id: 'request',
+      ok: false,
+      error: { message: 'no pane' },
+      _meta: { runtimeId: 'runtime' }
+    })
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({ client: rejected, terminal: 'term', text: 'hi' })
+    ).resolves.toBe('rejected')
   })
 
   it('sends a single non-submitting Escape for prompt cancellation', async () => {

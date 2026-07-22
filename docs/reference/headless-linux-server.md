@@ -5,18 +5,38 @@ desktop session, such as an Ubuntu VPS or a remote build box.
 
 `orca serve` starts the Orca runtime without opening the desktop window. On
 Linux, the packaged AppImage still needs the libraries that Electron expects at
-startup. Current Orca builds can start Xvfb automatically for `orca serve` when
-no `DISPLAY` is set, but Xvfb must be installed first. When `DISPLAY` is set,
-Orca uses that display instead of starting a competing Xvfb process.
+startup. Current Orca builds start Xvfb automatically for `orca serve` when no
+`DISPLAY` is set, but Xvfb must be installed first. A separate D-Bus session is
+not required. When `DISPLAY` is set, Orca uses that display instead of starting
+a competing Xvfb process.
 
-## Ubuntu 22.04 Prerequisites
+The supported deployment matrix covers Ubuntu 22.04 and 24.04 and current
+Debian stable. Package names can differ on other Debian-derived releases.
+
+## Ubuntu and Debian prerequisites
 
 Install the AppImage runtime dependency and Xvfb:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y curl file libfuse2 xvfb
+sudo apt-get install -y curl file jq xvfb zlib1g-dev
 ```
+
+On Ubuntu 22.04, install `libfuse2` to execute the AppImage through FUSE. On
+Ubuntu 24.04 and Debian, the equivalent package may be `libfuse2t64`. FUSE is
+optional: without it, use the AppImage's supported extraction path:
+
+```bash
+cd /opt/orca
+./orca-linux.AppImage --appimage-extract
+/opt/orca/squashfs-root/AppRun serve --port 6768
+```
+
+Docker commonly has no FUSE device. Use `--appimage-extract` once or
+`--appimage-extract-and-run`; neither requires a privileged container. The
+extract-and-run wrapper can print extracted paths before Orca starts, so
+automation that requires stdout to contain only the ready JSON should extract
+once and invoke `squashfs-root/AppRun`.
 
 Download and make the AppImage executable:
 
@@ -51,7 +71,65 @@ LIBGL_ALWAYS_SOFTWARE=1 /opt/orca/orca-linux.AppImage serve \
   --pairing-address 100.64.1.20
 ```
 
-The command prints the runtime endpoint and pairing URL. Stop it with `Ctrl+C`.
+`--pairing-address` is only the address advertised to clients. It does not
+change the listener bind address. Orca binds its WebSocket listener, then
+combines the actual bound port with the advertised host when the address omits
+a port. Use a reachable LAN/Tailscale hostname or IP, or a complete reverse
+proxy URL such as `https://orca.example.com/runtime` (`http(s)` is normalized
+to `ws(s)`). Wildcard addresses such as `*`, `0.0.0.0`, and `::` cannot be
+advertised.
+
+The command writes one ready block to stdout after the listener bind and
+pairing initialization complete:
+
+```text
+Orca server ready
+Bound endpoint: ws://0.0.0.0:6768
+Advertised endpoint: ws://100.64.1.20:6768
+Pairing URL: orca://pair?code=...
+```
+
+For supervisors, request the versioned single-line JSON contract:
+
+```bash
+/opt/orca/orca-linux.AppImage serve --port 6768 \
+  --pairing-address 100.64.1.20 --json
+```
+
+The actual output is one compact line; this example is pretty-printed for
+readability:
+
+```json
+{
+  "type": "orca_server_ready",
+  "schemaVersion": 1,
+  "runtimeId": "...",
+  "endpoint": "ws://0.0.0.0:6768",
+  "boundEndpoint": "ws://0.0.0.0:6768",
+  "advertisedEndpoint": "ws://100.64.1.20:6768",
+  "managedWslCliReconciliation": "settled",
+  "pairing": {
+    "available": true,
+    "url": "orca://pair?code=...",
+    "endpoint": "ws://100.64.1.20:6768",
+    "deviceId": "...",
+    "webClientUrl": "...",
+    "scope": "runtime",
+    "qr": null
+  }
+}
+```
+
+`endpoint` remains a compatibility alias for `boundEndpoint`; new automation
+should use the explicit bound and advertised fields.
+
+When the server remains usable but cannot mint an offer, `pairing` remains an
+object with `available:false`, a stable `reason`, and operator `guidance`; it is
+never silently omitted. `--recipe-json` is stricter and exits with that reason
+because its contract requires a pairing URL. Stop a foreground server with
+`Ctrl+C`. Stable reasons are `disabled_by_operator`, `websocket_unavailable`,
+`device_registry_unavailable`, `e2ee_key_unavailable`, and
+`invalid_advertised_endpoint`.
 
 ## Systemd Service
 
@@ -82,6 +160,8 @@ User=orca
 WorkingDirectory=/home/orca
 Environment=LIBGL_ALWAYS_SOFTWARE=1
 ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+StandardOutput=journal
+StandardError=journal
 Restart=on-failure
 RestartSec=5
 
@@ -99,6 +179,19 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now orca-serve.service
 sudo journalctl -u orca-serve.service -f
 ```
+
+`journalctl -o cat` removes journal metadata but still mixes the service's
+stdout and stderr. Parse each line as JSON and require the readiness type and
+schema before treating the service as ready:
+
+```bash
+sudo journalctl -u orca-serve.service -o cat \
+  | jq -Rrc 'fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1)'
+```
+
+A bounded health check should require that contract within its startup timeout;
+otherwise inspect earlier diagnostics for the precise pairing reason, listener
+error, or missing library.
 
 ## Managed Xvfb Service
 
@@ -163,6 +256,40 @@ server. Invoke the AppImage directly:
 ```bash
 /opt/orca/orca-linux.AppImage serve --help
 ```
+
+Running an AppImage as root requires Chromium's `--no-sandbox` switch before
+the command:
+
+```bash
+/opt/orca/orca-linux.AppImage --no-sandbox serve --port 6768
+```
+
+This disables a security boundary. Prefer a dedicated unprivileged service
+user, especially when the listener is reachable beyond localhost.
+
+## Pairing troubleshooting
+
+- A pairing offer is a capability containing a device credential and E2EE
+  material. Share it only with the intended client and do not put it in proxy
+  access logs.
+- `boundEndpoint` is where the process listens; `advertisedEndpoint` is what a
+  client dials. A valid-looking offer still cannot connect if DNS, firewall,
+  Docker port publishing, Tailscale policy, or a reverse proxy does not route
+  the advertised endpoint to the bound port.
+- An omitted advertised port uses the actual bound port, including a fallback
+  port selected after a collision. An explicit proxy port is preserved. A port
+  mismatch therefore means the supplied external routing is wrong, not that
+  Orca changes it.
+- Reverse proxies must support WebSocket upgrade and route the advertised path.
+  Use `wss://` or `https://` when TLS terminates at the proxy; do not advertise
+  `ws://` through an HTTPS-only endpoint.
+- Hostnames, IPv4, bracketed IPv6, and raw IPv6 literals are supported. IPv6
+  still requires an IPv6-reachable listener/network path.
+- `xvfb-run` and `dbus-run-session -- xvfb-run` remain valid diagnostic launch
+  shapes, but neither should be needed when `Xvfb` is installed and no display
+  is configured. Repeated D-Bus messages without a ready block indicate startup
+  did not reach serve mode; confirm the AppImage version and exact argument
+  order, especially `--no-sandbox serve`.
 
 If you later install the desktop CLI from Orca settings, use that CLI for normal
 shell workflows. Keep the AppImage path in systemd so service restarts do not
@@ -370,7 +497,9 @@ profile archive are complete. If you run the managed Xvfb unit, only
 sudo journalctl -u orca-serve.service -f
 ```
 
-A healthy start prints `Orca server ready: ws://0.0.0.0:6768` (with your port).
+A healthy start prints one `Orca server ready` block with the actual bound and
+advertised endpoints. Verify those values rather than assuming the configured
+port, because a collision can select a fallback port.
 Confirm a client reconnects before you discard the backup. The timestamped
 rollback bundles are not pruned automatically. After the new version satisfies
 your retention policy, select and inspect the newest complete bundle before

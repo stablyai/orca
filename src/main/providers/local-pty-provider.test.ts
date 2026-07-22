@@ -425,8 +425,24 @@ describe('LocalPtyProvider', () => {
     it('invokes onSpawned callback', async () => {
       const onSpawned = vi.fn()
       provider.configure({ onSpawned })
-      const { id } = await provider.spawn({ cols: 80, rows: 24 })
-      expect(onSpawned).toHaveBeenCalledWith(id)
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
+      expect(onSpawned).toHaveBeenCalledWith(id, incarnationId)
+    })
+
+    it('reports physical commit before post-spawn publication can fail', async () => {
+      spawnMock.mockClear()
+      const committed = vi.fn()
+      provider.configure({
+        onSpawned: () => {
+          throw new Error('post-spawn publication failed')
+        }
+      })
+
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, onPtySpawnCommitted: committed })
+      ).rejects.toThrow('post-spawn publication failed')
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(committed).toHaveBeenCalledOnce()
     })
 
     it('invokes buildSpawnEnv callback to customize environment', async () => {
@@ -439,6 +455,44 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
+    })
+
+    it('does not inherit NODE_ENV from the Orca process env', async () => {
+      // Why: NODE_ENV in Orca's process is Orca's build mode (electron-vite sets
+      // `development` in dev runs); leaking it breaks `next build` and Vitest.
+      const previous = process.env.NODE_ENV
+      process.env.NODE_ENV = 'development'
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.NODE_ENV
+        } else {
+          process.env.NODE_ENV = previous
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.NODE_ENV).toBeUndefined()
+      expect(spawnCall[2].env.PATH).toBe(process.env.PATH)
+    })
+
+    it('keeps an explicitly requested NODE_ENV for spawned terminals', async () => {
+      // Why: only the ambient value is stripped; a caller-supplied NODE_ENV still wins.
+      const previous = process.env.NODE_ENV
+      process.env.NODE_ENV = 'development'
+      try {
+        await provider.spawn({ cols: 80, rows: 24, env: { NODE_ENV: 'production' } })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.NODE_ENV
+        } else {
+          process.env.NODE_ENV = previous
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.NODE_ENV).toBe('production')
     })
 
     it('suppresses the first-run Powerlevel10k wizard for spawned terminals', async () => {
@@ -1148,9 +1202,9 @@ describe('LocalPtyProvider', () => {
     it('invokes onExit callback via the node-pty exit handler', async () => {
       const onExit = vi.fn()
       provider.configure({ onExit })
-      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
       await provider.shutdown(id, { immediate: true })
-      expect(onExit).toHaveBeenCalledWith(id, -1)
+      expect(onExit).toHaveBeenCalledWith(id, -1, incarnationId)
     })
 
     it('does not destroy after an intentional Windows shutdown kill', async () => {
@@ -1696,12 +1750,12 @@ describe('LocalPtyProvider', () => {
     it('notifies exit listeners when PTY exits', async () => {
       const exitHandler = vi.fn()
       provider.onExit(exitHandler)
-      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
 
       // Simulate node-pty exit event
       exitCb?.({ exitCode: 0 })
 
-      expect(exitHandler).toHaveBeenCalledWith({ id, code: 0 })
+      expect(exitHandler).toHaveBeenCalledWith({ id, code: 0, incarnationId })
     })
 
     it('allows unsubscribing from events', async () => {
@@ -1720,7 +1774,12 @@ describe('LocalPtyProvider', () => {
   describe('listProcesses', () => {
     it('returns spawned PTYs', async () => {
       const before = await provider.listProcesses()
-      await provider.spawn({ cols: 80, rows: 24, cwd: '/tmp/owned-cwd' })
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/owned-cwd',
+        worktreeId: 'repo::/tmp/owned-cwd'
+      })
       await provider.spawn({ cols: 80, rows: 24 })
       const after = await provider.listProcesses()
       expect(after.length - before.length).toBe(2)
@@ -1728,6 +1787,7 @@ describe('LocalPtyProvider', () => {
       expect(newEntries[0]).toHaveProperty('id')
       expect(newEntries[0]).toHaveProperty('title', 'zsh')
       expect(newEntries[0]).toHaveProperty('cwd', '/tmp/owned-cwd')
+      expect(newEntries[0]).toHaveProperty('worktreeId', 'repo::/tmp/owned-cwd')
     })
   })
 

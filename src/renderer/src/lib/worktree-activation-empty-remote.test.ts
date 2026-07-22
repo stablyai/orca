@@ -107,7 +107,9 @@ describe('empty remote worktree activation', () => {
         method: 'session.tabs.createTerminal',
         params: expect.objectContaining({
           worktree: `id:${worktree.id}`,
-          activate: true
+          activate: false,
+          select: true,
+          navigation: 'caller'
         })
       })
     )

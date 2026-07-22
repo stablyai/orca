@@ -1783,7 +1783,9 @@
         "jiraSortDescending": "내림차순",
         "jiraSortBy": "정렬 기준",
         "jiraToggleSortDirection": "{{value0}}으로 정렬",
-        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
+        "noGithubSourceDetected": "No GitHub source detected for",
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -2712,6 +2714,13 @@
             "removedTitle": "SSH 호스트가 제거됨",
             "removedBody": "이 워크트리의 SSH 호스트가 제거되어 더 이상 연결할 수 없습니다. 워크트리를 제거하여 정리하세요 — 원격 파일은 그대로 남아 있습니다.",
             "removeWorkspaceButton": "워크트리 제거"
+          },
+          "TerminalRemoteRuntimeReconnectBanner": {
+            "retryingTitle": "Reconnecting to remote runtime",
+            "disconnectedTitle": "Remote runtime disconnected",
+            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
+            "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
+            "reconnectButton": "Reconnect"
           }
         }
       },
@@ -3287,7 +3296,9 @@
             "noUsageData": "No usage data",
             "detailed": "Detailed",
             "compact": "Compact",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "detailedTooltip": "막대, 레이블, 백분율을 포함한 전체 사용량",
+            "compactTooltip": "압축된 사용: 가장 좁은 창만 사용"
           }
         }
       },
@@ -4584,7 +4595,6 @@
           "modalDescription": "terminal에서 Linear 스킬을 설치합니다.",
           "modalPrompt": "agents가 첨부된 Linear 티켓을 읽고 편집할 수 있게 합니다.",
           "dontShowAgain": "다시 표시하지 않음",
-          "notNow": "나중에",
           "missingBoth": "Orca CLI와 Linear agent 스킬이 없습니다.",
           "missingCli": "Orca CLI가 없습니다.",
           "missingSkill": "Linear agent 스킬이 없습니다.",
@@ -4846,7 +4856,7 @@
           "dbb9626ed1": "취소",
           "854ebbcc45": "Orca는 저장된 계정에 대해 관리되는 Claude 인증을 삭제합니다. 현재 활성화된 경우 Orca는 시스템 기본 Claude 로그인으로 대체됩니다.",
           "63843e37e2": "Claude 계정을 삭제하시겠습니까?",
-          "99c8f9e498": "Orca는 저장된 계정에 대해 관리되는 Codex 홈을 삭제합니다. 현재 활성화된 경우 Orca는 시스템 기본 Codex 로그인으로 대체됩니다.",
+          "380a7736cc": "이 계정을 제거하면 관리되는 Codex 홈과 그 안에 저장된 모든 Codex 세션 기록 및 MCP 로그인이 영구적으로 삭제됩니다. 이 작업은 실행 취소할 수 없습니다. 계정이 현재 활성 상태인 경우 Orca는 시스템 기본 Codex 로그인으로 전환됩니다.",
           "0d47394635": "Codex 계정을 제거하시겠습니까?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "opencode.ai에 로그인한 후 URL에서 이를 찾으세요(예:",
@@ -6971,7 +6981,6 @@
           "cf4437a2f7": "ANSI 블랙 컬러",
           "adfdee23cb": "검은색",
           "68e9f07de0": "ANSI 일반",
-          "fb8c6f1967": "굵은 텍스트의 색상입니다. 설정하지 않으면 일반 색상으로 돌아갑니다.",
           "862e463f7f": "굵은 글씨",
           "b2c0857c49": "선택한 텍스트의 텍스트 색상",
           "8b450b5305": "선택 전경",
@@ -6987,7 +6996,8 @@
           "79f6bfb76e": "전경",
           "cf37ff69f6": "베이스",
           "8abdab9f7c": "지금 재시작",
-          "907131d741": "다시 시작하는 중…"
+          "907131d741": "다시 시작하는 중…",
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
         },
         "UIZoomControl": {
           "c2c64b24d0": "재설정"
@@ -7804,7 +7814,9 @@
             "d2d2d929c0": "리치 Markdown 맞춤법 검사",
             "4497e2e2bb": "리치 Markdown을 편집하는 동안 브라우저 맞춤법 밑줄과 제안을 표시합니다.",
             "e61157e926": "편집기 자동 줄 바꿈",
-            "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
+            "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다.",
+            "editorFontFamily": "Editor Font Family",
+            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
           }
         },
         "git": {
@@ -9244,10 +9256,17 @@
           "howToUse": "How to use it",
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
-          "terminalAriaLabel": "Linear skill install terminal"
+          "terminalAriaLabel": "Linear skill install terminal",
+          "manageConnectionHint": "Review connected Linear workspaces and API keys in",
+          "manageConnectionLink": "Integrations settings"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
+        },
+        "EditorFontFamilySetting": {
+          "title": "Editor Font Family",
+          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+          "placeholder": "Same as terminal font"
         }
       },
       "right": {
@@ -10317,7 +10336,8 @@
             "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다.",
             "openSupportedWorkspace": "세션을 재개하기 전에 워크스페이스를 여세요.",
             "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스를 여세요.",
-            "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요."
+            "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요.",
+            "prepareSessionResumeFailed": "Could not prepare this session for resume."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "세션 스캔 중",
@@ -12309,6 +12329,15 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "보존된 HTML 인용을 잘라내려면 더 적은 콘텐츠를 선택하거나 코드 모드를 사용하세요."
+        },
+        "editor": {
+          "save": {
+            "failure": {
+              "notice": {
+                "8c59ce5075": "Failed to save the file. Please try again."
+              }
+            }
+          }
         }
       },
       "diff": {
@@ -13419,6 +13448,11 @@
           "91b5c8d7e6": "GitLab"
         }
       }
+    },
+    "runtime": {
+      "webRuntimeSession": {
+        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      }
     }
   },
   "components": {
@@ -13555,6 +13589,32 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "새 세션에서 계속…",
+      "dialogTitle": "새 세션에서 계속",
+      "dialogDescription": "이 지점부터 새 에이전트 세션을 시작합니다. 원래 세션은 변경되지 않습니다.",
+      "untitledSession": "현재 세션",
+      "originalAgent": "원래 에이전트: {{agent}}",
+      "agent": "에이전트",
+      "selectAgent": "에이전트 선택",
+      "detectingAgents": "이 워크스페이스 호스트에서 에이전트를 찾는 중…",
+      "detectionFailed": "이 워크스페이스 호스트에서 에이전트를 찾을 수 없습니다.",
+      "noAgents": "이 워크스페이스 호스트에서 활성화된 에이전트를 찾지 못했습니다.",
+      "context": "컨텍스트",
+      "modeFocused": "핵심 컨텍스트 전달(권장)",
+      "modeFocusedDescription": "최신 상태와 현재 워크스페이스를 사용하고 필요한 경우에만 이전 세부 정보를 읽습니다.",
+      "modeFull": "전체 세션 기록",
+      "modeFullDescription": "계속하기 전에 새 에이전트가 저장된 전체 세션을 읽도록 합니다. 시간이 더 오래 걸리고 상당한 컨텍스트, 요금제 사용량 또는 API 크레딧을 소모할 수 있습니다.",
+      "startsIn": "시작 위치:",
+      "startSession": "새 세션 시작",
+      "starting": "시작 중…",
+      "noContext": "새 세션에서 계속할 세션 컨텍스트가 없습니다.",
+      "agentDisabled": "에이전트 설정에서 {{agent}}이(가) 비활성화되어 있습니다.",
+      "agentUnavailable": "이 워크스페이스 호스트에서 {{agent}}을(를) 찾지 못했습니다.",
+      "sent": "세션 컨텍스트를 새 {{agent}} 세션으로 보냈습니다.",
+      "deliveryFailed": "새 {{agent}} 세션은 시작되었지만 컨텍스트를 보내지 못했습니다.",
+      "launchFailed": "새 {{agent}} 세션을 시작할 수 없습니다."
     }
   },
   "dashboardPopout": {
@@ -13585,8 +13645,8 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "close": "Close",
-      "focusWorktree": "Focus worktree"
+      "focusWorktree": "Focus worktree",
+      "close": "Close"
     }
   },
   "dashboard": {

@@ -77,6 +77,7 @@ function isDashboardCard(value: unknown): boolean {
     isBoundedString(card.repoName, MAX_LABEL_LENGTH, true) &&
     isBoundedString(card.worktreeName, MAX_LABEL_LENGTH, true) &&
     isFiniteNumber(card.startedAt) &&
+    (card.finishedAt === null || isFiniteNumber(card.finishedAt)) &&
     isFiniteNumber(card.stateChangedAt) &&
     typeof card.unseen === 'boolean' &&
     isOptionalBoundedString(card.askSummary, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)

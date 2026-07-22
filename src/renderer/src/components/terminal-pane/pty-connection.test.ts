@@ -529,6 +529,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     onPtyErrorRef: { current: vi.fn() },
     clearTabPtyId: vi.fn(),
     consumeSuppressedPtyExit: vi.fn(() => false),
+    isPtyShutdownPending: vi.fn(() => false),
     updateTabTitle: vi.fn(),
     setRuntimePaneTitle: vi.fn(),
     clearRuntimePaneTitle: vi.fn(),
@@ -1886,6 +1887,84 @@ describe('connectPanePty', () => {
     expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-pane-2')
     expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
+    expect(manager.closePane).not.toHaveBeenCalled()
+  })
+
+  it('defers all exit-side state mutation while worktree shutdown verification is pending', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    let pending = true
+    const deps = createDeps({
+      isPtyShutdownPending: vi.fn(() => pending),
+      consumeSuppressedPtyExit: vi.fn(() => true)
+    })
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+
+    onPtyExit?.('pty-pane-2')
+
+    expect(deps.consumeSuppressedPtyExit).not.toHaveBeenCalled()
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.clearRuntimePaneTitle).not.toHaveBeenCalled()
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(manager.closePane).not.toHaveBeenCalled()
+
+    pending = false
+    settleDeferredPtyShutdownExits(['pty-pane-2'], 'committed')
+    expect(deps.consumeSuppressedPtyExit).toHaveBeenCalledWith('pty-pane-2')
+    expect(deps.clearRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 2)
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+  })
+
+  it('keeps renderer state intact for an exit deferred through rollback', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    let pending = true
+    const deps = createDeps({
+      isPtyShutdownPending: vi.fn(() => pending),
+      consumeSuppressedPtyExit: vi.fn(() => true)
+    })
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    onPtyExit?.('pty-pane-2')
+
+    pending = false
+    settleDeferredPtyShutdownExits(['pty-pane-2'], 'rolled-back')
+
+    expect(deps.consumeSuppressedPtyExit).not.toHaveBeenCalled()
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.clearRuntimePaneTitle).not.toHaveBeenCalled()
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(manager.closePane).not.toHaveBeenCalled()
+  })
+
+  it('preserves wake identifiers when exit arrives after a committed shutdown', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { markCommittedPtyShutdowns } = await import('./pty-shutdown-exit-deferral')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isPtyShutdownPending: vi.fn(() => false),
+      consumeSuppressedPtyExit: vi.fn(() => true)
+    })
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+
+    markCommittedPtyShutdowns(['pty-pane-2'])
+    onPtyExit?.('pty-pane-2')
+
+    expect(deps.consumeSuppressedPtyExit).toHaveBeenCalledWith('pty-pane-2')
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
@@ -7444,7 +7523,11 @@ describe('connectPanePty', () => {
           updatedAt: 1,
           stateStartedAt: 1,
           stateHistory: [],
-          providerSession: { key: 'session_id', id: 'codex-session-1' }
+          providerSession: {
+            key: 'session_id',
+            id: 'codex-session-1',
+            transcriptPath: '/Users/example/.codex/sessions/2026/07/20/rollout-session.jsonl'
+          }
         }
       }
     } as StoreState
@@ -7470,6 +7553,11 @@ describe('connectPanePty', () => {
       expect.objectContaining({
         sessionId: 'lost-pty',
         command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        resumeProviderSession: {
+          key: 'session_id',
+          id: 'codex-session-1',
+          transcriptPath: '/Users/example/.codex/sessions/2026/07/20/rollout-session.jsonl'
+        },
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
@@ -14890,7 +14978,14 @@ describe('connectPanePty', () => {
 
     const pane = createPane(2)
     const manager = createManager(2)
-    const deps = createDeps()
+    const deps = createDeps({
+      startup: {
+        command: "codex '--profile' 'recipe'",
+        launchAgent: 'codex',
+        launchConfig: { agentArgs: '--profile recipe', agentEnv: {} },
+        agentArgsOverride: '--profile recipe'
+      }
+    })
 
     connectPanePty(pane as never, manager as never, deps as never)
 
@@ -14899,6 +14994,7 @@ describe('connectPanePty', () => {
       expect.any(Object)
     )
     expect(createdTransportOptions[0]?.cwdFallback).toBeUndefined()
+    expect(createdTransportOptions[0]?.agentArgsOverride).toBe('--profile recipe')
     expect(transport.connect).toHaveBeenCalled()
   })
 

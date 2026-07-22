@@ -8,7 +8,7 @@ import type { MarkdownDocument } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
 import '@/lib/monaco-setup'
-import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
@@ -152,7 +152,7 @@ export default function MonacoEditor({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
-  const editorFontFamily = settings?.terminalFontFamily || 'monospace'
+  const editorFontFamily = resolveEditorFontFamily(settings)
   const editorWordWrap = settings?.editorWordWrap
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {

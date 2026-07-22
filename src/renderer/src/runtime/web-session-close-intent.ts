@@ -16,10 +16,15 @@ const CLOSE_INTENT_TTL_MS = 10_000
 
 type CloseIntent = { recordedAt: number }
 
-// worktreeId -> (hostTabId -> intent)
-const pendingCloseByWorktree = new Map<string, Map<string, CloseIntent>>()
+// environment/worktree -> (hostTabId -> intent)
+const pendingCloseByRuntimeWorktree = new Map<string, Map<string, CloseIntent>>()
+
+function closeIntentScopeKey(environmentId: string, worktreeId: string): string {
+  return `${environmentId}\0${worktreeId}`
+}
 
 export function recordWebSessionCloseIntent(
+  environmentId: string,
   worktreeId: string,
   hostTabId: string,
   now: number
@@ -28,12 +33,45 @@ export function recordWebSessionCloseIntent(
   if (!worktreeId || !trimmed) {
     return
   }
-  let byTab = pendingCloseByWorktree.get(worktreeId)
+  const scopeKey = closeIntentScopeKey(environmentId, worktreeId)
+  let byTab = pendingCloseByRuntimeWorktree.get(scopeKey)
   if (!byTab) {
     byTab = new Map()
-    pendingCloseByWorktree.set(worktreeId, byTab)
+    pendingCloseByRuntimeWorktree.set(scopeKey, byTab)
   }
   byTab.set(trimmed, { recordedAt: now })
+}
+
+export function clearWebSessionCloseIntent(
+  environmentId: string,
+  worktreeId: string,
+  hostTabId: string
+): void {
+  const scopeKey = closeIntentScopeKey(environmentId, worktreeId)
+  const byTab = pendingCloseByRuntimeWorktree.get(scopeKey)
+  if (!byTab) {
+    return
+  }
+  byTab.delete(hostTabId.trim())
+  if (byTab.size === 0) {
+    pendingCloseByRuntimeWorktree.delete(scopeKey)
+  }
+}
+
+export function clearWebSessionCloseIntentsForRuntimeWorktree(
+  environmentId: string,
+  worktreeId: string
+): void {
+  pendingCloseByRuntimeWorktree.delete(closeIntentScopeKey(environmentId, worktreeId))
+}
+
+export function clearWebSessionCloseIntentsForEnvironment(environmentId: string): void {
+  const prefix = `${environmentId}\0`
+  for (const scopeKey of pendingCloseByRuntimeWorktree.keys()) {
+    if (scopeKey.startsWith(prefix)) {
+      pendingCloseByRuntimeWorktree.delete(scopeKey)
+    }
+  }
 }
 
 /**
@@ -42,11 +80,13 @@ export function recordWebSessionCloseIntent(
  * than hide it forever).
  */
 export function isWebSessionCloseIntentPending(
+  environmentId: string,
   worktreeId: string,
   hostTabId: string,
   now: number
 ): boolean {
-  const byTab = pendingCloseByWorktree.get(worktreeId)
+  const scopeKey = closeIntentScopeKey(environmentId, worktreeId)
+  const byTab = pendingCloseByRuntimeWorktree.get(scopeKey)
   const intent = byTab?.get(hostTabId)
   if (!intent) {
     return false
@@ -54,7 +94,7 @@ export function isWebSessionCloseIntentPending(
   if (now - intent.recordedAt > CLOSE_INTENT_TTL_MS) {
     byTab!.delete(hostTabId)
     if (byTab!.size === 0) {
-      pendingCloseByWorktree.delete(worktreeId)
+      pendingCloseByRuntimeWorktree.delete(scopeKey)
     }
     return false
   }
@@ -66,10 +106,12 @@ export function isWebSessionCloseIntentPending(
  * NOT in `presentHostTabIds` has been removed host-side, so the intent is done.
  */
 export function reconcileWebSessionCloseIntents(
+  environmentId: string,
   worktreeId: string,
   presentHostTabIds: ReadonlySet<string>
 ): void {
-  const byTab = pendingCloseByWorktree.get(worktreeId)
+  const scopeKey = closeIntentScopeKey(environmentId, worktreeId)
+  const byTab = pendingCloseByRuntimeWorktree.get(scopeKey)
   if (!byTab) {
     return
   }
@@ -83,10 +125,10 @@ export function reconcileWebSessionCloseIntents(
     byTab.delete(hostTabId)
   }
   if (byTab.size === 0) {
-    pendingCloseByWorktree.delete(worktreeId)
+    pendingCloseByRuntimeWorktree.delete(scopeKey)
   }
 }
 
 export function resetWebSessionCloseIntentForTests(): void {
-  pendingCloseByWorktree.clear()
+  pendingCloseByRuntimeWorktree.clear()
 }

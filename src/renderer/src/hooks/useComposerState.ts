@@ -1195,15 +1195,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const selectedRepoSettingsRef = useRef(selectedRepoSettings)
   selectedRepoSettingsRef.current = selectedRepoSettings
 
+  // Why: depend on the persisted policy *value*, not the selectedRepo object. Background repo
+  // refetches (git polling) hand back a new repo reference with the same hookSettings; keying on
+  // the object would re-run this and briefly flip the toggle back to the stale value — the glitch.
+  const persistedSetupAgentStartupPolicy = getRepoSetupAgentStartupPolicy(selectedRepo)
   useEffect(() => {
-    const nextPolicy = getRepoSetupAgentStartupPolicy(selectedRepo)
     const draft = setupAgentStartupPolicyDraftRef.current
-    if (draft?.repoId === repoId && draft.policy !== nextPolicy) {
+    if (draft?.repoId === repoId && draft.policy !== persistedSetupAgentStartupPolicy) {
       return
     }
-    setupAgentStartupPolicyRef.current = nextPolicy
-    setSetupAgentStartupPolicy(nextPolicy)
-  }, [repoId, selectedRepo])
+    setupAgentStartupPolicyRef.current = persistedSetupAgentStartupPolicy
+    setSetupAgentStartupPolicy(persistedSetupAgentStartupPolicy)
+  }, [repoId, persistedSetupAgentStartupPolicy])
 
   const persistSetupAgentStartupPolicy = useCallback(
     async (
@@ -1691,7 +1694,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
     }
 
-    void readRuntimeIssueCommand(selectedRepoSettings, repoId)
+    void readRuntimeIssueCommand(selectedRepoSettingsRef.current, repoId)
       .then((result) => {
         if (!cancelled) {
           setIssueCommandTemplate(result.effectiveContent ?? '')
@@ -1708,13 +1711,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
+    // Why: key on the stable runtime-env id, not the selectedRepoSettings object. `updateRepo`
+    // (e.g. saving the setup toggle from this very composer) replaces selectedRepo — and thus the
+    // memoized selectedRepoSettings — by reference; depending on the object would re-run this
+    // effect, blank yamlHooks to null, and make the whole setup section vanish for a frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     commitHookCheckIfCurrent,
     enableIssueAutomation,
     loadHookCheckForRepo,
     repoId,
     selectedRepoIsGit,
-    selectedRepoSettings
+    runtimeEnvironmentId
   ])
 
   const onConnectSelectedRepo = useCallback(async (): Promise<void> => {

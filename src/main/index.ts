@@ -41,7 +41,11 @@ import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-cl
 import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
+import { loadAgentSessionClaimSigner } from './runtime/agent-session-claim-identity'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
+import { resolveAdvertisedPairingEndpoint } from './runtime/pairing-endpoint'
+import { ServeReadinessPublisher } from './server/serve-readiness'
+import { reserveServeStdoutForReadiness } from './server/serve-stdout-boundary'
 import { DesktopRelayService } from './runtime/relay/desktop-relay-service'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
@@ -52,9 +56,13 @@ import {
   registerAppMenu,
   rebuildAppMenu
 } from './menu/register-app-menu'
-import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
+import { checkForUpdatesFromMenu, isQuittingForUpdate, resolveUpdateInstallMode } from './updater'
 import type { TuiAgent, UpdateCheckOptions } from '../shared/types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
+import {
+  installServeSupervisorDisconnectQuit,
+  notifyServeSupervisorReady
+} from './serve-update-handoff'
 import {
   configureElectronNetworkCompatibility,
   configureDevUserDataPath,
@@ -119,6 +127,7 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import { zoomDashboardPopoutIfFocused } from './window/dashboard-popout-window'
 import {
   createSystemTray,
   destroySystemTray,
@@ -147,6 +156,10 @@ import { startCodexSessionIndexHealInBackground } from './codex/codex-session-in
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
 import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
+import { findTrustedCodexSessionResume } from './codex/codex-session-resume-home'
+import { getSystemCodexHomePath } from './codex/codex-home-paths'
+import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
+import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
 import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -237,6 +250,7 @@ let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
+const serveReadinessPublisher = new ServeReadinessPublisher()
 let desktopRelayService: DesktopRelayService | null = null
 let desktopRelayStatus: RelayBrokerStatus = 'offline'
 // Why: gates whether headless serve installs the offscreen browser backend (and advertises browser pane support).
@@ -272,6 +286,9 @@ let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
+if (isServeMode) {
+  reserveServeStdoutForReadiness()
+}
 const desktopActivationGate = createServeDesktopActivationGate({
   initialState: isServeMode ? 'initializing' : 'ready',
   activateWindow: () => {
@@ -447,6 +464,7 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
+installServeSupervisorDisconnectQuit(isServeMode)
 
 // Why: just past createMainWindow's 10s ready-to-show fallback, so a window revealed that way still gets its tray icon.
 const TRAY_CREATE_FALLBACK_MS = 12_000
@@ -784,6 +802,84 @@ function prepareCodexRuntimeHomeForLaunch(
   return runtimeHomePath
 }
 
+async function prepareCodexSessionResumeForLaunch(args: {
+  providerSession: AgentProviderSessionMetadata
+  target: CodexAccountSelectionTarget
+  launchEnv?: NodeJS.ProcessEnv
+  workspacePath?: string
+}): Promise<{ codexHomePath: string | null } | null> {
+  if (args.target.runtime === 'wsl' || !codexRuntimeHome || !store) {
+    return null
+  }
+  const systemHomePath = getSystemCodexHomePath()
+  // Why: codexSessionSourceHome is import-only; treating it as CODEX_HOME would mutate history sources and bypass account auth.
+  const trustedHomes = [
+    systemHomePath,
+    ...codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery()
+  ]
+  const sessionSource = await findTrustedCodexSessionResume({
+    sessionId: args.providerSession.id,
+    transcriptPath: args.providerSession.transcriptPath,
+    trustedCodexHomes: trustedHomes
+  })
+  if (!sessionSource) {
+    if (args.providerSession.transcriptPath) {
+      throw new Error(
+        'Orca could not verify the originating Codex session file, so automatic resume was stopped to avoid using a different account.'
+      )
+    }
+    return null
+  }
+
+  let migrated = { useRealCodexHome: false }
+  try {
+    migrated = await prepareLegacySharedCodexSessionResume(
+      {
+        agent: 'codex',
+        executionHostId: 'local',
+        filePath: sessionSource.transcriptPath,
+        codexHome: sessionSource.homePath
+      },
+      {
+        isHostSystemDefaultRealHome: () => codexRuntimeHome!.isHostSystemDefaultRealHome(),
+        systemCodexHomePath: systemHomePath
+      }
+    )
+  } catch (error) {
+    // Why: migration is a compatibility repair; its failure must not prevent the PTY from resuming from its trusted origin home.
+    console.warn(
+      '[codex-session-resume] Legacy rollout migration failed; using origin home:',
+      error
+    )
+  }
+  const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+
+  if (args.workspacePath) {
+    try {
+      markCodexProjectTrusted(args.workspacePath)
+    } catch (error) {
+      console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
+    }
+  }
+  const isSystemHome =
+    normalizeRuntimePathForComparison(resumeHome) ===
+    normalizeRuntimePathForComparison(systemHomePath)
+  const hooksEnabled = isAgentStatusHooksEnabled(store.getSettings())
+  try {
+    if (isSystemHome) {
+      ensureRealHomeCodexHookState({ hooksEnabled, userDataPath: app.getPath('userData') })
+    } else if (hooksEnabled) {
+      codexHookService.install(resumeHome)
+    } else {
+      codexHookService.refreshRuntimeUserHooks(resumeHome)
+    }
+  } catch (error) {
+    // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
+    console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
+  }
+  return { codexHomePath: resumeHome }
+}
+
 // Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.
 function showMainWindowFromTray(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1050,6 +1146,7 @@ function openMainWindow(): BrowserWindow {
     prepareCodexRuntimeHomeForLaunch,
     (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
+      prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
       awaitLocalPtyStartup: () => localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -1061,7 +1158,8 @@ function openMainWindow(): BrowserWindow {
       // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).
       isRecoveryReloadInFlight,
       onBeforeUpdateQuit: () =>
-        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
+        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
+      updateInstallMode: resolveUpdateInstallMode(isServeMode)
     }
   )
   rateLimits.attach(window)
@@ -1399,8 +1497,13 @@ function getServeOptions(argv = process.argv): ServeOptions {
 }
 
 function getBundledWebClientRoot(): string | undefined {
-  const root = join(app.getAppPath(), 'out', 'web')
-  return existsSync(join(root, 'web-index.html')) ? root : undefined
+  const appPath = app.getAppPath()
+  const roots = [
+    join(appPath, 'out', 'web'),
+    // Why: unpacked electron-vite entrypoints set appPath to out/main, next to the web bundle.
+    join(appPath, '..', 'web')
+  ]
+  return roots.find((root) => existsSync(join(root, 'web-index.html')))
 }
 
 async function renderTerminalPairingQr(pairingUrl: string): Promise<string | null> {
@@ -1431,9 +1534,16 @@ async function printServeReady(options: ServeOptions): Promise<void> {
       throw new Error(`--serve-project-root must be a directory: ${options.projectRoot}`)
     }
   }
-  const endpoint = runtimeRpc.getWebSocketEndpoint()
+  const boundEndpoint = runtimeRpc.getWebSocketEndpoint()
+  const advertised = boundEndpoint
+    ? resolveAdvertisedPairingEndpoint(boundEndpoint, options.pairingAddress)
+    : null
   const pairing = options.noPairing
-    ? ({ available: false } as const)
+    ? ({
+        available: false,
+        reason: 'disabled_by_operator',
+        guidance: 'Restart without --no-pairing to create a client pairing offer.'
+      } as const)
     : runtimeRpc.createPairingOffer({
         address: options.pairingAddress,
         name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
@@ -1443,51 +1553,30 @@ async function printServeReady(options: ServeOptions): Promise<void> {
     pairing.available && options.mobilePairing
       ? await renderTerminalPairingQr(pairing.pairingUrl)
       : null
-  if (options.recipeJson) {
-    if (!pairing.available) {
-      throw new Error('Recipe JSON output requires runtime pairing to be available')
-    }
-    console.log(
-      JSON.stringify({
-        schemaVersion: 1,
-        pairingCode: pairing.pairingUrl,
-        projectRoot: options.projectRoot
-      })
-    )
-    return
-  }
-  if (options.json) {
-    console.log(
-      JSON.stringify({
-        type: 'orca_server_ready',
-        runtimeId: runtime.getRuntimeId(),
-        endpoint,
-        // Why: the WSL reconciliation barrier fails open, so 'pending' warns a WSL PTY launch may still race a repair.
-        managedWslCliReconciliation: managedWslCliReconciliationStatus,
-        pairing: pairing.available
-          ? {
-              url: pairing.pairingUrl,
-              endpoint: pairing.endpoint,
-              deviceId: pairing.deviceId,
-              webClientUrl: pairing.webClientUrl,
-              scope: options.mobilePairing ? 'mobile' : 'runtime',
-              qr: pairingQr
-            }
-          : null
-      })
-    )
-    return
-  }
-  console.log(`Orca server ready: ${endpoint ?? 'websocket unavailable'}`)
-  if (pairing.available) {
-    if (pairing.webClientUrl) {
-      console.log(`Web client URL: ${pairing.webClientUrl}`)
-    }
-    if (options.mobilePairing && pairingQr) {
-      console.log(`Mobile pairing QR:\n${pairingQr}`)
-    }
-    console.log(`Pairing URL: ${pairing.pairingUrl}`)
-  }
+  await serveReadinessPublisher.publish(
+    {
+      runtimeId: runtime.getRuntimeId(),
+      boundEndpoint,
+      advertisedEndpoint: advertised?.ok ? advertised.endpoint : null,
+      // Why: the WSL reconciliation barrier fails open, so 'pending' warns a WSL PTY launch may still race a repair.
+      managedWslCliReconciliation: managedWslCliReconciliationStatus,
+      pairing: pairing.available
+        ? {
+            available: true,
+            url: pairing.pairingUrl,
+            endpoint: pairing.endpoint,
+            deviceId: pairing.deviceId,
+            webClientUrl: pairing.webClientUrl,
+            scope: options.mobilePairing ? 'mobile' : 'runtime',
+            qr: pairingQr
+          }
+        : pairing
+    },
+    options.recipeJson
+      ? { mode: 'recipe-json', projectRoot: options.projectRoot! }
+      : { mode: options.json ? 'json' : 'human' }
+  )
+  notifyServeSupervisorReady(runtime.getRuntimeId())
 }
 
 function installServeSignalHandlers(): void {
@@ -1834,6 +1923,10 @@ app.whenReady().then(async () => {
   rateLimits.setClaudeAuthPreparationResolver((target) =>
     claudeRuntimeAuth!.prepareForRateLimitFetch(target)
   )
+  // Why: live Claude sessions stream usage windows through their statusLine command; feeding them here avoids OAuth usage-endpoint polling (and its 429s).
+  agentHookServer.setClaudeStatusLineListener((event) => {
+    rateLimits?.ingestLiveClaudeRateLimits(event)
+  })
   rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store!.getSettings()
     return {
@@ -1893,6 +1986,10 @@ app.whenReady().then(async () => {
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
   const runtimeService = new OrcaRuntimeService(store, stats, {
+    agentSessionClaimSigner: loadAgentSessionClaimSigner(
+      getProfileUserDataPath(),
+      getProfileUserDataPath()
+    ),
     // Why: resolve the PTY provider lazily — a daemon swap happens later, so an eager reference would freeze the pre-daemon provider (design §4.3).
     getLocalProvider: () => getLocalPtyProvider(),
     // Why: SSH relay providers register after construction and may reconnect, so destructive cleanup must resolve the current generation.
@@ -2103,14 +2200,22 @@ app.whenReady().then(async () => {
       const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
       sendOpenFeatureTour(targetBrowserWindow)
     },
+    // Why: menu zoom must act on the window the user is looking at — routing to
+    // the main window while the dashboard pop-out is focused zooms behind it.
     onZoomIn: () => {
-      mainWindow?.webContents.send('terminal:zoom', 'in')
+      if (!zoomDashboardPopoutIfFocused('in')) {
+        mainWindow?.webContents.send('terminal:zoom', 'in')
+      }
     },
     onZoomOut: () => {
-      mainWindow?.webContents.send('terminal:zoom', 'out')
+      if (!zoomDashboardPopoutIfFocused('out')) {
+        mainWindow?.webContents.send('terminal:zoom', 'out')
+      }
     },
     onZoomReset: () => {
-      mainWindow?.webContents.send('terminal:zoom', 'reset')
+      if (!zoomDashboardPopoutIfFocused('reset')) {
+        mainWindow?.webContents.send('terminal:zoom', 'reset')
+      }
     },
     onToggleLeftSidebar: () => {
       mainWindow?.webContents.send('ui:toggleLeftSidebar')
@@ -2195,7 +2300,8 @@ app.whenReady().then(async () => {
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
       (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
-      store
+      store,
+      prepareCodexSessionResumeForLaunch
     )
     // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
     if (headlessBrowserDisplayAvailable) {

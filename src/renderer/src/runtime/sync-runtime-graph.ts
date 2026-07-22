@@ -87,6 +87,47 @@ let syncEnabled = false
 let syncTimer: ReturnType<typeof setTimeout> | null = null
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
+// Why: main gates per-worktree mobile fanout on (publicationEpoch,
+// snapshotVersion), so that pair must be a semantic revision: reuse the cached
+// snapshot (same version) whenever a worktree's mobile-visible content is
+// unchanged, and bump the version only for worktrees that actually changed.
+const mobileSessionSnapshotCacheByWorktree = new Map<
+  string,
+  { content: unknown; snapshot: RuntimeMobileSessionTabsSnapshot }
+>()
+
+// Structural equality under JSON-serialization semantics (undefined-valued
+// keys are absent), so version reuse matches a JSON fingerprint exactly
+// without allocating a serialized copy of the payload on every graph sync.
+// Any value strict-equality can't prove equal (e.g. NaN) reads as changed,
+// which only costs a redundant fanout — never a suppressed one.
+function jsonContentEquals(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false
+    }
+    return a.every((item, index) => jsonContentEquals(item, b[index]))
+  }
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
+    return false
+  }
+  const aRecord = a as Record<string, unknown>
+  const bRecord = b as Record<string, unknown>
+  for (const key of Object.keys(aRecord)) {
+    if (!jsonContentEquals(aRecord[key], bRecord[key])) {
+      return false
+    }
+  }
+  for (const key of Object.keys(bRecord)) {
+    if (bRecord[key] !== undefined && aRecord[key] === undefined) {
+      return false
+    }
+  }
+  return true
+}
 let cachedTabsProjection: TabsProjectionCache | null = null
 let cachedOpenFileIndexesSource: AppState['openFiles'] | null = null
 let cachedOpenFileIndexes: OpenFileIndexes | null = null
@@ -821,17 +862,38 @@ export function buildMobileSessionTabSnapshots(
             new Set(tabGroups.map((group) => group.id))
           )
         : groupProjection.tabGroupLayout
-    snapshots.push({
-      worktree: worktreeId,
-      publicationEpoch: mobileSessionPublicationEpoch,
-      snapshotVersion: ++mobileSessionSnapshotVersion,
+    const content = {
       activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
       ...(tabGroups && tabGroups.length > 0 ? { tabGroups } : {}),
       ...(tabGroupLayout ? { tabGroupLayout } : {}),
       tabs
-    })
+    }
+    // Why: main suppresses per-worktree fanout on an unchanged (epoch, version)
+    // pair, so reuse the cached version for structurally-identical content. The
+    // global counter still advances per worktree per build (as before caching)
+    // so a changed worktree's fresh version stays ahead of main's +1 bumps.
+    const candidateVersion = ++mobileSessionSnapshotVersion
+    const cached = mobileSessionSnapshotCacheByWorktree.get(worktreeId)
+    if (cached && jsonContentEquals(cached.content, content)) {
+      snapshots.push(cached.snapshot)
+      continue
+    }
+    const snapshot: RuntimeMobileSessionTabsSnapshot = {
+      worktree: worktreeId,
+      publicationEpoch: mobileSessionPublicationEpoch,
+      snapshotVersion: candidateVersion,
+      ...content
+    }
+    mobileSessionSnapshotCacheByWorktree.set(worktreeId, { content, snapshot })
+    snapshots.push(snapshot)
+  }
+
+  for (const worktreeId of mobileSessionSnapshotCacheByWorktree.keys()) {
+    if (!worktreeIds.has(worktreeId)) {
+      mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
+    }
   }
 
   return snapshots

@@ -1783,7 +1783,9 @@
         "jiraSortDescending": "descendente",
         "jiraSortBy": "Ordenar por",
         "jiraToggleSortDirection": "Ordenar de forma {{value0}}",
-        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
+        "noGithubSourceDetected": "No GitHub source detected for",
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -2712,6 +2714,13 @@
             "removedTitle": "Host SSH eliminado",
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
+          },
+          "TerminalRemoteRuntimeReconnectBanner": {
+            "retryingTitle": "Reconnecting to remote runtime",
+            "disconnectedTitle": "Remote runtime disconnected",
+            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
+            "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
+            "reconnectButton": "Reconnect"
           }
         }
       },
@@ -3287,7 +3296,9 @@
             "noUsageData": "No usage data",
             "detailed": "Detailed",
             "compact": "Compact",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
+            "compactTooltip": "Uso condensado: sólo la ventana más estrecha"
           }
         }
       },
@@ -4584,7 +4595,6 @@
           "modalDescription": "Instala el skill de Linear desde una terminal.",
           "modalPrompt": "Permite que los Agents lean y editen el issue de Linear adjunto.",
           "dontShowAgain": "No volver a mostrar",
-          "notNow": "Ahora no",
           "missingBoth": "Faltan la CLI de Orca y el skill de Linear para Agents.",
           "missingCli": "Falta la CLI de Orca.",
           "missingSkill": "Falta el skill de Linear para Agents.",
@@ -4861,7 +4871,7 @@
           "dbb9626ed1": "Cancelar",
           "854ebbcc45": "Orca eliminará la autenticación de Claude gestionada para esta cuenta guardada. Si está activa actualmente, Orca volverá al login predeterminado de Claude del sistema.",
           "63843e37e2": "¿Eliminar la cuenta de Claude?",
-          "99c8f9e498": "Orca eliminará el home de Codex gestionado para esta cuenta guardada. Si está activo actualmente, Orca volverá al login predeterminado de Codex del sistema.",
+          "380a7736cc": "Eliminar esta cuenta borra permanentemente su home de Codex gestionado, incluido todo el historial de sesiones de Codex y los inicios de sesión de MCP almacenados dentro. Esto no se puede deshacer. Si la cuenta está activa, Orca vuelve al login predeterminado de Codex del sistema.",
           "0d47394635": "¿Eliminar cuenta de Codex?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk__…/go",
           "51c9104e13": "Encuéntralo en la URL después de iniciar sesión en opencode.ai (p. ej.",
@@ -6986,7 +6996,6 @@
           "cf4437a2f7": "Color negro ANSI",
           "adfdee23cb": "Negro",
           "68e9f07de0": "ANSI normal",
-          "fb8c6f1967": "Color para texto en negrita. Vuelve al color normal si no se establece.",
           "862e463f7f": "Texto en negrita",
           "b2c0857c49": "Color del texto seleccionado",
           "8b450b5305": "Primer plano de selección",
@@ -7002,7 +7011,8 @@
           "79f6bfb76e": "Primer plano",
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Reiniciar ahora",
-          "907131d741": "Reiniciando…"
+          "907131d741": "Reiniciando…",
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
         },
         "UIZoomControl": {
           "c2c64b24d0": "Restablecer"
@@ -7819,7 +7829,9 @@
             "d2d2d929c0": "Corrector ortográfico de Rich Markdown",
             "4497e2e2bb": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
             "e61157e926": "Ajuste de línea en el editor",
-            "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal."
+            "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
+            "editorFontFamily": "Editor Font Family",
+            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
           }
         },
         "git": {
@@ -9244,10 +9256,17 @@
           "howToUse": "How to use it",
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
-          "terminalAriaLabel": "Linear skill install terminal"
+          "terminalAriaLabel": "Linear skill install terminal",
+          "manageConnectionHint": "Review connected Linear workspaces and API keys in",
+          "manageConnectionLink": "Integrations settings"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
+        },
+        "EditorFontFamilySetting": {
+          "title": "Editor Font Family",
+          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+          "placeholder": "Same as terminal font"
         }
       },
       "right": {
@@ -10317,7 +10336,8 @@
             "worktreeUnavailable": "El worktree ya no está disponible.",
             "openSupportedWorkspace": "Abre un workspace antes de reanudar una sesión.",
             "localSessionSshWorkspaceUnsupported": "El historial de esta sesión solo existe en este equipo. Para reanudarla, abre un workspace local. Los workspaces SSH no tienen acceso a ese historial.",
-            "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Abre un espacio de trabajo en el mismo host para reanudarla."
+            "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Abre un espacio de trabajo en el mismo host para reanudarla.",
+            "prepareSessionResumeFailed": "Could not prepare this session for resume."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Buscando sesiones",
@@ -12309,6 +12329,15 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "Selecciona menos contenido o usa el modo de código para cortar citas HTML conservadas."
+        },
+        "editor": {
+          "save": {
+            "failure": {
+              "notice": {
+                "8c59ce5075": "Failed to save the file. Please try again."
+              }
+            }
+          }
         }
       },
       "diff": {
@@ -13419,6 +13448,11 @@
           "91b5c8d7e6": "GitLab"
         }
       }
+    },
+    "runtime": {
+      "webRuntimeSession": {
+        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      }
     }
   },
   "components": {
@@ -13555,6 +13589,32 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "Continuar en una sesión nueva…",
+      "dialogTitle": "Continuar en una sesión nueva",
+      "dialogDescription": "Inicia una sesión nueva del agente desde este punto. La sesión original no cambia.",
+      "untitledSession": "Sesión actual",
+      "originalAgent": "Agente original: {{agent}}",
+      "agent": "Agente",
+      "selectAgent": "Selecciona un agente",
+      "detectingAgents": "Detectando agentes en el host de este espacio de trabajo…",
+      "detectionFailed": "No se pudieron detectar agentes en el host de este espacio de trabajo.",
+      "noAgents": "No se detectaron agentes habilitados en el host de este espacio de trabajo.",
+      "context": "Contexto",
+      "modeFocused": "Traspaso enfocado (recomendado)",
+      "modeFocusedDescription": "Usa el estado más reciente y el espacio de trabajo actual, y consulta detalles anteriores solo cuando hacen falta.",
+      "modeFull": "Transcripción completa de la sesión",
+      "modeFullDescription": "Pide al nuevo agente que lea toda la sesión guardada antes de continuar. Puede tardar más y consumir una cantidad considerable de contexto, uso del plan o créditos de API.",
+      "startsIn": "Se inicia en:",
+      "startSession": "Iniciar sesión nueva",
+      "starting": "Iniciando…",
+      "noContext": "No hay contexto de sesión disponible para continuar en una sesión nueva.",
+      "agentDisabled": "{{agent}} está deshabilitado en la configuración de agentes.",
+      "agentUnavailable": "No se detectó {{agent}} en el host de este espacio de trabajo.",
+      "sent": "El contexto de la sesión se envió a {{agent}} en una sesión nueva.",
+      "deliveryFailed": "La nueva sesión de {{agent}} se inició, pero no se pudo enviar su contexto.",
+      "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
     }
   },
   "dashboardPopout": {
@@ -13585,8 +13645,8 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
-      "close": "Close",
-      "focusWorktree": "Focus worktree"
+      "focusWorktree": "Focus worktree",
+      "close": "Close"
     }
   },
   "dashboard": {

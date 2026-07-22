@@ -123,6 +123,8 @@ function localManagedCodexEvents(): string[] {
     'PreToolUse',
     'SessionStart',
     'Stop',
+    'SubagentStart',
+    'SubagentStop',
     'UserPromptSubmit'
   ]
 }

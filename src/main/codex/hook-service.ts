@@ -89,6 +89,8 @@ const CODEX_EVENTS = [
   'PreToolUse',
   'PermissionRequest',
   'PostToolUse',
+  'SubagentStart',
+  'SubagentStop',
   'Stop'
 ] as const
 
@@ -112,6 +114,8 @@ const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> 
   PreToolUse: CODEX_HOOK_EVENT_LABEL.PreToolUse!,
   PermissionRequest: CODEX_HOOK_EVENT_LABEL.PermissionRequest!,
   PostToolUse: CODEX_HOOK_EVENT_LABEL.PostToolUse!,
+  SubagentStart: CODEX_HOOK_EVENT_LABEL.SubagentStart!,
+  SubagentStop: CODEX_HOOK_EVENT_LABEL.SubagentStop!,
   Stop: CODEX_HOOK_EVENT_LABEL.Stop!
 }
 

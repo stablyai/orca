@@ -363,11 +363,11 @@ describe('GitHub PR local runtime routing', () => {
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('host-qualifies SSH-backed GitHub Enterprise review reads and mutations', async () => {
+  it('preserves a ported GHES host in SSH-backed review reads and mutations', async () => {
     const enterpriseRepo = {
       owner: 'team',
       repo: 'orca',
-      host: 'github.acme-corp.com'
+      host: 'github.acme-corp.com:8443'
     }
     getOwnerRepoMock.mockResolvedValue(null)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(enterpriseRepo)
@@ -392,7 +392,7 @@ describe('GitHub PR local runtime routing', () => {
             number: 7,
             title: 'Enterprise PR',
             state: 'OPEN',
-            url: 'https://github.acme-corp.com/team/orca/pull/7',
+            url: 'https://github.acme-corp.com:8443/team/orca/pull/7',
             labels: [],
             updatedAt: '2026-07-16T00:00:00Z',
             author: { login: 'pr-author' },
@@ -430,7 +430,7 @@ describe('GitHub PR local runtime routing', () => {
                 name: 'lint',
                 status: 'completed',
                 conclusion: 'failure',
-                details_url: 'https://github.acme-corp.com/team/orca/actions/runs/77/job/88'
+                details_url: 'https://github.acme-corp.com:8443/team/orca/actions/runs/77/job/88'
               }
             ]
           })
@@ -449,7 +449,7 @@ describe('GitHub PR local runtime routing', () => {
             name: 'lint',
             status: 'completed',
             conclusion: 'failure',
-            details_url: 'https://github.acme-corp.com/team/orca/actions/runs/77/job/88',
+            details_url: 'https://github.acme-corp.com:8443/team/orca/actions/runs/77/job/88',
             output: { title: 'Lint failed', summary: 'One error' }
           })
         }
@@ -557,7 +557,7 @@ describe('GitHub PR local runtime routing', () => {
     // The runner host-qualifies argv at spawn time from options.host, so the
     // mocked call sees the unqualified --repo plus the host in exec options.
     expect(prViewCall?.[0]).toEqual(expect.arrayContaining(['--repo', 'team/orca']))
-    expect(prViewCall?.[1]).toEqual({ host: 'github.acme-corp.com' })
+    expect(prViewCall?.[1]).toEqual({ host: 'github.acme-corp.com:8443' })
     const prCalls = ghExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'pr')
     expect(
       prCalls.every(
@@ -570,7 +570,7 @@ describe('GitHub PR local runtime routing', () => {
       apiCalls.every(
         ([args, options]) =>
           !args.includes('--hostname') &&
-          options.host === 'github.acme-corp.com' &&
+          options.host === 'github.acme-corp.com:8443' &&
           options.cwd === undefined &&
           options.wslDistro === undefined
       )

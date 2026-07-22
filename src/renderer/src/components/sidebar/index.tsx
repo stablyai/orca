@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
+import { createSingleFlightCoalescer, type SingleFlightCoalescer } from './single-flight-coalescer'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -104,6 +105,13 @@ function Sidebar({
     [runtimeStatusByEnvironmentId]
   )
   const previousOnlineRuntimeEnvKeyRef = React.useRef<string | null>(null)
+  // Coalesce staggered wake reconnects so K hosts can't fire K sidebar remounts and freeze (#8539).
+  const reconnectRefreshRef = React.useRef<SingleFlightCoalescer | null>(null)
+  if (reconnectRefreshRef.current === null) {
+    reconnectRefreshRef.current = createSingleFlightCoalescer(() =>
+      fetchAllWorktrees().then(() => fetchWorktreeLineage())
+    )
+  }
   useEffect(() => {
     const previousOnlineRuntimeEnvKey = previousOnlineRuntimeEnvKeyRef.current
     previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
@@ -114,13 +122,8 @@ function Sidebar({
     ) {
       return
     }
-    void fetchAllWorktrees().then(() => fetchWorktreeLineage())
-  }, [
-    onlineRuntimeEnvKey,
-    startupWorktreeRefreshCompleted,
-    fetchAllWorktrees,
-    fetchWorktreeLineage
-  ])
+    reconnectRefreshRef.current?.request()
+  }, [onlineRuntimeEnvKey, startupWorktreeRefreshCompleted])
 
   useEffect(() => {
     if (!sidebarOpen && workspaceBoardRenderedOpen) {

@@ -22,6 +22,29 @@ import {
 } from './terminal-delivery-watchdog'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 import { installTerminalFreezeReport } from './terminal-freeze-report'
+import {
+  bufferPtyShutdownData,
+  bufferPtyShutdownReplayData,
+  isPtyDataHandlerShutdownPending,
+  ptyDataHandlers,
+  ptyDataSidecars,
+  ptyExitHandlers,
+  ptyReplayHandlers
+} from './pty-shutdown-data-suspension'
+import { markCommittedPtyShutdowns } from './pty-shutdown-exit-deferral'
+
+export {
+  ptyDataHandlers,
+  ptyDataSidecars,
+  ptyExitHandlers,
+  ptyReplayHandlers,
+  ptyShutdownLifecycleHandlers,
+  ptyTeardownHandlers,
+  drainRolledBackPtyShutdownData,
+  isPtyDataHandlerShutdownPending,
+  restorePtyDataHandlersAfterFailedShutdown,
+  unregisterPtyDataHandlers
+} from './pty-shutdown-data-suspension'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
 // One global IPC listener per channel (routed by PTY ID) avoids the N-listener MaxListenersExceededWarning with many panes.
@@ -35,65 +58,13 @@ export type PtyDataMeta = {
   droppedOutput?: boolean
 }
 
-export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 /** Sidecar PTY-data observers, invoked AFTER the primary handler so a side-effect-only watcher can't delay xterm rendering. */
-export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
-
 /** Per-PTY replay handlers on a dedicated pty:replay channel so the renderer can engage the replay guard and suppress xterm auto-replies. */
-export const ptyReplayHandlers = new Map<string, (data: string) => void>()
-export const ptyExitHandlers = new Map<string, (code: number) => void>()
 const ptyExitSidecars = new Map<
   string,
   Set<(code: number, context: { hadPrimary: boolean }) => void>
 >()
-/** Per-PTY teardown callbacks that clear closure state which would otherwise fire after the data handler is removed. */
-export const ptyTeardownHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
-
-export type PtyDataHandlerShutdownSnapshot = {
-  ptyId: string
-  dataHandler?: (data: string, meta?: PtyDataMeta) => void
-  replayHandler?: (data: string) => void
-  teardownHandler?: () => void
-}
-
-/**
- * Remove data/replay/teardown handlers so teardown-flush data can't fire bell/agent-status
- * notifications from a shutting-down worktree; exit handlers stay for the normal exit-cleanup path.
- */
-export function unregisterPtyDataHandlers(ptyIds: string[]): PtyDataHandlerShutdownSnapshot[] {
-  const snapshots: PtyDataHandlerShutdownSnapshot[] = []
-  for (const id of ptyIds) {
-    snapshots.push({
-      ptyId: id,
-      dataHandler: ptyDataHandlers.get(id),
-      replayHandler: ptyReplayHandlers.get(id),
-      teardownHandler: ptyTeardownHandlers.get(id)
-    })
-    ptyDataHandlers.delete(id)
-    ptyReplayHandlers.delete(id)
-    ptyTeardownHandlers.get(id)?.()
-    ptyTeardownHandlers.delete(id)
-    clearPreHandlerPtyState(id)
-  }
-  return snapshots
-}
-
-export function restorePtyDataHandlersAfterFailedShutdown(
-  snapshots: readonly PtyDataHandlerShutdownSnapshot[]
-): void {
-  for (const snapshot of snapshots) {
-    if (snapshot.dataHandler) {
-      ptyDataHandlers.set(snapshot.ptyId, snapshot.dataHandler)
-    }
-    if (snapshot.replayHandler) {
-      ptyReplayHandlers.set(snapshot.ptyId, snapshot.replayHandler)
-    }
-    if (snapshot.teardownHandler) {
-      ptyTeardownHandlers.set(snapshot.ptyId, snapshot.teardownHandler)
-    }
-  }
-}
 
 let pushListenerUnsubscribes: (() => void)[] = []
 
@@ -170,6 +141,11 @@ function handleDispatchedPtyData(payload: {
   }
   const chars = payload.rawLength ?? payload.data.length
   const dispatch = (): void => {
+    if (isPtyDataHandlerShutdownPending(payload.id)) {
+      // Why: teardown output is speculative until the owner verifies sleep; retain it so a failed attempt resumes without losing terminal data.
+      bufferPtyShutdownData(payload.id, payload.data, meta)
+      return
+    }
     const handler = ptyDataHandlers.get(payload.id)
     if (handler) {
       handler(payload.data, meta)
@@ -193,11 +169,18 @@ function handleDispatchedPtyData(payload: {
 function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
   unsubscribes.push(
     window.api.pty.onReplay((payload) => {
+      if (bufferPtyShutdownReplayData(payload.id, payload.data)) {
+        return
+      }
       ptyReplayHandlers.get(payload.id)?.(payload.data)
     })
   )
   unsubscribes.push(
     window.api.pty.onExit((payload) => {
+      if (payload.preserveRendererBinding === true) {
+        // Why: host-initiated remote sleep has no requester transaction in this renderer; classify its ordered exit before pane cleanup runs.
+        markCommittedPtyShutdowns([payload.id])
+      }
       // Why: main drops its accounting on exit; drop totals too so a reused id restarts at zero on both sides.
       clearProcessedPtyCharTotal(payload.id)
       clearReceivedPtyCharTotal(payload.id)

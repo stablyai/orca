@@ -14,7 +14,7 @@ import { UnixSocketTransport } from './rpc/unix-socket-transport'
 import { WebSocketTransport } from './rpc/ws-transport'
 import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
-import { DeviceRegistry, type DeviceScope } from './device-registry'
+import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
 import {
   MobileSocketWiring,
@@ -35,6 +35,7 @@ import type {
   PairingProvisionRelayParams
 } from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
 import {
   decodeTerminalStreamFrame,
   type TerminalStreamFrame
@@ -56,6 +57,34 @@ type OrcaRuntimeRpcServerOptions = {
   keepaliveIntervalMs?: number
   longPollCap?: number
 }
+
+export type PairingOfferUnavailableReason =
+  | 'websocket_unavailable'
+  | 'device_registry_unavailable'
+  | 'e2ee_key_unavailable'
+  | 'invalid_advertised_endpoint'
+
+export type PairingOfferUnavailable = {
+  available: false
+  reason: PairingOfferUnavailableReason
+  guidance: string
+}
+
+type PairingIdentityInitialization =
+  | { ok: true; deviceRegistry: DeviceRegistry; e2eeKeypair: E2EEKeypair }
+  | { ok: false; failure: PairingOfferUnavailable }
+
+function pairingUnavailable(
+  reason: PairingOfferUnavailableReason,
+  guidance: string
+): PairingOfferUnavailable {
+  return { available: false, reason, guidance }
+}
+
+const DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE =
+  'The pairing registry is unavailable. Verify that the Orca data directory is writable.'
+const E2EE_KEY_UNAVAILABLE_GUIDANCE =
+  'The E2EE identity is unavailable. Verify that the Orca data directory is writable.'
 
 type MobileRelayPairingProvider = {
   createPairingRelay(
@@ -84,43 +113,6 @@ const KEEPALIVE_INTERVAL_MS = 10_000
 
 // Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
 const LONG_POLL_CAP = 16
-
-function resolvePairingEndpoint(rawEndpoint: string, address: string | null | undefined): string {
-  const endpoint = new URL(rawEndpoint)
-  const override = address?.trim()
-  if (!override) {
-    endpoint.hostname = '127.0.0.1'
-    return formatWebSocketUrl(endpoint)
-  }
-  if (/^wss?:\/\//i.test(override)) {
-    return formatWebSocketUrl(new URL(override))
-  }
-  const parsed = parsePairingAddressOverride(override)
-  endpoint.hostname = parsed.host.includes(':')
-    ? `[${parsed.host.replace(/^\[|\]$/g, '')}]`
-    : parsed.host
-  if (parsed.port) {
-    endpoint.port = parsed.port
-  }
-  return formatWebSocketUrl(endpoint)
-}
-
-function parsePairingAddressOverride(address: string): { host: string; port: string | null } {
-  if (address.startsWith('[') || address.split(':').length === 2) {
-    try {
-      const parsed = new URL(`ws://${address}`)
-      return { host: parsed.hostname.replace(/^\[|\]$/g, ''), port: parsed.port || null }
-    } catch {
-      return { host: address, port: null }
-    }
-  }
-  return { host: address, port: null }
-}
-
-function formatWebSocketUrl(url: URL): string {
-  const formatted = url.toString()
-  return url.pathname === '/' && !url.search && !url.hash ? formatted.replace(/\/$/, '') : formatted
-}
 
 function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
@@ -294,6 +286,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.listCustomViewProjects',
   'linear.listCustomViews',
   'linear.listIssues',
+  'linear.mcpListIssues',
   'linear.listProjectIssues',
   'linear.listProjects',
   'linear.teamLabels',
@@ -327,6 +320,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'runtime.clientEvents.unsubscribe',
   'session.tabs.activate',
   'session.tabs.close',
+  'session.tabs.closeLifecycle',
   'session.tabs.createTerminal',
   'session.tabs.list',
   'session.tabs.listAll',
@@ -362,6 +356,8 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'terminal.close',
   'terminal.closeTab',
   'terminal.create',
+  'terminal.createAgentSession',
+  'terminal.ensureAgentSession',
   'terminal.focus',
   'terminal.agentStatus',
   'terminal.getAutoRestoreFit',
@@ -435,6 +431,7 @@ export class OrcaRuntimeRpcServer {
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
+  private pairingInitializationFailure: PairingOfferUnavailable | null = null
   private tlsFingerprint: string | null = null
   private activeTransports: RpcTransport[] = []
   private transports: RuntimeTransportMetadata[] = []
@@ -540,6 +537,7 @@ export class OrcaRuntimeRpcServer {
       return false
     }
     this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+    this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
@@ -549,6 +547,7 @@ export class OrcaRuntimeRpcServer {
     if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
       return false
     }
+    this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
@@ -564,7 +563,7 @@ export class OrcaRuntimeRpcServer {
     rotate?: boolean
     scope?: DeviceScope
   }):
-    | { available: false }
+    | PairingOfferUnavailable
     | {
         available: true
         pairingUrl: string
@@ -572,18 +571,40 @@ export class OrcaRuntimeRpcServer {
         deviceId: string
         webClientUrl: string | null
       } {
+    if (this.pairingInitializationFailure) {
+      return this.pairingInitializationFailure
+    }
     const rawEndpoint = this.getWebSocketEndpoint()
+    if (!rawEndpoint) {
+      return pairingUnavailable(
+        'websocket_unavailable',
+        'WebSocket pairing is unavailable. Inspect preceding runtime errors and choose an unused --port if the listener failed.'
+      )
+    }
+    if (!this.deviceRegistry) {
+      return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
+    }
     const publicKeyB64 = this.getE2EEPublicKey()
-    if (!rawEndpoint || !this.deviceRegistry || !publicKeyB64) {
-      return { available: false }
+    if (!publicKeyB64) {
+      return pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
     }
 
-    const endpoint = resolvePairingEndpoint(rawEndpoint, args.address)
+    const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
+    if (!advertised.ok) {
+      return pairingUnavailable(advertised.reason, advertised.guidance)
+    }
+    const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
-    const device = args.rotate
-      ? this.deviceRegistry.rotatePendingDevice(deviceName, scope)
-      : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope)
+    let device: DeviceEntry
+    try {
+      device = args.rotate
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope)
+    } catch (error) {
+      console.error('[runtime] Failed to persist pairing credential:', error)
+      return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
+    }
     const pairingUrl = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       endpoint,
@@ -607,7 +628,7 @@ export class OrcaRuntimeRpcServer {
     name?: string
     rotate?: boolean
   }): Promise<
-    | { available: false }
+    | PairingOfferUnavailable
     | {
         available: true
         pairingUrl: string
@@ -770,6 +791,33 @@ export class OrcaRuntimeRpcServer {
     state.controllers.clear()
   }
 
+  private initializePairingIdentity(): PairingIdentityInitialization {
+    let deviceRegistry: DeviceRegistry
+    try {
+      deviceRegistry = new DeviceRegistry(this.userDataPath)
+    } catch (error) {
+      console.error('[runtime] Failed to initialize pairing registry:', error)
+      return {
+        ok: false,
+        failure: pairingUnavailable(
+          'device_registry_unavailable',
+          DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE
+        )
+      }
+    }
+    let e2eeKeypair: E2EEKeypair
+    try {
+      e2eeKeypair = loadOrCreateE2EEKeypair(this.userDataPath)
+    } catch (error) {
+      console.error('[runtime] Failed to initialize E2EE identity:', error)
+      return {
+        ok: false,
+        failure: pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
+      }
+    }
+    return { ok: true, deviceRegistry, e2eeKeypair }
+  }
+
   async start(): Promise<void> {
     if (this.activeTransports.length > 0) {
       return
@@ -822,64 +870,79 @@ export class OrcaRuntimeRpcServer {
 
     // Why: WebSocket uses per-device tokens + E2EE (tweetnacl) instead of TLS since React Native can't pin self-signed certs.
     if (this.enableWebSocket) {
-      try {
-        this.deviceRegistry = new DeviceRegistry(this.userDataPath)
-        this.e2eeKeypair = loadOrCreateE2EEKeypair(this.userDataPath)
+      const pairingIdentity = this.initializePairingIdentity()
+      if (!pairingIdentity.ok) {
+        this.deviceRegistry = null
+        this.e2eeKeypair = null
+        this.pairingInitializationFailure = pairingIdentity.failure
+      } else {
+        this.deviceRegistry = pairingIdentity.deviceRegistry
+        this.e2eeKeypair = pairingIdentity.e2eeKeypair
+        this.pairingInitializationFailure = null
+        try {
+          const wsTransport = new WebSocketTransport({
+            host: '0.0.0.0',
+            port: this.wsPort,
+            staticRoot: this.webClientRoot,
+            // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
+            ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {}),
+            ...(this.preferPinnedWsPort ? { preferPinnedPort: true } : {})
+          })
+          const mobileSocketWiring = new MobileSocketWiring({
+            deviceRegistry: pairingIdentity.deviceRegistry,
+            e2eeKeypair: pairingIdentity.e2eeKeypair,
+            onText: (socket, plaintext, reply, sendBinary) => {
+              void this.handleWebSocketMessage(
+                plaintext,
+                reply,
+                sendBinary,
+                undefined,
+                socket.ws,
+                socket.device.deviceToken,
+                socket
+              )
+            },
+            onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
+            onReady: () => {
+              // Why: first authenticated mobile/remote client (direct WS and
+              // cloud relay both attach here) starts path-candidate tracking.
+              // Activation is a local-host concern: candidate buffers live on the
+              // buffer-owning host's runtime, so a remote runtime proxy may
+              // legitimately lack this method (its own server activates it).
+              this.runtime.activateRecentPtyPathCandidateTracking?.()
+              this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+            },
+            onClose: (socket, hasOtherConnections) => {
+              if (!socket) {
+                return
+              }
+              this.abortWebSocketDispatches(socket.ws)
+              // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
+              this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
+              this.runtime.cancelMobileDictationForConnection(socket.connectionId)
+              this.binaryStreamHandlers.delete(socket.connectionId)
+              if (!hasOtherConnections) {
+                this.runtime.onClientDisconnected(socket.device.deviceToken)
+              }
+            }
+          })
+          mobileSocketWiring.attachTransport(wsTransport)
+          this.mobileSocketWiring = mobileSocketWiring
 
-        const wsTransport = new WebSocketTransport({
-          host: '0.0.0.0',
-          port: this.wsPort,
-          staticRoot: this.webClientRoot,
-          // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
-          ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {}),
-          ...(this.preferPinnedWsPort ? { preferPinnedPort: true } : {})
-        })
-        const mobileSocketWiring = new MobileSocketWiring({
-          deviceRegistry: this.deviceRegistry,
-          e2eeKeypair: this.e2eeKeypair,
-          onText: (socket, plaintext, reply, sendBinary) => {
-            void this.handleWebSocketMessage(
-              plaintext,
-              reply,
-              sendBinary,
-              undefined,
-              socket.ws,
-              socket.device.deviceToken,
-              socket
-            )
-          },
-          onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
-          onReady: () => this.mobileRelayPairingProvider?.onDemandStateChanged?.(),
-          onClose: (socket, hasOtherConnections) => {
-            if (!socket) {
-              return
-            }
-            this.abortWebSocketDispatches(socket.ws)
-            // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
-            this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
-            this.runtime.cancelMobileDictationForConnection(socket.connectionId)
-            this.binaryStreamHandlers.delete(socket.connectionId)
-            if (!hasOtherConnections) {
-              this.runtime.onClientDisconnected(socket.device.deviceToken)
-            }
+          await wsTransport.start()
+          if (this.wsPort !== 0 && wsTransport.resolvedPort !== this.wsPort) {
+            writeWsFallbackPort(this.userDataPath, wsTransport.resolvedPort)
           }
-        })
-        mobileSocketWiring.attachTransport(wsTransport)
-        this.mobileSocketWiring = mobileSocketWiring
-
-        await wsTransport.start()
-        if (this.wsPort !== 0 && wsTransport.resolvedPort !== this.wsPort) {
-          writeWsFallbackPort(this.userDataPath, wsTransport.resolvedPort)
+          activeTransports.push(wsTransport)
+          transportsMeta.push({
+            kind: 'websocket',
+            endpoint: `ws://0.0.0.0:${wsTransport.resolvedPort}`
+          })
+        } catch (error) {
+          // Why: WebSocket transport is supplementary; on failure (e.g. port in use) continue with Unix socket only.
+          console.error('[runtime] Failed to start WebSocket transport:', error)
+          this.mobileSocketWiring = null
         }
-        activeTransports.push(wsTransport)
-        transportsMeta.push({
-          kind: 'websocket',
-          endpoint: `ws://0.0.0.0:${wsTransport.resolvedPort}`
-        })
-      } catch (error) {
-        // Why: WebSocket transport is supplementary; on failure (e.g. port in use) continue with Unix socket only.
-        console.error('[runtime] Failed to start WebSocket transport:', error)
-        this.mobileSocketWiring = null
       }
     }
 
@@ -1094,6 +1157,7 @@ export class OrcaRuntimeRpcServer {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {
         connectionId,
         clientId: token,
+        pairedDeviceId: device.deviceId,
         // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
         clientKind: device.scope,
         pairing: pairingContext,

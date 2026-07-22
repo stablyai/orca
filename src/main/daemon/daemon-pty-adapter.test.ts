@@ -129,6 +129,16 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     getMacDaemonSystemResolverHealthMock.mockResolvedValue('unknown')
   })
 
+  it('reports whether its daemon protocol can participate in agent claims', () => {
+    const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 23 })
+
+    expect(adapter.supportsAgentSessionClaims()).toBe(true)
+    expect(legacy.supportsAgentSessionClaims()).toBe(false)
+    expect(adapter.supportsAgentSessionCreateOperations()).toBe(true)
+    expect(legacy.supportsAgentSessionCreateOperations()).toBe(false)
+    legacy.dispose()
+  })
+
   afterEach(async () => {
     adapter?.dispose()
     await server?.shutdown()
@@ -204,6 +214,135 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         requestSpy.mockRestore()
         ensureConnectedSpy.mockRestore()
       }
+    })
+
+    it('does not republish adapter state when stream exit beats the create reply', async () => {
+      const sessionId = 'exit-before-create-reply'
+      const exits: { id: string; incarnationId?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const originalRequest = client.request.bind(client)
+      vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+        const response = await originalRequest(type, payload)
+        if (type === 'createOrAttach') {
+          const exitCount = exits.length
+          lastSubprocess._simulateExit(0)
+          await waitFor(() => exits.length === exitCount + 1)
+        }
+        return response
+      })
+
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(exits).toHaveLength(2)
+      expect(exits[0]?.incarnationId).toBeDefined()
+      expect(exits[1]?.incarnationId).toBeDefined()
+      expect(exits[1]?.incarnationId).not.toBe(exits[0]?.incarnationId)
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        pendingSpawnOperationsBySessionId: Map<string, unknown>
+      }
+      expect(internals.activeSessionIds.has(sessionId)).toBe(false)
+      expect(internals.sessionIncarnations.has(sessionId)).toBe(false)
+      expect(internals.pendingSpawnOperationsBySessionId.has(sessionId)).toBe(false)
+    })
+
+    it('does not republish an adopted canonical id when its exit beats the reply', async () => {
+      const claim = {
+        digestVersion: 1 as const,
+        keyId: 'key',
+        identityDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        agent: 'codex' as const
+      }
+      const surface = {
+        worktreeId: 'worktree',
+        tabId: 'tab',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        terminalHandle: 'term_claimed'
+      }
+      const canonicalId = 'canonical-claimed-session'
+      const first = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: canonicalId,
+        agentSessionEnsure: { claim, surface }
+      })
+      expect(first.agentSessionEnsure?.disposition).toBe('created')
+
+      const exits: { id: string; incarnationId?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const originalRequest = client.request.bind(client)
+      vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+        const response = await originalRequest(type, payload)
+        if (type === 'createOrAttach') {
+          const exitCount = exits.length
+          lastSubprocess._simulateExit(0)
+          await waitFor(() => exits.length === exitCount + 1)
+        }
+        return response
+      })
+
+      const adopted = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'different-requested-session',
+        agentSessionEnsure: {
+          claim,
+          surface: { ...surface, terminalHandle: 'term_retry' }
+        }
+      })
+
+      expect(adopted.id).toBe(canonicalId)
+      expect(adopted.agentSessionEnsure?.disposition).toBe('adopted')
+      expect(adapter.didExitBeforeSpawnReply(adopted)).toBe(true)
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        pendingSpawnOperationsBySessionId: Map<string, unknown>
+        pendingClaimSpawnOperations: Set<unknown>
+      }
+      expect(internals.activeSessionIds.has(canonicalId)).toBe(false)
+      expect(internals.sessionIncarnations.has(canonicalId)).toBe(false)
+      expect(internals.pendingSpawnOperationsBySessionId.has('different-requested-session')).toBe(
+        false
+      )
+      expect(internals.pendingClaimSpawnOperations.size).toBe(0)
+    })
+
+    it('does not dispatch createOrAttach when cancellation wins during preflight', async () => {
+      let finishPreflight: (() => void) | undefined
+      const preflight = new Promise<void>((resolve) => {
+        finishPreflight = resolve
+      })
+      const internals = adapter as unknown as {
+        ensureConnected(): Promise<void>
+        client: { request: (...args: unknown[]) => Promise<unknown> }
+      }
+      const ensureConnected = vi
+        .spyOn(internals, 'ensureConnected')
+        .mockImplementation(() => preflight)
+      const request = vi.spyOn(internals.client, 'request')
+      const abort = new AbortController()
+
+      const spawning = adapter.spawn({ cols: 80, rows: 24, signal: abort.signal })
+      await waitFor(() => ensureConnected.mock.calls.length === 1)
+      abort.abort()
+      finishPreflight?.()
+
+      await expect(spawning).rejects.toThrow('client_disconnected')
+      expect(request).not.toHaveBeenCalledWith('createOrAttach', expect.anything())
     })
 
     it('uses worktreeId as session prefix when provided', async () => {
@@ -656,7 +795,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateExit(42)
 
       await waitFor(() => exits.length > 0)
-      expect(exits[0]).toEqual({ id, code: 42 })
+      expect(exits[0]).toEqual({ id, code: 42, incarnationId: expect.any(String) })
     })
   })
 
@@ -730,7 +869,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('listProcesses', () => {
     it('returns active sessions', async () => {
-      await adapter.spawn({ cols: 80, rows: 24, cwd: '/repo/owned-before-osc7' })
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/repo/owned-before-osc7',
+        worktreeId: 'repo::/repo/owned-before-osc7'
+      })
       await adapter.spawn({ cols: 80, rows: 24 })
 
       const procs = await adapter.listProcesses()
@@ -739,6 +883,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(procs[0]).toHaveProperty('cwd')
       expect(procs[0]).toHaveProperty('title')
       expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
+      expect(procs[0].worktreeId).toBe('repo::/repo/owned-before-osc7')
     })
   })
 

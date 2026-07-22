@@ -38,6 +38,7 @@ describe('linear RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       linearSearchIssues: vi.fn().mockResolvedValue([{ id: 'issue-1' }]),
       linearListIssues: vi.fn().mockResolvedValue({ items: [{ id: 'issue-2' }], hasMore: true }),
+      linearMcpIssueList: vi.fn().mockResolvedValue({ issues: [], meta: {} }),
       linearGetIssue: vi.fn().mockResolvedValue({ id: 'issue-3' }),
       linearCreateIssue: vi.fn().mockResolvedValue({ ok: true, id: 'issue-4' }),
       linearUpdateIssue: vi.fn().mockResolvedValue({ ok: true }),
@@ -53,6 +54,27 @@ describe('linear RPC methods', () => {
       makeRequest('linear.listIssues', {
         filter: 'assigned',
         limit: 20,
+        workspaceId: 'workspace-1'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.listIssues', {
+        limit: 5,
+        workspaceId: 'workspace-1'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.listIssues', {
+        team: 'ENG',
+        assignee: 'me',
+        cursor: 'next',
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.mcpListIssues', {
+        limit: 5,
         workspaceId: 'workspace-1'
       })
     )
@@ -104,6 +126,20 @@ describe('linear RPC methods', () => {
     expect(runtime.linearSearchIssues).toHaveBeenCalledWith('bug', 30, 'all')
     expect(runtime.linearListIssues).toHaveBeenCalledWith('assigned', 20, 'workspace-1', {
       attributeFilter: undefined
+    })
+    expect(runtime.linearListIssues).toHaveBeenCalledWith(undefined, 5, 'workspace-1', {
+      attributeFilter: undefined
+    })
+    expect(runtime.linearMcpIssueList).toHaveBeenCalledWith({
+      team: 'ENG',
+      assignee: 'me',
+      cursor: 'next',
+      orderBy: 'updatedAt',
+      workspaceId: 'workspace-1'
+    })
+    expect(runtime.linearMcpIssueList).toHaveBeenCalledWith({
+      limit: 5,
+      workspaceId: 'workspace-1'
     })
     expect(runtime.linearGetIssue).toHaveBeenCalledWith('issue-3', 'workspace-1')
     expect(runtime.linearCreateIssue).toHaveBeenCalledWith(
