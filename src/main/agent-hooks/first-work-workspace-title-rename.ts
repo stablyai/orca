@@ -4,6 +4,7 @@ import {
   resolveTextGenerationParams
 } from '../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
+import { noteGenerationFailureForUsageLimit } from './first-work-usage-limit-backoff'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 
 /**
@@ -52,11 +53,15 @@ export async function runFolderWorkspaceTitleAutoRename(
   if (!generated.success) {
     if (!generated.canceled) {
       deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
+      noteGenerationFailureForUsageLimit(generated.error, generated.failureOutput)
     }
     return retry(`generation failed: ${generated.error}`)
   }
 
-  const newDisplayName = deriveWorkspaceDisplayName({ prompt, slug: generated.slug })
+  const newDisplayName = deriveWorkspaceDisplayName({
+    prompt,
+    slug: generated.slug
+  })
   deps.setDisplayName(worktreeId, newDisplayName)
   deps.setRenameError(worktreeId, null)
   deps.onRenamed(worktreeId)
