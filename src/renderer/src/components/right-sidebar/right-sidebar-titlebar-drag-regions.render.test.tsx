@@ -68,6 +68,8 @@ vi.mock('@/store', async () => {
     const selected = selector({
       rightSidebarOpen: mockAppState.rightSidebarOpen,
       rightSidebarWidth: 350,
+      rightSidebarExpanded: false,
+      toggleRightSidebarExpanded: vi.fn(),
       setRightSidebarWidth: vi.fn(),
       rightSidebarTab: mockAppState.rightSidebarTab,
       rightSidebarExplorerView: 'files',

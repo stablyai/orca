@@ -10095,7 +10095,9 @@
             "fc3095d2ed": "资源管理器",
             "aiVaultSessionHistory": "智能体",
             "folderWorkspaces": "已附加的工作树",
-            "parentPrChecks": "PR 检查"
+            "parentPrChecks": "PR 检查",
+            "expandRightSidebar": "展开右侧边栏",
+            "collapseRightSidebar": "收起右侧边栏"
           },
           "right": {
             "panel": {

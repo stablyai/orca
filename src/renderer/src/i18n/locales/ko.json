@@ -10095,7 +10095,9 @@
             "fc3095d2ed": "탐색기",
             "aiVaultSessionHistory": "에이전트",
             "folderWorkspaces": "연결된 워크트리",
-            "parentPrChecks": "PR 검사"
+            "parentPrChecks": "PR 검사",
+            "expandRightSidebar": "오른쪽 사이드바 확장",
+            "collapseRightSidebar": "오른쪽 사이드바 축소"
           },
           "right": {
             "panel": {

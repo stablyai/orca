@@ -10095,7 +10095,9 @@
             "fc3095d2ed": "エクスプローラ",
             "aiVaultSessionHistory": "エージェント",
             "folderWorkspaces": "添付ワークツリー",
-            "parentPrChecks": "PR チェック"
+            "parentPrChecks": "PR チェック",
+            "expandRightSidebar": "右サイドバーを展開",
+            "collapseRightSidebar": "右サイドバーを折りたたむ"
           },
           "right": {
             "panel": {

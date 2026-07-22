@@ -1,6 +1,15 @@
 /* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Plug, Files, GitBranch, ListChecks, PanelRight, Workflow } from 'lucide-react'
+import {
+  Plug,
+  Files,
+  GitBranch,
+  ListChecks,
+  Maximize2,
+  Minimize2,
+  PanelRight,
+  Workflow
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { useRepoById } from '@/store/selectors'
@@ -35,6 +44,7 @@ import {
 import {
   RIGHT_SIDEBAR_MIN_WIDTH,
   clampRightSidebarPanelWidth,
+  computeExpandedRightSidebarPanelWidth,
   computeMaxRightSidebarPanelWidth
 } from './right-sidebar-width'
 import { translate } from '@/i18n/i18n'
@@ -69,6 +79,8 @@ function RightSidebarInner(): React.JSX.Element {
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
+  const rightSidebarExpanded = useAppStore((s) => s.rightSidebarExpanded)
+  const toggleRightSidebarExpanded = useAppStore((s) => s.toggleRightSidebarExpanded)
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
@@ -199,11 +211,12 @@ function RightSidebarInner(): React.JSX.Element {
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
   const maxWidth = computeMaxRightSidebarPanelWidth(windowWidth, activityBarSideWidth)
-  const renderedRightSidebarWidth = clampRightSidebarPanelWidth(
-    rightSidebarWidth,
-    windowWidth,
-    activityBarSideWidth
-  )
+  // Why: expanded mode renders at the expand target (a fraction of the window)
+  // without mutating the stored width, so toggling off restores the user's
+  // chosen (and persisted) width.
+  const renderedRightSidebarWidth = rightSidebarExpanded
+    ? computeExpandedRightSidebarPanelWidth(windowWidth, activityBarSideWidth)
+    : clampRightSidebarPanelWidth(rightSidebarWidth, windowWidth, activityBarSideWidth)
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,
     width: renderedRightSidebarWidth,
@@ -247,6 +260,42 @@ function RightSidebarInner(): React.JSX.Element {
       statusIndicator={item.id === 'checks' ? checksStatus : null}
     />
   ))
+
+  const expandButton = rightSidebarOpen ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="sidebar-toggle mr-1"
+          onClick={toggleRightSidebarExpanded}
+          aria-label={
+            rightSidebarExpanded
+              ? translate(
+                  'auto.components.right.sidebar.index.collapseRightSidebar',
+                  'Collapse right sidebar'
+                )
+              : translate(
+                  'auto.components.right.sidebar.index.expandRightSidebar',
+                  'Expand right sidebar'
+                )
+          }
+        >
+          {rightSidebarExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {rightSidebarExpanded
+          ? translate(
+              'auto.components.right.sidebar.index.collapseRightSidebar',
+              'Collapse right sidebar'
+            )
+          : translate(
+              'auto.components.right.sidebar.index.expandRightSidebar',
+              'Expand right sidebar'
+            )}
+      </TooltipContent>
+    </Tooltip>
+  ) : null
 
   const closeButton = rightSidebarOpen ? (
     <Tooltip>
@@ -343,6 +392,7 @@ function RightSidebarInner(): React.JSX.Element {
                       RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
                     )}
                   >
+                    {expandButton}
                     {closeButton}
                   </div>
                 </TooltipProvider>
@@ -355,6 +405,7 @@ function RightSidebarInner(): React.JSX.Element {
                       RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
                     )}
                   >
+                    {expandButton}
                     {closeButton}
                   </div>
                 </TooltipProvider>
@@ -413,7 +464,10 @@ function RightSidebarInner(): React.JSX.Element {
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
             <TooltipProvider delayDuration={400}>
-              <div className="flex items-center">{closeButton}</div>
+              <div className="flex items-center">
+                {expandButton}
+                {closeButton}
+              </div>
             </TooltipProvider>
           </div>
         )}

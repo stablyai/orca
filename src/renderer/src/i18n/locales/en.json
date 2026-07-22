@@ -10118,7 +10118,9 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "expandRightSidebar": "Expand right sidebar",
+            "collapseRightSidebar": "Collapse right sidebar"
           },
           "right": {
             "panel": {

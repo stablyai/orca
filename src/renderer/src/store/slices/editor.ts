@@ -381,6 +381,9 @@ export type EditorSlice = {
   // Right sidebar
   rightSidebarOpen: boolean
   rightSidebarWidth: number
+  // Session-only: when true the panel renders at max width without overwriting
+  // rightSidebarWidth, so toggling off restores the user's chosen width.
+  rightSidebarExpanded: boolean
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarRouteRequestId: number
@@ -388,6 +391,7 @@ export type EditorSlice = {
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
   activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
+  toggleRightSidebarExpanded: () => void
   setRightSidebarOpen: (open: boolean) => void
   setRightSidebarWidth: (width: number) => void
   setRightSidebarTab: (tab: ActiveRightSidebarTab) => void
@@ -1359,6 +1363,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Right sidebar
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
+  rightSidebarExpanded: false,
   rightSidebarTab: 'explorer',
   rightSidebarExplorerView: 'files',
   rightSidebarRouteRequestId: 0,
@@ -1366,8 +1371,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   rightSidebarExplorerViewByWorktree: {},
   activityBarPosition: 'top',
   toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
+  toggleRightSidebarExpanded: () => set((s) => ({ rightSidebarExpanded: !s.rightSidebarExpanded })),
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
-  setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
+  // Why: an explicit width change (e.g. dragging the resize handle) means the
+  // user picked a concrete width, so leave the auto-expanded mode.
+  setRightSidebarWidth: (width) => set({ rightSidebarWidth: width, rightSidebarExpanded: false }),
   setRightSidebarTab: (tab) =>
     set((s) => ({
       rightSidebarTab: tab,
