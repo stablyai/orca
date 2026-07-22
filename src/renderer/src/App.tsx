@@ -1048,6 +1048,10 @@ function App(): React.JSX.Element {
               }
             } catch (err) {
               console.warn('Remote startup catalog refresh failed:', err)
+            } finally {
+              if (!cancelled) {
+                useAppStore.setState({ startupWorktreeRefreshCompleted: true })
+              }
             }
           })()
         }

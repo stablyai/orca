@@ -2240,6 +2240,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   everActivatedWorktreeIds: new Set<string>(),
   lastVisitedAtByWorktreeId: {},
   hasHydratedWorktreePurge: false,
+  startupWorktreeRefreshCompleted: false,
 
   fetchDetectedWorktrees: async (repoId) => {
     try {
