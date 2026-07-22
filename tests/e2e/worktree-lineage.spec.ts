@@ -3,6 +3,8 @@ import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   markWorkspaceTerminalSlept,
+  removeCrossRepoParentPickerRepo,
+  seedCrossRepoParentPickerScenario,
   seedLineageScenario,
   seedWorkspaceAgentStatus,
   seedWorkspaceLiveTerminal
@@ -85,6 +87,60 @@ test.describe('Worktree Lineage', () => {
       )
       .toBe(false)
     await expect(childRow).toBeVisible()
+  })
+
+  test('selects and renders a parent worktree from another repo', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    const { parentId, childId, parentName, parentRepoName, repoPath } =
+      await seedCrossRepoParentPickerScenario(orcaPage, registerPostElectronShutdownCleanup)
+    try {
+      const childRow = worktreeOption(orcaPage, childId)
+      const parentRow = worktreeOption(orcaPage, parentId)
+
+      await expect(parentRow).toBeVisible()
+      await childRow.click({ button: 'right' })
+      await orcaPage.getByRole('menuitem', { name: 'Set Parent Worktree...' }).click()
+
+      const search = orcaPage.getByPlaceholder('Search worktrees...')
+      await expect(search).toBeVisible()
+      await search.fill(parentRepoName)
+
+      const parentOption = orcaPage
+        .locator('[cmdk-root]')
+        .getByRole('option')
+        .filter({ hasText: parentName })
+      await expect(parentOption).toBeVisible()
+      await expect(parentOption).toContainText(parentRepoName)
+      await parentOption.click()
+
+      await expect(parentRow).toBeVisible()
+      await expect(parentRow.getByRole('button', { name: 'Hide 1 child workspace' })).toBeVisible()
+      await expect(childRow).toBeVisible()
+
+      const positions = await orcaPage.evaluate(
+        ({ parentId, childId }) => {
+          const rowFor = (worktreeId: string) =>
+            [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+              (element) => element.dataset.worktreeId === worktreeId
+            )
+          const parent = rowFor(parentId)
+          const child = rowFor(childId)
+          return parent && child
+            ? {
+                parentTop: parent.getBoundingClientRect().top,
+                childTop: child.getBoundingClientRect().top
+              }
+            : null
+        },
+        { parentId, childId }
+      )
+      expect(positions).not.toBeNull()
+      expect(positions!.childTop).toBeGreaterThan(positions!.parentTop)
+    } finally {
+      await removeCrossRepoParentPickerRepo(orcaPage, repoPath)
+    }
   })
 
   test('injects filtered parents structurally without showing a parent badge', async ({

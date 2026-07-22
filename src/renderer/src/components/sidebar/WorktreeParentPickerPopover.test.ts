@@ -91,8 +91,11 @@ describe('selectWorktreeParent', () => {
 
 describe('getWorktreeParentPickerItemValue', () => {
   it('includes workspace-facing fields used by command filtering', () => {
-    expect(getWorktreeParentPickerItemValue(makeWorktree())).toContain('Parent Worktree')
-    expect(getWorktreeParentPickerItemValue(makeWorktree())).toContain('feature/parent')
-    expect(getWorktreeParentPickerItemValue(makeWorktree())).toContain('/workspaces/parent')
+    const value = getWorktreeParentPickerItemValue(makeWorktree(), 'shared-library')
+
+    expect(value).toContain('Parent Worktree')
+    expect(value).toContain('feature/parent')
+    expect(value).toContain('shared-library')
+    expect(value).toContain('/workspaces/parent')
   })
 })
