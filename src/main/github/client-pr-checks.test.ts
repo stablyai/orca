@@ -134,23 +134,37 @@ function graphQLCheckRun(
     conclusion: string | null
     detailsUrl: string | null
     url: string | null
+    startedAt: string | null
+    completedAt: string | null
     checkSuiteId: number | null
     workflowRunId: number | null
+    workflowName: string | null
+    appSlug: string | null
   }> = {}
 ): Record<string, unknown> {
   const checkSuiteId = overrides.checkSuiteId ?? 1000
-  const workflowRunId = overrides.workflowRunId ?? 1
+  const workflowRunId = overrides.workflowRunId === null ? null : (overrides.workflowRunId ?? 1)
   return {
     __typename: 'CheckRun',
     databaseId: overrides.databaseId ?? 88,
     name: overrides.name ?? 'build',
     status: overrides.status ?? 'COMPLETED',
     conclusion: overrides.conclusion ?? 'SUCCESS',
+    startedAt: overrides.startedAt ?? '2026-07-22T01:00:00Z',
+    completedAt: overrides.completedAt ?? '2026-07-22T01:01:00Z',
     detailsUrl: overrides.detailsUrl ?? 'https://github.com/acme/widgets/actions/runs/1',
     url: overrides.url ?? 'https://github.com/acme/widgets/runs/88',
     checkSuite: {
       databaseId: checkSuiteId,
-      workflowRun: workflowRunId === null ? null : { databaseId: workflowRunId }
+      app: overrides.appSlug === null ? null : { slug: overrides.appSlug ?? 'github-actions' },
+      workflowRun:
+        workflowRunId === null
+          ? null
+          : {
+              databaseId: workflowRunId,
+              workflow:
+                overrides.workflowName === null ? null : { name: overrides.workflowName ?? 'CI' }
+            }
     }
   }
 }
@@ -205,6 +219,8 @@ function expectGraphQLRollupCall(callIndex = 1, noCache = false): void {
   const queryArg = args.find((arg) => arg.startsWith('query='))
   expect(queryArg).toContain('statusCheckRollup')
   expect(queryArg).toContain('checkSuites')
+  expect(queryArg).toContain('startedAt')
+  expect(queryArg).toContain('completedAt')
 }
 
 describe('getPRChecks', () => {
@@ -261,6 +277,33 @@ describe('getPRChecks', () => {
     ])
   })
 
+  it('maps check runs without workflow metadata', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce(
+      graphQLChecksResponse({
+        contexts: [
+          graphQLCheckRun({
+            workflowRunId: null,
+            detailsUrl: 'https://ci.example.com/checks/88',
+            url: null
+          })
+        ]
+      })
+    )
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(checks).toEqual([
+      {
+        name: 'build',
+        status: 'completed',
+        conclusion: 'success',
+        url: 'https://ci.example.com/checks/88',
+        checkRunId: 88
+      }
+    ])
+  })
+
   it('merges rollup check-runs with legacy commit status contexts', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce(
@@ -301,6 +344,46 @@ describe('getPRChecks', () => {
         conclusion: 'pending',
         url: 'https://jenkins.example.com/job/merge/1'
       }
+    ])
+  })
+
+  it('keeps only the newest run for a repeated check context', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce(
+      graphQLChecksResponse({
+        contexts: [
+          graphQLCheckRun({
+            databaseId: 87,
+            name: 'merge-label',
+            conclusion: 'FAILURE',
+            startedAt: '2026-07-22T02:08:00Z',
+            completedAt: '2026-07-22T02:09:00Z',
+            checkSuiteId: 999,
+            workflowRunId: 7
+          }),
+          graphQLCheckRun({
+            databaseId: 88,
+            name: 'merge-label',
+            conclusion: 'SUCCESS',
+            startedAt: '2026-07-22T02:21:00Z',
+            completedAt: '2026-07-22T02:22:00Z',
+            checkSuiteId: 1000,
+            workflowRunId: 8
+          })
+        ],
+        checkSuites: [graphQLCheckSuite({ databaseId: 999 })]
+      })
+    )
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(checks).toEqual([
+      expect.objectContaining({
+        name: 'merge-label',
+        conclusion: 'success',
+        checkRunId: 88,
+        workflowRunId: 8
+      })
     ])
   })
 

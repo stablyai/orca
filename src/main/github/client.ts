@@ -109,6 +109,7 @@ import {
   deriveCheckStatus
 } from './mappers'
 import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from './comment-reactions'
+import { deriveGitHubCheckSummary, selectLatestGitHubCheckContexts } from './github-check-rollup'
 import {
   getRateLimit,
   noteRepositoryRateLimitSpend,
@@ -643,57 +644,6 @@ function isAutoMergeEnabled(value: unknown): boolean {
   return typeof value === 'object' && value !== null
 }
 
-function checkRollupEntries(value: unknown): unknown[] {
-  if (Array.isArray(value)) {
-    return value
-  }
-  if (typeof value !== 'object' || value === null) {
-    return []
-  }
-  const raw = value as Record<string, unknown>
-  const nodes = (raw.contexts as { nodes?: unknown } | undefined)?.nodes
-  return Array.isArray(nodes) ? nodes : []
-}
-
-function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSummary'] {
-  const entries = checkRollupEntries(value)
-  if (entries.length === 0) {
-    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0 }
-  }
-  let passed = 0
-  let failed = 0
-  let pending = 0
-  for (const entry of entries) {
-    if (typeof entry !== 'object' || entry === null) {
-      pending += 1
-      continue
-    }
-    const raw = entry as Record<string, unknown>
-    const conclusion = String(raw.conclusion ?? raw.state ?? '').toUpperCase()
-    const status = String(raw.status ?? '').toUpperCase()
-    if (['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(conclusion)) {
-      passed += 1
-    } else if (
-      ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(
-        conclusion
-      )
-    ) {
-      failed += 1
-    } else if (status === 'COMPLETED' && conclusion) {
-      failed += 1
-    } else {
-      pending += 1
-    }
-  }
-  return {
-    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : 'success',
-    total: entries.length,
-    passed,
-    failed,
-    pending
-  }
-}
-
 function mapPullRequestWorkItem(
   item: Record<string, unknown>,
   baseOwnerRepo: OwnerRepo | null = null
@@ -779,7 +729,7 @@ function mapPullRequestWorkItem(
       : {}),
     ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {}),
     ...(item.statusCheckRollup !== undefined
-      ? { checksSummary: deriveWorkItemCheckSummary(item.statusCheckRollup) }
+      ? { checksSummary: deriveGitHubCheckSummary(item.statusCheckRollup) }
       : {}),
     ...(mergeable ? { mergeable } : {}),
     ...('autoMergeRequest' in item
@@ -3244,18 +3194,27 @@ query($owner: String!, $repo: String!, $pr: Int!) {
                     name
                     status
                     conclusion
+                    startedAt
+                    completedAt
                     detailsUrl
                     url
                     checkSuite {
                       databaseId
+                      app {
+                        slug
+                      }
                       workflowRun {
                         databaseId
+                        workflow {
+                          name
+                        }
                       }
                     }
                   }
                   ... on StatusContext {
                     context
                     state
+                    createdAt
                     targetUrl
                   }
                 }
@@ -3311,11 +3270,17 @@ type GraphQLCheckRunContext = {
   name?: string | null
   status?: string | null
   conclusion?: string | null
+  startedAt?: string | null
+  completedAt?: string | null
   detailsUrl?: string | null
   url?: string | null
   checkSuite?: {
     databaseId?: number | null
-    workflowRun?: { databaseId?: number | null } | null
+    app?: { slug?: string | null } | null
+    workflowRun?: {
+      databaseId?: number | null
+      workflow?: { name?: string | null } | null
+    } | null
   } | null
 }
 
@@ -3323,6 +3288,7 @@ type GraphQLStatusContext = {
   __typename: 'StatusContext'
   context?: string | null
   state?: string | null
+  createdAt?: string | null
   targetUrl?: string | null
 }
 
@@ -3465,14 +3431,17 @@ function mapGraphQLPRChecksResponse(
     return []
   }
 
-  const contexts = commit.statusCheckRollup?.contexts?.nodes ?? []
+  const allContexts = commit.statusCheckRollup?.contexts?.nodes ?? []
+  const contexts = selectLatestGitHubCheckContexts(allContexts)
   const checkRunContexts = contexts.filter(isGraphQLCheckRunContext)
   const checkRuns = checkRunContexts
     .map(mapGraphQLCheckRunContext)
     .filter((check): check is PRCheckDetail => check !== null)
   const checkRunNames = new Set(checkRuns.map((check) => check.name))
+  // 原因：被新运行替代的旧 CheckRun 仍证明检查套件已启动，不能再生成 action_required 占位项。
   const checkSuiteIdsWithRuns = new Set(
-    checkRunContexts
+    allContexts
+      .filter(isGraphQLCheckRunContext)
       .map((context) => nullableNumber(context.checkSuite?.databaseId))
       .filter((id): id is number => id !== null)
   )
