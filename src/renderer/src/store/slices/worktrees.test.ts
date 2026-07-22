@@ -3241,6 +3241,53 @@ describe('createWorktree base status merge', () => {
     })
   })
 
+  it('stamps an explicitly requested runtime when duplicate repo IDs overlap', async () => {
+    const store = createTestStore()
+    const created = makeWorktree({
+      id: 'repo-duplicate::/remote/feature',
+      repoId: 'repo-duplicate',
+      path: '/remote/feature',
+      hostId: 'local'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [
+        {
+          id: 'repo-duplicate',
+          path: '/local/repo',
+          displayName: 'local',
+          badgeColor: '#000',
+          addedAt: 0
+        },
+        {
+          id: 'repo-duplicate',
+          path: '/remote/repo',
+          displayName: 'remote',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-remote-create',
+      ok: true,
+      result: { worktree: created },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    const createWorktree = store.getState().createWorktree
+    const createArgs: Parameters<typeof createWorktree> = [
+      'repo-duplicate',
+      'feature',
+      'origin/main'
+    ]
+    createArgs[25] = { executionHostId: 'runtime:env-1' }
+    await createWorktree(...createArgs)
+
+    expect(store.getState().worktreesByRepo['repo-duplicate']?.[0]?.hostId).toBe('runtime:env-1')
+  })
+
   it('passes the active folder workspace as parent for in-app worktree creates', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
@@ -4807,7 +4854,8 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      prNumber: 2548
+      prNumber: 2548,
+      executionHostId: 'local'
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -5103,7 +5151,8 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      prNumber: 2548
+      prNumber: 2548,
+      executionHostId: 'local'
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -5139,7 +5188,8 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      prNumber: 5571
+      prNumber: 5571,
+      executionHostId: 'local'
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -5291,7 +5341,8 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo-ssh',
-      prNumber: 5571
+      prNumber: 5571,
+      executionHostId: 'ssh:ssh-1'
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -5569,7 +5620,8 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      prNumber: 42
+      prNumber: 42,
+      executionHostId: 'local'
     })
 
     store.setState({

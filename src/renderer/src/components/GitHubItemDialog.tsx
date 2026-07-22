@@ -154,6 +154,7 @@ import {
   resolveCommentReplyTarget
 } from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
@@ -340,7 +341,11 @@ type GitHubItemDialogProps = {
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
-    itemKey: { id: string; repoId: string },
+    itemKey: {
+      id: string
+      repoId: string
+      repoExecutionHostId?: GitHubWorkItem['repoExecutionHostId']
+    },
     reviewRequests: GitHubAssignableUser[]
   ) => void
   onClose: () => void
@@ -6826,8 +6831,14 @@ export default function GitHubItemDialog({
     if (!repoPath && !effectiveRepoId) {
       return undefined
     }
-    return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
-      ?.issueSourcePreference
+    return (
+      effectiveRepoId
+        ? findRepoForHost(s.repos, effectiveRepoId, {
+            hostId: workItem?.repoExecutionHostId,
+            settings: s.settings
+          })
+        : s.repos.find((r) => r.path === repoPath)
+    )?.issueSourcePreference
   })
   const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const detailsCacheKey = useMemo(() => {
@@ -7053,7 +7064,12 @@ export default function GitHubItemDialog({
     if (!details?.item) {
       return workItem
     }
-    return { ...workItem, ...details.item, repoId: workItem.repoId }
+    return {
+      ...workItem,
+      ...details.item,
+      repoId: workItem.repoId,
+      repoExecutionHostId: workItem.repoExecutionHostId
+    }
   }, [details?.item, workItem])
 
   useEffect(() => {
@@ -7062,7 +7078,11 @@ export default function GitHubItemDialog({
     }
     // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
     onReviewRequestsChange?.(
-      { id: workItem.id, repoId: workItem.repoId },
+      {
+        id: workItem.id,
+        repoId: workItem.repoId,
+        repoExecutionHostId: workItem.repoExecutionHostId
+      },
       details.item.reviewRequests
     )
   }, [details?.item.reviewRequests, onReviewRequestsChange, workItem])

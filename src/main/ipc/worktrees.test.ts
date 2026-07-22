@@ -2183,6 +2183,33 @@ describe('registerWorktreeHandlers', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
+  it('creates through the requested SSH execution host when repo IDs overlap', async () => {
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/local-repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = {
+      ...localRepo,
+      path: '/workspace/ssh-repo',
+      displayName: 'ssh',
+      connectionId: 'connection-1'
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    store.getRepo.mockReturnValue(localRepo)
+    getSshGitProviderMock.mockReturnValue(undefined)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        executionHostId: 'ssh:connection-1',
+        name: 'issue-workspace'
+      })
+    ).rejects.toThrow(/Remote connection dropped/i)
+  })
+
   it('routes local worktree creation through the selected WSL project runtime', async () => {
     mockSelectedWslProjectRuntime()
     listWorktreesMock.mockResolvedValue([

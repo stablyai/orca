@@ -412,6 +412,45 @@ describe('createDetectedAgentsSlice WSL context', () => {
     expect(store.getState().detectedAgentIds).toEqual(['codex'])
   })
 
+  it('does not let a worktree continuation probe replace the composer repository snapshot', async () => {
+    let resolveRepo: (ids: string[]) => void = () => {}
+    let resolveWorktree: (ids: string[]) => void = () => {}
+    detectAgents
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRepo = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveWorktree = resolve
+          })
+      )
+    const worktree = makeWorktree({
+      id: 'repo-worktree::worktree',
+      repoId: 'repo-worktree',
+      path: 'C:\\worktree'
+    })
+    const store = createTestStore({
+      repos: [
+        makeRepo({ id: 'repo-composer', path: 'C:\\composer' }),
+        makeRepo({ id: 'repo-worktree', path: 'C:\\worktree-repo' })
+      ],
+      worktreesByRepo: { 'repo-worktree': [worktree] }
+    })
+
+    const composer = store.getState().ensureDetectedAgents({ repoId: 'repo-composer' })
+    const continuation = store.getState().ensureDetectedAgents({ worktreeId: worktree.id })
+    resolveWorktree(['codex'])
+    await expect(continuation).resolves.toEqual(['codex'])
+    resolveRepo(['claude'])
+    await expect(composer).resolves.toEqual(['claude'])
+
+    expect(store.getState().detectedAgentIds).toEqual(['claude'])
+  })
+
   it('does not let an older refresh replace a newer repository detection context', async () => {
     let resolveRefresh: (result: {
       agents: string[]

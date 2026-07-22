@@ -45,6 +45,8 @@ import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import {
   getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
   parseExecutionHostId
 } from '../../../shared/execution-host'
 import { Button } from '@/components/ui/button'
@@ -3959,7 +3961,11 @@ export default function TaskPage(): React.JSX.Element {
 
   const patchTaskPageWorkItemRows = useCallback(
     (
-      itemKey: { id: string; repoId: string },
+      itemKey: {
+        id: string
+        repoId: string
+        repoExecutionHostId?: GitHubWorkItem['repoExecutionHostId']
+      },
       patch: Partial<GitHubWorkItem>,
       shouldPatch?: (item: GitHubWorkItem) => boolean
     ): void => {
@@ -3971,7 +3977,12 @@ export default function TaskPage(): React.JSX.Element {
           }
           let pageChanged = false
           const nextPage = page.map((item) => {
-            if (item.id !== itemKey.id || item.repoId !== itemKey.repoId) {
+            if (
+              item.id !== itemKey.id ||
+              item.repoId !== itemKey.repoId ||
+              (normalizeExecutionHostId(item.repoExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID) !==
+                (normalizeExecutionHostId(itemKey.repoExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID)
+            ) {
               return item
             }
             if (shouldPatch && !shouldPatch(item)) {
@@ -3989,7 +4000,14 @@ export default function TaskPage(): React.JSX.Element {
     []
   )
   const handleDialogReviewRequestsChange = useCallback(
-    (itemKey: { id: string; repoId: string }, reviewRequests: GitHubAssignableUser[]): void => {
+    (
+      itemKey: {
+        id: string
+        repoId: string
+        repoExecutionHostId?: GitHubWorkItem['repoExecutionHostId']
+      },
+      reviewRequests: GitHubAssignableUser[]
+    ): void => {
       patchTaskPageWorkItemRows(itemKey, { reviewRequests })
     },
     [patchTaskPageWorkItemRows]
@@ -6122,7 +6140,11 @@ export default function TaskPage(): React.JSX.Element {
         { repoId: repo.id, sourceContext: getTaskPageRepoSourceContext(repo, 'github') }
       ).then((checks) => {
         patchTaskPageWorkItemRows(
-          { id: item.id, repoId: item.repoId },
+          {
+            id: item.id,
+            repoId: item.repoId,
+            repoExecutionHostId: item.repoExecutionHostId
+          },
           { checksSummary: deriveTaskPagePRCheckSummary(checks) },
           (currentItem) =>
             currentItem.type === 'pr' &&

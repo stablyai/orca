@@ -199,6 +199,27 @@ describe('runBackgroundWorktreeCreation', () => {
     )
   })
 
+  it('preserves the captured workspace host through background creation', async () => {
+    runBackgroundWorktreeCreation(
+      makeRequest({
+        workspaceRunContext: {
+          kind: 'workspace-run',
+          projectId: 'project-1',
+          hostId: 'runtime:env-1',
+          projectHostSetupId: 'setup-1',
+          repoId: 'repo-runtime',
+          path: '/workspace/repo'
+        }
+      })
+    )
+
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
+    const createCall = store.createWorktree.mock.calls[0] as unknown[]
+    expect(createCall[25]).toEqual({
+      executionHostId: 'runtime:env-1'
+    })
+  })
+
   it('shows a VM provisioning phase and creates the worktree on the prepared runtime repo', async () => {
     store.repos = [
       {

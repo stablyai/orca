@@ -88,7 +88,11 @@ export function getLocalRepoProjectExecutionRuntimeContext(
     return undefined
   }
 
-  const repo = (state.repos ?? []).find((entry) => entry.id === repoId)
+  // Why: repository ids are host-scoped. This helper models local execution,
+  // so skip SSH/runtime duplicates rather than accepting the first bare-id row.
+  const repo = (state.repos ?? []).find(
+    (entry) => entry.id === repoId && getRepoExecutionHostId(entry) === LOCAL_EXECUTION_HOST_ID
+  )
   if (!isLocalRuntimeRepo(repo)) {
     return undefined
   }

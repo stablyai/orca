@@ -66,4 +66,12 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
     expect(contextSection).toContain('repo: resolvedDialogRepo')
     expect(dialogSection).toContain('sourceContext={resolvedDialogSourceContext}')
   })
+
+  it('passes the exact project repository host through both direct launch paths', () => {
+    const source = componentSource('ProjectViewWrapper.tsx')
+    const rowLaunch = sourceBetween(source, 'const handleStartWork', 'const handleEditAssignees')
+
+    expect(rowLaunch).toContain('repoExecutionHostId: getRepoExecutionHostId(resolution.repo)')
+    expect(source).toContain('repoExecutionHostId: current.workItem.repoExecutionHostId')
+  })
 })

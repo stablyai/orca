@@ -1,6 +1,7 @@
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import type { TaskProvider, TuiAgent, WorkspaceCreateTelemetrySource } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
 export type LaunchableWorkItem = {
   provider?: TaskProvider
@@ -22,6 +23,7 @@ export type LaunchableWorkItem = {
 export type LaunchWorkItemDirectArgs = {
   item: LaunchableWorkItem
   repoId: string
+  repoExecutionHostId?: ExecutionHostId
   openModalFallback: () => void
   baseBranch?: string
   launchSource: LaunchSource

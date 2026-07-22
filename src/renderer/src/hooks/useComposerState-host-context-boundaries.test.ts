@@ -273,6 +273,25 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('projectHostSetupId: initialRunSeed.projectHostSetupId')
   })
 
+  it('retains an explicitly selected duplicate-id host setup after clearing the initial seed', () => {
+    const targetSection = sourceBetween(
+      HOOK_SOURCE,
+      'const [useInitialTargetSeed',
+      'const selectedRepoIsGit'
+    )
+    expect(targetSection).toContain('selectedTargetSeed ??')
+    expect(targetSection).toContain('projectHostSetupId: initialTargetSeed?.projectHostSetupId')
+
+    const changeSection = sourceBetween(
+      HOOK_SOURCE,
+      'const handleProjectHostSetupChange',
+      'const handleProjectChange'
+    )
+    expect(changeSection).toContain('setSelectedTargetSeed({')
+    expect(changeSection).toContain('projectHostSetupId: option.id')
+    expect(changeSection).toContain('hostId: option.hostId')
+  })
+
   it('resolves typed GitHub issue/PR input through the selected repo source context', () => {
     expect(HOOK_SOURCE).toContain('const selectedRepoGitHubSourceContext = useMemo')
 
@@ -332,6 +351,9 @@ describe('useComposerState host-context boundaries', () => {
     expect(fullSubmit).toContain('selectedRepoIsGit ? submitBaseBranch : undefined')
     expect(fullSubmit).toContain('submitPushTarget')
     expect(fullSubmit).toContain('submitCompareBaseRef')
+    expect(fullSubmit).toContain(
+      'selectedRepoExecutionHostId ? { executionHostId: selectedRepoExecutionHostId } : undefined'
+    )
     expect(fullSubmit).not.toContain('smartGitHubResolution?.baseBranch ?? baseBranch')
     expect(fullSubmit).not.toContain('smartGitHubResolution?.compareBaseRef ?? compareBaseRef')
     expect(fullSubmit).not.toContain('smartGitHubResolution?.pushTarget ?? pushTarget')
@@ -361,7 +383,10 @@ describe('useComposerState host-context boundaries', () => {
       'const handleSetupAgentStartupPolicyChange'
     )
     expect(persistSection).toContain('setupAgentStartupPolicySaveRef.current')
-    expect(persistSection).toContain('pendingSave?.repoId === currentRepo.id')
+    expect(persistSection).toContain('pendingSave.repoId === currentRepo.id')
+    expect(persistSection).toContain('pendingSave.hostId === executionHostId')
+    expect(persistSection).toContain('findRepoForHost(currentStore.repos, repoId')
+    expect(persistSection).toContain('{ hostId: executionHostId }')
     expect(persistSection).toContain('pendingSave.policy === policy')
     expect(persistSection).toContain('await pendingSave.promise')
     expect(persistSection).toContain('continue')
@@ -627,6 +652,9 @@ describe('useComposerState host-context boundaries', () => {
     expect(HOOK_SOURCE).toContain('const selectedRepoAgentLaunchPlatform = useMemo')
     expect(HOOK_SOURCE).toContain('getLocalRepoProjectExecutionRuntimeContext')
     expect(HOOK_SOURCE).toContain('getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)')
+    expect(HOOK_SOURCE).toContain(
+      'runtimeStatusByEnvironmentId.get(executionHost.environmentId)?.status?.hostPlatform'
+    )
 
     const fullSubmit = sourceBetween(
       HOOK_SOURCE,

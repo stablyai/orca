@@ -39,9 +39,11 @@ const mocks = vi.hoisted(() => {
         updatedAt: 1
       }
     ] as Record<string, unknown>[],
+    runtimeStatusByEnvironmentId: new Map<string, { status: { hostPlatform: NodeJS.Platform } }>(),
     allWorktrees: vi.fn(() => store.worktrees),
     ensureDetectedAgents: vi.fn(),
-    ensureRemoteDetectedAgents: vi.fn()
+    ensureRemoteDetectedAgents: vi.fn(),
+    ensureRuntimeDetectedAgents: vi.fn()
   }
   return {
     store,
@@ -141,6 +143,8 @@ describe('startFixChecksAgent', () => {
     ]
     mocks.store.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.store.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
+    mocks.store.ensureRuntimeDetectedAgents.mockResolvedValue(['codex'])
+    mocks.store.runtimeStatusByEnvironmentId = new Map()
     mocks.activateAndRevealWorktree.mockReturnValue(true)
     mocks.findGithubPrWorkspaceAttachment.mockReturnValue(null)
     mocks.getConnectionId.mockReturnValue(null)
@@ -170,6 +174,47 @@ describe('startFixChecksAgent', () => {
 
     expect(mocks.store.ensureDetectedAgents).not.toHaveBeenCalled()
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+  })
+
+  it('detects and launches checks on the attached runtime host platform', async () => {
+    mocks.store.repos = [
+      {
+        id: 'repo-1',
+        path: '/runtime/repo',
+        displayName: 'Runtime repo',
+        badgeColor: '#000000',
+        addedAt: 1,
+        connectionId: null,
+        executionHostId: 'runtime:env-1'
+      }
+    ] as never
+    mocks.store.worktrees = [
+      {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: '/runtime/repo/wt-1',
+        hostId: 'runtime:env-1'
+      }
+    ] as never
+    mocks.store.runtimeStatusByEnvironmentId = new Map([
+      ['env-1', { status: { hostPlatform: 'linux' } }]
+    ])
+
+    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+    await expect(
+      startFixChecksAgent({
+        repoId: 'repo-1',
+        worktreeId: 'wt-1',
+        basePrompt: 'Fix checks',
+        launchSource: 'task_page'
+      })
+    ).resolves.toBe(true)
+
+    expect(mocks.store.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1')
+    expect(mocks.store.ensureDetectedAgents).not.toHaveBeenCalled()
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ launchPlatform: 'linux' })
+    )
   })
 
   it('fails without launching when agent detection finds no enabled agent', async () => {
@@ -247,6 +292,50 @@ describe('startFixChecksAgent', () => {
       42,
       'runtime:env-1'
     )
+  })
+
+  it('fails closed instead of launching a colliding worktree id on another host', async () => {
+    const localWorktree = {
+      id: 'wt-shared',
+      repoId: 'repo-1',
+      path: '/repo/wt-shared',
+      hostId: 'local'
+    }
+    const runtimeWorktree = {
+      id: 'wt-shared',
+      repoId: 'repo-1',
+      path: '/runtime/repo/wt-shared',
+      hostId: 'runtime:env-1'
+    }
+    mocks.store.worktrees = [localWorktree, runtimeWorktree] as never
+    mocks.findGithubPrWorkspaceAttachment.mockReturnValue(runtimeWorktree)
+    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+
+    await expect(
+      startFixChecksAgent({
+        repoId: 'repo-1',
+        item: {
+          id: 'pr-42',
+          type: 'pr',
+          number: 42,
+          title: 'Fix checks',
+          state: 'open',
+          url: 'https://example.invalid/pr/42',
+          labels: [],
+          updatedAt: '2026-07-22T00:00:00Z',
+          author: 'alice',
+          repoId: 'repo-1',
+          repoExecutionHostId: 'runtime:env-1'
+        },
+        basePrompt: 'Fix checks',
+        launchSource: 'task_page'
+      })
+    ).resolves.toBe(false)
+
+    expect(mocks.store.ensureDetectedAgents).not.toHaveBeenCalled()
+    expect(mocks.store.ensureRuntimeDetectedAgents).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
   it('falls back to the repo connection when an attached workspace lookup is unresolved', async () => {

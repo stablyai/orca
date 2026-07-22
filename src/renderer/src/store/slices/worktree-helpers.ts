@@ -21,6 +21,7 @@ import type {
   WorkspaceKey
 } from '../../../../shared/types'
 import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -168,7 +169,10 @@ export type WorktreeSlice = {
     compareBaseRef?: string,
     // Why: reserved for automation-dispatch flows so host-side provenance can
     // be minted securely; regular create callers should omit this.
-    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
+    options?: {
+      automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+      executionHostId?: ExecutionHostId
+    }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void

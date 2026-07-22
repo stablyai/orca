@@ -147,6 +147,7 @@ import {
 import { getPrCommentCodeContext } from '@/components/github/pr-comment-code-context'
 import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
@@ -327,7 +328,11 @@ type PullRequestPageProps = {
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
-    itemKey: { id: string; repoId: string },
+    itemKey: {
+      id: string
+      repoId: string
+      repoExecutionHostId?: GitHubWorkItem['repoExecutionHostId']
+    },
     reviewRequests: GitHubAssignableUser[]
   ) => void
   onClose: () => void
@@ -4558,6 +4563,7 @@ function ChecksTab({
       return await launchWorkItemDirect({
         item: { ...item, repoId: targetRepoId, pasteContent: commandInput },
         repoId: targetRepoId,
+        repoExecutionHostId: item.repoExecutionHostId,
         launchSource: 'task_page',
         telemetrySource: 'sidebar',
         promptDelivery: 'submit-after-ready',
@@ -6501,7 +6507,12 @@ export default function PullRequestPage({
   const attachedWorkspace = useMemo(
     () =>
       workItem?.type === 'pr'
-        ? findGithubPrWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        ? findGithubPrWorkspaceAttachment(
+            allWorktrees,
+            effectiveRepoId,
+            workItem.number,
+            workItem.repoExecutionHostId
+          )
         : null,
     [allWorktrees, effectiveRepoId, workItem]
   )
@@ -6514,8 +6525,14 @@ export default function PullRequestPage({
     if (!repoPath && !effectiveRepoId) {
       return undefined
     }
-    return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
-      ?.issueSourcePreference
+    return (
+      effectiveRepoId
+        ? findRepoForHost(s.repos, effectiveRepoId, {
+            hostId: workItem?.repoExecutionHostId,
+            settings: s.settings
+          })
+        : s.repos.find((r) => r.path === repoPath)
+    )?.issueSourcePreference
   })
   const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const detailsCacheKey = useMemo(() => {
@@ -6573,7 +6590,8 @@ export default function PullRequestPage({
     const currentAttached = findGithubPrWorkspaceAttachment(
       useAppStore.getState().allWorktrees(),
       targetRepoId,
-      workItem.number
+      workItem.number,
+      workItem.repoExecutionHostId
     )
     if (!currentAttached) {
       handleUseWorkItem()
@@ -6788,7 +6806,12 @@ export default function PullRequestPage({
     if (!details?.item) {
       return workItem
     }
-    return { ...workItem, ...details.item, repoId: workItem.repoId }
+    return {
+      ...workItem,
+      ...details.item,
+      repoId: workItem.repoId,
+      repoExecutionHostId: workItem.repoExecutionHostId
+    }
   }, [details?.item, workItem])
 
   useEffect(() => {
@@ -6797,7 +6820,11 @@ export default function PullRequestPage({
     }
     // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
     onReviewRequestsChange?.(
-      { id: workItem.id, repoId: workItem.repoId },
+      {
+        id: workItem.id,
+        repoId: workItem.repoId,
+        repoExecutionHostId: workItem.repoExecutionHostId
+      },
       details.item.reviewRequests
     )
   }, [details?.item.reviewRequests, onReviewRequestsChange, workItem])

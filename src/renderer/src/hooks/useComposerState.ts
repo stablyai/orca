@@ -139,6 +139,7 @@ import {
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folder-workspace-composer-path-status'
 import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
@@ -713,8 +714,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [folderDetectedIds]
   )
   const [useInitialTargetSeed, setUseInitialTargetSeed] = useState(true)
+  const [selectedTargetSeed, setSelectedTargetSeed] = useState<{
+    projectId: string | null
+    hostId: ExecutionHostId | null
+    projectHostSetupId: string | null
+  } | null>(null)
   const initialTargetSeed =
-    useInitialTargetSeed && repoId === resolvedInitialRepoId ? initialRunSeed : null
+    selectedTargetSeed ??
+    (useInitialTargetSeed && repoId === resolvedInitialRepoId ? initialRunSeed : null)
   const selectedWorkspaceTarget = useMemo(
     () =>
       resolveWorkspaceCreationTarget({
@@ -747,22 +754,37 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (!selectedRepo) {
       return CLIENT_PLATFORM
     }
-    const projectRuntime = selectedRepo.connectionId
-      ? undefined
-      : getLocalRepoProjectExecutionRuntimeContext(
-          {
-            activeRepoId,
-            activeWorktreeId: null,
-            projects,
-            repos,
-            settings,
-            worktreesByRepo
-          },
-          selectedRepo.id,
-          CLIENT_PLATFORM
-        )
-    return getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)
-  }, [activeRepoId, projects, repos, selectedRepo, settings, worktreesByRepo])
+    const executionHost = parseExecutionHostId(getRepoExecutionHostId(selectedRepo))
+    const runtimePlatform =
+      executionHost?.kind === 'runtime'
+        ? (runtimeStatusByEnvironmentId.get(executionHost.environmentId)?.status?.hostPlatform ??
+          'linux')
+        : null
+    const projectRuntime =
+      selectedRepo.connectionId || executionHost?.kind === 'runtime'
+        ? undefined
+        : getLocalRepoProjectExecutionRuntimeContext(
+            {
+              activeRepoId,
+              activeWorktreeId: null,
+              projects,
+              repos,
+              settings,
+              worktreesByRepo
+            },
+            selectedRepo.id,
+            CLIENT_PLATFORM
+          )
+    return runtimePlatform ?? getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)
+  }, [
+    activeRepoId,
+    projects,
+    repos,
+    runtimeStatusByEnvironmentId,
+    selectedRepo,
+    settings,
+    worktreesByRepo
+  ])
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only `orca-ide` rename must not apply to remote launch commands.
   const selectedRepoIsRemote = selectedRepo ? repoIsRemote(selectedRepo) : false
   const selectedRepoStartupShell = resolveLocalWindowsAgentStartupShell({
@@ -1092,11 +1114,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   setupAgentStartupPolicyRef.current = setupAgentStartupPolicy
   const setupAgentStartupPolicySaveRef = useRef<{
     repoId: string
+    hostId: ExecutionHostId
     policy: SetupAgentStartupPolicy
     promise: Promise<boolean>
   } | null>(null)
   const setupAgentStartupPolicyDraftRef = useRef<{
     repoId: string
+    hostId: ExecutionHostId
     policy: SetupAgentStartupPolicy
   } | null>(null)
   const [creating, setCreating] = useState(false)
@@ -1181,30 +1205,48 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const persistedSetupAgentStartupPolicy = getRepoSetupAgentStartupPolicy(selectedRepo)
   useEffect(() => {
     const draft = setupAgentStartupPolicyDraftRef.current
-    if (draft?.repoId === repoId && draft.policy !== persistedSetupAgentStartupPolicy) {
+    if (
+      draft?.repoId === repoId &&
+      draft.hostId === selectedRepoExecutionHostId &&
+      draft.policy !== persistedSetupAgentStartupPolicy
+    ) {
       return
     }
     setupAgentStartupPolicyRef.current = persistedSetupAgentStartupPolicy
     setSetupAgentStartupPolicy(persistedSetupAgentStartupPolicy)
-  }, [repoId, persistedSetupAgentStartupPolicy])
+  }, [repoId, persistedSetupAgentStartupPolicy, selectedRepoExecutionHostId])
 
   const persistSetupAgentStartupPolicy = useCallback(
     async (
       policy: SetupAgentStartupPolicy = setupAgentStartupPolicyRef.current
     ): Promise<boolean> => {
+      const executionHostId = selectedRepoExecutionHostIdRef.current
+      if (!executionHostId) {
+        return true
+      }
       while (true) {
-        const currentRepo = useAppStore.getState().repos.find((repo) => repo.id === repoId)
+        const currentStore = useAppStore.getState()
+        const currentRepo = findRepoForHost(currentStore.repos, repoId, {
+          hostId: executionHostId,
+          settings: currentStore.settings
+        })
         if (!currentRepo || !isGitRepoKind(currentRepo)) {
           return true
         }
         const pendingSave = setupAgentStartupPolicySaveRef.current
-        if (pendingSave?.repoId === currentRepo.id) {
+        if (
+          pendingSave &&
+          pendingSave.repoId === currentRepo.id &&
+          pendingSave.hostId === executionHostId
+        ) {
           if (pendingSave.policy === policy) {
             const saved = await pendingSave.promise
+            const draft = setupAgentStartupPolicyDraftRef.current
             if (
               saved &&
-              setupAgentStartupPolicyDraftRef.current?.repoId === currentRepo.id &&
-              setupAgentStartupPolicyDraftRef.current.policy === policy
+              draft?.repoId === currentRepo.id &&
+              draft.hostId === executionHostId &&
+              draft.policy === policy
             ) {
               setupAgentStartupPolicyDraftRef.current = null
             }
@@ -1214,27 +1256,40 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           continue
         }
         if (getRepoSetupAgentStartupPolicy(currentRepo) === policy) {
+          const draft = setupAgentStartupPolicyDraftRef.current
           if (
-            setupAgentStartupPolicyDraftRef.current?.repoId === currentRepo.id &&
-            setupAgentStartupPolicyDraftRef.current.policy === policy
+            draft?.repoId === currentRepo.id &&
+            draft.hostId === executionHostId &&
+            draft.policy === policy
           ) {
             setupAgentStartupPolicyDraftRef.current = null
           }
           return true
         }
-        const promise = updateRepo(currentRepo.id, {
-          hookSettings: buildSetupAgentStartupHookSettings(currentRepo.hookSettings, policy)
-        }).finally(() => {
+        const promise = updateRepo(
+          currentRepo.id,
+          {
+            hookSettings: buildSetupAgentStartupHookSettings(currentRepo.hookSettings, policy)
+          },
+          { hostId: executionHostId }
+        ).finally(() => {
           if (setupAgentStartupPolicySaveRef.current?.promise === promise) {
             setupAgentStartupPolicySaveRef.current = null
           }
         })
-        setupAgentStartupPolicySaveRef.current = { repoId: currentRepo.id, policy, promise }
+        setupAgentStartupPolicySaveRef.current = {
+          repoId: currentRepo.id,
+          hostId: executionHostId,
+          policy,
+          promise
+        }
         const saved = await promise
+        const draft = setupAgentStartupPolicyDraftRef.current
         if (
           saved &&
-          setupAgentStartupPolicyDraftRef.current?.repoId === currentRepo.id &&
-          setupAgentStartupPolicyDraftRef.current.policy === policy
+          draft?.repoId === currentRepo.id &&
+          draft.hostId === executionHostId &&
+          draft.policy === policy
         ) {
           setupAgentStartupPolicyDraftRef.current = null
         }
@@ -1247,8 +1302,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleSetupAgentStartupPolicyChange = useCallback(
     (policy: SetupAgentStartupPolicy) => {
       setupAgentStartupPolicyRef.current = policy
-      if (repoId) {
-        setupAgentStartupPolicyDraftRef.current = { repoId, policy }
+      const executionHostId = selectedRepoExecutionHostIdRef.current
+      if (repoId && executionHostId) {
+        setupAgentStartupPolicyDraftRef.current = { repoId, hostId: executionHostId, policy }
       }
       setSetupAgentStartupPolicy(policy)
       void persistSetupAgentStartupPolicy(policy).then((saved) => {
@@ -2536,6 +2592,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     ): void => {
       setProjectError(null)
       setUseInitialTargetSeed(false)
+      setSelectedTargetSeed(null)
       if (value === repoId && !options.forceResetStartFrom) {
         setRepoId(value)
         return
@@ -2617,6 +2674,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       // Why: switching run host for the same project must not erase the task/PR source the user is starting from.
       handleRepoChange(option.repoId, { preserveStartFrom: true })
+      setSelectedTargetSeed({
+        projectId: option.projectId,
+        hostId: option.hostId,
+        projectHostSetupId: option.id
+      })
     },
     [handleRepoChange, projectHostSetupOptions]
   )
@@ -2860,6 +2922,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         repoId: runRepo.id,
         prNumber: identity.number,
         settings: itemRepoSettings,
+        executionHostId: getRepoExecutionHostId(runRepo),
         ...(normalizedItem.branchName ? { headRefName: normalizedItem.branchName } : {}),
         ...(normalizedItem.baseRefName ? { baseRefName: normalizedItem.baseRefName } : {}),
         ...(normalizedItem.isCrossRepository !== undefined
@@ -3548,7 +3611,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         undefined,
         undefined,
         undefined,
-        submitCompareBaseRef
+        submitCompareBaseRef,
+        selectedRepoExecutionHostId ? { executionHostId: selectedRepoExecutionHostId } : undefined
       )
       const worktree = result.worktree
 

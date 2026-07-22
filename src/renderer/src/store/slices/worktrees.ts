@@ -16,7 +16,8 @@ import type {
   WorktreeLineage,
   WorkspaceLineage,
   ProjectHostSetup,
-  WorktreeMeta
+  WorktreeMeta,
+  Repo
 } from '../../../../shared/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
 import {
@@ -69,7 +70,9 @@ import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  getWorktreeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -1378,13 +1381,14 @@ async function purgeOrphanedRuntimeSshProjects(
 async function resolveGitHubReviewPushTarget(
   settings: AppState['settings'],
   repoId: string,
-  prNumber: number
+  prNumber: number,
+  executionHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): Promise<GitPushTarget | undefined> {
   try {
     const target = getActiveRuntimeTarget(settings)
     const result =
       target.kind === 'local'
-        ? await window.api.worktrees.resolvePrBase({ repoId, prNumber })
+        ? await window.api.worktrees.resolvePrBase({ repoId, prNumber, executionHostId })
         : await callRuntimeRpc<GitHubPrStartPoint | { error: string }>(
             target,
             'worktree.resolvePrBase',
@@ -1435,16 +1439,30 @@ async function resolveGitLabReviewPushTarget(
   }
 }
 
-function getHostedReviewPushTargetLookup(worktree: Worktree): {
+function getHostedReviewPushTargetLookup(
+  worktree: Worktree,
+  repos: readonly Repo[]
+): {
   key: string
   resolve: (settings: AppState['settings']) => Promise<GitPushTarget | undefined>
 } | null {
-  const hostScope = worktree.hostId ?? ''
+  const matchingRepos = repos.filter((repo) => repo.id === worktree.repoId)
+  const explicitHostId = normalizeExecutionHostId(worktree.hostId)
+  const repo = explicitHostId
+    ? matchingRepos.find((candidate) => getRepoExecutionHostId(candidate) === explicitHostId)
+    : matchingRepos.length === 1
+      ? matchingRepos[0]
+      : matchingRepos.find(
+          (candidate) => getRepoExecutionHostId(candidate) === LOCAL_EXECUTION_HOST_ID
+        )
+  const executionHostId = getWorktreeExecutionHostId(worktree, repo)
+  const hostScope = executionHostId
   if (isPositiveHostedReviewNumber(worktree.linkedPR)) {
     const prNumber = worktree.linkedPR
     return {
       key: `${worktree.id}:${hostScope}:github:${prNumber}`,
-      resolve: (settings) => resolveGitHubReviewPushTarget(settings, worktree.repoId, prNumber)
+      resolve: (settings) =>
+        resolveGitHubReviewPushTarget(settings, worktree.repoId, prNumber, executionHostId)
     }
   }
   if (isPositiveHostedReviewNumber(worktree.linkedGitLabMR)) {
@@ -3023,6 +3041,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     options
   ) => {
     const automationProvenanceRequest = options?.automationProvenanceRequest
+    const requestedExecutionHostId = options?.executionHostId
     try {
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         const candidateName = getClientWorktreeCreateCandidate(name, attempt)
@@ -3040,6 +3059,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               : undefined
           const createArgs = {
             repoId,
+            ...(requestedExecutionHostId ? { executionHostId: requestedExecutionHostId } : {}),
             name: candidateName,
             baseBranch,
             ...(compareBaseRef ? { compareBaseRef } : {}),
@@ -3074,7 +3094,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(creationId ? { creationId } : {}),
             ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
           }
-          const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
+          const target = getActiveRuntimeTarget(
+            settingsForRepoOwner(get(), repoId, requestedExecutionHostId)
+          )
           const result =
             target.kind === 'local'
               ? await window.api.worktrees.create(createArgs)
@@ -3134,7 +3156,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 )
           // Why: worktrees.onChanged can add this worktree before this callback runs; appending blindly would duplicate it (React key clash).
           set((s) => {
-            const hostId = repoHostId(s, repoId)
+            const hostId = repoHostId(s, repoId, requestedExecutionHostId)
             const createdWorktree = withRepoHostOwnership(
               result.worktree,
               hostId,
@@ -3796,10 +3818,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           )
         : undefined
     const existingHostedReviewPushTargetLookup = existingWorktree
-      ? getHostedReviewPushTargetLookup(existingWorktree)
+      ? getHostedReviewPushTargetLookup(existingWorktree, get().repos)
       : null
     const nextHostedReviewPushTargetLookup = existingWorktree
-      ? getHostedReviewPushTargetLookup({ ...existingWorktree, ...normalizedUpdates })
+      ? getHostedReviewPushTargetLookup({ ...existingWorktree, ...normalizedUpdates }, get().repos)
       : null
     // Why: a pushTarget derived from a linked review must not keep steering pushes after it's unlinked or replaced.
     const shouldClearStaleHostedReviewPushTarget =
@@ -3991,7 +4013,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (!worktree || worktree.pushTarget) {
       return
     }
-    const lookup = getHostedReviewPushTargetLookup(worktree)
+    const lookup = getHostedReviewPushTargetLookup(worktree, get().repos)
     if (!lookup || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
       return
     }
@@ -4005,7 +4027,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (!current || current.pushTarget) {
         return
       }
-      const currentLookup = getHostedReviewPushTargetLookup(current)
+      const currentLookup = getHostedReviewPushTargetLookup(current, get().repos)
       if (currentLookup?.key !== lookup.key) {
         return
       }
