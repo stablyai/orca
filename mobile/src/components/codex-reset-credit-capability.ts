@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { CODEX_RESET_CREDIT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
 
-// Mirrors CODEX_RESET_CREDIT_RUNTIME_CAPABILITY in the shared runtime protocol.
-export const MOBILE_CODEX_RESET_CREDIT_CAPABILITY = 'accounts.codex-reset-credit.v1'
+// Why: source the capability string from the shared contract so a host bump can never
+// silently drift from the mobile probe.
+export const MOBILE_CODEX_RESET_CREDIT_CAPABILITY = CODEX_RESET_CREDIT_RUNTIME_CAPABILITY
 
 export async function readCodexResetCreditCapability(
   client: Pick<RpcClient, 'sendRequest'>

@@ -644,6 +644,44 @@ export class CodexAccountService {
     }
   }
 
+  // Why: a removed account's managed home is gone, so its unresolved providerPending
+  // attempt can never validate or be replayed; drop it so a target-scoped default reset
+  // is not wedged forever by hasPendingResetForTarget matching the orphan.
+  private discardResetAttemptsForRemovedAccount(accountId: string): void {
+    const staleKeys: string[] = []
+    for (const [idempotencyKey, attempt] of this.resetAttemptsByKey) {
+      if (attempt.expectedScope.accountId !== accountId) {
+        continue
+      }
+      staleKeys.push(idempotencyKey)
+      if (this.resetAttemptKeyByOffer.get(attempt.scopeKey) === idempotencyKey) {
+        this.resetAttemptKeyByOffer.delete(attempt.scopeKey)
+      }
+      if (this.unresolvedResetKeyByAccountScope.get(attempt.accountScopeKey) === idempotencyKey) {
+        this.unresolvedResetKeyByAccountScope.delete(attempt.accountScopeKey)
+      }
+    }
+    if (staleKeys.length === 0) {
+      return
+    }
+    for (const idempotencyKey of staleKeys) {
+      this.resetAttemptsByKey.delete(idempotencyKey)
+    }
+    if (!this.durableResetLedger) {
+      return
+    }
+    const staleKeySet = new Set(staleKeys)
+    const attempts = this.durableResetLedger.attempts.filter(
+      (attempt) => !staleKeySet.has(attempt.idempotencyKey)
+    )
+    if (attempts.length === this.durableResetLedger.attempts.length) {
+      return
+    }
+    const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
+    this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
+    this.durableResetLedger = structuredClone(nextLedger)
+  }
+
   private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
     const managedHome = this.createManagedHome(accountId, target)
@@ -779,6 +817,7 @@ export class CodexAccountService {
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
     this.rateLimits.evictInactiveCodexCache(accountId)
+    this.discardResetAttemptsForRemovedAccount(accountId)
     await this.rateLimits.refreshForCodexAccountChange(
       getSelectedCodexAccountIdForTarget(settings, getCodexSelectionTargetForAccount(account)) ===
         accountId

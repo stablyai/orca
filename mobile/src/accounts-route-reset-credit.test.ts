@@ -27,6 +27,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Alert: { alert: dependencies.alert },
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   ScrollView: 'ScrollView',
@@ -40,10 +41,16 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 })
 }))
 
-vi.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({ hostId: 'host-1' }),
-  useRouter: () => ({ back: dependencies.back })
-}))
+vi.mock('expo-router', async () => {
+  const React = await import('react')
+  return {
+    useFocusEffect(effect: () => void | (() => void)): void {
+      React.useEffect(effect, [effect])
+    },
+    useLocalSearchParams: () => ({ hostId: 'host-1' }),
+    useRouter: () => ({ back: dependencies.back })
+  }
+})
 
 vi.mock('expo-crypto', () => ({ randomUUID: dependencies.randomUUID }))
 

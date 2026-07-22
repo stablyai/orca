@@ -3032,6 +3032,65 @@ describe('CodexAccountService config sync', () => {
     expect(consume).not.toHaveBeenCalled()
   })
 
+  it('unwedges the system-default reset after removing the account owning a pending attempt', async () => {
+    const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+    const account = {
+      id: 'account-1',
+      email: 'user@example.com',
+      managedHomePath,
+      managedHomeRuntime: 'host' as const,
+      wslDistro: null,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1
+    }
+    const settings = createSettings({
+      codexManagedAccounts: [account],
+      activeCodexManagedAccountId: null
+    })
+    const limits = createResetCreditLimits()
+    const state = createResetRateLimitState(limits)
+    const expectedScope = buildCodexResetCreditExpectedScope({
+      target: state.codexTarget,
+      account,
+      limits
+    })!
+    const store = createStore(settings)
+    store.replaceCodexResetCreditAttemptLedgerAndFlush({
+      version: 1,
+      attempts: [
+        {
+          idempotencyKey: '12121212-1212-4212-8212-121212121212',
+          expectedScope,
+          state: 'providerPending'
+        }
+      ]
+    })
+    const consume = vi.fn().mockResolvedValue({ outcome: 'reset', state })
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      {
+        ...createRateLimits(),
+        getState: vi.fn(() => state),
+        consumeCodexRateLimitResetCredit: consume
+      } as never,
+      createRuntimeHome() as never
+    )
+
+    // The orphan pending attempt wedges the target-scoped default reset until removal.
+    await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')
+
+    await service.removeAccount('account-1')
+
+    await expect(service.consumeCurrentRateLimitResetCredit()).resolves.toEqual({
+      outcome: 'reset',
+      state
+    })
+    expect(consume).toHaveBeenCalledTimes(1)
+    expect(store.getCodexResetCreditAttemptLedger().attempts).toEqual([])
+  })
+
   it('does not reset a different system-default target after waiting in the mutation queue', async () => {
     const settings = createSettings()
     const state = createResetRateLimitState(createResetCreditLimits())
