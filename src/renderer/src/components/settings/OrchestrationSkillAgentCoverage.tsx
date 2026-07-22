@@ -1,7 +1,8 @@
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import type { OrchestrationSkillAgentStatus } from '@/lib/orchestration-skill-coverage'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { type AgentDetectionTarget, useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useAppStore } from '@/store'
 import { getOrchestrationSkillAgentStatuses } from '@/lib/orchestration-skill-coverage'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -73,7 +74,16 @@ export function OrchestrationSkillAgentCoverage(props: {
   className?: string
 }): React.JSX.Element {
   const { skills, loading: skillsLoading, embedded = false, className } = props
-  const { detectedIds, isLoading: agentsLoading } = useDetectedAgents()
+  // Why: skill coverage must follow the same host as agent detection/settings.
+  // Without the active runtime target this pane reports laptop PATH while the
+  // user is actually working against a remote orca serve environment.
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId?.trim() || null
+  )
+  const agentDetectionTarget: AgentDetectionTarget | null = activeRuntimeEnvironmentId
+    ? { kind: 'runtime', environmentId: activeRuntimeEnvironmentId }
+    : null
+  const { detectedIds, isLoading: agentsLoading } = useDetectedAgents(agentDetectionTarget)
   const loading = skillsLoading || agentsLoading || detectedIds === null
   const agentStatuses = getOrchestrationSkillAgentStatuses(skills, detectedIds ?? [])
   const installedCount = agentStatuses.filter((status) => status.installed).length

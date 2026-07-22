@@ -5,7 +5,7 @@ import { useId, useMemo, useState } from 'react'
 import { Check, ChevronDown, ExternalLink, Info, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { type AgentDetectionTarget, useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -679,7 +679,16 @@ export function AgentsPane({
   wslDistros,
   wslCapabilitiesLoading
 }: AgentsPaneProps): React.JSX.Element {
-  const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
+  // Why: Settings → Agents must probe the active runtime host when the user is
+  // working on a remote environment (orca serve / Devbox). Local PATH detection
+  // otherwise hides the remote CLIs even though launches already go remote.
+  const activeRuntimeEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
+  const agentDetectionTarget: AgentDetectionTarget | null = activeRuntimeEnvironmentId
+    ? { kind: 'runtime', environmentId: activeRuntimeEnvironmentId }
+    : null
+  const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents(
+    agentDetectionTarget
+  )
   // Why: refresh re-spawns the user's login shell to re-capture PATH
   // (preflight:refreshAgents on the main side). This handles the
   // "installed a new CLI, Orca doesn't see it yet" case without a restart.

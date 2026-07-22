@@ -5,7 +5,8 @@ import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { type AgentDetectionTarget, useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import type { TuiAgent } from '../../../../shared/types'
@@ -102,10 +103,24 @@ function QuickLaunchAgentMenuItemsInner({
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
   // Why: must be a reactive selector (not getConnectionId() which reads a
   // snapshot via getState()). This ensures the component re-renders when the
-  // SSH connection state changes. Returns undefined when the worktree isn't
-  // found (store not hydrated), null for local repos, string for remote.
-  const connectionId = useAppStore((s) => getConnectionIdFromState(s, worktreeId))
-  const { detectedIds } = useDetectedAgents(connectionId)
+  // SSH / runtime host changes. Prefer explicit SSH connection when present;
+  // otherwise use the worktree's runtime environment (orca serve / Devbox).
+  const agentDetectionTarget = useAppStore((s): AgentDetectionTarget | undefined => {
+    const connectionId = getConnectionIdFromState(s, worktreeId)
+    if (connectionId === undefined) {
+      return undefined
+    }
+    const normalizedConnectionId = connectionId?.trim()
+    if (normalizedConnectionId) {
+      return { kind: 'ssh', connectionId: normalizedConnectionId }
+    }
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim()
+    if (runtimeEnvironmentId) {
+      return { kind: 'runtime', environmentId: runtimeEnvironmentId }
+    }
+    return { kind: 'local' }
+  })
+  const { detectedIds } = useDetectedAgents(agentDetectionTarget)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
