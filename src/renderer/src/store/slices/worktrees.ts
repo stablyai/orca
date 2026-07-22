@@ -2325,10 +2325,22 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       const ownerState = get()
       const requestStartedWorktrees = ownerState.worktreesByRepo[repoId]
-      const hostId = repoHostId(ownerState, repoId)
-      const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
+      const repoOwners = ownerState.repos.filter((repo) => repo.id === repoId)
+      const hasLocalOwner = repoOwners.some(
+        (repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      )
+      // Why: a local event may share its repo id with the focused runtime; prefer
+      // the local owner without redirecting runtime/SSH-only repos.
+      const useLocalOwner =
+        options?.forceLocalOwner === true && (hasLocalOwner || repoOwners.length === 0)
+      const hostId = useLocalOwner ? LOCAL_EXECUTION_HOST_ID : repoHostId(ownerState, repoId)
+      const ownerWasMissingAtStart = repoOwners.length === 0
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
-      const settings = settingsForRepoOwner(ownerState, repoId, hostId)
+      const ownerSettings = settingsForRepoOwner(ownerState, repoId, hostId)
+      const settings =
+        useLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
+          ? { ...ownerSettings, activeRuntimeEnvironmentId: null }
+          : ownerSettings
       const detected = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
         executionHostId: hostId,
         requireAuthoritative: options?.requireAuthoritative
@@ -2688,10 +2700,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set({ hasHydratedWorktreePurge: true })
   },
 
-  fetchWorktreeLineage: async () => {
+  fetchWorktreeLineage: async (options) => {
     try {
       // Why: lineage is a focused-host refresh; host-merge so other hosts' fetched lineage is preserved.
-      await refreshWorktreeLineageForSettings(get().settings, set, {
+      const ownerSettings = get().settings
+      // Why: local worktree-change events while a runtime is focused are paired
+      // with a forced-local list refresh; lineage must follow the same owner.
+      const settings =
+        options?.forceLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
+          ? { ...ownerSettings, activeRuntimeEnvironmentId: null }
+          : ownerSettings
+      await refreshWorktreeLineageForSettings(settings, set, {
         reuseRecentCompatibilityFailure: true
       })
     } catch (err) {

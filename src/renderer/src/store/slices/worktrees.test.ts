@@ -1239,6 +1239,82 @@ describe('fetchWorktrees', () => {
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 
+  it('pins the list fetch to the local host when forceLocalOwner is set', async () => {
+    // Regression: a local `worktrees:changed` event for an unbound
+    // repo while a remote runtime is active must refresh against the local
+    // host, not the runtime — otherwise CLI-created local worktrees stay
+    // invisible in the sidebar until an app restart.
+    const store = createTestStore()
+    const local = makeWorktree({
+      id: 'repo1::/local/wt1',
+      repoId: 'repo1',
+      path: '/local/wt1',
+      branch: 'refs/heads/local'
+    })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(makeDetectedResult('repo1', [local]))
+
+    await store.getState().fetchWorktrees('repo1', { forceLocalOwner: true })
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([local])
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('pins a duplicate repo id to its local owner without replacing runtime worktrees', async () => {
+    const store = createTestStore()
+    const local = makeWorktree({
+      id: 'same-repo::/local/wt',
+      repoId: 'same-repo',
+      path: '/local/wt',
+      hostId: 'local'
+    })
+    const remote = makeWorktree({
+      id: 'same-repo::/remote/wt',
+      repoId: 'same-repo',
+      path: '/remote/wt',
+      hostId: 'runtime:env-1'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'same-repo',
+          path: '/repos/local',
+          displayName: 'local',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'local'
+        },
+        {
+          id: 'same-repo',
+          path: '/repos/remote',
+          displayName: 'remote',
+          badgeColor: '#111',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      worktreesByRepo: { 'same-repo': [remote] },
+      detectedWorktreesByRepo: {
+        'same-repo': makeDetectedResult('same-repo', [remote])
+      }
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(makeDetectedResult('same-repo', [local]))
+
+    await store.getState().fetchWorktrees('same-repo', { forceLocalOwner: true })
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'same-repo' })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([remote, local])
+    expect(store.getState().detectedWorktreesByRepo['same-repo']?.worktrees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: remote.id, hostId: 'runtime:env-1' }),
+        expect.objectContaining({ id: local.id, hostId: 'local' })
+      ])
+    )
+  })
+
   it('fetches SSH repo worktrees through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
     const sshWorktree = makeWorktree({
@@ -1264,7 +1340,7 @@ describe('fetchWorktrees', () => {
       makeDetectedResult('repo-ssh', [sshWorktree], { source: 'git' })
     )
 
-    await store.getState().fetchWorktrees('repo-ssh')
+    await store.getState().fetchWorktrees('repo-ssh', { forceLocalOwner: true })
 
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'repo-ssh' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
@@ -1303,7 +1379,7 @@ describe('fetchWorktrees', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
 
-    await store.getState().fetchWorktrees('repo-remote')
+    await store.getState().fetchWorktrees('repo-remote', { forceLocalOwner: true })
 
     expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
       { ...remote, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
@@ -1369,6 +1445,7 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
       { ...fresh, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
     ])
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 
   it('stamps runtime worktrees with the owning project host setup', async () => {
@@ -1871,6 +1948,22 @@ describe('worktree lineage state', () => {
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.listLineage).not.toHaveBeenCalled()
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+  })
+
+  it('pins lineage refresh to the local host when forceLocalOwner is set', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: {}
+    } as Partial<AppState>)
+    mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
+
+    await store.getState().fetchWorktreeLineage({ forceLocalOwner: true })
+
+    expect(mockApi.worktrees.listLineage).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
   })
 

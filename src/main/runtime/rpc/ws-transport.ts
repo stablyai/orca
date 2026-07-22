@@ -61,6 +61,7 @@ export class WebSocketTransport implements RpcTransport {
     | null = null
   // Why: maps each socket to its authenticated clientId so close can report which device disconnected.
   private wsClientIds = new Map<WebSocket, string>()
+  private heartbeatConnections = new Set<WebSocket>()
   private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
 
   constructor({
@@ -199,7 +200,6 @@ export class WebSocketTransport implements RpcTransport {
 
     this.httpServer = httpServer
     this.wss = wss
-    this.heartbeat.start(() => this.wss?.clients ?? [])
   }
 
   // Why: force-terminate soon after the 1013 close since a half-open phone may never ack and would hold the descriptor past the WS cap; the 'error' listener absorbs a reset while closing.
@@ -217,6 +217,7 @@ export class WebSocketTransport implements RpcTransport {
     this.wss = null
     this.httpServer = null
     this.heartbeat.stop()
+    this.heartbeatConnections.clear()
 
     if (wss) {
       for (const client of wss.clients) {
@@ -280,11 +281,22 @@ export class WebSocketTransport implements RpcTransport {
       ws.off('close', finalizeConnection)
       ws.off('error', onError)
       this.clearPreAuthTimer(ws)
+      this.heartbeatConnections.delete(ws)
+      if (this.heartbeatConnections.size === 0) {
+        this.heartbeat.stop()
+      }
       const clientId = this.wsClientIds.get(ws) ?? null
       this.wsClientIds.delete(ws)
       const hasOtherConnections =
         clientId !== null && Array.from(this.wsClientIds.values()).includes(clientId)
       this.connectionCloseHandler?.(clientId, ws, hasOtherConnections)
+    }
+
+    // Why: seed before arming so a fresh first socket survives its initial sweep.
+    this.heartbeatConnections.add(ws)
+    this.heartbeat.noteAlive(ws)
+    if (this.heartbeatConnections.size === 1) {
+      this.heartbeat.start(() => this.wss?.clients ?? [])
     }
 
     const preAuthTimer = setTimeout(() => {
@@ -297,9 +309,6 @@ export class WebSocketTransport implements RpcTransport {
       preAuthTimer.unref()
     }
     this.preAuthTimers.set(ws, preAuthTimer)
-
-    // Why: seed alive so the first heartbeat tick doesn't reap a fresh socket before its first pong.
-    this.heartbeat.noteAlive(ws)
 
     ws.on('pong', onPong)
     ws.on('message', onMessage)

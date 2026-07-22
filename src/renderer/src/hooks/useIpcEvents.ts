@@ -856,8 +856,11 @@ export function useIpcEvents(): void {
 
     const handleWorktreesChanged = async (
       repoId: string,
-      renamed?: { oldWorktreeId: string; newWorktreeId: string }
+      renamed?: { oldWorktreeId: string; newWorktreeId: string },
+      options?: { forceLocalOwner?: boolean }
     ): Promise<void> => {
+      const localRefreshStartedWithRuntime =
+        options?.forceLocalOwner === true && isRuntimeEnvironmentActive()
       // Why: capture active-ness before migration moves the pointer; re-key maps before the diff so a rename isn't a deletion.
       const renamedWasActive =
         renamed != null && useAppStore.getState().activeWorktreeId === renamed.oldWorktreeId
@@ -873,18 +876,40 @@ export function useIpcEvents(): void {
       const before =
         getAuthoritativeDetectedWorktreeIds(state, repoId) ??
         getVisibleWorktreeIdsForRepo(state, repoId)
-      await state.fetchWorktrees(repoId)
-      await useAppStore.getState().fetchWorktreeLineage()
+      await state.fetchWorktrees(
+        repoId,
+        options?.forceLocalOwner ? { forceLocalOwner: true } : undefined
+      )
+      await useAppStore
+        .getState()
+        .fetchWorktreeLineage(options?.forceLocalOwner ? { forceLocalOwner: true } : undefined)
       // Why: an id change unmounts the active pane; re-activate so the tab reconciles, else it vanishes until re-select.
       if (renamedWasActive && renamed) {
         useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
+      }
+      // Sweep expired rename-grace entries before any early return, else forced-local
+      // (or non-authoritative) events let the map grow for the session.
+      const now = Date.now()
+      for (const [id, expiry] of recentlyRenamedWorktreeIdExpiry) {
+        if (expiry <= now) {
+          recentlyRenamedWorktreeIdExpiry.delete(id)
+        }
+      }
+      // Why: the deletion diff below is repo-wide, but a forced-local scan overlapping
+      // a runtime cannot prove remote absence (legacy runtime rows may lack hostId).
+      // fetchWorktrees still purges removed local rows host-scoped; accepted gap: the
+      // workspace-space entry survives until the next local-only rescan.
+      if (
+        options?.forceLocalOwner &&
+        (localRefreshStartedWithRuntime || isRuntimeEnvironmentActive())
+      ) {
+        return
       }
       const afterState = useAppStore.getState()
       const after = getAuthoritativeDetectedWorktreeIds(afterState, repoId)
       if (!after) {
         return
       }
-      const now = Date.now()
       const removed: string[] = []
       for (const id of before) {
         if (after.has(id)) {
@@ -896,11 +921,6 @@ export function useIpcEvents(): void {
           continue
         }
         removed.push(id)
-      }
-      for (const [id, expiry] of recentlyRenamedWorktreeIdExpiry) {
-        if (expiry <= now) {
-          recentlyRenamedWorktreeIdExpiry.delete(id)
-        }
       }
       if (removed.length > 0) {
         console.warn(
@@ -1119,12 +1139,14 @@ export function useIpcEvents(): void {
           repoId: string
           renamed?: { oldWorktreeId: string; newWorktreeId: string }
         }) => {
-          if (isRuntimeEnvironmentActive()) {
-            // Why: local worktree events carry local repo ids; fetching the runtime with them can purge or overwrite server state.
-            return
-          }
-          // A folder rename changes the worktree id; handleWorktreesChanged re-keys state and shields it from the deletion diff.
-          worktreeChangeRefreshQueue.enqueue(data)
+          // Why: preserve this event's local origin across queue delays and runtime
+          // focus changes; otherwise an unbound repo can refresh from the wrong host.
+          // A folder rename changes the worktree id; handleWorktreesChanged re-keys
+          // state and shields it from the deletion diff.
+          worktreeChangeRefreshQueue.enqueue({
+            ...data,
+            forceLocalOwner: true
+          })
         }
       )
     )
@@ -1133,7 +1155,8 @@ export function useIpcEvents(): void {
       unsubs.push(
         window.api.worktrees.onHeadIdentitiesChanged((data) => {
           if (isRuntimeEnvironmentActive()) {
-            // Why: local worktree events carry local repo ids (see onChanged).
+            // Why: local worktree events carry local repo ids; the local-pinned list
+            // refresh (onChanged) covers local rows while a runtime is active.
             return
           }
           const state = useAppStore.getState()

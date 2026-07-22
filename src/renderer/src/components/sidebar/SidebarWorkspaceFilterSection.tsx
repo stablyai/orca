@@ -1,5 +1,5 @@
 import React from 'react'
-import { GitBranch, Moon, Workflow } from 'lucide-react'
+import { CalendarClock, GitBranch, Moon } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -40,7 +40,7 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
         onChange={setHideDefaultBranchWorkspace}
       />
       <FilterToggleRow
-        icon={<Workflow className="size-3.5" />}
+        icon={<CalendarClock className="size-3.5" />}
         label={translate(
           'auto.components.sidebar.SidebarWorkspaceFilterSection.automationCreated',
           'Hide automation-created'
