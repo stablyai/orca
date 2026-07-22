@@ -116,4 +116,48 @@ describe('empty remote worktree activation', () => {
       })
     )
   })
+
+  it('does not create a first host terminal when automatic creation is disabled', () => {
+    const worktree = makeWorktree()
+    const callRuntimeEnvironment = vi.fn()
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: callRuntimeEnvironment,
+          subscribe: vi.fn()
+        }
+      }
+    })
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: REPO_PATH,
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      settings: {
+        ...getDefaultSettings(ORCA_WORKSPACES_PATH),
+        activeRuntimeEnvironmentId: 'web-runtime-1',
+        autoCreateTerminalOnWorkspaceActivation: false
+      },
+      reconcileWorktreeTabModel: vi.fn(() => ({
+        renderableTabCount: 0,
+        activeRenderableTabId: null
+      }))
+    })
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+      automaticCreationEnabled: false
+    })
+
+    expect(callRuntimeEnvironment).not.toHaveBeenCalled()
+  })
 })

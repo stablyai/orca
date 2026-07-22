@@ -5701,7 +5701,9 @@
           "5567191a6e": "Browse",
           "0e9fc0eadc": "Workspace Directory",
           "e2955d9ccb": "Configure where new workspaces are created.",
-          "7511097c5d": "Workspace"
+          "7511097c5d": "Workspace",
+          "autoCreateTerminalOnWorkspaceActivation": "Create Terminal on Workspace Selection",
+          "autoCreateTerminalOnWorkspaceActivationDescription": "Automatically create the first terminal when selecting a workspace with no open tabs."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -7958,7 +7960,13 @@
             "e61157e926": "Editor Word Wrap",
             "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
             "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+            "autoCreateTerminalOnWorkspaceActivation": "Create Terminal on Workspace Selection",
+            "autoCreateTerminalOnWorkspaceActivationDescription": "Automatically create the first terminal when selecting a workspace with no open tabs.",
+            "autoCreateTerminalOnWorkspaceActivationTerminal": "terminal",
+            "autoCreateTerminalOnWorkspaceActivationAutomatic": "automatic",
+            "autoCreateTerminalOnWorkspaceActivationSelect": "select",
+            "autoCreateTerminalOnWorkspaceActivationClick": "click"
           }
         },
         "git": {

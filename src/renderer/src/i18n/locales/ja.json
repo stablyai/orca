@@ -5663,7 +5663,9 @@
           "5567191a6e": "ブラウズ",
           "0e9fc0eadc": "ワークスペースディレクトリ",
           "e2955d9ccb": "新規ワークスペースを作成する場所を構成します。",
-          "7511097c5d": "ワークスペース"
+          "7511097c5d": "ワークスペース",
+          "autoCreateTerminalOnWorkspaceActivation": "ワークスペース選択時にターミナルを作成",
+          "autoCreateTerminalOnWorkspaceActivationDescription": "開いているタブがないワークスペースを選択したときに、最初のターミナルを自動的に作成します。"
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "変更を適用する",
@@ -7920,7 +7922,13 @@
             "e61157e926": "エディターのワードラップ",
             "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
             "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+            "autoCreateTerminalOnWorkspaceActivation": "ワークスペース選択時にターミナルを作成",
+            "autoCreateTerminalOnWorkspaceActivationDescription": "開いているタブがないワークスペースを選択したときに、最初のターミナルを自動的に作成します。",
+            "autoCreateTerminalOnWorkspaceActivationTerminal": "ターミナル",
+            "autoCreateTerminalOnWorkspaceActivationAutomatic": "自動",
+            "autoCreateTerminalOnWorkspaceActivationSelect": "選択",
+            "autoCreateTerminalOnWorkspaceActivationClick": "クリック"
           }
         },
         "git": {

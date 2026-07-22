@@ -5678,7 +5678,9 @@
           "5567191a6e": "Examinar",
           "0e9fc0eadc": "Directorio de espacio de trabajo",
           "e2955d9ccb": "Configura dónde se crean nuevos espacios de trabajo.",
-          "7511097c5d": "Espacio de trabajo"
+          "7511097c5d": "Espacio de trabajo",
+          "autoCreateTerminalOnWorkspaceActivation": "Crear terminal al seleccionar un espacio de trabajo",
+          "autoCreateTerminalOnWorkspaceActivationDescription": "Crea automáticamente el primer terminal al seleccionar un espacio de trabajo sin pestañas abiertas."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Aplicar cambios",
@@ -7898,7 +7900,13 @@
             "e61157e926": "Ajuste de línea en el editor",
             "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
             "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+            "autoCreateTerminalOnWorkspaceActivation": "Crear terminal al seleccionar un espacio de trabajo",
+            "autoCreateTerminalOnWorkspaceActivationDescription": "Crea automáticamente el primer terminal al seleccionar un espacio de trabajo sin pestañas abiertas.",
+            "autoCreateTerminalOnWorkspaceActivationTerminal": "terminal",
+            "autoCreateTerminalOnWorkspaceActivationAutomatic": "automático",
+            "autoCreateTerminalOnWorkspaceActivationSelect": "seleccionar",
+            "autoCreateTerminalOnWorkspaceActivationClick": "clic"
           }
         },
         "git": {

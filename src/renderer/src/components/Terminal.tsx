@@ -1134,7 +1134,9 @@ function Terminal(): React.JSX.Element | null {
 
     // Why: give a newly activated worktree a focusable surface when nothing renders, without recreating one after the user closes the last visible tab.
     const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-    if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+    const automaticCreationEnabled =
+      useAppStore.getState().settings?.autoCreateTerminalOnWorkspaceActivation !== false
+    if (!shouldAutoCreateInitialTerminal(renderableTabCount, automaticCreationEnabled)) {
       return
     }
     // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).

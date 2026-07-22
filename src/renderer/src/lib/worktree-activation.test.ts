@@ -101,6 +101,23 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
   })
 
+  it('does not create a tab when automatic creation is disabled', () => {
+    const store = createMockStore()
+
+    const result = ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { automaticCreationEnabled: false }
+    )
+
+    expect(result).toBeNull()
+    expect(store.createTab).not.toHaveBeenCalled()
+  })
+
   it('creates configured default tabs once with title, color, and opted-in commands', () => {
     let createdIndex = 0
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))

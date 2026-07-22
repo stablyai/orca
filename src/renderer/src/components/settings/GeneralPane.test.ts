@@ -109,6 +109,14 @@ describe('GeneralPane search entries', () => {
     expect(matchesSettingsSearch('red underline', entries)).toBe(true)
   })
 
+  it('includes automatic terminal creation keywords', () => {
+    const entries = getGeneralPaneSearchEntries()
+
+    expect(matchesSettingsSearch('create terminal on workspace selection', entries)).toBe(true)
+    expect(matchesSettingsSearch('click', entries)).toBe(true)
+    expect(matchesSettingsSearch('worktree', entries)).toBe(true)
+  })
+
   it('omits the default project runtime setting when Windows runtimes are unsupported', () => {
     const entries = getGeneralPaneSearchEntries({ includeProjectRuntime: false })
 

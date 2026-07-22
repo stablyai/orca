@@ -123,6 +123,56 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
+  it('leaves an empty worktree terminal-free when automatic creation is disabled', () => {
+    const worktree = makeWorktree()
+    const revealWorktreeInSidebar = vi.fn()
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/workspace/repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null,
+      activeView: 'terminal',
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      activeTabIdByWorktree: {},
+      tabBarOrderByWorktree: {},
+      pendingStartupByTabId: {},
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        autoCreateTerminalOnWorkspaceActivation: false
+      },
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      revealWorktreeInSidebar
+    })
+
+    const result = activateAndRevealWorktree(worktree.id)
+    const state = useAppStore.getState()
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(state.tabsByWorktree[worktree.id]).toBeUndefined()
+    expect(state.pendingStartupByTabId).toEqual({})
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
+  })
+
   it('uses WSL launch quoting when reopening a Windows-path WSL project agent', () => {
     const worktree = {
       ...makeWorktree(),
@@ -661,7 +711,9 @@ describe('activateAndRevealWorktree created agent reopen', () => {
       }))
     })
 
-    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+      automaticCreationEnabled: false
+    })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(callRuntimeEnvironment).toHaveBeenCalledWith(
