@@ -12957,6 +12957,151 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('does not treat a Grok prompt as idle while a background task is active', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => 'grok'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.onPtyData(
+        'pty-bg',
+        [
+          'Tasks 1\n',
+          'Task Background sleep 60 for Orca repro  33s\n',
+          'watching · 1 command\n',
+          ...Array.from({ length: 8 }, (_, index) => `foreground output ${index}\n`),
+          '\x1b]0;Grok ready\x07'
+        ].join(''),
+        Date.now()
+      )
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 5_000
+      })
+      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+
+      await vi.advanceTimersByTimeAsync(6_000)
+
+      await timeoutAssertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not apply Grok background-task counters to another agent session', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'codex'
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData('pty-bg', 'Tasks 1\nwatching · 1 command\n\x1b]0;Codex ready\x07', Date.now())
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({ handle, condition: 'tui-idle', status: 'running' })
+  })
+
+  it('reports a blocked prompt while Grok background tasks remain active', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => 'grok'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.onPtyData(
+        'pty-bg',
+        [
+          'Tasks 1\n',
+          'Task Background sleep 60 for Orca repro  33s\n',
+          'watching · 1 command\n',
+          '\x1b]0;⠋ - Watching - Grok\x07'
+        ].join(''),
+        Date.now()
+      )
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 10_000
+      })
+      runtime.onPtyData(
+        'pty-bg',
+        'Would you like to grant these permissions?\nPress enter to confirm\n',
+        Date.now()
+      )
+      await vi.advanceTimersByTimeAsync(2_100)
+
+      await expect(waitPromise).resolves.toMatchObject({
+        handle,
+        condition: 'tui-idle',
+        satisfied: false,
+        blockedReason: 'codex-interactive-prompt'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resolves Grok tui-idle after the active background-task counters clear', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => 'grok'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.onPtyData(
+        'pty-bg',
+        [
+          'Tasks 1\n',
+          'Task Background sleep 60 for Orca repro  33s\n',
+          'watching · 1 command\n',
+          '\x1b]0;⠋ - Watching - Grok\x07'
+        ].join(''),
+        Date.now()
+      )
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 10_000
+      })
+      let resolved = false
+      void waitPromise.then(() => {
+        resolved = true
+      })
+
+      runtime.onPtyData('pty-bg', '\x1b]0;Grok ready\x07', Date.now())
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(resolved).toBe(false)
+
+      runtime.onPtyData('pty-bg', 'Tasks 0\nwatching · 0 commands\n', Date.now())
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      await expect(waitPromise).resolves.toMatchObject({
+        handle,
+        condition: 'tui-idle',
+        status: 'running'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resolves tui-idle from a Codex ready prompt preview', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

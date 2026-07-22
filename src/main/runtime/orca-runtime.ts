@@ -22,6 +22,8 @@ import {
   type TerminalTitleTracker
 } from '../../shared/terminal-output-side-effects'
 import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
+import { hasActiveGrokBackgroundTasks } from '../../shared/grok-background-task-status'
+import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -1215,6 +1217,48 @@ type RuntimePtyWorktreeRecord = {
   waitBlockedAt: number | null
   // Why: memoized wait scan of the current retained tail (see RuntimeLeafRecord).
   tailWaitState?: TerminalTailWaitState
+}
+
+function isGrokRuntimeTerminal(
+  launchAgent: TuiAgent | null | undefined,
+  foregroundAgent: TuiAgent | null | undefined,
+  titles: readonly (string | null | undefined)[]
+): boolean {
+  return (
+    launchAgent === 'grok' ||
+    foregroundAgent === 'grok' ||
+    titles.some(
+      (title) => !!title && resolveExplicitTerminalTitleAgentType(title.trim()) === 'grok'
+    )
+  )
+}
+
+function ptyHasActiveGrokBackgroundTasks(
+  pty: RuntimePtyWorktreeRecord,
+  terminalText: string
+): boolean {
+  return hasActiveGrokBackgroundTasks(
+    terminalText,
+    isGrokRuntimeTerminal(pty.launchAgent, pty.foregroundAgent, [pty.lastOscTitle, pty.title])
+  )
+}
+
+function leafHasActiveGrokBackgroundTasks(
+  leaf: RuntimeLeafRecord,
+  pty: RuntimePtyWorktreeRecord | undefined,
+  tabTitle: string | null | undefined,
+  terminalText: string
+): boolean {
+  return hasActiveGrokBackgroundTasks(
+    terminalText,
+    isGrokRuntimeTerminal(pty?.launchAgent, pty?.foregroundAgent, [
+      leaf.lastOscTitle,
+      leaf.paneTitle,
+      tabTitle,
+      pty?.lastOscTitle,
+      pty?.title
+    ])
+  )
 }
 
 type TerminalCreateOptions = {
@@ -14561,14 +14605,20 @@ export class OrcaRuntimeService {
         pty.pty.preview
       )
       const ptyBlockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
+      const ptyHasActiveBackgroundTasks = ptyHasActiveGrokBackgroundTasks(pty.pty, ptyWaitText)
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
       }
-      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
+      if (
+        condition === 'tui-idle' &&
+        !ptyHasActiveBackgroundTasks &&
+        pty.pty.lastAgentStatus === 'idle'
+      ) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       if (
         condition === 'tui-idle' &&
+        !ptyHasActiveBackgroundTasks &&
         (this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' ||
           isKnownReadyPromptPreview(ptyWaitText))
       ) {
@@ -14619,16 +14669,21 @@ export class OrcaRuntimeService {
             live.pty.preview
           )
           const blockedReason = detectTerminalWaitBlockedReason(livePtyWaitText)
+          const hasActiveBackgroundTasks = ptyHasActiveGrokBackgroundTasks(
+            live.pty,
+            livePtyWaitText
+          )
           if (blockedReason) {
             this.resolveWaiter(
               waiter,
               buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
             )
-          } else if (live.pty.lastAgentStatus === 'idle') {
+          } else if (!hasActiveBackgroundTasks && live.pty.lastAgentStatus === 'idle') {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else if (
-            this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
-            isKnownReadyPromptPreview(livePtyWaitText)
+            !hasActiveBackgroundTasks &&
+            (this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
+              isKnownReadyPromptPreview(livePtyWaitText))
           ) {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
@@ -14645,6 +14700,12 @@ export class OrcaRuntimeService {
 
     const leafWaitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
     const leafBlockedReason = detectTerminalWaitBlockedReason(leafWaitText)
+    const leafHasActiveBackgroundTasks = leafHasActiveGrokBackgroundTasks(
+      leaf,
+      leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined,
+      this.tabs.get(leaf.tabId)?.title,
+      leafWaitText
+    )
     if (condition === 'tui-idle' && leafBlockedReason) {
       return buildTerminalWaitBlockedResult(handle, condition, leaf, leafBlockedReason)
     }
@@ -14654,14 +14715,19 @@ export class OrcaRuntimeService {
     // detection that powers the renderer's "Task complete" notifications.
     // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
     // agent is blocked on user approval, not finished with its task.
-    if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
+    if (
+      condition === 'tui-idle' &&
+      !leafHasActiveBackgroundTasks &&
+      leaf.lastAgentStatus === 'idle'
+    ) {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
     if (condition === 'tui-idle') {
       const fastPathTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
       if (
-        (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-        isKnownReadyPromptPreview(leafWaitText)
+        !leafHasActiveBackgroundTasks &&
+        ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+          isKnownReadyPromptPreview(leafWaitText))
       ) {
         return buildTerminalWaitResult(handle, condition, leaf)
       }
@@ -14721,12 +14787,18 @@ export class OrcaRuntimeService {
             live.leaf.preview
           )
           const blockedReason = detectTerminalWaitBlockedReason(liveLeafWaitText)
+          const hasActiveBackgroundTasks = leafHasActiveGrokBackgroundTasks(
+            live.leaf,
+            live.leaf.ptyId ? this.ptysById.get(live.leaf.ptyId) : undefined,
+            this.tabs.get(live.leaf.tabId)?.title,
+            liveLeafWaitText
+          )
           if (blockedReason) {
             this.resolveWaiter(
               waiter,
               buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
             )
-          } else if (live.leaf.lastAgentStatus === 'idle') {
+          } else if (!hasActiveBackgroundTasks && live.leaf.lastAgentStatus === 'idle') {
             // Why: don't clear lastAgentStatus here. It's a factual record of the
             // last detected OSC state, not a one-shot signal. Clearing it causes
             // subsequent tui-idle waiters to hang even though the agent is idle —
@@ -14738,8 +14810,9 @@ export class OrcaRuntimeService {
             // preview/title until the waiter resolves or hits its timeout.
             const fastPathTitle = live.leaf.paneTitle ?? this.tabs.get(live.leaf.tabId)?.title
             if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isKnownReadyPromptPreview(liveLeafWaitText)
+              !hasActiveBackgroundTasks &&
+              ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+                isKnownReadyPromptPreview(liveLeafWaitText))
             ) {
               this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
             } else {
@@ -27855,6 +27928,17 @@ export class OrcaRuntimeService {
   }
 
   private resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
+    const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+    if (
+      leafHasActiveGrokBackgroundTasks(
+        leaf,
+        leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined,
+        this.tabs.get(leaf.tabId)?.title,
+        waitText
+      )
+    ) {
+      return
+    }
     const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
     if (!handle) {
       return
@@ -27890,6 +27974,10 @@ export class OrcaRuntimeService {
   }
 
   private resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
+    const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    if (ptyHasActiveGrokBackgroundTasks(pty, waitText)) {
+      return
+    }
     const handle = this.handleByPtyId.get(ptyId)
     if (!handle) {
       return
@@ -27914,6 +28002,33 @@ export class OrcaRuntimeService {
       }
       let startedForegroundPoll = false
       try {
+        const leafWaitText = buildTerminalWaitText(
+          leaf.tailBuffer,
+          leaf.tailPartialLine,
+          leaf.preview
+        )
+        const blockedReason = detectTerminalWaitBlockedReason(leafWaitText)
+        if (blockedReason) {
+          if (waiter.pollInterval) {
+            clearInterval(waiter.pollInterval)
+            waiter.pollInterval = null
+          }
+          this.resolveWaiter(
+            waiter,
+            buildTerminalWaitBlockedResult(waiter.handle, 'tui-idle', leaf, blockedReason)
+          )
+          return
+        }
+        if (
+          leafHasActiveGrokBackgroundTasks(
+            leaf,
+            leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined,
+            this.tabs.get(leaf.tabId)?.title,
+            leafWaitText
+          )
+        ) {
+          return
+        }
         if (leaf.lastAgentStatus === 'idle') {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
@@ -27934,23 +28049,6 @@ export class OrcaRuntimeService {
             this.resolveWaiter(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
             return
           }
-        }
-        const leafWaitText = buildTerminalWaitText(
-          leaf.tailBuffer,
-          leaf.tailPartialLine,
-          leaf.preview
-        )
-        const blockedReason = detectTerminalWaitBlockedReason(leafWaitText)
-        if (blockedReason) {
-          if (waiter.pollInterval) {
-            clearInterval(waiter.pollInterval)
-            waiter.pollInterval = null
-          }
-          this.resolveWaiter(
-            waiter,
-            buildTerminalWaitBlockedResult(waiter.handle, 'tui-idle', leaf, blockedReason)
-          )
-          return
         }
         if (isKnownReadyPromptPreview(leafWaitText)) {
           if (waiter.pollInterval) {
@@ -27999,14 +28097,6 @@ export class OrcaRuntimeService {
       }
       let startedForegroundPoll = false
       try {
-        if (pty.lastAgentStatus === 'idle') {
-          if (waiter.pollInterval) {
-            clearInterval(waiter.pollInterval)
-            waiter.pollInterval = null
-          }
-          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
-          return
-        }
         const ptyWaitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
         const blockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
         if (blockedReason) {
@@ -28018,6 +28108,17 @@ export class OrcaRuntimeService {
             waiter,
             buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, blockedReason)
           )
+          return
+        }
+        if (ptyHasActiveGrokBackgroundTasks(pty, ptyWaitText)) {
+          return
+        }
+        if (pty.lastAgentStatus === 'idle') {
+          if (waiter.pollInterval) {
+            clearInterval(waiter.pollInterval)
+            waiter.pollInterval = null
+          }
+          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
         // Why: adopted background PTY handles use their live xterm title as the same readiness signal as leaf handles.
