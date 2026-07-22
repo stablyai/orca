@@ -261,10 +261,13 @@ describe('PullRequestPage host boundaries', () => {
     // Why: fix-check defaults and reviewer metadata share repo ids across local,
     // SSH, and runtime owners, so source inspection guards both identity handoffs.
     expect(checksSection).toContain('findRepoForHost(s.repos, targetRepoId')
-    expect(checksSection).toContain(
+    expect(checksSection).toContain('hostId: item.repoExecutionHostId')
+    expect(checksSection).not.toContain(
       'const itemRepoExecutionHostId = item.repoExecutionHostId ?? LOCAL_EXECUTION_HOST_ID'
     )
-    expect(checksSection).toContain('hostId: itemRepoExecutionHostId')
+    expect(checksSection).toMatch(
+      /const checksRepoExecutionHostId = repo\s*\? getRepoExecutionHostId\(repo\)\s*:\s*\(?item\.repoExecutionHostId \?\? LOCAL_EXECUTION_HOST_ID\)?/
+    )
     expect(checksSection).toMatch(
       /getRuntimeWorkItemLaunchContext\(\s*useAppStore\.getState\(\),\s*checksRepoExecutionHostId\s*\)\s*\?\.platform/
     )

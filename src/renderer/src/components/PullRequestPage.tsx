@@ -4479,16 +4479,17 @@ function ChecksTab({
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateRepo = useAppStore((s) => s.updateRepo)
-  const itemRepoExecutionHostId = item.repoExecutionHostId ?? LOCAL_EXECUTION_HOST_ID
   const repo = useAppStore((s) =>
     targetRepoId
       ? findRepoForHost(s.repos, targetRepoId, {
-          hostId: itemRepoExecutionHostId,
+          hostId: item.repoExecutionHostId,
           settings: s.settings
         })
       : null
   )
-  const checksRepoExecutionHostId = repo ? getRepoExecutionHostId(repo) : itemRepoExecutionHostId
+  const checksRepoExecutionHostId = repo
+    ? getRepoExecutionHostId(repo)
+    : (item.repoExecutionHostId ?? LOCAL_EXECUTION_HOST_ID)
   const [refreshing, setRefreshing] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [fixingChecks, setFixingChecks] = useState(false)
