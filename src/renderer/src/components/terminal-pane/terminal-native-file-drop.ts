@@ -251,6 +251,7 @@ async function uploadRemoteDropPaths(
       paths: args.dataPaths,
       worktreePath: args.worktreePath,
       connectionId: args.connectionId,
+      expectedExecutionHostId: args.expectedExecutionHostId,
       expectedSshTargetId: args.expectedSshTargetId,
       expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
     })

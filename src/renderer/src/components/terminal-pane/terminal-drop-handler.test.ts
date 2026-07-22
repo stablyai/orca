@@ -604,6 +604,7 @@ describe('handleTerminalFileDrop', () => {
       paths: ['C:\\Users\\Name\\A&B.txt'],
       worktreePath: 'C:\\Remote Repo',
       connectionId: 'ssh-win',
+      expectedExecutionHostId: 'ssh:ssh-win',
       expectedSshTargetId: 'ssh-win',
       expectedSshConnectionGeneration: 4
     })

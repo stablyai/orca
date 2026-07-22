@@ -9,11 +9,17 @@ const SSH_OWNER_CHANGED_MESSAGE =
 type DirectSshMutationState = Pick<AppState, 'sshConnectionStates'> &
   Partial<Pick<AppState, 'sshStateByEnvironment'>>
 
+export type DirectSshMutationExpectation = {
+  expectedExecutionHostId: `ssh:${string}`
+  expectedSshTargetId: string
+  expectedSshConnectionGeneration: number
+}
+
 export function captureDirectSshMutationExpectation(
   state: DirectSshMutationState,
   connectionId: string,
   runtimeEnvironmentId?: string | null
-): Required<SshMutationExpectation> {
+): DirectSshMutationExpectation {
   const generation = runtimeEnvironmentId
     ? state.sshStateByEnvironment?.get(runtimeEnvironmentId)?.connectionStates.get(connectionId)
         ?.connectionGeneration

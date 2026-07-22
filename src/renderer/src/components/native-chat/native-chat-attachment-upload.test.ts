@@ -79,6 +79,7 @@ describe('resolveNativeChatAttachmentOwner', () => {
       kind: 'ssh',
       connectionId: 'conn-1',
       worktreePath: '/repo/worktree',
+      expectedExecutionHostId: 'ssh:conn-1',
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     })
@@ -133,8 +134,10 @@ describe('resolveNativeChatAttachmentOwner', () => {
 
 describe('uploadNativeChatAttachmentPaths', () => {
   const owner = {
+    kind: 'ssh' as const,
     connectionId: 'conn-1',
     worktreePath: '/remote/worktree',
+    expectedExecutionHostId: 'ssh:conn-1' as const,
     expectedSshTargetId: 'conn-1',
     expectedSshConnectionGeneration: 4
   }
@@ -159,6 +162,7 @@ describe('uploadNativeChatAttachmentPaths', () => {
       paths: ['/local/a.txt'],
       worktreePath: '/remote/worktree',
       connectionId: 'conn-1',
+      expectedExecutionHostId: 'ssh:conn-1',
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     })

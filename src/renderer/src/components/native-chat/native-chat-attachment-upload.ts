@@ -14,17 +14,20 @@ import {
   findTerminalTabWorktreeId,
   resolveNativeChatFileLinkContext
 } from './native-chat-file-link'
-import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import {
+  captureDirectSshMutationExpectation,
+  type DirectSshMutationExpectation
+} from '@/lib/ssh-mutation-expectation'
+
+export type NativeChatSshAttachmentOwner = DirectSshMutationExpectation & {
+  kind: 'ssh'
+  connectionId: string
+  worktreePath: string
+}
 
 export type NativeChatAttachmentOwner =
   | { kind: 'local' }
-  | {
-      kind: 'ssh'
-      connectionId: string
-      worktreePath: string
-      expectedSshTargetId: string
-      expectedSshConnectionGeneration: number
-    }
+  | NativeChatSshAttachmentOwner
   /** Runtime-owned (`remote:`) panes keep the composer's existing
    *  local-attachment block; runtime upload support is a separate seam. */
   | { kind: 'runtime' }
@@ -92,12 +95,7 @@ export function nativeChatWorktreeNotReadyNotice(): string {
  */
 export async function uploadNativeChatAttachmentPaths(
   paths: string[],
-  owner: {
-    connectionId: string
-    worktreePath: string
-    expectedSshTargetId: string
-    expectedSshConnectionGeneration: number
-  }
+  owner: NativeChatSshAttachmentOwner
 ): Promise<string[] | null> {
   const pending = toast.loading(
     translate(
@@ -111,6 +109,7 @@ export async function uploadNativeChatAttachmentPaths(
       paths,
       worktreePath: owner.worktreePath,
       connectionId: owner.connectionId,
+      expectedExecutionHostId: owner.expectedExecutionHostId,
       expectedSshTargetId: owner.expectedSshTargetId,
       expectedSshConnectionGeneration: owner.expectedSshConnectionGeneration
     })
