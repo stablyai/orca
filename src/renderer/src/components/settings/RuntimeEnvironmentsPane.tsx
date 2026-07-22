@@ -814,7 +814,7 @@ export function RuntimeEnvironmentsPane({
                       )
                   : translate(
                       'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
-                      'Server updates'
+                      'Check for Server Updates'
                     )}
               </Button>
             ) : null}

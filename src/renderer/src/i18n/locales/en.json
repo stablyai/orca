@@ -6483,7 +6483,7 @@
           "updatesAvailable": "{{value0}} updates available",
           "versionUnavailable": "Orca version unavailable",
           "updateServer": "Update",
-          "reviewServerUpdates": "Server updates",
+          "reviewServerUpdates": "Check for Server Updates",
           "orcaVersion": "Orca v{{value0}}"
         },
         "RuntimePairingGeneratedUrlRows": {
