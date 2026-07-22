@@ -248,7 +248,7 @@ async function main() {
     `export const COLLAB_CANVAS_ENGINE_JS = ${JSON.stringify(htmlText(scrubbed, 'script'))}`,
     `export const COLLAB_CANVAS_ENGINE_BYTES = ${Buffer.byteLength(scrubbed, 'utf8')}`,
     ''
-  ].join('\\n')
+  ].join('\n')
   await writeFile(outputPath, source, 'utf8')
   const st = await stat(outputPath)
   console.log(
