@@ -56,7 +56,12 @@ import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-agent-kind'
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -1084,6 +1089,7 @@ export function getLocalPtyProvider(): IPtyProvider {
  *  Call before registerPtyHandlers so the IPC layer routes through the daemon. */
 export function setLocalPtyProvider(provider: IPtyProvider): void {
   localProvider = provider
+  refreshLocalProcessInventoryAfterProviderChange()
 }
 
 /** Get all PTY IDs owned by a given connectionId (for reconnection reattach). */
@@ -1199,9 +1205,11 @@ let rendererDidStartLoadingHandler: (() => void) | null = null
 
 // Why: Restart daemon must re-bind provider→renderer listeners after replaceDaemonProvider swaps localProvider, else subscribers stay bound to the disposed adapter and new PTY data silently drops.
 let rebindProviderListeners: (() => void) | null = null
+let refreshLocalProcessInventoryAfterProviderChange: () => void = () => {}
 
 export function rebindLocalProviderListeners(): void {
   rebindProviderListeners?.()
+  refreshLocalProcessInventoryAfterProviderChange()
 }
 
 export type PtyRendererDeliveryDebugSnapshot = {
@@ -1426,6 +1434,129 @@ export function registerPtyHandlers(
     return options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.()
   }
 
+  type LocalProcessInventorySnapshot =
+    | {
+        state: 'pending'
+      }
+    | {
+        state: 'ready'
+        processes: PtyProcessInfo[]
+      }
+    | {
+        state: 'stale'
+        processes?: PtyProcessInfo[]
+      }
+
+  let localProcessInventorySnapshot: LocalProcessInventorySnapshot = { state: 'pending' }
+  let localProcessInventoryEpoch = 0
+  let localProcessInventoryRequestSeq = 0
+  let localProcessInventoryRefreshEpoch: number | null = null
+  let localProcessInventoryRefreshPromise: Promise<PtyProcessInfo[]> | null = null
+
+  const getRetainedLocalProcessInventory = (): PtyProcessInfo[] | undefined =>
+    'processes' in localProcessInventorySnapshot
+      ? localProcessInventorySnapshot.processes
+      : undefined
+
+  const cloneProcessInventory = (processes: readonly PtyProcessInfo[]): PtyProcessInfo[] =>
+    processes.map((process) => ({ ...process }))
+
+  const updateLocalProcessInventoryForEpoch = (opts: { removePtyId?: string } = {}): void => {
+    const retained = getRetainedLocalProcessInventory()
+    if (retained !== undefined) {
+      localProcessInventorySnapshot = {
+        state: 'stale',
+        processes: retained.filter((process) => process.id !== opts.removePtyId)
+      }
+      return
+    }
+    localProcessInventorySnapshot =
+      localProcessInventorySnapshot.state === 'pending' ? { state: 'pending' } : { state: 'stale' }
+  }
+
+  const requestLocalProcessInventory = async (
+    opts: { coalesce?: boolean } = {}
+  ): Promise<PtyProcessInfo[]> => {
+    const epoch = localProcessInventoryEpoch
+    if (
+      opts.coalesce === true &&
+      localProcessInventoryRefreshEpoch === epoch &&
+      localProcessInventoryRefreshPromise
+    ) {
+      return await localProcessInventoryRefreshPromise
+    }
+    const requestSeq = ++localProcessInventoryRequestSeq
+    let request!: Promise<PtyProcessInfo[]>
+    request = (async (): Promise<PtyProcessInfo[]> => {
+      try {
+        const processes = cloneProcessInventory(await localProvider.listProcesses())
+        if (
+          requestSeq === localProcessInventoryRequestSeq &&
+          epoch === localProcessInventoryEpoch
+        ) {
+          localProcessInventorySnapshot = { state: 'ready', processes }
+        }
+        return processes
+      } catch (error) {
+        if (
+          requestSeq === localProcessInventoryRequestSeq &&
+          epoch === localProcessInventoryEpoch
+        ) {
+          const retained = getRetainedLocalProcessInventory()
+          localProcessInventorySnapshot =
+            retained !== undefined ? { state: 'stale', processes: retained } : { state: 'stale' }
+        }
+        throw error
+      } finally {
+        if (localProcessInventoryRefreshPromise === request) {
+          localProcessInventoryRefreshPromise = null
+          localProcessInventoryRefreshEpoch = null
+        }
+      }
+    })()
+    if (opts.coalesce === true) {
+      localProcessInventoryRefreshEpoch = epoch
+      localProcessInventoryRefreshPromise = request
+    }
+    return await request
+  }
+
+  const refreshLocalProcessInventory = async (): Promise<void> => {
+    await requestLocalProcessInventory({ coalesce: true })
+  }
+
+  const invalidateLocalProcessInventory = (
+    opts: { removePtyId?: string; refresh?: boolean } = {}
+  ): void => {
+    localProcessInventoryEpoch += 1
+    updateLocalProcessInventoryForEpoch(opts)
+    if (opts.refresh !== false) {
+      void refreshLocalProcessInventory().catch(() => undefined)
+    }
+  }
+
+  const noteLocalProcessInventoryChange = (connectionId?: string | null): void => {
+    if (connectionId) {
+      return
+    }
+    invalidateLocalProcessInventory()
+  }
+
+  const forwardRuntimePtyExit = (
+    ptyId: string,
+    code: number,
+    opts: { connectionId?: string | null } = {}
+  ): void => {
+    if (opts.connectionId == null) {
+      invalidateLocalProcessInventory({ removePtyId: ptyId })
+    }
+    runtime?.onPtyExit(ptyId, code)
+  }
+
+  refreshLocalProcessInventoryAfterProviderChange = () => {
+    invalidateLocalProcessInventory()
+  }
+
   // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
@@ -1515,12 +1646,15 @@ export function registerPtyHandlers(
         }
         return env
       },
-      onSpawned: (id) => runtime?.onPtySpawned(id),
+      onSpawned: (id) => {
+        noteLocalProcessInventoryChange(null)
+        runtime?.onPtySpawned(id)
+      },
       onExit: (id, code) => {
         clearProviderPtyState(id)
         ptyOwnership.delete(id)
         markClaudePtyExited(id)
-        runtime?.onPtyExit(id, code)
+        forwardRuntimePtyExit(id, code)
       },
       onData: (id, data, timestamp, sequenceChars, transformed) =>
         runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)
@@ -2539,7 +2673,7 @@ export function registerPtyHandlers(
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
         markClaudePtyExited(payload.id)
-        runtime?.onPtyExit(payload.id, payload.code)
+        forwardRuntimePtyExit(payload.id, payload.code)
       }
       sendPtyExitToRenderer(payload)
     })
@@ -3193,6 +3327,7 @@ export function registerPtyHandlers(
                 : null
           })
         }
+        noteLocalProcessInventoryChange(args.connectionId)
         const response = { id: result.id }
         return resolvePaneSpawnReservation(materializedPaneKey, paneSpawnReservation, response)
       } catch (err) {
@@ -3224,7 +3359,7 @@ export function registerPtyHandlers(
           if (connectionId) {
             // Why: runtime/CLI close can target a detached SSH PTY after its provider was unregistered; tombstone the lease so reconnect can't revive it.
             finishPtyShutdown(ptyId, connectionId, store)
-            runtime?.onPtyExit(ptyId, -1)
+            forwardRuntimePtyExit(ptyId, -1, { connectionId })
             rememberSyntheticKillExit(ptyId)
             sendPtyExitToRenderer({ id: ptyId, code: -1 })
             return true
@@ -3236,7 +3371,7 @@ export function registerPtyHandlers(
           .then((providerExitObserved) => {
             finishPtyShutdown(ptyId, connectionId, store)
             if (!providerExitObserved) {
-              runtime?.onPtyExit(ptyId, -1)
+              forwardRuntimePtyExit(ptyId, -1, { connectionId })
               rememberSyntheticKillExit(ptyId)
               sendPtyExitToRenderer({ id: ptyId, code: -1 })
             }
@@ -3244,7 +3379,7 @@ export function registerPtyHandlers(
           .catch((err) => {
             if (isPtyAlreadyGoneError(err)) {
               finishPtyShutdown(ptyId, connectionId, store)
-              runtime?.onPtyExit(ptyId, -1)
+              forwardRuntimePtyExit(ptyId, -1, { connectionId })
               rememberSyntheticKillExit(ptyId)
               sendPtyExitToRenderer({ id: ptyId, code: -1 })
               return
@@ -3253,7 +3388,7 @@ export function registerPtyHandlers(
               `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
             )
             // Why: close runtime tails but keep provider ownership so a retry can still target a PTY that survived the failed shutdown.
-            runtime?.onPtyExit(ptyId, -1)
+            forwardRuntimePtyExit(ptyId, -1, { connectionId })
           })
         return true
       }
@@ -3264,7 +3399,7 @@ export function registerPtyHandlers(
           console.warn(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
           )
-          runtime?.onPtyExit(ptyId, -1)
+          forwardRuntimePtyExit(ptyId, -1, { connectionId })
         })
         return true
       }
@@ -3308,7 +3443,7 @@ export function registerPtyHandlers(
         if (connectionId) {
           // Why: an absent SSH provider means no live target to await, but the relay lease must still be tombstoned.
           finishPtyShutdown(ptyId, connectionId, store)
-          runtime?.onPtyExit(ptyId, -1)
+          forwardRuntimePtyExit(ptyId, -1, { connectionId })
           rememberSyntheticKillExit(ptyId)
           sendPtyExitToRenderer({ id: ptyId, code: -1 })
           return true
@@ -3344,7 +3479,7 @@ export function registerPtyHandlers(
       }
       finishPtyShutdown(ptyId, connectionId, store)
       if (!providerExitObserved) {
-        runtime?.onPtyExit(ptyId, -1)
+        forwardRuntimePtyExit(ptyId, -1, { connectionId })
         rememberSyntheticKillExit(ptyId)
         sendPtyExitToRenderer({ id: ptyId, code: -1 })
       }
@@ -3398,11 +3533,27 @@ export function registerPtyHandlers(
       }
     },
     listProcesses: async () => {
+      const localProcesses = await requestLocalProcessInventory()
       const providerSessions = await Promise.all([
-        localProvider.listProcesses(),
+        Promise.resolve(localProcesses),
         ...Array.from(sshProviders.values(), (provider) => provider.listProcesses())
       ])
       return providerSessions.flat()
+    },
+    getLocalProcessInventorySnapshot: () => {
+      if (localProcessInventorySnapshot.state === 'pending') {
+        return { state: 'pending' }
+      }
+      if (localProcessInventorySnapshot.processes === undefined) {
+        return { state: 'stale' }
+      }
+      return {
+        state: localProcessInventorySnapshot.state,
+        processes: cloneProcessInventory(localProcessInventorySnapshot.processes)
+      }
+    },
+    refreshLocalProcessInventory: async () => {
+      await refreshLocalProcessInventory()
     },
     serializeBuffer: (ptyId, opts) => {
       // Why: mobile xterm must start from the desktop's exact screen state/dimensions before live TUI chunks render correctly.
@@ -4755,7 +4906,7 @@ export function registerPtyHandlers(
     if (!provider && connectionId) {
       // Why: detached SSH PTYs keep ownership after provider unregister, and hydrated app-scoped ids may arrive pre-ownership; tombstone instead of falling back local.
       finishPtyShutdown(args.id, connectionId, store)
-      runtime?.onPtyExit(args.id, -1)
+      forwardRuntimePtyExit(args.id, -1, { connectionId })
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({ id: args.id, code: -1 })
       return
@@ -4777,7 +4928,7 @@ export function registerPtyHandlers(
     // Why: some shutdown paths don't emit onExit via the provider listener; this cleanup is idempotent and covers already-dead PTYs.
     finishPtyShutdown(args.id, connectionId, store)
     if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1)
+      forwardRuntimePtyExit(args.id, -1, { connectionId })
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({ id: args.id, code: -1 })
     }
@@ -4789,7 +4940,7 @@ export function registerPtyHandlers(
       const providerSessions = await Promise.all([
         Promise.resolve({
           connectionId: null as string | null,
-          sessions: await localProvider.listProcesses()
+          sessions: await requestLocalProcessInventory()
         }),
         ...Array.from(sshProviders.entries(), async ([connectionId, provider]) => ({
           connectionId,

@@ -102,6 +102,7 @@ import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
+import type { PtyProcessInfo } from '../providers/types'
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1705,11 +1706,89 @@ describe('OrcaRuntimeService', () => {
     expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
   })
 
-  const buildSurvivingSessionReconciliationHarness = () => {
+  const createSurvivingSessionControllerHarness = () => {
+    type Snapshot =
+      | { state: 'pending' }
+      | { state: 'ready'; processes: PtyProcessInfo[] }
+      | { state: 'stale'; processes?: PtyProcessInfo[] }
+
+    let snapshot: Snapshot = { state: 'pending' }
+    let refreshStarts = 0
+    let pending: {
+      promise: Promise<void>
+      resolve: (processes: PtyProcessInfo[]) => void
+      reject: (error?: Error) => void
+    } | null = null
+
+    const refreshLocalProcessInventory = vi.fn(() => {
+      if (pending) {
+        return pending.promise
+      }
+      refreshStarts += 1
+      let settle = () => {}
+      let fail = (_error: Error) => {}
+      const promise = new Promise<void>((resolve, reject) => {
+        settle = resolve
+        fail = reject
+      })
+      pending = {
+        promise,
+        resolve: (processes) => {
+          snapshot = { state: 'ready', processes }
+          pending = null
+          settle()
+        },
+        reject: (error = new Error('refresh failed')) => {
+          const retained = 'processes' in snapshot ? snapshot.processes : undefined
+          snapshot = retained ? { state: 'stale', processes: retained } : { state: 'stale' }
+          pending = null
+          fail(error)
+        }
+      }
+      return promise
+    })
+
+    return {
+      controller: {
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        getLocalProcessInventorySnapshot: () => snapshot,
+        refreshLocalProcessInventory
+      },
+      refreshLocalProcessInventory,
+      getRefreshStarts() {
+        return refreshStarts
+      },
+      setReady(processes: PtyProcessInfo[]) {
+        snapshot = { state: 'ready', processes }
+      },
+      invalidate() {
+        const retained = 'processes' in snapshot ? snapshot.processes : undefined
+        snapshot =
+          retained !== undefined
+            ? { state: 'stale', processes: retained }
+            : snapshot.state === 'pending'
+              ? { state: 'pending' }
+              : { state: 'stale' }
+      },
+      async resolveRefresh(processes: PtyProcessInfo[]) {
+        pending?.resolve(processes)
+        await Promise.resolve()
+      },
+      async rejectRefresh(error?: Error) {
+        pending?.reject(error)
+        await Promise.resolve()
+      }
+    }
+  }
+
+  const buildSurvivingSessionReconciliationHarness = async () => {
     const activePtyId = `${TEST_WORKTREE_ID}@@active`
     const restorablePtyId = `${TEST_WORKTREE_ID}@@restorable`
     const ambiguousPtyId = 'repo-1::/removed@@ambiguous'
     const restorablePaneKey = makePaneKey('tab-1', HEADLESS_SECOND_LEAF_ID)
+    const controllerHarness = createSurvivingSessionControllerHarness()
     const runtime = new OrcaRuntimeService({
       ...store,
       getWorkspaceSession: () => ({
@@ -1730,16 +1809,12 @@ describe('OrcaRuntimeService', () => {
         }
       })
     } as never)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        { id: activePtyId, cwd: TEST_WORKTREE_PATH, title: '' },
-        { id: restorablePtyId, cwd: TEST_WORKTREE_PATH, title: '' },
-        { id: ambiguousPtyId, cwd: '/tmp/removed', title: '' }
-      ]
-    })
+    runtime.setPtyController(controllerHarness.controller)
+    await controllerHarness.resolveRefresh([
+      { id: activePtyId, cwd: TEST_WORKTREE_PATH, title: '' },
+      { id: restorablePtyId, cwd: TEST_WORKTREE_PATH, title: '' },
+      { id: ambiguousPtyId, cwd: '/tmp/removed', title: '' }
+    ])
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [],
@@ -1774,50 +1849,127 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
-    runtime.onPtySpawned(activePtyId)
-    runtime.onPtySpawned(restorablePtyId)
-    runtime.onPtySpawned(ambiguousPtyId)
-
-    const expected = {
-      active: 1,
-      restorable: 1,
-      ambiguous: 1,
-      provenOrphan: 0
-    } as const
 
     return {
       runtime,
-      expected
+      controllerHarness,
+      activePtyId,
+      ambiguousPtyId
     }
   }
 
-  it('classifies surviving daemon PTYs against the active runtime generation', async () => {
-    const { runtime, expected } = buildSurvivingSessionReconciliationHarness()
+  it('loads pre-existing local PTYs before any spawn callback', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = createRuntime()
 
-    await expect(runtime.classifySurvivingSessionsAgainstGeneration()).resolves.toEqual(expected)
-  })
+    runtime.setPtyController(controllerHarness.controller)
 
-  it('surfaces surviving session reconciliation on runtime status', () => {
-    const { runtime, expected } = buildSurvivingSessionReconciliationHarness()
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({ state: 'pending' })
 
-    expect(runtime.getStatus().survivingSessionReconciliation).toEqual(expected)
-  })
+    await controllerHarness.resolveRefresh([
+      { id: `${TEST_WORKTREE_ID}@@preexisting`, cwd: TEST_WORKTREE_PATH, title: 'shell' }
+    ])
 
-  it('keeps live current-generation PTYs out of ambiguous reconciliation', () => {
-    const { runtime } = buildSurvivingSessionReconciliationHarness()
-
-    expect(runtime.getStatus().survivingSessionReconciliation).toMatchObject({
-      active: 1,
-      ambiguous: 1
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 0, ambiguous: 1 }
     })
   })
 
-  it('keeps sleeping or serve-owned PTYs restorable', () => {
-    const { runtime } = buildSurvivingSessionReconciliationHarness()
+  it('reports pending until local PTY inventory is ready', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = createRuntime()
 
-    expect(runtime.getStatus().survivingSessionReconciliation).toMatchObject({
-      restorable: 1,
-      provenOrphan: 0
+    runtime.setPtyController(controllerHarness.controller)
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({ state: 'pending' })
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({ state: 'pending' })
+    expect(controllerHarness.getRefreshStarts()).toBe(1)
+
+    await controllerHarness.resolveRefresh([])
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 0, ambiguous: 0 }
+    })
+  })
+
+  it('labels failed and invalidated local PTY inventory stale', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = createRuntime()
+
+    runtime.setPtyController(controllerHarness.controller)
+    await controllerHarness.resolveRefresh([
+      { id: `${TEST_WORKTREE_ID}@@stale`, cwd: TEST_WORKTREE_PATH, title: 'shell' }
+    ])
+    controllerHarness.invalidate()
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'stale',
+      summary: { active: 0, restorable: 0, ambiguous: 1 }
+    })
+    expect(controllerHarness.refreshLocalProcessInventory).toHaveBeenCalledTimes(2)
+
+    await controllerHarness.rejectRefresh()
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'stale',
+      summary: { active: 0, restorable: 0, ambiguous: 1 }
+    })
+
+    await controllerHarness.resolveRefresh([])
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 0, ambiguous: 0 }
+    })
+  })
+
+  it('reclassifies ready local inventory from current runtime bindings on every status read', async () => {
+    const controllerHarness = createSurvivingSessionControllerHarness()
+    const runtime = createRuntime()
+    const ptyId = `${TEST_WORKTREE_ID}@@reclassify`
+
+    runtime.setPtyController(controllerHarness.controller)
+    await controllerHarness.resolveRefresh([{ id: ptyId, cwd: TEST_WORKTREE_PATH, title: 'shell' }])
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 0, restorable: 0, ambiguous: 1 }
+    })
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId: 'tab-active',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-active',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId
+        }
+      ]
+    })
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 1, restorable: 0, ambiguous: 0 }
+    })
+  })
+
+  it('surfaces surviving session reconciliation on runtime status', async () => {
+    const { runtime } = await buildSurvivingSessionReconciliationHarness()
+
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      state: 'ready',
+      summary: { active: 1, restorable: 1, ambiguous: 1 }
     })
   })
 

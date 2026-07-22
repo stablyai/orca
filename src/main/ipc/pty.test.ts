@@ -4435,6 +4435,191 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('updates local inventory readiness through pty:listSessions', async () => {
+    const runtime = { setPtyController: vi.fn() }
+    const localSessions = [{ id: 'local-pty', cwd: '/local', title: 'local-shell' }]
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => localSessions),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      getLocalProcessInventorySnapshot: () => {
+        state: 'pending' | 'ready' | 'stale'
+        processes?: { id: string; cwd: string; title: string }[]
+      }
+    }
+
+    expect(controller.getLocalProcessInventorySnapshot()).toEqual({ state: 'pending' })
+    await expect(handlers.get('pty:listSessions')!(null, undefined)).resolves.toEqual(localSessions)
+    expect(controller.getLocalProcessInventorySnapshot()).toEqual({
+      state: 'ready',
+      processes: localSessions
+    })
+  })
+
+  it('removes an exited PTY before the next status read', async () => {
+    let exitListener = (_payload: { id: string; code: number }) => {
+      throw new Error('missing exit listener')
+    }
+    let shouldBlockRefresh = false
+    const refreshBarrier = makeDeferred()
+    const listProcesses = vi.fn(async () => {
+      if (!shouldBlockRefresh) {
+        return [{ id: 'local-pty', cwd: '/local', title: 'shell' }]
+      }
+      await refreshBarrier.promise
+      return []
+    })
+    const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
+
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((callback) => {
+        exitListener = callback
+        return () => {}
+      }),
+      listProcesses,
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      refreshLocalProcessInventory: () => Promise<void>
+      getLocalProcessInventorySnapshot: () => {
+        state: 'pending' | 'ready' | 'stale'
+        processes?: { id: string; cwd: string; title: string }[]
+      }
+    }
+
+    await controller.refreshLocalProcessInventory()
+    expect(controller.getLocalProcessInventorySnapshot()).toEqual({
+      state: 'ready',
+      processes: [{ id: 'local-pty', cwd: '/local', title: 'shell' }]
+    })
+
+    shouldBlockRefresh = true
+    exitListener({ id: 'local-pty', code: 0 })
+
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0)
+    expect(controller.getLocalProcessInventorySnapshot()).toEqual({
+      state: 'stale',
+      processes: []
+    })
+
+    shouldBlockRefresh = false
+    refreshBarrier.resolve()
+  })
+
+  it('discards local inventory that resolves after PTY exit', async () => {
+    let exitListener = (_payload: { id: string; code: number }) => {
+      throw new Error('missing exit listener')
+    }
+    let mode: 'idle' | 'two-stage' | 'done' = 'idle'
+    let pendingRefreshCall = 0
+    let resolveFirst!: (sessions: { id: string; cwd: string; title: string }[]) => void
+    let resolveSecond!: (sessions: { id: string; cwd: string; title: string }[]) => void
+    const firstList = new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
+      resolveFirst = resolve
+    })
+    const secondList = new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
+      resolveSecond = resolve
+    })
+    const listProcesses = vi.fn(async () => {
+      if (mode !== 'two-stage') {
+        return []
+      }
+      pendingRefreshCall += 1
+      return pendingRefreshCall === 1 ? firstList : secondList
+    })
+    const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
+
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((callback) => {
+        exitListener = callback
+        return () => {}
+      }),
+      listProcesses,
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      refreshLocalProcessInventory: () => Promise<void>
+      getLocalProcessInventorySnapshot: () => {
+        state: 'pending' | 'ready' | 'stale'
+        processes?: { id: string; cwd: string; title: string }[]
+      }
+    }
+
+    mode = 'two-stage'
+    const firstRefresh = controller.refreshLocalProcessInventory()
+    exitListener({ id: 'local-pty', code: 0 })
+    resolveFirst([{ id: 'local-pty', cwd: '/local', title: 'shell' }])
+    await firstRefresh
+
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0)
+    expect(controller.getLocalProcessInventorySnapshot()).toEqual({ state: 'pending' })
+
+    mode = 'done'
+    resolveSecond([])
+    await vi.waitFor(() =>
+      expect(controller.getLocalProcessInventorySnapshot()).toEqual({
+        state: 'ready',
+        processes: []
+      })
+    )
+  })
+
   it('reports authoritative snapshot capability with the owning provider context', () => {
     const capabilityProvider = {
       authoritativeIds: new Set(['current-pty']),
