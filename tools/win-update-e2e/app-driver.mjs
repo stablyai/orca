@@ -237,6 +237,7 @@ export async function waitForTerminalReady(page, timeoutMs = 60_000, terminalTab
  *     workspace (which would mask a broken restore).
  */
 export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_000 } = {}) {
+  await dismissOverlays(page, 1)
   const visibleTerminal = page.locator(TERMINAL_SURFACE_VISIBLE).first()
   if (await visibleTerminal.isVisible().catch(() => false)) {
     await waitForTerminalReady(page, timeoutMs)
