@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import { detectSpeakBackAnnouncement } from './desktop-speak-back-detect'
 import { DesktopMeshSpeaker } from './desktop-mesh-speech'
 import { summarizeForSpeech } from './summarize-for-speech'
@@ -15,14 +16,22 @@ import { isSpeakBackEnabled, subscribeToSpeakBackEnabled } from './desktop-speak
  * status in `agentStatusByPaneKey`, so this subscribes to the store instead of
  * polling — one fewer moving part and no envelope-unwrap trap.
  *
- * Mount once, near the app root. Does nothing until the toolbar toggle is on.
+ * Mount once, near the app root. Does nothing until the titlebar SpeakBackToggle is on.
  */
-export function useDesktopSessionSpeakBack(options: {
-  hostEndpoint?: string | null
-} = {}): void {
+export function useDesktopSessionSpeakBack(
+  options: {
+    hostEndpoint?: string | null
+  } = {}
+): void {
   const hostEndpoint = options.hostEndpoint ?? null
   const enabled = useSyncExternalStore(subscribeToSpeakBackEnabled, isSpeakBackEnabled)
   const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
+  // Why subscribe here too: the picker writes to settings.voice.kokoroVoice and
+  // the speaker must read the freshest value on every turn — same store path
+  // the dictation toggle uses for VoiceSettings updates.
+  const kokoroVoice =
+    useAppStore((state) => state.settings?.voice?.kokoroVoice) ??
+    getDefaultVoiceSettings().kokoroVoice
   const speakerRef = useRef<DesktopMeshSpeaker | null>(null)
   // Per-pane memory of the last observed working-ness, so we speak on the
   // working→done edge and not on every re-render that re-sees a 'done' row.
@@ -59,21 +68,21 @@ export function useDesktopSessionSpeakBack(options: {
       void (async () => {
         try {
           const summary = await summarizeForSpeech(announcement.reply, { hostEndpoint })
-          await speaker.speak(summary)
+          await speaker.speak(summary, { voice: kokoroVoice })
         } catch {
           // A summarizer or synth outage should degrade to the raw reply, never
           // to silence — silence is indistinguishable from the feature being
           // broken. If even that throws, the connection banner already reports
           // real disconnects.
           try {
-            await speaker.speak(announcement.reply)
+            await speaker.speak(announcement.reply, { voice: kokoroVoice })
           } catch {
             // Give up quietly; the next finished turn tries again.
           }
         }
       })()
     }
-  }, [enabled, agentStatusByPaneKey, hostEndpoint])
+  }, [enabled, agentStatusByPaneKey, hostEndpoint, kokoroVoice])
 
   useEffect(
     () => () => {

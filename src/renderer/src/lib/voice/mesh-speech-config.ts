@@ -14,9 +14,19 @@ export const DEFAULT_MESH_VOICE_HOST = '100.92.56.51'
 /** LiteLLM synth proxy port — /v1/audio/speech, /v1/chat/completions. */
 const MESH_VOICE_PROXY_PORT = 4000
 
+/** Kokoro's own API — /v1/audio/voices (the proxy does not expose this). */
+const KOKORO_DIRECT_PORT = 8880
+
 export const KOKORO_TTS_MODEL = 'mesh-tts-kokoro'
 export const KOKORO_SAMPLE_RATE = 24000
 export const DEFAULT_KOKORO_VOICE = 'af_heart'
+
+/** Shared storage identifier for the selected Kokoro voice. Mirrors mobile's
+ *  `VOICE_STORAGE_KEY` in `mobile/src/voice/kokoro-voices.ts`. Mobile and
+ *  desktop are separate builds; this is the contract string both sides spell
+ *  identically (asserted by tests on each side and by `grep` in the design
+ *  doc's Test Plan). */
+export const KOKORO_VOICE_STORAGE_KEY = 'orca:kokoroVoice'
 
 /** The mesh assistant arm — same model the pet answers from, so the spoken
  *  summary and the pet's reply come from one voice. See HANDOFF. */
@@ -49,4 +59,12 @@ export function extractMeshHost(endpoint: string | null | undefined): string | n
 export function meshVoiceBaseUrlFor(hostEndpoint: string | null | undefined): string {
   const host = extractMeshHost(hostEndpoint) ?? DEFAULT_MESH_VOICE_HOST
   return `http://${host}:${MESH_VOICE_PROXY_PORT}`
+}
+
+/** URL of the Kokoro-direct catalogue (`/v1/audio/voices`) for the given
+ *  paired host endpoint, or the default host when no host is supplied.
+ *  Mirrors `kokoroDirectBaseUrlFor` in `mobile/src/voice/mesh-voice-endpoint.ts`. */
+export function kokoroDirectBaseUrlFor(hostEndpoint: string | null | undefined): string {
+  const host = extractMeshHost(hostEndpoint) ?? DEFAULT_MESH_VOICE_HOST
+  return `http://${host}:${KOKORO_DIRECT_PORT}`
 }

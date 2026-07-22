@@ -64,4 +64,10 @@ export type VoiceSettings = {
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean
+  // Why: the mesh Kokoro voice the desktop speaks replies in. Persisted with
+  // the rest of VoiceSettings so the choice survives a restart and so the
+  // desktop + mobile pickers agree on a single source of truth for the field.
+  // Mirrors mobile's `orca:kokoroVoice` AsyncStorage key; mobile cannot import
+  // this type so the parity is asserted by tests on each side.
+  kokoroVoice: string
 }

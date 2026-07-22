@@ -422,7 +422,11 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     dictationMode: 'toggle' as const,
     terminalConfirmBeforeInsert: false,
     userModels: [],
-    openAiApiKeyConfigured: false
+    openAiApiKeyConfigured: false,
+    // Why literal: the renderer-side DEFAULT_KOKORO_VOICE constant lives in
+    // mesh-speech-config.ts; shared/constants.ts cannot import a renderer path.
+    // Tests on both sides assert the same string.
+    kokoroVoice: 'af_heart'
   }
 }
 

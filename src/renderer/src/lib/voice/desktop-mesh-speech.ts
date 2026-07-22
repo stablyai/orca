@@ -18,9 +18,9 @@ import {
 /** text → mesh Kokoro → raw 16-bit LE PCM at 24 kHz. */
 export async function synthesizeViaMesh(
   text: string,
-  options: { hostEndpoint?: string | null; signal?: AbortSignal } = {}
+  options: { hostEndpoint?: string | null; signal?: AbortSignal; voice?: string } = {}
 ): Promise<ArrayBuffer> {
-  const { hostEndpoint, signal } = options
+  const { hostEndpoint, signal, voice } = options
   const res = await fetch(`${meshVoiceBaseUrlFor(hostEndpoint)}/v1/audio/speech`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -28,7 +28,7 @@ export async function synthesizeViaMesh(
     body: JSON.stringify({
       model: KOKORO_TTS_MODEL,
       input: text,
-      voice: DEFAULT_KOKORO_VOICE,
+      voice: voice ?? DEFAULT_KOKORO_VOICE,
       response_format: 'pcm'
     })
   })
@@ -80,7 +80,7 @@ export class DesktopMeshSpeaker {
     return this.context
   }
 
-  async speak(text: string): Promise<void> {
+  async speak(text: string, options: { voice?: string } = {}): Promise<void> {
     const clean = text.trim()
     if (!clean) {
       return
@@ -88,7 +88,15 @@ export class DesktopMeshSpeaker {
     this.stop()
     const controller = new AbortController()
     this.abort = controller
-    const pcm = await synthesizeViaMesh(clean, { hostEndpoint: this.hostEndpoint, signal: controller.signal })
+    // Why: the speaker is shared across the picker preview path and the agent
+    // speak-back hook. The picker passes the freshly-chosen id per call so a
+    // preview doesn't clobber the persisted selection the hook reads on its
+    // own turn.
+    const pcm = await synthesizeViaMesh(clean, {
+      hostEndpoint: this.hostEndpoint,
+      signal: controller.signal,
+      voice: options.voice
+    })
     if (controller.signal.aborted) {
       return
     }
