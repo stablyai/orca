@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { discoverAndroidSdk } from './android-sdk-discovery'
+import { discoverAndroidSdk, discoverAndroidSdkAtPath } from './android-sdk-discovery'
 import type { DiscoverAndroidSdkOptions } from './android-sdk-discovery'
 
 // Fake `exists` predicate: only paths placed in the set are reported present.
@@ -137,5 +137,16 @@ describe('discoverAndroidSdk', () => {
     })
 
     expect(result).toBeNull()
+  })
+
+  it('does not fall back when an app-configured SDK path is incomplete', () => {
+    const defaultRoot = '/Users/erik/Library/Android/sdk'
+    expect(
+      discoverAndroidSdkAtPath(
+        '/custom/incomplete',
+        'darwin',
+        existsIn(sdkToolsFor(defaultRoot, false))
+      )
+    ).toBeNull()
   })
 })

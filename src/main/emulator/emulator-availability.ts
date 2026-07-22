@@ -2,14 +2,17 @@ import { platform } from 'node:os'
 import type { EmulatorBridge } from './emulator-bridge'
 import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { BackendAvailability, EmulatorDevice } from './backends/emulator-backend'
+import type { AndroidSetupStatus, IosSetupStatus } from '../../shared/emulator-setup-types'
+import { inspectAndroidSetupFromHost, inspectIosSetupFromHost } from './emulator-setup-host-probe'
 
 export type EmulatorAvailability = {
   platform: NodeJS.Platform
   available: boolean
   devices: SimulatorDevice[]
+  ios: IosSetupStatus
   simctl: { ok: boolean; message?: string }
   serveSim: { ok: boolean; message?: string }
-  android: { sdkFound: boolean; sdkPath?: string; message: string }
+  android: AndroidSetupStatus & { sdkFound: boolean }
   message: string
 }
 
@@ -32,38 +35,36 @@ type IosAvailability = {
   devices: SimulatorDevice[]
   simctl: { ok: boolean; message?: string }
   serveSim: { ok: boolean; message?: string }
+  setup: IosSetupStatus
 }
 
-async function inspectIosAvailability(bridge: EmulatorBridge): Promise<IosAvailability> {
-  let devices: SimulatorDevice[] = []
-  let simctl: IosAvailability['simctl'] = { ok: true }
+async function inspectIosAvailability(
+  bridge: EmulatorBridge,
+  setup: IosSetupStatus
+): Promise<IosAvailability> {
+  const devices = setup.devices
+  const simctl: IosAvailability['simctl'] =
+    setup.state === 'ready' ? { ok: true } : { ok: false, message: setup.message }
   let serveSim: IosAvailability['serveSim'] = { ok: true }
 
-  try {
-    devices = await bridge.listSimulators()
-    if (devices.length === 0) {
-      simctl = {
+  if (setup.state === 'ready') {
+    try {
+      await bridge.checkServeSimAvailable()
+    } catch (error) {
+      serveSim = {
         ok: false,
-        message: 'No iOS simulators found. Add one in Xcode Settings > Platforms.'
+        message: error instanceof Error ? error.message : 'serve-sim is unavailable.'
       }
     }
-  } catch (error) {
-    simctl = {
-      ok: false,
-      message: error instanceof Error ? error.message : 'xcrun simctl is unavailable.'
-    }
   }
 
-  try {
-    await bridge.checkServeSimAvailable()
-  } catch (error) {
-    serveSim = {
-      ok: false,
-      message: error instanceof Error ? error.message : 'serve-sim is unavailable.'
-    }
+  return {
+    available: simctl.ok && serveSim.ok && devices.length > 0,
+    devices,
+    simctl,
+    serveSim,
+    setup
   }
-
-  return { available: simctl.ok && serveSim.ok && devices.length > 0, devices, simctl, serveSim }
 }
 
 // Android devices are surfaced through the same SimulatorDevice-shaped list the
@@ -81,44 +82,59 @@ function toSimulatorRow(device: EmulatorDevice): SimulatorDevice {
 // Aggregates availability across backends so the Mobile Emulator pane works on
 // every desktop platform: iOS (macOS only) plus Android (any host with the SDK).
 export async function inspectEmulatorAvailability(
-  bridge: EmulatorBridge
+  bridge: EmulatorBridge,
+  probes: {
+    inspectIos?: () => Promise<IosSetupStatus>
+    inspectAndroid?: (backend: BackendAvailability) => AndroidSetupStatus
+  } = {}
 ): Promise<EmulatorAvailability> {
   const currentPlatform = platform()
   const backends = bridge.listBackends()
   const iosBackend = backends.find((backend) => backend.kind === 'ios')
   const androidBackend = backends.find((backend) => backend.kind === 'android')
+  const iosSupported = Boolean(iosBackend?.isSupportedOnHost())
 
-  const ios: IosAvailability = iosBackend?.isSupportedOnHost()
-    ? await inspectIosAvailability(bridge)
-    : { available: false, devices: [], simctl: { ok: false }, serveSim: { ok: false } }
+  const [android, iosSetup] = await Promise.all([
+    androidBackend
+      ? androidBackend.checkAvailability()
+      : Promise.resolve({ available: false, devices: [], message: '' }),
+    (probes.inspectIos ?? inspectIosSetupFromHost)()
+  ])
+  const ios: IosAvailability = iosSupported
+    ? await inspectIosAvailability(bridge, iosSetup)
+    : {
+        available: false,
+        devices: [],
+        simctl: { ok: false, message: iosSetup.message },
+        serveSim: { ok: false },
+        setup: iosSetup
+      }
+  const androidSetup = (probes.inspectAndroid ?? inspectAndroidSetupFromHost)(android)
 
-  const android: BackendAvailability = androidBackend
-    ? await androidBackend.checkAvailability()
-    : { available: false, devices: [], message: '' }
-
-  const devices = [...ios.devices, ...android.devices.map(toSimulatorRow)]
-  const available = ios.available || android.available
+  const androidReady = androidSetup.state === 'ready'
+  const devices = [...ios.devices, ...(androidReady ? android.devices.map(toSimulatorRow) : [])]
+  const available = ios.available || androidReady
   // Why: on non-macOS hosts the iOS messages are irrelevant, so surface the
   // Android setup message instead of "requires macOS".
   const message = available
     ? 'Ready'
-    : currentPlatform === 'darwin'
+    : currentPlatform === 'darwin' && iosSupported
       ? ios.simctl.message ||
         ios.serveSim.message ||
-        android.message ||
+        androidSetup.message ||
         'Mobile Emulator is not available.'
-      : android.message || 'Mobile Emulator is not available.'
+      : androidSetup.message || 'Mobile Emulator is not available.'
 
   return {
     platform: currentPlatform,
     available,
     devices,
+    ios: ios.setup,
     simctl: ios.simctl,
     serveSim: ios.serveSim,
     android: {
-      sdkFound: Boolean(android.sdkPath),
-      sdkPath: android.sdkPath,
-      message: android.message || ''
+      ...androidSetup,
+      sdkFound: Boolean(androidSetup.sdkPath && androidSetup.state !== 'sdk-invalid')
     },
     message
   }

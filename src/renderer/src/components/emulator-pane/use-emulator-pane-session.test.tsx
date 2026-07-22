@@ -245,7 +245,7 @@ describe('useEmulatorPaneSession', () => {
 
   it('keeps simulator discovery setup errors during auto attach', async () => {
     const message =
-      'Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.'
+      'iOS Simulator is not set up for Orca. Open Settings > Mobile Emulator to select Xcode and finish setup.'
     consumePrelaunchedSimulatorSession(WORKTREE_ID)
     const runtimeCall = vi.fn(async ({ method }: RuntimeCallRequest) => {
       if (method === 'emulator.listDevices') {

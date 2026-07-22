@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
@@ -14,28 +13,15 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
-
-type SimulatorDeviceRow = {
-  name: string
-  udid: string
-  state: string
-  runtime?: string
-  isAvailable?: boolean
-}
-
-type EmulatorAvailability = {
-  platform: string
-  available: boolean
-  devices: SimulatorDeviceRow[]
-  simctl: { ok: boolean; message?: string }
-  serveSim: { ok: boolean; message?: string }
-  android: { sdkFound: boolean; sdkPath?: string; message: string }
-  message: string
-}
+import {
+  useMobileEmulatorAvailability,
+  type EmulatorAvailability,
+  type SimulatorDeviceRow
+} from './use-mobile-emulator-availability'
 
 type MobileEmulatorSettingsPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }
 
 const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'
@@ -122,37 +108,8 @@ export function MobileEmulatorSettingsPane({
   settings,
   updateSettings
 }: MobileEmulatorSettingsPaneProps): React.JSX.Element {
-  const [availability, setAvailability] = useState<EmulatorAvailability | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
+  const { availability, refreshing, refreshAvailability } = useMobileEmulatorAvailability()
   const enabled = settings.mobileEmulatorEnabled !== false
-
-  const refreshAvailability = useCallback(async (): Promise<void> => {
-    setRefreshing(true)
-    try {
-      const result = (await callRuntimeRpc(
-        { kind: 'local' },
-        'emulator.availability',
-        {}
-      )) as EmulatorAvailability
-      setAvailability(result)
-    } catch (error) {
-      setAvailability({
-        platform: '',
-        available: false,
-        devices: [],
-        simctl: { ok: false },
-        serveSim: { ok: false },
-        android: { sdkFound: false, message: '' },
-        message: error instanceof Error ? error.message : 'Could not check emulator availability.'
-      })
-    } finally {
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void refreshAvailability()
-  }, [refreshAvailability])
 
   const devices = availability?.devices ?? []
   const selectedDeviceKnown = devices.some(
@@ -250,6 +207,7 @@ export function MobileEmulatorSettingsPane({
                 await updateSettings({ androidSdkPath: path })
                 await refreshAvailability()
               }}
+              onRefresh={refreshAvailability}
             />
           ) : null}
         </div>

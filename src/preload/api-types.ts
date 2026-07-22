@@ -9,6 +9,7 @@ import type {
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
+import type { EmulatorSetupActionResult } from '../shared/emulator-setup-types'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -2268,6 +2269,11 @@ export type PreloadApi = {
       id?: ComputerUsePermissionId
     }) => Promise<ComputerUsePermissionSetupResult>
     reset: () => Promise<ComputerUsePermissionResetResult>
+  }
+  emulatorSetup: {
+    useInstalledXcode: (developerDir: string) => Promise<EmulatorSetupActionResult>
+    finishXcodeSetup: (developerDir: string) => Promise<EmulatorSetupActionResult>
+    openXcode: (developerDir: string) => Promise<EmulatorSetupActionResult>
   }
   shell: {
     openPath: (path: string) => Promise<void>

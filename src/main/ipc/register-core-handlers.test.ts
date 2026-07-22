@@ -23,6 +23,7 @@ const {
   registerDiagnosticsHandlersMock,
   registerTerminalRenderDesyncEvidenceHandlerMock,
   registerShellHandlersMock,
+  registerEmulatorSetupHandlersMock,
   registerPetHandlersMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
@@ -87,6 +88,7 @@ const {
   registerDiagnosticsHandlersMock: vi.fn(),
   registerTerminalRenderDesyncEvidenceHandlerMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
+  registerEmulatorSetupHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
@@ -252,6 +254,10 @@ vi.mock('./shell', () => ({
   registerShellHandlers: registerShellHandlersMock
 }))
 
+vi.mock('./emulator-setup', () => ({
+  registerEmulatorSetupHandlers: registerEmulatorSetupHandlersMock
+}))
+
 vi.mock('./pet', () => ({
   registerPetHandlers: registerPetHandlersMock
 }))
@@ -400,6 +406,7 @@ describe('registerCoreHandlers', () => {
     registerDiagnosticsHandlersMock.mockReset()
     registerTerminalRenderDesyncEvidenceHandlerMock.mockReset()
     registerShellHandlersMock.mockReset()
+    registerEmulatorSetupHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
@@ -537,6 +544,7 @@ describe('registerCoreHandlers', () => {
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalled()
+    expect(registerEmulatorSetupHandlersMock).toHaveBeenCalled()
     expect(registerClipboardHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)

@@ -88,10 +88,28 @@ describe('listSimulatorDevices', () => {
 
     expect(error).toMatchObject({
       code: 'emulator_simctl_unavailable',
-      message: expect.stringContaining('Xcode Simulator tools are unavailable')
+      message: expect.stringContaining('Open Settings > Mobile Emulator')
     })
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).message).not.toContain('Command failed')
+  })
+
+  it('routes pending Xcode license errors to the guided setup page', async () => {
+    execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
+      callback(
+        Object.assign(new Error('You have not agreed to the Xcode license agreements.'), {
+          code: 69
+        }),
+        '',
+        'Run xcodebuild -license'
+      )
+      return {} as never
+    })
+
+    await expect(listSimulatorDevices()).rejects.toMatchObject({
+      code: 'emulator_simctl_unavailable',
+      message: expect.stringContaining('Open Settings > Mobile Emulator')
+    })
   })
 })
 

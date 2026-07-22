@@ -25,7 +25,7 @@ type SimctlDeviceList = {
 
 const UDID_RE = /^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$/i
 const SIMCTL_UNAVAILABLE_MESSAGE =
-  'Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.'
+  'iOS Simulator is not set up for Orca. Open Settings > Mobile Emulator to select Xcode and finish setup.'
 
 function parseSimctlDevices(stdout: string): SimulatorDevice[] {
   const data = JSON.parse(stdout || '{}') as SimctlDeviceList
@@ -53,7 +53,11 @@ function mapSimctlError(error: ExecFileException, stderr?: string | Buffer): Emu
   if (
     error.code === 'ENOENT' ||
     (lower.includes('unable to find utility') && lower.includes('simctl')) ||
-    lower.includes('not a developer tool')
+    lower.includes('not a developer tool') ||
+    lower.includes('license') ||
+    lower.includes('runfirstlaunch') ||
+    lower.includes('first launch') ||
+    lower.includes('active developer path')
   ) {
     // Why: xcrun exposes setup problems as raw execFile text; UI and CLI need
     // the actionable Xcode fix instead of "Command failed: xcrun ...".

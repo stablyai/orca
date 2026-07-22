@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { EmulatorSetupActionResult } from '../shared/emulator-setup-types'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -2174,6 +2175,15 @@ const api = {
     openSetup: (args?: { id?: string }): Promise<unknown> =>
       ipcRenderer.invoke('computerUsePermissions:openSetup', args),
     reset: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:reset')
+  },
+
+  emulatorSetup: {
+    useInstalledXcode: (developerDir: string): Promise<EmulatorSetupActionResult> =>
+      ipcRenderer.invoke('emulatorSetup:useInstalledXcode', developerDir),
+    finishXcodeSetup: (developerDir: string): Promise<EmulatorSetupActionResult> =>
+      ipcRenderer.invoke('emulatorSetup:finishXcodeSetup', developerDir),
+    openXcode: (developerDir: string): Promise<EmulatorSetupActionResult> =>
+      ipcRenderer.invoke('emulatorSetup:openXcode', developerDir)
   },
 
   shell: {

@@ -9293,6 +9293,24 @@
           "title": "Editor Font Family",
           "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
+        },
+        "MobileEmulatorAndroidSetupRow": {
+          "title": "Android Emulator",
+          "open": "Open Android Studio",
+          "download": "Download Android Studio",
+          "locate": "Locate SDK folder",
+          "clear": "Use automatic detection"
+        },
+        "MobileEmulatorIosSetupRow": {
+          "copy": "Command copied",
+          "download": "Download Xcode",
+          "selecting": "Setting up Xcode…",
+          "use": "Use Installed Xcode",
+          "finishing": "Installing components…",
+          "finish": "Finish Xcode Setup",
+          "title": "iOS Simulator",
+          "open": "Open Xcode",
+          "copyCommand": "Copy command"
         }
       },
       "right": {

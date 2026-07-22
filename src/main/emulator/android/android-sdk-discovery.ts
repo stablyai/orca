@@ -32,6 +32,15 @@ export function discoverAndroidSdk(options: DiscoverAndroidSdkOptions): AndroidS
   return null
 }
 
+export function discoverAndroidSdkAtPath(
+  sdkRoot: string,
+  platform: NodeJS.Platform,
+  exists: (path: string) => boolean
+): AndroidSdkPaths | null {
+  const paths = resolveToolPaths(sdkRoot, platform === 'win32')
+  return exists(paths.adb) && exists(paths.emulator) ? paths : null
+}
+
 function candidateSdkRoots(
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform,
