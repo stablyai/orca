@@ -18,7 +18,7 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8
 +++ b/deps/winpty/src/winpty.gyp
 @@ -10,7 +10,7 @@
      #    make -j4 CXX=i686-w64-mingw32-g++ LDFLAGS="-static -static-libgcc -static-libstdc++"
-
+ 
      'variables': {
 -        'WINPTY_COMMIT_HASH%': '<!(cmd /c "cd shared && GetCommitHash.bat")',
 +        'WINPTY_COMMIT_HASH%': '<!(cmd /c "cd shared && .\\GetCommitHash.bat")',
@@ -54,8 +54,29 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8
              'msvs_settings': {
                  # Specify this setting here to override a setting from somewhere
                  # else, such as node's common.gypi.
+diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
+index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441e02a974c 100644
+--- a/lib/conpty_console_list_agent.js
++++ b/lib/conpty_console_list_agent.js
+@@ -10,7 +10,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ var utils_1 = require("./utils");
+ var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
+ var shellPid = parseInt(process.argv[2], 10);
+-var consoleProcessList = getConsoleProcessList(shellPid);
++var consoleProcessList;
++try {
++    consoleProcessList = getConsoleProcessList(shellPid);
++}
++catch (_a) {
++    // Why: AttachConsole can fail after the shell exits; parent already has this fallback.
++    consoleProcessList = [shellPid];
++}
+ process.send({ consoleProcessList: consoleProcessList });
+ process.exit(0);
+ //# sourceMappingURL=conpty_console_list_agent.js.map
+\ No newline at end of file
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
+index 1ec12f796a822c78fba9ad7f6448c3987e325c23..772684f3380fd99f8e2a31812fbcf0b83d84d28f 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -73,31 +94,242 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
-diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
-index ccc111c9e03a4a661ccfd5d8e8f0ee699571b5dd..f92c6bef7d46dc35c941c87ef186aa46d8ed9c44 100644
---- a/lib/conpty_console_list_agent.js
-+++ b/lib/conpty_console_list_agent.js
-@@ -9,7 +9,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
- var utils_1 = require("./utils");
- var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
- var shellPid = parseInt(process.argv[2], 10);
--var consoleProcessList = getConsoleProcessList(shellPid);
-+var consoleProcessList;
-+try {
-+    consoleProcessList = getConsoleProcessList(shellPid);
-+}
-+catch (_a) {
-+    // Why: AttachConsole can fail after the shell exits; parent already has this fallback.
-+    consoleProcessList = [shellPid];
-+}
- process.send({ consoleProcessList: consoleProcessList });
- process.exit(0);
- //# sourceMappingURL=conpty_console_list_agent.js.map
+@@ -283,10 +287,18 @@ var CustomWriteStream = /** @class */ (function () {
+         this._fd = _fd;
+         this._encoding = _encoding;
+         this._writeQueue = [];
++        this._syncFallback = false;
+     }
+     CustomWriteStream.prototype.dispose = function () {
+         clearImmediate(this._writeImmediate);
+         this._writeImmediate = undefined;
++        clearTimeout(this._callbackWatchdog);
++        this._callbackWatchdog = undefined;
++        this._cancelCanary();
++        clearTimeout(this._syncRetryTimer);
++        this._syncRetryTimer = undefined;
++        clearImmediate(this._drainImmediate);
++        this._drainImmediate = undefined;
+     };
+     CustomWriteStream.prototype.write = function (data) {
+         // Writes are put in a queue and processed asynchronously in order to handle
+@@ -296,7 +308,10 @@ var CustomWriteStream = /** @class */ (function () {
+             : Buffer.from(data);
+         if (buffer.byteLength !== 0) {
+             this._writeQueue.push({ buffer: buffer, offset: 0 });
+-            if (this._writeQueue.length === 1) {
++            if (this._syncFallback) {
++                this._drainQueueSync();
++            }
++            else if (this._writeQueue.length === 1) {
+                 this._processWriteQueue();
+             }
+         }
+@@ -308,10 +323,28 @@ var CustomWriteStream = /** @class */ (function () {
+             return;
+         }
+         var task = this._writeQueue[0];
+-        // Write to the underlying file descriptor and handle it directly, rather
+-        // than using the `net.Socket`/`tty.WriteStream` wrappers which swallow and
+-        // mask errors like EAGAIN and can cause the thread to block indefinitely.
++        // fs.write completes on the libuv threadpool. If the pool is wedged (all
++        // completions stop being delivered — observed in Electron utility
++        // processes), the callback below never fires, the queue head never
++        // advances, and every subsequent write is queued forever with no error.
++        // The watchdog detects a callback that never arrives; a canary probe
++        // then confirms the pool is actually dead (a paused event loop or a
++        // merely-busy pool completes the canary and no fallback happens) before
++        // switching this stream to synchronous writes, which bypass the pool.
++        this._armWriteWatchdog(task);
+         fs.write(this._fd, task.buffer, task.offset, function (err, written) {
++            clearTimeout(_this._callbackWatchdog);
++            _this._callbackWatchdog = undefined;
++            // The write completed, so the pool is alive: cancel any in-flight
++            // canary decision that would have abandoned this task.
++            _this._cancelCanary();
++            _this._canaryProbeCount = 0;
++            if (_this._syncFallback) {
++                // Late completion of the write the watchdog gave up on. The task
++                // was abandoned when the fallback engaged; processing it here
++                // would deliver its bytes twice.
++                return;
++            }
+             if (err) {
+                 if ('code' in err && err.code === 'EAGAIN') {
+                     // `setImmediate` is used to yield to the event loop and re-attempt
+@@ -341,6 +374,165 @@ var CustomWriteStream = /** @class */ (function () {
+             _this._processWriteQueue();
+         });
+     };
++    CustomWriteStream.prototype._armWriteWatchdog = function (task) {
++        var _this = this;
++        clearTimeout(this._callbackWatchdog);
++        this._callbackWatchdog = setTimeout(function () {
++            _this._callbackWatchdog = undefined;
++            _this._startCanaryProbe(task);
++        }, CustomWriteStream.WRITE_CALLBACK_TIMEOUT_MS);
++    };
++    CustomWriteStream.prototype._cancelCanary = function () {
++        // Invalidate every outstanding canary artifact: a stale probe
++        // completion or timer from an earlier write must never influence a
++        // later write's decision (it could cancel a live canary and leave the
++        // queue stuck with no watchdog at all).
++        this._canaryGeneration = (this._canaryGeneration || 0) + 1;
++        clearTimeout(this._canaryTimer);
++        this._canaryTimer = undefined;
++        clearImmediate(this._canaryVerdict);
++        this._canaryVerdict = undefined;
++    };
++    CustomWriteStream.prototype._startCanaryProbe = function (stalledTask) {
++        var _this = this;
++        if (this._syncFallback || this._canaryTimer !== undefined) {
++            return;
++        }
++        // A slow write completion alone cannot distinguish a wedged pool from a
++        // paused event loop (GC, suspend/resume) or a busy-but-alive pool. Probe
++        // with an independent threadpool op: if the probe completes, keep
++        // waiting; only a probe that also never returns confirms the wedge.
++        var gen = (this._canaryGeneration = (this._canaryGeneration || 0) + 1);
++        var armedAt = Date.now();
++        this._canaryTimer = setTimeout(function () {
++            // Generation first: a stale timer must not null out a newer
++            // timer's reference (dispose could then never cancel it).
++            if (gen !== _this._canaryGeneration) {
++                return;
++            }
++            _this._canaryTimer = undefined;
++            if (_this._syncFallback) {
++                return;
++            }
++            // If this timer fired far past its deadline, the EVENT LOOP was
++            // stalled — the probe may have completed without its callback
++            // running yet. The verdict would be meaningless; probe again.
++            if (Date.now() - armedAt > CustomWriteStream.CANARY_TIMEOUT_MS * 2) {
++                if (_this._writeQueue[0] === stalledTask) {
++                    _this._startCanaryProbe(stalledTask);
++                }
++                return;
++            }
++            // Defer the verdict one check-phase: a probe completion already
++            // sitting in the poll queue still gets to cancel it.
++            _this._canaryVerdict = setImmediate(function () {
++                _this._canaryVerdict = undefined;
++                if (gen !== _this._canaryGeneration || _this._syncFallback) {
++                    return;
++                }
++                _this._enterSyncFallback(stalledTask);
++            });
++        }, CustomWriteStream.CANARY_TIMEOUT_MS);
++        CustomWriteStream.probeThreadpool(function () {
++            if (gen !== _this._canaryGeneration) {
++                // Stale probe from an earlier write; a fresh decision owns the
++                // canary state now.
++                return;
++            }
++            _this._cancelCanary();
++            // Pool alive; if the same write is still pending, watch it again.
++            if (!_this._syncFallback && _this._writeQueue[0] === stalledTask) {
++                _this._canaryProbeCount = (_this._canaryProbeCount || 0) + 1;
++                if (_this._canaryProbeCount === 5) {
++                    console.error('node-pty: pty write still undelivered after 5 canary cycles ' +
++                        'with a healthy threadpool; input for this pty may be stalled outside node-pty');
++                }
++                _this._armWriteWatchdog(stalledTask);
++            }
++        });
++    };
++    CustomWriteStream.prototype._enterSyncFallback = function (stalledTask) {
++        this._syncFallback = true;
++        // Abandon the stalled task rather than re-writing it synchronously: its
++        // in-flight fs.write may still land if the threadpool recovers, and
++        // writing the same bytes twice could, e.g., execute a command twice.
++        var droppedBytes = 0;
++        if (this._writeQueue[0] === stalledTask) {
++            droppedBytes = stalledTask.buffer.byteLength - stalledTask.offset;
++            this._writeQueue.shift();
++        }
++        console.error('node-pty: pty write completion did not arrive within ' +
++            CustomWriteStream.WRITE_CALLBACK_TIMEOUT_MS +
++            'ms and a canary threadpool probe also stalled; falling back to ' +
++            'synchronous writes (abandoning ' + droppedBytes + ' byte(s), delivery status unknown)');
++        this._drainQueueSync();
++    };
++    CustomWriteStream.prototype._drainQueueSync = function () {
++        var _this = this;
++        if (this._syncRetryTimer !== undefined || this._drainImmediate !== undefined) {
++            // A retry or continuation is already scheduled; it will drain the
++            // queue (and anything appended meanwhile) in order.
++            return;
++        }
++        var bytesThisTurn = 0;
++        while (this._writeQueue.length > 0) {
++            if (bytesThisTurn >= CustomWriteStream.SYNC_DRAIN_BYTE_BUDGET) {
++                // Yield so a large backlog cannot monopolize the event loop.
++                this._drainImmediate = setImmediate(function () {
++                    _this._drainImmediate = undefined;
++                    _this._drainQueueSync();
++                });
++                return;
++            }
++            var task = this._writeQueue[0];
++            var written = void 0;
++            // Cap the syscall itself at the remaining turn budget so a single
++            // large task cannot bypass the per-turn bound in one write.
++            var lengthCap = Math.min(task.buffer.byteLength - task.offset, CustomWriteStream.SYNC_DRAIN_BYTE_BUDGET - bytesThisTurn);
++            try {
++                written = fs.writeSync(this._fd, task.buffer, task.offset, lengthCap);
++            }
++            catch (err) {
++                if (err && err.code === 'EAGAIN') {
++                    this._scheduleSyncRetry();
++                    return;
++                }
++                this._writeQueue.length = 0;
++                console.error('Unhandled pty write error', err);
++                return;
++            }
++            if (written === 0) {
++                // Defensive: treat a zero-byte write like backpressure instead of
++                // spinning on the same task in a tight loop.
++                this._scheduleSyncRetry();
++                return;
++            }
++            task.offset += written;
++            bytesThisTurn += written;
++            if (task.offset >= task.buffer.byteLength) {
++                this._writeQueue.shift();
++            }
++        }
++    };
++    CustomWriteStream.prototype._scheduleSyncRetry = function () {
++        var _this = this;
++        this._syncRetryTimer = setTimeout(function () {
++            _this._syncRetryTimer = undefined;
++            _this._drainQueueSync();
++        }, 5);
++    };
++    // How long to wait for an fs.write completion before probing the
++    // threadpool. Static so embedders/tests can tune them.
++    CustomWriteStream.WRITE_CALLBACK_TIMEOUT_MS = 2000;
++    // How long the canary probe may take before the pool counts as wedged.
++    CustomWriteStream.CANARY_TIMEOUT_MS = 2000;
++    // Max bytes written per event-loop turn once in sync-fallback mode.
++    CustomWriteStream.SYNC_DRAIN_BYTE_BUDGET = 65536;
++    // Independent threadpool liveness probe; injectable for tests.
++    CustomWriteStream.probeThreadpool = function (done) {
++        fs.stat('.', function () { done(); });
++    };
+     return CustomWriteStream;
+ }());
++exports.CustomWriteStream = CustomWriteStream;
+ //# sourceMappingURL=unixTerminal.js.map
+\ No newline at end of file
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
-index f6a653893e0b9b548c514db29d75599538ee1acb..1d5400489f200ef0161ca687e672e1cc02d29c95 100644
+index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
 --- a/src/conpty_console_list_agent.ts
 +++ b/src/conpty_console_list_agent.ts
-@@ -11,5 +11,11 @@ import { loadNativeModule } from './utils';
+@@ -10,6 +10,12 @@ import { loadNativeModule } from './utils';
+ 
  const getConsoleProcessList = loadNativeModule('conpty_console_list').module.getConsoleProcessList;
  const shellPid = parseInt(process.argv[2], 10);
 -const consoleProcessList = getConsoleProcessList(shellPid);
@@ -122,11 +354,11 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
  #include <unistd.h>
 +#include <string>
  #include <thread>
-
+ 
  #include <sys/types.h>
 @@ -237,13 +239,23 @@ pty_getproc(int, char *);
  #endif
-
+ 
  #if defined(__APPLE__) || defined(__OpenBSD__)
 +struct pty_spawn_error {
 +  const char* step;
@@ -147,12 +379,12 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 -                int* err);
 +                pty_spawn_error* err);
  #endif
-
+ 
  struct DelBuf {
 @@ -367,10 +379,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
-
+ 
 -  int err = -1;
 -  pty_posix_spawn(argv, env, term, &winp, &master, &pid, &err);
 -  if (err != 0) {
@@ -167,7 +399,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
 @@ -684,15 +697,73 @@ pty_getproc(int fd, char *tty) {
  #endif
-
+ 
  #if defined(__APPLE__)
 +static const char*
 +pty_errno_name(int errnum) {
@@ -238,7 +470,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +  bool acts_initialized = false;
 +  posix_spawnattr_t attrs;
 +  bool attrs_initialized = false;
-
+ 
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
 @@ -706,80 +777,118 @@ pty_posix_spawn(char** argv, char** env,
@@ -255,7 +487,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "grantpt", errno);
 +    goto done;
    }
-
+ 
 -  int res = grantpt(*master) || unlockpt(*master);
 +  res = unlockpt(*master);
    if (res == -1) {
@@ -263,7 +495,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "unlockpt", errno);
 +    goto done;
    }
-
+ 
    // Use TIOCPTYGNAME instead of ptsname() to avoid threading problems.
 -  int slave;
    char slave_pty_name[128];
@@ -273,14 +505,14 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "ioctl_TIOCPTYGNAME", errno);
 +    goto done;
    }
-
+ 
    slave = open(slave_pty_name, O_RDWR | O_NOCTTY);
    if (slave == -1) {
 -    return;
 +    pty_set_spawn_error(err, "open_slave", errno, "slave", slave_pty_name);
 +    goto done;
    }
-
+ 
    if (termp) {
      res = tcsetattr(slave, TCSANOW, termp);
      if (res == -1) {
@@ -289,7 +521,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +      goto done;
      };
    }
-
+ 
    if (winp) {
      res = ioctl(slave, TIOCSWINSZ, winp);
      if (res == -1) {
@@ -298,7 +530,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +      goto done;
      }
    }
-
+ 
 -  posix_spawn_file_actions_t acts;
 -  posix_spawn_file_actions_init(&acts);
 +  res = posix_spawn_file_actions_init(&acts);
@@ -312,7 +544,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
    posix_spawn_file_actions_adddup2(&acts, slave, STDERR_FILENO);
    posix_spawn_file_actions_addclose(&acts, slave);
    posix_spawn_file_actions_addclose(&acts, *master);
-
+ 
 -  posix_spawnattr_t attrs;
 -  posix_spawnattr_init(&attrs);
 -  *err = posix_spawnattr_setflags(&attrs, flags);
@@ -328,7 +560,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "posix_spawnattr_setflags", res);
      goto done;
    }
-
+ 
    sigset_t signal_set;
    /* Reset all signal the child to their default behavior */
    sigfillset(&signal_set);
@@ -339,7 +571,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "posix_spawnattr_setsigdefault", res);
      goto done;
    }
-
+ 
    /* Reset the signal mask for all signals */
    sigemptyset(&signal_set);
 -  *err = posix_spawnattr_setsigmask(&attrs, &signal_set);
@@ -349,7 +581,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "posix_spawnattr_setsigmask", res);
      goto done;
    }
-
+ 
    do
 -    *err = posix_spawn(pid, argv[0], &acts, &attrs, argv, env);
 -  while (*err == EINTR);
@@ -374,7 +606,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    close(*master);
 +    *master = -1;
 +  }
-
+ 
 -  for (; count > 0; count--) {
 -    close(low_fds[count]);
 +  for (size_t i = 0; i <= count && i < 3; i++) {
