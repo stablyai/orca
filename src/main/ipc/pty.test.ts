@@ -4075,6 +4075,60 @@ describe('registerPtyHandlers', () => {
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
       })
 
+      it('classifies host reversible-stop exits for the attached renderer', async () => {
+        vi.useFakeTimers()
+        const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(async (id: string) => {
+            for (const listener of exitListeners) {
+              listener({ id, code: 0 })
+            }
+          }),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn((listener: (payload: { id: string; code: number }) => void) => {
+            exitListeners.add(listener)
+            return () => exitListeners.delete(listener)
+          }),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          markReversibleStops: (ptyIds: readonly string[]) => () => void
+          stopAndWait: (ptyId: string) => Promise<boolean>
+        }
+        const release = controller.markReversibleStops(['local-pty'])
+
+        const stopPromise = controller.stopAndWait('local-pty')
+        await vi.advanceTimersByTimeAsync(1_200)
+        await expect(stopPromise).resolves.toBe(true)
+        release()
+
+        expect(
+          mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+        ).toEqual([['pty:exit', { id: 'local-pty', code: 0, preserveRendererBinding: true }]])
+      })
+
       it('passes keepHistory through runtime controller stopAndWait', async () => {
         vi.useFakeTimers()
         const shutdown = vi.fn(async () => undefined)

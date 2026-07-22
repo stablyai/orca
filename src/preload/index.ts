@@ -1042,7 +1042,9 @@ const api = {
     getSideEffectSnapshot: (id: string): Promise<TerminalSideEffectBatch | null> =>
       ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
 
-    onExit: (callback: (data: { id: string; code: number }) => void): (() => void) => {
+    onExit: (
+      callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
+    ): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { id: string; code: number }) =>
         callback(data)
       ipcRenderer.on('pty:exit', listener)

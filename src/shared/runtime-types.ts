@@ -476,6 +476,32 @@ export type RuntimeTerminalListResult = {
   truncated: boolean
 }
 
+export type RuntimeWorktreeTerminalSleepFailure =
+  | 'terminal_liveness_unavailable'
+  | 'terminal_worktree_sleep_still_live'
+
+export type RuntimeWorktreeTerminalSleepResult = {
+  stopped: number
+  stoppedPtyIds: string[]
+  livePtyIds: string[]
+} & (
+  | {
+      postStopVerified: true
+      postStopFailure?: never
+      remainingLivePtyIds?: never
+    }
+  | {
+      postStopVerified: false
+      postStopFailure: 'terminal_liveness_unavailable'
+      remainingLivePtyIds?: never
+    }
+  | {
+      postStopVerified: false
+      postStopFailure: 'terminal_worktree_sleep_still_live'
+      remainingLivePtyIds: string[]
+    }
+)
+
 export type RuntimeTerminalShow = RuntimeTerminalSummary & {
   paneRuntimeId: number
   ptyId: string | null

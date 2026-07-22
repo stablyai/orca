@@ -65,6 +65,15 @@ import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-laun
 import { useAppStore } from '@/store'
 import { recordWebAgentSessionHandoff } from '@/runtime/web-agent-session-handoff'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session'
+import {
+  bufferPtyShutdownData,
+  bufferPtyShutdownReplayData,
+  drainRolledBackPtyShutdownData,
+  isPtyDataHandlerShutdownPending,
+  ptyDataHandlers,
+  ptyReplayHandlers,
+  ptyShutdownLifecycleHandlers
+} from './pty-shutdown-data-suspension'
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
@@ -189,6 +198,45 @@ export function createRemoteRuntimePtyTransport(
     onAgentExited,
     onAgentStatus
   })
+  const shutdownDataHandler = (
+    data: string,
+    meta?: Parameters<typeof outputProcessor.processData>[3]
+  ): void => {
+    outputProcessor.processData(data, storedCallbacks, undefined, meta)
+  }
+  const shutdownReplayHandler = (data: string): void => {
+    outputProcessor.processData(data, storedCallbacks, {
+      replayingBufferedData: true,
+      suppressAttentionEvents: true
+    })
+  }
+  const shutdownLifecycle = {
+    pause: outputProcessor.pausePendingSideEffects,
+    rollback: outputProcessor.flushPendingSideEffects,
+    commit: outputProcessor.clearAccumulatedState
+  }
+  const registerShutdownHandlers = (ptyId: string): void => {
+    ptyDataHandlers.set(ptyId, shutdownDataHandler)
+    ptyReplayHandlers.set(ptyId, shutdownReplayHandler)
+    ptyShutdownLifecycleHandlers.set(ptyId, shutdownLifecycle)
+    if (!isPtyDataHandlerShutdownPending(ptyId)) {
+      drainRolledBackPtyShutdownData(ptyId)
+    }
+  }
+  const unregisterShutdownHandlers = (ptyId: string | null): void => {
+    if (!ptyId) {
+      return
+    }
+    if (ptyDataHandlers.get(ptyId) === shutdownDataHandler) {
+      ptyDataHandlers.delete(ptyId)
+    }
+    if (ptyReplayHandlers.get(ptyId) === shutdownReplayHandler) {
+      ptyReplayHandlers.delete(ptyId)
+    }
+    if (ptyShutdownLifecycleHandlers.get(ptyId) === shutdownLifecycle) {
+      ptyShutdownLifecycleHandlers.delete(ptyId)
+    }
+  }
 
   function getRecoveryState(): PtyTransportRecoveryState {
     const phase = destroyed
@@ -412,6 +460,7 @@ export function createRemoteRuntimePtyTransport(
 
     handle = hostHandle
     remotePtyId = toRemoteRuntimePtyId(hostHandle, currentRuntimeEnvironmentId)
+    registerShutdownHandlers(remotePtyId)
     connected = true
     desiredViewport = {
       cols: options.cols ?? 80,
@@ -785,6 +834,7 @@ export function createRemoteRuntimePtyTransport(
     clearPublishedHandleWait()
     clearPendingViewportClaim()
     const stalePtyId = remotePtyId
+    unregisterShutdownHandlers(stalePtyId)
     handle = null
     remotePtyId = null
     closeMultiplexedStream()
@@ -797,8 +847,10 @@ export function createRemoteRuntimePtyTransport(
   function rebindRemoteTerminalHandle(nextHandle: string): void {
     clearPublishedHandleWait()
     const replacedPtyId = remotePtyId
+    unregisterShutdownHandlers(replacedPtyId)
     handle = nextHandle
     remotePtyId = toRemoteRuntimePtyId(nextHandle, currentRuntimeEnvironmentId)
+    registerShutdownHandlers(remotePtyId)
     attachmentReady = false
     // Why: host handle rotation preserves the pane generation; only the store identity changes, not spawn/exit semantics.
     if (replacedPtyId) {
@@ -1037,12 +1089,18 @@ export function createRemoteRuntimePtyTransport(
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
-            outputProcessor.processData(data, storedCallbacks, undefined, meta)
+            if (subscribedPtyId && bufferPtyShutdownData(subscribedPtyId, data, meta)) {
+              return
+            }
+            shutdownDataHandler(data, meta)
           }
         },
         onSnapshot: (data, meta) => {
           // Why: an empty snapshot can still carry a pending mid-escape tail that must replay so the next live chunk completes it.
           if ((data || meta?.pendingEscapeTailAnsi) && isCurrentSubscription()) {
+            if (subscribedPtyId && bufferPtyShutdownReplayData(subscribedPtyId, data)) {
+              return
+            }
             outputProcessor.processData(data, storedCallbacks, {
               replayingBufferedData: true,
               suppressAttentionEvents: true,
@@ -1070,6 +1128,7 @@ export function createRemoteRuntimePtyTransport(
             return
           }
           outputProcessor.clearAccumulatedState()
+          unregisterShutdownHandlers(subscribedPtyId)
           connected = false
           connecting = false
           handle = null
@@ -1330,6 +1389,7 @@ export function createRemoteRuntimePtyTransport(
         handle = createdTerminal.handle
 
         remotePtyId = toRemoteRuntimePtyId(handle, currentRuntimeEnvironmentId)
+        registerShutdownHandlers(remotePtyId)
         connected = true
         desiredViewport = {
           cols: options.cols ?? 80,
@@ -1382,6 +1442,7 @@ export function createRemoteRuntimePtyTransport(
       currentRuntimeEnvironmentId =
         getRemoteRuntimePtyEnvironmentId(options.existingPtyId) ?? runtimeEnvironmentId
       const previousHandle = handle
+      const previousPtyId = remotePtyId
       const nextHandle = getRemoteRuntimeTerminalHandle(options.existingPtyId)
       if (previousHandle && previousHandle !== nextHandle) {
         // Why: debounced input is scoped by the current terminal handle at flush time.
@@ -1389,6 +1450,7 @@ export function createRemoteRuntimePtyTransport(
       }
       handle = nextHandle
       if (!handle) {
+        unregisterShutdownHandlers(previousPtyId)
         connected = false
         connecting = false
         remotePtyId = null
@@ -1398,7 +1460,9 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       // Why: legacy restored ids omit their runtime owner; canonicalize at attach so stores and lifecycle guards never share raw aliases.
+      unregisterShutdownHandlers(previousPtyId)
       remotePtyId = toRemoteRuntimePtyId(handle, currentRuntimeEnvironmentId)
+      registerShutdownHandlers(remotePtyId)
       connected = true
       desiredViewport = {
         cols: options.cols ?? 80,
@@ -1432,6 +1496,7 @@ export function createRemoteRuntimePtyTransport(
       terminalEnded = true
       clearPendingViewportClaim()
       const id = remotePtyId
+      unregisterShutdownHandlers(id)
       closeMultiplexedStream()
       handle = null
       remotePtyId = null
@@ -1452,6 +1517,7 @@ export function createRemoteRuntimePtyTransport(
       inputBatcher.clear()
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
+      unregisterShutdownHandlers(remotePtyId)
       connected = false
       connecting = false
       clearPendingViewportClaim()

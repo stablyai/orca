@@ -70,6 +70,7 @@ const forceRebuild =
   cliOptions.force ||
   rebuildPlatform !== osPlatform() ||
   rebuildArch !== process.arch
+let modulesToRebuild = onlyModules
 
 ensureElectronPackageInstalled()
 restoreNodePtyWindowsConptyRuntime()
@@ -79,16 +80,21 @@ const patchedNodePtyRebuildReason = forceRebuild ? null : getPatchedNodePtyRebui
 if (patchedNodePtyRebuildReason) {
   console.log(`[rebuild] ${patchedNodePtyRebuildReason}`)
 } else if (!forceRebuild) {
-  // Why: Windows cannot unlink a loaded .node DLL, so avoid @electron/rebuild
-  // when the current install already works with Electron's ABI.
-  const probe = probeElectronNativeModules(onlyModules)
-  if (probe.ok) {
+  // Why: independent probes avoid rebuilding healthy Windows DLLs that may already be loaded and locked.
+  const probes = onlyModules.map((moduleName) => ({
+    moduleName,
+    result: probeElectronNativeModules([moduleName])
+  }))
+  modulesToRebuild = probes.filter(({ result }) => !result.ok).map(({ moduleName }) => moduleName)
+  if (modulesToRebuild.length === 0) {
     console.log('[rebuild] Native modules already load in Electron; skipping rebuild.')
     process.exit(0)
   }
-  console.log('[rebuild] Native modules do not load in Electron; rebuilding.')
-  if (probe.stderr.trim()) {
-    console.log(probe.stderr.trim())
+  console.log(`[rebuild] Rebuilding failed native modules: ${modulesToRebuild.join(', ')}`)
+  for (const { result } of probes) {
+    if (!result.ok && result.stderr.trim()) {
+      console.log(result.stderr.trim())
+    }
   }
 } else {
   console.log(`[rebuild] Forcing native rebuild for ${rebuildPlatform}-${rebuildArch}.`)
@@ -131,7 +137,7 @@ try {
     platform: rebuildPlatform,
     arch: rebuildArch,
     ignoreModules,
-    onlyModules,
+    onlyModules: modulesToRebuild,
     // Why: without force, @electron/rebuild skips modules it considers
     // "already built" — even when they were compiled for the wrong ABI
     // (e.g., system Node instead of Electron's embedded Node). This is

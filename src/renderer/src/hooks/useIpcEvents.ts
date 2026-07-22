@@ -103,6 +103,7 @@ import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import type { AppState } from '../store/types'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '../store/pinned-tab-close-guard'
 import {
@@ -963,6 +964,10 @@ export function useIpcEvents(): void {
       null
 
     const handleRuntimeClientEvent = (environmentId: string, event: RuntimeClientEvent): void => {
+      if (event.type === 'worktreeTerminalSleepState') {
+        applyHostWorktreeTerminalSleepState(environmentId, event)
+        return
+      }
       if (event.type === 'reposChanged') {
         runtimeProjectRefreshScheduler.request(environmentId)
         return
