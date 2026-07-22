@@ -27,11 +27,15 @@ describe('buildPetOmpAgentArgs', () => {
     expect(args).toMatch(/--session-dir \S*orca-pet-\S+ --continue/)
   })
 
-  it('leaves $HOME literal so the owner host shell expands it', () => {
-    // Resolving $HOME in the renderer would be wrong for an SSH worktree: the
-    // path must resolve on the host that runs omp, which is where the pty shell
-    // runs the startup command.
-    expect(buildPetOmpAgentArgs(WT)).toContain('$HOME/.local/state/meshina/omp-sessions')
+  it('uses absolute session-dir and config paths (Orca quotes argv; $HOME never expands)', () => {
+    // Dogfood: `$HOME/...` became `/cwd/$HOME/meshina/...` and omp failed
+    // "Config overlay not found". Paths must be absolute for the host.
+    const args = buildPetOmpAgentArgs(WT)
+    const home = process.env.HOME ?? '/home/nixos'
+    expect(args).toContain(`--session-dir ${home}/.local/state/meshina/omp-sessions/`)
+    expect(args).toContain(`--config ${home}/meshina/configs/omp/mesh-coding.yml`)
+    expect(args).not.toMatch(/--config\s+\$HOME/)
+    expect(args).not.toMatch(/--session-dir\s+\$HOME/)
   })
 
   it('lets the arm be overridden without touching approval or durability', () => {

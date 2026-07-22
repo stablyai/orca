@@ -2,6 +2,11 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import {
+  meshOmpCodingConfigPath,
+  meshOmpMcpConfigDocPath,
+  meshOmpSessionRoot
+} from '@/lib/collab-canvas/mesh-omp-paths'
 import { getPetBoundSession, setPetBoundSession } from './pet-bound-session'
 import { resolveSpawnFreshness } from './pet-session-epoch'
 
@@ -16,33 +21,22 @@ import { resolveSpawnFreshness } from './pet-session-epoch'
  */
 export const PET_OMP_MODEL = 'mesh-litellm/LFM2.5-8B-A1B-Q4_0.gguf'
 
-/** Root for pet session storage, matching the mesh convention already used by
- * `scripts/mesh/omp_orca_dispatch.sh`. `$HOME` is left literal on purpose — the
- * startup command runs in the pty's shell on the worktree's owner host, so the
- * shell expands it there, which is also the only host that can resolve it
- * correctly for an SSH/remote worktree. */
-const PET_SESSION_ROOT = '$HOME/.local/state/meshina/omp-sessions'
+/**
+ * Session root / mesh config — ABSOLUTE paths (see mesh-omp-paths.ts).
+ * Orca single-quotes every agentArgs token in the PTY startup command, so a
+ * literal `$HOME/...` never expands and omp dies with
+ * "Config overlay not found: <cwd>/$HOME/meshina/...".
+ */
+function petSessionRoot(): string {
+  return meshOmpSessionRoot()
+}
 
-/** The mesh's omp overlay — model roles, web provider, approval posture, and the
- * lean tool discipline the mesh's own doers run under (`configs/omp/mesh-coding.yml`,
- * loaded exactly as `scripts/mesh/spawn_omp_worker.sh` does). Without it the pet
- * spawns on omp's bare defaults: no mesh tool surface and no idea what the mesh
- * gives it — the "empty toolset / unaware of its capabilities" the operator hit.
- * `$HOME` literal for the owner-host shell, same reason as the session root. */
-const PET_MESH_CONFIG = '$HOME/meshina/configs/omp/mesh-coding.yml'
+function petMeshConfig(): string {
+  return meshOmpCodingConfigPath()
+}
 
-/** Authoritative mesh MCP config (`mcp.json`) registering the first-class
- * SearXNG and CloakBrowser MCP servers under HERMES web tool priority
- * (Cloak first for fetch/scrape, SearXNG as SERP fallback). omp 17.x has no
- * built-in SearXNG/CloakBrowser providers (audit 2026-07-16-L4), so they
- * surface as MCP servers in `mcp.json` instead. omp auto-discovers
- * `~/.omp/agent/mcp.json` on the owner host, so the pet's spawned omp sees
- * both servers as long as the operator has symlinked the file at the
- * discovery path (a one-time `ln -sf $HOME/meshina/configs/omp/mcp.json
- * $HOME/.omp/agent/mcp.json`, run by the mesh `omp` setup; documented in
- * the persona so the failure mode is named if it hasn't been done yet).
- * `$HOME` literal for the same reason as the mesh config and session root. */
-const PET_MCP_CONFIG = '$HOME/meshina/configs/omp/mcp.json'
+/** Doc path only (persona); MCP loads via ~/.omp/agent/mcp.json discovery. */
+const PET_MCP_CONFIG_DOC = meshOmpMcpConfigDocPath()
 
 /** MCP tool names the mesh's `mcp.json` exposes (Cloak → SearXNG priority).
  * Named in the persona only — never in omp `--tools`. omp 17.x validates
@@ -66,7 +60,7 @@ const PET_PERSONA = [
   'scrape or browse; fall back to searxng_search for SERP and quick lookups;',
   'reach for the built-in web_search only when both MCP tools are unavailable.',
   'The cloakbrowser_browse and searxng_search tools come from the mesh',
-  `MCP config at ${PET_MCP_CONFIG}; if they are missing from your tool`,
+  `MCP config at ${PET_MCP_CONFIG_DOC}; if they are missing from your tool`,
   'set, the operator has not symlinked it at ~/.omp/agent/mcp.json yet,',
   'and you should say so rather than silently reach for the built-in web_search.',
   'Both MCP tools fail-closed (the call surfaces an error) if the mesh',
@@ -123,11 +117,11 @@ export function buildPetOmpAgentArgs(
   options: { fresh?: boolean; model?: string } = {}
 ): string {
   const model = options.model ?? PET_OMP_MODEL
-  const sessionDir = `${PET_SESSION_ROOT}/${petSessionDirName(worktreeId)}`
+  const sessionDir = `${petSessionRoot()}/${petSessionDirName(worktreeId)}`
   const parts = [
     '--approval-mode always-ask',
     `--model ${model}`,
-    `--config ${PET_MESH_CONFIG}`,
+    `--config ${petMeshConfig()}`,
     `--tools ${PET_TOOLS}`,
     `--session-dir ${sessionDir}`,
     // Fresh spawns omit --continue so omp starts a new session in the same dir.

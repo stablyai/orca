@@ -13,11 +13,17 @@ describe('canvasSessionDirName', () => {
 })
 
 describe('buildCanvasOmpAgentArgs', () => {
-  it('points session-dir at canvas board and includes mesh config', () => {
+  it('points session-dir at canvas board and includes absolute mesh config', () => {
     const args = buildCanvasOmpAgentArgs('b1')
-    expect(args).toContain('--session-dir $HOME/.local/state/meshina/omp-sessions/canvas-b1')
+    const home = process.env.HOME ?? '/home/nixos'
+    expect(args).toContain(
+      `--session-dir ${home}/.local/state/meshina/omp-sessions/canvas-b1`
+    )
+    expect(args).toContain(`--config ${home}/meshina/configs/omp/mesh-coding.yml`)
+    // Persona may still document $HOME for MCP docs; CLI flags must not.
+    expect(args).not.toMatch(/--config\s+\$HOME/)
+    expect(args).not.toMatch(/--session-dir\s+\$HOME/)
     expect(args).toContain('--continue')
-    expect(args).toContain('mesh-coding.yml')
     expect(args).toContain('gemma')
   })
 

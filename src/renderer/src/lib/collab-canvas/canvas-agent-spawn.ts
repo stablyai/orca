@@ -6,13 +6,15 @@
 
 import { collabCanvasSessionDirName } from '../../../../shared/collab-canvas-binding'
 import type { CollabCanvasBinding } from '../../../../shared/collab-canvas-binding'
+import {
+  meshOmpCodingConfigPath,
+  meshOmpMcpConfigDocPath,
+  meshOmpSessionRoot
+} from './mesh-omp-paths'
 
 /** Multimodal default for board vision (atlas). Operator can override later. */
 export const CANVAS_OMP_MODEL = 'mesh-litellm/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf'
 
-const SESSION_ROOT = '$HOME/.local/state/meshina/omp-sessions'
-const MESH_CONFIG = '$HOME/meshina/configs/omp/mesh-coding.yml'
-const MCP_CONFIG = '$HOME/meshina/configs/omp/mcp.json'
 /** Native omp tools only. cloakbrowser_browse / searxng_search load via MCP
  * (`~/.omp/agent/mcp.json`), not the `--tools` allowlist (omp 17 rejects them). */
 const TOOLS = 'read,bash,edit,write,grep,glob,todo,web_search'
@@ -27,7 +29,7 @@ const PERSONA = [
   'For write-back, prefer a ```collab-board JSON fence with geo/note/draft ops,',
   'or short prose that becomes an agent-draft card.',
   'Keep replies short and concrete.',
-  `Mesh MCP config expected at ${MCP_CONFIG} (symlink ~/.omp/agent/mcp.json).`
+  `Mesh MCP config expected at ${meshOmpMcpConfigDocPath()} (symlink ~/.omp/agent/mcp.json).`
 ].join(' ')
 
 export function canvasSessionDirName(boardId: string): string {
@@ -44,11 +46,11 @@ export function buildCanvasOmpAgentArgs(
   options: { fresh?: boolean; model?: string } = {}
 ): string {
   const model = options.model ?? CANVAS_OMP_MODEL
-  const sessionDir = `${SESSION_ROOT}/${canvasSessionDirName(boardId)}`
+  const sessionDir = `${meshOmpSessionRoot()}/${canvasSessionDirName(boardId)}`
   const parts = [
     '--approval-mode always-ask',
     `--model ${model}`,
-    `--config ${MESH_CONFIG}`,
+    `--config ${meshOmpCodingConfigPath()}`,
     `--tools ${TOOLS}`,
     `--session-dir ${sessionDir}`,
     ...(options.fresh ? [] : ['--continue']),
