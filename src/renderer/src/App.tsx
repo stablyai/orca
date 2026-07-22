@@ -878,7 +878,20 @@ function App(): React.JSX.Element {
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
         })()
-        const startupRuntimeHostIds = await runtimeHostsPromise
+        // Why: chain session-get off runtimeHostsPromise instead of awaiting the host ids here, so
+        // fetch-worktrees and the catalog chain start immediately (neither needs the ids) — awaiting
+        // the host-list IPC first would re-serialize the worktree scan behind host discovery when the
+        // IPC is the slower of the two. Only session-get waits on the ids.
+        const sessionReadPromise = runtimeHostsPromise.then((startupRuntimeHostIds) =>
+          // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
+          timeRendererStartupStep('session-get', () =>
+            fetchWorkspaceSessionWithRuntimeHostOwners(
+              window.api.session,
+              useAppStore.getState().repos,
+              startupRuntimeHostIds
+            )
+          )
+        )
         // Why: once repos is loaded, fetch-worktrees (snapshots repos), session-get (repos-independent
         // local disk read), and the local catalog chain are mutually independent — run them concurrently
         // so the two disk reads hide behind the O(repos) worktree git scan (the startup long pole).
@@ -889,14 +902,7 @@ function App(): React.JSX.Element {
           timeRendererStartupStep('fetch-worktrees', () =>
             actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
           ),
-          // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
-          timeRendererStartupStep('session-get', () =>
-            fetchWorkspaceSessionWithRuntimeHostOwners(
-              window.api.session,
-              useAppStore.getState().repos,
-              startupRuntimeHostIds
-            )
-          ),
+          sessionReadPromise,
           localCatalogChain
         ])
         await keybindingsPromise
