@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import type { RuntimeEnvironmentSshBucket } from '@/store/slices/runtime-environment-ssh'
 import type WorktreeCardComponent from './WorktreeCard'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -14,6 +16,8 @@ let WorktreeCard: typeof WorktreeCardComponent
 let sshConnectionStates = new Map<string, { status: string }>()
 let sshTargetLabels = new Map<string, string>()
 let runtimeStatusByEnvironmentId = new Map<string, { status?: unknown }>()
+let sshStateByEnvironment = new Map<string, RuntimeEnvironmentSshBucket>()
+let worktreesByRepo: Record<string, Worktree[]> = {}
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 
 vi.mock('@/store', () => ({
@@ -32,10 +36,14 @@ vi.mock('@/store', () => ({
       remoteBranchConflictByWorktreeId: {},
       runtimeStatusByEnvironmentId,
       settings: null,
+      removedSshTargetLabels: new Map(),
       sshConnectionStates,
+      sshStateByEnvironment,
       sshTargetLabels,
+      sshTargetsHydrated: false,
       updateWorktreeMeta,
-      worktreeCardProperties
+      worktreeCardProperties,
+      worktreesByRepo
     })
 }))
 
@@ -130,6 +138,8 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     sshConnectionStates = new Map()
     sshTargetLabels = new Map()
     runtimeStatusByEnvironmentId = new Map()
+    sshStateByEnvironment = new Map()
+    worktreesByRepo = {}
     worktreeCardProperties = ['status']
   })
 
@@ -159,6 +169,80 @@ describe('WorktreeCard SSH reconnect prompt', () => {
       <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
     )
     expect(markup).toContain('Server disconnected')
+  })
+
+  // Regression (#9276): paired clients mirror hub SSH state only into
+  // sshStateByEnvironment; reading the local maps marked every healthy hub
+  // worktree disconnected and armed the blocking reconnect dialog.
+  it('does not mark a hub-owned SSH worktree disconnected when the hub reports it connected', () => {
+    runtimeStatusByEnvironmentId.set('env-1', { status: { runtimeId: 'r1' } })
+    sshStateByEnvironment.set('env-1', {
+      connectionStates: new Map([
+        [
+          'ssh-target-1',
+          { targetId: 'ssh-target-1', status: 'connected', error: null, reconnectAttempt: 0 }
+        ]
+      ]),
+      targetLabels: new Map([['ssh-target-1', 'Hub target']]),
+      removedTargetLabels: new Map(),
+      targetsHydrated: true
+    })
+    const hubWorktree: Worktree = {
+      ...makeWorktree(),
+      hostId: toRuntimeExecutionHostId('env-1')
+    }
+    worktreesByRepo = { 'repo-1': [hubWorktree] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={hubWorktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('SSH disconnected')
+    expect(markup).toContain('data-ssh-status="connected"')
+    expect(markup).toContain('data-ssh-target-label="Hub target"')
+  })
+
+  it('still shows the disconnected chip when the hub itself reports the target disconnected', () => {
+    runtimeStatusByEnvironmentId.set('env-1', { status: { runtimeId: 'r1' } })
+    sshStateByEnvironment.set('env-1', {
+      connectionStates: new Map([
+        [
+          'ssh-target-1',
+          { targetId: 'ssh-target-1', status: 'disconnected', error: null, reconnectAttempt: 0 }
+        ]
+      ]),
+      targetLabels: new Map([['ssh-target-1', 'Hub target']]),
+      removedTargetLabels: new Map(),
+      targetsHydrated: true
+    })
+    const hubWorktree: Worktree = {
+      ...makeWorktree(),
+      hostId: toRuntimeExecutionHostId('env-1')
+    }
+    worktreesByRepo = { 'repo-1': [hubWorktree] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={hubWorktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('SSH disconnected')
+    expect(markup).toContain('data-ssh-target-label="Hub target"')
+  })
+
+  it('shows nothing for a hub-owned SSH worktree while the hub bucket is not hydrated', () => {
+    runtimeStatusByEnvironmentId.set('env-1', { status: { runtimeId: 'r1' } })
+    const hubWorktree: Worktree = {
+      ...makeWorktree(),
+      hostId: toRuntimeExecutionHostId('env-1')
+    }
+    worktreesByRepo = { 'repo-1': [hubWorktree] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={hubWorktree} repo={makeRepo()} isActive={false} />
+    )
+
+    // Unknown owner state must render no chip instead of a false disconnect.
+    expect(markup).not.toContain('SSH disconnected')
   })
 
   it('shows a runtime-host worktree as connected when its environment has a status', () => {

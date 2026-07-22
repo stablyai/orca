@@ -173,7 +173,7 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
     })
 })
 
-type RuntimeAwareSshReadState = Pick<
+export type RuntimeAwareSshReadState = Pick<
   AppState,
   | 'sshConnectionStates'
   | 'sshTargetLabels'

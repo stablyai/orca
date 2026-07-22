@@ -81,8 +81,14 @@ import {
 import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import {
+  selectWorktreeCardSshStatus,
+  selectWorktreeCardSshTargetLabel
+} from './worktree-card-ssh-status'
 
 type WorktreeRenameRequest = {
   worktreeId: string
@@ -331,14 +337,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   // SSH disconnected state
-  const sshStatus = useAppStore((s) => {
-    // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
-    if (!repo?.connectionId || isRuntimeOwnedSshTargetId(repo.connectionId)) {
-      return null
-    }
-    const state = s.sshConnectionStates.get(repo.connectionId)
-    return state?.status ?? 'disconnected'
-  })
+  // Which machine's SSH store owns this card's target: a remote server's per-environment bucket, or null for this machine's local SSH maps.
+  // Why: paired web clients force null — they mirror their one host through the local maps, not an explicit environment bucket.
+  const sshEnvironmentId = useAppStore((s) =>
+    repo?.connectionId && !isPairedWebClientWindow()
+      ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id)
+      : null
+  )
+  const sshStatus = useAppStore((s) =>
+    selectWorktreeCardSshStatus(s, sshEnvironmentId, repo?.connectionId)
+  )
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   // Why: terminal views have their own reconnect overlay; reserve the blocking dialog for non-terminal views (default to terminal when ambiguous).
   const activeViewIsTerminal = useAppStore(
@@ -359,7 +367,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from the store (hydrated in useIpcEvents.ts) instead of a listTargets IPC per card.
   const sshTargetLabel = useAppStore((s) =>
-    repo?.connectionId ? (s.sshTargetLabels.get(repo.connectionId) ?? '') : ''
+    selectWorktreeCardSshTargetLabel(s, sshEnvironmentId, repo?.connectionId)
   )
 
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
