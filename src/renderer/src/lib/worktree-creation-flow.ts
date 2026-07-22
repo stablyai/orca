@@ -19,6 +19,7 @@ import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
+import { resolveWorktreeCreateParent } from '@/lib/worktree-create-parent'
 import type { CreateWorktreeResult } from '../../../shared/types'
 import type {
   WorktreeCreationPhase,
@@ -136,6 +137,17 @@ async function executeWorktreeCreation(
     return
   }
 
+  // Why: the parent is re-resolved at create time (not menu-open time) so the
+  // child bases on the branch the parent points at now, and a parent that was
+  // deleted or left behind by a repo switch drops the link instead of failing.
+  const createParent = preparedRequest.parentWorktreeId
+    ? resolveWorktreeCreateParent(
+        useAppStore.getState(),
+        preparedRequest.parentWorktreeId,
+        preparedRequest.repoId
+      )
+    : null
+
   let result: CreateWorktreeResult
   try {
     result = await useAppStore
@@ -143,7 +155,7 @@ async function executeWorktreeCreation(
       .createWorktree(
         preparedRequest.repoId,
         preparedRequest.name,
-        preparedRequest.baseBranch,
+        preparedRequest.baseBranch ?? (createParent?.branch || undefined),
         preparedRequest.setupDecision,
         preparedRequest.sparseCheckout,
         preparedRequest.telemetrySource,
@@ -165,7 +177,8 @@ async function executeWorktreeCreation(
         preparedRequest.linkedBitbucketPR,
         preparedRequest.linkedAzureDevOpsPR,
         preparedRequest.linkedGiteaPR,
-        preparedRequest.compareBaseRef
+        preparedRequest.compareBaseRef,
+        createParent ? { parentWorktreeId: createParent.id } : undefined
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon

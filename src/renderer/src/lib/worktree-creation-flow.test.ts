@@ -17,6 +17,7 @@ const store = {
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
   repos: [{ id: 'repo-runtime', connectionId: null }],
+  worktreesByRepo: {} as Record<string, { id: string; repoId: string; branch?: string }[]>,
   pendingWorktreeCreations: {} as Record<string, PendingWorktreeCreation>,
   beginPendingWorktreeCreation: vi.fn((entry: PendingWorktreeCreation) => {
     store.pendingWorktreeCreations[entry.creationId] = entry
@@ -95,6 +96,7 @@ beforeEach(() => {
   store.activeView = 'terminal'
   store.activePendingCreationId = 'creation-1'
   store.repos = []
+  store.worktreesByRepo = {}
   store.pendingWorktreeCreations = { 'creation-1': makePendingCreation(makeRequest()) }
   store.createWorktree.mockImplementation(() => new Promise(() => {}))
   vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
@@ -644,6 +646,82 @@ describe('staged background worktree creation', () => {
       })
     )
     expect(toast.error).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('child workspace parent at create time', () => {
+  const CREATE_OPTIONS_ARG = 25
+
+  beforeEach(() => {
+    store.activeView = 'tasks'
+    store.repos = [{ id: 'repo-1', connectionId: null }]
+    store.worktreesByRepo = {
+      'repo-1': [{ id: 'parent-1', repoId: 'repo-1', branch: 'feat/parent' }]
+    }
+    store.createWorktree.mockResolvedValueOnce({ worktree: { id: 'wt-1', repoId: 'repo-1' } })
+  })
+
+  it('threads the parent branch and lineage option into the create call', async () => {
+    const started = continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({ parentWorktreeId: 'parent-1' }),
+      { revealCreationSurface: false }
+    )
+
+    expect(started).toBe(true)
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
+    const createCall = store.createWorktree.mock.calls[0] as unknown[]
+    expect(createCall[2]).toBe('feat/parent')
+    expect(createCall[CREATE_OPTIONS_ARG]).toEqual({ parentWorktreeId: 'parent-1' })
+  })
+
+  it('lets an explicit Start-from base win over the parent branch', async () => {
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({ parentWorktreeId: 'parent-1', baseBranch: 'release/1.0' }),
+      { revealCreationSurface: false }
+    )
+
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
+    const createCall = store.createWorktree.mock.calls[0] as unknown[]
+    expect(createCall[2]).toBe('release/1.0')
+    expect(createCall[CREATE_OPTIONS_ARG]).toEqual({ parentWorktreeId: 'parent-1' })
+  })
+
+  it('drops the parent when it was deleted before submit', async () => {
+    store.worktreesByRepo = { 'repo-1': [] }
+
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({ parentWorktreeId: 'parent-1' }),
+      { revealCreationSurface: false }
+    )
+
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
+    const createCall = store.createWorktree.mock.calls[0] as unknown[]
+    expect(createCall[2]).toBeUndefined()
+    expect(createCall[CREATE_OPTIONS_ARG]).toBeUndefined()
+  })
+
+  it('drops the parent when the composer switched to another repo', async () => {
+    store.repos = [
+      { id: 'repo-1', connectionId: null },
+      { id: 'repo-2', connectionId: null }
+    ]
+    store.worktreesByRepo = {
+      'repo-2': [{ id: 'parent-2', repoId: 'repo-2', branch: 'feat/other' }]
+    }
+
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({ parentWorktreeId: 'parent-2' }),
+      { revealCreationSurface: false }
+    )
+
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
+    const createCall = store.createWorktree.mock.calls[0] as unknown[]
+    expect(createCall[2]).toBeUndefined()
+    expect(createCall[CREATE_OPTIONS_ARG]).toBeUndefined()
   })
 })
 

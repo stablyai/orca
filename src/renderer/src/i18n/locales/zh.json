@@ -1262,7 +1262,8 @@
         "addSshHostHint": "Use an existing machine over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
         "addRemoteOrcaServerHint": "Pair another Orca runtime",
-        "hostConnectionFailed": "Connection failed"
+        "hostConnectionFailed": "Connection failed",
+        "childWorkspaceParentHint": "将创建为“{{parent}}”的子工作区。"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "创建工作树",
@@ -4339,6 +4340,7 @@
           "697d0f6e1b": "取消固定",
           "250de158fd": "移除工作区",
           "changeParentWorkspace": "更改父工作树...",
+          "newChildWorkspace": "新建子工作区...",
           "setParentWorkspace": "设置父工作树...",
           "workspaceSection": "工作区",
           "primaryDeleteDisabled": "主工作树不能删除。请改为移除项目。",

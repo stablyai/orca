@@ -2993,8 +2993,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
           const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
           const activeScope = parseWorkspaceKey(get().activeWorkspaceKey ?? '')
-          const parentWorkspace =
-            activeScope?.type === 'folder'
+          const parentWorkspace = options?.parentWorktreeId
+            ? worktreeWorkspaceKey(options.parentWorktreeId)
+            : activeScope?.type === 'folder'
               ? folderWorkspaceKey(activeScope.folderWorkspaceId)
               : undefined
           const createArgs = {
@@ -3113,6 +3114,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 ...s.worktreesByRepo,
                 [repoId]: nextWorktrees
               },
+              ...(result.lineage
+                ? {
+                    worktreeLineageById: {
+                      ...s.worktreeLineageById,
+                      [result.worktree.id]: result.lineage
+                    }
+                  }
+                : {}),
               ...(result.workspaceLineage
                 ? {
                     workspaceLineageByChildKey: {
