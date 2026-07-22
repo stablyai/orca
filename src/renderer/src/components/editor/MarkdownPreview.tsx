@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: MarkdownPreview keeps rendering, link interception, search, and viewport state together so preview behavior stays coherent. */
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: search match state is synchronized with DOM highlights inserted into the rendered markdown body. */
 import React, {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -30,7 +31,7 @@ import {
   Plus,
   X
 } from 'lucide-react'
-import type { Components } from 'react-markdown'
+import type { Components, Options as ReactMarkdownOptions } from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
@@ -327,6 +328,53 @@ const markdownPreviewSanitizeSchema = {
     th: [...(defaultSchema.attributes?.th ?? []), 'align']
   }
 }
+
+// Why: react-markdown's <Markdown> has no internal memoization — it rebuilds the whole
+// unified remark→rehype pipeline and re-parses the document on EVERY render. These plugin
+// lists are fully static, so hoist them to module scope; a fresh array identity per render
+// would otherwise defeat the memoized body below.
+type MarkdownPluginList = NonNullable<ReactMarkdownOptions['remarkPlugins']>
+const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
+  remarkGfm,
+  remarkBreaks,
+  remarkFrontmatter,
+  remarkMath,
+  remarkMarkdownDocLinks
+]
+// Why: sanitize raw HTML before KaTeX/highlight expand it, so their generated markup needn't be whitelisted in the schema.
+const MARKDOWN_REHYPE_PLUGINS: MarkdownPluginList = [
+  rehypeRaw,
+  [rehypeSanitize, markdownPreviewSanitizeSchema],
+  rehypeSlug,
+  rehypeHighlight,
+  rehypeKatex
+]
+
+// Why: render the body through a memoized wrapper so the expensive pipeline only re-runs when
+// the rendered content or the components map changes. Find state (query/match index) and
+// body-unrelated toolbar re-renders touch neither prop, so keystrokes in Find no longer
+// re-parse+re-highlight the whole doc. (Inline-annotation/review state — attentionReviewCommentId,
+// copiedReviewNoteId, activeAnnotationBlockKey — deliberately rebuilds `components`, so those
+// re-renders still re-run the pipeline; that's required to update the live annotation markup.)
+const MarkdownBody = memo(function MarkdownBody({
+  content,
+  components
+}: {
+  content: string
+  components: Components
+}) {
+  return (
+    <Markdown
+      components={components}
+      // Why: react-markdown filters file:// after sanitize; click handlers need the target to authorize and open it.
+      urlTransform={markdownPreviewUrlTransform}
+      remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+      rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+    >
+      {content}
+    </Markdown>
+  )
+})
 
 function parseLineTarget(hash: string): { line: number; column?: number } | null {
   if (!hash) {
@@ -1947,28 +1995,7 @@ export default function MarkdownPreview({
               </pre>
             </div>
           ) : null}
-          <Markdown
-            components={components}
-            // Why: react-markdown filters file:// after sanitize; click handlers need the target to authorize and open it.
-            urlTransform={markdownPreviewUrlTransform}
-            remarkPlugins={[
-              remarkGfm,
-              remarkBreaks,
-              remarkFrontmatter,
-              remarkMath,
-              remarkMarkdownDocLinks
-            ]}
-            // Why: sanitize raw HTML before KaTeX/highlight expand it, so their generated markup needn't be whitelisted in the schema.
-            rehypePlugins={[
-              rehypeRaw,
-              [rehypeSanitize, markdownPreviewSanitizeSchema],
-              rehypeSlug,
-              rehypeHighlight,
-              rehypeKatex
-            ]}
-          >
-            {renderedContent}
-          </Markdown>
+          <MarkdownBody content={renderedContent} components={components} />
         </div>
       </div>
     </div>
