@@ -1040,6 +1040,10 @@ function App(): React.JSX.Element {
                   // Why: the full scan is not required for session recovery, so keep it off the startup-critical path.
                   await actions.fetchAllWorktrees()
                   await actions.fetchWorktreeLineage()
+                  // Why: the startup prune only saw session-referenced repos; now that every repo is
+                  // authoritative, prune again to drop deleted-worktree visit timestamps that would
+                  // otherwise accumulate unbounded (disconnected SSH stays non-authoritative and is kept).
+                  actions.pruneLastVisitedTimestamps()
                 })
               }
             } catch (err) {
