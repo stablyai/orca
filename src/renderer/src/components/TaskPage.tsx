@@ -6125,7 +6125,7 @@ export default function TaskPage(): React.JSX.Element {
       if (item.type !== 'pr' || item.checksSummary) {
         return
       }
-      const repo = repoMap.get(item.repoId)
+      const repo = findTaskPageRepoForWorkItem(repos, item)
       if (!repo) {
         return
       }
@@ -6137,7 +6137,11 @@ export default function TaskPage(): React.JSX.Element {
         item.branchName,
         item.headSha,
         item.prRepo ?? null,
-        { repoId: repo.id, sourceContext: getTaskPageRepoSourceContext(repo, 'github') }
+        {
+          repoId: repo.id,
+          executionHostId: getRepoExecutionHostId(repo),
+          sourceContext: getTaskPageRepoSourceContext(repo, 'github')
+        }
       ).then((checks) => {
         patchTaskPageWorkItemRows(
           {
@@ -6153,7 +6157,7 @@ export default function TaskPage(): React.JSX.Element {
         )
       })
     },
-    [fetchPRChecks, patchTaskPageWorkItemRows, repoMap]
+    [fetchPRChecks, patchTaskPageWorkItemRows, repos]
   )
 
   useEffect(() => {

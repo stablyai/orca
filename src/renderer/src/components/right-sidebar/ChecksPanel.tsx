@@ -1788,7 +1788,8 @@ export default function ChecksPanel(): React.JSX.Element {
           pr?.prRepo,
           {
             force,
-            repoId: repo.id
+            repoId: repo.id,
+            executionHostId: getRepoExecutionHostId(repo)
           }
         )
         if (!isCurrentAsyncResult(requestKey)) {
@@ -2286,7 +2287,11 @@ export default function ChecksPanel(): React.JSX.Element {
           branch,
           refreshedPR.headSha,
           refreshedPR.prRepo,
-          { force: true, repoId: repo.id }
+          {
+            force: true,
+            repoId: repo.id,
+            executionHostId: getRepoExecutionHostId(repo)
+          }
         ).then(
           (result) => {
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
@@ -3242,7 +3247,8 @@ export default function ChecksPanel(): React.JSX.Element {
             refreshedPR.prRepo,
             {
               force: true,
-              repoId: repo.id
+              repoId: repo.id,
+              executionHostId: getRepoExecutionHostId(repo)
             }
           )
             .then(

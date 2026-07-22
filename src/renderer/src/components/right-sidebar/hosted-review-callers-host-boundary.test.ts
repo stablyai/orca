@@ -33,6 +33,7 @@ describe('hosted-review caller host boundaries', () => {
     expect(source).toContain('findRepoForWorktreeOwner(s.repos, activeWorktree)')
     expectEveryCallToCarryExecutionHost(source, 'fetchHostedReviewForBranch')
     expectEveryCallToCarryExecutionHost(source, 'refreshHostedReviewCard')
+    expectEveryCallToCarryExecutionHost(source, 'fetchPRChecks')
     expectEveryCallToCarryExecutionHost(source, 'getHostedReviewCreationEligibility')
     expectEveryCallToCarryExecutionHost(source, 'createHostedReview')
   })
@@ -49,5 +50,12 @@ describe('hosted-review caller host boundaries', () => {
     const source = readSource('../../store/slices/github.ts')
     expect(source).toContain('hostId: options.executionHostId')
     expect(source).toContain('if (options?.executionHostId && !repo)')
+    expect(source).toMatch(/window\.api\.gh\.prChecks\(\{[\s\S]{0,300}executionHostId:/)
+  })
+
+  it('resolves TaskPage PR checks through the work-item owner', () => {
+    const source = readSource('../TaskPage.tsx')
+    expect(source).toContain('findTaskPageRepoForWorkItem(repos, item)')
+    expectEveryCallToCarryExecutionHost(source, 'fetchPRChecks')
   })
 })

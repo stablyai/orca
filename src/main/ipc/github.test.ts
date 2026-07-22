@@ -442,7 +442,7 @@ describe('registerGitHubHandlers', () => {
         branch: 'feature/test',
         repoKind: 'git',
         connectionId: 'ssh-stale',
-        executionHostId: 'runtime:stale',
+        executionHostId: 'ssh:ssh-real',
         connectionState: 'disconnected',
         localGitOptions: { wslDistro: 'Stale' }
       },
@@ -883,6 +883,57 @@ describe('registerGitHubHandlers', () => {
       undefined,
       'origin'
     )
+  })
+
+  it('routes PR checks through the requested execution host when ids and paths overlap', async () => {
+    const sharedPath = '/workspace/shared'
+    repos = [
+      {
+        id: 'shared-repo',
+        path: sharedPath,
+        displayName: 'local',
+        badgeColor: 'blue',
+        addedAt: 0,
+        executionHostId: 'local'
+      },
+      {
+        id: 'shared-repo',
+        path: sharedPath,
+        displayName: 'ssh',
+        badgeColor: 'green',
+        addedAt: 0,
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1'
+      }
+    ]
+    getPRChecksMock.mockResolvedValue([])
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:prChecks'](null, {
+      repoPath: sharedPath,
+      repoId: 'shared-repo',
+      executionHostId: 'ssh:ssh-1',
+      prNumber: 42
+    })
+
+    expect(getPRChecksMock).toHaveBeenCalledWith(
+      sharedPath,
+      42,
+      undefined,
+      null,
+      { noCache: undefined },
+      'ssh-1'
+    )
+
+    getPRChecksMock.mockClear()
+    expect(() =>
+      handlers['gh:prChecks'](null, {
+        repoPath: sharedPath,
+        repoId: 'shared-repo',
+        prNumber: 42
+      })
+    ).toThrow('Access denied: ambiguous repository identity')
+    expect(getPRChecksMock).not.toHaveBeenCalled()
   })
 
   it('routes local WSL project GitHub PR detail and action IPC through project git options', async () => {

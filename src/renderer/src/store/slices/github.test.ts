@@ -740,6 +740,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     expect(mockApi.gh.prChecks).toHaveBeenCalledWith({
       repoPath,
       repoId,
+      executionHostId: 'local',
       prNumber: 12,
       headSha: undefined,
       prRepo: null,

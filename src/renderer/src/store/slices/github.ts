@@ -3466,6 +3466,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             : ((await window.api.gh.prChecks({
                 repoPath,
                 repoId,
+                executionHostId: repo ? getRepoExecutionHostId(repo) : options?.executionHostId,
                 prNumber,
                 headSha,
                 prRepo: prRepo ?? null,

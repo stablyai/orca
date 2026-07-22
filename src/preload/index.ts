@@ -1363,6 +1363,7 @@ const api = {
     prChecks: (args: {
       repoPath: string
       repoId?: string
+      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       prNumber: number
       headSha?: string

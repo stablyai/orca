@@ -514,6 +514,7 @@ type GitLabRepoSelectorArgs = {
 type GitHubRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
+  executionHostId?: ExecutionHostId
   sourceContext?: TaskSourceContext | null
 }
 
