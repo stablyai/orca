@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: the remote terminal multiplexer owns one bridged subscription, stream lifecycle, binary frame parsing, and remote lock events as a single transport contract. */
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime-client-error-classification'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -50,7 +51,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onDriverChanged?: (
     driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
   ) => void
-  onTransportClose?: () => void
+  onTransportClose?: (event: { recoverable: boolean }) => void
 }
 
 export type RemoteRuntimeMultiplexedTerminal = {
@@ -72,6 +73,7 @@ type RemoteRuntimeMultiplexedTerminalState = {
   streamId: number
   terminal: string
   callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
+  subscriptionRequested: boolean
   acknowledgeOutput: boolean
   heldAckBytes: number
   snapshotChunks: Uint8Array<ArrayBufferLike>[]
@@ -223,6 +225,7 @@ class RemoteRuntimeTerminalMultiplexer {
       streamId,
       terminal: args.terminal,
       callbacks: args.callbacks,
+      subscriptionRequested: false,
       acknowledgeOutput: args.client.type === 'desktop',
       heldAckBytes: 0,
       snapshotChunks: [],
@@ -295,6 +298,7 @@ class RemoteRuntimeTerminalMultiplexer {
       if (!sent) {
         throw new Error('Remote terminal stream is not connected.')
       }
+      state.subscriptionRequested = true
     } catch (error) {
       const terminalError = error instanceof Error ? error : new Error(String(error))
       if (this.streams.get(streamId) === state) {
@@ -340,7 +344,13 @@ class RemoteRuntimeTerminalMultiplexer {
           {
             onResponse: (response) => this.handleResponse(response),
             onBinary: (bytes) => this.handleBinary(bytes),
-            onError: (error) => this.failConnection(new Error(error.message)),
+            onError: (error) => {
+              if (isRecoverableRemoteRuntimeConnectionError(error)) {
+                this.handleClose(error.message)
+              } else {
+                this.failConnection(Object.assign(new Error(error.message), { code: error.code }))
+              }
+            },
             onClose: () => this.handleClose('Remote Orca runtime closed the connection.')
           }
         )
@@ -764,34 +774,36 @@ class RemoteRuntimeTerminalMultiplexer {
     this.readyResolver = null
     this.readyRejecter = null
     for (const stream of this.streams.values()) {
-      stream.callbacks.onError?.(error.message)
+      // Why: a stream still awaiting ensureConnected receives this failure through its rejected promise.
+      if (stream.subscriptionRequested) {
+        stream.callbacks.onError?.(error.message)
+      }
     }
-    this.subscription?.unsubscribe()
-    this.handleClose()
+    this.handleClose(undefined, false)
   }
 
-  private handleClose(message?: string): void {
+  private handleClose(message?: string, recoverable = true): void {
     const streams = Array.from(this.streams.values())
+    const closingSubscription = this.subscription
     this.ready = false
     this.connectPromise = null
     this.readyRejecter?.(new Error(message ?? 'Remote runtime connection closed.'))
     this.readyResolver = null
     this.readyRejecter = null
     this.subscription = null
+    closingSubscription?.unsubscribe()
     this.streams.clear()
+    // Why: close callbacks may resubscribe synchronously; release first so every replacement shares the new environment multiplexer.
+    this.releaseIfCurrent(this.environmentId, this)
     for (const stream of streams) {
       clearSnapshot(stream)
       rejectPendingSnapshotRequest(stream, message ?? 'Remote runtime connection closed.')
       const canHandleClose = Boolean(stream.callbacks.onTransportClose)
-      stream.callbacks.onTransportClose?.()
+      stream.callbacks.onTransportClose?.({ recoverable })
       if (message && !canHandleClose) {
         stream.callbacks.onError?.(message)
       }
     }
-    // Why: a closed transport has no live streams or subscription; keeping it
-    // in the module map only retains callbacks for an environment that must
-    // reconnect through a fresh subscription anyway.
-    this.releaseIfCurrent(this.environmentId, this)
   }
 
   private closeIfIdle(): void {

@@ -1758,7 +1758,12 @@ describe('LocalPtyProvider', () => {
   describe('listProcesses', () => {
     it('returns spawned PTYs', async () => {
       const before = await provider.listProcesses()
-      await provider.spawn({ cols: 80, rows: 24, cwd: '/tmp/owned-cwd' })
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/owned-cwd',
+        worktreeId: 'repo::/tmp/owned-cwd'
+      })
       await provider.spawn({ cols: 80, rows: 24 })
       const after = await provider.listProcesses()
       expect(after.length - before.length).toBe(2)
@@ -1766,6 +1771,7 @@ describe('LocalPtyProvider', () => {
       expect(newEntries[0]).toHaveProperty('id')
       expect(newEntries[0]).toHaveProperty('title', 'zsh')
       expect(newEntries[0]).toHaveProperty('cwd', '/tmp/owned-cwd')
+      expect(newEntries[0]).toHaveProperty('worktreeId', 'repo::/tmp/owned-cwd')
     })
   })
 

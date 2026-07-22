@@ -540,6 +540,22 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         displayServer: null
       })
     },
+    workspacePorts: {
+      // Why: browser-local workspaces have no host process to inspect; return capability state instead of the generic undefined fallback.
+      scan: () =>
+        Promise.resolve({
+          platform: getBrowserPlatform(),
+          scannedAt: Date.now(),
+          ports: [],
+          unavailableReason: 'Workspace port scanning is unavailable for browser-local workspaces.'
+        }),
+      kill: () =>
+        Promise.resolve({
+          ok: false,
+          reason: 'Workspace port management is unavailable for browser-local workspaces.'
+        }),
+      onAdvertisedUrlChanged: () => noopUnsubscribe
+    },
     orcaProfiles: {
       list: () =>
         Promise.resolve({
@@ -1269,8 +1285,9 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
       if (!offer) {
         throw new Error('Invalid Orca pairing code.')
       }
+      const previousEnvironment = activeEnvironment
       closeActiveRuntimeClients()
-      activeEnvironment = createStoredWebRuntimeEnvironment({ name, offer })
+      activeEnvironment = createStoredWebRuntimeEnvironment({ name, offer, previousEnvironment })
       saveStoredWebRuntimeEnvironment(activeEnvironment)
       return { environment: redactStoredWebRuntimeEnvironment(activeEnvironment) }
     },
@@ -1349,10 +1366,17 @@ function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultL
 
 function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
-    list: async () => (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos,
+    list: async () => {
+      const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
+      return owned.result.repos.map((repo) => withRuntimeRepoOwner(repo, owned.hostId))
+    },
     add: async ({ path, kind }) => {
       invalidateRuntimeWorktreeCaches()
-      return callRuntimeResult('repo.add', { path, kind })
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
+        'repo.add',
+        { path, kind }
+      )
+      return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
     },
     remove: async ({ repoId }) => {
       await callRuntimeResult('repo.rm', { repo: repoId })
@@ -1367,16 +1391,24 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     reorderForHost: async () => {
       throw new Error('Host-scoped project reordering is unavailable in paired web clients.')
     },
-    update: async ({ repoId, updates }) =>
-      (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
+    update: async ({ repoId, updates }) => {
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo }>('repo.update', {
+        repo: repoId,
+        updates
+      })
+      return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
+    },
     pickFolder: () => Promise.resolve(null),
     pickFolders: () => Promise.resolve([]),
     pickDirectory: () => Promise.resolve(null),
     clone: async ({ url, destination }) => {
       invalidateRuntimeWorktreeCaches()
-      return (
-        await callRuntimeResult<{ repo: Repo }>('repo.clone', { url, destination }, 10 * 60_000)
-      ).repo
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo }>(
+        'repo.clone',
+        { url, destination },
+        10 * 60_000
+      )
+      return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
     },
     cloneRemote: async () => {
       // Why: SSH relay cloning is owned by the desktop main process; paired web clients can't run that local IPC path.
@@ -1389,22 +1421,31 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     cloneAbort: () => Promise.resolve(),
     addRemote: async ({ remotePath, displayName, kind }) => {
       invalidateRuntimeWorktreeCaches()
-      const result = await callRuntimeResult<{ repo: Repo }>('repo.add', {
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo }>('repo.add', {
         path: remotePath,
         kind
       })
-      return displayName
-        ? {
-            repo: await createReposApi().update({
-              repoId: result.repo.id,
-              updates: { displayName }
-            })
-          }
-        : result
+      const result = {
+        repo: withRuntimeRepoOwner(owned.result.repo, owned.hostId)
+      }
+      if (!displayName) {
+        return result
+      }
+      assertActiveEnvironment(owned.environmentId)
+      return {
+        repo: await createReposApi().update({
+          repoId: result.repo.id,
+          updates: { displayName }
+        })
+      }
     },
     create: async ({ parentPath, name, kind }) => {
       invalidateRuntimeWorktreeCaches()
-      return callRuntimeResult('repo.create', { parentPath, name, kind })
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
+        'repo.create',
+        { parentPath, name, kind }
+      )
+      return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
     },
     isGitAvailable: async () =>
       (await callRuntimeResult<{ available: boolean }>('repo.gitAvailable')).available,
@@ -1443,18 +1484,20 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
 
 function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
-    list: async ({ repoId }) =>
-      (
-        await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {
-          repo: repoId,
-          limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
-        })
-      ).worktrees,
+    list: async ({ repoId }) => {
+      const owned = await callRuntimeResultWithOwner<{ worktrees: Worktree[] }>('worktree.list', {
+        repo: repoId,
+        limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
+      })
+      return owned.result.worktrees.map((worktree) =>
+        withRuntimeWorktreeOwner(worktree, owned.hostId)
+      )
+    },
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       invalidateRuntimeWorktreeCaches()
-      return callRuntimeResult('worktree.create', {
+      const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
         repo: args.repoId,
         name: args.name,
         baseBranch: args.baseBranch,
@@ -1494,6 +1537,10 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         manualOrder: args.manualOrder,
         automationProvenanceRequest: args.automationProvenanceRequest
       })
+      return {
+        ...owned.result,
+        worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
+      }
     },
     // Why: the runtime create path emits no two-phase progress, so the panel falls back to an indeterminate spinner.
     onCreateProgress: () => noopUnsubscribe,
@@ -1543,12 +1590,11 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         updates.pushTarget === undefined
           ? { ...updates, pushTarget: null }
           : updates
-      return (
-        await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
-          worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...rpcUpdates
-        })
-      ).worktree
+      const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.set', {
+        worktree: toRuntimeWorktreeSelector(worktreeId),
+        ...rpcUpdates
+      })
+      return withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
     },
     listLineage: async () =>
       await callRuntimeResult<{
@@ -3077,6 +3123,31 @@ async function callRuntimeResult<TResult>(
   return response.result as TResult
 }
 
+async function callRuntimeResultWithOwner<TResult>(
+  method: string,
+  params?: unknown,
+  timeoutMs?: number
+): Promise<{ result: TResult; hostId: ExecutionHostId; environmentId: string }> {
+  const environmentId = requireActiveEnvironment().id
+  const result = await callRuntimeResult<TResult>(method, params, timeoutMs)
+  return { result, hostId: toRuntimeExecutionHostId(environmentId), environmentId }
+}
+
+function withRuntimeRepoOwner(repo: Repo, hostId: ExecutionHostId): Repo {
+  return { ...repo, executionHostId: hostId }
+}
+
+function withRuntimeRepoMutationOwner(
+  result: { repo: Repo } | { error: string },
+  hostId: ExecutionHostId
+): { repo: Repo } | { error: string } {
+  return 'repo' in result ? { ...result, repo: withRuntimeRepoOwner(result.repo, hostId) } : result
+}
+
+function withRuntimeWorktreeOwner<T extends Worktree>(worktree: T, hostId: ExecutionHostId): T {
+  return { ...worktree, hostId }
+}
+
 async function saveClipboardImageAsTempFileInRuntime(
   contentBase64: string,
   args?: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
@@ -3171,8 +3242,7 @@ function resolveEnvironment(selector: string): StoredWebRuntimeEnvironment {
   if (selector === environment.id || selector === environment.name || selector === 'active') {
     return environment
   }
-  if (selector.startsWith('web-') && environment.id.startsWith('web-')) {
-    // Why: persisted terminal ids can outlive a re-pair, which mints a fresh web-* id for the same active server.
+  if (environment.compatibleEnvironmentIds?.includes(selector)) {
     return environment
   }
   throw new Error(`Unknown Orca runtime environment: ${selector}`)
@@ -3191,10 +3261,19 @@ function requireActiveEnvironmentOrNull(): StoredWebRuntimeEnvironment | null {
   return activeEnvironment
 }
 
+function assertActiveEnvironment(environmentId: string): void {
+  if (requireActiveEnvironment().id !== environmentId) {
+    throw new Error('The paired Orca server changed while the request was in progress.')
+  }
+}
+
 function updateEnvironmentFromResponse(
   environment: StoredWebRuntimeEnvironment,
   response: RuntimeRpcResponse<unknown>
 ): void {
+  if (activeEnvironment?.id !== environment.id) {
+    return
+  }
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
   activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId)
 }
@@ -3547,11 +3626,15 @@ async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
   if (cachedWorktrees && Date.now() - cachedWorktrees.loadedAt < 5_000) {
     return cachedWorktrees.worktrees
   }
-  const result = await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {
+  const owned = await callRuntimeResultWithOwner<{ worktrees: Worktree[] }>('worktree.list', {
     limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
   })
-  cachedWorktrees = { loadedAt: Date.now(), worktrees: result.worktrees }
-  return result.worktrees
+  const worktrees = owned.result.worktrees.map((worktree) =>
+    withRuntimeWorktreeOwner(worktree, owned.hostId)
+  )
+  assertActiveEnvironment(owned.environmentId)
+  cachedWorktrees = { loadedAt: Date.now(), worktrees }
+  return worktrees
 }
 
 async function listAllRuntimeDetectedWorktrees(): Promise<Worktree[]> {
@@ -3559,34 +3642,49 @@ async function listAllRuntimeDetectedWorktrees(): Promise<Worktree[]> {
     return cachedDetectedWorktrees.worktrees
   }
 
-  const repos = (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos
+  const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
   const detectedLists = await Promise.all(
-    repos.map((repo) => callRuntimeDetectedWorktrees(repo.id))
+    owned.result.repos.map((repo) => callRuntimeDetectedWorktrees(repo.id, owned.environmentId))
   )
   const worktrees = detectedLists.flatMap((result) => result.worktrees)
+  assertActiveEnvironment(owned.environmentId)
   cachedDetectedWorktrees = { loadedAt: Date.now(), worktrees }
   return worktrees
 }
 
-async function callRuntimeDetectedWorktrees(repoId: string): Promise<DetectedWorktreeListResult> {
+async function callRuntimeDetectedWorktrees(
+  repoId: string,
+  expectedEnvironmentId = requireActiveEnvironment().id
+): Promise<DetectedWorktreeListResult> {
+  assertActiveEnvironment(expectedEnvironmentId)
+  const hostId = toRuntimeExecutionHostId(expectedEnvironmentId)
   const response = await callRuntimeEnvelope<DetectedWorktreeListResult>(
     'worktree.detectedList',
     { repo: repoId },
     15_000
   )
   if (response.ok) {
-    return response.result
+    return {
+      ...response.result,
+      worktrees: response.result.worktrees.map((worktree) =>
+        withRuntimeWorktreeOwner(worktree, hostId)
+      )
+    }
   }
   if (response.error.code !== 'method_not_found') {
     throw new Error(response.error.message)
   }
 
+  assertActiveEnvironment(expectedEnvironmentId)
   const legacy = await callRuntimeResult<{ worktrees: Worktree[] }>(
     'worktree.list',
     { repo: repoId, limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT },
     15_000
   )
-  return toLegacyDetectedWorktreeResult(repoId, legacy.worktrees)
+  return toLegacyDetectedWorktreeResult(
+    repoId,
+    legacy.worktrees.map((worktree) => withRuntimeWorktreeOwner(worktree, hostId))
+  )
 }
 
 function toLegacyDetectedWorktreeResult(

@@ -1330,7 +1330,7 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-20",
+          "date": "2026-07-21",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler.test.ts",
@@ -2385,7 +2385,7 @@
     },
     {
       "id": "terminal-provider.ssh-remote-reattach-contract",
-      "title": "SSH and remote terminal restore never turn unknown liveness into destructive cleanup",
+      "title": "SSH restore and remote-runtime recovery preserve live terminal ownership",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "terminal-provider",
@@ -2393,6 +2393,8 @@
       "surfaces": [
         "SSH deferred restore",
         "remote-runtime mirror polling",
+        "remote-runtime network recovery",
+        "terminal create idempotency",
         "provider listing",
         "reattach",
         "unknown liveness"
@@ -2414,7 +2416,7 @@
         "ssh",
         "remote-runtime"
       ],
-      "coverageNotes": "Deterministic renderer coverage proves startup publishes the state returned by ssh.connect, remote or unresolved hosts cannot enter local-daemon cold activation deferral, stale cleanup cannot unregister a replacement runtime terminal, and a mounted remote-runtime web mirror replaces a stale handle without retiring its pane or accumulating obsolete PTY identities. Bounded polling falls back to accepted host snapshots without a global store subscription, and concurrent panes share each in-flight inventory request. A macOS Electron journey connects to a real Linux SSH relay in Docker, persists six terminals, reloads the renderer, and verifies all six original relay PTYs remount eagerly and still execute remote input. Linux and Windows desktop clients, WSL, and live remote-runtime restore remain gaps.",
+      "coverageNotes": "Deterministic renderer coverage proves startup publishes the state returned by ssh.connect, stale cleanup cannot unregister a replacement runtime terminal, and a mounted remote-runtime terminal survives repeated transport partitions without changing PTY identity. Client/server heartbeat tests cover timer suspension, socket generations fence stale callbacks, cold restored-terminal attachment retries, cached pixels remain unhealthy until authoritative replay, automatic retries stop after one minute, manual reconnect preserves the PTY, and pane closure releases recovery UI state. Capability-gated create retries adopt a provider-owned PTY by stable terminal identity after an unknown outcome or runtime-process restart, stop retrying after one minute without a fatal error, and remain manually retryable without accepting stale create completions. A macOS Electron journey covers live SSH restore; a Windows remote-runtime smoke covers reachability and PTY round-trip. A live partition journey using patched Mac and Windows builds remains a gap.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
@@ -2422,10 +2424,11 @@
         "https://github.com/stablyai/orca/pull/7009",
         "https://github.com/stablyai/orca/pull/8597"
       ],
-      "invariant": "SSH, WSL, and remote-runtime restore paths must treat provider listing failures and unknown liveness as unknown, not dead, while still avoiding duplicate spawn and clearing expired relay leases exactly once. Snapshot-backed cold activation deferral is local-daemon-only; every restored remote terminal must mount a manager eagerly and preserve its provider PTY identity. A stale remote-runtime mirror handle must keep its pane mounted until a replacement or explicit terminal-removal fact arrives, and each replacement must atomically supersede rather than accumulate PTY identity.",
-      "oracle": "Deterministic tests assert startup publishes ssh.connect's authoritative state before terminal reconnect, only an explicit local execution host can defer cold activation, host ownership changes clear old restrictions, replacement runtime registrations survive stale cleanup, stale mirror polling is bounded, and replacement handles resubscribe without exit/disconnect callbacks or stale PTY index growth. Count tests prove concurrent panes share one in-flight inventory request per runtime/worktree and accepted-snapshot listeners are identity-scoped and released after rebind. The live Docker SSH journey commits six terminal records to the relay, reloads Electron, requires the exact six manager ids with no parked tabs, compares all restored PTY ids to their pre-reload identities, and sends a marker through the restored terminal to a proof file on the Linux host.",
+      "invariant": "SSH, WSL, and remote-runtime restore paths must treat provider listing failures and unknown liveness as unknown, not dead, while still avoiding duplicate spawn and clearing expired relay leases exactly once. Every restored remote terminal must preserve its provider PTY identity. After a recoverable partition the same authenticated runtime must reattach the same PTY, reject detached input, apply the latest viewport, and report healthy only after authoritative replay. Automatic PTY recovery stops after one bounded minute without a fatal terminal error; a manual reconnect starts a newly fenced epoch against the same PTY, and closed panes retain no recovery UI state. One capability-gated terminal-create mutation must produce at most one host PTY across an unknown response outcome, remain manually retryable after cutoff, and never let a stale completion replace a newer pane lifecycle.",
+      "oracle": "Deterministic tests cover bounded stale-handle replacement, suspended heartbeat clocks, cold and established subscription failure, ten partition/recovery cycles, automatic-recovery cutoff, and manual reconnect. They assert one unsubscribe per epoch, observable recovery phases, stable PTY identity, resumed snapshot/output/input, no healthy state before replay, no retry or input after cutoff, a new manual epoch against the same PTY, quiet recovery UI with an explicit Reconnect action, pane-close state cleanup, one stable create mutation id, one-minute create-retry cutoff, old-runtime no-retry behavior, authenticated client/worktree isolation, cross-process PTY adoption without rerunning startup, unavailable or legacy-incomplete inventory fail-closed behavior, and bounded in-flight coordination. Existing count tests prove concurrent panes share one in-flight inventory request per runtime/worktree and accepted-snapshot listeners are identity-scoped and released after rebind.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-session-terminal-handle-events.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -2438,9 +2441,19 @@
         "src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts",
+        "src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx",
+        "src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts",
         "src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts",
         "src/renderer/src/runtime/web-session-terminal-handle-events.test.ts",
         "src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
+        "src/shared/remote-runtime-socket-liveness.test.ts",
+        "src/shared/remote-runtime-shared-control-connection.test.ts",
+        "src/shared/remote-runtime-shared-control-socket-generation.test.ts",
+        "src/shared/remote-runtime-client-error-classification.test.ts",
+        "src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts",
+        "src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts",
+        "src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
         "tests/e2e/terminal-cold-activation-deferral.spec.ts",
         "tests/e2e/ssh-cold-activation-restore.spec.ts"
       ],
@@ -2463,7 +2476,53 @@
           "assertions": [
             "a stale web-mirror handle polls until a different ready handle is published without resubscribing the stale handle",
             "replacement does not emit pane exit or disconnect callbacks and explicit terminal exit still retires the mirror",
-            "replacement polling and each in-flight request share a 15-second deadline, then accepted snapshots own recovery without input re-arming polling"
+            "replacement polling and each in-flight request share a 15-second deadline, then accepted snapshots own recovery without input re-arming polling",
+            "cold restored-terminal subscription failure retries and resumes snapshot, output, and input without a fatal error",
+            "a canonical close before subscription readiness opens exactly one replacement stream without surfacing a fatal error",
+            "recovery exposes connecting, recovering, backoff, connected, and fatal-offline phases with fenced epochs",
+            "ten partition cycles retain one PTY identity, reject detached input, and unsubscribe each epoch exactly once",
+            "cached terminal pixels remain disconnected until authoritative replay completes",
+            "automatic retries stop after one minute with no fatal error, no further requests, and no stale input",
+            "manual reconnect starts a new epoch, resubscribes the same PTY exactly once, and becomes healthy only after its snapshot",
+            "unknown terminal-create recovery stops all request activity after one minute without a fatal error, clips post-probe RPC timeouts to the remaining budget, then manual retry re-probes capability and reconciles the same mutation",
+            "a stale create completion cannot replace or close a newer attachment, including when two runtimes use the same raw handle",
+            "an authoritative capability-probe failure replaces the stale connectivity error"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts",
+          "assertions": [
+            "a healthy replacement invalidates the prior recovery epoch so a slower failure cannot re-arm retry",
+            "the automatic-recovery deadline cancels pending backoff and a manual retry owns a new epoch",
+            "a caller-owned recovery cutoff cancels scheduled work and remains disconnected"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx",
+          "assertions": [
+            "automatic recovery renders as a quiet bounded status without a button",
+            "the disconnected state exposes one explicit Reconnect action"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts",
+          "assertions": [
+            "only actionable recovery phases retain UI state and pane closure removes disconnected state"
+          ]
+        },
+        {
+          "file": "src/shared/remote-runtime-socket-liveness.test.ts",
+          "assertions": [
+            "a suspended client receives a fresh probe deadline after resume and post-resume activity clears it"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
+          "assertions": [
+            "one authenticated client/worktree mutation derives a stable server-owned terminal handle",
+            "an unknown-outcome retry adopts the same provider PTY after runtime-process restart without rerunning startup",
+            "retry inventory failure, missing same-worktree identity metadata, or ownership mismatch fails closed without spawning",
+            "in-flight mutation coordination is bounded and releases capacity after settlement"
           ]
         },
         {
@@ -2513,6 +2572,15 @@
           "result": "passed",
           "durationSeconds": 15,
           "summary": "Ten provider-contract files and 566 tests passed, including a shared 15-second polling/RPC deadline, no input-triggered re-polling after the bound, post-timeout snapshot recovery, listener cleanup, in-flight inventory deduplication, and replacement-state migration."
+        },
+        {
+          "date": "2026-07-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "Eleven fault-injection and recovery-UI files and 127 tests passed, covering suspended heartbeat clocks, stale socket, PTY, and create generations, canonical pre-ready close recovery with one replacement subscription, cold and repeated PTY reattachment, authoritative health, bounded PTY and terminal-create recovery, post-probe timeout clipping, manually retryable create cutoff, accurate capability-probe failures, same-PTY manual reconnect, pane-state cleanup, fatal error deduplication, stable create identity, cross-process PTY adoption, and fail-closed legacy inventory."
         }
       ],
       "runtimeBudget": {
@@ -2525,11 +2593,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert SSH attach uses relay pty.attach for saved sessions, expired relay attach does not fresh-spawn in the provider, a failed SSH listProcesses observation does not clear previously learned ownership, a rejected SSH hasPty probe resolves as unknown liveness, deferred SSH passphrase cancellation does not auto-reconnect, deferred attach uses saved leaf/tab session ids once connected, transient deferred reattach failure preserves the saved session id without clearing pane/tab bindings or fresh-spawning, deferred SSH no-result cleanup clears the pending serializer without clearing pane/tab bindings or consuming the saved restore id, disconnected SSH relay ids are retained as deferred reconnect metadata and sidebar wake hints rather than attached PTY proof, expired deferred relay state clears stale pane/tab bindings before one fresh replacement spawn, and remote-runtime stale handles rotate in place without stale resubscription, pane retirement, or PTY index growth. Needs WSL, live remote-runtime/SSH, and saved intentional-break artifacts before promotion."
+        "evidence": "The remote-runtime fault tests failed before the recovery changes by leaving a cold restored subscription detached, reporting connected before authoritative replay, delivering a fatal setup error twice, and allowing an unknown create outcome to spawn again after process-local state was lost. The bounded-recovery tests additionally failed before the policy change because PTY and terminal-create recovery remained active after one minute and a retry reused the stale epoch. Final review tests failed before lifecycle fencing because create cutoff emitted a fatal error with no manual path and a delayed create completion replaced a newer cross-runtime attachment. The fixed tests pass with resumed snapshot/output/input, one-minute cutoffs, new manual epochs, capability re-probing, stale-create rejection, and cross-process provider PTY adoption without rerunning startup. Existing SSH and stale-handle reattach coverage remains green. Needs WSL, a patched live remote-runtime partition journey, and saved intentional-break artifacts before promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Host eligibility is resolved from existing store metadata during activation. Remote-runtime resubscribe polling runs only after a transport close, reserves replacement-only matching for typed stale-handle evidence, backs off from 150 ms to 1 s, caps each request to the remaining 15-second reconnect deadline, and shares each in-flight inventory request across panes in the same runtime/worktree. Accepted host snapshots use an identity-scoped listener only while recovery is pending; after the bound there is no timer or global store subscriber, and stale input cannot re-arm polling. The listener is released on rebind, removal, detach, or destroy, and PTY state is atomically replaced instead of growing. The local journey preserves cold deferral, while SSH eagerly mounts six managers as required; no work is added to typing or terminal-output hot paths."
+        "evidence": "Remote-runtime recovery allocates at most one backoff timer and one one-minute deadline per detached pane, then stops all PTY retry work until explicit user action; regular PTYs and initial creates do not poll inventory. Each unknown-outcome create attempt performs one bounded provider inventory scan, coordinated per authenticated client/worktree mutation, and the renderer stops issuing attempts after one minute. Timers, accepted-snapshot listeners, stale streams, and pane UI entries are released on health, cutoff, rebind, removal, detach, or destroy; ten-cycle tests prove one unsubscribe per epoch and cutoff tests prove request counts stay fixed for five additional minutes. Client and server liveness each use one interval per socket/transport. At most 4,096 create promises are retained only while in flight, and capacity rejection happens before spawning. Common terminal input/output paths add only constant-time state checks; recovery UI updates only on deduplicated phase transitions."
       },
       "promotionCriteria": [
         "Use deterministic fake providers for failure and unknown-liveness cases.",
@@ -2540,7 +2608,8 @@
         "Current command covers store wake-hint metadata, main-process SSH provider failure semantics, provider attach/expired-attach behavior, and renderer deferred SSH reconnect/transient-failure/expired-relay fallback with mocked transports.",
         "The live SSH journey is environment-dependent and currently runs from a macOS Electron client against a Linux Docker host.",
         "WSL restore remains inferred rather than directly covered.",
-        "Linux and Windows desktop-client journeys and a live remote-runtime reconnect soak are not yet collected."
+        "Linux and Windows desktop-client partition journeys using patched builds are not yet collected; the Windows smoke proves current reachability and PTY round-trip only.",
+        "Terminal-create recovery depends on providers authoritatively listing live terminal handles and worktree ownership; older runtimes do not advertise the capability and are never retried after an unknown outcome."
       ],
       "demotionRule": "Cannot promote if provider failure can close panes or if the oracle is screenshot-only."
     },

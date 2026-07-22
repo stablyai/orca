@@ -773,13 +773,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
     )
     return result.sessions
       .filter((s) => s.isAlive)
-      .map((s) => ({
-        id: s.sessionId,
-        // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
-        cwd: s.cwd ?? this.initialCwds.get(s.sessionId) ?? '',
-        title: 'shell',
-        ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {})
-      }))
+      .map((s) => {
+        const { worktreeId } = parsePtySessionId(s.sessionId)
+        return {
+          id: s.sessionId,
+          // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
+          cwd: s.cwd ?? this.initialCwds.get(s.sessionId) ?? '',
+          title: 'shell',
+          ...(worktreeId ? { worktreeId } : {}),
+          ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {})
+        }
+      })
   }
 
   // Why keep both: the Manage Sessions panel needs full SessionInfo (pid/state/createdAt) that listProcesses drops for the IPtyProvider contract.

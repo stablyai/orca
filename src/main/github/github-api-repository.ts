@@ -98,12 +98,7 @@ export async function getGitHubApiRepositoryForRemote(
 ): Promise<GitHubApiRepository | null> {
   // Why: generic PR resolution prefers upstream, but this API represents the
   // caller-selected remote exactly (#7331).
-  const ownerRepo = await getOwnerRepoForRemote(
-    repoPath,
-    remoteName,
-    connectionId,
-    localGitOptions
-  )
+  const ownerRepo = await getOwnerRepoForRemote(repoPath, remoteName, connectionId, localGitOptions)
   if (ownerRepo) {
     return { ...ownerRepo, host: 'github.com' }
   }
