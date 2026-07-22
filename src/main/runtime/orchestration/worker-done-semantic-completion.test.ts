@@ -179,4 +179,18 @@ describe('evaluateWorkerDoneSemanticCompletion', () => {
       appliedStatus: 'blocked'
     })
   })
+
+  it('rejects plain test-suite failure wording before completion language', () => {
+    expect(
+      evaluateWorkerDoneSemanticCompletion({
+        subject: 'Tests failed; implementation complete.',
+        body: 'The test suite failed after the last push.',
+        filesModified: ['src/main/runtime/orchestration/worker-done-semantic-completion.ts']
+      })
+    ).toMatchObject({
+      complete: false,
+      kind: 'failure',
+      appliedStatus: 'failed'
+    })
+  })
 })

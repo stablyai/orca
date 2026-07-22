@@ -35,7 +35,7 @@ export interface WorkerDoneSemanticCompletionInput {
 
 const FAILURE_SUBJECT_RE = /^\s*failed\s*:/i
 const FAILURE_BODY_RE =
-  /\b(failed\s+transactionally|migration(?:\s+\S+)?\s+failed|transaction(?:al)?(?:ly)?\s+failed|deploy(?:ment)?\s+failed|e2e\s+failed|(?:npm(?:\s+run)?\s+)?(?:lint|format:check|typecheck|test|build(?::cloudflare)?|smoke(?::cloudflare-worker-startup)?)\s+failed|required\s+(?:check|gate)s?\s+failed)\b/i
+  /\b(failed\s+transactionally|migration(?:\s+\S+)?\s+failed|transaction(?:al)?(?:ly)?\s+failed|deploy(?:ment)?\s+failed|e2e\s+failed|tests?\s+failed|test[- ]suite\s+failed|(?:npm(?:\s+run)?\s+)?(?:lint|format:check|typecheck|test|build(?::cloudflare)?|smoke(?::cloudflare-worker-startup)?)\s+failed|required\s+(?:check|gate)s?\s+failed)\b/i
 /** Past/transient failure wording that is narratively resolved — not a current terminal failure. */
 const RESOLVED_FAILURE_NARRATIVE_RE =
   /\b(?:failed|failure)\b[\s\S]{0,160}\b(?:then\s+succeeded|succeeded\s+after(?:\s+(?:a\s+)?retry)?|after\s+(?:a\s+)?retr(?:y|ies)|later\s+succeeded|was\s+(?:then\s+)?(?:fixed|resolved)|retr(?:y|ied|ies)[\s\S]{0,60}succeed(?:ed|s)?)\b/i
