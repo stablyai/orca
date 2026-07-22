@@ -2,7 +2,14 @@ import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { recoverVisibleTerminalWindowWake } from './terminal-visibility-resume'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
+import { retryAllRemoteRuntimePtyRecoveriesNow } from './remote-runtime-pty-recovery-state'
 import type { IDisposable } from '@xterm/xterm'
+
+function advanceRemoteRuntimeRecoveryBackoffs(): void {
+  // Why: shared control and pane recovery own separate backoff timers.
+  void window.api?.runtimeEnvironments?.retryConnectionsNow?.().catch(() => undefined)
+  retryAllRemoteRuntimePtyRecoveriesNow()
+}
 
 type UseTerminalWindowWakeRecoveryArgs = {
   isVisible: boolean
@@ -107,11 +114,19 @@ export function useTerminalWindowWakeRecovery({
     // Why: Linux has no window-occlusion tracking, so visibilitychange never
     // fires around system suspend; the main process broadcasts OS resume.
     const onSystemResumed = (): void => {
+      // Why: advance existing remote recovery backoffs even when the window is
+      // still occluded — connectivity may return before the first paint pass.
+      advanceRemoteRuntimeRecoveryBackoffs()
       if (typeof document === 'undefined' || document.visibilityState === 'visible') {
         recoverVisibleWake(true, 'system-resumed')
       }
     }
+    // Why: an awake client can regain network without power/visibility events.
+    const onNetworkOnline = (): void => {
+      advanceRemoteRuntimeRecoveryBackoffs()
+    }
     window.addEventListener('focus', onFocus)
+    window.addEventListener('online', onNetworkOnline)
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('visibilitychange', onVisibilityChange)
     }
@@ -126,6 +141,7 @@ export function useTerminalWindowWakeRecovery({
     return () => {
       cancelScheduledWakeRecovery()
       window.removeEventListener('focus', onFocus)
+      window.removeEventListener('online', onNetworkOnline)
       if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
         document.removeEventListener('visibilitychange', onVisibilityChange)
       }

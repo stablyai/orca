@@ -1345,6 +1345,8 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
     },
     getStatus: ({ selector, timeoutMs }) =>
       callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
+    // Why: web client has no main-process shared-control reconnect timers to accelerate.
+    retryConnectionsNow: async () => undefined,
     call: ({ selector, method, params, timeoutMs }) =>
       callEnvironmentEnvelope(selector, method, params, timeoutMs),
     subscribe: async ({ selector, method, params, timeoutMs }, callbacks) => {

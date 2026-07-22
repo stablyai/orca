@@ -67,6 +67,24 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     expect(onChange).toHaveBeenCalled()
   })
 
+  it('advances a pending backoff immediately via retryNow and the active registry', async () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    const retry = vi.fn()
+    const epoch = state.begin()
+    state.schedule(epoch, retry)
+
+    const { retryAllRemoteRuntimePtyRecoveriesNow } = await import(
+      './remote-runtime-pty-recovery-state'
+    )
+    expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
+    expect(retry).toHaveBeenCalledWith(epoch)
+    expect(state.currentPhase).toBe('recovering')
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
   it('starts a newly fenced recovery epoch after a manual retry', async () => {
     vi.useFakeTimers()
     const state = new RemoteRuntimePtyRecoveryState()
