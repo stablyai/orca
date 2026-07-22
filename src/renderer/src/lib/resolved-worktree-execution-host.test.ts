@@ -43,6 +43,32 @@ describe('getResolvedExecutionHostIdForWorktree', () => {
     )
   })
 
+  it('resolves hostless host-split worktrees by their own path, not repo record order (#8484)', () => {
+    const hostSplitState: WorktreeRuntimeOwnerState = {
+      repos: [
+        {
+          id: 'proj',
+          connectionId: null,
+          executionHostId: 'runtime:env-1',
+          path: '/srv/proj'
+        },
+        { id: 'proj', connectionId: null, executionHostId: 'local', path: '/Users/me/proj' }
+      ],
+      worktreesByRepo: {
+        proj: [
+          { id: 'proj::/Users/me/proj-wt', repoId: 'proj' },
+          { id: 'proj::/srv/proj-wt', repoId: 'proj' }
+        ]
+      }
+    }
+    expect(getResolvedExecutionHostIdForWorktree(hostSplitState, 'proj::/Users/me/proj-wt')).toBe(
+      'local'
+    )
+    expect(getResolvedExecutionHostIdForWorktree(hostSplitState, 'proj::/srv/proj-wt')).toBe(
+      'runtime:env-1'
+    )
+  })
+
   it('keeps missing folder catalogs unresolved but honors restored runtime ownership', () => {
     expect(getResolvedExecutionHostIdForWorktree({}, 'folder:missing')).toBeNull()
     expect(

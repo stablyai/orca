@@ -1,7 +1,8 @@
 import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
 
 type WorktreeOwnerRecord = Pick<Worktree, 'id' | 'repoId' | 'hostId'>
-type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> &
+  Partial<Pick<Repo, 'path'>>
 type FolderWorkspaceOwnerRecord = Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'>
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
 
@@ -11,9 +12,11 @@ const worktreeOwnerIndexCache = new WeakMap<
   Record<string, readonly WorktreeOwnerRecord[]>,
   ReadonlyMap<string, WorktreeOwnerRecord>
 >()
+// Why: a project shared across hosts has several repo records under one id, so
+// the repo index groups every record per id (built once per immutable array).
 const repoOwnerIndexCache = new WeakMap<
   readonly RepoOwnerRecord[],
-  ReadonlyMap<string, RepoOwnerRecord>
+  ReadonlyMap<string, readonly RepoOwnerRecord[]>
 >()
 const folderWorkspaceOwnerIndexCache = new WeakMap<
   readonly FolderWorkspaceOwnerRecord[],
@@ -72,11 +75,36 @@ export function findIndexedWorktreeOwner(
   return index.get(worktreeId) ?? null
 }
 
-export function findIndexedRepoOwner(
+function getRepoOwnerIndex(
+  repos: readonly RepoOwnerRecord[]
+): ReadonlyMap<string, readonly RepoOwnerRecord[]> {
+  let index = repoOwnerIndexCache.get(repos)
+  if (!index) {
+    const next = new Map<string, RepoOwnerRecord[]>()
+    for (const record of repos) {
+      const recordId = record.id
+      const existing = next.get(recordId)
+      if (existing) {
+        existing.push(record)
+      } else {
+        next.set(recordId, [record])
+      }
+    }
+    index = next
+    repoOwnerIndexCache.set(repos, index)
+  }
+  return index
+}
+
+export function findIndexedRepoOwners(
   repos: readonly RepoOwnerRecord[] | undefined,
   repoId: string
-): RepoOwnerRecord | null {
-  return findIndexedOwnerRecord(repos, repoId, repoOwnerIndexCache)
+): readonly RepoOwnerRecord[] {
+  if (!repos) {
+    return []
+  }
+  // The first entry preserves the prior Array.find "first matching id" behavior.
+  return getRepoOwnerIndex(repos).get(repoId) ?? []
 }
 
 export function findIndexedFolderWorkspaceOwner(

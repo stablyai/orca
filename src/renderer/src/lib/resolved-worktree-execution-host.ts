@@ -9,9 +9,9 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner,
-  findIndexedRepoOwner,
   findIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
+import { findRepoOwnerRecordForWorktree } from './worktree-runtime-owner-repo-match'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
 
 function getResolvedFolderHost(
@@ -65,7 +65,7 @@ export function getResolvedExecutionHostIdForWorktree(
   if (!worktree) {
     return null
   }
-  const repo = findIndexedRepoOwner(state.repos, worktree.repoId)
+  const repo = findRepoOwnerRecordForWorktree(state.repos, worktreeId, worktree.repoId)
   if (!repo) {
     return null
   }

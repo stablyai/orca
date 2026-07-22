@@ -17,14 +17,15 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner,
-  findIndexedRepoOwner as findRepoRecord,
   findIndexedWorktreeOwner as findWorktreeRecord
 } from './worktree-runtime-owner-index'
+import { findRepoOwnerRecordForWorktree } from './worktree-runtime-owner-repo-match'
 
 type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 
 export type WorktreeRuntimeOwnerState = {
-  repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
+  repos?: readonly (Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> &
+    Partial<Pick<Repo, 'path'>>)[]
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   worktreesByRepo?: Record<string, readonly Pick<Worktree, 'id' | 'repoId' | 'hostId'>[]>
   folderWorkspaces?: readonly Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'>[]
@@ -170,7 +171,7 @@ export function getRuntimeEnvironmentIdForWorktree(
     return worktreeRuntimeEnvironmentId
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = findRepoRecord(state.repos, repoId)
+  const repo = findRepoOwnerRecordForWorktree(state.repos, worktreeId, repoId)
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
   if (repo && hasExplicitOwner) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
@@ -198,7 +199,7 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
     return getExplicitRuntimeEnvironmentIdFromHost(worktree.hostId)
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = findRepoRecord(state.repos, repoId)
+  const repo = findRepoOwnerRecordForWorktree(state.repos, worktreeId, repoId)
   if (!repo) {
     return null
   }
@@ -264,7 +265,7 @@ export function getExecutionHostIdForWorktree(
     return worktreeHostId
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = findRepoRecord(state.repos, repoId)
+  const repo = findRepoOwnerRecordForWorktree(state.repos, worktreeId, repoId)
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
   if (repo && hasExplicitOwner) {
     return getRepoExecutionHostId(repo)

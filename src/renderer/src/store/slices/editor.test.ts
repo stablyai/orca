@@ -536,6 +536,39 @@ describe('createEditorSlice openDiff', () => {
     )
   })
 
+  it('routes host-split hostless worktree diffs by their own paths, not repo record order (#8484)', () => {
+    const store = createEditorStore()
+    // Same project on local + a paired runtime under one repoId; the runtime
+    // record indexes first and neither worktree carries a hostId (legacy
+    // metadata). Each diff must resolve its owner from the worktree's path.
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [
+        { id: 'proj', executionHostId: 'runtime:env-1', path: '/srv/proj' },
+        { id: 'proj', executionHostId: 'local', path: '/Users/me/proj' }
+      ] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        proj: [
+          { id: 'proj::/Users/me/proj-wt', repoId: 'proj' },
+          { id: 'proj::/srv/proj-wt', repoId: 'proj' }
+        ]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openDiff('proj::/Users/me/proj-wt', '/Users/me/proj-wt/a.ts', 'a.ts', 'typescript', false)
+    store
+      .getState()
+      .openDiff('proj::/srv/proj-wt', '/srv/proj-wt/a.ts', 'a.ts', 'typescript', false)
+
+    const byWorktree = Object.fromEntries(
+      store.getState().openFiles.map((file) => [file.worktreeId, file.runtimeEnvironmentId])
+    )
+    expect(byWorktree['proj::/Users/me/proj-wt']).toBeNull()
+    expect(byWorktree['proj::/srv/proj-wt']).toBe('env-1')
+  })
+
   it('keeps an SSH-owned worktree diff off the focused runtime so it routes via its connection', () => {
     const store = createEditorStore()
     // An SSH worktree is owned by its connection, not the focused runtime. Its
