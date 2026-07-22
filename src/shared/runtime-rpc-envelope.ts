@@ -74,6 +74,11 @@ export type RuntimeRpcFailure = {
 
 export type RuntimeRpcResponse<TResult> = RuntimeRpcSuccess<TResult> | RuntimeRpcFailure
 
+export type RuntimeOrchestrationEnvelope = {
+  orchestrationCapability?: string
+  orchestrationRequestId?: string
+}
+
 export type RuntimeRpcKeepaliveFrame = z.infer<typeof Keepalive>
 
 export function isKeepaliveFrame(frame: unknown): frame is RuntimeRpcKeepaliveFrame {

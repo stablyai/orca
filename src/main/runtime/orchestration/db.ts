@@ -202,7 +202,7 @@ export class OrchestrationDb {
         type          TEXT NOT NULL DEFAULT 'status'
           CHECK(type IN (
             'status', 'dispatch', 'worker_done', 'merge_ready',
-            'escalation', 'handoff', 'decision_gate', 'heartbeat'
+            'escalation', 'handoff', 'decision_gate', 'question', 'heartbeat'
           )),
         priority      TEXT NOT NULL DEFAULT 'normal'
           CHECK(priority IN ('normal', 'high', 'urgent')),
@@ -3581,30 +3581,62 @@ export class OrchestrationDb {
 
   // ── Lifecycle ──
 
+  private runResetTransaction(statements: string): void {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db.exec(statements)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   resetAll(): void {
-    this.db.exec('DELETE FROM coordinator_runs')
-    this.db.exec('DELETE FROM decision_gates')
-    this.db.exec('DELETE FROM question_threads')
-    this.db.exec('DELETE FROM deliveries')
-    this.db.exec('DELETE FROM dispatch_contexts')
-    this.db.exec('DELETE FROM tasks')
-    this.db.exec('DELETE FROM messages')
+    // Why: retain mutation receipts so a lost reset response cannot replay as a new mutation.
+    this.runResetTransaction(`
+      DELETE FROM coordinator_runs;
+      DELETE FROM decision_gates;
+      DELETE FROM remote_questions;
+      DELETE FROM question_threads;
+      DELETE FROM deliveries;
+      DELETE FROM federation_relay_items;
+      DELETE FROM remote_dispatch_attachments;
+      DELETE FROM federated_dispatches;
+      DELETE FROM worker_dispatches;
+      DELETE FROM dispatch_contexts;
+      DELETE FROM tasks;
+      DELETE FROM messages;
+      DELETE FROM runs;
+      INSERT INTO runs (id, objective, home_database, consumer_generation, legacy)
+        VALUES ('${LEGACY_RUN_ID}', 'Legacy orchestration state (inspect only)', 'this_database', 0, 1);
+    `)
     this.hasAnyDispatchContextsCache = undefined
   }
 
   resetTasks(): void {
-    this.db.exec('DELETE FROM coordinator_runs')
-    this.db.exec('DELETE FROM decision_gates')
-    this.db.exec('DELETE FROM question_threads')
-    this.db.exec('DELETE FROM dispatch_contexts')
-    this.db.exec('DELETE FROM tasks')
+    this.runResetTransaction(`
+      DELETE FROM coordinator_runs;
+      DELETE FROM decision_gates;
+      DELETE FROM remote_questions;
+      DELETE FROM question_threads;
+      DELETE FROM federation_relay_items;
+      DELETE FROM remote_dispatch_attachments;
+      DELETE FROM federated_dispatches;
+      DELETE FROM worker_dispatches;
+      DELETE FROM dispatch_contexts;
+      DELETE FROM tasks;
+    `)
     this.hasAnyDispatchContextsCache = undefined
   }
 
   resetMessages(): void {
-    this.db.exec('DELETE FROM question_threads')
-    this.db.exec('DELETE FROM deliveries')
-    this.db.exec('DELETE FROM messages')
+    // Why: relay rows carry contiguous cross-server cursors, not just inbox history.
+    this.runResetTransaction(`
+      DELETE FROM question_threads;
+      DELETE FROM deliveries;
+      DELETE FROM messages;
+    `)
   }
 
   close(): void {

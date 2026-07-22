@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, OptionalBoolean, requiredString } from '../schemas'
 import type { MessageType, MessagePriority, TaskStatus } from '../../orchestration/db'
+import { MESSAGE_TYPES } from '../../orchestration/types'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
@@ -16,18 +17,6 @@ import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-met
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
-
-const MESSAGE_TYPES: MessageType[] = [
-  'status',
-  'dispatch',
-  'worker_done',
-  'merge_ready',
-  'escalation',
-  'handoff',
-  'decision_gate',
-  'question',
-  'heartbeat'
-]
 
 const TASK_STATUSES: TaskStatus[] = [
   'pending',

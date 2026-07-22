@@ -70,7 +70,7 @@ Explicit non-goals:
 
 - [x] Teach that `check --wait` returns a message batch, not one message.
 - [x] Teach processing every returned message and waiting until expected Dispatches settle.
-- [x] Document today's consume-before-response crash window until explicit acknowledgment ships.
+- [x] Document crash-safe explicit acknowledgment and redelivery of an unacknowledged batch.
 - [x] Prefer `agentTerminalHandle`, then legacy `startupTerminal.handle`, then exact terminal-list
       resolution.
 - [x] Pass `--setup run` for new worktrees by default.
@@ -1155,6 +1155,36 @@ Append new entries chronologically. Do not rewrite older entries except to corre
     needed. Phase 4 remains deferred.
 - Next:
   - Push the audit corrections and confirm PR #9925 is green at the new head.
+
+### 2026-07-22 — CodeRabbit and internal review until clean
+
+- Changes:
+  - Validated every CodeRabbit finding; fixed relay type validation, stale runtime-owned terminal
+    identity, setup receipt classification, Windows batch percent escaping, worker reconciliation,
+    root-help discovery, canonical question schema, and deterministic waiter timing.
+  - Coalesced overlapping per-Dispatch federation polls and added one warning per outage window.
+  - Centralized the orchestration RPC envelope type without adding a new runtime abstraction.
+  - Made reset scopes atomic and cleared matching worker/federation state while preserving relay
+    cursors for message-only resets and the mutation ledger needed for lost-response deduplication.
+- Files:
+  - orchestration runtime, federation, worker-control, database, CLI help/client, wrapper, skill, and
+    focused regression tests listed in the current working diff.
+- Verification:
+  - Focused runtime, federation, database, CLI, SSH, wrapper, and skill suites passed 1,103 tests.
+  - The repository-wide configured suite passed 34,253 tests with 58 intentional skips.
+  - Node, CLI, and web typechecks passed; focused oxlint, formatting, generated-skill checks, and
+    `git diff --check` passed.
+- Findings:
+  - The type-only pairing import is valid TypeScript and remains type-only; Dispatch capability
+    flags stay intentionally hidden because the authenticated worker preamble supplies them.
+  - Persistent envelope-bearing WebSocket reuse remains a measured-later optimization; the V1
+    single-flight relay removes overlapping connection churn without growing transport scope.
+  - The final re-review found no remaining in-scope correctness, ergonomics, elegance, or
+    performance defect after fixing reset scope and relay-cursor preservation in round 2.
+  - Full lint reaches unrelated existing failures in the unchanged skill-freshness switch and
+    localization catalog; changed-file lint and every in-scope quality gate pass.
+- Next:
+  - Resolve CodeRabbit threads and confirm the PR checks at the final head.
 
 ### Entry template
 

@@ -20,6 +20,31 @@ describe('dev CLI terminal wrappers', () => {
     expect(wrapper).toContain('set "ORCA_DEV_CLI_INVOCATION=1"')
     expect(wrapper).toContain(`node "${path.join(root, 'out', 'cli', 'index.js')}" %*`)
     expect(readFileSync(path.join(userDataPath, 'cli', 'bin', 'orca.cmd'), 'utf8')).toBe(wrapper)
+    expect(readFileSync(path.join(root, 'out', 'bin', 'orca-dev.cmd'), 'utf8')).toBe(wrapper)
+    expect(readFileSync(path.join(root, 'out', 'bin', 'orca.cmd'), 'utf8')).toBe(wrapper)
+  })
+
+  it('escapes literal percent signs in every Windows batch path', () => {
+    const root = path.join(mkdtempSync(path.join(tmpdir(), 'orca-dev-terminal-wrapper-')), '%repo%')
+    const userDataPath = path.join(root, '%profile%')
+    const electronExecutable = path.join(root, '%electron%', 'electron.exe')
+    prepareDevCliTerminalWrappers({
+      repoRoot: root,
+      userDataPath,
+      electronExecutable,
+      platform: 'win32'
+    })
+
+    const wrapper = readFileSync(path.join(userDataPath, 'cli', 'bin', 'orca-dev.cmd'), 'utf8')
+    expect(wrapper).toContain(`set "ORCA_USER_DATA_PATH=${userDataPath.replaceAll('%', '%%')}"`)
+    expect(wrapper).toContain(
+      `set "ORCA_APP_EXECUTABLE=${electronExecutable.replaceAll('%', '%%')}"`
+    )
+    expect(wrapper).toContain(
+      `node "${path.join(root, 'out', 'cli', 'index.js').replaceAll('%', '%%')}" %*`
+    )
+    expect(readFileSync(path.join(root, 'out', 'bin', 'orca-dev.cmd'), 'utf8')).toBe(wrapper)
+    expect(readFileSync(path.join(root, 'out', 'bin', 'orca.cmd'), 'utf8')).toBe(wrapper)
   })
 
   it('writes executable-style POSIX wrappers with the same profile identity', () => {
@@ -39,5 +64,7 @@ describe('dev CLI terminal wrappers', () => {
       `exec node ${JSON.stringify(path.join(root, 'out', 'cli', 'index.js'))}`
     )
     expect(readFileSync(path.join(userDataPath, 'cli', 'bin', 'orca'), 'utf8')).toBe(wrapper)
+    expect(readFileSync(path.join(root, 'out', 'bin', 'orca-dev'), 'utf8')).toBe(wrapper)
+    expect(readFileSync(path.join(root, 'out', 'bin', 'orca'), 'utf8')).toBe(wrapper)
   })
 })

@@ -66,7 +66,13 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
             })
           }
         }
-        worker = db.getWorkerDispatch(params.dispatch) as typeof worker
+        worker = db.getWorkerDispatch(params.dispatch)
+        if (!worker) {
+          throw new OrchestrationError(
+            'dispatch_not_found',
+            `Worker Dispatch ${params.dispatch} was not found after remote reconciliation.`
+          )
+        }
         return {
           dispatch: db.getDispatchContextById(params.dispatch),
           worker: exposeWorker(worker),

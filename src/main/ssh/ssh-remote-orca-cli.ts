@@ -1,4 +1,5 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -225,7 +226,7 @@ async function call(
   dispatcher: RpcDispatcher,
   method: string,
   params?: Record<string, unknown>,
-  envelope?: { orchestrationCapability?: string; orchestrationRequestId?: string }
+  envelope?: RuntimeOrchestrationEnvelope
 ): Promise<RpcResponse> {
   return await dispatcher.dispatch({
     id: `remote-cli-${Date.now()}`,

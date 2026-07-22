@@ -1,6 +1,17 @@
-import type { MessagePriority, MessageType, WorkerReportOutcome } from './types'
+import {
+  MESSAGE_TYPES,
+  type MessagePriority,
+  type MessageType,
+  type WorkerReportOutcome
+} from './types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from './orchestration-error'
+
+const MESSAGE_TYPE_SET = new Set<MessageType>(MESSAGE_TYPES)
+
+function isMessageType(value: unknown): value is MessageType {
+  return typeof value === 'string' && MESSAGE_TYPE_SET.has(value as MessageType)
+}
 
 type PulledRelayItem = {
   dispatch_id: string
@@ -113,7 +124,7 @@ export async function syncFederatedDispatch(
   return { imported, acknowledgedThrough: cursor }
 }
 
-function parseRelayedMessage(payload: string): RelayedMessage {
+export function parseRelayedMessage(payload: string): RelayedMessage {
   let parsed: unknown
   try {
     parsed = JSON.parse(payload)
@@ -124,18 +135,20 @@ function parseRelayedMessage(payload: string): RelayedMessage {
     throw new OrchestrationError('invalid_argument', 'Federated relay payload is not a message.')
   }
   const message = parsed as Partial<RelayedMessage>
-  if (
-    typeof message.subject !== 'string' ||
-    typeof message.body !== 'string' ||
-    typeof message.type !== 'string'
-  ) {
+  if (typeof message.subject !== 'string' || typeof message.body !== 'string') {
     throw new OrchestrationError('invalid_argument', 'Federated relay message is incomplete.')
+  }
+  if (!isMessageType(message.type)) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `Federated relay message type ${String(message.type)} is not supported.`
+    )
   }
   return {
     from: typeof message.from === 'string' ? message.from : 'remote-worker',
     subject: message.subject,
     body: message.body,
-    type: message.type as MessageType,
+    type: message.type,
     priority:
       message.priority === 'high' || message.priority === 'urgent' ? message.priority : 'normal',
     threadId: typeof message.threadId === 'string' ? message.threadId : null,

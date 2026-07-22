@@ -353,6 +353,15 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'orca terminal create --worktree active --command "codex"'
     )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-start Start a supervised worker locally or on a connected Orca server'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration ask         Ask the coordinator a blocking question'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-abandon Fence an uncertain worker without claiming it stopped'
+    )
     expect(callMock).not.toHaveBeenCalled()
   })
 

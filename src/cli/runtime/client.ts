@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
@@ -51,11 +52,7 @@ export class RuntimeClient {
   async call<TResult>(
     method: string,
     params?: unknown,
-    options?: {
-      timeoutMs?: number
-      orchestrationCapability?: string
-      orchestrationRequestId?: string
-    }
+    options?: { timeoutMs?: number } & RuntimeOrchestrationEnvelope
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
     const orchestrationRequestId = isOrchestrationMutation(method, params)
@@ -253,11 +250,13 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
 
 function isOrchestrationMutation(method: string, params: unknown): boolean {
   if (method === 'orchestration.check') {
+    // Why: a plain check is read-only, while acknowledging a Delivery durably consumes it.
     return Boolean(
       params && typeof params === 'object' && typeof (params as { ack?: unknown }).ack === 'string'
     )
   }
   if (method === 'orchestration.dispatch') {
+    // Why: dry-run validates dispatch intent without creating a Dispatch or injecting input.
     return !(
       params &&
       typeof params === 'object' &&

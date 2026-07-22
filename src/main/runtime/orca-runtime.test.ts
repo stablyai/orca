@@ -17291,6 +17291,24 @@ describe('OrcaRuntimeService', () => {
     expect(writes).toEqual(['still writable'])
   })
 
+  it('preserves runtime-created PTY process identity after graph unavailable', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    const incarnation = runtime.getTerminalProcessIncarnation(handle)
+
+    runtime.markGraphUnavailable(1)
+
+    expect(runtime.getTerminalProcessIncarnation(handle)).toBe(incarnation)
+  })
+
   it('recognizes runtime-created PTY handles with agent launch titles', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -27150,13 +27168,24 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('resolves message waiters on timeout when no message arrives', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const wait = runtime.waitForMessage('term_abc', { timeoutMs: 100 })
 
-    const start = Date.now()
-    await expect(runtime.waitForMessage('term_abc', { timeoutMs: 100 })).resolves.toBe('timed_out')
-    const elapsed = Date.now() - start
-    expect(elapsed).toBeGreaterThanOrEqual(90)
-    expect(elapsed).toBeLessThan(500)
+      await vi.advanceTimersByTimeAsync(99)
+      let settled = false
+      void wait.then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+      expect(settled).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(wait).resolves.toBe('timed_out')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('allows only one exclusive mailbox waiter and supports explicit cancellation', async () => {
@@ -33148,10 +33177,12 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:repo-1',
       name: 'runtime-cli-setup-skip',
-      setupDecision: 'skip'
+      setupDecision: 'skip',
+      awaitTerminalProvisioning: true
     })
 
     expect(result.warning).toBeUndefined()
+    expect(result.setupReceipt).toMatchObject({ requested: 'skip', state: 'skipped' })
     expect(createSetupRunnerScript).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledTimes(1)
   })

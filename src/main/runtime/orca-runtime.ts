@@ -97,6 +97,7 @@ import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import { OrchestrationError } from './orchestration/orchestration-error'
+import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import type {
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
@@ -2448,6 +2449,8 @@ export class OrcaRuntimeService {
   private readonly store: RuntimeStore | null
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
   private readonly orchestrationFederationTimers = new Map<string, ReturnType<typeof setInterval>>()
+  private readonly orchestrationFederationSyncs = new Map<string, Promise<void>>()
+  private readonly orchestrationFederationWarnings = new Set<string>()
   private rendererGraphEpoch = 0
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
@@ -3467,7 +3470,7 @@ export class OrcaRuntimeService {
     method: string,
     params: unknown,
     timeoutMs?: number,
-    envelope?: { orchestrationRequestId?: string; orchestrationCapability?: string }
+    envelope?: RuntimeOrchestrationEnvelope
   ): Promise<unknown> {
     if (!this.orchestrationEnvironmentTransport) {
       throw new OrchestrationError(
@@ -3494,8 +3497,31 @@ export class OrcaRuntimeService {
     }
     const dispatches = this.getOrchestrationDb().listActiveFederatedDispatches(runId)
     await Promise.allSettled(
-      dispatches.map((dispatch) => syncFederatedDispatch(this, dispatch.dispatch_id))
+      dispatches.map((dispatch) => this.syncOrchestrationFederatedDispatch(dispatch.dispatch_id))
     )
+  }
+
+  private syncOrchestrationFederatedDispatch(dispatchId: string): Promise<void> {
+    const current = this.orchestrationFederationSyncs.get(dispatchId)
+    if (current) {
+      return current
+    }
+    const sync = syncFederatedDispatch(this, dispatchId)
+      .then(() => {
+        this.orchestrationFederationWarnings.delete(dispatchId)
+      })
+      .catch((error: unknown) => {
+        if (!this.orchestrationFederationWarnings.has(dispatchId)) {
+          console.warn(`[orchestration] Federation sync failed for ${dispatchId}:`, error)
+          this.orchestrationFederationWarnings.add(dispatchId)
+        }
+        throw error
+      })
+      .finally(() => {
+        this.orchestrationFederationSyncs.delete(dispatchId)
+      })
+    this.orchestrationFederationSyncs.set(dispatchId, sync)
+    return sync
   }
 
   ensureOrchestrationFederationRelay(runId?: string): void {
@@ -3514,9 +3540,10 @@ export class OrcaRuntimeService {
             clearInterval(activeTimer)
           }
           this.orchestrationFederationTimers.delete(dispatch.dispatch_id)
+          this.orchestrationFederationWarnings.delete(dispatch.dispatch_id)
           return
         }
-        void syncFederatedDispatch(this, dispatch.dispatch_id).catch(() => undefined)
+        void this.syncOrchestrationFederatedDispatch(dispatch.dispatch_id).catch(() => undefined)
       }
       const timer = setInterval(tick, 1_000)
       timer.unref?.()
@@ -3530,6 +3557,7 @@ export class OrcaRuntimeService {
       clearInterval(timer)
     }
     this.orchestrationFederationTimers.clear()
+    this.orchestrationFederationWarnings.clear()
   }
 
   getStartedAt(): number {
@@ -13661,7 +13689,8 @@ export class OrcaRuntimeService {
   }
 
   getTerminalProcessIncarnation(handle: string): string | null {
-    const record = this.handles.get(handle)
+    const live = this.getLivePtyForHandle(handle)
+    const record = live?.record ?? this.handles.get(handle)
     if (!record?.ptyId) {
       return null
     }
@@ -19478,7 +19507,7 @@ export class OrcaRuntimeService {
                 : ('start-immediately' as const),
               state: !hooks?.scripts.setup
                 ? ('not_configured' as const)
-                : effectiveDecision === 'skip'
+                : effectiveDecision === 'skip' || !shouldRunSetup
                   ? ('skipped' as const)
                   : didSpawnSetup
                     ? ('running' as const)
@@ -19809,20 +19838,21 @@ export class OrcaRuntimeService {
           }
         : resultForRenderer
 
+    const requestedSetupDecision = args.runHooks ? 'run' : (args.setupDecision ?? 'inherit')
     const setupReceipt = {
-      requested: (args.runHooks ? 'run' : (args.setupDecision ?? 'inherit')) as
-        | 'run'
-        | 'skip'
-        | 'inherit',
+      requested: requestedSetupDecision,
       hookFound: Boolean(result.setup),
       startupPolicy: result.setup?.waitForAgentStartup
         ? ('wait-for-setup' as const)
         : ('start-immediately' as const),
-      state: !result.setup
-        ? ('not_configured' as const)
-        : didSpawnSetup
-          ? ('running' as const)
-          : ('spawn_failed' as const)
+      state:
+        requestedSetupDecision === 'skip'
+          ? ('skipped' as const)
+          : !result.setup
+            ? ('not_configured' as const)
+            : didSpawnSetup
+              ? ('running' as const)
+              : ('spawn_failed' as const)
     }
     const resultWithSetupReceipt = args.awaitTerminalProvisioning
       ? { ...resultWithStartupTerminal, setupReceipt }

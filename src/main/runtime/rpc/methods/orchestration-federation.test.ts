@@ -743,6 +743,58 @@ describe('orchestration federation', () => {
     expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
   })
 
+  it('coalesces overlapping relay polls for the same Dispatch', async () => {
+    const task = createHomeTask()
+    await homeDispatcher.dispatch(startRequest(task.id))
+    await homeRuntime.syncOrchestrationFederation()
+    homeRuntime.stopOrchestrationFederationRelay()
+
+    let releasePull!: () => void
+    const blockedPull = new Promise<void>((resolve) => {
+      releasePull = resolve
+    })
+    let pullCount = 0
+    vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer').mockImplementation(
+      async (_selector, method) => {
+        if (method !== 'orchestration.federationPull') {
+          throw new Error(`Unexpected relay method ${method}`)
+        }
+        pullCount += 1
+        await blockedPull
+        return { runtimeEpoch: workerRuntime.getRuntimeId(), items: [] }
+      }
+    )
+
+    const first = homeRuntime.syncOrchestrationFederation()
+    const second = homeRuntime.syncOrchestrationFederation()
+    await vi.waitFor(() => expect(pullCount).toBe(1))
+    releasePull()
+    await Promise.all([first, second])
+
+    expect(pullCount).toBe(1)
+  })
+
+  it('warns once while a federated Dispatch remains unreachable', async () => {
+    const task = createHomeTask()
+    await homeDispatcher.dispatch(startRequest(task.id))
+    await homeRuntime.syncOrchestrationFederation()
+    homeRuntime.stopOrchestrationFederationRelay()
+    vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer').mockRejectedValue(
+      new Error('worker server offline')
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await homeRuntime.syncOrchestrationFederation()
+    await homeRuntime.syncOrchestrationFederation()
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Federation sync failed'),
+      expect.any(Error)
+    )
+    warn.mockRestore()
+  })
+
   it('returns stop_unknown when the worker server disconnects after the home fence', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))

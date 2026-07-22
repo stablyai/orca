@@ -91,7 +91,8 @@ Orchestration:
   orchestration run-list    List lightweight orchestration Runs
   orchestration run-show    Show one lightweight orchestration Run
   orchestration send        Send an inter-agent message
-  orchestration check       Check messages for a terminal
+  orchestration check       Check the bound Run mailbox
+  orchestration ask         Ask the coordinator a blocking question
   orchestration reply       Reply to a message
   orchestration inbox       Show all messages across recipients
   orchestration task-create Create an orchestration task
@@ -99,6 +100,11 @@ Orchestration:
   orchestration task-update Update a task status
   orchestration dispatch    Dispatch a task to a terminal
   orchestration dispatch-show Show dispatch context for a task
+  orchestration worker-start Start a supervised worker locally or on a connected Orca server
+  orchestration worker-show Inspect one supervised worker
+  orchestration worker-read Read bounded output from one supervised worker
+  orchestration worker-stop Stop one supervised worker
+  orchestration worker-abandon Fence an uncertain worker without claiming it stopped
   orchestration coordinator-start Start the legacy automatic coordinator loop
   orchestration coordinator-stop Stop the legacy automatic coordinator loop
   orchestration gate-create Create a decision gate blocking a task
