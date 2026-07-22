@@ -3,12 +3,11 @@ import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
 import { sendSingleFlightRequest } from './request-single-flight'
 
-const response: RpcResponse = {
-  id: 'request-1',
-  ok: true,
-  result: {},
-  _meta: { runtimeId: 'runtime-1' }
+function makeResponse(id: string): RpcResponse {
+  return { id, ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } }
 }
+
+const response = makeResponse('request-1')
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -25,43 +24,83 @@ function rpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {
 }
 
 describe('sendSingleFlightRequest', () => {
-  it('shares a concurrent request and clears it after success', async () => {
-    const pending = deferred<RpcResponse>()
+  it('coalesces triggers that arrive during an in-flight read into one trailing follow-up', async () => {
+    const leading = deferred<RpcResponse>()
+    const trailing = deferred<RpcResponse>()
+    const leadingResponse = makeResponse('leading')
+    const trailingResponse = makeResponse('trailing')
     const sendRequest = vi
       .fn<() => Promise<RpcResponse>>()
-      .mockReturnValueOnce(pending.promise)
+      .mockReturnValueOnce(leading.promise)
+      .mockReturnValueOnce(trailing.promise)
+    const client = rpcClient(sendRequest)
+
+    const first = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
+    // Two more triggers arrive while the read is on the wire: no duplicate now, and they share ONE
+    // trailing follow-up (not the older in-flight response).
+    const second = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
+    const third = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
+
+    expect(second).toBe(third)
+    expect(second).not.toBe(first)
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+
+    leading.resolve(leadingResponse)
+    expect(await first).toBe(leadingResponse)
+
+    // The leading read settled → the coalesced follow-up fires exactly once.
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    trailing.resolve(trailingResponse)
+    expect(await second).toBe(trailingResponse)
+    expect(await third).toBe(trailingResponse)
+  })
+
+  it('starts a fresh request once nothing is in flight', async () => {
+    const leading = deferred<RpcResponse>()
+    const sendRequest = vi
+      .fn<() => Promise<RpcResponse>>()
+      .mockReturnValueOnce(leading.promise)
       .mockResolvedValueOnce(response)
     const client = rpcClient(sendRequest)
 
     const first = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
-    const second = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
-
-    expect(second).toBe(first)
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-
-    pending.resolve(response)
+    leading.resolve(response)
     await first
-    const next = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
 
+    const next = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
     expect(next).not.toBe(first)
     expect(sendRequest).toHaveBeenCalledTimes(2)
     await next
   })
 
-  it('propagates a shared failure and clears it for retry', async () => {
-    const pending = deferred<RpcResponse>()
+  it('rejects the leading caller on failure but still runs a queued follow-up', async () => {
+    const leading = deferred<RpcResponse>()
     const failure = new Error('request failed')
     const sendRequest = vi
       .fn<() => Promise<RpcResponse>>()
-      .mockReturnValueOnce(pending.promise)
+      .mockReturnValueOnce(leading.promise)
       .mockResolvedValueOnce(response)
     const client = rpcClient(sendRequest)
+
     const first = sendSingleFlightRequest(client, 'host-1', 'accounts.list')
     const second = sendSingleFlightRequest(client, 'host-1', 'accounts.list')
 
-    pending.reject(failure)
-    await Promise.all([expect(first).rejects.toBe(failure), expect(second).rejects.toBe(failure)])
+    leading.reject(failure)
+    await expect(first).rejects.toBe(failure)
+    // A trigger that arrived mid-flight is not poisoned by the leading failure: its follow-up runs.
+    await expect(second).resolves.toBe(response)
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+  })
 
+  it('clears a failed leading request so the next call retries', async () => {
+    const failure = new Error('request failed')
+    const sendRequest = vi
+      .fn<() => Promise<RpcResponse>>()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(response)
+    const client = rpcClient(sendRequest)
+
+    await expect(sendSingleFlightRequest(client, 'host-1', 'accounts.list')).rejects.toBe(failure)
     await expect(sendSingleFlightRequest(client, 'host-1', 'accounts.list')).resolves.toBe(response)
     expect(sendRequest).toHaveBeenCalledTimes(2)
   })
