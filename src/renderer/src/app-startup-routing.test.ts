@@ -57,6 +57,11 @@ describe('renderer startup runtime routing', () => {
     expect(fullWorktreesIndex).toBeGreaterThan(
       source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
     )
+    // Why: the deferred full scan must be followed by a re-prune so deleted-worktree visit
+    // timestamps for non-session repos are dropped once every repo is authoritative.
+    expect(
+      source.indexOf('actions.pruneLastVisitedTimestamps()', fullWorktreesIndex)
+    ).toBeGreaterThan(fullWorktreesIndex)
     expect(lineageIndex).toBe(-1)
   })
 

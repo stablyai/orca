@@ -8,7 +8,9 @@ export type WorkspaceSessionHydrationOptions = {
   additionalValidWorkspaceKeys?: readonly WorkspaceKey[]
 }
 
-const WORKSPACE_KEYED_SESSION_FIELDS = [
+// Worktree-keyed fields carrying restorable chrome — a repo appears here only if it has live
+// session state (open tabs, editors, browser) to restore.
+const WORKSPACE_CHROME_SESSION_FIELDS = [
   'tabsByWorktree',
   'openFilesByWorktree',
   'activeFileIdByWorktree',
@@ -19,9 +21,21 @@ const WORKSPACE_KEYED_SESSION_FIELDS = [
   'unifiedTabs',
   'tabGroups',
   'tabGroupLayouts',
-  'activeGroupIdByWorktree',
+  'activeGroupIdByWorktree'
+] as const satisfies readonly (keyof WorkspaceSessionState)[]
+
+// Why: unbounded per-worktree history — one entry per worktree ever focused / given default tabs.
+// Folder-key detection still scans them, but repo-enumeration for pre-hydration must NOT: they'd
+// pull in ~every repo the user ever touched and defeat the selective fetch, and they hydrate
+// unfiltered regardless (the post-scan re-prune reaps stale entries).
+const WORKSPACE_HISTORY_SESSION_FIELDS = [
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId'
+] as const satisfies readonly (keyof WorkspaceSessionState)[]
+
+const WORKSPACE_KEYED_SESSION_FIELDS = [
+  ...WORKSPACE_CHROME_SESSION_FIELDS,
+  ...WORKSPACE_HISTORY_SESSION_FIELDS
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -38,7 +52,10 @@ function addFolderWorkspaceKey(keys: Set<WorkspaceKey>, value: unknown): void {
   }
 }
 
-function collectWorkspaceSessionKeys(session: WorkspaceSessionState): string[] {
+function collectWorkspaceSessionKeys(
+  session: WorkspaceSessionState,
+  fields: readonly (keyof WorkspaceSessionState)[]
+): string[] {
   const keys = new Set<string>()
   const addKey = (value: unknown): void => {
     if (typeof value === 'string') {
@@ -48,7 +65,7 @@ function collectWorkspaceSessionKeys(session: WorkspaceSessionState): string[] {
 
   addKey(session.activeWorkspaceKey)
   addKey(session.activeWorktreeId)
-  for (const field of WORKSPACE_KEYED_SESSION_FIELDS) {
+  for (const field of fields) {
     const value = session[field]
     if (!isPlainRecord(value)) {
       continue
@@ -79,7 +96,7 @@ export function collectFolderWorkspaceKeysFromSession(
   session: WorkspaceSessionState
 ): WorkspaceKey[] {
   const keys = new Set<WorkspaceKey>()
-  for (const key of collectWorkspaceSessionKeys(session)) {
+  for (const key of collectWorkspaceSessionKeys(session, WORKSPACE_KEYED_SESSION_FIELDS)) {
     addFolderWorkspaceKey(keys, key)
   }
 
@@ -108,7 +125,9 @@ export function collectWorktreeHydrationRepoIdsFromSession(
     }
   }
 
-  for (const key of collectWorkspaceSessionKeys(session)) {
+  // Why: only chrome-bearing fields — enumerating the unbounded history maps would pull in ~every
+  // repo ever touched and defeat the selective pre-hydration fetch (they hydrate unfiltered).
+  for (const key of collectWorkspaceSessionKeys(session, WORKSPACE_CHROME_SESSION_FIELDS)) {
     addWorktreeRepoId(key)
   }
   // Why: a repo referenced only by activeRepoId (no active worktree, no tabs) still needs

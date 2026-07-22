@@ -109,6 +109,25 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
     expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-a', 'repo-b'])
   })
 
+  it('excludes repositories referenced only by unbounded history maps (visit recency, default tabs)', () => {
+    const session = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { 'repo-chrome::/wt': [{ ptyId: 'pty-a' }] },
+      lastVisitedAtByWorktreeId: {
+        'repo-chrome::/wt': 10,
+        'repo-history-only::/visited': 20
+      },
+      defaultTerminalTabsAppliedByWorktreeId: {
+        'repo-default-only::/applied': true
+      }
+    } as unknown as WorkspaceSessionState
+
+    // Why: history-only repos hydrate their maps unfiltered and would bloat the selective fetch.
+    expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-chrome'])
+  })
+
   it('includes a repository referenced only by activeRepoId (no active worktree, no tabs)', () => {
     const session = {
       activeRepoId: 'repo-active-only',
