@@ -475,6 +475,22 @@ describe('AppearancePane', () => {
     expect(updateSettings).toHaveBeenCalledWith({ showMenuBarIcon: false })
   })
 
+  it('shows and updates keep-serving-on-close on desktop Linux', async () => {
+    mocks.state.appPlatform = 'linux'
+    mocks.state.settingsSearchQuery = 'keep serving'
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Keep Serving on Close"]'
+    )
+
+    expect(toggle).not.toBeNull()
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(updateSettings).toHaveBeenCalledWith({ keepServingOnClose: true })
+  })
+
   it('keeps description-only search matches visible after helper text is hidden', async () => {
     mocks.state.settingsSearchQuery = 'app window'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))

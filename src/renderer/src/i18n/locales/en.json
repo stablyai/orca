@@ -99,6 +99,10 @@
     "minimizeNotice": {
       "body": "Orca is still running in the system tray"
     },
+    "keepServingNotice": {
+      "macos": "Orca is still running and serving remote clients. Reopen it from the Dock.",
+      "linux": "Orca is still running and serving remote clients. Launch Orca again to reopen."
+    },
     "activityWaiting": "Orca - activity waiting",
     "activityWaitingSuffix": "activity waiting"
   },
@@ -5581,6 +5585,10 @@
           "statusBarCount": "{{value0}} indicators visible.",
           "gitIgnoredGlossary": "Files matched by .gitignore.",
           "statusBarDescription": "Choose which indicators appear in the status bar.",
+          "keepServingOnClose": {
+            "title": "Keep Serving on Close",
+            "description": "When enabled, closing the window keeps Orca running so remote, mobile, and SSH clients stay served, instead of quitting."
+          },
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."

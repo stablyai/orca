@@ -3325,6 +3325,20 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
+        const storedKeepServingOnClose = parsed.settings?.keepServingOnClose
+        const storedMinimizeToTrayOnClose = parsed.settings?.minimizeToTrayOnClose
+        const keepServingOnClose =
+          storedKeepServingOnClose === undefined
+            ? storedMinimizeToTrayOnClose === true
+            : storedKeepServingOnClose === true
+        if (
+          storedKeepServingOnClose !== keepServingOnClose ||
+          storedMinimizeToTrayOnClose !== keepServingOnClose
+        ) {
+          // Why: older builds read only the legacy alias, so persist one
+          // canonical value for both fields instead of retaining a split pair.
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -3401,8 +3415,10 @@ export class Store {
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
             mobilePairingCustomAddress,
             mobilePairingCustomAddresses,
-            // Why: persisted settings may be hand-edited or from older builds; keep tray-minimize false unless stored value is true.
-            minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
+            // Why: write the canonical setting and its Windows legacy alias as
+            // one value so upgrades and downgrades cannot split their behavior.
+            minimizeToTrayOnClose: keepServingOnClose,
+            keepServingOnClose,
             // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
             showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
@@ -5693,7 +5709,18 @@ export class Store {
     const sanitizedUpdates = stripRetiredSettingsFields(updates)
     // Why: coerce to boolean here (not the IPC edge) so every write path is covered and a truthy non-bool can't persist as "tray-minimize on".
     if ('minimizeToTrayOnClose' in updates) {
-      sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
+      const enabled = updates.minimizeToTrayOnClose === true
+      sanitizedUpdates.minimizeToTrayOnClose = enabled
+      // Why: mirror the canonical flag so a bare legacy write cannot leave the
+      // two persisted compatibility fields split.
+      sanitizedUpdates.keepServingOnClose = enabled
+    }
+    if ('keepServingOnClose' in updates) {
+      const enabled = updates.keepServingOnClose === true
+      sanitizedUpdates.keepServingOnClose = enabled
+      // Why: mirror the legacy alias so a stale minimizeToTrayOnClose cannot
+      // re-enable a preference that the canonical setting disabled.
+      sanitizedUpdates.minimizeToTrayOnClose = enabled
     }
     if ('showMenuBarIcon' in updates) {
       sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true

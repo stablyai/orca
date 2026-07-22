@@ -165,12 +165,12 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
   })
 
-  it('includes the system tray appearance entry only when desktop tray controls are shown', () => {
+  it('includes the keep-serving-on-close appearance entry only when desktop controls are shown', () => {
     const desktopEntries = getAppearancePaneSearchEntries({ showSystemTray: true })
     const webEntries = getAppearancePaneSearchEntries({ showSystemTray: false })
 
-    expect(desktopEntries.some((entry) => entry.title === 'Minimize to Tray on Close')).toBe(true)
-    expect(webEntries.some((entry) => entry.title === 'Minimize to Tray on Close')).toBe(false)
+    expect(desktopEntries.some((entry) => entry.title === 'Keep Serving on Close')).toBe(true)
+    expect(webEntries.some((entry) => entry.title === 'Keep Serving on Close')).toBe(false)
     expect(matchesSettingsSearch('tray', desktopEntries)).toBe(true)
     expect(matchesSettingsSearch('tray', webEntries)).toBe(false)
   })

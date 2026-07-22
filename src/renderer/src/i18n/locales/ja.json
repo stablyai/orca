@@ -72,6 +72,10 @@
     "minimizeNotice": {
       "body": "Orcaはシステムトレイで実行中です"
     },
+    "keepServingNotice": {
+      "macos": "Orca は引き続き実行され、リモートクライアントにサービスを提供しています。Dock から再度開けます。",
+      "linux": "Orca は引き続き実行され、リモートクライアントにサービスを提供しています。Orca をもう一度起動すると再度開けます。"
+    },
     "activityWaiting": "Orca - アクティビティ待機中",
     "activityWaitingSuffix": "activity waiting"
   },
@@ -5400,6 +5404,10 @@
           "statusBarCount": "{{value0}} 個のインジケーターが表示中。",
           "gitIgnoredGlossary": ".gitignore に一致するファイル。",
           "statusBarDescription": "Choose which indicators appear in the status bar.",
+          "keepServingOnClose": {
+            "title": "閉じた後もサービスを継続",
+            "description": "有効にすると、ウインドウを閉じても Orca は終了せず、リモート、モバイル、SSH クライアントへのサービスを継続します。"
+          },
           "showPinnedWorktreesInGroups": {
             "title": "ピン留めしたワークツリーを元のリストにも表示",
             "description": "ピン留めしたワークツリーを Pinned に残したまま、すべて、プロジェクト、ステータス、PR にも表示します。"

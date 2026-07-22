@@ -183,6 +183,25 @@ function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void 
   win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y })
 }
 
+// Why: the hide-on-close notice must name the correct restore path per platform
+// (Dock on macOS, tray on Windows, launching Orca on Linux) instead of the
+// old Windows-only "system tray" wording.
+function keepServingNoticeBody(): string {
+  if (process.platform === 'darwin') {
+    return translateMain(
+      'tray.keepServingNotice.macos',
+      'Orca is still running and serving remote clients. Reopen it from the Dock.'
+    )
+  }
+  if (process.platform === 'win32') {
+    return translateMain('tray.minimizeNotice.body', 'Orca is still running in the system tray')
+  }
+  return translateMain(
+    'tray.keepServingNotice.linux',
+    'Orca is still running and serving remote clients. Launch Orca again to reopen.'
+  )
+}
+
 type CreateMainWindowOptions = {
   /** Returns true when a manual app.quit() (Cmd+Q) is in progress, so the renderer skips the running-process confirm dialog. */
   getIsQuitting?: () => boolean
@@ -979,29 +998,32 @@ export function createMainWindow(
     }
   }
 
-  // Windows minimize-to-tray: hide instead of close when enabled; returns true when it hid so callers skip their close path.
+  // Why: keepServingOnClose (all platforms) HIDES the window instead of closing
+  // so the renderer stays alive and remote/SSH clients keep working. It reads the
+  // canonical flag only — persistence load-migration + updateSettings mirroring
+  // keep it authoritative over the legacy minimizeToTrayOnClose alias, so a stored
+  // explicit false wins even if the alias is stale. Skipped on a real quit (Cmd+Q /
+  // tray "Quit" set getIsQuitting) and when the renderer is gone/crashed. Returns
+  // true when it handled the close by hiding, so callers skip their normal close
+  // path. Shared by BOTH the renderer-drawn X (window:request-close) and the native
+  // close event (Alt+F4 / macOS traffic light).
   const hideToTrayIfEnabled = (): boolean => {
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
+    const settings = store?.getSettings()
     if (
-      process.platform !== 'win32' ||
       rendererProcessGone ||
       isRendererCrashed ||
       opts?.getIsQuitting?.() === true ||
-      store?.getSettings().minimizeToTrayOnClose !== true
+      settings?.keepServingOnClose !== true
     ) {
       return false
     }
     mainWindow.hide()
-    // Why: notify once that closing only hid the window; the persisted flag stops it repeating on every later minimize.
-    if (store.getUI().trayMinimizeNoticeShown !== true) {
+    // Why: tell the user once that closing only hid the window; the persisted
+    // flag stops the notice from repeating on every later close.
+    if (store && store.getUI().trayMinimizeNoticeShown !== true) {
       try {
-        new Notification({
-          title: 'Orca',
-          body: translateMain(
-            'tray.minimizeNotice.body',
-            'Orca is still running in the system tray'
-          )
-        }).show()
+        new Notification({ title: 'Orca', body: keepServingNoticeBody() }).show()
       } catch {
         // Notification is best-effort — never block hiding the window.
       }
@@ -1011,7 +1033,8 @@ export function createMainWindow(
   }
 
   mainWindow.on('close', (e) => {
-    // Why: Alt+F4/programmatic closes hit the native event; apply the same minimize-to-tray guard the renderer-drawn X uses.
+    // Why: Alt+F4 and programmatic closes reach the native event; apply the same
+    // hide-on-close guard the renderer-drawn X uses via onRequestClose.
     if (!windowCloseConfirmed && hideToTrayIfEnabled()) {
       e.preventDefault()
       return
@@ -1094,7 +1117,9 @@ export function createMainWindow(
     if (mainWindow.isDestroyed()) {
       return
     }
-    // Why: renderer-drawn X routes here (not the native close event), so the minimize-to-tray guard must also run here.
+    // Why: the renderer-drawn X on Windows routes here (not the native close
+    // event), so the minimize-to-tray guard must run on this path too — hide
+    // instead of asking the renderer to close.
     if (hideToTrayIfEnabled()) {
       return
     }

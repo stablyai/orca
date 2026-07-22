@@ -39,8 +39,8 @@ type AppearanceInterfaceSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
+  isDesktop: boolean
   isDesktopMac: boolean
-  isDesktopWindows: boolean
   onRequestFontSuggestions?: () => void
   forceVisiblePrimary?: boolean
 }
@@ -50,8 +50,8 @@ export function AppearanceInterfaceSection({
   updateSettings,
   applyTheme,
   fontSuggestions,
+  isDesktop,
   isDesktopMac,
-  isDesktopWindows,
   onRequestFontSuggestions,
   forceVisiblePrimary = false
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
@@ -70,7 +70,7 @@ export function AppearanceInterfaceSection({
   const zoomEntry = getZoomEntries()[0]
   const advancedEntries = [
     ...getTitlebarEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
+    ...getSystemTrayEntries({ showSystemTray: isDesktop }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
@@ -218,29 +218,29 @@ export function AppearanceInterfaceSection({
               />
             </SearchableSetting>
 
-            {isDesktopWindows ? (
+            {isDesktop ? (
               <SearchableSetting
                 title={translate(
-                  'auto.components.settings.AppearancePane.2edf606c46',
-                  'Minimize to Tray on Close'
+                  'auto.components.settings.AppearancePane.keepServingOnClose.title',
+                  'Keep Serving on Close'
                 )}
                 description={systemTrayEntry?.description}
-                keywords={systemTrayEntry?.keywords ?? ['tray', 'minimize', 'close']}
+                keywords={systemTrayEntry?.keywords ?? ['tray', 'serving', 'remote', 'close']}
               >
                 <SettingsSwitchRow
                   label={translate(
-                    'auto.components.settings.AppearancePane.2edf606c46',
-                    'Minimize to Tray on Close'
+                    'auto.components.settings.AppearancePane.keepServingOnClose.title',
+                    'Keep Serving on Close'
                   )}
-                  // Why: platform constraint + "close keeps Orca running" consequence are
-                  // both non-obvious from the label alone.
+                  // Why: the "close keeps Orca serving remote clients" consequence is
+                  // not obvious from the label alone.
                   description={translate(
-                    'auto.components.settings.AppearancePane.b707773a0d',
-                    'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
+                    'auto.components.settings.AppearancePane.keepServingOnClose.description',
+                    'When enabled, closing the window keeps Orca running so remote, mobile, and SSH clients stay served, instead of quitting.'
                   )}
-                  checked={settings.minimizeToTrayOnClose === true}
+                  checked={settings.keepServingOnClose === true}
                   onChange={() =>
-                    updateSettings({ minimizeToTrayOnClose: !settings.minimizeToTrayOnClose })
+                    updateSettings({ keepServingOnClose: !settings.keepServingOnClose })
                   }
                 />
               </SearchableSetting>

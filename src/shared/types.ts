@@ -2821,8 +2821,13 @@ export type GlobalSettings = {
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
   windowBackgroundBlur?: boolean
-  /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
+  /** Why: Windows-only legacy alias of keepServingOnClose. Kept so existing
+   *  Windows users' stored preference still applies; new writes mirror
+   *  keepServingOnClose. The Windows tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean
+  /** Why: hiding instead of destroying the window preserves the renderer-owned
+   *  runtime graph that serves remote, mobile, and SSH clients. */
+  keepServingOnClose?: boolean
   /** macOS: toggles the additive menu-bar entry (Orca survives last-window close); doesn't change Dock behavior. */
   showMenuBarIcon?: boolean
   /** Windows convention: right-click pastes; macOS/Linux keep the context menu. */

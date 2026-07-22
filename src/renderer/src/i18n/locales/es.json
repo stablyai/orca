@@ -72,6 +72,10 @@
     "minimizeNotice": {
       "body": "Orca sigue ejecutándose en la bandeja del sistema"
     },
+    "keepServingNotice": {
+      "macos": "Orca sigue ejecutándose y atendiendo a clientes remotos. Vuelve a abrirlo desde el Dock.",
+      "linux": "Orca sigue ejecutándose y atendiendo a clientes remotos. Inicia Orca de nuevo para volver a abrirlo."
+    },
     "activityWaiting": "Orca: actividad en espera",
     "activityWaitingSuffix": "activity waiting"
   },
@@ -5415,6 +5419,10 @@
           "statusBarCount": "{{value0}} indicadores visibles.",
           "gitIgnoredGlossary": "Archivos que coinciden con .gitignore.",
           "statusBarDescription": "Elige qué indicadores aparecen en la barra de estado.",
+          "keepServingOnClose": {
+            "title": "Seguir ofreciendo servicio al cerrar",
+            "description": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución para seguir atendiendo a clientes remotos, móviles y SSH, en lugar de salir."
+          },
           "showPinnedWorktreesInGroups": {
             "title": "Mostrar también los worktrees fijados en sus listas originales",
             "description": "Los worktrees fijados permanecen en Fijados y también aparecen en Todos, Proyecto, Estado y PR."

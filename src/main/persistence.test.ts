@@ -781,8 +781,9 @@ describe('Store', () => {
     expect(store.getUI().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
   })
 
-  it('defaults minimizeToTrayOnClose to false when unset', async () => {
+  it('defaults keepServingOnClose and its legacy alias to false when unset', async () => {
     const store = await createStore()
+    expect(store.getSettings().keepServingOnClose).toBe(false)
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
   })
 
@@ -796,7 +797,47 @@ describe('Store', () => {
 
     const store = await createStore()
 
+    expect(store.getSettings().keepServingOnClose).toBe(false)
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('migrates a legacy minimizeToTrayOnClose=true into the canonical setting', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      settings: {
+        minimizeToTrayOnClose: true
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().keepServingOnClose).toBe(true)
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(true)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings).toMatchObject({
+      keepServingOnClose: true,
+      minimizeToTrayOnClose: true
+    })
+  })
+
+  it('lets an explicit canonical false repair a stale legacy true', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      settings: {
+        keepServingOnClose: false,
+        minimizeToTrayOnClose: true
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().keepServingOnClose).toBe(false)
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings).toMatchObject({
+      keepServingOnClose: false,
+      minimizeToTrayOnClose: false
+    })
   })
 
   it('persists minimizeToTrayOnClose true/false round-trip', async () => {
@@ -806,6 +847,24 @@ describe('Store', () => {
     store.flush()
     expect((readDataFile() as PersistedState).settings.minimizeToTrayOnClose).toBe(true)
     store.updateSettings({ minimizeToTrayOnClose: false })
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('mirrors canonical keepServingOnClose writes into the legacy alias', async () => {
+    const store = await createStore()
+    store.updateSettings({ keepServingOnClose: true })
+    expect(store.getSettings().keepServingOnClose).toBe(true)
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(true)
+    store.updateSettings({ keepServingOnClose: false })
+    expect(store.getSettings().keepServingOnClose).toBe(false)
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('mirrors legacy minimizeToTrayOnClose writes into the canonical setting', async () => {
+    const store = await createStore()
+    store.updateSettings({ keepServingOnClose: true })
+    store.updateSettings({ minimizeToTrayOnClose: false })
+    expect(store.getSettings().keepServingOnClose).toBe(false)
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
   })
 
@@ -842,6 +901,13 @@ describe('Store', () => {
     store.updateSettings({ minimizeToTrayOnClose: 1 as unknown as boolean })
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
     store.updateSettings({ minimizeToTrayOnClose: null as unknown as boolean })
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('coerces non-boolean keepServingOnClose payloads to a strict boolean', async () => {
+    const store = await createStore()
+    store.updateSettings({ keepServingOnClose: 'true' as unknown as boolean })
+    expect(store.getSettings().keepServingOnClose).toBe(false)
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
   })
 

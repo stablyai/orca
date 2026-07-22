@@ -72,6 +72,10 @@
     "minimizeNotice": {
       "body": "Orca 仍在系统托盘中运行"
     },
+    "keepServingNotice": {
+      "macos": "Orca 仍在运行并为远程客户端提供服务。可从程序坞重新打开。",
+      "linux": "Orca 仍在运行并为远程客户端提供服务。再次启动 Orca 即可重新打开。"
+    },
     "activityWaiting": "Orca - 活动等待中",
     "activityWaitingSuffix": "activity waiting"
   },
@@ -5412,6 +5416,10 @@
           "statusBarCount": "显示 {{value0}} 个指示器。",
           "gitIgnoredGlossary": "与 .gitignore 匹配的文件。",
           "statusBarDescription": "选择状态栏中显示哪些指示器。",
+          "keepServingOnClose": {
+            "title": "关闭窗口后继续提供服务",
+            "description": "启用后，关闭窗口不会退出 Orca，远程、移动端和 SSH 客户端仍可继续使用服务。"
+          },
           "showPinnedWorktreesInGroups": {
             "title": "也在原来的列表中显示已固定的工作树",
             "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中。"

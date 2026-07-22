@@ -8,12 +8,12 @@ import { translateSearchKeyword } from './settings-search-keywords'
 const getSystemTrayEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
-      'auto.components.settings.appearance.search.9a115966d3',
-      'Minimize to Tray on Close'
+      'auto.components.settings.AppearancePane.keepServingOnClose.title',
+      'Keep Serving on Close'
     ),
     description: translate(
-      'auto.components.settings.appearance.search.4d5b9427b5',
-      'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
+      'auto.components.settings.AppearancePane.keepServingOnClose.description',
+      'When enabled, closing the window keeps Orca running so remote, mobile, and SSH clients stay served, instead of quitting.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.appearance.search.tray.tray', 'tray', {
@@ -25,8 +25,8 @@ const getSystemTrayEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry
         { englishOnly: true }
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.search.tray.minimize',
-        'minimize',
+        'auto.components.settings.appearance.search.tray.serving',
+        'keep serving remote',
         { englishOnly: true }
       ),
       ...translateSearchKeyword('auto.components.settings.appearance.search.tray.close', 'close', {
@@ -89,8 +89,9 @@ export function getSystemTrayEntries(
 ): SettingsSearchEntry[] {
   const show =
     options.showSystemTray ??
-    // Why: a Windows web client can report win32, but it has no local tray.
-    (getRendererAppPlatform() === 'win32' && !isWebClientLocation())
+    // Why: the close behavior is available on every desktop platform, while a
+    // web client has no local window lifecycle to control.
+    !isWebClientLocation()
   return show ? getSystemTrayEntryCatalog() : []
 }
 
