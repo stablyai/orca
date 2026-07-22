@@ -10,12 +10,14 @@ const {
   isPwshAvailableMock,
   validateWorkingDirectoryMock,
   resolveUnixShellPathMock,
-  resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessMock,
+  killOsProcessTreeMock
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
   resolveAgentForegroundProcessMock: vi.fn(),
+  killOsProcessTreeMock: vi.fn(),
   validateWorkingDirectoryMock: vi.fn((cwd: string) => {
     if (cwd.includes('definitely-missing')) {
       throw new Error(
@@ -27,6 +29,11 @@ const {
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('../pty/os-process-termination', () => ({
+  killOsProcessTree: killOsProcessTreeMock,
+  isProcessAlive: () => true
 }))
 
 vi.mock('../pwsh', () => ({
@@ -1454,7 +1461,8 @@ describe('createPtySubprocess', () => {
     expect(proc.kill).toHaveBeenCalledTimes(2)
   })
 
-  it('propagates rejected force kills so the owner can retry', () => {
+  // POSIX-only: on Windows forceKill escalates out-of-band via killOsProcessTree (taskkill), not SIGKILL.
+  itOnPosixHost('propagates rejected force kills so the owner can retry', () => {
     const proc = mockPtyProcess(77)
     proc.kill.mockImplementation(() => {
       throw new Error('native fallback rejected')
@@ -1478,7 +1486,7 @@ describe('createPtySubprocess', () => {
     }
   })
 
-  it('forceKill sends SIGKILL to the child pid', () => {
+  itOnPosixHost('forceKill sends SIGKILL to the child pid', () => {
     const proc = mockPtyProcess(77)
     spawnMock.mockReturnValue(proc)
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
@@ -1488,6 +1496,63 @@ describe('createPtySubprocess', () => {
 
     expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
     killSpy.mockRestore()
+  })
+
+  it('forceKill escalates out-of-band on Windows after a graceful kill, without re-entering node-pty', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    killOsProcessTreeMock.mockClear()
+    try {
+      const proc = mockPtyProcess(77)
+      spawnMock.mockReturnValue(proc)
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
+      // Graceful kill latches nodePtyKillIssued; escalation must still reach the child.
+      handle.kill()
+      handle.forceKill()
+
+      // Why: node-pty's kill/destroy are NOT re-entered (double-close hazard); OS tree kill does the work.
+      expect(killOsProcessTreeMock).toHaveBeenCalledTimes(1)
+      expect(killOsProcessTreeMock).toHaveBeenCalledWith(77, expect.any(Function))
+      expect(killSpy).not.toHaveBeenCalledWith(77, 'SIGKILL')
+      expect(proc.kill).toHaveBeenCalledTimes(1) // only the graceful kill(), never again
+
+      // Idempotent: a second escalation must not spawn another taskkill.
+      handle.forceKill()
+      expect(killOsProcessTreeMock).toHaveBeenCalledTimes(1)
+    } finally {
+      killSpy.mockRestore()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  // Why: latching after a denied taskkill would strand the session in 'terminating' with no way to retry.
+  it('re-arms Windows forceKill and surfaces the refusal when the OS tree kill fails', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    killOsProcessTreeMock.mockReset()
+    const refusal = new Error('Access is denied')
+    killOsProcessTreeMock.mockImplementationOnce(
+      (_pid: number, onFailure?: (error: Error) => void) => {
+        onFailure?.(refusal)
+      }
+    )
+    try {
+      const proc = mockPtyProcess(77)
+      spawnMock.mockReturnValue(proc)
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      const onFailure = vi.fn()
+
+      handle.kill()
+      handle.forceKill(onFailure) // taskkill refused → must surface it and un-latch
+      handle.forceKill() // so this retries instead of returning early
+
+      expect(onFailure).toHaveBeenCalledWith(refusal)
+      expect(killOsProcessTreeMock).toHaveBeenCalledTimes(2)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
   })
 
   it('routes onData events', () => {
@@ -2968,24 +3033,25 @@ describe('createPtySubprocess', () => {
       }
     })
 
-    it('dispose() on Windows skips destroy after forceKill falls back to node-pty kill()', () => {
+    it('dispose() on Windows still destroys the handle after an out-of-band forceKill', () => {
       const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
-      proc.destroy = vi.fn(() => proc.kill())
+      proc.destroy = vi.fn()
       spawnMock.mockReturnValue(proc)
-      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-        throw new Error('already gone')
-      })
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      killOsProcessTreeMock.mockClear()
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
       try {
         const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.forceKill()
         handle.dispose()
-        expect(killSpy).toHaveBeenCalledWith(123456, 'SIGKILL')
-        expect(proc.kill).toHaveBeenCalledOnce()
-        expect(proc.destroy).not.toHaveBeenCalled()
+        // Escalation is out-of-band (never re-enters node-pty), so process.kill is untouched...
+        expect(killOsProcessTreeMock).toHaveBeenCalledWith(123456, expect.any(Function))
+        expect(killSpy).not.toHaveBeenCalled()
+        // ...and because nodePtyKillIssued stayed false, dispose() releases the handle via destroy().
+        expect(proc.destroy).toHaveBeenCalledOnce()
       } finally {
         killSpy.mockRestore()
         restorePlatform(origPlatform)
@@ -3033,7 +3099,8 @@ describe('createPtySubprocess', () => {
       killSpy.mockRestore()
     })
 
-    it('forceKill before exit still fires SIGKILL (live child)', () => {
+    // POSIX-only: on Windows forceKill escalates out-of-band via killOsProcessTree, not SIGKILL.
+    itOnPosixHost('forceKill before exit still fires SIGKILL (live child)', () => {
       const proc = mockPtyProcess(77)
       spawnMock.mockReturnValue(proc)
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)

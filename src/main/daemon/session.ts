@@ -10,6 +10,7 @@ import {
 } from '../shell-ready-marker-scanner'
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { isProcessAlive } from '../pty/os-process-termination'
 import type { TuiAgent } from '../../shared/types'
 import { randomUUID } from 'node:crypto'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
@@ -34,6 +35,10 @@ const KILL_TIMEOUT_MS = 5_000
 export const IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
 export const SESSION_FORCE_KILL_RETRY_MS = 250
 const SESSION_FORCE_KILL_MAX_ATTEMPTS = 2
+// Why: a wedged ConPTY may never fire node-pty's onExit; after a force-kill we poll the real pid and
+// synthesize the exit once it's gone, so the session reaps instead of ghosting (Windows ghost-terminal fix).
+export const OS_EXIT_POLL_INTERVAL_MS = 250
+export const SYNTHETIC_KILL_EXIT_CODE = -1
 // Why: bounds in-memory pending output when no client drains it; past the cap we drop records and flag
 // overflow so the next take falls back to one full snapshot. UTF-16 units; worst-case wire is ~6x, under NDJSON_MAX_LINE_BYTES (16MB).
 const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
@@ -63,7 +68,9 @@ export type SubprocessHandle = {
    *  where a stale cursor row makes the next prompt repaint below a blank gap. */
   clear?(): void
   kill(): void
-  forceKill(): void
+  /** Escalates to a forced kill. `onFailure` fires when the OS refused the kill (e.g. taskkill denied),
+   *  which proves the child was never terminated — the only safe trigger for re-escalating a bare pid. */
+  forceKill(onFailure?: (error: Error) => void): void
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number) => void): void
@@ -126,6 +133,7 @@ export class Session {
   private readonly _historySeeded: boolean | undefined
   private forceKillSent = false
   private subprocessDisposed = false
+  private osExitPollTimer: ReturnType<typeof setTimeout> | null = null
   private readonly physicalExit = new PhysicalExitTracker()
   private readonly startupIngress: PtyStartupIngress
 
@@ -557,6 +565,7 @@ export class Session {
     this._disposed = true
     // Why: never leave a paused fd behind on teardown; the handle's dead-guard makes this a no-op once the child is reaped.
     this.releaseProducerPause({ resume: true })
+    this.stopOsExitWatch()
     if (this.killTimer) {
       clearTimeout(this.killTimer)
       this.killTimer = null
@@ -645,7 +654,9 @@ export class Session {
 
   private handleSubprocessExit(code: number): void {
     this.physicalExit.markExited()
-    if (this._disposed) {
+    this.stopOsExitWatch()
+    // Why: a synthesized exit can race node-pty's real onExit; first flip wins so clients fire once.
+    if (this._disposed || this._state === 'exited') {
       return
     }
 
@@ -731,10 +742,68 @@ export class Session {
     }
     this.forceKillSent = true
     try {
-      this.subprocess.forceKill()
+      this.subprocess.forceKill((error) => this.handleForceKillFailure(error))
     } catch (error) {
       this.forceKillSent = false
       throw error
+    }
+    // Why: ConPTY may never deliver onExit; poll the real pid so a wedged session still reaps.
+    this.startOsExitWatch()
+  }
+
+  /** Re-arms after the OS refused a force-kill, so the next kill request actually retries instead of
+   *  silently no-opping. Safe against pid reuse: a refused kill proves the child was never terminated,
+   *  so the pid still belongs to us — unlike a liveness probe, which a recycled pid would fool. */
+  private handleForceKillFailure(error: Error): void {
+    if (this._state === 'exited') {
+      return
+    }
+    console.warn(`[Session] force-kill was refused for ${this.sessionId}:`, error)
+    this.forceKillSent = false
+  }
+
+  /** Polls the real OS pid after a force-kill and synthesizes the exit if node-pty's onExit never fires
+   *  (wedged ConPTY). No-op once the session has exited or before any force-kill was issued. */
+  private startOsExitWatch(): void {
+    if (this.osExitPollTimer || this._state === 'exited') {
+      return
+    }
+    const poll = (): void => {
+      this.osExitPollTimer = null
+      if (this._state === 'exited') {
+        return
+      }
+      if (!isProcessAlive(this.subprocess.pid)) {
+        // Why: child is gone but node-pty never fired onExit; synthesize so the session reaps.
+        this.handleSubprocessExit(SYNTHETIC_KILL_EXIT_CODE)
+        return
+      }
+      this.osExitPollTimer = setTimeout(poll, OS_EXIT_POLL_INTERVAL_MS)
+      this.osExitPollTimer.unref?.()
+    }
+    this.osExitPollTimer = setTimeout(poll, OS_EXIT_POLL_INTERVAL_MS)
+    this.osExitPollTimer.unref?.()
+  }
+
+  /** Cancels the OS-pid poll. Idempotent; called on real and synthesized exits and on teardown. */
+  private stopOsExitWatch(): void {
+    if (this.osExitPollTimer) {
+      clearTimeout(this.osExitPollTimer)
+      this.osExitPollTimer = null
+    }
+  }
+
+  /** Backstop for a wedged ConPTY: synthesize the exit of a force-killed session whose OS pid is already
+   *  gone. Scoped to force-killed sessions so a live session's (possibly recycled) pid is never probed. */
+  reconcileWedgedExit(): void {
+    if (this._state === 'exited' || !this.forceKillSent) {
+      return
+    }
+    // Why: only ever *synthesize* from a liveness probe, never re-kill from one. A recycled pid reads as
+    // alive, so re-killing here could destroy an unrelated process tree; re-escalation is instead driven by
+    // a confirmed kill failure (handleForceKillFailure), which proves the pid is still our child.
+    if (!isProcessAlive(this.subprocess.pid)) {
+      this.handleSubprocessExit(SYNTHETIC_KILL_EXIT_CODE)
     }
   }
 

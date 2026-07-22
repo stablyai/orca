@@ -12,6 +12,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
+
+// Behavior-preserving: keep synthetic-pid sessions probing as alive so the wedged-ConPTY exit synthesis
+// (which uses a real process.kill(pid, 0)) never fires against these fake pids.
+vi.mock('../pty/os-process-termination', () => ({
+  isProcessAlive: () => true,
+  killOsProcessTree: vi.fn()
+}))
 import type { SubprocessHandle } from './session'
 import { HeadlessEmulator } from './headless-emulator'
 

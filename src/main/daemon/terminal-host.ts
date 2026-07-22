@@ -16,6 +16,7 @@ import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
 import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
+import { WedgedSessionReconciler } from './wedged-session-reconciler'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 export type { TerminalHostOptions } from './terminal-host-options'
@@ -33,12 +34,14 @@ export class TerminalHost {
   private disposePromise: Promise<void> | null = null
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
+  private readonly wedgedReconciler = new WedgedSessionReconciler()
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
     this.onFinalCheckpoint = opts.onFinalCheckpoint
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
     this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
+    this.wedgedReconciler.start(this.sessions)
   }
 
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
@@ -220,6 +223,7 @@ export class TerminalHost {
   }
 
   private async disposeSessions(): Promise<void> {
+    this.wedgedReconciler.stop()
     await shutdownTerminalHostSessions(this.sessions, this.onFinalCheckpoint)
     this.killedTombstones.clear()
   }

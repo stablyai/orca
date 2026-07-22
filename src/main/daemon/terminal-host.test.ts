@@ -13,6 +13,13 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
+// Behavior-preserving: keep synthetic-pid sessions probing as alive so the wedged-ConPTY exit synthesis
+// never fires against these fake pids.
+vi.mock('../pty/os-process-termination', () => ({
+  isProcessAlive: () => true,
+  killOsProcessTree: vi.fn()
+}))
+
 function createMockSubprocess(
   options: { startupCommandDeliveredInShellArgs?: boolean; shellPath?: string } = {}
 ): SubprocessHandle {
@@ -498,6 +505,7 @@ describe('TerminalHost', () => {
         vi.useRealTimers()
       }
     })
+
 
     it('throws for non-existent session', () => {
       expect(() => host.kill('missing')).toThrow('Session not found')

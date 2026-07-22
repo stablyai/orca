@@ -66,6 +66,7 @@ import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../provider
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import type { TuiAgent } from '../../shared/types'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
+import { killOsProcessTree } from '../pty/os-process-termination'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -858,6 +859,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let dead = false
   let disposed = false
   let nodePtyKillIssued = false
+  // Why: latch the Windows out-of-band escalation so it never re-spawns taskkill.
+  let osForceKillIssued = false
   let cachedAgentForeground: { processName: string; refreshedAt: number } | null = null
   const agentForegroundContextPaths = getAgentForegroundContextPaths({
     cwd: opts.cwd,
@@ -1155,10 +1158,23 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         throw error
       }
     },
-    forceKill: () => {
-      // Why: after reap/dispose proc.pid is a recycled pid, so SIGKILL would hit an unrelated process (forceKill only signals a live child).
-      // Why: Windows node-pty kill already closed ConPTY; forcing again can double-close the native handle.
-      if (dead || (process.platform === 'win32' && nodePtyKillIssued)) {
+    forceKill: (onFailure?: (error: Error) => void) => {
+      // Why: after reap/dispose proc.pid is a recycled pid, so a force-kill could hit an unrelated process.
+      if (dead) {
+        return
+      }
+      if (process.platform === 'win32') {
+        // Why: re-entering node-pty after its kill() double-closes ConPTY (heap corruption); an out-of-band
+        // taskkill /T is safe and reaps the descendant tree a wedged ConPTY orphaned.
+        if (osForceKillIssued) {
+          return
+        }
+        osForceKillIssued = true
+        killOsProcessTree(proc.pid, (error) => {
+          // Why: a refused taskkill must not latch the escalation, or the child can never be re-killed.
+          osForceKillIssued = false
+          onFailure?.(error)
+        })
         return
       }
       try {

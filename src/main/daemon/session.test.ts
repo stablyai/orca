@@ -8,6 +8,13 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
+// Behavior-preserving: keep synthetic-pid sessions probing as alive so the wedged-ConPTY exit synthesis
+// never fires here (the synthesis path is covered in session-wedged-exit.test.ts).
+vi.mock('../pty/os-process-termination', () => ({
+  isProcessAlive: () => true,
+  killOsProcessTree: vi.fn()
+}))
+
 // Stub the subprocess — Session talks to it via an interface, not child_process directly.
 function createMockSubprocess() {
   const written: string[] = []
