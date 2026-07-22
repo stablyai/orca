@@ -486,6 +486,9 @@ function focusExistingWindow(): void {
 
 function requestDesktopActivation(): void {
   desktopActivationGate.requestActivation()
+  // Why: the losing instance may have clobbered orca-runtime.json on its way
+  // out; republish so the CLI keeps resolving to this live runtime.
+  runtimeRpc?.republishMetadata()
 }
 
 function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {

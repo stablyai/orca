@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this integration-style RPC test keeps the request/response contract together so regressions in the external CLI surface are easier to spot. */
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection, type Socket } from 'node:net'
@@ -11,6 +11,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata } from './runtime-metadata'
+import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
@@ -337,6 +338,49 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({
       runtimeId: runtime.getRuntimeId()
     })
+  })
+
+  it('republishes runtime metadata after a losing second instance clobbers it', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+
+    await server.start()
+
+    // Why: a second launch that loses the single-instance lock writes its own
+    // metadata before exiting, leaving the file pointing at a dead pid — the
+    // CLI then reads stale_bootstrap forever while this instance runs on.
+    writeFileSync(
+      getRuntimeMetadataPath(userDataPath),
+      JSON.stringify({
+        runtimeId: 'dead-loser',
+        pid: 99999999,
+        transports: [{ kind: 'unix', endpoint: '/tmp/never.sock' }],
+        authToken: 'stale',
+        startedAt: 0
+      })
+    )
+
+    server.republishMetadata()
+
+    const metadata = readRuntimeMetadata(userDataPath)
+    expect(metadata?.runtimeId).toBe(runtime.getRuntimeId())
+    expect(metadata?.pid).toBe(process.pid)
+    expect(metadata?.transports).toEqual(server['transports'])
+
+    await server.stop()
+  })
+
+  it('republishMetadata is a no-op before transports exist', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+
+    // Why: an unstarted server has no endpoint to advertise; publishing a
+    // transportless record would replace a possibly-valid file with garbage.
+    server.republishMetadata()
+
+    expect(readRuntimeMetadata(userDataPath)).toBeNull()
   })
 
   it('creates a pairing offer for the active WebSocket transport', async () => {

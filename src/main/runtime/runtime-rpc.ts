@@ -1170,6 +1170,23 @@ export class OrcaRuntimeRpcServer {
     return errorResponse(id, { runtimeId: this.runtime.getRuntimeId() }, code, message)
   }
 
+  // Why: the metadata file is written once at transport startup, and a LOSING
+  // second instance (dock click, CLI `open`, updater relaunch) can overwrite it
+  // with its own short-lived record as it exits — leaving the CLI pointed at a
+  // dead pid while this instance runs on, permanently unreachable. The
+  // second-instance signal fires in the winner at exactly the moment that race
+  // has just happened, so re-publishing there heals the file.
+  republishMetadata(): void {
+    if (this.transports.length === 0) {
+      return
+    }
+    try {
+      this.writeMetadata()
+    } catch {
+      // Why: a failed heal must never break second-instance activation.
+    }
+  }
+
   private writeMetadata(): void {
     const metadata: RuntimeMetadata = {
       runtimeId: this.runtime.getRuntimeId(),
