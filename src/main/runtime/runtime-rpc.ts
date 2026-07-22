@@ -15,6 +15,7 @@ import { WebSocketTransport } from './rpc/ws-transport'
 import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from './rpc/unpaired-device-auth-throttle'
 import {
@@ -392,18 +393,31 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
 ])
 
 // Why: methods whose handlers can tear down PTYs (ptyController.kill / killAllProcessesForWorktree).
-// Each dispatch on either transport logs one console attribution line so a mass-kill is traceable to its caller (issue #9949).
+// Each dispatch on either transport records one attribution line so a mass-kill is traceable to its caller (issue #9949).
 const KILL_CAPABLE_RPC_METHODS = new Set<string>([
   'terminal.close',
   'terminal.closeTab',
   'terminal.stop',
   'terminal.stopExact',
   'session.tabs.close',
-  // Why: the tmuxCompat 'kill-pane' branch routes to closeTerminal, so it is a kill path too.
+  // Why: only the tmuxCompat kill-* subcommands route to closeTerminal; the method itself is high-volume (see TMUX_KILL_SUBCOMMANDS gate).
   'agentTeams.tmuxCompat',
   'worktree.sleep',
   'worktree.rm'
 ])
+
+const TMUX_KILL_SUBCOMMANDS = new Set(['kill-pane', 'kill-window', 'kill-session'])
+
+function isKillCapableDispatch(request: RpcRequest): boolean {
+  if (!KILL_CAPABLE_RPC_METHODS.has(request.method)) {
+    return false
+  }
+  if (request.method !== 'agentTeams.tmuxCompat') {
+    return true
+  }
+  const argv = (request.params as { argv?: unknown } | null | undefined)?.argv
+  return Array.isArray(argv) && typeof argv[0] === 'string' && TMUX_KILL_SUBCOMMANDS.has(argv[0])
+}
 
 // Origin naming for an audit line; a DeviceEntry (WebSocket) or the synthetic local-socket identity.
 type KillDispatchOrigin = { deviceId: string; deviceName: string; scope: string }
@@ -431,21 +445,28 @@ function summarizeKillTarget(params: unknown): Record<string, string> {
   return summary
 }
 
-// Why: console attribution line naming who dispatched a kill-capable RPC; low volume, one line per kill dispatch (not persisted).
+// Why: names who dispatched a kill-capable RPC. The durable breadcrumb is the forensic record — a
+// packaged GUI launch discards stdout, exactly where the #9949 kills happened; console.info is the dev echo.
 export function recordKillCapableRpcDispatch(
   request: RpcRequest,
   origin: KillDispatchOrigin
 ): void {
-  if (!KILL_CAPABLE_RPC_METHODS.has(request.method)) {
+  if (!isKillCapableDispatch(request)) {
     return
   }
-  console.info('[runtime-rpc] kill-capable dispatch', {
+  const record = {
     method: request.method,
     deviceId: origin.deviceId,
     deviceName: origin.deviceName,
     scope: origin.scope,
     ...summarizeKillTarget(request.params)
-  })
+  }
+  console.info('[runtime-rpc] kill-capable dispatch', record)
+  try {
+    recordDurableCrashBreadcrumb('kill_capable_rpc_dispatch', record)
+  } catch {
+    // Why: attribution must never break the dispatch path.
+  }
 }
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.

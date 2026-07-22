@@ -26,6 +26,7 @@ import {
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import { getCrashBreadcrumbSnapshot } from '../crash-reporting/crash-breadcrumb-store'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -4407,6 +4408,16 @@ describe('OrcaRuntimeRpcServer kill-capable dispatch audit', () => {
         scope: 'mobile',
         terminal: 'term-42'
       })
+      // Why: the durable breadcrumb is the record that survives a packaged GUI launch (stdout discarded).
+      const breadcrumb = getCrashBreadcrumbSnapshot().find(
+        (entry) => entry.name === 'kill_capable_rpc_dispatch'
+      )
+      expect(breadcrumb?.data).toMatchObject({
+        method: 'terminal.close',
+        deviceId: device.deviceId,
+        scope: 'mobile',
+        terminal: 'term-42'
+      })
     } finally {
       infoSpy.mockRestore()
       await server.stop()
@@ -4444,7 +4455,7 @@ describe('OrcaRuntimeRpcServer kill-capable dispatch audit', () => {
     }
   })
 
-  it('audits agentTeams.tmuxCompat since its kill-pane branch tears down a PTY', async () => {
+  it('audits agentTeams.tmuxCompat kill-* subcommands since they tear down a PTY', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({
       runtime: makeRuntime(),
@@ -4461,7 +4472,7 @@ describe('OrcaRuntimeRpcServer kill-capable dispatch audit', () => {
           id: 'req_1',
           method: 'agentTeams.tmuxCompat',
           deviceToken: device.token,
-          params: { paneKey: 'pane-1', command: 'kill-pane -t %3' }
+          params: { teamId: 'team-1', token: 'tok', envPane: '%3', argv: ['kill-pane', '-t', '%3'] }
         }),
         () => {},
         () => {},
@@ -4473,6 +4484,37 @@ describe('OrcaRuntimeRpcServer kill-capable dispatch audit', () => {
         method: 'agentTeams.tmuxCompat',
         deviceId: device.deviceId
       })
+    } finally {
+      infoSpy.mockRestore()
+      await server.stop()
+    }
+  })
+
+  it('does not audit non-kill tmuxCompat subcommands', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: makeRuntime(),
+      userDataPath,
+      enableWebSocket: false
+    })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const device = server['deviceRegistry']!.addDevice('Pixel 8', 'mobile')
+    stubStreamingDispatch(server)
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      await server['handleWebSocketMessage'](
+        JSON.stringify({
+          id: 'req_1',
+          method: 'agentTeams.tmuxCompat',
+          deviceToken: device.token,
+          params: { teamId: 'team-1', token: 'tok', envPane: '%3', argv: ['list-panes'] }
+        }),
+        () => {},
+        () => {},
+        undefined,
+        new FakeWebSocket() as unknown as WebSocket
+      )
+      expect(infoSpy.mock.calls.some((call) => call[0] === AUDIT_TAG)).toBe(false)
     } finally {
       infoSpy.mockRestore()
       await server.stop()
