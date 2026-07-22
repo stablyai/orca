@@ -237,6 +237,22 @@ describe('orchestration RPC methods', () => {
       expect(notify).toHaveBeenCalledWith('term_coord', 'heartbeat')
     })
 
+    it('scopes worker messages to the sender dispatch workspace', async () => {
+      setup()
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      const task = db.createTask({ spec: 'work', workspaceKey: 'worktree:wt_a' })
+      db.createDispatchContext(task.id, 'term_worker')
+
+      const result = (await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'shared_coordinator',
+        subject: 'needs input',
+        type: 'decision_gate'
+      })) as { message: { workspace_key: string | null } }
+
+      expect(result.message.workspace_key).toBe('worktree:wt_a')
+    })
+
     it('rejects missing --to', () => {
       const method = findMethod('orchestration.send')
       expect(() => method.params!.parse({ subject: 'hi' })).toThrow()
@@ -1160,12 +1176,44 @@ describe('orchestration RPC methods', () => {
 
     it('records the caller terminal handle when creating a task', async () => {
       setup()
+      vi.spyOn(runtime, 'resolveWorkspaceKeyForTerminalHandle').mockResolvedValue(null)
       const result = (await call('orchestration.taskCreate', {
         spec: 'spawn related workspace',
         callerTerminalHandle: 'term_creator'
       })) as { task: { id: string } }
 
       expect(db.getTask(result.task.id)?.created_by_terminal_handle).toBe('term_creator')
+    })
+
+    it('inherits a child task workspace from its parent', async () => {
+      setup()
+      const parent = db.createTask({ spec: 'parent', workspaceKey: 'worktree:wt_a' })
+      const resolveCallerWorkspace = vi
+        .spyOn(runtime, 'resolveWorkspaceKeyForTerminalHandle')
+        .mockResolvedValue('worktree:wt_b')
+
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'child',
+        parent: parent.id,
+        callerTerminalHandle: 'term_b'
+      })) as { task: { workspace_key: string | null } }
+
+      expect(result.task.workspace_key).toBe('worktree:wt_a')
+      expect(resolveCallerWorkspace).not.toHaveBeenCalled()
+    })
+
+    it('rejects dependencies owned by another workspace', async () => {
+      setup()
+      const dependency = db.createTask({ spec: 'dependency', workspaceKey: 'worktree:wt_a' })
+      vi.spyOn(runtime, 'resolveWorkspaceKeyForTerminalHandle').mockResolvedValue('worktree:wt_b')
+
+      await expect(
+        call('orchestration.taskCreate', {
+          spec: 'dependent',
+          deps: JSON.stringify([dependency.id]),
+          callerTerminalHandle: 'term_b'
+        })
+      ).rejects.toThrow('belongs to a different workspace')
     })
 
     it('rejects invalid deps JSON', async () => {

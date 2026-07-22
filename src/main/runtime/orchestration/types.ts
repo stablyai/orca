@@ -18,6 +18,9 @@ export type GateStatus = 'pending' | 'resolved' | 'timeout'
 
 export type CoordinatorStatus = 'idle' | 'running' | 'completed' | 'failed'
 
+// Why (#4389): `workspace_key` scopes a row to the worktree of the orchestrator
+// that created it. NULL = legacy/global (pre-v7 rows or callers without a
+// worktree), which every scoped read still matches.
 export type MessageRow = {
   id: string
   from_handle: string
@@ -33,6 +36,7 @@ export type MessageRow = {
   created_at: string
   delivered_at: string | null
   sender_pane_key: string | null
+  workspace_key: string | null
 }
 
 export type TaskRow = {
@@ -47,6 +51,7 @@ export type TaskRow = {
   result: string | null
   created_at: string
   completed_at: string | null
+  workspace_key: string | null
 }
 
 export type DispatchContextRow = {
@@ -61,6 +66,7 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  workspace_key: string | null
 }
 
 export type DecisionGateRow = {
@@ -82,4 +88,5 @@ export type CoordinatorRun = {
   poll_interval_ms: number
   created_at: string
   completed_at: string | null
+  workspace_key: string | null
 }

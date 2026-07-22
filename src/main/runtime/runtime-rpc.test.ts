@@ -4339,5 +4339,88 @@ describe('OrcaRuntimeRpcServer', () => {
         realPrototype.exec = originalExec
       }
     })
+
+    // Why (#4389): v6 → v7 must add the nullable workspace_key column to the
+    // four orchestration tables, bump user_version to 7, and leave existing
+    // rows as NULL (legacy/global) so single-orchestrator installs are intact.
+    it('upgrades a v6 on-disk DB to v7 with workspace_key columns, preserving rows as NULL', () => {
+      const tmpPath = join(mkdtempSync(join(tmpdir(), 'orca-orch-mig-v7-')), 'orch.sqlite')
+      const seed = new Database(tmpPath)
+      // Minimal v6 shapes include pane authority but no workspace_key.
+      seed.exec(`
+        CREATE TABLE coordinator_runs (
+          id TEXT PRIMARY KEY, spec TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          coordinator_handle TEXT NOT NULL,
+          poll_interval_ms INTEGER NOT NULL DEFAULT 2000,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')), completed_at TEXT
+        );
+        CREATE TABLE tasks (
+          id TEXT PRIMARY KEY, parent_id TEXT, created_by_terminal_handle TEXT,
+          task_title TEXT, display_name TEXT, spec TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending', deps TEXT NOT NULL DEFAULT '[]',
+          result TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), completed_at TEXT
+        );
+        CREATE TABLE dispatch_contexts (
+          id TEXT PRIMARY KEY, task_id TEXT NOT NULL, assignee_handle TEXT,
+          assignee_pane_key TEXT,
+          status TEXT NOT NULL DEFAULT 'pending', failure_count INTEGER NOT NULL DEFAULT 0,
+          last_failure TEXT, dispatched_at TEXT, completed_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')), last_heartbeat_at TEXT
+        );
+        CREATE TABLE messages (
+          id TEXT NOT NULL, from_handle TEXT NOT NULL, to_handle TEXT NOT NULL,
+          subject TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
+          type TEXT NOT NULL DEFAULT 'status', priority TEXT NOT NULL DEFAULT 'normal',
+          thread_id TEXT, payload TEXT, read INTEGER NOT NULL DEFAULT 0,
+          sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')), delivered_at TEXT,
+          sender_pane_key TEXT
+        );
+        INSERT INTO coordinator_runs (id, spec, status, coordinator_handle)
+          VALUES ('run_legacy', 'legacy', 'running', 'coord');
+        INSERT INTO tasks (id, spec, status) VALUES ('task_legacy', 'legacy', 'ready');
+        INSERT INTO dispatch_contexts (id, task_id, assignee_handle, status)
+          VALUES ('ctx_legacy', 'task_legacy', 'term_legacy', 'dispatched');
+        INSERT INTO messages (id, from_handle, to_handle, subject)
+          VALUES ('msg_legacy', 'a', 'coord', 'hi');
+      `)
+      seed.pragma('user_version = 6')
+      seed.close()
+
+      const db = new OrchestrationDb(tmpPath)
+      try {
+        const probe = (db as unknown as { db: Database.Database }).db
+        const version = probe.pragma('user_version', { simple: true }) as number
+        expect(version).toBe(7)
+
+        const hasColumn = (table: string): boolean =>
+          (probe.pragma(`table_info(${table})`) as { name: string }[]).some(
+            (r) => r.name === 'workspace_key'
+          )
+        expect(hasColumn('coordinator_runs')).toBe(true)
+        expect(hasColumn('tasks')).toBe(true)
+        expect(hasColumn('dispatch_contexts')).toBe(true)
+        expect(hasColumn('messages')).toBe(true)
+        expect(
+          probe
+            .prepare(
+              `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_coordinator_runs_handle_status'`
+            )
+            .all()
+        ).toHaveLength(1)
+
+        // Pre-existing rows survive the migration with NULL workspace_key, so a
+        // scoped read still treats them as legacy/global.
+        expect(db.getActiveCoordinatorRun('worktree:wt_a')?.id).toBe('run_legacy')
+        const legacyTask = db.getTask('task_legacy')
+        expect(legacyTask?.workspace_key).toBeNull()
+        expect(db.listTasks({ workspaceKey: 'worktree:wt_a' }).map((t) => t.id)).toContain(
+          'task_legacy'
+        )
+      } finally {
+        db.close()
+      }
+    })
   })
 })

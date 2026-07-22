@@ -2,7 +2,12 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, OptionalBoolean, requiredString } from '../schemas'
-import type { MessageType, MessagePriority, TaskStatus } from '../../orchestration/db'
+import type {
+  MessageType,
+  MessagePriority,
+  OrchestrationDb,
+  TaskStatus
+} from '../../orchestration/db'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
@@ -29,6 +34,27 @@ const TASK_STATUSES: TaskStatus[] = [
   'failed',
   'blocked'
 ]
+
+function resolveMessageWorkspaceKey(
+  db: OrchestrationDb,
+  fromHandle: string,
+  toHandle: string,
+  recipientFirst = false
+): string | null {
+  const senderDispatch = db.getActiveDispatchForTerminal(fromHandle)
+  if (!recipientFirst && senderDispatch) {
+    return senderDispatch.workspace_key
+  }
+  const recipientRun = db.getActiveCoordinatorRunForHandle(toHandle)
+  if (recipientRun) {
+    return recipientRun.workspace_key
+  }
+  const recipientDispatch = db.getActiveDispatchForTerminal(toHandle)
+  if (recipientDispatch) {
+    return recipientDispatch.workspace_key
+  }
+  return senderDispatch?.workspace_key ?? null
+}
 
 function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
@@ -212,7 +238,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           priority: params.priority as MessagePriority,
           threadId: params.threadId,
           payload: params.payload,
-          senderPaneKey
+          senderPaneKey,
+          workspaceKey: resolveMessageWorkspaceKey(db, from, params.to)
         })
         // Why: reconcile releases the dispatch lock before waking recipients, else a woken coordinator re-dispatches while the lock is still held.
         if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
@@ -254,7 +281,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           priority: params.priority as MessagePriority,
           threadId,
           payload: params.payload,
-          senderPaneKey
+          senderPaneKey,
+          // Why (#4389): one group send can cross workspaces, so each persisted
+          // copy follows its recipient instead of sharing the sender's scope.
+          workspaceKey: resolveMessageWorkspaceKey(db, from, handle, true)
         })
       )
       for (const message of messages) {
@@ -350,7 +380,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         to: original.from_handle,
         subject: `Re: ${original.subject}`,
         body: params.body,
-        threadId: original.thread_id ?? original.id
+        threadId: original.thread_id ?? original.id,
+        workspaceKey: original.workspace_key
       })
 
       runtime.notifyMessageArrived(original.from_handle, reply.type)
@@ -374,7 +405,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.taskCreate',
     params: TaskCreateParams,
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       let deps: string[] | undefined
       if (params.deps) {
@@ -388,13 +419,30 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           throw new Error('Invalid --deps: must be a JSON array of task IDs')
         }
       }
+      const parentTask = params.parent ? db.getTask(params.parent) : undefined
+      // Why (#4389): child ownership follows the parent DAG, not whichever
+      // terminal happened to create it; roots still follow the caller workspace.
+      const workspaceKey = parentTask
+        ? parentTask.workspace_key
+        : await runtime.resolveWorkspaceKeyForTerminalHandle(params.callerTerminalHandle)
+      for (const depId of deps ?? []) {
+        const dependency = db.getTask(depId)
+        if (
+          workspaceKey != null &&
+          dependency?.workspace_key != null &&
+          dependency.workspace_key !== workspaceKey
+        ) {
+          throw new Error(`Dependency ${depId} belongs to a different workspace`)
+        }
+      }
       const task = db.createTask({
         spec: params.spec,
         taskTitle: params.taskTitle,
         displayName: params.displayName,
         deps,
         parentId: params.parent,
-        createdByTerminalHandle: params.callerTerminalHandle
+        createdByTerminalHandle: params.callerTerminalHandle,
+        workspaceKey
       })
       return { task }
     }
@@ -581,7 +629,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         subject: 'Question',
         body: params.question,
         type: 'decision_gate',
-        payload
+        payload,
+        workspaceKey: resolveMessageWorkspaceKey(db, from, params.to)
       })
       runtime.deliverPendingMessagesForHandle(params.to)
       runtime.notifyMessageArrived(params.to, outbound.type)

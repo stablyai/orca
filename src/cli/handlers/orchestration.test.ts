@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
+const getOptionalWorktreeSelectorMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
@@ -10,7 +11,10 @@ function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string
 
 // Why: isolate the handler's flag-to-param mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
-vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
+vi.mock('../selectors', () => ({
+  getOptionalWorktreeSelector: getOptionalWorktreeSelectorMock,
+  getTerminalHandle: getTerminalHandleMock
+}))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { RuntimeClientError } from '../runtime-client'
@@ -36,6 +40,7 @@ function stubStaleHandleRemintFailure(error: RuntimeClientError): void {
 
 afterEach(() => {
   getTerminalHandleMock.mockReset()
+  getOptionalWorktreeSelectorMock.mockReset()
   if (originalTerminalHandle === undefined) {
     delete process.env.ORCA_TERMINAL_HANDLE
   } else {
@@ -343,6 +348,7 @@ describe('orchestration dispatch coordinator handle', () => {
   beforeEach(() => {
     callMock.mockReset()
     getTerminalHandleMock.mockReset()
+    getOptionalWorktreeSelectorMock.mockReset().mockResolvedValue(undefined)
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
   })

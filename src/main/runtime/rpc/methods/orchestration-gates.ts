@@ -1,13 +1,35 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
-import type { GateStatus } from '../../orchestration/db'
+import type { CoordinatorRun, GateStatus } from '../../orchestration/db'
 import { Coordinator } from '../../orchestration/coordinator'
 
-// Why: the coordinator instance is stored at module scope so orchestration.runStop
-// can signal it to halt. Only one coordinator can run at a time (enforced by
-// the DB's active-run check), so a single reference suffices.
-let activeCoordinator: Coordinator | null = null
+// Why (#4389): live coordinators are keyed by workspace scope so concurrent
+// orchestrators in different worktrees of one Orca instance don't orphan or
+// stop each other. A 2nd run in another workspace adds its own entry instead of
+// overwriting a single module-level reference, and runStop halts only the
+// coordinator for the requested workspace. The unscoped/global run (no
+// worktree selector or `--worktree all`) uses a fixed sentinel key so its
+// pre-#4389 single-coordinator semantics are preserved.
+const GLOBAL_COORDINATOR_KEY = '__global__'
+const activeCoordinators = new Map<string, Coordinator>()
+
+function coordinatorMapKey(workspaceKey: string | null): string {
+  return workspaceKey ?? GLOBAL_COORDINATOR_KEY
+}
+
+function normalizeOrchestrationWorktreeSelector(worktree?: string | null): string | undefined {
+  return worktree === 'all' ? undefined : (worktree ?? undefined)
+}
+
+function stopCoordinatorForRun(run: CoordinatorRun): void {
+  const mapKey = coordinatorMapKey(run.workspace_key)
+  const coordinator = activeCoordinators.get(mapKey)
+  if (coordinator) {
+    coordinator.stop()
+    activeCoordinators.delete(mapKey)
+  }
+}
 
 const RunParams = z.object({
   spec: requiredString('Missing --spec'),
@@ -17,7 +39,9 @@ const RunParams = z.object({
   worktree: OptionalString
 })
 
-const RunStopParams = z.object({})
+const RunStopParams = z.object({
+  worktree: OptionalString
+})
 
 const GateCreateParams = z.object({
   task: requiredString('Missing --task'),
@@ -43,10 +67,17 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.run',
     params: RunParams,
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      const worktree = normalizeOrchestrationWorktreeSelector(params.worktree)
 
-      const existing = db.getActiveCoordinatorRun()
+      // Why (#4389): scope the active-run guard to this worktree so a 2nd
+      // orchestrator in a different workspace is not rejected by another
+      // workspace's running coordinator. A null key (no worktree or
+      // `--worktree all`) is the explicit global coordinator; because it sees
+      // every task, it still conflicts with any running scoped coordinator.
+      const workspaceKey = await runtime.resolveWorkspaceKeyForSelector(worktree)
+      const existing = db.getActiveCoordinatorRun(workspaceKey)
       if (existing) {
         throw new Error(`Coordinator already running: ${existing.id}`)
       }
@@ -57,23 +88,29 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
         coordinatorHandle,
         pollIntervalMs: params.pollIntervalMs,
         maxConcurrent: params.maxConcurrent,
-        worktree: params.worktree
+        worktree,
+        workspaceKey
       })
 
-      activeCoordinator = coordinator
+      const mapKey = coordinatorMapKey(workspaceKey)
+      activeCoordinators.set(mapKey, coordinator)
 
       const run = db.createCoordinatorRun({
         spec: params.spec,
         coordinatorHandle,
-        pollIntervalMs: params.pollIntervalMs
+        pollIntervalMs: params.pollIntervalMs,
+        workspaceKey
       })
 
       // Why: fire-and-forget — the coordinator loop runs in the event loop
       // background. Results are persisted to the DB; callers query via
       // orchestration.taskList or orchestration.runStatus.
       coordinator.runFromExistingRun(run.id).finally(() => {
-        if (activeCoordinator === coordinator) {
-          activeCoordinator = null
+        // Why (#4389): only clear this workspace's slot, and only if it still
+        // points at this coordinator — a newer run for the same workspace must
+        // not be evicted by an older one's completion.
+        if (activeCoordinators.get(mapKey) === coordinator) {
+          activeCoordinators.delete(mapKey)
         }
       })
 
@@ -84,17 +121,43 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runStop',
     params: RunStopParams,
-    handler: (_params, { runtime }) => {
+    handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      const run = db.getActiveCoordinatorRun()
-      if (!run) {
-        throw new Error('No active coordinator run')
+      const worktree = normalizeOrchestrationWorktreeSelector(params.worktree)
+
+      let run: CoordinatorRun | undefined
+      if (params.worktree === 'all') {
+        run = db.getActiveGlobalCoordinatorRun()
+        if (!run) {
+          throw new Error('No active global coordinator run')
+        }
+      } else if (worktree) {
+        // Why (#4389): explicit scoped stops must be exact. Scoped read helpers
+        // intentionally include legacy NULL rows for task visibility, but using
+        // that fallback here could report a global run as stopped while leaving
+        // the live global coordinator running.
+        const workspaceKey = await runtime.resolveWorkspaceKeyForSelector(worktree)
+        run =
+          workspaceKey === null
+            ? db.getActiveGlobalCoordinatorRun()
+            : db.getActiveCoordinatorRunForWorkspace(workspaceKey)
+        if (!run) {
+          throw new Error('No active coordinator run for requested worktree')
+        }
+      } else {
+        const activeRuns = db.listActiveCoordinatorRuns()
+        if (activeRuns.length === 0) {
+          throw new Error('No active coordinator run')
+        }
+        if (activeRuns.length > 1) {
+          throw new Error(
+            'Multiple active coordinator runs; pass --worktree <selector> or --worktree all'
+          )
+        }
+        run = activeRuns[0]
       }
 
-      if (activeCoordinator) {
-        activeCoordinator.stop()
-        activeCoordinator = null
-      }
+      stopCoordinatorForRun(run)
 
       return { runId: run.id, stopped: true }
     }

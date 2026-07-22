@@ -117,7 +117,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'run'],
     summary: 'Start the coordinator loop',
     usage:
-      'orca orchestration run --spec <text> [--from <handle>] [--poll-interval-ms <n>] [--max-concurrent <n>] [--worktree <selector>] [--json]',
+      'orca orchestration run --spec <text> [--from <handle>] [--poll-interval-ms <n>] [--max-concurrent <n>] [--worktree <selector|all>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'spec',
@@ -125,13 +125,19 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'poll-interval-ms',
       'max-concurrent',
       'worktree'
+    ],
+    notes: [
+      'Use --worktree <selector> for an isolated coordinator. Omit --worktree or pass --worktree all for the global coordinator, which cannot run alongside scoped coordinators.'
     ]
   },
   {
     path: ['orchestration', 'run-stop'],
     summary: 'Stop the active coordinator run',
-    usage: 'orca orchestration run-stop [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
+    usage: 'orca orchestration run-stop [--worktree <selector|all>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'Use --worktree all for the global coordinator. With no --worktree, run-stop succeeds only when exactly one coordinator is active.'
+    ]
   },
   {
     path: ['orchestration', 'gate-create'],

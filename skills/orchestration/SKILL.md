@@ -53,7 +53,7 @@ Do not use orchestration merely because the user says "hand off", "handoff", "ha
 
 ## Ownership
 
-Orchestration messages and tasks are runtime-global. Lifecycle authority comes from the payload `taskId` + `dispatchId` of the active dispatch, verified against the dispatched pane. Terminal handles are routing metadata — a pane can receive a new handle after restart — so never accept or reject lifecycle provenance by comparing handles. Send `worker_done` and `heartbeat` from the worker's own terminal; the runtime ignores them when sent from a different pane.
+Orchestration state is persisted by the runtime. Rows with a `workspace_key` are owned by that workspace; NULL rows are legacy/global and remain visible to scoped coordinators for compatibility. Lifecycle authority comes from the payload `taskId` + `dispatchId` of the active dispatch, verified against the dispatched pane. Terminal handles are routing metadata — a pane can receive a new handle after restart — so never accept or reject lifecycle provenance by comparing handles. Send `worker_done` and `heartbeat` from the worker's own terminal; the runtime ignores them when sent from a different pane.
 
 Classify inherited context before sending lifecycle messages:
 
@@ -130,11 +130,11 @@ Dispatch rules:
 orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--json]
 orca orchestration gate-resolve --id <gate_id> --resolution <text> [--json]
 orca orchestration gate-list [--task <task_id>] [--status <status>] [--json]
-orca orchestration run --spec <text> [--from <handle>] [--poll-interval-ms <n>] [--max-concurrent <n>] [--worktree <selector>] [--json]
-orca orchestration run-stop [--json]
+orca orchestration run --spec <text> [--from <handle>] [--poll-interval-ms <n>] [--max-concurrent <n>] [--worktree <selector|all>] [--json]
+orca orchestration run-stop [--worktree <selector|all>] [--json]
 ```
 
-`run` returns immediately with a run ID. Query progress with `task-list`. Use `ask` for worker-to-coordinator questions; it creates a `decision_gate` message that the coordinator answers with `reply`. Use `gate-create` only for coordinator-managed task DAG decisions, not for answering a worker's `ask`.
+`run` returns immediately with a run ID. Query progress with `task-list`. Pass `--worktree <selector>` to isolate a coordinator to one workspace; omit it or pass `--worktree all` for the global coordinator, which cannot run alongside scoped coordinators. `run-stop --worktree <selector>` stops that workspace exactly, while `--worktree all` stops the global coordinator; without a selector, stop succeeds only when exactly one coordinator is active. Use `ask` for worker-to-coordinator questions; it creates a `decision_gate` message that the coordinator answers with `reply`. Use `gate-create` only for coordinator-managed task DAG decisions, not for answering a worker's `ask`.
 
 Recovery only: `orca orchestration reset --tasks|--messages|--all --json` clears runtime-global orchestration state. Do not run it during active coordination unless explicitly abandoning that state.
 
