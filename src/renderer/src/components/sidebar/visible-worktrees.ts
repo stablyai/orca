@@ -266,24 +266,8 @@ export function setVisibleWorktreeIds(ids: string[]): void {
  * only before WorktreeList's first render (e.g. app startup).
  */
 export function getVisibleWorktreeIds(): string[] {
-  // Why: reuse cached sidebar order while filtering out archived or deleted worktrees.
-  if (_cachedVisibleIds.length > 0) {
-    const state = useAppStore.getState()
-    const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
-    const validIds = new Set(allWorktrees.map((w) => w.id))
-    const validCached = _cachedVisibleIds.filter((id) => validIds.has(id))
-    if (validCached.length > 0) {
-      const cachedSet = new Set(validCached)
-      const missing = allWorktrees.filter((w) => !cachedSet.has(w.id)).map((w) => w.id)
-      return [...validCached, ...missing]
-    }
-  }
-
-  // Fallback: live recomputation for the window before WorktreeList renders.
   const state = useAppStore.getState()
   const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
-
-  // Hoist repoMap so it's built once and reused across all branches below.
   const repoMap = getRepoMapFromState(state)
 
   let sortedIds: string[]
@@ -308,7 +292,7 @@ export function getVisibleWorktreeIds(): string[] {
     sortedIds = sorted.map((w) => w.id)
   }
 
-  return computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
+  const liveVisibleIds = computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
     tabsByWorktree: state.tabsByWorktree,
@@ -327,4 +311,17 @@ export function getVisibleWorktreeIds(): string[] {
     defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
     worktreeLineageById: state.worktreeLineageById
   })
+
+  // Why: preserve cached sidebar order for items matching active filters, appending new visible items.
+  if (_cachedVisibleIds.length > 0) {
+    const liveSet = new Set(liveVisibleIds)
+    const validCached = _cachedVisibleIds.filter((id) => liveSet.has(id))
+    if (validCached.length > 0) {
+      const cachedSet = new Set(validCached)
+      const missing = liveVisibleIds.filter((id) => !cachedSet.has(id))
+      return [...validCached, ...missing]
+    }
+  }
+
+  return liveVisibleIds
 }

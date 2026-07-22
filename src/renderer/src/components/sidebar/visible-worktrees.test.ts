@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   computeClearFilterActions,
   computeVisibleWorktreeIds,
@@ -689,11 +689,14 @@ describe('computeClearFilterActions', () => {
 })
 
 describe('getVisibleWorktreeIds caching', () => {
+  afterEach(() => {
+    // Why: guarantee cleanup after each test so failures do not leak cached state.
+    setVisibleWorktreeIds([])
+  })
+
   it('preserves cached rendered order when setVisibleWorktreeIds is populated', () => {
     setVisibleWorktreeIds(['wt-2', 'wt-1', 'wt-3'])
-    // Why: cached IDs override live store fallback to maintain rendered sidebar card order even when panel is hidden.
     expect(getVisibleWorktreeIds().slice(0, 3)).toEqual(['wt-2', 'wt-1', 'wt-3'])
-    setVisibleWorktreeIds([])
   })
 })
 
