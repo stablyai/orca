@@ -2598,7 +2598,8 @@ describe('browserManager', () => {
       }
     )
 
-    expect(keyDownPreventDefault).toHaveBeenCalledTimes(1)
+    // Why: keydown must not preventDefault or Electron drops the commit keyup.
+    expect(keyDownPreventDefault).not.toHaveBeenCalled()
     expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyUp')

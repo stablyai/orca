@@ -446,7 +446,8 @@ export function setupGuestShortcutForwarding(args: {
       input.type === 'keyDown' &&
       matchesRecentTabSwitcherChord(input, process.platform, keybindings)
     ) {
-      event.preventDefault()
+      // Why: held switcher commits on Control keyup; preventDefault on Tab
+      // keydown suppresses that keyup in Electron and strands the overlay.
       ctrlTabSwitching = true
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
