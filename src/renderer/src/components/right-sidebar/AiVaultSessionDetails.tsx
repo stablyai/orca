@@ -1,5 +1,5 @@
 import type React from 'react'
-import { FileJson, FolderGit2, MessageSquare, Play } from 'lucide-react'
+import { FileJson, FolderGit2, MessageSquare, MessageSquarePlus, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,7 @@ export function SessionInlineDetails({
   resumeActions,
   onResumeInWorktree,
   onResumeInNewTab,
+  onContinueInNewSession,
   onOpenLog
 }: {
   id: string
@@ -40,6 +41,7 @@ export function SessionInlineDetails({
   }
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
+  onContinueInNewSession?: () => void
   onOpenLog?: () => void
 }): React.JSX.Element {
   // A zero-turn transcript would resume into an empty conversation, so the plain
@@ -115,8 +117,27 @@ export function SessionInlineDetails({
         ) : null}
       </div>
 
-      {showResumeInWorktree || showResumeInNewTab || onOpenLog ? (
+      {showResumeInWorktree || showResumeInNewTab || onContinueInNewSession || onOpenLog ? (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-sidebar-border/80 bg-sidebar-accent/15 px-3 py-2">
+          {onContinueInNewSession ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              draggable={false}
+              onClick={(event) => {
+                event.stopPropagation()
+                onContinueInNewSession()
+              }}
+              className="h-7 shrink-0 px-2.5 text-[11px]"
+            >
+              <MessageSquarePlus className="size-3.5" />
+              {translate(
+                'components.agentSessionContinuation.continueInNewSession',
+                'Continue in New Session…'
+              )}
+            </Button>
+          ) : null}
           {showResumeInWorktree ? (
             <Button
               type="button"

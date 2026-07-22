@@ -14,6 +14,7 @@ export type SerializedBuffer = {
   data: string
   cols: number
   rows: number
+  seq?: number
   lastTitle?: string
 }
 
@@ -147,6 +148,9 @@ function ensureSerializerListener(): void {
           data: result.data,
           cols: result.cols,
           rows: result.rows
+        }
+        if (result.seq !== undefined) {
+          payload.seq = result.seq
         }
         if (lastTitle !== undefined) {
           payload.lastTitle = lastTitle

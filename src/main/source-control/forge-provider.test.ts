@@ -81,6 +81,14 @@ import {
   getForgeProviderForRepository
 } from './forge-provider'
 
+import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
+
+// The origin-repository cache is module-level state; reset it so slugs
+// resolved by one test cannot leak into the next.
+beforeEach(() => {
+  _resetOriginGitHubApiRepositoryCache()
+})
+
 describe('forge provider interface', () => {
   beforeEach(() => {
     createGitHubPullRequestMock.mockReset()
@@ -113,8 +121,9 @@ describe('forge provider interface', () => {
     // slug parsing returns null. Detection must claim it via the enterprise
     // resolver instead of falling through to Gitea's demand for ORCA_GITEA_TOKEN.
     getProjectSlugMock.mockResolvedValue(null)
-    getRepoSlugMock.mockResolvedValue(null)
-    getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
+    // Why: getRepoSlug resolves hosted identities itself now — a GHES remote
+    // comes back host-qualified instead of null + separate enterprise fallback.
+    getRepoSlugMock.mockResolvedValue({
       owner: 'team',
       repo: 'orca',
       host: 'github.acme-corp.com'

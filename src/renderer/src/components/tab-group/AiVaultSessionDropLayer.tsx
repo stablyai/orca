@@ -12,11 +12,13 @@ import {
   hasAiVaultSessionDragData,
   readAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
+import { getAiVaultAgentProviderSession } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { useAppStore } from '@/store'
 import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
+import { isLegacySharedCodexHome } from '../../../../shared/ai-vault-resume-preparation'
 
 type PaneDropTarget = {
   groupId: string
@@ -199,15 +201,6 @@ export default function AiVaultSessionDropLayer({
         return true
       }
 
-      const launchResult = launchAiVaultSessionInNewTab({
-        agent: payload.agent,
-        worktreeId,
-        command: payload.command,
-        ...(payload.env ? { env: payload.env } : {}),
-        ...(payload.launchConfig ? { launchConfig: payload.launchConfig } : {}),
-        targetGroupId: dropTarget.groupId,
-        splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
-      })
       const showQueuedToast = (): void => {
         toast.success(
           translate(
@@ -216,23 +209,70 @@ export default function AiVaultSessionDropLayer({
           )
         )
       }
-      if (launchResult.tabId === null) {
-        void launchResult.runtimeLaunch.then((created) => {
-          if (!created) {
-            toast.error(
-              translate(
-                'auto.lib.launch.agent.in.new.tab.11cce5cc77',
-                'Could not launch {{value0}} in a new terminal.',
-                { value0: payload.agent }
-              )
-            )
+      const preparation =
+        payload.agent === 'codex' &&
+        isLegacySharedCodexHome(payload.codexHome ?? null) &&
+        payload.sessionFilePath &&
+        payload.sessionExecutionHostId &&
+        payload.codexHome !== undefined
+          ? window.api.aiVault.prepareSessionResume({
+              agent: payload.agent,
+              filePath: payload.sessionFilePath,
+              executionHostId: payload.sessionExecutionHostId,
+              codexHome: payload.codexHome
+            })
+          : Promise.resolve({ useRealCodexHome: false })
+      void preparation
+        .then((result) => {
+          const startup = result.useRealCodexHome ? payload.realHomeStartup : payload
+          if (!startup) {
+            throw new Error('Orca could not prepare this legacy Codex session. Retry resume.')
+          }
+          const providerSession = getAiVaultAgentProviderSession({
+            agent: payload.agent,
+            sessionId: payload.sessionId,
+            filePath: payload.sessionFilePath
+          })
+          const launchResult = launchAiVaultSessionInNewTab({
+            agent: payload.agent,
+            worktreeId,
+            command: startup.command,
+            ...(startup.env ? { env: startup.env } : {}),
+            ...(startup.envToDelete ? { envToDelete: startup.envToDelete } : {}),
+            ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+            ...(providerSession ? { providerSession } : {}),
+            targetGroupId: dropTarget.groupId,
+            splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
+          })
+          if (launchResult.tabId === null) {
+            void launchResult.runtimeLaunch.then((outcome) => {
+              if (outcome.status === 'failed') {
+                toast.error(
+                  outcome.message ||
+                    translate(
+                      'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+                      'Could not launch {{value0}} in a new terminal.',
+                      { value0: payload.agent }
+                    )
+                )
+                return
+              }
+              showQueuedToast()
+            })
             return
           }
           showQueuedToast()
         })
-        return true
-      }
-      showQueuedToast()
+        .catch((error: unknown) => {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.right.sidebar.AiVaultPanel.prepareSessionResumeFailed',
+                  'Could not prepare this session for resume.'
+                )
+          )
+        })
       return true
     },
     [clearDragState, target, updateTarget, worktreeId]

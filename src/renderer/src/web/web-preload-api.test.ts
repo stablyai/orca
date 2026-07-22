@@ -72,20 +72,20 @@ async function installApi(userAgent?: string): Promise<{
   }
 }
 
-function writeStoredRuntimeEnvironment(storage: Storage): void {
+function writeStoredRuntimeEnvironment(storage: Storage, environmentId = 'web-env-1'): void {
   storage.setItem(
     'orca.web.runtimeEnvironment.v1',
     JSON.stringify({
-      id: 'web-env-1',
+      id: environmentId,
       name: 'Test runtime',
       createdAt: 1,
       updatedAt: 1,
       lastUsedAt: null,
       runtimeId: null,
-      preferredEndpointId: 'ws-web-env-1',
+      preferredEndpointId: `ws-${environmentId}`,
       endpoints: [
         {
-          id: 'ws-web-env-1',
+          id: `ws-${environmentId}`,
           kind: 'websocket',
           label: 'WebSocket',
           endpoint: 'ws://127.0.0.1:1234',
@@ -95,6 +95,19 @@ function writeStoredRuntimeEnvironment(storage: Storage): void {
       ]
     })
   )
+}
+
+function encodePairingCode(overrides: Record<string, unknown> = {}): string {
+  return Buffer.from(
+    JSON.stringify({
+      v: 2,
+      endpoint: 'wss://server.example:443',
+      deviceToken: 'server-token',
+      publicKeyB64: 'server-key',
+      ...overrides
+    }),
+    'utf8'
+  ).toString('base64url')
 }
 
 function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
@@ -139,6 +152,119 @@ function installClipboardImageBase64(contentBase64: string): void {
     }
   })
 }
+
+describe('web before-unload persistence', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('persists final UI and host-partitioned sessions synchronously', async () => {
+    const { api, storage } = await installApi('Linux')
+
+    api.app.persistBeforeUnloadSync({
+      sessions: [
+        { state: { activeWorktreeId: 'local-worktree' } as never },
+        {
+          state: { activeWorktreeId: 'remote-worktree' } as never,
+          hostId: 'runtime:web-env-1'
+        }
+      ],
+      ui: { activeView: 'settings' }
+    })
+
+    expect(JSON.parse(storage.getItem('orca.web.workspaceSession.v1') ?? '{}')).toMatchObject({
+      activeWorktreeId: 'local-worktree'
+    })
+    expect(
+      JSON.parse(storage.getItem('orca.web.workspaceSession.v1.runtime:web-env-1') ?? '{}')
+    ).toMatchObject({ activeWorktreeId: 'remote-worktree' })
+    expect(JSON.parse(storage.getItem('orca.web.ui.v1') ?? '{}')).toMatchObject({
+      activeView: 'settings'
+    })
+  })
+})
+
+describe('web runtime environment identity', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('does not resolve an old server selector through a differently keyed server', async () => {
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Server B',
+      pairingCode: encodePairingCode({ publicKeyB64: 'server-b-key' })
+    })
+
+    await expect(
+      globals.window.api.runtimeEnvironments.resolve({ selector: 'web-server-a' })
+    ).rejects.toThrow('Unknown Orca runtime environment: web-server-a')
+  })
+
+  it('keeps old selectors only when re-pairing proves the same server key', async () => {
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Server A again',
+      pairingCode: encodePairingCode({ publicKeyB64: 'public-key' })
+    })
+
+    await expect(
+      globals.window.api.runtimeEnvironments.resolve({ selector: 'web-server-a' })
+    ).resolves.toMatchObject({ id: paired.environment.id, name: 'Server A again' })
+  })
+
+  it('ignores malformed persisted compatibility ids when resolving selectors', async () => {
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const stored = JSON.parse(
+      globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}'
+    ) as Record<string, unknown>
+    stored.compatibleEnvironmentIds = { old: 'web-server-old' }
+    globals.storage.setItem('orca.web.runtimeEnvironment.v1', JSON.stringify(stored))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.resolve({ selector: 'web-server-old' })
+    ).rejects.toThrow('Unknown Orca runtime environment: web-server-old')
+  })
+})
+
+describe('web browser-local port capability', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns an explicit unavailable scan instead of an undefined fallback payload', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(api.workspacePorts.scan({})).resolves.toMatchObject({
+      platform: 'linux',
+      ports: [],
+      unavailableReason: 'Workspace port scanning is unavailable for browser-local workspaces.'
+    })
+  })
+})
 
 function installClipboardImageBlob(blob: Blob): {
   getType: ReturnType<typeof vi.fn>
@@ -699,6 +825,88 @@ describe('web settings preload API', () => {
       prBotAuthorOverrides?: string[]
     }
     expect(stored.prBotAuthorOverrides).toBeUndefined()
+  })
+})
+
+describe('web native chat preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('forwards validated lifecycle metadata from reads and stream frames', async () => {
+    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+    const message = {
+      id: 'a-1',
+      role: 'assistant' as const,
+      blocks: [{ type: 'text' as const, text: 'done' }],
+      timestamp: 42,
+      source: 'transcript' as const
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'read-1',
+            ok: true,
+            result: { messages: [message], lifecycle },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        subscribe(
+          _method: string,
+          _params: unknown,
+          callbacks: { onResponse: (response: RuntimeRpcResponse<unknown>) => void }
+        ): Promise<{ unsubscribe: () => void }> {
+          callbacks.onResponse({
+            id: 'stream-1',
+            ok: true,
+            result: {
+              type: 'snapshot',
+              messages: [message],
+              hasMore: false,
+              lifecycle
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.nativeChat.readSession('claude', 'session-1')).resolves.toEqual(
+      {
+        messages: [message],
+        lifecycle
+      }
+    )
+    const frames: unknown[] = []
+    globals.window.api.nativeChat.subscribe(
+      { subscriptionId: 'sub-1', agent: 'claude', sessionId: 'session-1' },
+      (frame) => frames.push(frame)
+    )
+    await Promise.resolve()
+
+    expect(frames).toEqual([
+      {
+        type: 'snapshot',
+        messages: [message],
+        hasMore: false,
+        lifecycle
+      }
+    ])
   })
 })
 
@@ -1740,6 +1948,35 @@ describe('web UI preload API', () => {
     )
   })
 
+  it('rejects paired web skill discovery failures instead of returning an empty scan', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'skills.discover') {
+            return Promise.reject(new Error('runtime disconnected'))
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.skills.discover({ cwd: '/repo' })).rejects.toThrow(
+      'runtime disconnected'
+    )
+  })
+
   it('rejects paired web computer-use status failures instead of marking the helper unavailable', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -1786,6 +2023,99 @@ describe('web repos preload API', () => {
     await expect(
       api.repos.reorderForHost({ hostId: 'ssh:target', orderedIds: ['repo-1'] })
     ).rejects.toThrow('Host-scoped project reordering is unavailable in paired web clients.')
+  })
+
+  it('attributes a server-local catalog to the paired runtime that returned it', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'repo-list',
+            ok: true,
+            result: {
+              repos: [
+                {
+                  id: 'repo-1',
+                  path: '/srv/repo',
+                  displayName: 'repo',
+                  badgeColor: '#000',
+                  addedAt: 1,
+                  executionHostId: 'local'
+                }
+              ]
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.repos.list()).resolves.toMatchObject([
+      { id: 'repo-1', executionHostId: 'runtime:web-server-a' }
+    ])
+  })
+
+  it('does not reassign an in-flight catalog when the browser pairs to another server', async () => {
+    let resolveCatalog!: (response: RuntimeRpcResponse<unknown>) => void
+    const pendingCatalog = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
+      resolveCatalog = resolve
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return pendingCatalog
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const catalogPromise = globals.window.api.repos.list()
+    const pairingCode = encodePairingCode({
+      endpoint: 'wss://server-b.example:443',
+      deviceToken: 'server-b-token',
+      publicKeyB64: 'server-b-key'
+    })
+    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Server B',
+      pairingCode
+    })
+
+    resolveCatalog({
+      id: 'repo-list',
+      ok: true,
+      result: {
+        repos: [
+          {
+            id: 'repo-a',
+            path: '/srv/a',
+            displayName: 'A',
+            badgeColor: '#000',
+            addedAt: 1,
+            executionHostId: 'local'
+          }
+        ]
+      },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+
+    await expect(catalogPromise).resolves.toMatchObject([
+      { id: 'repo-a', executionHostId: 'runtime:web-server-a' }
+    ])
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: paired.environment.id, name: 'Server B' }
+    ])
   })
 
   it.each([
@@ -1889,6 +2219,94 @@ describe('web worktree preload API', () => {
     ])
   })
 
+  it.each(['web-server-a', 'web-server-b'])(
+    'attributes server-local worktrees to their own paired runtime %s',
+    async (environmentId) => {
+      vi.doMock('./web-runtime-client', () => ({
+        WebRuntimeClient: class {
+          call(): Promise<RuntimeRpcResponse<unknown>> {
+            return Promise.resolve({
+              id: 'worktree-list',
+              ok: true,
+              result: {
+                worktrees: [
+                  {
+                    id: 'repo-1::/srv/repo',
+                    repoId: 'repo-1',
+                    path: '/srv/repo',
+                    hostId: 'local'
+                  }
+                ]
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+
+          close(): void {}
+        }
+      }))
+
+      const globals = installBrowserGlobals('Linux')
+      writeStoredRuntimeEnvironment(globals.storage, environmentId)
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+
+      await expect(globals.window.api.worktrees.list({ repoId: 'repo-1' })).resolves.toMatchObject([
+        { id: 'repo-1::/srv/repo', hostId: `runtime:${environmentId}` }
+      ])
+    }
+  )
+
+  it('does not let a stale listAll response repopulate the next server cache', async () => {
+    let resolveServerA: ((response: RuntimeRpcResponse<unknown>) => void) | undefined
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        constructor(private readonly offer: { publicKeyB64: string }) {}
+
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          if (this.offer.publicKeyB64 === 'public-key') {
+            return new Promise((resolve) => {
+              resolveServerA = resolve
+            })
+          }
+          return Promise.resolve({
+            id: 'server-b-list',
+            ok: true,
+            result: { worktrees: [{ id: 'worktree-b', repoId: 'repo-b', path: '/srv/b' }] },
+            _meta: { runtimeId: 'runtime-b' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const serverAList = globals.window.api.worktrees.listAll()
+    await vi.waitFor(() => expect(resolveServerA).toBeTypeOf('function'))
+    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Server B',
+      pairingCode: encodePairingCode({ publicKeyB64: 'server-b-key' })
+    })
+    resolveServerA?.({
+      id: 'server-a-list',
+      ok: true,
+      result: { worktrees: [{ id: 'worktree-a', repoId: 'repo-a', path: '/srv/a' }] },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+
+    await expect(serverAList).rejects.toThrow(
+      'The paired Orca server changed while the request was in progress.'
+    )
+    await expect(globals.window.api.worktrees.listAll()).resolves.toMatchObject([
+      { id: 'worktree-b', hostId: `runtime:${paired.environment.id}` }
+    ])
+  })
+
   it('falls back to legacy worktree.list when detectedList is unavailable', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const worktree = {
@@ -1951,12 +2369,59 @@ describe('web worktree preload API', () => {
       repoId: 'repo-1',
       authoritative: true,
       source: 'session-fallback',
-      worktrees: [{ id: worktree.id, ownership: 'orca-managed', visible: true }]
+      worktrees: [
+        {
+          id: worktree.id,
+          hostId: 'runtime:web-env-1',
+          ownership: 'orca-managed',
+          visible: true
+        }
+      ]
     })
     expect(runtimeCalls).toEqual([
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
       { method: 'worktree.list', params: { repo: 'repo-1', limit: 10_000 } }
     ])
+  })
+
+  it('does not run a legacy detected-worktree fallback against a newly paired server', async () => {
+    const runtimeCalls: string[] = []
+    let resolveDetected: ((response: RuntimeRpcResponse<unknown>) => void) | undefined
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push(method)
+          return new Promise((resolve) => {
+            resolveDetected = resolve
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const detected = globals.window.api.worktrees.listDetected({ repoId: 'repo-1' })
+    await vi.waitFor(() => expect(resolveDetected).toBeTypeOf('function'))
+    await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Server B',
+      pairingCode: encodePairingCode({ publicKeyB64: 'server-b-key' })
+    })
+    resolveDetected?.({
+      id: 'detected-list',
+      ok: false,
+      error: { code: 'method_not_found', message: 'Unknown method: worktree.detectedList' },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+
+    await expect(detected).rejects.toThrow(
+      'The paired Orca server changed while the request was in progress.'
+    )
+    expect(runtimeCalls).toEqual(['worktree.detectedList'])
   })
 
   it('forwards review compare-base fields through runtime worktree calls', async () => {
@@ -2137,6 +2602,9 @@ describe('web file preload API', () => {
     await expect(
       api.fs.downloadFile({ filePath: '/workspace/repo/file.txt', connectionId: 'ssh-1' })
     ).rejects.toThrow('Remote file download is unavailable in paired web clients.')
+    await expect(
+      api.fs.downloadFolder({ dirPath: '/workspace/repo/src', connectionId: 'ssh-1' })
+    ).rejects.toThrow('Remote folder download is unavailable in paired web clients.')
   })
 
   it('rejects SSH clone requests in paired web clients', async () => {
@@ -2521,13 +2989,13 @@ describe('web GitHub preload API', () => {
       },
       {
         key: 'listWorkItems',
-        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor', noCache: true },
+        args: { repoPath, limit: 20, query: 'is:pr', page: 2, noCache: true },
         expectedMethod: 'github.listWorkItems',
         expectedParams: withRepo({
           repoPath,
           limit: 20,
           query: 'is:pr',
-          before: 'cursor',
+          page: 2,
           noCache: true
         })
       },
@@ -2667,8 +3135,9 @@ describe('web GitHub preload API', () => {
       },
       {
         key: 'listAccessibleProjects',
+        args: { host: 'ghe.example.com' },
         expectedMethod: 'github.project.listAccessible',
-        expectedParams: undefined
+        expectedParams: { host: 'ghe.example.com' }
       },
       {
         key: 'resolveProjectRef',

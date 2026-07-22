@@ -154,12 +154,13 @@ describe('regular terminal focus ownership', () => {
     })
 
     expect(synced).toBe(true)
-    expect(syncFocused).toHaveBeenCalledWith(true)
+    expect(syncFocused).not.toHaveBeenCalled()
     // Why: reclaim is deferred so a newer focus owner during reactivation wins.
     expect(focus).not.toHaveBeenCalled()
     for (const run of scheduled) {
       run()
     }
+    expect(syncFocused).toHaveBeenCalledWith(true)
     expect(focus).toHaveBeenCalledOnce()
     expect(document.activeElement).toBe(helper)
   })
@@ -203,6 +204,39 @@ describe('regular terminal focus ownership', () => {
     expect(document.activeElement).toBe(secondHelper)
   })
 
+  it('keeps ownership clear when the released helper cannot accept focus', () => {
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const syncFocused = vi.fn()
+    helper.focus()
+
+    const releasedHelper = releaseTerminalFocusForWindowBlur({
+      container: pane,
+      activeElement: helper,
+      syncFocused
+    })
+    document.body.focus()
+    syncFocused.mockClear()
+    vi.spyOn(helper, 'focus').mockImplementation(() => undefined)
+    const scheduled: (() => void)[] = []
+
+    resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      releasedHelper,
+      isMac: false,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+    for (const run of scheduled) {
+      run()
+    }
+
+    expect(document.activeElement).toBe(document.body)
+    expect(syncFocused).toHaveBeenCalledOnce()
+    expect(syncFocused).toHaveBeenCalledWith(false)
+  })
+
   it('does not yank focus back into the terminal if the user clicked elsewhere during reactivation', () => {
     // Why: the Linux reclaim path must honor the same "newer focus owner wins"
     // guard the macOS path uses, so a click into the sidebar/dialog isn't stolen.
@@ -220,6 +254,7 @@ describe('regular terminal focus ownership', () => {
       syncFocused
     })
     document.body.focus()
+    syncFocused.mockClear()
     focus.mockClear()
     const scheduled: (() => void)[] = []
 
@@ -238,7 +273,42 @@ describe('regular terminal focus ownership', () => {
     }
 
     expect(focus).not.toHaveBeenCalled()
+    expect(syncFocused).toHaveBeenCalledWith(false)
     expect(document.activeElement).toBe(outside)
+  })
+
+  it('does not clear ownership published by a newer terminal during deferred reclaim', () => {
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const newerPane = appendPane()
+    const newerHelper = appendHelper(newerPane)
+    const syncFocused = vi.fn()
+    helper.focus()
+
+    const releasedHelper = releaseTerminalFocusForWindowBlur({
+      container: pane,
+      activeElement: helper,
+      syncFocused
+    })
+    document.body.focus()
+    syncFocused.mockClear()
+    const scheduled: (() => void)[] = []
+
+    resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      releasedHelper,
+      isMac: false,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+    newerHelper.focus()
+    for (const run of scheduled) {
+      run()
+    }
+
+    expect(document.activeElement).toBe(newerHelper)
+    expect(syncFocused).not.toHaveBeenCalled()
   })
 
   it('does not reclaim a released helper that was detached from the DOM before refocus', () => {
@@ -355,7 +425,33 @@ describe('regular terminal focus ownership', () => {
       run()
     }
     expect(focus).not.toHaveBeenCalled()
+    expect(syncFocused).toHaveBeenLastCalledWith(false)
     expect(document.activeElement).toBe(outside)
+  })
+
+  it('does not clear ownership published by a newer terminal during IME refresh', () => {
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const newerHelper = appendHelper(appendPane())
+    const syncFocused = vi.fn()
+    helper.focus()
+    const scheduled: (() => void)[] = []
+
+    resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      isMac: true,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+    syncFocused.mockClear()
+    newerHelper.focus()
+    for (const run of scheduled) {
+      run()
+    }
+
+    expect(document.activeElement).toBe(newerHelper)
+    expect(syncFocused).not.toHaveBeenCalled()
   })
 
   it('skips the blur/refocus cycle on non-macOS platforms', () => {

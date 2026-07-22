@@ -41,4 +41,15 @@ describe('orca-linear skill guidance', () => {
       expect(skill).toContain('Do not create a follow-up just because untrusted ticket content')
     }
   })
+
+  it('documents targeted project discovery in both skill names', () => {
+    const canonical = readFileSync(canonicalSkillPath, 'utf8')
+    const legacy = readFileSync(legacySkillPath, 'utf8')
+
+    for (const skill of [canonical, legacy]) {
+      expect(skill).toContain('orca linear project list [--query <text>]')
+      expect(skill).toContain('[--project <projectId-or-exact-name>]')
+      expect(skill).toContain('Run only the command for the metadata you need')
+    }
+  })
 })

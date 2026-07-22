@@ -129,6 +129,36 @@ describe('useChecksPanelTerminalWorktree', () => {
     expect(latest?.worktree).toBe(parentWorktree)
   })
 
+  it('does not spawn getCwd while the window is hidden, then refreshes on becoming visible', async () => {
+    getCwdMock.mockResolvedValue(`${CHILD_PATH}/src`)
+    const setVisibility = (state: 'visible' | 'hidden'): void => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => state
+      })
+    }
+    setVisibility('hidden')
+    try {
+      await renderHook(parentWorktree)
+      await flushMicrotasks()
+      // Hidden window: no lsof-backed cwd probe at all.
+      expect(getCwdMock).not.toHaveBeenCalled()
+      expect(latest?.worktree).toBe(parentWorktree)
+
+      setVisibility('visible')
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await flushMicrotasks()
+      // Becoming visible runs an immediate refresh (a `cd` made while hidden
+      // is picked up promptly on return).
+      expect(getCwdMock).toHaveBeenCalledWith('pty-1')
+      expect(latest?.worktree).toBe(childWorktree)
+    } finally {
+      setVisibility('visible')
+    }
+  })
+
   it('keeps the default worktree when the cwd is outside every worktree', async () => {
     getCwdMock.mockResolvedValue('/tmp/scratch')
 

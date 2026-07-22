@@ -32,6 +32,10 @@ export type ProjectHostSetupOption =
       label: string
       detail: string
       isAvailable: boolean
+      // Why: only a genuine connection error warrants an alarm glyph; a dormant
+      // disconnected host is merely not-yet-connected, not broken.
+      attention: boolean
+      connectAction?: { kind: 'ssh'; targetId: string } | { kind: 'runtime'; environmentId: string }
     }
 
 export type ReadyProjectHostSetupOption = Extract<ProjectHostSetupOption, { kind: 'ready' }>
@@ -150,6 +154,7 @@ function buildNeedsSetupOptions({
     .map((host) => {
       const pendingSetup = pendingSetupByHost.get(host.id)
       const availability = getHostSetupAvailability(host)
+      const connectAction = getHostConnectAction(host)
       return {
         id: `needs-setup:${host.id}`,
         kind: 'needs-setup' as const,
@@ -161,7 +166,9 @@ function buildNeedsSetupOptions({
             ? getPendingSetupDetail(pendingSetup)
             : 'Project not set up on this host'
           : availability.detail,
-        isAvailable: availability.isAvailable
+        isAvailable: availability.isAvailable,
+        attention: host.health === 'error',
+        ...(connectAction ? { connectAction } : {})
       }
     })
 }
@@ -188,6 +195,15 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
       detail: 'Orca server version is incompatible'
     }
   }
+  // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
+  // so connection state needs to win over setup guidance.
+  const healthUnavailableDetail = getHostHealthUnavailableDetail(host.health)
+  if (healthUnavailableDetail) {
+    return {
+      isAvailable: false,
+      detail: healthUnavailableDetail
+    }
+  }
   if (host.kind === 'runtime') {
     if (!host.capabilities) {
       return {
@@ -209,6 +225,39 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
     isAvailable: true,
     detail: ''
   }
+}
+
+function getHostHealthUnavailableDetail(
+  health: ExecutionHostRegistryEntry['health']
+): string | null {
+  switch (health) {
+    case 'connecting':
+      return 'Connecting to host'
+    case 'disconnected':
+      return 'Connect this host to set up projects'
+    case 'error':
+      return 'Host connection needs attention'
+    case 'available':
+    case 'blocked':
+    case 'local':
+      return null
+  }
+}
+
+function getHostConnectAction(
+  host: ExecutionHostRegistryEntry
+): NeedsSetupProjectHostOption['connectAction'] | undefined {
+  if (host.health !== 'disconnected' && host.health !== 'error') {
+    return undefined
+  }
+  const parsed = parseExecutionHostId(host.id)
+  if (parsed?.kind === 'ssh') {
+    return { kind: 'ssh', targetId: parsed.targetId }
+  }
+  if (parsed?.kind === 'runtime') {
+    return { kind: 'runtime', environmentId: parsed.environmentId }
+  }
+  return undefined
 }
 
 function getPendingSetupDetail(setup: ProjectHostSetup): string {

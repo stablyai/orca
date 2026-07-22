@@ -82,9 +82,9 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     )
   })
 
-  it('renames a fresh creature branch and its display name from the generated slug', async () => {
+  it('keeps incidental work-item markers from overriding the generated display name', async () => {
     const { deps, onRenamed, setDisplayName } = makeDeps()
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ prompt: 'Fix auth from note #1' }), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '-m', 'you/fix-auth'],
       expect.objectContaining({ cwd: '/repo/wt' })
@@ -140,7 +140,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   })
 
   it('strips a prefix the model leaked into the slug from both branch and display name', async () => {
-    // Model ignored "no prefixes" and echoed `you/worktree-spinner`, which the
+    // Model echoed `you/worktree-spinner`, which the
     // sanitizer folds to `you-worktree-spinner`; without stripping it would
     // double-prefix the branch (`you/you-...`) and show "You worktree spinner".
     generateBranchNameMock.mockResolvedValue({ success: true, slug: 'you-worktree-spinner' })
@@ -219,7 +219,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       getCurrentDisplayName: () => 'Platform workspace'
     })
 
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ prompt: 'Fix auth from note #1' }), deps)
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(

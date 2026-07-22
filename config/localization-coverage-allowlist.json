@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "filePath": "src/renderer/src/lib/agent-background-session-test-state.ts",
+    "kind": "object-property:title",
+    "text": "Terminal 1",
+    "dynamic": false,
+    "count": 1
+  }
+]

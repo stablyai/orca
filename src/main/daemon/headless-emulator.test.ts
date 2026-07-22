@@ -263,6 +263,22 @@ describe('HeadlessEmulator', () => {
 
       expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/split-escape'))
     })
+
+    it('keeps split WSL OSC-7 parsing scoped to each emulator distro', async () => {
+      const ubuntu = new HeadlessEmulator({ cols: 80, rows: 24, wslDistro: 'Ubuntu' })
+      const debian = new HeadlessEmulator({ cols: 80, rows: 24, wslDistro: 'Debian' })
+      try {
+        await ubuntu.write('\x1b]7;file://machine/home/jin')
+        await debian.write('\x1b]7;file://machine/home/jin/repo\x07')
+        await ubuntu.write('/repo\x07')
+
+        expect(ubuntu.getSnapshot().cwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
+        expect(debian.getSnapshot().cwd).toBe('\\\\wsl.localhost\\Debian\\home\\jin\\repo')
+      } finally {
+        ubuntu.dispose()
+        debian.dispose()
+      }
+    })
   })
 
   describe('OSC title tracking', () => {

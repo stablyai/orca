@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: getStatus + install + remove all share the managed-command and trust-key derivation. Splitting would hide that the three operations must agree on group index, event label, and command bytes. */
-import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync, statSync, unlinkSync } from 'node:fs'
 import { join, win32 as pathWin32 } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -11,6 +11,7 @@ import {
   hookDefinitionHasManagedCommand,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
+  readHooksJsonWithRaw,
   removeManagedCommands,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -18,6 +19,8 @@ import {
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
   readHooksJsonRemote,
   readTextFileRemote,
@@ -32,10 +35,12 @@ import {
   POSIX_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
 import {
+  codexHookSourcePathsEqual,
   computeTrustKey,
   computeTrustedHash,
   escapeTomlString,
-  getCodexCanonicalTrustPath,
+  getCodexExplicitHomeHookSourcePath,
+  normalizeCodexHookSourcePath,
   normalizeCodexProjectPathForLookup,
   normalizeHookTrustKeyForLookup,
   parseTrustKey,
@@ -66,43 +71,51 @@ import {
   promoteCodexRuntimeHookApprovalsToSystem,
   snapshotCodexRuntimeHookTrustProvenance
 } from './hook-trust-promotion'
+import { grantManagedCodexHookTrust } from './codex-hook-trust-grant'
+import { readCurrentCodexTrustGrantLedgerHome } from './codex-trust-grant-host'
+import {
+  getCodexLedgerTrustedHash,
+  readCodexTrustGrantLedgerHomeForReconciliation,
+  removeCodexManagedHookTrustEntries,
+  removeStaleWslCodexManagedHookTrustEntries
+} from './codex-managed-trust-reconciliation'
+import type { CodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
+import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
 
-// Why: PreToolUse/PostToolUse give the dashboard a live readout of the
-// in-flight tool (name + input preview) between UserPromptSubmit and Stop.
-// PermissionRequest is the human-input boundary: the managed script exits
-// without a decision so Codex still shows its normal approval UI, while Orca
-// can flip the pane to the red waiting state.
+// Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
 const CODEX_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
   'PreToolUse',
   'PermissionRequest',
   'PostToolUse',
+  'SubagentStart',
+  'SubagentStop',
   'Stop'
 ] as const
 
-function getConfigPath(): string {
-  return join(getOrcaManagedCodexHomePath(), 'hooks.json')
+function getConfigPath(runtimeHomePath: string = getOrcaManagedCodexHomePath()): string {
+  return join(runtimeHomePath, 'hooks.json')
 }
 
 function writeCodexHooksJson(configPath: string, hooks: Record<string, HookDefinition[]>): void {
-  // Why: Codex rejects unknown top-level hooks.json fields, so plugin manager
-  // bookkeeping such as `_managed` must not survive Orca's rewrite.
+  // Why: Codex rejects unknown top-level hooks.json fields, so plugin bookkeeping like `_managed` must not survive Orca's rewrite.
   writeHooksJson(configPath, { hooks })
 }
 
-function getCodexConfigTomlPath(): string {
-  return join(getOrcaManagedCodexHomePath(), 'config.toml')
+function getCodexConfigTomlPath(runtimeHomePath: string = getOrcaManagedCodexHomePath()): string {
+  return join(runtimeHomePath, 'config.toml')
 }
 
-// Why: the managed-event subset of the shared PascalCase→label map; the
-// full mapping lives in codex-hook-identity.ts so promotion can't drift.
+// Why: managed-event subset of the shared label map; full mapping lives in codex-hook-identity.ts so promotion can't drift.
 const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> = {
   SessionStart: CODEX_HOOK_EVENT_LABEL.SessionStart!,
   UserPromptSubmit: CODEX_HOOK_EVENT_LABEL.UserPromptSubmit!,
   PreToolUse: CODEX_HOOK_EVENT_LABEL.PreToolUse!,
   PermissionRequest: CODEX_HOOK_EVENT_LABEL.PermissionRequest!,
   PostToolUse: CODEX_HOOK_EVENT_LABEL.PostToolUse!,
+  SubagentStart: CODEX_HOOK_EVENT_LABEL.SubagentStart!,
+  SubagentStop: CODEX_HOOK_EVENT_LABEL.SubagentStop!,
   Stop: CODEX_HOOK_EVENT_LABEL.Stop!
 }
 
@@ -136,13 +149,44 @@ function getManagedCommand(scriptPath: string): string {
     : wrapPosixHookCommand(scriptPath)
 }
 
+export type CodexManagedHookInstallMaterial = {
+  events: readonly (typeof CODEX_EVENTS)[number][]
+  eventLabel: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel>
+  scriptPath: string
+  command: string
+  script: string
+}
+
+// Why: the real-home installer must byte-match the managed lane's events,
+// command, and script, or trust signatures diverge between the two homes.
+export function getCodexManagedHookInstallMaterial(): CodexManagedHookInstallMaterial {
+  const scriptPath = getManagedScriptPath()
+  return {
+    events: CODEX_EVENTS,
+    eventLabel: CODEX_EVENT_LABEL,
+    scriptPath,
+    command: getManagedCommand(scriptPath),
+    script: getManagedScript()
+  }
+}
+
+// Why: when the real-home lane owns ~/.codex/hooks.json (system-default flag ON
+// with hooks enabled), the legacy system-home sweep must stand down or every
+// managed install would delete the entry the real-home installer just wrote.
+// Injected as a gate because this module is bundled into plain-node CLI entries
+// that have no settings store; the CLI default keeps the sweep active.
+let systemCodexHomeHookSweepSuppressed: () => boolean = () => false
+
+export function setSystemCodexHomeHookSweepSuppressed(gate: () => boolean): void {
+  systemCodexHomeHookSweepSuppressed = gate
+}
+
 export { createCodexWslRuntimeHookInstallPlan }
 export type { CodexWslRuntimeHookInstallPlan }
 
 function wrapReadablePosixHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
-  // Why: WSL runtime hooks are written from Windows through UNC, where the
-  // executable bit is not reliable; a missing script must still own stdin.
+  // Why: WSL hooks are written from Windows over UNC where the exec bit is unreliable; a missing script must still own stdin.
   return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
@@ -187,7 +231,10 @@ function collectManagedTrustEntries(
   return entries
 }
 
-function removeMatchingTrustEntries(configPath: string, entries: readonly CodexTrustEntry[]): void {
+function removeSelfComputedMatchingTrustEntries(
+  configPath: string,
+  entries: readonly CodexTrustEntry[]
+): void {
   if (entries.length === 0) {
     return
   }
@@ -215,11 +262,11 @@ function removeStaleRuntimeHookTrustEntries(
       entry.trustedHash ?? computeTrustedHash(entry)
     ])
   )
-  const canonicalRuntimeHooksPath = getCodexCanonicalTrustPath(runtimeHooksPath)
+  const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
   const staleKeys: string[] = []
   for (const [key, state] of readHookTrustEntries(tomlPath)) {
     const parsed = parseTrustKey(key)
-    if (!parsed || getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
+    if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
     if (expectedHashes.get(normalizeHookTrustKeyForLookup(key)) === state.trustedHash) {
@@ -240,22 +287,20 @@ function commandUsesCodexPluginOnlyPlaceholder(command: string | undefined): boo
 }
 
 function removeCodexPluginEnvironmentCommands(definitions: HookDefinition[]): HookDefinition[] {
-  // Why: Orca mirrors system hooks into a plain runtime hooks.json. Plugin
-  // placeholders only work for Codex plugin hook sources, so copying those
-  // commands here strips the environment they require and turns them into 127s.
+  // Why: plugin placeholders only resolve for Codex plugin hook sources; mirroring them into a plain runtime hooks.json turns them into 127s.
   return removeManagedCommands(definitions, commandUsesCodexPluginOnlyPlaceholder)
 }
 
 function getRuntimeHooksWithSystemUserHooks(
   runtimeHooks: Record<string, HookDefinition[]> | undefined,
-  isManagedCommand: (command: string | undefined) => boolean
+  isManagedCommand: (command: string | undefined) => boolean,
+  runtimeConfigPath: string = getConfigPath()
 ): {
   hooks: Record<string, HookDefinition[]>
   trustEntries: MirroredRuntimeUserHookTrustEntry[]
 } {
   const systemConfigPath = getSystemConfigPath()
-  const runtimeConfigPath = getConfigPath()
-  if (systemConfigPath === getConfigPath()) {
+  if (systemConfigPath === runtimeConfigPath) {
     return { hooks: { ...runtimeHooks }, trustEntries: [] }
   }
 
@@ -282,9 +327,7 @@ function getRuntimeHooksWithSystemUserHooks(
       continue
     }
 
-    // Why: runtime hooks are derived from the user's system hooks plus Orca's
-    // managed hooks. Reusing old runtime user-hook copies would keep deleted or
-    // edited ~/.codex/hooks.json entries alive for new Orca-launched sessions.
+    // Why: rebuild from system hooks; reusing old runtime copies would keep deleted/edited ~/.codex/hooks.json entries alive for new sessions.
     nextHooks[eventName] = dedupeHookDefinitions(systemUserDefinitions)
   }
 
@@ -314,8 +357,7 @@ function getTrustedSystemUserHookSignatures(
   try {
     trustEntries = readHookTrustEntries(getSystemCodexConfigTomlPath())
   } catch (error) {
-    // Why: a hand-broken system config.toml should only disable user-hook
-    // trust mirroring; Orca's managed runtime hooks can still be installed.
+    // Why: a hand-broken system config.toml should only disable user-hook trust mirroring, not block Orca's managed runtime hooks.
     console.warn('[codex-hook-service] failed to read system hook trust entries', error)
     return signatures
   }
@@ -346,8 +388,7 @@ function getTrustedSystemUserHookSignatures(
           return
         }
         const signature = getCodexHookTrustSignature(entry)
-        // Why: runtime deduping collapses identical system hook definitions;
-        // if any duplicate remains enabled, keep the mirrored hook enabled.
+        // Why: runtime deduping collapses identical definitions; if any duplicate stays enabled, keep the mirrored hook enabled.
         if (state.enabled || !signatures.has(signature)) {
           signatures.set(signature, state)
         }
@@ -372,11 +413,7 @@ function resolveTrustedSystemHookState(
     return { enabled: reorderedEnabled, trustedHash: expectedHash }
   }
   if (state?.trustedHash) {
-    // Why: carry a key-matched system hash verbatim instead of dropping it as
-    // stale. Codex is the authority on its own hash algorithm; recomputing
-    // here is what turned #7110-style hash drift into an endless re-approval
-    // loop. If the hash is genuinely stale (edited hook), Codex prompts —
-    // exactly what a plain ~/.codex session would do.
+    // Why: carry a key-matched system hash verbatim — recomputing caused #7110 re-approval loops since Codex owns its hash algorithm.
     return { enabled: state.enabled !== false, trustedHash: state.trustedHash }
   }
   return null
@@ -387,13 +424,13 @@ function getTrustedSystemHookHashesByEvent(
   trustEntries: ReadonlyMap<string, CodexHookTrustState>
 ): Map<CodexEventLabel, Map<string, boolean>> {
   const trustedHashesByEvent = new Map<CodexEventLabel, Map<string, boolean>>()
-  const canonicalSystemConfigPath = getCodexCanonicalTrustPath(systemConfigPath)
+  const canonicalSystemConfigPath = normalizeCodexHookSourcePath(systemConfigPath)
   for (const [key, state] of trustEntries) {
     const parsed = parseTrustKey(key)
     if (!parsed || !state.trustedHash) {
       continue
     }
-    if (getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalSystemConfigPath) {
+    if (!codexHookSourcePathsEqual(parsed.sourcePath, canonicalSystemConfigPath)) {
       continue
     }
     let hashes = trustedHashesByEvent.get(parsed.eventLabel)
@@ -402,8 +439,7 @@ function getTrustedSystemHookHashesByEvent(
       trustedHashesByEvent.set(parsed.eventLabel, hashes)
     }
     const enabled = state.enabled !== false
-    // Why: Codex trust keys include hook indices. If a user reorders hooks,
-    // the hash still proves the same event+command identity was approved.
+    // Why: Codex trust keys include hook indices, but the hash still proves the same event+command identity was approved after a reorder.
     if (enabled || !hashes.has(state.trustedHash)) {
       hashes.set(state.trustedHash, enabled)
     }
@@ -422,6 +458,7 @@ function collectMirroredRuntimeUserHookTrustEntries(
   }
 
   const entries: MirroredRuntimeUserHookTrustEntry[] = []
+  const trustSourcePath = getCodexExplicitHomeHookSourcePath(runtimeConfigPath)
   for (const [eventName, definitions] of Object.entries(runtimeHooks)) {
     if (!Array.isArray(definitions)) {
       continue
@@ -433,7 +470,7 @@ function collectMirroredRuntimeUserHookTrustEntries(
           return
         }
         const entry = createCodexHookTrustEntry(
-          runtimeConfigPath,
+          trustSourcePath,
           eventName,
           groupIndex,
           handlerIndex,
@@ -488,8 +525,7 @@ function buildHookTrustHeaderKeyPattern(key: string): string {
   const alternatives = [...new Set(keyVariants)].flatMap((variant) => {
     const quoted = [`"${escapeRegex(escapeTomlString(variant))}"`]
     if (!variant.includes("'")) {
-      // Why: tolerate raw-backslash literal keys left by Codex/manual approval
-      // while Orca repairs mirrored runtime trust across both Windows variants.
+      // Why: tolerate raw-backslash literal keys from Codex/manual approval while repairing mirrored runtime trust across both Windows variants.
       quoted.push(`'${escapeRegex(variant)}'`)
     }
     return quoted
@@ -532,15 +568,37 @@ function dedupeHookDefinitions(definitions: readonly HookDefinition[]): HookDefi
   })
 }
 
+function removeSystemManagedHookTrustEntries(systemHomePath: string, hooksJsonPath: string): void {
+  removeCodexManagedHookTrustEntries({
+    tomlPath: getSystemCodexConfigTomlPath(),
+    runtimeHomePath: systemHomePath,
+    sourcePath: hooksJsonPath,
+    command: getManagedCommand(getManagedScriptPath()),
+    managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
+    timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+  })
+}
+
 function cleanupLegacySystemManagedHooks(): void {
+  if (systemCodexHomeHookSweepSuppressed()) {
+    return
+  }
   const legacyConfigPath = getSystemConfigPath()
   const runtimeConfigPath = getConfigPath()
   if (legacyConfigPath === runtimeConfigPath) {
     return
   }
 
-  const config = readHooksJson(legacyConfigPath)
-  if (!config?.hooks) {
+  const systemHomePath = getSystemCodexHomePath()
+  const hasRecordedRealHomeGrant =
+    readCodexTrustGrantLedgerHomeForReconciliation(systemHomePath) !== null
+  // Why: the pre-write guard below compares against these bytes; a separate
+  // later read would let a concurrent save land between parse and snapshot.
+  const { raw: previousRaw, config } = readHooksJsonWithRaw(legacyConfigPath)
+  if (!config?.hooks || previousRaw === null) {
+    if (hasRecordedRealHomeGrant) {
+      removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
+    }
     return
   }
 
@@ -573,14 +631,40 @@ function cleanupLegacySystemManagedHooks(): void {
     }
   }
 
-  // Why: Codex hooks moved to Orca's managed CODEX_HOME; old entries in
-  // ~/.codex would keep external Codex sessions reporting into Orca.
+  // Why: Codex hooks moved to Orca's managed CODEX_HOME; stale ~/.codex entries would keep external Codex sessions reporting into Orca.
   if (removedManagedHook) {
     // Why: this is the user's system hooks file, not Orca's runtime copy.
     // Remove only stale Orca hook entries and preserve other managers' metadata.
-    writeHooksJson(legacyConfigPath, { ...config, hooks: nextHooks })
+    const hooksWritePath = resolveHooksJsonWritePath(legacyConfigPath)
+    const previousMode = statSync(hooksWritePath).mode
+    mutateRealHomeHooksPreservingUserTrust({
+      sourcePath: legacyConfigPath,
+      runtimeHomePath: systemHomePath,
+      tomlPath: getSystemCodexConfigTomlPath(),
+      beforeHooks: config.hooks,
+      afterHooks: nextHooks,
+      writeHooks: () => {
+        if (
+          readFileSync(legacyConfigPath, 'utf-8') !== previousRaw ||
+          resolveHooksJsonWritePath(legacyConfigPath) !== hooksWritePath
+        ) {
+          // Why: the pre-mutation RPC may overlap a user save; downgrade must
+          // never replace that newer dotfiles generation with our stale parse.
+          throw new Error('System Codex hooks changed during trust repair')
+        }
+        writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
+      },
+      restoreHooks: () => writeFileAtomically(hooksWritePath, previousRaw, { mode: previousMode })
+    })
+    // Why: stale dev/version entries can reference an older managed script
+    // path that is not represented by the current grant ledger.
+    removeSelfComputedMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
   }
-  removeMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
+  if (removedManagedHook || hasRecordedRealHomeGrant) {
+    // Why: the ledger recognizes Codex-computed hashes and remains a retry
+    // marker if a prior cleanup removed hooks.json but could not update TOML.
+    removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
+  }
 }
 
 function stripLegacyManagedProfileBlock(content: string): string {
@@ -612,8 +696,7 @@ function cleanupLegacyCodexProfileHooks(): void {
   if (next === existing) {
     return
   }
-  // Why: #2778 wrote Orca hooks into a Codex profile file. Runtime CODEX_HOME
-  // supersedes that representation, so remove only Orca's marked block.
+  // Why: #2778 wrote Orca hooks into a Codex profile file; runtime CODEX_HOME supersedes it, so remove only Orca's marked block.
   if (next.trim().length === 0) {
     unlinkSync(profilePath)
   } else {
@@ -632,149 +715,52 @@ function cleanupLegacyManagedHookRepresentations(): void {
 
 function removeRuntimeManagedHookTrustEntries(configPath: string): void {
   try {
-    const tomlPath = getCodexConfigTomlPath()
-    const existingEntries = readHookTrustEntries(tomlPath)
-    const scriptPath = getManagedScriptPath()
-    const command = getManagedCommand(scriptPath)
-    const managedEventLabels = new Set<CodexEventLabel>(
-      CODEX_EVENTS.map((event) => CODEX_EVENT_LABEL[event])
-    )
-    // Why: only drop entries WE wrote. The same config.toml can contain
-    // user-approved trust entries for non-Orca commands, so match by hash
-    // equivalence to our managed command — a sourcePath-only filter would
-    // wipe the user's manually-approved entries.
-    const ourKeys: string[] = []
-    const canonicalConfigPath = getCodexCanonicalTrustPath(configPath)
-    for (const [key, state] of existingEntries) {
-      const parts = parseTrustKey(key)
-      if (parts === null) {
-        continue
-      }
-      if (getCodexCanonicalTrustPath(parts.sourcePath) !== canonicalConfigPath) {
-        continue
-      }
-      if (!managedEventLabels.has(parts.eventLabel)) {
-        continue
-      }
-      const expectedEntry: CodexTrustEntry = {
-        sourcePath: configPath,
-        eventLabel: parts.eventLabel,
-        groupIndex: parts.groupIndex,
-        handlerIndex: parts.handlerIndex,
-        command,
-        // Why: match the timeout install() wrote, or remove() would fail to
-        // recognize (and clean up) its own managed trust entries.
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
-      }
-      const recognizedHashes = new Set([
-        computeTrustedHash(expectedEntry),
-        computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
-      ])
-      if (!state.trustedHash || !recognizedHashes.has(state.trustedHash)) {
-        continue
-      }
-      ourKeys.push(key)
-    }
-    if (ourKeys.length > 0) {
-      removeHookTrustEntries(tomlPath, ourKeys)
-    }
+    removeCodexManagedHookTrustEntries({
+      tomlPath: getCodexConfigTomlPath(),
+      runtimeHomePath: getOrcaManagedCodexHomePath(),
+      sourcePath: configPath,
+      command: getManagedCommand(getManagedScriptPath()),
+      managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
+      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
+      sourceUsesExplicitCodexHome: true
+    })
   } catch (error) {
-    // Best effort — stale trust entries are harmless once hooks.json no
-    // longer references the hook. Log so a programmer error doesn't disappear silently.
+    // Best effort — stale trust is harmless once hooks.json no longer references the hook; log so a programmer error isn't silent.
     console.warn('[codex-hook-service] failed to clean trust entries', error)
   }
 }
 
 function removeWslRuntimeManagedHookTrustEntries(plan: CodexWslRuntimeHookInstallPlan): void {
   try {
-    const existingEntries = readHookTrustEntries(plan.tomlPath)
-    const command = wrapReadablePosixHookCommand(plan.commandScriptPath)
-    const managedEventLabels = new Set<CodexEventLabel>(
-      CODEX_EVENTS.map((event) => CODEX_EVENT_LABEL[event])
-    )
-    const canonicalConfigPath = getCodexCanonicalTrustPath(plan.trustConfigPath)
-    const ourKeys: string[] = []
-    for (const [key, state] of existingEntries) {
-      const parts = parseTrustKey(key)
-      if (parts === null) {
-        continue
-      }
-      if (getCodexCanonicalTrustPath(parts.sourcePath) !== canonicalConfigPath) {
-        continue
-      }
-      if (!managedEventLabels.has(parts.eventLabel)) {
-        continue
-      }
-      const expectedEntry: CodexTrustEntry = {
-        sourcePath: plan.trustConfigPath,
-        eventLabel: parts.eventLabel,
-        groupIndex: parts.groupIndex,
-        handlerIndex: parts.handlerIndex,
-        command,
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
-      }
-      const recognizedHashes = new Set([
-        computeTrustedHash(expectedEntry),
-        computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
-      ])
-      if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
-        ourKeys.push(key)
-      }
-    }
-    if (ourKeys.length > 0) {
-      removeHookTrustEntries(plan.tomlPath, ourKeys)
-    }
+    removeCodexManagedHookTrustEntries({
+      tomlPath: plan.tomlPath,
+      runtimeHomePath: pathWin32.dirname(plan.tomlPath),
+      sourcePath: plan.trustConfigPath,
+      command: wrapReadablePosixHookCommand(plan.commandScriptPath),
+      managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
+      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    })
   } catch (error) {
-    // Why: removing disabled WSL status hooks should be best-effort like the
-    // host cleanup path; stale trust is inert once hooks.json no longer points at us.
+    // Why: best-effort like host cleanup; stale trust is inert once hooks.json no longer points at us.
     console.warn('[codex-hook-service] failed to clean WSL trust entries', error)
   }
 }
 
 function removeStaleWslRuntimeManagedHookTrustEntries(
   tomlPath: string,
-  desiredEntries: readonly CodexTrustEntry[]
+  desiredEntries: readonly CodexTrustEntry[],
+  priorLedgerHomes: readonly CodexTrustGrantLedgerHome[] = []
 ): void {
-  const desiredKeys = new Set(
-    desiredEntries.map((entry) => normalizeHookTrustKeyForLookup(computeTrustKey(entry)))
-  )
-  const existingEntries = readHookTrustEntries(tomlPath)
-  const ourKeys: string[] = []
-  for (const [key, state] of existingEntries) {
-    if (desiredKeys.has(normalizeHookTrustKeyForLookup(key))) {
-      continue
-    }
-    const parts = parseTrustKey(key)
-    if (!parts || !CODEX_MANAGED_EVENT_LABELS.has(parts.eventLabel)) {
-      continue
-    }
-    const sourcePath = parts.sourcePath
-    // Why: this cleanup owns only guest-side WSL trust. A runtime config can
-    // still contain user Windows/remote hooks, which must remain untouched.
-    if (!sourcePath.startsWith('/') || !sourcePath.endsWith('/hooks.json')) {
-      continue
-    }
-    const runtimeHome = sourcePath.slice(0, -'/hooks.json'.length)
-    const command = wrapReadablePosixHookCommand(`${runtimeHome}/.orca/agent-hooks/codex-hook.sh`)
-    const expectedEntry: CodexTrustEntry = {
-      sourcePath: parts.sourcePath,
-      eventLabel: parts.eventLabel,
-      groupIndex: parts.groupIndex,
-      handlerIndex: parts.handlerIndex,
-      command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
-    }
-    const recognizedHashes = new Set([
-      computeTrustedHash(expectedEntry),
-      computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
-    ])
-    if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
-      ourKeys.push(key)
-    }
-  }
-  if (ourKeys.length > 0) {
-    removeHookTrustEntries(tomlPath, ourKeys)
-  }
+  removeStaleWslCodexManagedHookTrustEntries({
+    tomlPath,
+    runtimeHomePath: pathWin32.dirname(tomlPath),
+    desiredEntries,
+    managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
+    timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
+    buildManagedCommand: (linuxRuntimeHome) =>
+      wrapReadablePosixHookCommand(`${linuxRuntimeHome}/.orca/agent-hooks/codex-hook.sh`),
+    priorLedgerHomes
+  })
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -782,10 +768,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: see claude/hook-service.ts for rationale. The endpoint file holds
-      // the live port/token for this Orca install; sourcing it here lets a
-      // surviving PTY reach the current server even though its env points at
-      // the prior Orca's coordinates.
+      // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('codex'),
@@ -798,15 +781,12 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
-    // Why: see claude/hook-service.ts for rationale. Sourcing refreshes
-    // PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps
-    // reporting after a restart.
+    // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',
     '  case "$endpoint_path" in',
     '    *.cmd)',
-    // Why: Windows passes endpoint.cmd into WSL through WSLENV path translation.
-    // Parse only Orca's known assignments; cmd.exe `set` lines are not shell syntax.
+    // Why: Windows passes endpoint.cmd into WSL via WSLENV; parse only Orca's known assignments since cmd.exe `set` lines aren't shell syntax.
     '      endpoint_cr=$(printf "\\r")',
     '      while IFS= read -r endpoint_line || [ -n "$endpoint_line" ]; do',
     '        endpoint_line=${endpoint_line%"$endpoint_cr"}',
@@ -833,13 +813,8 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  curl_bin="$1"',
     '  connect_timeout="${2:-0.5}"',
     '  max_time="${3:-1.5}"',
-    // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
-    // shell is not safe once a path contains quotes or newlines. Post the raw
-    // hook payload plus metadata as form fields and let the receiver parse it.
-    // Timeout caps best-effort hook posts if the local listener stalls.
-    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
-    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
-    // command line (EDR command-line false positives). Wire body is identical.
+    // Why: worktreeId embeds a path, so hand-building JSON in shell is unsafe with quotes/newlines; post raw payload plus metadata as form fields instead.
+    // Why: pipe payload to curl's stdin (`payload@-`) not an inline arg, so tens-of-KB tool output stays off the command line (EDR false positives).
     '  printf \'%s\' "$payload" | "$curl_bin" -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
     '    --connect-timeout "$connect_timeout" --max-time "$max_time" \\',
     '    --noproxy "127.0.0.1" \\',
@@ -923,10 +898,31 @@ function installManagedHooksIntoWslRuntime(
   writeManagedScript(plan.scriptPath, getManagedScript('posix'))
   writeCodexHooksJson(plan.configPath, nextHooks)
   try {
-    // Why: WSL runtime homes may carry user hook approvals we did not rebuild
-    // here; only upsert Orca's entries instead of sweeping the whole source.
-    upsertHookTrustEntries(plan.tomlPath, trustEntries)
-    removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, trustEntries)
+    // Why: same grant-then-fallback split as the host install — codex runs
+    // inside the distro so the hash authority matches the codex the pane runs.
+    const runtimeHomePath = pathWin32.dirname(plan.tomlPath)
+    // Why: a successful re-grant replaces the ledger. Keep the previous
+    // records long enough to prove ownership of stale canonical-path keys.
+    const previousLedgerHome = readCodexTrustGrantLedgerHomeForReconciliation(runtimeHomePath)
+    // Why: Codex's verified RPC write must be the final config mutation. A
+    // host-side rewrite after verification can race or invalidate that grant.
+    removeStaleWslRuntimeManagedHookTrustEntries(
+      plan.tomlPath,
+      trustEntries,
+      previousLedgerHome ? [previousLedgerHome] : []
+    )
+    const grant = grantManagedCodexHookTrust({
+      runtimeHomePath,
+      tomlPath: plan.tomlPath,
+      managedCommand: command,
+      managedEntries: trustEntries,
+      host: { kind: 'wsl', distro: plan.wslDistro, linuxRuntimeHome: plan.linuxRuntimeHome }
+    })
+    if (grant.lane === 'fallback') {
+      // Why: WSL runtime homes may carry user hook approvals we did not rebuild
+      // here; only upsert Orca's entries instead of sweeping the whole source.
+      upsertHookTrustEntries(plan.tomlPath, trustEntries)
+    }
   } catch (error) {
     return {
       agent: 'codex',
@@ -974,8 +970,7 @@ function refreshWslRuntimeUserHooks(plan: CodexWslRuntimeHookInstallPlan): Agent
   writeCodexHooksJson(plan.configPath, nextHooks)
   removeWslRuntimeManagedHookTrustEntries(plan)
   try {
-    // Why: the disabled path may be reached after the WSL mount root changed,
-    // so cleanup cannot be scoped only to the plan's current source path.
+    // Why: the disabled path may run after the WSL mount root changed, so cleanup can't be scoped to the plan's current source path.
     removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, [])
   } catch (error) {
     console.warn('[codex-hook-service] failed to clean stale WSL trust entries', error)
@@ -989,19 +984,25 @@ function refreshWslRuntimeUserHooks(plan: CodexWslRuntimeHookInstallPlan): Agent
   }
 }
 
-// Why: transport failures preserve the last known-good identity, while a
-// successful absence probe is strong enough to revoke trust immediately.
+// Why: transport failures preserve last known-good identity; a successful absence probe is strong enough to revoke trust immediately.
 function getWslHookReconciliationAction(args: {
   settlement: WslCanonicalPathSettlement
   isCurrentGeneration: boolean
   installedTrustConfigPath: string | null
   resolvedTrustConfigPath: string | null
+  /** Whether the synchronous install for this generation wrote trust. */
+  installSucceeded: boolean
 }): 'none' | 'remove' | 'reinstall' {
   if (!args.isCurrentGeneration) {
     return 'none'
   }
   if (args.settlement.status === 'missing') {
-    return 'remove'
+    // Why: a `missing` directory probe right after a verified install/grant is
+    // a false negative — the RPC (or fallback) just wrote and read trust in
+    // that home, so it exists. Revoking here would delete the fresh grant the
+    // launching pane needs, resurfacing "hooks need review". A genuinely moved
+    // home resolves to a different path and takes the `reinstall` branch below.
+    return args.installSucceeded ? 'none' : 'remove'
   }
   if (
     args.settlement.status !== 'resolved' ||
@@ -1013,8 +1014,7 @@ function getWslHookReconciliationAction(args: {
   return 'reinstall'
 }
 
-// Why: fold only the Windows-case-insensitive portion — a full lowercase would
-// let case-distinct WSL runtime homes share one reconciliation generation slot.
+// Why: fold only the Windows-case-insensitive portion; a full lowercase would let case-distinct WSL homes share one reconciliation slot.
 function getWslReconciliationKey(runtimeHomePath: string): string {
   return normalizeCodexProjectPathForLookup(runtimeHomePath)
 }
@@ -1038,6 +1038,10 @@ export class CodexHookService {
   ): AgentHookInstallStatus | null {
     const generation = this.supersedeWslReconciliation(runtimeHomePath)
     let installedTrustConfigPath: string | null = null
+    // Why: JS is single-threaded, so the synchronous install below finishes
+    // before any async `wsl.exe` settlement callback runs — this flag is
+    // always set by the time the callback reads it.
+    let installSucceeded = false
     const onCanonicalPathSettled = (settlement: WslCanonicalPathSettlement): void => {
       if (!runtimeHomePath) {
         return
@@ -1055,7 +1059,8 @@ export class CodexHookService {
         settlement,
         isCurrentGeneration: this.wslReconciliationGeneration.get(key) === generation,
         installedTrustConfigPath,
-        resolvedTrustConfigPath: resolvedPlan?.trustConfigPath ?? null
+        resolvedTrustConfigPath: resolvedPlan?.trustConfigPath ?? null,
+        installSucceeded
       })
       if (action === 'none') {
         return
@@ -1080,6 +1085,7 @@ export class CodexHookService {
         return
       }
       installedTrustConfigPath = resolvedPlan.trustConfigPath
+      installSucceeded = status.state === 'installed'
     }
     const wslPlan = createCodexWslRuntimeHookInstallPlan(
       runtimeHomePath,
@@ -1088,7 +1094,9 @@ export class CodexHookService {
       onCanonicalPathSettled
     )
     installedTrustConfigPath = wslPlan?.trustConfigPath ?? null
-    return wslPlan ? installManagedHooksIntoWslRuntime(wslPlan) : null
+    const status = wslPlan ? installManagedHooksIntoWslRuntime(wslPlan) : null
+    installSucceeded = status?.state === 'installed'
+    return status
   }
 
   refreshRuntimeUserHooksForRuntimeHome(
@@ -1100,8 +1108,15 @@ export class CodexHookService {
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
   }
 
-  getStatus(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  getStatus(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
+    return this.getStatusAfterInstall(null, runtimeHomePath)
+  }
+
+  private getStatusAfterInstall(
+    recentGrantEntries: readonly CodexTrustEntry[] | null,
+    runtimeHomePath: string = getOrcaManagedCodexHomePath()
+  ): AgentHookInstallStatus {
+    const configPath = getConfigPath(runtimeHomePath)
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
     if (!config) {
@@ -1114,11 +1129,9 @@ export class CodexHookService {
       }
     }
 
-    // Why: Report `partial` when managed events are missing OR when their
-    // trust entries are missing/stale. Codex 0.129+ silently drops untrusted
-    // hooks, so a green status without trust verification is misleading.
+    // Why: Codex 0.129+ silently drops untrusted hooks, so report `partial` when managed events OR their trust entries are missing/stale.
     const command = getManagedCommand(scriptPath)
-    const tomlPath = getCodexConfigTomlPath()
+    const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
     // Why: an unreadable config.toml (EACCES/EIO) is distinct from "file
     // absent" (which returns an empty Map without throwing). Hooks.json may
     // still be fine, so report partial with a specific reason rather than
@@ -1131,23 +1144,38 @@ export class CodexHookService {
       trustEntries = new Map()
       trustReadError = error instanceof Error ? error.message : String(error)
     }
+    // Why: RPC-granted entries store Codex's own hash, which is authoritative
+    // even when it differs from computeTrustedHash — that difference is the
+    // drift bug class this lane exists to absorb, not a stale entry.
+    // Why: install() already resolved the binary and either verified Codex's
+    // hashes or wrote fallback hashes. Re-resolving PATH here doubles sync launch work.
+    const ledgerHome =
+      recentGrantEntries === null
+        ? readCurrentCodexTrustGrantLedgerHome(runtimeHomePath, { kind: 'native' })
+        : null
+    const recentGrantHashes = new Map<string, { signature: string; trustedHash: string }>()
+    for (const entry of recentGrantEntries ?? []) {
+      if (entry.trustedHash) {
+        recentGrantHashes.set(normalizeHookTrustKeyForLookup(computeTrustKey(entry)), {
+          signature: getCodexHookTrustSignature(entry),
+          trustedHash: entry.trustedHash
+        })
+      }
+    }
 
     const missing: string[] = []
     const trustMissing: string[] = []
     const disabled: string[] = []
+    const trustSourcePath = getCodexExplicitHomeHookSourcePath(configPath)
     let presentCount = 0
     for (const eventName of CODEX_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
-      // Why: older installs appended this command, while current installs
-      // prepend it. Picking the last match keeps status repair conservative
-      // if duplicate managed definitions survive from a stale hooks.json.
+      // Why: older installs appended, current ones prepend; last-match keeps status repair conservative when stale duplicate definitions survive.
       let foundGroupIndex = -1
       let foundHandlerIndex = -1
       definitions.forEach((definition, idx) => {
         const hooks = definition.hooks ?? []
-        // Why: mirror the LAST-match-wins rule at the group level — if a user
-        // merged hook arrays and ended up with our command at multiple indices
-        // in one group, the surviving runtime entry is the last one.
+        // Why: last-match-wins at the group level — if merged hook arrays repeat our command, the surviving runtime entry is the last one.
         const handlerIdx = hooks.findLastIndex((hook) => hook.command === command)
         if (handlerIdx !== -1) {
           foundGroupIndex = idx
@@ -1159,25 +1187,32 @@ export class CodexHookService {
         continue
       }
       presentCount += 1
-      // Why: a stale hash blocks firing the same as a missing entry, so
-      // compare against the canonical hash we would write.
-      // Why: capture the actual handler index — Codex's hook_key uses the
-      // positional handlerIndex, and a user-merged hook array can put our
-      // command at a non-zero slot, so hardcoding 0 would misreport trust.
-      // Why: the managed hook is written with `timeout` (see install()), and
-      // Codex folds the handler timeout into its trust hash. Hash the same
-      // timeout here or status would report every managed hook as stale-trust.
+      // Why: a stale hash blocks firing like a missing entry, so compare against the canonical hash we would write.
+      // Why: Codex's hook_key is positional, so hardcoding handlerIndex 0 misreports trust for user-merged hook arrays.
+      // Why: hash the same `timeout` install() writes, since Codex folds it into the trust hash or every managed hook reports stale-trust.
       const trustInput: CodexTrustEntry = {
-        sourcePath: configPath,
+        sourcePath: trustSourcePath,
         eventLabel: CODEX_EVENT_LABEL[eventName],
         groupIndex: foundGroupIndex,
         handlerIndex: foundHandlerIndex,
         command,
         timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
       }
-      const expectedHash = computeTrustedHash(trustInput)
-      const actualState = trustEntries.get(computeTrustKey(trustInput))
-      if (actualState?.trustedHash !== expectedHash) {
+      const trustKey = computeTrustKey(trustInput)
+      const validHashes = new Set([computeTrustedHash(trustInput)])
+      const grantedHash = getCodexLedgerTrustedHash(ledgerHome, trustKey, trustInput)
+      if (grantedHash) {
+        validHashes.add(grantedHash)
+      }
+      const recentGrant = recentGrantHashes.get(normalizeHookTrustKeyForLookup(trustKey))
+      if (
+        recentGrant?.signature === getCodexHookTrustSignature(trustInput) &&
+        recentGrant.trustedHash
+      ) {
+        validHashes.add(recentGrant.trustedHash)
+      }
+      const actualState = trustEntries.get(trustKey)
+      if (!actualState?.trustedHash || !validHashes.has(actualState.trustedHash)) {
         trustMissing.push(eventName)
       } else if (actualState?.enabled === false) {
         disabled.push(eventName)
@@ -1188,8 +1223,7 @@ export class CodexHookService {
     let detail: string | null
     if (presentCount === 0) {
       state = 'not_installed'
-      // Why: surface the trust read error even when not_installed so the user
-      // has actionable info if config.toml is broken.
+      // Why: surface the trust read error even when not_installed, so a broken config.toml gives actionable info.
       detail = trustReadError !== null ? `Trust entries unverifiable: ${trustReadError}` : null
     } else if (
       missing.length === 0 &&
@@ -1218,14 +1252,17 @@ export class CodexHookService {
     return { agent: 'codex', state, configPath, managedHooksPresent, detail }
   }
 
-  install(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  // Why: runtimeHomePath defaults to the shared managed mirror, but a managed
+  // account launching against its own self-contained CODEX_HOME passes that
+  // per-account home so hooks.json/config.toml/trust land where codex reads.
+  install(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
+    const configPath = getConfigPath(runtimeHomePath)
     const scriptPath = getManagedScriptPath()
     // Why: must run before this install rewrites hooks.json/config.toml —
     // approvals the user made inside Orca-launched Codex are keyed to the
     // previous launch's runtime layout, and stale-trust cleanup below would
     // delete them once the system config stops backing them.
-    promoteCodexRuntimeHookApprovalsToSystem()
+    promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
@@ -1237,29 +1274,20 @@ export class CodexHookService {
       }
     }
 
-    // Why: match by script filename (not exact command string) so a fresh
-    // install sweeps stale entries left by older builds or a different
-    // Electron userData path (dev vs. prod). Without this, repeated installs
-    // accumulate duplicate hook entries pointing at defunct scripts.
+    // Why: match by script filename (not exact command) so a fresh install sweeps stale entries from older builds or a different userData path.
     const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     const command = getManagedCommand(scriptPath)
-    const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand)
+    const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
     const nextHooks = hookPlan.hooks
     const managedEvents = new Set<string>(CODEX_EVENTS)
 
-    // Why: sweep managed entries out of events we no longer subscribe to
-    // (e.g., PreToolUse from a prior install). Without this, users who
-    // already had PreToolUse registered would keep firing stale hooks on
-    // every auto-approved tool call after the app upgrade.
+    // Why: sweep managed entries from events we no longer subscribe to (e.g. a prior install's PreToolUse), else they keep firing stale hooks after upgrade.
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (managedEvents.has(eventName)) {
         continue
       }
       if (!Array.isArray(definitions)) {
-        // Why: a malformed hooks.json entry (non-array value for an event name)
-        // would make removeManagedCommands throw. Skip instead — we aren't
-        // going to sweep something we can't parse, and the install() for
-        // managed events below still runs.
+        // Why: a non-array event value would make removeManagedCommands throw; skip the unparsable entry, managed events below still install.
         continue
       }
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
@@ -1270,14 +1298,15 @@ export class CodexHookService {
       }
     }
 
-    // Why: Codex 0.129+ requires a per-hook trust entry in config.toml or the
-    // hook sits in the "review required" pile. We compute the trust hash for
-    // each managed entry as we install it and persist it alongside hooks.json
-    // so the user does not have to /hooks-approve after every install.
+    // Why: Codex 0.129+ requires a per-hook config.toml trust entry or the hook needs manual /hooks-approve; precompute the hash to avoid that.
     const mirroredUserTrustEntries = moveMirroredRuntimeUserTrustAfterManagedStatusHook(
       hookPlan.trustEntries
     )
-    const trustEntries: CodexTrustEntry[] = mirroredUserTrustEntries.map(({ entry }) => entry)
+    const mirroredTrustEntries: CodexTrustEntry[] = mirroredUserTrustEntries.map(
+      ({ entry }) => entry
+    )
+    const managedTrustEntries: CodexTrustEntry[] = []
+    const trustSourcePath = getCodexExplicitHomeHookSourcePath(configPath)
     for (const eventName of CODEX_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
@@ -1290,8 +1319,8 @@ export class CodexHookService {
       // state while Codex visibly reports that hooks are still running.
       // timeoutSec mirrors the hook's `timeout` so the trust hash matches the
       // entry actually written to hooks.json.
-      trustEntries.push({
-        sourcePath: configPath,
+      managedTrustEntries.push({
+        sourcePath: trustSourcePath,
         eventLabel: CODEX_EVENT_LABEL[eventName],
         groupIndex: 0,
         handlerIndex: 0,
@@ -1299,23 +1328,49 @@ export class CodexHookService {
         timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
       })
     }
+    const trustEntries: CodexTrustEntry[] = [...mirroredTrustEntries, ...managedTrustEntries]
+    let recentGrantEntries: readonly CodexTrustEntry[] = []
 
     config.hooks = nextHooks
     writeManagedScript(scriptPath, getManagedScript())
     writeCodexHooksJson(configPath, nextHooks)
-    // Why: trust entries write last so a half-write can't leave a hash
-    // pointing at a hook that doesn't exist. Surface failures — without this,
-    // getStatus would report green for a hook Codex won't actually fire.
+    // Why: trust entries write last so a half-write can't leave a hash pointing at a nonexistent hook.
+    // Why: surface trust-write failures — otherwise getStatus reports green for a hook Codex won't fire.
     try {
-      const tomlPath = getCodexConfigTomlPath()
-      syncSystemConfigIntoManagedCodexHome()
-      // Why: system user hook approvals are mirrored into runtime CODEX_HOME.
-      // If the user later revokes approval in ~/.codex/config.toml, preserving
-      // all old runtime [hooks.state.*] blocks would keep Orca Codex trusted.
-      // Upsert first so duplicate repair can preserve a disabled managed copy
-      // before stale cleanup removes old managed hook keys.
-      upsertHookTrustEntries(tomlPath, trustEntries)
-      removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
+      const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
+      syncSystemConfigIntoManagedCodexHome({
+        runtimeHomePath,
+        systemHomePath: getSystemCodexHomePath()
+      })
+      // Why: Codex is the only authority on its trust-hash algorithm, so the
+      // managed entries are granted through codex app-server RPCs (verified by
+      // re-list) whenever the installed CLI supports them; the granted entries
+      // then carry Codex's verbatim hashes into stale cleanup so it cannot
+      // delete what Codex just wrote. Mirrored user trust keeps its existing
+      // verbatim-carry lane either way.
+      const grant = grantManagedCodexHookTrust({
+        runtimeHomePath,
+        tomlPath,
+        managedCommand: command,
+        managedEntries: managedTrustEntries,
+        host: { kind: 'native' }
+      })
+      if (grant.lane === 'rpc') {
+        recentGrantEntries = grant.entries
+        upsertHookTrustEntries(tomlPath, mirroredTrustEntries)
+        removeStaleRuntimeHookTrustEntries(tomlPath, configPath, [
+          ...mirroredTrustEntries,
+          ...grant.entries
+        ])
+      } else {
+        // Why: system user hook approvals are mirrored into runtime CODEX_HOME.
+        // If the user later revokes approval in ~/.codex/config.toml, preserving
+        // all old runtime [hooks.state.*] blocks would keep Orca Codex trusted.
+        // Upsert first so duplicate repair can preserve a disabled managed copy
+        // before stale cleanup removes old managed hook keys.
+        upsertHookTrustEntries(tomlPath, trustEntries)
+        removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
+      }
       applyMirroredRuntimeUserHookTrustStates(tomlPath, mirroredUserTrustEntries)
     } catch (error) {
       return {
@@ -1326,28 +1381,23 @@ export class CodexHookService {
         detail: `Hooks installed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
       }
     }
-    snapshotCodexRuntimeHookTrustProvenance()
+    snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
     try {
       cleanupLegacySystemManagedHooks()
       cleanupLegacyCodexProfileHooks()
     } catch (error) {
       console.warn('[codex-hook-service] failed to clean legacy Codex hooks', error)
     }
-    return this.getStatus()
+    return this.getStatusAfterInstall(recentGrantEntries, runtimeHomePath)
   }
 
   async installRemote(
     sftp: SFTPWrapper,
     remoteHome: string,
     options?: {
-      /** Explicit CODEX_HOME dir (flat layout: hooks.json/config.toml at its
-       *  root). WSL sessions read Orca's managed runtime home, not ~/.codex —
-       *  installing to the default location leaves those sessions hookless. */
+      /** Explicit CODEX_HOME dir (flat layout). WSL sessions read Orca's managed runtime home, not ~/.codex, so the default location leaves them hookless. */
       codexHomeDir?: string
-      /** Skip the trust write when config.toml doesn't exist yet. The WSL
-       *  runtime home's config.toml is seeded only-if-absent by the launch
-       *  path; creating it here first would silently cancel that seed. A
-       *  later (idempotent) reinstall upserts trust once the seed lands. */
+      /** Skip the trust write when config.toml is absent — the WSL launch path seeds it only-if-absent, so creating it here would cancel that seed. */
       deferTrustUntilConfigToml?: boolean
     }
   ): Promise<AgentHookInstallStatus> {
@@ -1404,13 +1454,10 @@ export class CodexHookService {
       }
 
       config.hooks = nextHooks
-      // Why: script/settings first, trust TOML last. A partial trust write
-      // leaves Codex asking for approval rather than executing a missing script.
-      // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
-      // running on Windows; never derive remote script syntax from local OS.
+      // Why: write script/settings before trust TOML; a partial trust write leaves Codex asking approval instead of running a missing script.
+      // Why: SSH remotes use POSIX `.sh` paths even when Orca runs on Windows; never derive remote script syntax from local OS.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      // Why: SSH installs edit the user's remote ~/.codex/hooks.json directly.
-      // Preserve non-Orca top-level metadata while replacing the hooks tree.
+      // Why: SSH edits the user's remote ~/.codex/hooks.json directly, so preserve non-Orca top-level metadata while replacing the hooks tree.
       await writeHooksJsonRemote(sftp, remoteConfigPath, { ...config, hooks: nextHooks })
       try {
         const existingTomlRaw = await readTextFileRemote(sftp, remoteTomlPath)
@@ -1458,15 +1505,16 @@ export class CodexHookService {
     }
   }
 
-  refreshRuntimeUserHooks(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  refreshRuntimeUserHooks(
+    runtimeHomePath: string = getOrcaManagedCodexHomePath()
+  ): AgentHookInstallStatus {
+    const configPath = getConfigPath(runtimeHomePath)
     // Why: same as install() — capture in-Orca approvals before this refresh
     // rewrites the runtime files they are keyed against.
-    promoteCodexRuntimeHookApprovalsToSystem()
+    promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
     const config = readHooksJson(configPath)
     if (!config) {
-      // Why: disabled launch prep used to call remove(); preserve its legacy
-      // cleanup behavior even when runtime hooks.json is malformed.
+      // Why: disabled launch prep once called remove(); preserve that legacy cleanup even when runtime hooks.json is malformed.
       cleanupLegacyManagedHookRepresentations()
       return {
         agent: 'codex',
@@ -1478,14 +1526,17 @@ export class CodexHookService {
     }
 
     const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
-    const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand)
+    const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
     config.hooks = hookPlan.hooks
     writeCodexHooksJson(configPath, hookPlan.hooks)
 
     try {
-      const tomlPath = getCodexConfigTomlPath()
+      const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
       const trustEntries = hookPlan.trustEntries.map(({ entry }) => entry)
-      syncSystemConfigIntoManagedCodexHome()
+      syncSystemConfigIntoManagedCodexHome({
+        runtimeHomePath,
+        systemHomePath: getSystemCodexHomePath()
+      })
       // Why: this path is used when Orca status hooks are disabled. The
       // runtime CODEX_HOME should keep user hooks, but not Orca-managed trust.
       // Write current mirrored user trust first so stale cleanup compares
@@ -1502,10 +1553,10 @@ export class CodexHookService {
         detail: `User hooks refreshed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
       }
     }
-    snapshotCodexRuntimeHookTrustProvenance()
+    snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
 
     cleanupLegacyManagedHookRepresentations()
-    return this.getStatus()
+    return this.getStatus(runtimeHomePath)
   }
 
   remove(): AgentHookInstallStatus {
@@ -1513,8 +1564,7 @@ export class CodexHookService {
     const configExists = existsSync(configPath)
     const config = readHooksJson(configPath)
     if (!config) {
-      // Why: a malformed runtime hooks.json should not strand old hooks in
-      // ~/.codex or the legacy profile after the user disables Codex hooks.
+      // Why: a malformed hooks.json shouldn't strand old hooks in ~/.codex or the legacy profile after disabling.
       cleanupLegacyManagedHookRepresentations()
       return {
         agent: 'codex',
@@ -1526,14 +1576,11 @@ export class CodexHookService {
     }
 
     const nextHooks = { ...config.hooks }
-    // Why: same broad matcher as install(), so remove() also cleans up stale
-    // entries from older builds even if the current scriptPath has moved.
+    // Why: same broad matcher as install() so stale entries from older builds get cleaned even if scriptPath moved.
     const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (!Array.isArray(definitions)) {
-        // Why: a malformed hooks.json entry (non-array value for an event name)
-        // would make removeManagedCommands throw. Skip instead — we have no
-        // managed commands to remove from something we can't parse.
+        // Why: a non-array event value would make removeManagedCommands throw; skip it.
         continue
       }
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
@@ -1544,14 +1591,11 @@ export class CodexHookService {
       }
     }
     if (configExists) {
-      // Why: remove() can be the only repair path for a parseable runtime file
-      // whose top-level plugin metadata makes Codex reject hooks.json.
+      // Why: remove() may be the only repair path for a file whose top-level plugin metadata makes Codex reject hooks.json.
       writeCodexHooksJson(configPath, nextHooks)
     }
 
-    // Why: also drop our trust entries so config.toml doesn't accumulate dead
-    // [hooks.state."..."] blocks across install/remove cycles. Best-effort —
-    // a stale entry is harmless once hooks.json no longer references it.
+    // Why: drop trust entries so config.toml doesn't accumulate dead [hooks.state] blocks across install/remove cycles.
     removeRuntimeManagedHookTrustEntries(configPath)
 
     cleanupLegacyManagedHookRepresentations()

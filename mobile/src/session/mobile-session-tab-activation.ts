@@ -14,6 +14,7 @@ type MobileSessionTabActivationParams = {
   tabId: string
   leafId?: string
   notifyClients: false
+  navigation: 'caller'
 }
 
 async function retryIdempotentActivationAfterCutover(
@@ -72,7 +73,7 @@ export function focusMobileTerminal(
   terminal: string
 ): Promise<RpcResponse> {
   return retryIdempotentActivationAfterCutover(
-    () => client.sendRequest('terminal.focus', { terminal }),
+    () => client.sendRequest('terminal.focus', { terminal, navigation: 'host' }),
     'terminal.focus',
     terminal
   )

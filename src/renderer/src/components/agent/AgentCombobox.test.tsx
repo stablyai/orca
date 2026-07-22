@@ -21,6 +21,21 @@ describe('AgentCombobox', () => {
     expect(markup).toContain('flex-1')
   })
 
+  it('supports an Agent-only empty state without presenting a blank terminal', () => {
+    const markup = renderToStaticMarkup(
+      <AgentCombobox
+        agents={[]}
+        value={null}
+        onValueChange={vi.fn()}
+        allowBlankTerminal={false}
+        emptyLabel="Select an Agent"
+      />
+    )
+
+    expect(markup).toContain('Select an Agent')
+    expect(markup).not.toContain('Blank Terminal')
+  })
+
   it('uses the bundled OpenClaude favicon crop instead of Claude or GitHub artwork', () => {
     const markup = renderToStaticMarkup(<AgentIcon agent="openclaude" />)
 

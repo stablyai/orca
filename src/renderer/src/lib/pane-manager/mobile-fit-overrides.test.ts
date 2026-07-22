@@ -9,7 +9,8 @@ import {
   onOverrideChange,
   hydrateOverrides,
   getAllOverrides,
-  getMobileFitOverridePtyIds
+  getMobileFitOverridePtyIds,
+  replaceFitOverridePtyId
 } from './mobile-fit-overrides'
 
 afterEach(() => {
@@ -73,6 +74,16 @@ describe('setFitOverride / getFitOverrideForPty', () => {
 
     expect(getFitOverrideForPty('pty-1')?.cols).toBe(49)
     expect(getFitOverrideForPty('pty-2')?.cols).toBe(80)
+  })
+
+  it('moves a fit hold when a provider replaces the PTY identity', () => {
+    setFitOverride('pty-old', 'mobile-fit', 49, 20)
+
+    replaceFitOverridePtyId('pty-old', 'pty-new')
+
+    expect(getFitOverrideForPty('pty-old')).toBeNull()
+    expect(getFitOverrideForPty('pty-new')).toEqual({ mode: 'mobile-fit', cols: 49, rows: 20 })
+    expect([...getAllOverrides().keys()]).toEqual(['pty-new'])
   })
 })
 

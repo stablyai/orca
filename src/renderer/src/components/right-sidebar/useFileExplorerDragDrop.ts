@@ -12,10 +12,8 @@ import {
   readWorkspaceFileDragPaths,
   WORKSPACE_FILE_PATH_MIME
 } from '@/lib/workspace-file-drag'
-import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
-import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
+import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { renameRuntimePath } from '@/runtime/runtime-file-client'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
@@ -105,8 +103,6 @@ export function useFileExplorerDragDrop({
   refreshDir,
   scrollRef
 }: UseFileExplorerDragDropParams): UseFileExplorerDragDropResult {
-  const openFiles = useAppStore((s) => s.openFiles)
-
   const [isRootDragOver, setIsRootDragOver] = useState(false)
   const rootDragCounterRef = useRef(0)
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null)
@@ -211,50 +207,45 @@ export function useFileExplorerDragDrop({
       }
 
       const newPath = joinPath(destDir, fileName)
-      const remapOpenTabsForMovedPath = (fromPath: string, toPath: string): void =>
-        remapOpenEditorTabsForPathChange({
-          fromPath,
-          toPath,
-          worktreePath,
-          worktreeId: activeWorktreeId
-        })
 
       const run = async (): Promise<void> => {
-        const filesToMove = openFiles.filter((file) => {
-          if (file.filePath === sourcePath) {
-            return true
-          }
-          return (
-            file.filePath.startsWith(`${sourcePath}/`) ||
-            file.filePath.startsWith(`${sourcePath}\\`)
-          )
-        })
-
-        // Why: a file move changes the write target path. Let any in-flight
-        // autosave settle first, then carry draft state forward to the new tab
-        // id so explorer drag-and-drop does not silently drop unsaved edits.
-        await Promise.all(filesToMove.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
-
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        const fileContext = {
+          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        }
+        // The coordinator quiesces saves, retargets the open sessions in place,
+        // and settles the move as one transaction (was: quiesce + rename + remap).
         try {
-          const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-          const fileContext = {
-            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
+          await executeOpenEditorPathMove({
+            context: fileContext,
+            fromPath: sourcePath,
+            toPath: newPath,
             worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          }
-          await renameRuntimePath(fileContext, sourcePath, newPath)
-
+            worktreePath
+          })
           commitFileExplorerOp({
             undo: async () => {
-              await renameRuntimePath(fileContext, newPath, sourcePath)
+              await executeOpenEditorPathMove({
+                context: fileContext,
+                fromPath: newPath,
+                toPath: sourcePath,
+                worktreeId: activeWorktreeId,
+                worktreePath
+              })
               await Promise.all([refreshDir(destDir), refreshDir(sourceDir)])
-              remapOpenTabsForMovedPath(newPath, sourcePath)
             },
             redo: async () => {
-              await renameRuntimePath(fileContext, sourcePath, newPath)
+              await executeOpenEditorPathMove({
+                context: fileContext,
+                fromPath: sourcePath,
+                toPath: newPath,
+                worktreeId: activeWorktreeId,
+                worktreePath
+              })
               await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])
-              remapOpenTabsForMovedPath(sourcePath, newPath)
             }
           })
         } catch (err) {
@@ -262,11 +253,10 @@ export function useFileExplorerDragDrop({
           return
         }
         await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])
-        remapOpenTabsForMovedPath(sourcePath, newPath)
       }
       void run()
     },
-    [worktreePath, activeWorktreeId, openFiles, refreshDir]
+    [worktreePath, activeWorktreeId, refreshDir]
   )
 
   const clearNativeDragState = useCallback(() => {

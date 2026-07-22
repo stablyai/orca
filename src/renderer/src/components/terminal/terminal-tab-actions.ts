@@ -8,7 +8,10 @@ import {
   isWebRuntimeSessionActive,
   toHostSessionTabId
 } from '@/runtime/web-runtime-session'
-import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
+import {
+  getLatestWebSessionTabsPublicationEpoch,
+  resolveHostSessionTabIdForWebSessionTab
+} from '@/runtime/web-session-tabs-sync'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
 import type {
@@ -16,6 +19,7 @@ import type {
   TerminalTabRetirementPlan
 } from '@/store/slices/terminal-tab-retirement'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
+import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
 import {
   getWorktreeTerminalTabIds,
   resolveTerminalCloseTarget,
@@ -49,7 +53,14 @@ export function closeTerminalTab(
   tabId: string,
   options?: {
     force?: boolean
+    rejectPinned?: boolean
     reason?: TerminalTabCloseReason
+    /** Close reason sent to the host only. Unlike `reason`, it does not skip
+     *  local guards (pinned confirmation keys off `reason === 'pty-exit'`),
+     *  so lifecycle echoes that still need those guards can tag the wire. */
+    hostCloseReason?: TerminalTabCloseReason
+    /** PTY whose lifecycle event initiated the host close. */
+    lifecyclePtyId?: string
     captureRecentlyClosed?: boolean
     localPtyTeardownOwnedExternally?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
@@ -78,6 +89,12 @@ export function closeTerminalTab(
     !options?.force &&
     isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)
   ) {
+    // Why: background lifecycle callers cannot safely wait on a modal whose
+    // owner may be unattended; reject pinned tabs without bypassing the guard.
+    if (options?.rejectPinned) {
+      options.onCancel?.()
+      return
+    }
     guardPinnedTabClose({
       isPinned: true,
       tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
@@ -104,6 +121,15 @@ export function closeTerminalTab(
         worktreeId: owningWorktreeId,
         tabId: terminalTabId
       }) ?? toHostSessionTabId(terminalTabId)
+    const wireReason = options?.reason ?? options?.hostCloseReason ?? 'user'
+    const lifecycleTerminalHandle =
+      wireReason === 'user'
+        ? null
+        : getTerminalIncarnationHandle(options?.lifecyclePtyId ?? '', runtimeEnvironmentId)
+    const publicationEpoch =
+      wireReason === 'user'
+        ? null
+        : getLatestWebSessionTabsPublicationEpoch(runtimeEnvironmentId, owningWorktreeId)
     // Why: prune local mirrors immediately so close feels responsive while the
     // host session snapshot catches up.
     closeLocalTerminalTabState(terminalTabId, {
@@ -122,7 +148,16 @@ export function closeTerminalTab(
     void closeWebRuntimeSessionTab({
       worktreeId: owningWorktreeId,
       tabId: hostBackedTabId,
-      environmentId: runtimeEnvironmentId
+      environmentId: runtimeEnvironmentId,
+      // Why: lifecycle evidence binds this stale-prone echo to the exact host
+      // publication and terminal incarnation that the renderer observed.
+      reason: wireReason,
+      ...(wireReason !== 'user'
+        ? {
+            publicationEpoch,
+            terminalHandle: lifecycleTerminalHandle
+          }
+        : {})
     })
     options?.onClosed?.()
     return
@@ -211,7 +246,8 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
         void closeWebRuntimeSessionTab({
           worktreeId: activeWorktreeId,
           tabId: tab.id,
-          environmentId: runtimeEnvironmentId
+          environmentId: runtimeEnvironmentId,
+          reason: 'user'
         })
       } else {
         state.closeTab(tab.id)
@@ -254,7 +290,8 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
         void closeWebRuntimeSessionTab({
           worktreeId: activeWorktreeId,
           tabId: id,
-          environmentId: runtimeEnvironmentId
+          environmentId: runtimeEnvironmentId,
+          reason: 'user'
         })
       } else {
         state.closeTab(id)

@@ -161,9 +161,9 @@ vi.mock('./pty', () => ({
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
   setPtyOwnership: vi.fn(),
-  answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data),
   getSshPtyProvider: vi.fn(),
   getPtyIdsForConnection: vi.fn().mockReturnValue([]),
+  isCurrentPtyExit: vi.fn().mockReturnValue(true),
   isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
 }))
 
@@ -214,7 +214,11 @@ vi.mock('../ssh/ssh-port-scanner', () => ({
 }))
 
 import { getSshConnectionManager, registerSshHandlers, resetSshHandlerStateForTests } from './ssh'
-import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, type SshTarget } from '../../shared/ssh-types'
+import {
+  SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD,
+  type SshConnectionState,
+  type SshTarget
+} from '../../shared/ssh-types'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
@@ -542,6 +546,7 @@ describe('SSH IPC handlers', () => {
         status: 'connected',
         error: null,
         reconnectAttempt: 0,
+        supportsFolderDownload: true,
         remotePlatform: 'win32'
       }
     })
@@ -599,7 +604,8 @@ describe('SSH IPC handlers', () => {
           targetId: 'ssh-1',
           status: 'connected',
           error: null,
-          reconnectAttempt: 0
+          reconnectAttempt: 0,
+          supportsFolderDownload: true
         }
       })
       expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toEqual({
@@ -803,8 +809,14 @@ describe('SSH IPC handlers', () => {
     onData?.({ id: 'remote-pty', data: 'hello' })
     onExit?.({ id: 'remote-pty', code: 7 })
 
-    expect(runtime.onPtyData).toHaveBeenCalledWith('remote-pty', 'hello', expect.any(Number))
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7)
+    expect(runtime.onPtyData).toHaveBeenCalledWith(
+      'remote-pty',
+      'hello',
+      expect.any(Number),
+      'hello'.length,
+      undefined
+    )
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7, undefined)
   })
 
   it('mirrors SSH state broadcasts onto the runtime client-event stream', async () => {
@@ -837,6 +849,66 @@ describe('SSH IPC handlers', () => {
     expect(runtime.notifySshStateChanged).toHaveBeenCalledWith(
       'ssh-1',
       expect.objectContaining({ targetId: 'ssh-1', status: 'connected' })
+    )
+  })
+
+  it('keeps runtime-owned SSH state off the renderer while invalidating runtime scans', async () => {
+    const runtime = {
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      invalidateSshWorktreeScanCache: vi.fn(),
+      notifySshStateChanged: vi.fn()
+    }
+    registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
+    mockSshStore.getTarget.mockReturnValue({
+      id: 'runtime-ssh-1',
+      label: 'Runtime host',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    } satisfies SshTarget)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'runtime-ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'runtime-ssh-1' })
+
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
+      'ssh:state-changed',
+      expect.anything()
+    )
+    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
+    expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
+  })
+
+  it('invalidates runtime scans from hidden SSH state broadcasts', () => {
+    const runtime = {
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      invalidateSshWorktreeScanCache: vi.fn(),
+      notifySshStateChanged: vi.fn()
+    }
+    registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
+    const callbacks = mockConnectionManager.callbacksRef.current as {
+      onStateChange: (targetId: string, state: SshConnectionState) => void
+    }
+
+    callbacks.onStateChange('runtime-ssh-1', {
+      targetId: 'runtime-ssh-1',
+      status: 'disconnected',
+      error: null,
+      reconnectAttempt: 1
+    })
+
+    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
+    expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
+      'ssh:state-changed',
+      expect.anything()
     )
   })
 
@@ -1114,8 +1186,14 @@ describe('SSH IPC handlers', () => {
       targetId: 'ssh-1',
       ports: expect.arrayContaining([expect.objectContaining({ port: 3000 })])
     })
-    expect(secondRuntime.onPtyData).toHaveBeenCalledWith('remote-pty', 'hello', expect.any(Number))
-    expect(secondRuntime.onPtyExit).toHaveBeenCalledWith('remote-pty', 9)
+    expect(secondRuntime.onPtyData).toHaveBeenCalledWith(
+      'remote-pty',
+      'hello',
+      expect.any(Number),
+      'hello'.length,
+      undefined
+    )
+    expect(secondRuntime.onPtyExit).toHaveBeenCalledWith('remote-pty', 9, undefined)
     expect(firstRuntime.onPtyData).not.toHaveBeenCalled()
     expect(firstRuntime.onPtyExit).not.toHaveBeenCalled()
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
@@ -1146,6 +1224,49 @@ describe('SSH IPC handlers', () => {
     await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
 
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('invalidates a pending connect when disconnect wins and allows a fresh connect', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const staleConn = {}
+    const freshConn = {}
+    let resolveStaleConnect!: (connection: unknown) => void
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStaleConnect = resolve
+      })
+    )
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    const staleConnect = handlers.get('ssh:connect')!(null, {
+      targetId: 'ssh-1'
+    }) as Promise<SshConnectionState>
+    await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1))
+
+    await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
+    mockConnectionManager.connect.mockResolvedValueOnce(freshConn)
+    const freshConnect = handlers.get('ssh:connect')!(null, {
+      targetId: 'ssh-1'
+    }) as Promise<SshConnectionState>
+    await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(2))
+
+    resolveStaleConnect(staleConn)
+
+    await expect(staleConnect).rejects.toThrow('SSH connection attempt was cancelled')
+    await expect(freshConnect).resolves.toMatchObject({ targetId: 'ssh-1', status: 'connected' })
+    expect(mockDeployAndLaunchRelay).toHaveBeenCalledTimes(1)
   })
 
   it('ssh:terminateSessions preserves tracking when relay shutdown fails', async () => {

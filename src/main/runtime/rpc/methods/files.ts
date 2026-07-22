@@ -19,6 +19,11 @@ const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+const FilePathSearch = WorktreeSelector.extend({
+  query: z.string().max(256).default(''),
+  limit: z.number().int().positive().max(32).default(16)
+})
+
 const FileOpen = WorktreeSelector.extend({
   relativePath: z
     .unknown()
@@ -175,6 +180,12 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     name: 'files.list',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listMobileFiles(params.worktree)
+  }),
+  defineMethod({
+    name: 'files.searchPaths',
+    params: FilePathSearch,
+    handler: async (params, { runtime }) =>
+      runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
   }),
   defineMethod({
     name: 'files.open',

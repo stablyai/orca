@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   callRuntimeRpc,
   assertRuntimeEnvironmentCapability,
@@ -20,15 +21,20 @@ import {
 
 const runtimeCall = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentSubscribe = vi.fn()
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   runtimeCall.mockReset()
   runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentSubscribe.mockReset()
   vi.stubGlobal('window', {
     api: {
       runtime: { call: runtimeCall },
-      runtimeEnvironments: { call: runtimeEnvironmentCall }
+      runtimeEnvironments: {
+        call: runtimeEnvironmentCall,
+        subscribe: runtimeEnvironmentSubscribe
+      }
     }
   })
 })
@@ -107,6 +113,49 @@ describe('runtime RPC client routing', () => {
       timeoutMs: 50
     })
     expect(runtimeCall).not.toHaveBeenCalled()
+  })
+
+  it('uses an abortable subscription for paired-runtime requests', async () => {
+    const controller = new AbortController()
+    const unsubscribe = vi.fn()
+    runtimeEnvironmentSubscribe.mockResolvedValue({ unsubscribe, sendBinary: vi.fn() })
+
+    const request = callRuntimeRpc(
+      { kind: 'environment', environmentId: 'env-1' },
+      'status.get',
+      undefined,
+      { signal: controller.signal }
+    )
+    await vi.waitFor(() => expect(runtimeEnvironmentSubscribe).toHaveBeenCalled())
+    controller.abort()
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('rejects an abortable paired-runtime request at the response deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const controller = new AbortController()
+      const unsubscribe = vi.fn()
+      runtimeEnvironmentSubscribe.mockResolvedValue({ unsubscribe, sendBinary: vi.fn() })
+
+      const request = callRuntimeRpc(
+        { kind: 'environment', environmentId: 'env-1' },
+        'status.get',
+        undefined,
+        { signal: controller.signal, timeoutMs: 15_000 }
+      )
+      await vi.waitFor(() => expect(runtimeEnvironmentSubscribe).toHaveBeenCalled())
+      const rejection = expect(request).rejects.toThrow('timed out before status.get completed')
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      await rejection
+      await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('preflights remote runtime compatibility before non-status calls', async () => {
@@ -526,6 +575,41 @@ describe('runtime RPC client routing', () => {
     expect(statusCalls).toBe(2)
   })
 
+  it('dispatches capability-selected legacy without a redundant status probe', async () => {
+    const methods: string[] = []
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      methods.push(method)
+      if (method === 'status.get') {
+        return Promise.resolve({
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'old-runtime',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+            capabilities: []
+          },
+          _meta: { runtimeId: 'old-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result: { terminal: { handle: 'legacy' } },
+        _meta: { runtimeId: 'old-runtime' }
+      })
+    })
+    const target = { kind: 'environment', environmentId: 'env-legacy' } as const
+
+    await expect(
+      runtimeEnvironmentSupportsCapability('env-legacy', 'agent-session.host-authority.v1')
+    ).resolves.toBe(false)
+    await callRuntimeRpc(target, 'terminal.create', {}, { skipCompatibilityCheck: true })
+
+    expect(methods).toEqual(['status.get', 'terminal.create'])
+  })
+
   it('coalesces concurrent cold-cache capability probes onto one status.get', async () => {
     let statusCalls = 0
     runtimeEnvironmentCall.mockImplementation(() => {
@@ -605,6 +689,46 @@ describe('runtime RPC client routing', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('invalidates a positive capability verdict when the endpoint runtime changes', async () => {
+    let statusCalls = 0
+    runtimeEnvironmentCall.mockImplementation(() => {
+      statusCalls += 1
+      const runtimeId = statusCalls === 1 ? 'runtime-before-restart' : 'runtime-after-restart'
+      return Promise.resolve({
+        id: 'status',
+        ok: true,
+        result: {
+          runtimeId,
+          graphStatus: 'ready',
+          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+          capabilities: statusCalls === 1 ? ['agent-session.host-authority.v1'] : []
+        },
+        _meta: { runtimeId }
+      })
+    })
+
+    await expect(
+      runtimeEnvironmentSupportsCapability(
+        'env-runtime-replaced',
+        'agent-session.host-authority.v1'
+      )
+    ).resolves.toBe(true)
+    clearRecentRuntimeCompatibilityFailure('env-runtime-replaced', {
+      runtimeId: 'runtime-after-restart',
+      graphStatus: 'ready',
+      runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+      minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+    } as RuntimeStatus)
+    await expect(
+      runtimeEnvironmentSupportsCapability(
+        'env-runtime-replaced',
+        'agent-session.host-authority.v1'
+      )
+    ).resolves.toBe(false)
+    expect(statusCalls).toBe(2)
   })
 
   it('rejects missing advertised runtime capabilities with the caller message', async () => {

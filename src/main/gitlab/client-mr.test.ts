@@ -10,7 +10,8 @@ const {
   getProjectRefMock,
   resolveIssueSourceMock,
   acquireMock,
-  releaseMock
+  releaseMock,
+  gitExecFileAsyncMock
 } = vi.hoisted(() => ({
   glabExecFileAsyncMock: vi.fn(),
   glabApiWithHeadersMock: vi.fn(),
@@ -18,7 +19,14 @@ const {
   getProjectRefMock: vi.fn(),
   resolveIssueSourceMock: vi.fn(),
   acquireMock: vi.fn(),
-  releaseMock: vi.fn()
+  releaseMock: vi.fn(),
+  gitExecFileAsyncMock: vi.fn()
+}))
+
+// Why: the #9171 default-branch guard resolves the repo default branch via
+// git; keep those probes hermetic instead of spawning real git processes.
+vi.mock('../git/runner', () => ({
+  gitExecFileAsync: gitExecFileAsyncMock
 }))
 
 vi.mock('./gl-utils', async () => {
@@ -41,6 +49,7 @@ import {
   addMRComment,
   getMergeRequest,
   getMergeRequestForBranch,
+  getMergeRequestForBranchOrThrow,
   getJobTrace,
   addMRInlineComment,
   closeMR,
@@ -55,6 +64,20 @@ import {
   updateMR,
   updateMRReviewers
 } from './client'
+import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
+
+/** Answer the real default-branch resolver probes (#9171 guard). */
+function primeGitDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
+      return { stdout: `${defaultRef}\n`, stderr: '' }
+    }
+    if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
+      return { stdout: 'default-oid\n', stderr: '' }
+    }
+    throw new Error(`unexpected git call: ${args.join(' ')}`)
+  })
+}
 
 describe('gitlab client — MR operations', () => {
   beforeEach(() => {
@@ -66,12 +89,28 @@ describe('gitlab client — MR operations', () => {
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
+    gitExecFileAsyncMock.mockReset()
+    primeGitDefaultBranch()
+    __resetRepoDefaultBranchCacheForTests()
     _resetGitLabRateLimitCache()
     getGlabKnownHostsMock.mockResolvedValue(['gitlab.com'])
     resolveIssueSourceMock.mockResolvedValue({
       source: { host: 'gitlab.com', path: 'g/p' },
       fellBack: false
     })
+  })
+
+  it('getMergeRequestForBranchOrThrow surfaces a glab failure instead of null (finding 4)', async () => {
+    getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+    glabExecFileAsyncMock.mockRejectedValue(new Error('glab: connection refused'))
+
+    // The swallowing variant collapses a real failure into a false "no MR".
+    await expect(getMergeRequestForBranch('/repo', 'feature/x')).resolves.toBeNull()
+    // The throwing variant makes the failure visible so eligibility records
+    // `unavailable` rather than a false "No merge request found".
+    await expect(getMergeRequestForBranchOrThrow('/repo', 'feature/x')).rejects.toThrow(
+      /connection refused/
+    )
   })
 
   it('routes local WSL MR review-management and job actions through project resolution and glab options', async () => {
@@ -430,6 +469,132 @@ describe('gitlab client — MR operations', () => {
         cwd: '/repo',
         wslDistro: 'Ubuntu'
       })
+    })
+
+    it('hides a stale closed MR whose source branch is the repo default branch (#9171)', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 7,
+            title: 'Accidental MR from main',
+            state: 'closed',
+            sha: 'stale-main-oid',
+            head_pipeline: { status: 'success' }
+          }
+        ])
+      })
+
+      await expect(getMergeRequestForBranch('/repo', 'main')).resolves.toBeNull()
+    })
+
+    it('hides a stuck-locked MR whose source branch is the repo default branch (#9171)', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 9,
+            title: 'Wedged mid-merge MR from main',
+            state: 'locked',
+            sha: 'locked-main-oid',
+            head_pipeline: { status: 'success' }
+          }
+        ])
+      })
+
+      await expect(getMergeRequestForBranch('/repo', 'main')).resolves.toBeNull()
+    })
+
+    it('keeps an open MR whose source branch is the repo default branch', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 8,
+            title: 'main → release',
+            state: 'opened',
+            sha: 'abc',
+            head_pipeline: { status: 'success' }
+          }
+        ])
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'main')
+      expect(mr?.number).toBe(8)
+      // Open results never consult git for the default branch (lazy resolution).
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps a closed MR on a feature branch (behavior preserved)', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 9,
+            title: 'Rejected work',
+            state: 'closed',
+            sha: 'def',
+            head_pipeline: { status: 'failed' }
+          }
+        ])
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'feature/rejected')
+      expect(mr?.number).toBe(9)
+      expect(mr?.state).toBe('closed')
+    })
+
+    it('discards a closed default-branch shadow and refetches the linked MR via the fallback (#9171)', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify([
+            {
+              iid: 7,
+              title: 'Accidental MR from main',
+              state: 'closed',
+              sha: 'stale-main-oid',
+              head_pipeline: { status: 'success' }
+            }
+          ])
+        })
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({
+            iid: 42,
+            title: 'Linked MR',
+            state: 'merged',
+            pipeline: { status: 'success' }
+          })
+        })
+
+      const mr = await getMergeRequestForBranch('/repo', 'main', 42)
+
+      expect(mr).toMatchObject({ number: 42, state: 'merged' })
+      expect(glabExecFileAsyncMock).toHaveBeenLastCalledWith(
+        ['api', 'projects/g%2Fp/merge_requests/42'],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('keeps a non-open branch match on the default branch when it IS the linked MR', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 7,
+            title: 'Linked trunk MR',
+            state: 'merged',
+            sha: 'abc',
+            head_pipeline: { status: 'success' }
+          }
+        ])
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'main', 7)
+
+      expect(mr).toMatchObject({ number: 7, state: 'merged' })
+      // Exempted by linked-number match — no fallback refetch needed.
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
     })
 
     it('returns null for an empty / detached-HEAD branch arg', async () => {

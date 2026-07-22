@@ -268,6 +268,9 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
       [
         'model = "runtime-model"',
         '',
+        '[hooks.state]',
+        '# runtime-owned parent',
+        '',
         '[hooks.state."runtime-hooks:stop:0:0"]',
         'enabled = false',
         'trusted_hash = "sha256:runtime"',
@@ -285,6 +288,9 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
       getSystemConfigPath(),
       [
         'model = "system-model"',
+        '',
+        '[hooks.state]',
+        '# system-owned parent',
         '',
         '[projects."/repo"] # explicit revocation',
         'trust_level = "untrusted"',
@@ -310,6 +316,8 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).toContain('[projects."/system-only"]')
     expect(runtimeConfig).toContain('[hooks.state."runtime-hooks:stop:0:0"]')
     expect(runtimeConfig).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+    expect(runtimeConfig).toContain('# runtime-owned parent')
+    expect(runtimeConfig).not.toContain('# system-owned parent')
     expect(runtimeConfig).toContain('trust_level = "untrusted"')
     expect(runtimeConfig.match(/\[projects\."\/repo"\]/g)?.length).toBe(1)
   })

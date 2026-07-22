@@ -966,6 +966,22 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     })
   })
 
+  it('isolates PR detail caches by Enterprise host', () => {
+    const githubRepo = { owner: 'Acme', repo: 'Widgets', host: 'github.com' }
+    const enterpriseRepo = {
+      owner: 'Acme',
+      repo: 'Widgets',
+      host: 'github.acme-corp.com'
+    }
+
+    expect(prChecksCacheSuffix(12, enterpriseRepo, 'head')).not.toBe(
+      prChecksCacheSuffix(12, githubRepo, 'head')
+    )
+    expect(prCommentsCacheSuffix(12, enterpriseRepo)).not.toBe(
+      prCommentsCacheSuffix(12, githubRepo)
+    )
+  })
+
   it('bounds checks cache entries across many repo and head combinations', async () => {
     vi.useFakeTimers()
 
@@ -1867,9 +1883,39 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     await expect(request).resolves.toMatchObject({ title: 'Local request result' })
     expect(store.getState().hostedReviewCache[localHostedReviewCacheKey]).toMatchObject({
       data: expect.objectContaining({ provider: 'github', title: 'Local request result' }),
-      linkedReviewHintKey: 'github:12'
+      linkedReviewHintKey: 'github:12',
+      branchLookupGitHubPRNumber: 12
     })
     expect(store.getState().hostedReviewCache[runtimeHostedReviewCacheKey]).toBeUndefined()
+  })
+
+  it('does not mark an exact linked PR refresh as branch-discovered', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/exact-linked-provenance'
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ number: 12 }),
+      fetchedAt: 2
+    })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      linkedPRNumber: 12
+    })
+
+    const cacheEntry = store.getState().hostedReviewCache[hostedReviewCacheKey]
+    expect(cacheEntry).toMatchObject({
+      data: expect.objectContaining({ provider: 'github', number: 12 }),
+      linkedReviewHintKey: 'github:12'
+    })
+    expect(cacheEntry).not.toHaveProperty('branchLookupGitHubPRNumber')
   })
 
   it('does not let an older direct PR refresh overwrite a newer hosted-review cache entry', async () => {
@@ -6299,6 +6345,222 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     }
   })
 
+  it('flags githubUnavailable when a GitHub repo fails with a 5xx outage and no cache', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'github-repo', path: '/server/github-repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.items).toEqual([])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(true)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('flags a GitHub outage returned by a remote runtime method', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-outage',
+      ok: false,
+      error: { code: 'runtime_error', message: 'HTTP 503: Service Unavailable' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.githubUnavailable).toBe(true)
+      expect(result.failedCount).toBe(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not attribute a remote runtime transport timeout to GitHub', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-runtime-timeout',
+      ok: false,
+      error: {
+        code: 'runtime_unavailable',
+        message: 'Runtime request timed out before github.listWorkItems completed'
+      },
+      _meta: { runtimeId: null }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.githubUnavailable).toBe(false)
+      expect(result.failedCount).toBe(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('flags githubUnavailable while serving stale cached rows after a failed refresh', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const item = {
+      type: 'pr',
+      number: 8,
+      title: 'Cached PR',
+      url: 'https://example.test/8',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+    mockApi.gh.listWorkItems
+      .mockResolvedValueOnce({
+        items: [item],
+        sources: {
+          issues: null,
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
+      })
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const repos = [{ repoId: 'github-repo', path: '/server/github-repo' }]
+      await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '')
+
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(repos, 24, 100, '', { force: true })
+
+      expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
+      expect(result.failedCount).toBe(0)
+      expect(result.githubUnavailable).toBe(true)
+      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('ignores an ineligible SSH repo when every GitHub source is unavailable', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems
+      .mockRejectedValueOnce(new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE))
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const result = await store.getState().fetchWorkItemsAcrossRepos(
+        [
+          { repoId: 'ssh-repo', path: '/server/ssh-repo' },
+          { repoId: 'github-repo', path: '/server/github-repo' }
+        ],
+        24,
+        100,
+        ''
+      )
+
+      expect(result.items).toEqual([])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(true)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('keeps the partial-failure count when another GitHub repo still loads', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const item = {
+      type: 'pr',
+      number: 8,
+      title: 'Loaded PR',
+      url: 'https://example.test/8',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+    mockApi.gh.listWorkItems
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+      .mockResolvedValueOnce({
+        items: [item],
+        sources: {
+          issues: null,
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
+      })
+
+    try {
+      const result = await store.getState().fetchWorkItemsAcrossRepos(
+        [
+          { repoId: 'unavailable-repo', path: '/server/unavailable-repo' },
+          { repoId: 'loaded-repo', path: '/server/loaded-repo' }
+        ],
+        24,
+        100,
+        ''
+      )
+
+      expect(result.items).toEqual([{ ...item, repoId: 'loaded-repo' }])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(false)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not flag githubUnavailable for a 404 (not an outage)', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 404: Not Found'))
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'github-repo', path: '/server/github-repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(false)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
   it('quietly skips SSH repos without a resolved GitHub remote in next-page fetches', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -6331,7 +6593,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         24,
         100,
         '',
-        '2026-05-21T00:00:00Z'
+        1
       )
 
       expect(result.failedCount).toBe(0)
@@ -6377,7 +6639,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         24,
         100,
         'is:open',
-        '2026-05-22T00:00:00Z'
+        1
       )
 
     expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
@@ -6388,7 +6650,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         repo: 'runtime-repo-id',
         limit: 24,
         query: 'is:open',
-        before: '2026-05-22T00:00:00Z'
+        page: 1
       },
       timeoutMs: 30_000
     })
@@ -6413,9 +6675,13 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
     const result = await store
       .getState()
-      .countWorkItemsAcrossRepos([{ repoId: 'caller-repo-id', path: '/server/repo' }], 'is:open')
+      .countWorkItemsAcrossRepos(
+        [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+        'is:open',
+        10
+      )
 
-    expect(result).toBe(12)
+    expect(result).toEqual({ totalCount: 12, totalPages: 2 })
     expect(mockApi.gh.countWorkItems).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -6434,15 +6700,31 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
     const result = await store
       .getState()
-      .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], '')
+      .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], '', 10)
 
-    expect(result).toBe(7)
+    expect(result).toEqual({ totalCount: 7, totalPages: 1 })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(mockApi.gh.countWorkItems).toHaveBeenCalledWith({
       repoPath: '/local/repo',
       repoId: 'repo-id',
       query: undefined
     })
+  })
+
+  it('derives page count from the repo with the most results', async () => {
+    const store = createTestStore()
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(100).mockResolvedValueOnce(1)
+
+    const result = await store.getState().countWorkItemsAcrossRepos(
+      [
+        { repoId: 'large-repo', path: '/local/large' },
+        { repoId: 'small-repo', path: '/local/small' }
+      ],
+      'is:issue',
+      36
+    )
+
+    expect(result).toEqual({ totalCount: 101, totalPages: 3 })
   })
 
   it('rejects oversized work-item queries before cache keys or provider calls', async () => {
@@ -6462,7 +6744,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           24,
           oversizedQuery
         )
-    ).resolves.toEqual({ items: [], failedCount: 0 })
+    ).resolves.toEqual({ items: [], failedCount: 0, githubUnavailable: false })
     await expect(
       store
         .getState()
@@ -6471,14 +6753,14 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           24,
           24,
           oversizedQuery,
-          'cursor'
+          1
         )
     ).resolves.toEqual({ items: [], failedCount: 0 })
     await expect(
       store
         .getState()
-        .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], oversizedQuery)
-    ).resolves.toBe(0)
+        .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], oversizedQuery, 24)
+    ).resolves.toEqual({ totalCount: 0, totalPages: 0 })
     store.getState().prefetchWorkItems('repo-id', '/local/repo', 24, oversizedQuery)
 
     expect(store.getState().getCachedWorkItems('repo-id', 24, oversizedQuery, '/local/repo')).toBe(
@@ -6646,6 +6928,62 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     ).toBe('project-local')
   })
 
+  it('keeps same-named github.com and GHES project cache entries separate', async () => {
+    const store = createTestStore()
+    const makeTable = (host: string, id: string) => ({
+      project: {
+        id,
+        host,
+        owner: 'acme',
+        ownerType: 'organization' as const,
+        number: 1,
+        title: id,
+        url: `https://${host}/orgs/acme/projects/1`
+      },
+      selectedView: {
+        id: 'view-1',
+        number: 1,
+        name: 'Table',
+        layout: 'TABLE_LAYOUT' as const,
+        filter: '',
+        fields: [],
+        groupByFields: [],
+        sortByFields: []
+      },
+      rows: [],
+      totalCount: 0,
+      parentFieldDropped: false
+    })
+    mockApi.gh.getProjectViewTable
+      .mockResolvedValueOnce({ ok: true, data: makeTable('github.com', 'dotcom-project') })
+      .mockResolvedValueOnce({ ok: true, data: makeTable('ghe.example', 'enterprise-project') })
+
+    for (const host of ['github.com', 'ghe.example']) {
+      await store.getState().fetchProjectViewTable({
+        owner: 'acme',
+        ownerType: 'organization',
+        projectNumber: 1,
+        viewId: 'view-1',
+        host
+      })
+    }
+
+    expect(mockApi.gh.getProjectViewTable).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ host: 'ghe.example' })
+    )
+    expect(
+      store.getState().projectViewCache[
+        projectViewCacheKey('organization', 'acme', 1, 'view-1', undefined, 'local', 'ghe.example')
+      ]?.data?.project.id
+    ).toBe('enterprise-project')
+    expect(
+      store.getState().projectViewCache[
+        projectViewCacheKey('organization', 'acme', 1, 'view-1', undefined, 'local', 'github.com')
+      ]?.data?.project.id
+    ).toBe('dotcom-project')
+  })
+
   it('routes project field mutations through the source encoded in the cache key', async () => {
     const store = createTestStore()
     const cacheKey = projectViewCacheKey(
@@ -6654,7 +6992,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       1,
       'view-1',
       undefined,
-      'runtime:env-project'
+      'runtime:env-project',
+      'ghe.example:8443'
     )
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-focused' },
@@ -6664,6 +7003,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           data: {
             project: {
               id: 'project-1',
+              host: 'ghe.example:8443',
               owner: 'acme',
               ownerType: 'organization',
               number: 1,
@@ -6723,6 +7063,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       method: 'github.project.updateItemField',
       params: {
         projectId: 'project-1',
+        host: 'ghe.example:8443',
         itemId: 'row-1',
         fieldId: 'field-1',
         value: { kind: 'text', text: 'next' }
@@ -6888,6 +7229,12 @@ describe('IssueSourceIndicator suppression', () => {
     expect(
       sameGitHubOwnerRepo({ owner: 'StablyAI', repo: 'Orca' }, { owner: 'stablyai', repo: 'orca' })
     ).toBe(true)
+    expect(
+      sameGitHubOwnerRepo(
+        { owner: 'stablyai', repo: 'orca', host: 'github.com' },
+        { owner: 'stablyai', repo: 'orca', host: 'ghe.example.test' }
+      )
+    ).toBe(false)
     expect(sameGitHubOwnerRepo({ owner: 'a', repo: 'r' }, { owner: 'b', repo: 'r' })).toBe(false)
 
     // null on either side → element renders as null (empty render)
@@ -6923,6 +7270,12 @@ describe('IssueSourceIndicator suppression', () => {
     expect(itemMarkup).toContain('up/r')
     expect(itemMarkup).toContain('Issue from')
     expect(itemMarkup).not.toContain('Issues from')
+
+    const enterpriseEl = React.createElement(IssueSourceIndicator, {
+      issues: { owner: 'up', repo: 'r', host: 'ghe.example.test' },
+      prs: { owner: 'fork', repo: 'r', host: 'ghe.example.test' }
+    })
+    expect(renderToStaticMarkup(enterpriseEl)).toContain('ghe.example.test/up/r')
   })
 })
 

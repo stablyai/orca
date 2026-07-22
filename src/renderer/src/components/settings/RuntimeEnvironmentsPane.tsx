@@ -12,7 +12,7 @@ import {
   Share2,
   Trash2
 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -65,6 +65,7 @@ type RuntimeEnvironmentsPaneProps = {
   switchRuntimeEnvironment: (environmentId: string | null) => Promise<boolean>
   canGeneratePairingUrl?: boolean
   allowLocalRuntime?: boolean
+  addServerIntentSignal?: number
 }
 
 export type RuntimeHostDetails = {
@@ -247,7 +248,8 @@ export function RuntimeEnvironmentsPane({
   settings,
   switchRuntimeEnvironment,
   canGeneratePairingUrl = true,
-  allowLocalRuntime = true
+  allowLocalRuntime = true,
+  addServerIntentSignal
 }: RuntimeEnvironmentsPaneProps): React.JSX.Element {
   const [environments, setEnvironments] = useState<PublicKnownRuntimeEnvironment[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -268,6 +270,7 @@ export function RuntimeEnvironmentsPane({
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [pairingCode, setPairingCode] = useState('')
+  const consumedAddServerIntentSignalRef = useRef(0)
   const mountedRef = useMountedRef()
   const activeValue =
     settings.activeRuntimeEnvironmentId ??
@@ -377,6 +380,19 @@ export function RuntimeEnvironmentsPane({
   useEffect(() => {
     void loadEnvironments()
   }, [loadEnvironments])
+
+  useEffect(() => {
+    if (
+      !addServerIntentSignal ||
+      consumedAddServerIntentSignalRef.current === addServerIntentSignal
+    ) {
+      return
+    }
+    consumedAddServerIntentSignalRef.current = addServerIntentSignal
+    // Why: composer deep-links should land on the existing pairing form, not just
+    // the server list.
+    setAddServerFormOpen(true)
+  }, [addServerIntentSignal])
 
   const closeAddServerForm = (): void => {
     if (isSaving) {
@@ -813,7 +829,7 @@ export function RuntimeEnvironmentsPane({
                   className="h-8 min-w-0 font-mono text-xs"
                 />
                 <p id="runtime-server-pairing-code-help" className="text-xs text-muted-foreground">
-                  {translate('auto.components.settings.RuntimeEnvironmentsPane.163671f7b5', 'Run')}
+                  {translate('auto.components.settings.RuntimeEnvironmentsPane.163671f7b5', 'Run')}{' '}
                   <span className="font-mono">
                     {translate(
                       'auto.components.settings.RuntimeEnvironmentsPane.960e901ae4',

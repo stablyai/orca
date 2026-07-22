@@ -264,6 +264,15 @@ export type WorktreeSlice = {
    */
   purgeWorktreeTerminalState: (worktreeIds: string[]) => void
   /**
+   * Retires every client-store row (repos, project host setups, worktree +
+   * detected-worktree rows, and their tab/PTY/browser/editor cascade) owned by a
+   * runtime host whose environment id was just removed from the saved list.
+   * Scoped to the removal diff so a serving instance's locally-persisted
+   * runtime-stamped repos — whose env id was never saved here — are never torn
+   * down. No-op when the removed set is empty or nothing matched (#8881).
+   */
+  purgeStaleRuntimeHostState: (removedEnvironmentIds: Iterable<string>) => void
+  /**
    * Re-key every worktree-scoped map + pointer from `oldWorktreeId` to
    * `newWorktreeId` after a folder rename changed the worktree's path-derived id.
    * The inverse of purge: move state instead of dropping it, so the live worktree

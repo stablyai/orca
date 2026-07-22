@@ -3,6 +3,7 @@ import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { normalizePromptField } from '../../shared/agent-status-field-normalization'
 import {
   addPreviewContent,
   cloneSessionAccumulator,
@@ -179,6 +180,10 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
 
   if (payload.type === 'user_message') {
     accumulator.messageCount++
+    const prompt = normalizePromptField(payload.message)
+    if (prompt) {
+      accumulator.lastUserPrompt = prompt
+    }
     if (!accumulator.title) {
       accumulator.title = extractContentText(payload.message)
       state.titleSource = accumulator.title ? 'user' : state.titleSource
