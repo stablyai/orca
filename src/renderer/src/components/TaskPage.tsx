@@ -38,6 +38,7 @@ import {
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
@@ -450,6 +451,12 @@ function getTaskPageRepoSourceContext(
   })
 }
 
+function findTaskPageRepoForWorkItem(
+  repos: readonly Repo[],
+  item: GitHubWorkItem
+): Repo | undefined {
+  return findRepoForHost(repos, item.repoId, { hostId: item.repoExecutionHostId }) ?? undefined
+}
 function buildGitLabProviderIdentity(projectRef: GitLabProjectRef) {
   const pathParts = projectRef.path
     .split('/')
@@ -3822,7 +3829,11 @@ export default function TaskPage(): React.JSX.Element {
   const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
   const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')
   const dialogWorkItemKey = githubTaskDrawerWorkItem
-    ? { id: githubTaskDrawerWorkItem.id, repoId: githubTaskDrawerWorkItem.repoId }
+    ? {
+        id: githubTaskDrawerWorkItem.id,
+        repoId: githubTaskDrawerWorkItem.repoId,
+        repoExecutionHostId: githubTaskDrawerWorkItem.repoExecutionHostId
+      }
     : null
 
   const appliedWorkItemsCacheQuery = useMemo(
@@ -3840,14 +3851,15 @@ export default function TaskPage(): React.JSX.Element {
     )
   )
 
-  // Why: derive the dialog item from the cache for optimistic patches, falling back to the click-time snapshot for new stubs; key by repoId so same-number issues across repos resolve to the clicked row.
+  // Why: derive the dialog item from the cache for optimistic patches, falling back to the click-time snapshot for new stubs; key by repository and host so duplicate ids resolve to the clicked row.
   const cachedDialogWorkItem = useAppStore((s) =>
     findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
   )
   const dialogWorkItem = dialogWorkItemKey
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
     : null
-  const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
+  const dialogRepo = dialogWorkItem ? findTaskPageRepoForWorkItem(repos, dialogWorkItem) : undefined
+  const dialogRepoPath = dialogRepo?.path ?? null
   const dialogSourceContext = useMemo(() => {
     if (!dialogWorkItem) {
       return null
@@ -3855,12 +3867,13 @@ export default function TaskPage(): React.JSX.Element {
     if (
       pageData.openGitHubSourceContext?.provider === 'github' &&
       pageData.openGitHubWorkItem?.id === dialogWorkItem.id &&
-      pageData.openGitHubWorkItem.repoId === dialogWorkItem.repoId
+      pageData.openGitHubWorkItem.repoId === dialogWorkItem.repoId &&
+      pageData.openGitHubWorkItem.repoExecutionHostId === dialogWorkItem.repoExecutionHostId
     ) {
       return pageData.openGitHubSourceContext
     }
-    return getTaskPageRepoSourceContext(repoMap.get(dialogWorkItem.repoId), 'github')
-  }, [dialogWorkItem, pageData.openGitHubSourceContext, pageData.openGitHubWorkItem, repoMap])
+    return getTaskPageRepoSourceContext(dialogRepo, 'github')
+  }, [dialogRepo, dialogWorkItem, pageData.openGitHubSourceContext, pageData.openGitHubWorkItem])
   const gitlabDialogRepo = useMemo(
     () =>
       gitlabDialogItem
@@ -3910,18 +3923,19 @@ export default function TaskPage(): React.JSX.Element {
 
   const openGitHubDetailPage = useCallback(
     (item: GitHubWorkItem, initialTab: ItemDialogTab = 'conversation') => {
+      const targetRepo = findTaskPageRepoForWorkItem(repos, item)
       openTaskPage(
         {
           taskSource: 'github',
           preselectedRepoId: item.repoId,
           openGitHubWorkItem: item,
-          openGitHubSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
+          openGitHubSourceContext: getTaskPageRepoSourceContext(targetRepo, 'github'),
           openGitHubInitialTab: initialTab
         },
         { recordTasksInteraction: false }
       )
     },
-    [openTaskPage, repoMap]
+    [openTaskPage, repos]
   )
 
   const openGitLabDetailPage = useCallback(
@@ -6584,7 +6598,8 @@ export default function TaskPage(): React.JSX.Element {
   ])
 
   const openComposerForItem = useCallback(
-    (item: GitHubWorkItem, initialAgent?: TuiAgent): void => {
+    (item: GitHubWorkItem, initialAgent?: TuiAgent, repoOverride?: Repo): void => {
+      const targetRepo = repoOverride ?? findTaskPageRepoForWorkItem(repos, item)
       const linkedWorkItem: LinkedWorkItemSummary = {
         type: item.type,
         number: item.number,
@@ -6593,41 +6608,48 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
-        taskSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
+        taskSourceContext: getTaskPageRepoSourceContext(targetRepo, 'github'),
         prefilledName: getGitHubWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
         ...(initialAgent ? { initialAgent } : {}),
         telemetrySource: 'sidebar'
       })
     },
-    [openModal, repoMap]
+    [openModal, repos]
   )
 
   const handleUseWorkItem = useCallback(
-    (item: GitHubWorkItem, agentOverride?: TuiAgent): void => {
+    (item: GitHubWorkItem, agentOverride?: TuiAgent, repoOverride?: Repo): void => {
+      const targetRepo = repoOverride ?? findTaskPageRepoForWorkItem(repos, item)
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       void createGitHubWorkItemWorkspaceInBackground({
         item,
         repoId: item.repoId,
-        taskSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
+        repoExecutionHostId:
+          item.repoExecutionHostId ?? (targetRepo ? getRepoExecutionHostId(targetRepo) : undefined),
+        taskSourceContext: getTaskPageRepoSourceContext(targetRepo, 'github'),
         telemetrySource: 'sidebar',
         agentOverride,
-        openModalFallback: () => openComposerForItem(item, agentOverride)
+        openModalFallback: () => openComposerForItem(item, agentOverride, targetRepo)
       })
     },
-    [openComposerForItem, repoMap]
+    [openComposerForItem, repos]
   )
 
   const handleOpenOrUseGitHubWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
+      const targetRepo = findTaskPageRepoForWorkItem(repos, item)
+      const executionHostId =
+        item.repoExecutionHostId ?? (targetRepo ? getRepoExecutionHostId(targetRepo) : undefined)
       const currentAttached = findGithubWorkItemWorkspaceAttachment(
         useAppStore.getState().allWorktrees(),
         item.repoId,
         item.type,
-        item.number
+        item.number,
+        executionHostId
       )
       if (!currentAttached) {
-        handleUseWorkItem(item)
+        handleUseWorkItem(item, undefined, targetRepo)
         return
       }
 
@@ -6648,7 +6670,7 @@ export default function TaskPage(): React.JSX.Element {
       }
       useAppStore.getState().recordFeatureInteraction('github-tasks')
     },
-    [handleUseWorkItem]
+    [handleUseWorkItem, repos]
   )
 
   const openComposerForGitLabItem = useCallback(
@@ -6766,6 +6788,7 @@ export default function TaskPage(): React.JSX.Element {
       const stub: GitHubWorkItem = {
         id: `issue:${String(result.number)}`,
         repoId: newIssueTargetRepo.id,
+        repoExecutionHostId: getRepoExecutionHostId(newIssueTargetRepo),
         type: 'issue',
         number: result.number,
         title,
@@ -6803,7 +6826,11 @@ export default function TaskPage(): React.JSX.Element {
         .then((full) => {
           if (full) {
             // Why: cast through unknown — spreading the discriminated union loses the discriminant, so { ...full, repoId } won't typecheck.
-            const withRepoId = { ...full, repoId: stubRepoId } as unknown as GitHubWorkItem
+            const withRepoId = {
+              ...full,
+              repoId: stubRepoId,
+              repoExecutionHostId: stub.repoExecutionHostId
+            } as unknown as GitHubWorkItem
             setDialogWorkItem(withRepoId)
           }
         })
@@ -9253,12 +9280,14 @@ export default function TaskPage(): React.JSX.Element {
                 <div className="divide-y divide-border/50">
                   {!showGitHubTaskSkeletons &&
                     filteredWorkItems.map((item) => {
-                      const itemRepo = repoMap.get(item.repoId) ?? null
+                      const itemRepo = findTaskPageRepoForWorkItem(repos, item) ?? null
                       const attachedWorkspace = findGithubWorkItemWorkspaceAttachment(
                         allWorktrees,
                         item.repoId,
                         item.type,
-                        item.number
+                        item.number,
+                        item.repoExecutionHostId ??
+                          (itemRepo ? getRepoExecutionHostId(itemRepo) : undefined)
                       )
                       const attachedWorkspaceLabel = attachedWorkspace
                         ? getGithubWorkItemWorkspaceAttachmentLabel(attachedWorkspace)
@@ -9290,7 +9319,7 @@ export default function TaskPage(): React.JSX.Element {
                         // Why: clickable div not a <button> — it nests buttons, and button-in-button is invalid HTML that breaks hydration.
                         <div
                           // Why: key on repoId+item.id — repos sharing an upstream reuse item.id, so a bare key collides and React silently drops rows.
-                          key={`${item.repoId}:${item.id}`}
+                          key={`${item.repoExecutionHostId ?? 'legacy'}:${item.repoId}:${item.id}`}
                           role="button"
                           tabIndex={0}
                           onClick={() => openGitHubDetailPage(item)}

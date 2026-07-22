@@ -101,6 +101,17 @@ describe('GitHubItemDialog source host boundaries', () => {
     )
   })
 
+  it('matches attached issue workspaces on the issue execution host', () => {
+    const source = componentSource('GitHubItemDialog.tsx')
+    const section = sourceBetween(
+      source,
+      'const issueAttachedWorkspace = useMemo(',
+      '// Why: the cache key must include issue source preference'
+    )
+
+    expect(section.match(/workItem\.repoExecutionHostId/g)).toHaveLength(1)
+  })
+
   it('treats null details as unavailable while preserving empty detail payloads', () => {
     const source = componentSource('GitHubItemDialog.tsx')
     const loadedSection = sourceBetween(

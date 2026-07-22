@@ -205,6 +205,50 @@ describe('startFixChecksAgent', () => {
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
+  it('uses the work item host for duplicate-repo recipe and attachment lookup', async () => {
+    const localRepo = mocks.store.repos[0]
+    const runtimeRepo = {
+      ...localRepo,
+      path: '/runtime/repo',
+      executionHostId: 'runtime:env-1'
+    }
+    mocks.store.repos = [localRepo, runtimeRepo]
+    const item = {
+      id: 'pr-42',
+      type: 'pr' as const,
+      number: 42,
+      title: 'Fix checks',
+      state: 'open' as const,
+      url: 'https://example.invalid/pr/42',
+      labels: [],
+      updatedAt: '2026-07-22T00:00:00Z',
+      author: 'alice',
+      repoId: 'repo-1',
+      repoExecutionHostId: 'runtime:env-1' as const
+    }
+    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+
+    await expect(
+      startFixChecksAgent({
+        repoId: 'repo-1',
+        item,
+        basePrompt: 'Fix checks',
+        launchSource: 'task_page',
+        openModalFallback: vi.fn()
+      })
+    ).resolves.toBe(true)
+
+    expect(mocks.resolveSourceControlActionRecipe).toHaveBeenCalledWith(
+      expect.objectContaining({ repo: runtimeRepo })
+    )
+    expect(mocks.findGithubPrWorkspaceAttachment).toHaveBeenCalledWith(
+      mocks.store.worktrees,
+      'repo-1',
+      42,
+      'runtime:env-1'
+    )
+  })
+
   it('falls back to the repo connection when an attached workspace lookup is unresolved', async () => {
     mocks.store.repos = [
       {

@@ -2144,6 +2144,45 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('resolves a PR base against the requested SSH execution host when repo IDs overlap', async () => {
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/local-repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = {
+      ...localRepo,
+      path: '/workspace/ssh-repo',
+      displayName: 'ssh',
+      connectionId: 'connection-1'
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    store.getRepo.mockReturnValue(localRepo)
+    const sshExec = vi.fn(async (args: string[]) =>
+      args[0] === 'rev-parse'
+        ? { stdout: 'ssh-head\n', stderr: '' }
+        : args[0] === 'remote' && args.length === 1
+          ? { stdout: 'origin\n', stderr: '' }
+          : { stdout: '', stderr: '' }
+    )
+    const fetchRemoteTrackingRef = vi.fn(async () => {})
+    getSshGitProviderMock.mockReturnValue({ exec: sshExec, fetchRemoteTrackingRef } as never)
+
+    const result = await handlers['worktrees:resolvePrBase'](null, {
+      repoId: 'repo-1',
+      executionHostId: 'ssh:connection-1',
+      prNumber: 42,
+      headRefName: 'feature/ssh',
+      isCrossRepository: false
+    })
+
+    expect(result).toMatchObject({ baseBranch: 'ssh-head' })
+    expect(sshExec).toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
   it('routes local worktree creation through the selected WSL project runtime', async () => {
     mockSelectedWslProjectRuntime()
     listWorktreesMock.mockResolvedValue([
@@ -3091,7 +3130,7 @@ describe('registerWorktreeHandlers', () => {
       return { stdout: '', stderr: '' }
     })
     getSshGitProviderMock.mockReturnValue({ exec, fetchRemoteTrackingRef })
-    store.getRepo.mockReturnValue({
+    const sshRepo = {
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
@@ -3099,7 +3138,9 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-1',
       worktreeBaseRef: null
-    })
+    }
+    store.getRepos.mockReturnValue([sshRepo])
+    store.getRepo.mockReturnValue(sshRepo)
 
     const result = await handlers['worktrees:resolvePrBase'](null, {
       repoId: 'repo-1',

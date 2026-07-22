@@ -26,7 +26,9 @@ describe('GitHub workspace creation source boundaries', () => {
     )
 
     expect(section).toContain('createGitHubWorkItemWorkspaceInBackground({')
-    expect(section).toContain('openModalFallback: () => openComposerForItem(item, agentOverride)')
+    expect(section).toContain(
+      'openModalFallback: () => openComposerForItem(item, agentOverride, targetRepo)'
+    )
     expect(section).not.toContain("openModal('new-workspace-composer'")
   })
 
@@ -40,20 +42,44 @@ describe('GitHub workspace creation source boundaries', () => {
     expect(TASK_PAGE_SOURCE).toContain('GitHubIssueWorkspaceLaunchButton')
     expect(section).toContain('agentOverride?: TuiAgent')
     expect(section).toContain('agentOverride,')
-    expect(section).toContain('openComposerForItem(item, agentOverride)')
+    expect(section).toContain('repoExecutionHostId:')
+    expect(section).toContain('getRepoExecutionHostId(targetRepo)')
+    expect(section).toContain('openComposerForItem(item, agentOverride, targetRepo)')
     expect(TASK_PAGE_SOURCE).toContain('onStartWithAgent={(agent) =>')
     expect(COMPOSER_MODAL_SOURCE).toContain('initialAgent?: TuiAgent')
     expect(COMPOSER_MODAL_SOURCE).toContain('modalData.initialAgent')
+    expect(COMPOSER_MODAL_SOURCE).toContain('const unavailableExplicitAgent =')
+    expect(COMPOSER_MODAL_SOURCE).toContain('if (unavailableExplicitAgent)')
   })
 
   it('lets nested GitHub row controls handle their own keyboard activation', () => {
     const section = sourceBetween(
       TASK_PAGE_SOURCE,
-      'key={`${item.repoId}:${item.id}`}',
+      "key={`${item.repoExecutionHostId ?? 'legacy'}:${item.repoId}:${item.id}`}",
       'className={cn('
     )
 
     expect(section).toContain('if (event.target !== event.currentTarget)')
+  })
+
+  it('preserves the issue row execution host through dialog selection and refresh', () => {
+    const dialogSection = sourceBetween(
+      TASK_PAGE_SOURCE,
+      'const dialogWorkItemKey = githubTaskDrawerWorkItem',
+      'const gitlabDialogRepo = useMemo('
+    )
+    const detailSection = sourceBetween(
+      TASK_PAGE_SOURCE,
+      'const openGitHubDetailPage = useCallback(',
+      'const openGitLabDetailPage = useCallback('
+    )
+
+    expect(dialogSection).toContain(
+      'repoExecutionHostId: githubTaskDrawerWorkItem.repoExecutionHostId'
+    )
+    expect(dialogSection).toContain('findTaskPageRepoForWorkItem(repos, dialogWorkItem)')
+    expect(detailSection).toContain('findTaskPageRepoForWorkItem(repos, item)')
+    expect(TASK_PAGE_SOURCE).toContain('repoExecutionHostId: stub.repoExecutionHostId')
   })
 
   it('keeps project-view GitHub actions on the direct start-work path for issue #4756', () => {

@@ -1588,6 +1588,8 @@ export type GitHubWorkItem = {
    *  to know which repo an item came from. Stamped by the renderer fetcher
    *  (`fetchWorkItems`) and by optimistic stubs on the new-issue path. */
   repoId: string
+  /** Execution host that produced this row. Repo ids are unique only within a host. */
+  repoExecutionHostId?: ExecutionHostId
 }
 
 export type GitHubPRFile = {

@@ -6782,7 +6782,12 @@ export default function GitHubItemDialog({
   const issueAttachedWorkspace = useMemo(
     () =>
       workItem?.type === 'issue'
-        ? findGithubIssueWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        ? findGithubIssueWorkspaceAttachment(
+            allWorktrees,
+            effectiveRepoId,
+            workItem.number,
+            workItem.repoExecutionHostId
+          )
         : null,
     [allWorktrees, effectiveRepoId, workItem]
   )
@@ -6795,7 +6800,8 @@ export default function GitHubItemDialog({
       const currentAttached = findGithubIssueWorkspaceAttachment(
         useAppStore.getState().allWorktrees(),
         effectiveRepoId,
-        item.number
+        item.number,
+        item.repoExecutionHostId
       )
       if (!currentAttached) {
         onUse(item)

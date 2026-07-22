@@ -28,16 +28,12 @@ import {
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { renderIssueCommandTemplate } from '@/lib/new-workspace'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { isGitHubWorkItemRepoHostUnavailable } from '@/lib/github-work-item-background-host'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { evaluateRuntimeCompat } from '../../../shared/protocol-compat'
-import {
-  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
-  RUNTIME_PROTOCOL_VERSION
-} from '../../../shared/protocol-version'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { GitHubWorkItem, SetupDecision, TuiAgent } from '../../../shared/types'
-import type { Repo } from '../../../shared/types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 
@@ -61,7 +57,8 @@ type BackgroundGitHubWorkItemCreateDeps = {
   confirmHooks: (
     store: GitHubWorkItemBackgroundStoreSnapshot,
     repoId: string,
-    scope: 'setup' | 'issueCommand'
+    scope: 'setup' | 'issueCommand',
+    hostId?: ExecutionHostId
   ) => ReturnType<typeof ensureHooksConfirmed>
   readIssueCommand: typeof readRuntimeIssueCommand
   beginBackgroundCreate: typeof beginBackgroundWorktreePreparation
@@ -75,6 +72,7 @@ type BackgroundGitHubWorkItemCreateDeps = {
 export type BackgroundGitHubWorkItemCreateArgs = {
   item: GitHubWorkItem
   repoId: string
+  repoExecutionHostId?: ExecutionHostId
   agentOverride?: TuiAgent
   taskSourceContext?: TaskSourceContext | null
   workspaceRunContext?: WorkspaceRunContext | null
@@ -91,8 +89,8 @@ const DEFAULT_DEPS: BackgroundGitHubWorkItemCreateDeps = {
     useAppStore.getState().activePendingCreationId === creationId,
   resolveSetupDecision: resolveDirectSetupDecision,
   resolvePrStartPoint: resolveDirectPrStartPoint,
-  confirmHooks: (store, repoId, scope: 'setup' | 'issueCommand') =>
-    ensureHooksConfirmed(store as ReturnType<typeof useAppStore.getState>, repoId, scope),
+  confirmHooks: (store, repoId, scope: 'setup' | 'issueCommand', hostId) =>
+    ensureHooksConfirmed(store as ReturnType<typeof useAppStore.getState>, repoId, scope, hostId),
   readIssueCommand: readRuntimeIssueCommand,
   beginBackgroundCreate: beginBackgroundWorktreePreparation,
   continueBackgroundCreate: continueBackgroundWorktreeCreation,
@@ -106,31 +104,6 @@ const DEFAULT_DEPS: BackgroundGitHubWorkItemCreateDeps = {
     useAppStore.getState().removePendingWorktreeCreation(creationId),
   setActiveView: (view) => useAppStore.getState().setActiveView(view),
   toastError: (message) => toast.error(message)
-}
-
-function repoHostUnavailable(store: GitHubWorkItemBackgroundStoreSnapshot, repo: Repo): boolean {
-  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (host?.kind === 'ssh') {
-    return store.sshConnectionStates.get(host.targetId)?.status !== 'connected'
-  }
-  if (host?.kind !== 'runtime') {
-    return false
-  }
-  const status = store.runtimeStatusByEnvironmentId.get(host.environmentId)?.status
-  if (!status) {
-    return true
-  }
-  if (!status.hostPlatform) {
-    return true
-  }
-  const compatibility = evaluateRuntimeCompat({
-    clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-    minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
-    serverProtocolVersion: status.runtimeProtocolVersion ?? status.protocolVersion,
-    serverMinCompatibleClientProtocolVersion:
-      status.minCompatibleRuntimeClientVersion ?? status.minCompatibleMobileVersion
-  })
-  return compatibility.kind === 'blocked'
 }
 
 function abandonStagedCreate(
@@ -152,11 +125,15 @@ export async function createGitHubWorkItemWorkspaceInBackground(
   deps: BackgroundGitHubWorkItemCreateDeps = DEFAULT_DEPS
 ): Promise<BackgroundGitHubWorkItemCreateResult> {
   const store = deps.getStore()
-  const repo = store.repos.find((candidate) => candidate.id === args.repoId)
+  const repo = findRepoForHost(store.repos, args.repoId, {
+    hostId: args.repoExecutionHostId,
+    settings: store.settings
+  })
   if (!repo) {
     args.openModalFallback()
     return { kind: 'fallback', reason: 'repo-missing' }
   }
+  const repoExecutionHostId = getRepoExecutionHostId(repo)
 
   const initialRequest = {
     ...buildInitialGitHubWorkItemRequest(args, repo),
@@ -172,7 +149,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
   }
   // Why: disconnected hosts make hook and agent probes fall back to skip/no-agent;
   // keep the old composer gate so Retry cannot reuse degraded preflight values.
-  if (repoHostUnavailable(store, repo)) {
+  if (isGitHubWorkItemRepoHostUnavailable(store, repo)) {
     args.openModalFallback()
     return { kind: 'fallback', reason: 'host-unavailable' }
   }
@@ -182,8 +159,16 @@ export async function createGitHubWorkItemWorkspaceInBackground(
   const itemIdentity = resolveGitHubWorkItemIdentity(args.item)
 
   try {
-    const repoOwnerSettings = getSettingsForRepoRuntimeOwner(store, args.repoId)
-    const setupResolution = await deps.resolveSetupDecision(args.repoId, repo, repoOwnerSettings)
+    const repoOwnerSettings = getSettingsForRepoRuntimeOwner(
+      { repos: [repo], settings: store.settings },
+      args.repoId
+    )
+    const setupResolution = await deps.resolveSetupDecision(
+      args.repoId,
+      repo,
+      repoOwnerSettings,
+      repoExecutionHostId
+    )
     // Why: once the staged row disappears, the user already cancelled or moved
     // on, so every later preflight await must exit without reopening UI.
     if (!deps.hasPendingCreate(creationId)) {
@@ -205,7 +190,8 @@ export async function createGitHubWorkItemWorkspaceInBackground(
           args.repoId,
           itemIdentity.number,
           repoOwnerSettings,
-          args.item
+          args.item,
+          repoExecutionHostId
         )
         baseBranch = result.baseBranch
         pushTarget = result.pushTarget
@@ -228,7 +214,12 @@ export async function createGitHubWorkItemWorkspaceInBackground(
     // Why: trust prompts are serialized app-wide, so read the store fresh at
     // each check — an "Always trust" stamped by an earlier prompt (including
     // this flow's own setup prompt) must short-circuit instead of re-prompting.
-    const trustDecision = await deps.confirmHooks(deps.getStore(), args.repoId, 'setup')
+    const trustDecision = await deps.confirmHooks(
+      deps.getStore(),
+      args.repoId,
+      'setup',
+      repoExecutionHostId
+    )
     if (!deps.hasPendingCreate(creationId)) {
       return { kind: 'background-started' }
     }
@@ -274,7 +265,11 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       // Why: read failures fail closed (no command), so create still proceeds.
       let effectiveContent = ''
       try {
-        const issueCommandRead = await deps.readIssueCommand(repoOwnerSettings, args.repoId)
+        const issueCommandRead = await deps.readIssueCommand(
+          repoOwnerSettings,
+          args.repoId,
+          repoExecutionHostId
+        )
         effectiveContent = (issueCommandRead.effectiveContent ?? '').trim()
       } catch {
         effectiveContent = ''
@@ -286,7 +281,8 @@ export async function createGitHubWorkItemWorkspaceInBackground(
         const issueCommandTrust = await deps.confirmHooks(
           deps.getStore(),
           args.repoId,
-          'issueCommand'
+          'issueCommand',
+          repoExecutionHostId
         )
         if (!deps.hasPendingCreate(creationId)) {
           return { kind: 'background-started' }

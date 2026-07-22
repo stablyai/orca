@@ -28,6 +28,7 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
+import { toast } from 'sonner'
 
 // Why: match App-level AddRepoDialog loading — the add flow is off the hot
 // path for the composer, so keep its clone/SSH machinery out of the entry render.
@@ -182,14 +183,25 @@ function QuickTabBody({
     setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
   }
   const quickAgent = resolvedQuickAgentSelection.quickAgent
+  const unavailableExplicitAgent =
+    quickAgent === null && typeof quickAgentOverride === 'string' ? quickAgentOverride : null
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)
   }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
+    if (unavailableExplicitAgent) {
+      toast.error(
+        translate(
+          'auto.source.control.agent.action.plan.a7ac8717c7',
+          'Choose an agent before starting.'
+        )
+      )
+      return
+    }
     await submitQuick(quickAgent)
-  }, [quickAgent, submitQuick])
+  }, [quickAgent, submitQuick, unavailableExplicitAgent])
   // Why: Add Project layers over the composer as a nested dialog instead of
   // replacing it in the activeModal slot — closing the composer mid-flow (and
   // losing the typed name/prompt) was the old, abrupt behavior. Once opened it

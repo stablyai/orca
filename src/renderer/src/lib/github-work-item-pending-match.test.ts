@@ -2,9 +2,20 @@ import { describe, expect, it } from 'vitest'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import { findPendingGitHubWorkItemCreate } from './github-work-item-background-match'
 
-function request(agent: WorktreeCreationRequest['agent']): WorktreeCreationRequest {
+function request(
+  agent: WorktreeCreationRequest['agent'],
+  hostId: NonNullable<WorktreeCreationRequest['workspaceRunContext']>['hostId'] = 'local'
+): WorktreeCreationRequest {
   return {
     repoId: 'repo-1',
+    workspaceRunContext: {
+      kind: 'workspace-run',
+      projectId: 'repo-1',
+      hostId,
+      projectHostSetupId: `repo-1:${hostId}`,
+      repoId: 'repo-1',
+      path: '/repo'
+    },
     name: 'issue-42',
     setupDecision: 'inherit',
     linkedIssue: 42,
@@ -37,5 +48,9 @@ describe('findPendingGitHubWorkItemCreate', () => {
   it('does not substitute an existing pending workspace for an explicit agent', () => {
     expect(findPendingGitHubWorkItemCreate(pending, request('claude'))).toBeNull()
     expect(findPendingGitHubWorkItemCreate(pending, request('codex'))).toBe('creation-codex')
+  })
+
+  it('does not match the same repository id on another execution host', () => {
+    expect(findPendingGitHubWorkItemCreate(pending, request('codex', 'ssh:server-b'))).toBeNull()
   })
 })

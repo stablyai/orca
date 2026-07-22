@@ -1,4 +1,5 @@
 import type { GitHubWorkItem, Worktree } from '../../../shared/types'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { basename } from './path'
 
 type GitHubWorkItemType = GitHubWorkItem['type']
@@ -7,7 +8,8 @@ export function findGithubWorkItemWorkspaceAttachment(
   worktrees: readonly Worktree[],
   repoId: string | null | undefined,
   type: GitHubWorkItemType,
-  number: number
+  number: number,
+  executionHostId?: ExecutionHostId
 ): Worktree | null {
   if (!repoId) {
     return null
@@ -15,7 +17,12 @@ export function findGithubWorkItemWorkspaceAttachment(
 
   return (
     worktrees.find((worktree) => {
-      if (worktree.repoId !== repoId || worktree.isArchived) {
+      if (
+        worktree.repoId !== repoId ||
+        worktree.isArchived ||
+        (executionHostId &&
+          (normalizeExecutionHostId(worktree.hostId) ?? 'local') !== executionHostId)
+      ) {
         return false
       }
 
@@ -27,17 +34,25 @@ export function findGithubWorkItemWorkspaceAttachment(
 export function findGithubPrWorkspaceAttachment(
   worktrees: readonly Worktree[],
   repoId: string | null | undefined,
-  prNumber: number
+  prNumber: number,
+  executionHostId?: ExecutionHostId
 ): Worktree | null {
-  return findGithubWorkItemWorkspaceAttachment(worktrees, repoId, 'pr', prNumber)
+  return findGithubWorkItemWorkspaceAttachment(worktrees, repoId, 'pr', prNumber, executionHostId)
 }
 
 export function findGithubIssueWorkspaceAttachment(
   worktrees: readonly Worktree[],
   repoId: string | null | undefined,
-  issueNumber: number
+  issueNumber: number,
+  executionHostId?: ExecutionHostId
 ): Worktree | null {
-  return findGithubWorkItemWorkspaceAttachment(worktrees, repoId, 'issue', issueNumber)
+  return findGithubWorkItemWorkspaceAttachment(
+    worktrees,
+    repoId,
+    'issue',
+    issueNumber,
+    executionHostId
+  )
 }
 
 export function getGithubWorkItemWorkspaceAttachmentLabel(worktree: Worktree): string {

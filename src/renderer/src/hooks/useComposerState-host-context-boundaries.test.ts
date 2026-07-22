@@ -220,19 +220,16 @@ describe('useComposerState host-context boundaries', () => {
       selectorSection.indexOf('if (runtimeEnvironmentId) {')
     )
 
-    expect(HOOK_SOURCE).toContain(
-      'const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null'
-    )
+    expect(HOOK_SOURCE).toContain("selectedRepoExecutionHost?.kind === 'runtime'")
+    expect(HOOK_SOURCE).toContain('selectedRepoExecutionHost.environmentId')
 
     // Detection effect fans out to the same three hosts in the same order and
-    // re-runs when the runtime environment changes.
+    // re-runs when the repository or runtime environment changes.
     const detectSection = sourceBetween(HOOK_SOURCE, 'const detect = isRemote', 'void detect.then')
     expect(detectSection).toContain('ensureRemoteDetectedAgents(connectionId)')
     expect(detectSection).toContain('ensureRuntimeDetectedAgents(runtimeEnvironmentId)')
-    expect(detectSection).toContain('ensureDetectedAgents()')
-    expect(HOOK_SOURCE).toContain(
-      '}, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])'
-    )
+    expect(detectSection).toContain('ensureDetectedAgents(repoId ? { repoId } : undefined)')
+    expect(HOOK_SOURCE).toContain('runtimeEnvironmentId,\n    isRemote,\n    repoId,')
   })
 
   it('seeds initial workspace run target from the task source context', () => {

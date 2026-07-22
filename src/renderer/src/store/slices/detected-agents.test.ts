@@ -365,9 +365,9 @@ describe('createDetectedAgentsSlice WSL context', () => {
       activeWorktreeId: null
     })
 
-    await expect(
-      store.getState().ensureDetectedAgents({ repoId: 'repo-target' })
-    ).resolves.toEqual(['claude'])
+    await expect(store.getState().ensureDetectedAgents({ repoId: 'repo-target' })).resolves.toEqual(
+      ['claude']
+    )
 
     expect(detectAgents).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -377,6 +377,79 @@ describe('createDetectedAgentsSlice WSL context', () => {
         })
       })
     )
+  })
+
+  it('does not let an older repository probe replace the newer context cache', async () => {
+    let resolveFirst: (ids: string[]) => void = () => {}
+    let resolveSecond: (ids: string[]) => void = () => {}
+    detectAgents
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve
+          })
+      )
+    const store = createTestStore({
+      repos: [
+        makeRepo({ id: 'repo-first', path: 'C:\\first' }),
+        makeRepo({ id: 'repo-second', path: 'C:\\second' })
+      ]
+    })
+
+    const first = store.getState().ensureDetectedAgents({ repoId: 'repo-first' })
+    const second = store.getState().ensureDetectedAgents({ repoId: 'repo-second' })
+    resolveSecond(['codex'])
+    await expect(second).resolves.toEqual(['codex'])
+    resolveFirst(['claude'])
+    await expect(first).resolves.toEqual(['claude'])
+
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+  })
+
+  it('does not let an older refresh replace a newer repository detection context', async () => {
+    let resolveRefresh: (result: {
+      agents: string[]
+      addedPathSegments: string[]
+      shellHydrationOk: boolean
+      pathSource: 'shell_hydrate'
+      pathFailureReason: 'none'
+    }) => void = () => {}
+    refreshAgents.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve
+        })
+    )
+    detectAgents.mockResolvedValueOnce(['codex'])
+    const store = createTestStore({
+      repos: [
+        makeRepo({ id: 'repo-refresh-source', path: 'C:\\refresh-source' }),
+        makeRepo({ id: 'repo-refresh-target', path: 'C:\\refresh-target' })
+      ],
+      activeRepoId: 'repo-refresh-source',
+      activeWorktreeId: null
+    })
+
+    const refresh = store.getState().refreshDetectedAgents()
+    const newerDetection = store.getState().ensureDetectedAgents({ repoId: 'repo-refresh-target' })
+    await expect(newerDetection).resolves.toEqual(['codex'])
+    resolveRefresh({
+      agents: ['claude'],
+      addedPathSegments: [],
+      shellHydrationOk: true,
+      pathSource: 'shell_hydrate',
+      pathFailureReason: 'none'
+    })
+    await expect(refresh).resolves.toEqual(['claude'])
+
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(store.getState().isRefreshingAgents).toBe(false)
   })
 
   it('does not keep previous context agents when detection fails after a context switch', async () => {

@@ -1304,13 +1304,14 @@ export function registerWorktreeHandlers(
       _event,
       args: {
         repoId: string
+        executionHostId?: ExecutionHostId
         prNumber: number
         headRefName?: string
         baseRefName?: string
         isCrossRepository?: boolean
       }
     ): Promise<GitHubPrStartPoint | { error: string }> => {
-      const repo = store.getRepo(args.repoId)
+      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.executionHostId)
       if (!repo) {
         return { error: 'Repo not found' }
       }

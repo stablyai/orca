@@ -13960,6 +13960,17 @@
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
       }
+    },
+    "source": {
+      "control": {
+        "agent": {
+          "action": {
+            "plan": {
+              "a7ac8717c7": "Elige un agente antes de empezar."
+            }
+          }
+        }
+      }
     }
   },
   "components": {

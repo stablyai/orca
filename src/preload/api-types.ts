@@ -1350,6 +1350,7 @@ export type PreloadApi = {
     prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
     resolvePrBase: (args: {
       repoId: string
+      executionHostId?: ExecutionHostId
       prNumber: number
       headRefName?: string
       baseRefName?: string

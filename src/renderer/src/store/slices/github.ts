@@ -2668,7 +2668,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           ...(options?.noCache ? { noCache: true } : {})
         })
         // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
-        const items: GitHubWorkItem[] = envelope.items.map((item) => ({ ...item, repoId }))
+        const items: GitHubWorkItem[] = envelope.items.map((item) => ({
+          ...item,
+          repoId,
+          ...(ownerHostId ? { repoExecutionHostId: ownerHostId } : {})
+        }))
         // Why: only surface issues-side errors here; PR-side failures predate the issue-source split (#1076) and are out of scope for this banner (design doc §2).
         const issuesError = envelope.errors?.issues
         // Why: errors.issues without sources.issues has no slug for the banner, so it's dropped from the cache; log it so this rare case is visible in devtools.
@@ -2817,7 +2821,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               envelope.errors.issues
             )
           }
-          return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
+          const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, r.sourceContext)
+          return envelope.items.map(
+            (item): GitHubWorkItem => ({
+              ...item,
+              repoId: r.repoId,
+              ...(ownerHostId ? { repoExecutionHostId: ownerHostId } : {})
+            })
+          )
         } catch (err) {
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             return [] as GitHubWorkItem[]

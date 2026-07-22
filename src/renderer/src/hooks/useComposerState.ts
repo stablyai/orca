@@ -140,6 +140,7 @@ import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folde
 import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
 import {
+  getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
@@ -711,6 +712,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     () => (folderDetectedIds ? new Set(folderDetectedIds) : null),
     [folderDetectedIds]
   )
+  const [useInitialTargetSeed, setUseInitialTargetSeed] = useState(true)
+  const initialTargetSeed =
+    useInitialTargetSeed && repoId === resolvedInitialRepoId ? initialRunSeed : null
   const selectedWorkspaceTarget = useMemo(
     () =>
       resolveWorkspaceCreationTarget({
@@ -718,11 +722,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         projects,
         projectHostSetups,
         draftRepoId: repoId,
+        projectId: initialTargetSeed?.projectId,
+        hostId: initialTargetSeed?.hostId,
+        projectHostSetupId: initialTargetSeed?.projectHostSetupId,
         focusedHostScope: workspaceHostScope
       }),
-    [eligibleRepos, projectHostSetups, projects, repoId, workspaceHostScope]
+    [
+      eligibleRepos,
+      initialTargetSeed?.hostId,
+      initialTargetSeed?.projectHostSetupId,
+      initialTargetSeed?.projectId,
+      projectHostSetups,
+      projects,
+      repoId,
+      workspaceHostScope
+    ]
   )
-  const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+  const selectedRepo =
+    selectedWorkspaceTarget.status === 'ready'
+      ? selectedWorkspaceTarget.target.repo
+      : eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
   const selectedRepoAgentLaunchPlatform = useMemo(() => {
     if (!selectedRepo) {
@@ -829,7 +848,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projectGroupTarget: isProjectGroupTarget,
     initialRecipeId: initialEphemeralVmRecipeId
   })
-  const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
+  const selectedRepoExecutionHostId = selectedRepo ? getRepoExecutionHostId(selectedRepo) : null
+  const selectedRepoExecutionHost = parseExecutionHostId(selectedRepoExecutionHostId)
+  const selectedRepoConnectionId =
+    selectedRepoExecutionHost?.kind === 'ssh'
+      ? selectedRepoExecutionHost.targetId
+      : (selectedRepo?.connectionId ?? null)
   const selectedRepoSshState = selectedRepoConnectionId
     ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
     : null
@@ -1035,7 +1059,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: for a repo on an SSH host or runtime env, read the per-host agent list so the dialog shows the host's installed agents, not local.
   const connectionId = selectedRepoConnectionId
   const isRemote = typeof connectionId === 'string'
-  const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
+  const runtimeEnvironmentId =
+    selectedRepoExecutionHost?.kind === 'runtime'
+      ? selectedRepoExecutionHost.environmentId
+      : (selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() ?? null)
   const detectedAgentList = useAppStore((s) => {
     if (isRemote) {
       return s.remoteDetectedAgentIds[connectionId] ?? null
@@ -1145,6 +1172,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   selectedRepoPathRef.current = selectedRepoPath
   const selectedRepoSettingsRef = useRef(selectedRepoSettings)
   selectedRepoSettingsRef.current = selectedRepoSettings
+  const selectedRepoExecutionHostIdRef = useRef(selectedRepoExecutionHostId)
+  selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId
 
   // Why: depend on the persisted policy *value*, not the selectedRepo object. Background repo
   // refetches (git polling) hand back a new repo reference with the same hookSettings; keying on
@@ -1259,12 +1288,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     promise: Promise<HookCheckResult>
   } | null>(null)
   const loadHookCheckForRepo = useCallback((targetRepoId: string): Promise<HookCheckResult> => {
-    const key = `${selectedRepoSettingsRef.current?.activeRuntimeEnvironmentId ?? 'local'}:${targetRepoId}`
+    const key = `${selectedRepoExecutionHostIdRef.current ?? 'local'}:${targetRepoId}`
     const existing = hookCheckRef.current
     if (existing?.key === key) {
       return existing.promise
     }
-    const promise = checkRuntimeHooks(selectedRepoSettingsRef.current, targetRepoId)
+    const promise = checkRuntimeHooks(
+      selectedRepoSettingsRef.current,
+      targetRepoId,
+      selectedRepoExecutionHostIdRef.current ?? undefined
+    )
     hookCheckRef.current = { key, promise }
     return promise
   }, [])
@@ -1583,7 +1616,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       ? ensureRemoteDetectedAgents(connectionId)
       : runtimeEnvironmentId
         ? ensureRuntimeDetectedAgents(runtimeEnvironmentId)
-        : ensureDetectedAgents()
+        : ensureDetectedAgents(repoId ? { repoId } : undefined)
     void detect.then((ids) => {
       if (cancelled) {
         return
@@ -1604,7 +1637,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     // Why: deps narrowed to host identity (connectionId/runtimeEnvironmentId); detection is a best-effort PATH snapshot, so draft/settings are excluded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])
+  }, [
+    connectionId,
+    runtimeEnvironmentId,
+    isRemote,
+    repoId,
+    selectedRepoSshStatus,
+    disabledTuiAgents
+  ])
 
   // Per-repo: load yaml hooks + issue command template.
   useEffect(() => {
@@ -1645,7 +1685,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
     }
 
-    void readRuntimeIssueCommand(selectedRepoSettingsRef.current, repoId)
+    void readRuntimeIssueCommand(
+      selectedRepoSettingsRef.current,
+      repoId,
+      selectedRepoExecutionHostId ?? undefined
+    )
       .then((result) => {
         if (!cancelled) {
           setIssueCommandTemplate(result.effectiveContent ?? '')
@@ -1672,6 +1716,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     enableIssueAutomation,
     loadHookCheckForRepo,
     repoId,
+    selectedRepoExecutionHostId,
     selectedRepoIsGit,
     runtimeEnvironmentId
   ])
@@ -1962,6 +2007,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             (await resolveGitHubPrStartPointForRepo({
               repoId: selectedRepo.id,
               prNumber: startPointIdentity.number,
+              executionHostId: selectedRepoExecutionHostId ?? undefined,
               settings: getSettingsForRepoRuntimeOwner(
                 { repos: [selectedRepo], settings },
                 selectedRepo.id
@@ -2054,6 +2100,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ? await resolveGitHubPrStartPointForRepo({
               repoId: selectedRepo.id,
               prNumber: itemIdentity.number,
+              executionHostId: selectedRepoExecutionHostId ?? undefined,
               settings: getSettingsForRepoRuntimeOwner(
                 { repos: [selectedRepo], settings },
                 selectedRepo.id
@@ -2116,6 +2163,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       linkedWorkItem,
       name,
       selectedRepo,
+      selectedRepoExecutionHostId,
       selectedRepoGitHubSourceContext,
       selectedRepoIsGit,
       settings
@@ -2487,6 +2535,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       options: { preserveStartFrom?: boolean; forceResetStartFrom?: boolean } = {}
     ): void => {
       setProjectError(null)
+      setUseInitialTargetSeed(false)
       if (value === repoId && !options.forceResetStartFrom) {
         setRepoId(value)
         return
@@ -3365,7 +3414,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         !submitShouldApplyLinkedOnlyTemplate
 
       const setupTrustDecision = selectedRepoIsGit
-        ? await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+        ? await ensureHooksConfirmed(
+            useAppStore.getState(),
+            repoId,
+            'setup',
+            selectedRepoExecutionHostId ?? undefined
+          )
         : 'skip'
       const effectiveSetupDecision: SetupDecision =
         setupTrustDecision === 'skip'
@@ -3377,7 +3431,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         issueCommandTrustDecision =
           setupTrustDecision === 'skip'
             ? 'skip'
-            : await ensureHooksConfirmed(useAppStore.getState(), repoId, 'issueCommand')
+            : await ensureHooksConfirmed(
+                useAppStore.getState(),
+                repoId,
+                'issueCommand',
+                selectedRepoExecutionHostId ?? undefined
+              )
       }
 
       const linkedLinearIssue =
@@ -3600,6 +3659,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     resolvedInitialWorkspaceStatus,
     selectedRepo,
     selectedRepoAgentLaunchPlatform,
+    selectedRepoExecutionHostId,
     selectedRepoIsRemote,
     selectedRepoStartupShell,
     selectedRepoIsGit,
@@ -3774,7 +3834,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
 
         const trustDecision = selectedRepoIsGit
-          ? await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+          ? await ensureHooksConfirmed(
+              useAppStore.getState(),
+              repoId,
+              'setup',
+              selectedRepoExecutionHostId ?? undefined
+            )
           : 'skip'
         const effectiveSetupDecision: SetupDecision =
           trustDecision === 'skip'
@@ -3931,7 +3996,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           const vmRecipeTrustDecision = await ensureHooksConfirmed(
             useAppStore.getState(),
             repoId,
-            'vmRecipe'
+            'vmRecipe',
+            selectedRepoExecutionHostId ?? undefined
           )
           if (vmRecipeTrustDecision === 'skip') {
             return
@@ -4047,6 +4113,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       resolvedInitialWorkspaceStatus,
       selectedRepo,
       selectedRepoAgentLaunchPlatform,
+      selectedRepoExecutionHostId,
       selectedRepoIsRemote,
       selectedRepoStartupShell,
       selectedRepoIsGit,
@@ -4176,9 +4243,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     baseBranchLinkedPrNumber:
       linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
     selectedRepoPath: isProjectGroupTarget ? null : (selectedRepo?.path ?? null),
-    selectedRepoIsRemote: isProjectGroupTarget
-      ? folderTargetIsRemote
-      : Boolean(selectedRepo?.connectionId),
+    selectedRepoIsRemote: isProjectGroupTarget ? folderTargetIsRemote : isRemote,
     selectedRepoConnectionId: isProjectGroupTarget
       ? folderTargetConnectionId
       : selectedRepoConnectionId,

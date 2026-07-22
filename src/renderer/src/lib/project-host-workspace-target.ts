@@ -1,5 +1,6 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
+  getRepoExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../shared/execution-host'
@@ -77,9 +78,12 @@ function isReadySetup(setup: ProjectHostSetup): boolean {
 
 function createTarget(
   setup: ProjectHostSetup,
-  repoById: ReadonlyMap<string, Repo>
+  eligibleRepos: readonly Repo[]
 ): WorkspaceCreationTarget | null {
-  const repo = repoById.get(setup.repoId)
+  const repo = eligibleRepos.find(
+    (candidate) =>
+      candidate.id === setup.repoId && getRepoExecutionHostId(candidate) === setup.hostId
+  )
   if (!repo) {
     return null
   }
@@ -95,14 +99,14 @@ function createTarget(
 
 function findReadySetupTarget(
   setups: readonly ProjectHostSetup[],
-  repoById: ReadonlyMap<string, Repo>,
+  eligibleRepos: readonly Repo[],
   predicate: (setup: ProjectHostSetup) => boolean
 ): WorkspaceCreationTarget | null {
   for (const setup of setups) {
     if (!isReadySetup(setup) || !predicate(setup)) {
       continue
     }
-    const target = createTarget(setup, repoById)
+    const target = createTarget(setup, eligibleRepos)
     if (target) {
       return target
     }
@@ -119,7 +123,6 @@ export function resolveWorkspaceCreationTarget(
   }
 
   const model = getProjectSetupModel(input)
-  const repoById = new Map(eligibleRepos.map((repo) => [repo.id, repo]))
   const setups = model?.setups ?? []
 
   if (projectHostSetupId) {
@@ -136,9 +139,9 @@ export function resolveWorkspaceCreationTarget(
     const canonical =
       findReadySetupTarget(
         setups,
-        repoById,
+        eligibleRepos,
         (entry) => entry.projectId === setup.projectId && entry.hostId === setup.hostId
-      ) ?? createTarget(setup, repoById)
+      ) ?? createTarget(setup, eligibleRepos)
     if (canonical) {
       return { status: 'ready', target: canonical }
     }
@@ -158,7 +161,7 @@ export function resolveWorkspaceCreationTarget(
     }
     const target = findReadySetupTarget(
       setups,
-      repoById,
+      eligibleRepos,
       (setup) => setup.projectId === projectId && setup.hostId === hostId
     )
     if (target) {
@@ -173,14 +176,18 @@ export function resolveWorkspaceCreationTarget(
     const focusedTarget = focusedHostId
       ? findReadySetupTarget(
           setups,
-          repoById,
+          eligibleRepos,
           (setup) => setup.projectId === projectId && setup.hostId === focusedHostId
         )
       : null
     if (focusedTarget) {
       return { status: 'ready', target: focusedTarget }
     }
-    const target = findReadySetupTarget(setups, repoById, (setup) => setup.projectId === projectId)
+    const target = findReadySetupTarget(
+      setups,
+      eligibleRepos,
+      (setup) => setup.projectId === projectId
+    )
     if (target) {
       return { status: 'ready', target }
     }
@@ -188,14 +195,14 @@ export function resolveWorkspaceCreationTarget(
   }
 
   if (hostId) {
-    const target = findReadySetupTarget(setups, repoById, (setup) => setup.hostId === hostId)
+    const target = findReadySetupTarget(setups, eligibleRepos, (setup) => setup.hostId === hostId)
     if (target) {
       return { status: 'ready', target }
     }
   }
 
   const repoId = resolveComposerRepoId(input)
-  const legacyRepo = repoId ? repoById.get(repoId) : null
+  const legacyRepo = repoId ? eligibleRepos.find((repo) => repo.id === repoId) : null
   if (!legacyRepo) {
     return { status: 'unavailable', reason: 'no-eligible-repo' }
   }
@@ -203,7 +210,7 @@ export function resolveWorkspaceCreationTarget(
   const legacySetup =
     setups.find((setup) => setup.repoId === legacyRepo.id && isReadySetup(setup)) ??
     projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
-  const legacyTarget = legacySetup ? createTarget(legacySetup, repoById) : null
+  const legacyTarget = legacySetup ? createTarget(legacySetup, eligibleRepos) : null
   if (!legacyTarget) {
     return { status: 'unavailable', reason: 'setup-not-found' }
   }

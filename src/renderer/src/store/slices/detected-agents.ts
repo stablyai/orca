@@ -48,6 +48,7 @@ let detectPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let refreshPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let detectedContextKey: string | null = null
 let localDetectionGeneration = 0
+let latestLocalDetectionRequest = 0
 const remoteDetectPromises = new Map<string, Promise<TuiAgent[]>>()
 const remoteRefreshPromises = new Map<string, Promise<TuiAgent[]>>()
 
@@ -82,23 +83,32 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     const contextChanged = detectedContextKey !== contextKey
     set({
       detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
-      isDetectingAgents: true
+      isDetectingAgents: true,
+      isRefreshingAgents: false
     })
     const requestGeneration = localDetectionGeneration
-    const pending = window.api.preflight
-      .detectAgents(context)
+    const requestId = ++latestLocalDetectionRequest
+    let pending: Promise<TuiAgent[]>
+    pending = window.api.preflight
+      .detectAgents(context ?? undefined)
       .then((ids) => {
         const typed = ids as TuiAgent[]
-        if (requestGeneration === localDetectionGeneration) {
+        if (
+          requestGeneration === localDetectionGeneration &&
+          requestId === latestLocalDetectionRequest &&
+          detectPromise?.promise === pending
+        ) {
           set({ detectedAgentIds: typed, isDetectingAgents: false })
           detectedContextKey = contextKey
         }
         return typed
       })
       .catch(() => {
-        // Why: allow a retry on the next call if detection blew up (IPC timeout
-        // during cold start). Do not cache the failure or show stale context.
-        if (requestGeneration === localDetectionGeneration) {
+        if (
+          requestGeneration === localDetectionGeneration &&
+          requestId === latestLocalDetectionRequest &&
+          detectPromise?.promise === pending
+        ) {
           detectPromise = null
           set({
             detectedAgentIds: contextChanged ? [] : get().detectedAgentIds,
@@ -120,14 +130,21 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     const contextChanged = detectedContextKey !== contextKey
     set({
       detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
+      isDetectingAgents: false,
       isRefreshingAgents: true
     })
     const requestGeneration = localDetectionGeneration
-    const pending = window.api.preflight
+    const requestId = ++latestLocalDetectionRequest
+    let pending: Promise<TuiAgent[]>
+    pending = window.api.preflight
       .refreshAgents(context)
       .then((result) => {
         const typed = result.agents as TuiAgent[]
-        if (requestGeneration === localDetectionGeneration) {
+        if (
+          requestGeneration === localDetectionGeneration &&
+          requestId === latestLocalDetectionRequest &&
+          refreshPromise?.promise === pending
+        ) {
           set({
             detectedAgentIds: typed,
             isRefreshingAgents: false,
@@ -143,7 +160,11 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       })
       .catch(() => {
         const fallback = contextChanged ? [] : (get().detectedAgentIds ?? [])
-        if (requestGeneration === localDetectionGeneration) {
+        if (
+          requestGeneration === localDetectionGeneration &&
+          requestId === latestLocalDetectionRequest &&
+          refreshPromise?.promise === pending
+        ) {
           set({
             detectedAgentIds: fallback,
             isRefreshingAgents: false
@@ -162,6 +183,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
 
   clearLocalDetectedAgents: () => {
     localDetectionGeneration += 1
+    latestLocalDetectionRequest += 1
     detectPromise = null
     refreshPromise = null
     detectedContextKey = null

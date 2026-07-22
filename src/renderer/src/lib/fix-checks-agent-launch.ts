@@ -14,6 +14,7 @@ import {
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
@@ -118,7 +119,10 @@ async function pickExistingWorktreeAgent(
 
 export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
   const store = useAppStore.getState()
-  const repo = store.repos.find((candidate) => candidate.id === args.repoId) ?? null
+  const repo = findRepoForHost(store.repos, args.repoId, {
+    hostId: args.item?.repoExecutionHostId,
+    settings: store.settings
+  })
   const recipe = resolveSourceControlActionRecipe({
     settings: store.settings,
     repo,
@@ -142,7 +146,12 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
   const attachedWorkspace =
     args.worktreeId || !args.item
       ? null
-      : findGithubPrWorkspaceAttachment(store.allWorktrees(), args.repoId, args.item.number)
+      : findGithubPrWorkspaceAttachment(
+          store.allWorktrees(),
+          args.repoId,
+          args.item.number,
+          args.item.repoExecutionHostId
+        )
   const targetWorktreeId = args.worktreeId ?? attachedWorkspace?.id ?? null
   if (targetWorktreeId) {
     const targetWorktree = store.allWorktrees().find((worktree) => worktree.id === targetWorktreeId)

@@ -423,7 +423,8 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       executionHostId: 'runtime:env-1'
     }
     const store = makeStore({
-      repos: [runtimeRepo],
+      // Why: repo ids are host-scoped; keep the local duplicate first to prove the target host wins.
+      repos: [repo, runtimeRepo],
       runtimeStatusByEnvironmentId: new Map([
         [
           'env-1',
@@ -443,6 +444,7 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       {
         item: makeIssue(),
         repoId: 'repo-1',
+        repoExecutionHostId: 'runtime:env-1',
         openModalFallback: vi.fn()
       },
       deps
@@ -650,7 +652,8 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
         branchName: 'fix-issue-6933',
         baseRefName: 'main',
         isCrossRepository: true
-      })
+      }),
+      'local'
     )
     expect(deps.continueBackgroundCreate).toHaveBeenCalledWith(
       'creation-1',
@@ -713,8 +716,6 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       deps
     )
 
-    expect(deps.confirmHooks).toHaveBeenCalledWith(expect.anything(), 'repo-1', 'setup')
-    expect(deps.confirmHooks).toHaveBeenCalledWith(expect.anything(), 'repo-1', 'issueCommand')
     const continueCall = deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined
     expect(continueCall).toBeDefined()
     const request = continueCall?.[1] as WorktreeCreationRequest

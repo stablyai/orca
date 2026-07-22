@@ -7,6 +7,7 @@ import {
   type WorkItemsCacheSources
 } from '@/store/slices/github'
 import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 export type TaskPageRepoCacheInput = {
   id: string
@@ -18,6 +19,7 @@ export type TaskPageRepoCacheInput = {
 export type TaskPageDialogWorkItemKey = {
   id: string
   repoId: string
+  repoExecutionHostId?: ExecutionHostId
 } | null
 
 export type TaskPageRepoSourceState = {
@@ -341,9 +343,16 @@ export function findTaskPageDialogWorkItem(
     return null
   }
 
+  const requestedHostId = dialogWorkItemKey.repoExecutionHostId
+    ? normalizeExecutionHostId(dialogWorkItemKey.repoExecutionHostId)
+    : null
   for (const entry of Object.values(workItemsCache)) {
     const found = entry?.data?.find(
-      (wi) => wi.id === dialogWorkItemKey.id && wi.repoId === dialogWorkItemKey.repoId
+      (wi) =>
+        wi.id === dialogWorkItemKey.id &&
+        wi.repoId === dialogWorkItemKey.repoId &&
+        (requestedHostId === null ||
+          normalizeExecutionHostId(wi.repoExecutionHostId) === requestedHostId)
     )
     if (found) {
       return found

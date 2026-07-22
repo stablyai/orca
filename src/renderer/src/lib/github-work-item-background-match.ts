@@ -1,5 +1,6 @@
 import type { GitHubWorkItemBackgroundStoreSnapshot } from '@/lib/github-work-item-background-request'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import { normalizeExecutionHostId } from '../../../shared/execution-host'
 
 export type GitHubWorkItemBackgroundFallbackReason =
   | 'repo-missing'
@@ -20,6 +21,8 @@ export function findPendingGitHubWorkItemCreate(
     const pending = entry.request
     return (
       pending.repoId === request.repoId &&
+      (normalizeExecutionHostId(pending.workspaceRunContext?.hostId) ?? 'local') ===
+        (normalizeExecutionHostId(request.workspaceRunContext?.hostId) ?? 'local') &&
       pending.linkedIssue === request.linkedIssue &&
       pending.linkedPR === request.linkedPR &&
       (!request.agent || pending.agent === request.agent)

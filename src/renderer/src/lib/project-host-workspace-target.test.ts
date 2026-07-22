@@ -166,6 +166,30 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
+  it('resolves duplicate repository ids to the repository on the setup host', () => {
+    const runtimeRepo = makeRepo('orca', {
+      path: '/runtime/orca',
+      executionHostId: 'runtime:gpu-1'
+    })
+    const localRepo = makeRepo('orca', { path: '/local/orca' })
+    const project = makeProject('github:stablyai/orca', ['orca'])
+    const runtimeSetup = makeSetup('orca-runtime', project.id, 'runtime:gpu-1', 'orca', {
+      path: runtimeRepo.path
+    })
+
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: [runtimeRepo, localRepo],
+      projects: [project],
+      projectHostSetups: [runtimeSetup],
+      projectHostSetupId: runtimeSetup.id
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ready',
+      target: { hostId: 'runtime:gpu-1', repo: { path: '/runtime/orca' } }
+    })
+  })
+
   it('does not merge same-name repos without shared project identity', () => {
     const repos = [
       makeRepo('personal-orca', { displayName: 'orca' }),
