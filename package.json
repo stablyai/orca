@@ -114,7 +114,7 @@
     "@xterm/addon-serialize": "0.15.0-beta.287",
     "@xterm/headless": "6.1.0-beta.287",
     "agent-browser": "~0.27.0",
-    "electron-updater": "^6.8.3",
+    "electron-updater": "^6.8.9",
     "i18next": "^26.3.1",
     "jsonc-parser": "^3.3.1",
     "node-pty": "^1.1.0",
@@ -176,9 +176,10 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "dompurify": "^3.4.11",
+    "dompurify": "^3.4.12",
     "electron": "^43.1.0",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.15.3",
+    "electron-builder-squirrel-windows": "^26.15.3",
     "electron-vite": "^5.0.0",
     "emoji-picker-react": "^4.19.1",
     "happy-dom": "^20.9.0",
@@ -213,7 +214,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
-    "shadcn": "^4.7.0",
+    "shadcn": "^4.13.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.4",
@@ -251,7 +252,8 @@
   "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
   "pnpm": {
     "overrides": {
-      "monaco-editor>dompurify": "3.4.11"
+      "@modelcontextprotocol/sdk>@hono/node-server": "2.0.10",
+      "monaco-editor>dompurify": "3.4.12"
     },
     "supportedArchitectures": {
       "os": [
