@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto'
+import { rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
 import {
@@ -185,6 +189,41 @@ describe('ORCH-R15 role lease / post-worker_done quarantine', () => {
     expect(canPerformCoordinatorControl(authority, 'taskCreate')).toBe(true)
   })
 
+  it('persists explicit coordinator promotion across database reopen', () => {
+    const dbPath = join(tmpdir(), `orca-role-lease-${randomUUID()}.sqlite`)
+    db = new OrchestrationDb(dbPath)
+    try {
+      const { task, ctx } = dispatchWorker(db, {
+        handle: 'term_worker',
+        paneKey: 'tab_w:leaf_w'
+      })
+      db.updateTaskStatus(task.id, 'completed')
+      db.completeDispatch(ctx.id)
+      const lease = db.grantCoordinatorRoleLease({
+        subjectHandle: 'term_worker',
+        subjectPaneKey: 'tab_w:leaf_w',
+        grantedByHandle: 'term_coord'
+      })
+      db.close()
+      db = undefined
+
+      db = new OrchestrationDb(dbPath)
+      expect(
+        resolveOrchestrationAuthority(db, {
+          handle: 'term_worker',
+          paneKey: 'tab_w:leaf_w'
+        })
+      ).toMatchObject({
+        role: 'coordinator',
+        lease: { id: lease.id, ceremony: 'explicit_handoff' }
+      })
+    } finally {
+      db?.close()
+      db = undefined
+      rmSync(dbPath, { force: true })
+    }
+  })
+
   it('lets fresh redispatch restore worker scope over prior quarantine', () => {
     const d = createDb()
     const first = dispatchWorker(d, { handle: 'term_worker', paneKey: 'tab_w:leaf_w' })
@@ -205,13 +244,65 @@ describe('ORCH-R15 role lease / post-worker_done quarantine', () => {
     ).toMatchObject({ role: 'worker', dispatch: { id: second.ctx.id } })
   })
 
-  it('keeps never-dispatched / identity-less callers unscoped', () => {
+  it('allows identity-less bootstrap but fails closed after dispatch history exists', () => {
     const d = createDb()
     expect(resolveOrchestrationAuthority(d, {}).role).toBe('unscoped')
     expect(
       resolveOrchestrationAuthority(d, { handle: 'term_coord', paneKey: 'tab_c:leaf_c' }).role
     ).toBe('unscoped')
+
+    dispatchWorker(d, { handle: 'term_worker', paneKey: 'tab_w:leaf_w' })
+
+    expect(resolveOrchestrationAuthority(d, {}).role).toBe('unidentified')
+    expect(canPerformCoordinatorControl({ role: 'unidentified' }, 'taskCreate')).toBe(false)
     expect(canPerformCoordinatorControl({ role: 'unscoped' }, 'taskCreate')).toBe(true)
+  })
+
+  it('consumes a coordinator lease on fresh redispatch', () => {
+    const d = createDb()
+    const first = dispatchWorker(d, { handle: 'term_worker', paneKey: 'tab_w:leaf_w' })
+    d.updateTaskStatus(first.task.id, 'completed')
+    d.completeDispatch(first.ctx.id)
+    d.grantCoordinatorRoleLease({
+      subjectHandle: 'term_worker',
+      subjectPaneKey: 'tab_w:leaf_w',
+      grantedByHandle: 'term_coord'
+    })
+
+    const second = dispatchWorker(d, {
+      handle: 'term_worker',
+      paneKey: 'tab_w:leaf_w',
+      spec: 'redispatched work'
+    })
+    d.updateTaskStatus(second.task.id, 'completed')
+    d.completeDispatch(second.ctx.id)
+
+    expect(
+      d.findActiveCoordinatorLease({
+        handle: 'term_worker',
+        paneKey: 'tab_w:leaf_w'
+      })
+    ).toBeUndefined()
+    expect(
+      resolveOrchestrationAuthority(d, { handle: 'term_worker', paneKey: 'tab_w:leaf_w' }).role
+    ).toBe('quarantined')
+  })
+
+  it('preserves worker quarantine evidence through task reset', () => {
+    const d = createDb()
+    const { task, ctx } = dispatchWorker(d, {
+      handle: 'term_worker',
+      paneKey: 'tab_w:leaf_w'
+    })
+    d.updateTaskStatus(task.id, 'completed')
+    d.completeDispatch(ctx.id)
+
+    d.resetTasks()
+
+    expect(d.listTasks()).toHaveLength(0)
+    expect(
+      resolveOrchestrationAuthority(d, { handle: 'term_worker', paneKey: 'tab_w:leaf_w' }).role
+    ).toBe('quarantined')
   })
 
   it('denies self-promotion grant while quarantined', () => {

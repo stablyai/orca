@@ -364,7 +364,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
     // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness probe (worker_done must survive the mid-restart window) and no remint (older runtimes require from === the stale assignee_handle).
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const caller = await resolveCallerRoleIdentity(client)
+    const caller = ['decision_gate', 'handoff', 'dispatch', 'merge_ready'].includes(type ?? '')
+      ? await resolveCallerRoleIdentity(client)
+      : {}
     const result = await client.call<OrchestrationSendResult>('orchestration.send', {
       from,
       to,
@@ -601,7 +603,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
-    const caller = await resolveCallerRoleIdentity(client)
+    const caller = {
+      callerTerminalHandle: from,
+      callerPaneKey: process.env.ORCA_PANE_KEY || undefined
+    }
     const dryRun = flags.has('dry-run') ? true : undefined
     const returnPreamble = flags.has('return-preamble') ? true : undefined
     // Why: --to is only required for non-dry-run; the RPC handler re-enforces.
@@ -697,7 +702,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration run': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
-    const caller = await resolveCallerRoleIdentity(client)
+    const caller = {
+      callerTerminalHandle: from,
+      callerPaneKey: process.env.ORCA_PANE_KEY || undefined
+    }
     const result = await client.call<{
       runId: string
       status: string

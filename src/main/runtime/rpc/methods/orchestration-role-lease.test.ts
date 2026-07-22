@@ -16,6 +16,15 @@ describe('ORCH-R15 role lease RPC guards', () => {
     dbOpen = true
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => {
+      if (handle === 'term_worker') {
+        return 'tab_w:leaf_w'
+      }
+      if (handle === 'term_coord') {
+        return 'tab_c:leaf_c'
+      }
+      return null
+    })
     ctx = { runtime }
   }
 
@@ -163,6 +172,44 @@ describe('ORCH-R15 role lease RPC guards', () => {
       callerPaneKey: 'tab_w:leaf_w'
     })) as { task: { id: string } }
     expect(created.task.id).toMatch(/^task_/)
+  })
+
+  it('denies identity-less self-grant after dispatch history without mutation', async () => {
+    setup()
+    const { task, dispatch } = dispatchWorker()
+    db.updateTaskStatus(task.id, 'completed')
+    db.completeDispatch(dispatch.id)
+    expect(
+      db.findActiveCoordinatorLease({ handle: 'term_worker', paneKey: 'tab_w:leaf_w' })
+    ).toBeUndefined()
+
+    await expect(
+      call('orchestration.roleLeaseGrant', {
+        to: 'term_worker',
+        from: 'term_unknown',
+        subjectPaneKey: 'tab_w:leaf_w'
+      })
+    ).rejects.toBeInstanceOf(OrchestrationRoleDeniedError)
+    expect(
+      db.findActiveCoordinatorLease({ handle: 'term_worker', paneKey: 'tab_w:leaf_w' })
+    ).toBeUndefined()
+  })
+
+  it('denies a live coordinator handle paired with the worker pane', async () => {
+    setup()
+    const { task, dispatch } = dispatchWorker()
+    db.updateTaskStatus(task.id, 'completed')
+    db.completeDispatch(dispatch.id)
+    const beforeTasks = db.listTasks().length
+
+    await expect(
+      call('orchestration.taskCreate', {
+        spec: 'forged coordinator',
+        callerTerminalHandle: 'term_coord',
+        callerPaneKey: 'tab_w:leaf_w'
+      })
+    ).rejects.toBeInstanceOf(OrchestrationRoleDeniedError)
+    expect(db.listTasks()).toHaveLength(beforeTasks)
   })
 
   it('preserves worker_done / heartbeat sends for an active assignee', async () => {

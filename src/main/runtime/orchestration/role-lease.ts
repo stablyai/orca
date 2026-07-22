@@ -20,6 +20,7 @@ export type OrchestrationCallerIdentity = {
 }
 
 export type OrchestrationAuthority =
+  | { role: 'unidentified' }
   | { role: 'unscoped' }
   | { role: 'worker'; dispatch: DispatchContextRow }
   | { role: 'quarantined'; lastDispatch: DispatchContextRow }
@@ -54,7 +55,7 @@ export class OrchestrationRoleDeniedError extends Error {
   }
 }
 
-function isEquivalentPaneKey(a: string, b: string): boolean {
+export function isEquivalentOrchestrationPaneKey(a: string, b: string): boolean {
   if (a === b) {
     return true
   }
@@ -72,7 +73,11 @@ export function matchesAssigneeIdentity(
   if (handle && row.assignee_handle === handle) {
     return true
   }
-  if (paneKey && row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, paneKey)) {
+  if (
+    paneKey &&
+    row.assignee_pane_key &&
+    isEquivalentOrchestrationPaneKey(row.assignee_pane_key, paneKey)
+  ) {
     return true
   }
   return false
@@ -84,13 +89,10 @@ export function matchesLeaseSubject(
 ): boolean {
   const handle = identity.handle?.trim() || undefined
   const paneKey = identity.paneKey?.trim() || undefined
-  if (handle && lease.subject_handle === handle) {
-    return true
+  if (lease.subject_pane_key) {
+    return Boolean(paneKey && isEquivalentOrchestrationPaneKey(lease.subject_pane_key, paneKey))
   }
-  if (paneKey && lease.subject_pane_key && isEquivalentPaneKey(lease.subject_pane_key, paneKey)) {
-    return true
-  }
-  return false
+  return Boolean(handle && lease.subject_handle === handle)
 }
 
 /**
@@ -102,8 +104,8 @@ export function matchesLeaseSubject(
  * 3. prior inactive worker dispatch → post-worker_done quarantine
  * 4. otherwise → unscoped (may perform coordinator control)
  *
- * Missing caller identity stays unscoped so external/non-terminal owners keep
- * recovery tools; the ORCH-R15 failure mode always has a live worker identity.
+ * Missing identity bootstraps only an empty DB, then fails closed once any
+ * dispatch has established worker authority.
  */
 export function resolveOrchestrationAuthority(
   db: OrchestrationDb,
@@ -112,7 +114,7 @@ export function resolveOrchestrationAuthority(
   const handle = identity.handle?.trim() || undefined
   const paneKey = identity.paneKey?.trim() || undefined
   if (!handle && !paneKey) {
-    return { role: 'unscoped' }
+    return db.hasAnyDispatchContexts() ? { role: 'unidentified' } : { role: 'unscoped' }
   }
 
   const active = db.findActiveDispatchForAssignee(handle ?? '', paneKey)
@@ -143,6 +145,8 @@ export function canPerformCoordinatorControl(
   operation: CoordinatorControlOperation
 ): boolean {
   switch (authority.role) {
+    case 'unidentified':
+      return false
     case 'unscoped':
     case 'coordinator':
       return true
@@ -170,6 +174,9 @@ export function formatRoleDeniedMessage(
   operation: CoordinatorControlOperation,
   authority: OrchestrationAuthority
 ): string {
+  if (authority.role === 'unidentified') {
+    return `Denied ${operation}: caller terminal identity is missing or unverifiable.`
+  }
   if (authority.role === 'worker') {
     return (
       `Denied ${operation}: terminal is an active dispatched worker ` +
@@ -192,6 +199,8 @@ export function coordinatorControlOpForMessageType(
   type: string | undefined
 ): CoordinatorControlOperation | null {
   switch (type) {
+    case undefined:
+      return null
     case 'decision_gate':
       return 'send.decision_gate'
     case 'handoff':

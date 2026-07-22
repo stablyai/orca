@@ -72,7 +72,7 @@ describe('orchestration empty-dispatch short-circuit (benchmark)', () => {
     expect(contexts).toBe(1)
   })
 
-  it('predicate lifecycle: false when empty, true after dispatch (even completed), false after reset', () => {
+  it('predicate lifecycle: reset preserves dispatch evidence for role enforcement', () => {
     const db = new OrchestrationDb(':memory:')
     expect(db.hasAnyDispatchContexts()).toBe(false)
     const ctx = db.createDispatchContext(db.createTask({ spec: 'work' }).id, 'term_worker')
@@ -81,6 +81,6 @@ describe('orchestration empty-dispatch short-circuit (benchmark)', () => {
     db.completeDispatch(ctx.id)
     expect(db.hasAnyDispatchContexts()).toBe(true)
     db.resetTasks()
-    expect(db.hasAnyDispatchContexts()).toBe(false)
+    expect(db.hasAnyDispatchContexts()).toBe(true)
   })
 })

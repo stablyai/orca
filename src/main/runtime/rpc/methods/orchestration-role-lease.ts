@@ -4,6 +4,7 @@ import { OptionalString, requiredString } from '../schemas'
 import {
   assertCoordinatorControlAllowed,
   coordinatorControlOpForMessageType,
+  isEquivalentOrchestrationPaneKey,
   type OrchestrationCallerIdentity
 } from '../../orchestration/role-lease'
 import type { OrchestrationDb } from '../../orchestration/db'
@@ -22,6 +23,7 @@ export const RoleLeaseGrantParams = z.object({
 })
 
 export function resolveCallerIdentity(
+  db: OrchestrationDb,
   runtime: OrcaRuntimeService,
   params: {
     callerTerminalHandle?: string
@@ -30,12 +32,41 @@ export function resolveCallerIdentity(
     senderPaneKey?: string
   }
 ): OrchestrationCallerIdentity {
-  const handle = params.callerTerminalHandle ?? params.from ?? undefined
-  const paneKey =
+  const claimedHandle = params.callerTerminalHandle ?? params.from ?? undefined
+  const claimedPaneKey =
     params.callerPaneKey ??
     params.senderPaneKey ??
-    (handle ? (runtime.getTerminalPaneKey(handle) ?? undefined) : undefined)
-  return { handle, paneKey }
+    (claimedHandle ? (runtime.getTerminalPaneKey(claimedHandle) ?? undefined) : undefined)
+
+  if (!claimedHandle && !claimedPaneKey) {
+    return {}
+  }
+
+  // After the first dispatch, bind request claims to the runtime's live pane map.
+  if (!db.hasAnyDispatchContexts()) {
+    return { handle: claimedHandle, paneKey: claimedPaneKey }
+  }
+
+  if (claimedHandle) {
+    const runtimePaneKey = runtime.getTerminalPaneKey(claimedHandle) ?? undefined
+    if (!runtimePaneKey) {
+      return {}
+    }
+    if (claimedPaneKey && !isEquivalentOrchestrationPaneKey(runtimePaneKey, claimedPaneKey)) {
+      return {}
+    }
+    return { handle: claimedHandle, paneKey: runtimePaneKey }
+  }
+
+  if (!claimedPaneKey) {
+    return {}
+  }
+  try {
+    const terminal = runtime.resolveTerminalPane(claimedPaneKey)
+    return { handle: terminal.handle, paneKey: claimedPaneKey }
+  } catch {
+    return {}
+  }
 }
 
 export function assertCallerCoordinatorControl(
@@ -49,7 +80,7 @@ export function assertCallerCoordinatorControl(
   },
   operation: Parameters<typeof assertCoordinatorControlAllowed>[2]
 ): void {
-  assertCoordinatorControlAllowed(db, resolveCallerIdentity(runtime, params), operation)
+  assertCoordinatorControlAllowed(db, resolveCallerIdentity(db, runtime, params), operation)
 }
 
 export function assertSenderCoordinatorMessageAllowed(

@@ -617,7 +617,7 @@ describe('OrchestrationDb', () => {
       expect(d.listTasks()).toHaveLength(1)
     })
 
-    it('resetTasks clears tasks and dispatch contexts', () => {
+    it('resetTasks clears tasks while preserving inactive dispatch evidence', () => {
       const d = createDb()
       d.insertMessage({ from: 'a', to: 'b', subject: 'test' })
       const task = d.createTask({ spec: 'work' })
@@ -627,6 +627,7 @@ describe('OrchestrationDb', () => {
 
       expect(d.getInbox()).toHaveLength(1)
       expect(d.listTasks()).toHaveLength(0)
+      expect(d.getLatestDispatchForTerminal('term_a')?.status).toBe('failed')
     })
   })
 

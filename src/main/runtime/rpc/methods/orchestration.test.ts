@@ -22,6 +22,9 @@ describe('orchestration RPC methods', () => {
     dbOpen = true
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_test_coord' ? 'tab_test:leaf_test' : null
+    )
     ctx = { runtime }
   }
 
@@ -46,7 +49,13 @@ describe('orchestration RPC methods', () => {
 
   async function call(name: string, params: Record<string, unknown>) {
     const method = findMethod(name)
-    const parsed = method.params ? method.params.parse(params) : undefined
+    const parsed = method.params
+      ? method.params.parse({
+          callerTerminalHandle: 'term_test_coord',
+          callerPaneKey: 'tab_test:leaf_test',
+          ...params
+        })
+      : undefined
     return method.handler(parsed, ctx)
   }
 

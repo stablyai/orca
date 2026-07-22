@@ -51,6 +51,8 @@ afterEach(() => {
 describe('orchestration reset CLI handler', () => {
   beforeEach(() => {
     callMock.mockReset().mockResolvedValue({ result: { reset: 'all' } })
+    delete process.env.ORCA_TERMINAL_HANDLE
+    delete process.env.ORCA_PANE_KEY
   })
 
   const invoke = (flags: Map<string, string | boolean>) =>
@@ -401,7 +403,9 @@ describe('orchestration dispatch coordinator handle', () => {
       inject: true,
       dryRun: undefined,
       returnPreamble: undefined,
-      devMode: false
+      devMode: false,
+      callerTerminalHandle: 'term_live_coord',
+      callerPaneKey: 'tab_coord:leaf_coord'
     })
   })
 
@@ -504,7 +508,9 @@ describe('orchestration dispatch coordinator handle', () => {
       from: 'term_live_coord',
       pollIntervalMs: undefined,
       maxConcurrent: undefined,
-      worktree: undefined
+      worktree: undefined,
+      callerTerminalHandle: 'term_live_coord',
+      callerPaneKey: 'tab_coord:leaf_coord'
     })
   })
 })
@@ -561,7 +567,8 @@ describe('orchestration task-create caller handle', () => {
       displayName: undefined,
       deps: undefined,
       parent: undefined,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      callerPaneKey: undefined
     })
   })
 
@@ -581,7 +588,8 @@ describe('orchestration task-create caller handle', () => {
       displayName: undefined,
       deps: undefined,
       parent: undefined,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      callerPaneKey: undefined
     })
   })
 
@@ -607,7 +615,8 @@ describe('orchestration task-create caller handle', () => {
       displayName: undefined,
       deps: undefined,
       parent: undefined,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      callerPaneKey: 'tab_creator:leaf_creator'
     })
   })
 
@@ -665,7 +674,8 @@ describe('orchestration task-create caller handle', () => {
       displayName: undefined,
       deps: undefined,
       parent: undefined,
-      callerTerminalHandle: 'term_live'
+      callerTerminalHandle: 'term_live',
+      callerPaneKey: 'tab_creator:leaf_creator'
     })
   })
 })
@@ -855,7 +865,9 @@ describe('orchestration timeout flag validation', () => {
         question: 'Proceed?',
         options: undefined,
         timeoutMs: 123,
-        from: 'term_worker'
+        from: 'term_worker',
+        callerTerminalHandle: 'term_worker',
+        callerPaneKey: undefined
       },
       { timeoutMs: 5_123 }
     )

@@ -709,15 +709,26 @@ export class OrchestrationDb {
     const priorFailures = prior?.max_failures ?? 0
 
     const id = generateId('ctx')
-    this.db
-      .prepare(
-        `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, assignee_pane_key, status, failure_count, dispatched_at)
-         VALUES (?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
-      )
-      .run(id, taskId, assigneeHandle, assigneePaneKey ?? null, priorFailures)
+    this.db.exec('BEGIN')
+    try {
+      // A fresh worker dispatch consumes its coordinator grant; reconnects return above.
+      this.revokeCoordinatorRoleLeases({
+        handle: assigneeHandle,
+        paneKey: assigneePaneKey
+      })
+      this.db
+        .prepare(
+          `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, assignee_pane_key, status, failure_count, dispatched_at)
+           VALUES (?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
+        )
+        .run(id, taskId, assigneeHandle, assigneePaneKey ?? null, priorFailures)
+      this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
     this.hasAnyDispatchContextsCache = true
-
-    this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
 
     return this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
@@ -960,12 +971,10 @@ export class OrchestrationDb {
       .prepare('SELECT * FROM role_leases WHERE revoked_at IS NULL ORDER BY rowid DESC')
       .all() as RoleLeaseRow[]
     return actives.find((lease) => {
-      if (handle && lease.subject_handle === handle) {
-        return true
+      if (lease.subject_pane_key) {
+        return Boolean(paneKey && isEquivalentPaneKey(lease.subject_pane_key, paneKey))
       }
-      return Boolean(
-        paneKey && lease.subject_pane_key && isEquivalentPaneKey(lease.subject_pane_key, paneKey)
-      )
+      return Boolean(handle && lease.subject_handle === handle)
     })
   }
 
@@ -1114,7 +1123,7 @@ export class OrchestrationDb {
     this.db.exec('DELETE FROM role_leases')
     this.db.exec('DELETE FROM coordinator_runs')
     this.db.exec('DELETE FROM decision_gates')
-    this.db.exec('DELETE FROM dispatch_contexts')
+    this.quarantineDispatchContextsForReset()
     this.db.exec('DELETE FROM tasks')
     this.db.exec('DELETE FROM messages')
     this.hasAnyDispatchContextsCache = undefined
@@ -1124,13 +1133,27 @@ export class OrchestrationDb {
     this.db.exec('DELETE FROM role_leases')
     this.db.exec('DELETE FROM coordinator_runs')
     this.db.exec('DELETE FROM decision_gates')
-    this.db.exec('DELETE FROM dispatch_contexts')
+    this.quarantineDispatchContextsForReset()
     this.db.exec('DELETE FROM tasks')
     this.hasAnyDispatchContextsCache = undefined
   }
 
   resetMessages(): void {
     this.db.exec('DELETE FROM messages')
+  }
+
+  private quarantineDispatchContextsForReset(): void {
+    this.db
+      .prepare(
+        `UPDATE dispatch_contexts
+         SET status = 'failed',
+             last_failure = 'orchestration reset',
+             completed_at = COALESCE(completed_at, datetime('now'))
+         WHERE status IN ('pending', 'dispatched')`
+      )
+      .run()
+    // Inactive rows keep reset from restoring coordinator authority to a worker pane.
+    this.hasAnyDispatchContextsCache = undefined
   }
 
   close(): void {
