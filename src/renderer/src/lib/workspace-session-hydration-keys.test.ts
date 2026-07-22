@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSessionState } from '../../../shared/types'
-import { collectWorktreeHydrationRepoIdsFromSession } from './workspace-session-hydration-keys'
+import {
+  collectFolderWorkspaceKeysFromSession,
+  collectWorktreeHydrationRepoIdsFromSession
+} from './workspace-session-hydration-keys'
+
+describe('collectFolderWorkspaceKeysFromSession', () => {
+  it('keeps folder workspace selection markers valid without scheduling a Git scan', () => {
+    const session = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      activeTabTypeByWorktree: { 'folder:folder-1': 'terminal' }
+    } as unknown as WorkspaceSessionState
+
+    expect(collectFolderWorkspaceKeysFromSession(session)).toEqual(['folder:folder-1'])
+    expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual([])
+  })
+})
 
 describe('collectWorktreeHydrationRepoIdsFromSession', () => {
   it('includes persisted terminal tabs and ignores folder workspaces', () => {
@@ -128,9 +146,12 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
     expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-chrome'])
   })
 
-  it('does not scan repositories retained only by empty chrome maps', () => {
+  it('does not scan repositories retained only by empty chrome maps or selection markers', () => {
     const emptyTabsByWorktree = Object.fromEntries(
       Array.from({ length: 326 }, (_, index) => [`repo-empty-${index}::/wt`, []])
+    )
+    const staleActiveTabTypes = Object.fromEntries(
+      Array.from({ length: 326 }, (_, index) => [`repo-empty-${index}::/wt`, 'terminal'])
     )
     const session = {
       activeRepoId: null,
@@ -142,7 +163,8 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
       },
       openFilesByWorktree: { 'repo-empty-editor::/wt': [] },
       browserTabsByWorktree: { 'repo-empty-browser::/wt': [] },
-      activeFileIdByWorktree: { 'repo-empty-active-file::/wt': null }
+      activeFileIdByWorktree: { 'repo-empty-active-file::/wt': null },
+      activeTabTypeByWorktree: staleActiveTabTypes
     } as unknown as WorkspaceSessionState
 
     expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-live'])

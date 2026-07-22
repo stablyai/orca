@@ -15,7 +15,6 @@ const WORKSPACE_CHROME_SESSION_FIELDS = [
   'openFilesByWorktree',
   'activeFileIdByWorktree',
   'activeBrowserTabIdByWorktree',
-  'activeTabTypeByWorktree',
   'activeTabIdByWorktree',
   'browserTabsByWorktree',
   'unifiedTabs',
@@ -33,8 +32,14 @@ const WORKSPACE_HISTORY_SESSION_FIELDS = [
   'defaultTerminalTabsAppliedByWorktreeId'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
+// Why: this selection marker can outlive the last tab and cannot restore anything by itself.
+const WORKSPACE_SELECTION_SESSION_FIELDS = [
+  'activeTabTypeByWorktree'
+] as const satisfies readonly (keyof WorkspaceSessionState)[]
+
 const WORKSPACE_KEYED_SESSION_FIELDS = [
   ...WORKSPACE_CHROME_SESSION_FIELDS,
+  ...WORKSPACE_SELECTION_SESSION_FIELDS,
   ...WORKSPACE_HISTORY_SESSION_FIELDS
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
