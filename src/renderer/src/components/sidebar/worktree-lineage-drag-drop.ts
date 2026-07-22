@@ -1,6 +1,12 @@
+import {
+  buildSparseManualOrderUpdates,
+  type WorktreeManualOrderUpdate
+} from './worktree-manual-order-ranks'
+
 const WORKTREE_CARD_CONTENT_TARGET_SELECTOR = '[data-worktree-card-hover-trigger]'
 const WORKTREE_DRAG_ROW_SELECTOR = '[data-worktree-drag-id]'
 const WORKTREE_LINEAGE_CHILDREN_SELECTOR = '[data-worktree-lineage-children]'
+const WORKTREE_LINEAGE_PARENT_ATTRIBUTE = 'data-worktree-lineage-parent-id'
 
 const LINEAGE_DROP_ZONE_RATIO = 0.4
 const LINEAGE_DROP_ZONE_MAX_HEIGHT_PX = 44
@@ -10,6 +16,59 @@ type VerticalRect = Pick<DOMRect, 'top' | 'bottom'>
 export type WorktreeLineageDropTarget = {
   parentId: string
   dropIndicatorY: number
+  insertionBeforeChildId?: string | null
+}
+
+export function buildWorktreeLineageInsertionOrderUpdates(args: {
+  directChildIds: readonly string[]
+  draggedIds: readonly string[]
+  insertionBeforeChildId: string | null
+  orderIndexById: ReadonlyMap<string, number>
+  rankByWorktreeId: ReadonlyMap<string, number>
+  now: number
+}): Map<string, WorktreeManualOrderUpdate> {
+  const draggedIdSet = new Set(args.draggedIds)
+  const orderedDraggedIds = Array.from(draggedIdSet).sort(
+    (left, right) =>
+      (args.orderIndexById.get(left) ?? Number.POSITIVE_INFINITY) -
+      (args.orderIndexById.get(right) ?? Number.POSITIVE_INFINITY)
+  )
+  if (orderedDraggedIds.length === 0) {
+    return new Map()
+  }
+
+  const dropIndex =
+    args.insertionBeforeChildId === null
+      ? args.directChildIds.length
+      : args.directChildIds.indexOf(args.insertionBeforeChildId)
+  if (dropIndex < 0) {
+    return new Map()
+  }
+  let removedBeforeDrop = 0
+  for (let index = 0; index < dropIndex; index++) {
+    if (draggedIdSet.has(args.directChildIds[index]!)) {
+      removedBeforeDrop++
+    }
+  }
+  const remainingIds = args.directChildIds.filter((id) => !draggedIdSet.has(id))
+  const insertAt = Math.max(0, Math.min(remainingIds.length, dropIndex - removedBeforeDrop))
+  const orderedIds = [
+    ...remainingIds.slice(0, insertAt),
+    ...orderedDraggedIds,
+    ...remainingIds.slice(insertAt)
+  ]
+  if (
+    orderedIds.length === args.directChildIds.length &&
+    orderedIds.every((id, index) => id === args.directChildIds[index])
+  ) {
+    return new Map()
+  }
+  return buildSparseManualOrderUpdates({
+    orderedIds,
+    movedIds: orderedDraggedIds,
+    rankByWorktreeId: args.rankByWorktreeId,
+    now: args.now
+  })
 }
 
 export function getWorktreeLineageInsertionBeforeChildId(args: {
@@ -87,8 +146,6 @@ export function getWorktreeLineageDropTarget(args: {
     return null
   }
 
-  // Why: nesting should be deliberate; the top/bottom of a card stays available
-  // for reorder drops instead of treating the whole card as a parent target.
   const contentRect = contentTarget.getBoundingClientRect()
   const lineageChildren = contentTarget.querySelector<HTMLElement>(
     WORKTREE_LINEAGE_CHILDREN_SELECTOR
@@ -101,12 +158,7 @@ export function getWorktreeLineageDropTarget(args: {
         bottom: Math.min(contentRect.bottom, lineageChildren.getBoundingClientRect().top)
       }
     : contentRect
-  if (
-    !isWorktreeLineageDropZoneHit({
-      pointerY: args.pointerY,
-      rect: dropZoneRect
-    })
-  ) {
+  if (args.pointerY < dropZoneRect.top || args.pointerY > dropZoneRect.bottom) {
     return null
   }
 
@@ -118,10 +170,46 @@ export function getWorktreeLineageDropTarget(args: {
   if (!parentId) {
     return null
   }
+  const containerRect = args.container.getBoundingClientRect()
+  if (
+    !isWorktreeLineageDropZoneHit({
+      pointerY: args.pointerY,
+      rect: dropZoneRect
+    })
+  ) {
+    const lineageParentId = rowTarget.getAttribute(WORKTREE_LINEAGE_PARENT_ATTRIBUTE)
+    if (!lineageParentId) {
+      return null
+    }
+    // Why: child-row edges are sibling insertion slots; their center remains
+    // available for deliberately creating a deeper parent-child relationship.
+    const sectionKey = rowTarget.getAttribute('data-worktree-section-key')
+    const directSiblingRows = Array.from(
+      args.container.querySelectorAll<HTMLElement>(WORKTREE_DRAG_ROW_SELECTOR)
+    ).filter(
+      (row) =>
+        row.getAttribute(WORKTREE_LINEAGE_PARENT_ATTRIBUTE) === lineageParentId &&
+        (!sectionKey || row.getAttribute('data-worktree-section-key') === sectionKey)
+    )
+    const siblingIndex = directSiblingRows.indexOf(rowTarget)
+    if (siblingIndex < 0) {
+      return null
+    }
+    const insertBeforeCurrent = args.pointerY < (dropZoneRect.top + dropZoneRect.bottom) / 2
+    const nextSibling = insertBeforeCurrent ? rowTarget : directSiblingRows[siblingIndex + 1]
+    const indicatorViewportY = nextSibling
+      ? nextSibling.getBoundingClientRect().top - 3
+      : rowTarget.getBoundingClientRect().bottom + 3
+    return {
+      parentId: lineageParentId,
+      insertionBeforeChildId: nextSibling?.getAttribute('data-worktree-drag-id') ?? null,
+      dropIndicatorY: Math.max(0, indicatorViewportY - containerRect.top + args.container.scrollTop)
+    }
+  }
+
   const indicatorViewportY = lineageChildren
     ? lineageChildren.getBoundingClientRect().top - 3
     : dropZoneRect.bottom + 3
-  const containerRect = args.container.getBoundingClientRect()
   return {
     parentId,
     // Why: the regular reorder guide is positioned in scroll-content space;

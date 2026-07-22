@@ -17,7 +17,10 @@ export type WorktreeSidebarStatusDropTarget = {
 }
 
 export type WorktreeSidebarTrackedStatusDropTarget = {
-  target: WorktreeSidebarStatusDropTarget & { lineageParentId: string | null }
+  target: WorktreeSidebarStatusDropTarget & {
+    lineageParentId: string | null
+    lineageInsertionBeforeChildId?: string | null
+  }
   preview: WorktreeSidebarDropPreview | null
   x: number
   y: number
@@ -70,13 +73,19 @@ function hasWorktreeSidebarStatusDropTarget(
 }
 
 export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
-  currentTarget: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
+  currentTarget: WorktreeSidebarStatusDropTarget & {
+    lineageParentId?: string | null
+    lineageInsertionBeforeChildId?: string | null
+  }
   currentPreview: WorktreeSidebarDropPreview | null
   latestTrackedTarget: WorktreeSidebarTrackedStatusDropTarget | null
   x: number
   y: number
 }): {
-  target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
+  target: WorktreeSidebarStatusDropTarget & {
+    lineageParentId?: string | null
+    lineageInsertionBeforeChildId?: string | null
+  }
   preview: WorktreeSidebarDropPreview | null
 } {
   if (hasWorktreeSidebarStatusDropTarget(args.currentTarget)) {

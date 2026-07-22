@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildWorktreeLineageInsertionOrderUpdates,
   getReorderedWorktreeIdsToUnnest,
   getWorktreeLineageInsertionBeforeChildId,
   getWorktreeLineageDropTarget,
@@ -76,6 +77,77 @@ describe('getWorktreeLineageDropTargetId', () => {
     })
   })
 
+  it('uses a child upper edge as an exact sibling insertion slot', () => {
+    const { container, target } = makeTarget({
+      worktreeId: 'child-b',
+      lineageParentId: 'parent',
+      directSiblingIds: ['child-a', 'child-b'],
+      top: 200,
+      bottom: 300,
+      containerTop: 20,
+      scrollTop: 400
+    })
+
+    expect(getWorktreeLineageDropTarget({ container, target, pointerY: 215 })).toEqual({
+      parentId: 'parent',
+      insertionBeforeChildId: 'child-b',
+      dropIndicatorY: 577
+    })
+  })
+
+  it('uses a child lower edge to insert before its next sibling', () => {
+    const { container, target } = makeTarget({
+      worktreeId: 'child-a',
+      lineageParentId: 'parent',
+      directSiblingIds: ['child-a', 'child-b'],
+      top: 100,
+      bottom: 200,
+      containerTop: 20,
+      scrollTop: 400
+    })
+
+    expect(getWorktreeLineageDropTarget({ container, target, pointerY: 185 })).toEqual({
+      parentId: 'parent',
+      insertionBeforeChildId: 'child-b',
+      dropIndicatorY: 577
+    })
+  })
+
+  it('uses the last child lower edge as the sibling-list append slot', () => {
+    const { container, target } = makeTarget({
+      worktreeId: 'child-b',
+      lineageParentId: 'parent',
+      directSiblingIds: ['child-a', 'child-b'],
+      top: 200,
+      bottom: 300,
+      containerTop: 20,
+      scrollTop: 400
+    })
+
+    expect(getWorktreeLineageDropTarget({ container, target, pointerY: 285 })).toEqual({
+      parentId: 'parent',
+      insertionBeforeChildId: null,
+      dropIndicatorY: 683
+    })
+  })
+
+  it('keeps the child center available as a deeper nesting target', () => {
+    const { container, target } = makeTarget({
+      worktreeId: 'child-a',
+      lineageParentId: 'parent',
+      directSiblingIds: ['child-a', 'child-b'],
+      top: 100,
+      bottom: 200,
+      containerTop: 20,
+      scrollTop: 400
+    })
+
+    expect(getWorktreeLineageDropTarget({ container, target, pointerY: 150 })).toEqual({
+      parentId: 'child-a',
+      dropIndicatorY: 583
+    })
+  })
+
   it('ignores content targets outside the sidebar container', () => {
     const { container, target } = makeTarget({
       worktreeId: 'parent',
@@ -128,6 +200,47 @@ describe('getWorktreeLineageInsertionBeforeChildId', () => {
   })
 })
 
+describe('buildWorktreeLineageInsertionOrderUpdates', () => {
+  const orderIndexById = new Map([
+    ['root', 0],
+    ['child-a', 1],
+    ['child-b', 2]
+  ])
+  const rankByWorktreeId = new Map([
+    ['root', 4000],
+    ['child-a', 3000],
+    ['child-b', 1000]
+  ])
+
+  it('ranks a root workspace into the pointed-at child gap', () => {
+    expect(
+      Array.from(
+        buildWorktreeLineageInsertionOrderUpdates({
+          directChildIds: ['child-a', 'child-b'],
+          draggedIds: ['root'],
+          insertionBeforeChildId: 'child-b',
+          orderIndexById,
+          rankByWorktreeId,
+          now: 10_000
+        })
+      )
+    ).toEqual([['root', { manualOrder: 2000 }]])
+  })
+
+  it('does not rewrite ranks for a child dropped back into its current gap', () => {
+    expect(
+      buildWorktreeLineageInsertionOrderUpdates({
+        directChildIds: ['child-a', 'child-b'],
+        draggedIds: ['child-a'],
+        insertionBeforeChildId: 'child-b',
+        orderIndexById,
+        rankByWorktreeId,
+        now: 10_000
+      }).size
+    ).toBe(0)
+  })
+})
+
 describe('getReorderedWorktreeIdsToUnnest', () => {
   it('clears parents only for directly dragged nested cards', () => {
     expect(
@@ -160,6 +273,8 @@ function makeTarget(args: {
   worktreeId: string
   top: number
   bottom: number
+  lineageParentId?: string
+  directSiblingIds?: readonly string[]
   lineageChildrenTop?: number
   containerTop?: number
   scrollTop?: number
@@ -168,9 +283,31 @@ function makeTarget(args: {
   container: HTMLElement
   target: Element
 } {
-  const row = {
-    getAttribute: (name: string) => (name === 'data-worktree-drag-id' ? args.worktreeId : null)
-  } as HTMLElement
+  const siblingIds = args.directSiblingIds ?? [args.worktreeId]
+  const currentSiblingIndex = Math.max(0, siblingIds.indexOf(args.worktreeId))
+  const rowHeight = args.bottom - args.top
+  const siblingRows = siblingIds.map(
+    (worktreeId, index) =>
+      ({
+        getAttribute: (name: string) => {
+          if (name === 'data-worktree-drag-id') {
+            return worktreeId
+          }
+          if (name === 'data-worktree-lineage-parent-id') {
+            return args.lineageParentId ?? null
+          }
+          if (name === 'data-worktree-section-key') {
+            return 'section'
+          }
+          return null
+        },
+        getBoundingClientRect: () => {
+          const top = args.top + (index - currentSiblingIndex) * rowHeight
+          return { top, bottom: top + rowHeight }
+        }
+      }) as HTMLElement
+  )
+  const row = siblingRows[currentSiblingIndex]!
   const lineageChildren =
     args.lineageChildrenTop === undefined
       ? null
@@ -182,16 +319,19 @@ function makeTarget(args: {
     querySelector: (selector: string) =>
       selector === '[data-worktree-lineage-children]' ? lineageChildren : null,
     closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? row : null)
-  } as HTMLElement
+  } as unknown as HTMLElement
   const target = {
     closest: (selector: string) =>
       selector === '[data-worktree-card-hover-trigger]' ? content : null
   } as Element
   const contained = args.contained ?? true
   const container = {
-    contains: (element: Element) => contained && (element === content || element === row),
+    contains: (element: Element) =>
+      contained && (element === content || siblingRows.includes(element as HTMLElement)),
+    querySelectorAll: (selector: string) =>
+      selector === '[data-worktree-drag-id]' ? siblingRows : [],
     getBoundingClientRect: () => ({ top: args.containerTop ?? 0 }),
     scrollTop: args.scrollTop ?? 0
-  } as HTMLElement
+  } as unknown as HTMLElement
   return { container, target }
 }

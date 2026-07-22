@@ -199,6 +199,7 @@ import {
   type WorktreeSidebarDropPreview
 } from './worktree-sidebar-drop-preview'
 import {
+  buildWorktreeLineageInsertionOrderUpdates,
   getReorderedWorktreeIdsToUnnest,
   getWorktreeLineageInsertionGuideY,
   getWorktreeLineageDropTarget
@@ -972,7 +973,10 @@ function areWorktreeDragPreviewOffsetsEqual(
 
 function updateLatestWorktreeStatusDropTarget(
   drag: WorktreePointerDrag,
-  target: WorktreeSidebarStatusDropTarget & { lineageParentId: string | null },
+  target: WorktreeSidebarStatusDropTarget & {
+    lineageParentId: string | null
+    lineageInsertionBeforeChildId?: string | null
+  },
   preview: WorktreeSidebarDropPreview | null
 ): void {
   drag.latestStatusDropTarget =
@@ -998,6 +1002,7 @@ function getPointerDropStatusTarget(args: {
 }): WorktreeSidebarStatusDropTarget & {
   lineageParentId: string | null
   lineageDropIndicatorY: number | null
+  lineageInsertionBeforeChildId?: string | null
 } {
   const target = document.elementFromPoint(args.x, args.y)
   if (!(target instanceof Element) || !args.container.contains(target)) {
@@ -1030,7 +1035,8 @@ function getPointerDropStatusTarget(args: {
         : null,
     isPinDrop: false,
     lineageParentId: lineageTarget?.parentId ?? null,
-    lineageDropIndicatorY: lineageTarget?.dropIndicatorY ?? null
+    lineageDropIndicatorY: lineageTarget?.dropIndicatorY ?? null,
+    lineageInsertionBeforeChildId: lineageTarget?.insertionBeforeChildId
   }
 }
 
@@ -1411,6 +1417,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+  const setLineageDragSortBy = useAppStore((s) => s.setSortBy)
+  const updateLineageDragWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const worktreePointerAutoscrollFrameIdRef = useRef<number | null>(null)
@@ -2723,11 +2731,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       target: WorktreeSidebarStatusDropTarget & {
         lineageParentId: string | null
         lineageDropIndicatorY?: number | null
+        lineageInsertionBeforeChildId?: string | null
       },
       draggedIds: readonly string[]
     ): WorktreeSidebarStatusDropTarget & {
       lineageParentId: string | null
       lineageDropIndicatorY?: number | null
+      lineageInsertionBeforeChildId?: string | null
     } => {
       const parentId = target.lineageParentId
       if (!parentId) {
@@ -2748,7 +2758,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       })
       return canAssignAll
         ? target
-        : { ...target, lineageParentId: null, lineageDropIndicatorY: null }
+        : {
+            ...target,
+            lineageParentId: null,
+            lineageDropIndicatorY: null,
+            lineageInsertionBeforeChildId: undefined
+          }
     },
     [repoMap, worktreeLineageById, worktreeMap, worktrees]
   )
@@ -2759,9 +2774,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       parentId: string
       draggedIds: readonly string[]
       fallbackY: number | null | undefined
+      insertionBeforeChildId?: string | null
     }): number | null => {
       if (args.fallbackY === null || args.fallbackY === undefined) {
         return null
+      }
+      if (args.insertionBeforeChildId !== undefined) {
+        // Why: child-edge hit testing already resolves the exact mounted sibling
+        // in its section; another global row lookup can select a pinned duplicate.
+        return args.fallbackY
       }
       return getWorktreeLineageInsertionGuideY({
         container: args.container,
@@ -2776,7 +2797,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
 
   const commitWorktreeLineageParentDrop = useCallback(
-    (draggedIds: readonly string[], parentId: string): boolean => {
+    (
+      draggedIds: readonly string[],
+      parentId: string,
+      insertionBeforeChildId?: string | null
+    ): boolean => {
       const target = getEligibleLineageDropTarget(
         { status: null, isPinDrop: false, lineageParentId: parentId },
         draggedIds
@@ -2784,9 +2809,31 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       if (!target.lineageParentId) {
         return false
       }
-      void Promise.all(
-        draggedIds.map((id) => assignWorktreeParent(id, { parentWorktreeId: parentId }))
-      ).catch((err) => {
+      const orderUpdates =
+        insertionBeforeChildId === undefined
+          ? new Map()
+          : buildWorktreeLineageInsertionOrderUpdates({
+              directChildIds: lineageDragOrder.directChildIdsByParentId.get(parentId) ?? [],
+              draggedIds,
+              insertionBeforeChildId,
+              orderIndexById: lineageDragOrder.orderIndexById,
+              rankByWorktreeId: new Map(
+                worktrees.map((worktree) => [
+                  worktree.id,
+                  worktree.manualOrder ?? worktree.sortOrder
+                ])
+              ),
+              now: Date.now()
+            })
+      if (orderUpdates.size > 0) {
+        // Why: a child-edge divider promises an exact sibling slot, which only
+        // persisted manual ranks can preserve across refreshes and sort modes.
+        setLineageDragSortBy('manual')
+      }
+      void Promise.all([
+        ...draggedIds.map((id) => assignWorktreeParent(id, { parentWorktreeId: parentId })),
+        ...(orderUpdates.size > 0 ? [updateLineageDragWorktreesMeta(orderUpdates)] : [])
+      ]).catch((err) => {
         console.error('Failed to nest workspace:', err)
         toast.error(
           translate(
@@ -2797,7 +2844,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       })
       return true
     },
-    [assignWorktreeParent, getEligibleLineageDropTarget]
+    [
+      assignWorktreeParent,
+      getEligibleLineageDropTarget,
+      lineageDragOrder,
+      setLineageDragSortBy,
+      updateLineageDragWorktreesMeta,
+      worktrees
+    ]
   )
 
   const clearReorderedWorktreeParents = useCallback(
@@ -2926,7 +2980,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             container: sidebarContainer,
             parentId: preferredStatusTarget.lineageParentId,
             draggedIds: drag.draggedIds,
-            fallbackY: preferredStatusTarget.lineageDropIndicatorY
+            fallbackY: preferredStatusTarget.lineageDropIndicatorY,
+            insertionBeforeChildId: preferredStatusTarget.lineageInsertionBeforeChildId
           })
         : null
       updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, null)
@@ -3317,7 +3372,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           drag.draggedIds
         )
         if (preferredStatusTarget.lineageParentId) {
-          commitWorktreeLineageParentDrop(drag.draggedIds, preferredStatusTarget.lineageParentId)
+          commitWorktreeLineageParentDrop(
+            drag.draggedIds,
+            preferredStatusTarget.lineageParentId,
+            preferredStatusTarget.lineageInsertionBeforeChildId
+          )
           clearWorktreeDrag()
           return
         }
@@ -3385,7 +3444,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             y: event.clientY
           })
           if (target.lineageParentId) {
-            commitWorktreeLineageParentDrop(drag.draggedIds, target.lineageParentId)
+            commitWorktreeLineageParentDrop(
+              drag.draggedIds,
+              target.lineageParentId,
+              target.lineageInsertionBeforeChildId
+            )
           } else if (target.isPinDrop) {
             onPinWorktrees(drag.draggedIds)
           } else if (target.status) {
@@ -3623,7 +3686,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           container: event.currentTarget,
           parentId: target.lineageParentId,
           draggedIds: session.draggedIds,
-          fallbackY: target.lineageDropIndicatorY
+          fallbackY: target.lineageDropIndicatorY,
+          insertionBeforeChildId: target.lineageInsertionBeforeChildId
         })
         event.preventDefault()
         event.dataTransfer.dropEffect = 'move'
@@ -3739,7 +3803,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       if (target.lineageParentId) {
         event.preventDefault()
         event.stopPropagation()
-        commitWorktreeLineageParentDrop(session.draggedIds, target.lineageParentId)
+        commitWorktreeLineageParentDrop(
+          session.draggedIds,
+          target.lineageParentId,
+          target.lineageInsertionBeforeChildId
+        )
         clearWorktreeDrag()
         return
       }
@@ -4001,7 +4069,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         if (target.lineageParentId) {
           event.preventDefault()
           event.stopPropagation()
-          commitWorktreeLineageParentDrop(session.draggedIds, target.lineageParentId)
+          commitWorktreeLineageParentDrop(
+            session.draggedIds,
+            target.lineageParentId,
+            target.lineageInsertionBeforeChildId
+          )
           clearWorktreeDrag()
           return
         }
@@ -4905,6 +4977,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   data-worktree-row-key={itemRow.rowKey}
                   data-worktree-section-key={itemRow.sectionKey}
                   data-worktree-drag-id={worktreeDragGroupKey ? itemRow.worktree.id : undefined}
+                  data-worktree-lineage-parent-id={
+                    nested ? worktreeLineageById[itemRow.worktree.id]?.parentWorktreeId : undefined
+                  }
                   data-worktree-drag-group-key={worktreeDragGroupKey}
                   data-worktree-drag-group-index={worktreeDragGroupIndex}
                   className={cn(

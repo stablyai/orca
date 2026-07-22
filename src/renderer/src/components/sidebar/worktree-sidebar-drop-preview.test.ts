@@ -219,7 +219,12 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
         currentPreview: null,
         latestTrackedTarget: {
-          target: { status: null, isPinDrop: false, lineageParentId: 'parent-worktree' },
+          target: {
+            status: null,
+            isPinDrop: false,
+            lineageParentId: 'parent-worktree',
+            lineageInsertionBeforeChildId: 'child-worktree'
+          },
           preview: null,
           x: 100,
           y: 100
@@ -228,7 +233,12 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 101
       })
     ).toEqual({
-      target: { status: null, isPinDrop: false, lineageParentId: 'parent-worktree' },
+      target: {
+        status: null,
+        isPinDrop: false,
+        lineageParentId: 'parent-worktree',
+        lineageInsertionBeforeChildId: 'child-worktree'
+      },
       preview: null
     })
   })
