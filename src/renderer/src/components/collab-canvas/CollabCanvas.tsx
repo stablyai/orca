@@ -44,6 +44,13 @@ import {
   COLLAB_CANVAS_SHAPE_UTILS,
   mountAgentDraftOnEditor
 } from '../../lib/collab-canvas/agent-draft-shape-util'
+import {
+  buildCanvasOmpAgentArgs,
+  getCanvasBoardAgentTabId,
+  setCanvasBoardAgentTabId
+} from '../../lib/collab-canvas/canvas-agent-spawn'
+import { collabCanvasOwnsAgentSession } from '../../../../shared/collab-canvas-binding'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { useAppStore } from '@/store'
 
 export type CollabCanvasProps = {
@@ -84,20 +91,71 @@ export function CollabCanvas({
   const [awareStatus, setAwareStatus] = useState<'idle' | 'sent' | 'no-terminal'>('idle')
   const [awaitingLabel, setAwaitingLabel] = useState(false)
 
-  const worktreeId = binding.kind === 'session' ? binding.worktreeId : null
+  const isSession = binding.kind === 'session'
+  const isPanel = binding.kind === 'panel'
+  const ownsAgent = collabCanvasOwnsAgentSession(binding)
+  /** Synthetic worktree key for inject payload on panel boards. */
+  const injectWorktreeKey =
+    binding.kind === 'session' ? binding.worktreeId : `panel:${binding.panelId}`
+  const sessionWorktreeId = binding.kind === 'session' ? binding.worktreeId : null
   const unifiedTabs = useAppStore((s) =>
-    worktreeId ? (s.unifiedTabsByWorktree[worktreeId] ?? []) : []
+    sessionWorktreeId ? (s.unifiedTabsByWorktree[sessionWorktreeId] ?? []) : []
   )
-  const groups = useAppStore((s) => (worktreeId ? (s.groupsByWorktree[worktreeId] ?? []) : []))
+  const groups = useAppStore((s) =>
+    sessionWorktreeId ? (s.groupsByWorktree[sessionWorktreeId] ?? []) : []
+  )
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const [, bumpAgentBind] = useState(0)
 
   const resolveTerminalTabId = useCallback((): string | null => {
-    if (!worktreeId) return null
+    if (binding.kind === 'panel') {
+      return getCanvasBoardAgentTabId(binding.boardId)
+    }
+    if (!sessionWorktreeId) return null
     return resolveSessionAgentTerminalTabId({
       tabs: unifiedTabs,
       preferredTabIds: preferredTabIdsFromGroups(groups)
     })
-  }, [worktreeId, unifiedTabs, groups])
+  }, [binding, sessionWorktreeId, unifiedTabs, groups, bumpAgentBind])
+
+  const spawnPanelAgent = useCallback(
+    (fresh: boolean) => {
+      if (binding.kind !== 'panel') return
+      const worktreeId = activeWorktreeId
+      if (!worktreeId) {
+        toast('Open a workspace first so the board agent has a cwd')
+        return
+      }
+      try {
+        const result = launchAgentInNewTab({
+          agent: 'omp',
+          worktreeId,
+          agentArgs: buildCanvasOmpAgentArgs(binding.boardId, { fresh }),
+          launchSource: 'pet'
+        })
+        if (result?.tabId) {
+          setCanvasBoardAgentTabId(binding.boardId, result.tabId)
+          bumpAgentBind((n) => n + 1)
+          setAwareStatus('sent')
+          toast(fresh ? 'Fresh board agent spawned' : 'Board agent spawned')
+        } else {
+          toast('Failed to spawn board agent')
+        }
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Spawn failed')
+      }
+    },
+    [binding, activeWorktreeId]
+  )
+
+  const closePanelAgent = useCallback(() => {
+    if (binding.kind !== 'panel') return
+    setCanvasBoardAgentTabId(binding.boardId, null)
+    bumpAgentBind((n) => n + 1)
+    setAwareStatus('no-terminal')
+    toast('Board agent unbound (close the omp tab manually if still open)')
+  }, [binding])
 
   const applyAgentReplyToBoard = useCallback(
     (rawBody: string, sourceTurnId: string, opts?: { quiet?: boolean }) => {
@@ -164,8 +222,10 @@ export function CollabCanvas({
   )
 
   const tryAwareness = useCallback(() => {
-    if (binding.kind !== 'session') return
-    const key = `${binding.worktreeId}:${binding.boardId}`
+    const key =
+      binding.kind === 'session'
+        ? `${binding.worktreeId}:${binding.boardId}`
+        : `panel:${binding.panelId}:${binding.boardId}`
     if (awarenessSentRef.current === key) return
     const tabId = resolveTerminalTabId()
     if (!tabId) {
@@ -174,7 +234,7 @@ export function CollabCanvas({
     }
     const result = injectSessionBoardAwareness({
       boardId: binding.boardId,
-      worktreeId: binding.worktreeId,
+      worktreeId: injectWorktreeKey,
       tabId
     })
     if (result.ok) {
@@ -183,31 +243,27 @@ export function CollabCanvas({
     } else {
       setAwareStatus('no-terminal')
     }
-  }, [binding, resolveTerminalTabId])
+  }, [binding, resolveTerminalTabId, injectWorktreeKey])
 
-  // Session awareness: once a board mounts beside a worktree, tell the live agent.
-  const sessionBoardKey =
-    binding.kind === 'session' ? `${binding.worktreeId}:${binding.boardId}` : null
+  // Awareness when a terminal/agent is available for this binding.
   useEffect(() => {
-    if (!sessionBoardKey) return
-    // Defer slightly so terminal panes finish registering paste listeners.
     const t = window.setTimeout(() => tryAwareness(), 400)
     return () => window.clearTimeout(t)
-  }, [sessionBoardKey, tryAwareness])
+  }, [tryAwareness, binding.boardId])
 
-  // Auto write-back: after Send, next working→done for this worktree lands on the board.
+  // Auto write-back: after Send, next working→done for the bound agent lands on the board.
   useEffect(() => {
-    if (binding.kind !== 'session' || !autoDraft) return
-    const wt = binding.worktreeId
+    if (!autoDraft) return
     const tabId = resolveTerminalTabId()
+    const wt = sessionWorktreeId
 
     for (const entry of Object.values(agentStatusByPaneKey)) {
       if (!entry) continue
-      const matchesWt =
-        entry.worktreeId === wt ||
+      const matches =
         (tabId != null &&
-          (entry.tabId === tabId || entry.paneKey.startsWith(`${tabId}:`)))
-      if (!matchesWt) continue
+          (entry.tabId === tabId || entry.paneKey.startsWith(`${tabId}:`))) ||
+        (wt != null && entry.worktreeId === wt && isSession)
+      if (!matches) continue
 
       const wasWorking = workingByPaneRef.current.get(entry.paneKey) === true
       workingByPaneRef.current.set(entry.paneKey, entry.state === 'working')
@@ -228,11 +284,12 @@ export function CollabCanvas({
       applyAgentReplyToBoard(decision.body, `auto:${entry.paneKey}`, { quiet: false })
     }
   }, [
-    binding,
     autoDraft,
     agentStatusByPaneKey,
     resolveTerminalTabId,
-    applyAgentReplyToBoard
+    applyAgentReplyToBoard,
+    sessionWorktreeId,
+    isSession
   ])
 
   const handlePlaceDraftFromClipboard = useCallback(async () => {
@@ -251,38 +308,44 @@ export function CollabCanvas({
   }, [placeDraftBody])
 
   const handlePlaceDraftFromLastReply = useCallback(() => {
-    if (!worktreeId) {
-      toast('Draft from last reply is only for session boards')
-      return
-    }
     const tabId = resolveTerminalTabId()
     const hit = resolveLastAgentReply({
-      worktreeId,
+      worktreeId: sessionWorktreeId ?? injectWorktreeKey,
       preferredTabId: tabId,
       entries: Object.values(agentStatusByPaneKey).filter(
         (e): e is NonNullable<typeof e> => Boolean(e)
       )
     })
     if (!hit) {
-      toast('No agent reply found for this workspace yet')
+      toast('No agent reply found yet')
       return
     }
     placeDraftBody(hit.body, `agent:${hit.paneKey}`)
-  }, [worktreeId, resolveTerminalTabId, agentStatusByPaneKey, placeDraftBody])
+  }, [
+    sessionWorktreeId,
+    injectWorktreeKey,
+    resolveTerminalTabId,
+    agentStatusByPaneKey,
+    placeDraftBody
+  ])
 
-  const handleSendToSession = useCallback(async () => {
-    if (binding.kind !== 'session') {
-      toast('Send to session is only for session boards')
-      return
-    }
+  const handleSendToAgent = useCallback(async () => {
     const editor = editorRef.current
     if (!editor) {
       toast('Board editor not ready')
       return
     }
-    const tabId = resolveTerminalTabId()
+    let tabId = resolveTerminalTabId()
+    if (!tabId && isPanel) {
+      spawnPanelAgent(false)
+      tabId = resolveTerminalTabId()
+    }
     if (!tabId) {
-      toast('No terminal in this workspace — open Hermes/omp first')
+      toast(
+        isPanel
+          ? 'Spawn a board agent first (or open a workspace and retry)'
+          : 'No terminal in this workspace — open Hermes/omp first'
+      )
       setAwareStatus('no-terminal')
       return
     }
@@ -291,10 +354,9 @@ export function CollabCanvas({
     try {
       tryAwareness()
 
-      // Full board screenshot always + selection coords/crop when focused.
       const snap = await exportCollabBoardFromEditor(editor, {
         boardId: binding.boardId,
-        worktreeId: binding.worktreeId
+        worktreeId: injectWorktreeKey
       })
       if (snap.boardShapeIds.length === 0) {
         toast('Board is empty — draw something first')
@@ -322,14 +384,12 @@ export function CollabCanvas({
         toast(`Inject failed: ${result.reason}`)
         return
       }
-      // Arm auto-draft for the next agent turn in this worktree.
       awaitingReplyRef.current = autoDraft
       setAwaitingLabel(autoDraft)
       const focus = snap.hasSelection ? ' + selection focus' : ''
       toast(
         boardMat.ok
-          ? `Sent full-board screenshot${focus}` +
-              (autoDraft ? ' · auto-draft armed' : '')
+          ? `Sent full-board screenshot${focus}` + (autoDraft ? ' · auto-draft armed' : '')
           : 'Sent board digest (screenshot path failed)'
       )
     } catch (err) {
@@ -338,7 +398,15 @@ export function CollabCanvas({
     } finally {
       setSending(false)
     }
-  }, [binding, resolveTerminalTabId, tryAwareness])
+  }, [
+    binding.boardId,
+    injectWorktreeKey,
+    resolveTerminalTabId,
+    tryAwareness,
+    autoDraft,
+    isPanel,
+    spawnPanelAgent
+  ])
 
   if (!valid) {
     return (
@@ -348,75 +416,103 @@ export function CollabCanvas({
     )
   }
 
-  const isSession = binding.kind === 'session'
+  const panelAgentBound = isPanel && Boolean(getCanvasBoardAgentTabId(binding.boardId))
 
   return (
     <div className="relative flex h-full w-full flex-col">
-      {isSession ? (
-        <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background/90 px-2 py-1.5 text-xs">
-          <span className="font-medium text-foreground">Collab board</span>
-          <span className="text-muted-foreground truncate" title={binding.boardId}>
-            {binding.boardId}
-          </span>
-          <span
-            className={
-              awareStatus === 'sent'
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : awareStatus === 'no-terminal'
-                  ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-muted-foreground'
-            }
-          >
-            {awareStatus === 'sent'
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background/90 px-2 py-1.5 text-xs">
+        <span className="font-medium text-foreground">
+          {isPanel ? 'Panel board' : 'Session board'}
+        </span>
+        <span className="text-muted-foreground truncate" title={binding.boardId}>
+          {binding.boardId}
+        </span>
+        <span
+          className={
+            awareStatus === 'sent'
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : awareStatus === 'no-terminal'
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-muted-foreground'
+          }
+        >
+          {isPanel
+            ? panelAgentBound
+              ? '· board agent bound'
+              : '· no board agent'
+            : awareStatus === 'sent'
               ? '· session agent aware'
               : awareStatus === 'no-terminal'
                 ? '· no terminal yet'
                 : '· binding session'}
-            {awaitingLabel ? (
-              <span className="text-sky-600 dark:text-sky-400">· awaiting reply → board</span>
-            ) : null}
-          </span>
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-            <label
-              className="flex cursor-pointer items-center gap-1 text-muted-foreground"
-              title="After Send, place the next finished agent turn on the board (draft or collab-board ops)"
-            >
-              <input
-                type="checkbox"
-                className="accent-primary"
-                checked={autoDraft}
-                onChange={(e) => setAutoDraft(e.target.checked)}
-              />
-              Auto draft
-            </label>
-            <button
-              type="button"
-              className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
-              onClick={() => handlePlaceDraftFromLastReply()}
-              title="Place the session agent's last reply as draft / collab-board ops"
-            >
-              Draft from last reply
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
-              onClick={() => void handlePlaceDraftFromClipboard()}
-              title="Paste clipboard text as a provisional agent-draft shape"
-            >
-              Draft from clipboard
-            </button>
-            <button
-              type="button"
-              className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
-              disabled={sending}
-              onClick={() => void handleSendToSession()}
-              title="Full board screenshot for vision + selection coords when focused"
-            >
-              {sending ? 'Sending…' : 'Send to session'}
-            </button>
-          </div>
+          {awaitingLabel ? (
+            <span className="text-sky-600 dark:text-sky-400"> · awaiting reply → board</span>
+          ) : null}
+        </span>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          {ownsAgent ? (
+            <>
+              <button
+                type="button"
+                className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                onClick={() => spawnPanelAgent(false)}
+              >
+                Spawn agent
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                onClick={() => spawnPanelAgent(true)}
+                title="New omp session in the same canvas session-dir"
+              >
+                Fresh session
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                onClick={() => closePanelAgent()}
+              >
+                Close session
+              </button>
+            </>
+          ) : null}
+          <label
+            className="flex cursor-pointer items-center gap-1 text-muted-foreground"
+            title="After Send, place the next finished agent turn on the board"
+          >
+            <input
+              type="checkbox"
+              className="accent-primary"
+              checked={autoDraft}
+              onChange={(e) => setAutoDraft(e.target.checked)}
+            />
+            Auto draft
+          </label>
+          <button
+            type="button"
+            className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+            onClick={() => handlePlaceDraftFromLastReply()}
+          >
+            Draft from last reply
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+            onClick={() => void handlePlaceDraftFromClipboard()}
+          >
+            Draft from clipboard
+          </button>
+          <button
+            type="button"
+            className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+            disabled={sending}
+            onClick={() => void handleSendToAgent()}
+            title="Full board screenshot for vision + selection coords when focused"
+          >
+            {sending ? 'Sending…' : isPanel ? 'Send to board agent' : 'Send to session'}
+          </button>
         </div>
-      ) : null}
+      </div>
       <div className="min-h-0 flex-1">
         {/* tldraw owns pointer events wholesale — including pen pressure and palm
             rejection, which is what makes the S Pen work on the tablet WebView

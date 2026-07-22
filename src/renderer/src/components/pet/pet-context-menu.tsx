@@ -12,6 +12,12 @@ import { usePetAgentJump } from './pet-agent-jump'
 import { usePetAgentAsk } from './pet-agent-ask'
 import { usePetAgentSpawn } from './pet-agent-spawn'
 import { PetAskDialog } from './PetAskDialog'
+import { useAppStore } from '@/store'
+import {
+  MAX_PINNED_CANVAS_PANELS,
+  normalizePinnedCanvasPanels
+} from '../../../../shared/pinned-canvas-panels'
+import type { PinnedCanvasPanel } from '../../../../shared/types'
 
 /**
  * Right-click surface for the pet.
@@ -31,6 +37,30 @@ export function PetContextMenu({
   const { canAsk, askAgent } = usePetAgentAsk(agentTarget)
   const { canSpawn, spawnOmpAgent } = usePetAgentSpawn()
   const [askOpen, setAskOpen] = useState(false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const openPinnedCanvasPanelPage = useAppStore((s) => s.openPinnedCanvasPanelPage)
+
+  const spawnCollabBoard = useCallback((): void => {
+    const panels = useAppStore.getState().settings?.pinnedCanvasPanels ?? []
+    if (panels.length >= MAX_PINNED_CANVAS_PANELS) {
+      return
+    }
+    const id = crypto.randomUUID()
+    const boardId = crypto.randomUUID()
+    const panel: PinnedCanvasPanel = {
+      id,
+      title: 'Collab board',
+      boardId
+    }
+    const next = normalizePinnedCanvasPanels([...panels, panel])
+    void updateSettings({
+      pinnedCanvasPanels: next,
+      pinnedCanvasPanelsCollapsed: false
+    })
+    if (next.some((p) => p.id === id)) {
+      openPinnedCanvasPanelPage(id)
+    }
+  }, [updateSettings, openPinnedCanvasPanelPage])
 
   // Why the 'omp' fallback: a just-spawned assistant is askable before it has
   // reported any status, so there is no agentType to read yet. Every session the
@@ -99,6 +129,15 @@ export function PetContextMenu({
               </ContextMenuItem>
             )
           ) : null}
+          {/* G4: panel board with its own omp (not the pet assistant). Always
+              offered so collab does not require Settings; does not orphan the
+              pet-bound assistant. */}
+          <ContextMenuItem onSelect={spawnCollabBoard}>
+            {translate(
+              'auto.components.pet.PetOverlay.spawnCollabBoard',
+              'Spawn a collab board'
+            )}
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
       <PetAskDialog

@@ -23,6 +23,8 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { SortableTerminalPanelButton, SortableWebPanelButton } from './SidebarPanelRows'
 import {
+  QuickAddCanvasForm,
+  QuickAddCanvasPanelButton,
   QuickAddTerminalForm,
   QuickAddTerminalPanelButton,
   QuickAddWebForm,
@@ -46,10 +48,15 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   // Why: forms mount only after + click — rail buttons stay free of
   // useAppStore/Popover (React #185 at packaged boot).
   const [webQuickAddOpen, setWebQuickAddOpen] = React.useState(false)
+  const [canvasQuickAddOpen, setCanvasQuickAddOpen] = React.useState(false)
   const [terminalQuickAddOpen, setTerminalQuickAddOpen] = React.useState(false)
   const openPinnedWebPanelPage = useAppStore((s) => s.openPinnedWebPanelPage)
   const activePinnedWebPanelId = useAppStore((s) => s.activePinnedWebPanelId)
   const pinnedWebPanels = useAppStore((s) => s.settings?.pinnedWebPanels)
+  const openPinnedCanvasPanelPage = useAppStore((s) => s.openPinnedCanvasPanelPage)
+  const activePinnedCanvasPanelId = useAppStore((s) => s.activePinnedCanvasPanelId)
+  const pinnedCanvasPanels = useAppStore((s) => s.settings?.pinnedCanvasPanels)
+  const canvasPanelsCollapsed = useAppStore((s) => s.settings?.pinnedCanvasPanelsCollapsed === true)
   const openPinnedTerminalPanelPage = useAppStore((s) => s.openPinnedTerminalPanelPage)
   const activePinnedTerminalPanelId = useAppStore((s) => s.activePinnedTerminalPanelId)
   const pinnedTerminalPanelsSetting = useAppStore((s) => s.settings?.pinnedTerminalPanels)
@@ -167,6 +174,7 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
 
   const webPanelsCollapsed = useAppStore((s) => s.settings?.pinnedWebPanelsCollapsed === true)
   const hasWebPanels = (pinnedWebPanels ?? []).length > 0
+  const hasCanvasPanels = (pinnedCanvasPanels ?? []).length > 0
   const hasTerminalPanels = pinnedTerminalPanels.length > 0
   const hasGroupedTerminals = topLevelNodeGroups.length > 0
   // Why: always mount the rails so User Panels / Nodes + buttons exist even
@@ -180,6 +188,67 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className="flex flex-col gap-0.5">
           <SidebarPanelCanvasSection />
+          <div className="flex w-full items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() =>
+                void updateSettings({ pinnedCanvasPanelsCollapsed: !canvasPanelsCollapsed })
+              }
+              aria-expanded={!canvasPanelsCollapsed}
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
+                canvasPanelsCollapsed &&
+                  (pinnedCanvasPanels ?? []).some(
+                    (panel) =>
+                      activeView === 'canvas-panel' && activePinnedCanvasPanelId === panel.id
+                  )
+                  ? 'text-worktree-sidebar-accent-foreground'
+                  : 'text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80'
+              )}
+            >
+              <ChevronRight
+                className={cn(
+                  'size-3 shrink-0 transition-transform',
+                  !canvasPanelsCollapsed && 'rotate-90'
+                )}
+                strokeWidth={2}
+              />
+              <span className="min-w-0 flex-1 truncate">Collab Boards</span>
+            </button>
+            <QuickAddCanvasPanelButton
+              open={canvasQuickAddOpen}
+              onOpenChange={setCanvasQuickAddOpen}
+            />
+          </div>
+          {canvasQuickAddOpen ? (
+            <QuickAddCanvasForm onDone={() => setCanvasQuickAddOpen(false)} />
+          ) : null}
+          {canvasPanelsCollapsed ? null : hasCanvasPanels ? (
+            (pinnedCanvasPanels ?? []).map((panel) => (
+              <button
+                key={panel.id}
+                type="button"
+                onClick={() => openPinnedCanvasPanelPage(panel.id)}
+                aria-current={
+                  activeView === 'canvas-panel' && activePinnedCanvasPanelId === panel.id
+                    ? 'page'
+                    : undefined
+                }
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-left text-[13px] font-medium tracking-tight transition-colors',
+                  activeView === 'canvas-panel' && activePinnedCanvasPanelId === panel.id
+                    ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                    : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{panel.title}</span>
+              </button>
+            ))
+          ) : (
+            <p className="px-2 py-1 pl-8 text-[11px] text-worktree-sidebar-foreground/35">
+              Add a whiteboard with +
+            </p>
+          )}
           <div className="flex w-full items-center gap-0.5">
             <button
               type="button"

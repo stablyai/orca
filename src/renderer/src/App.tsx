@@ -318,6 +318,9 @@ const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityP
 const Settings = lazy(() => import('./components/settings/Settings'))
 const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const PinnedWebPanelPage = lazy(() => import('./components/pinned-web-panels/PinnedWebPanelPage'))
+const PinnedCanvasPanelPage = lazy(
+  () => import('./components/pinned-canvas-panels/PinnedCanvasPanelPage')
+)
 const PinnedTerminalPanelPage = lazy(
   () => import('./components/pinned-terminal-panels/PinnedTerminalPanelPage')
 )
@@ -488,6 +491,9 @@ function App(): React.JSX.Element {
   // Why: gates the always-mounted panel host so profiles without pinned
   // panels never fetch its lazy chunk.
   const hasPinnedWebPanels = useAppStore((s) => (s.settings?.pinnedWebPanels?.length ?? 0) > 0)
+  const hasPinnedCanvasPanels = useAppStore(
+    (s) => (s.settings?.pinnedCanvasPanels?.length ?? 0) > 0
+  )
   const hasPinnedTerminalPanels = useAppStore(
     (s) => (s.settings?.pinnedTerminalPanels?.length ?? 0) > 0
   )
@@ -2478,6 +2484,7 @@ function App(): React.JSX.Element {
                                   webviews must survive view switches, so the
                                   page hides itself instead of unmounting. */}
                               {hasPinnedWebPanels ? <PinnedWebPanelPage /> : null}
+                              {hasPinnedCanvasPanels ? <PinnedCanvasPanelPage /> : null}
                               {hasPinnedTerminalPanels ? <PinnedTerminalPanelPage /> : null}
                               {hasPanelCanvas ? <PanelCanvasPage /> : null}
                               <PanelCanvasAdoptBridge />

@@ -2775,6 +2775,11 @@ export type GlobalSettings = {
    *  first-class sidebar entries hosting persistent webviews. Optional for
    *  profiles saved before this setting existed; readers default to none. */
   pinnedWebPanels?: PinnedWebPanel[]
+  /** Collab whiteboard boards pinned under User Panels (G3). Each owns a
+   *  boardId (sync room + omp session-dir). Optional for older profiles. */
+  pinnedCanvasPanels?: PinnedCanvasPanel[]
+  /** Collapsed state of the sidebar "Collab Boards" disclosure. */
+  pinnedCanvasPanelsCollapsed?: boolean
   /** Collapsed state of the sidebar's "User Panels" disclosure that groups
    *  the pinned web panels — in settings (not per-window UI state) so the
    *  fold survives relaunch, matching the terminal-panel group folds. */
@@ -3500,6 +3505,7 @@ export type TopLevelView =
   | 'mobile'
   | 'web-panel'
   | 'terminal-panel'
+  | 'canvas-panel'
   | 'panel-canvas'
 
 export type PersistedUIState = {

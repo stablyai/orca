@@ -24,6 +24,7 @@ import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { normalizePinnedWebPanels } from '../../shared/pinned-web-panels'
 import { normalizePinnedTerminalPanels } from '../../shared/pinned-terminal-panels'
+import { normalizePinnedCanvasPanels } from '../../shared/pinned-canvas-panels'
 import { normalizePanelTreeGroups } from '../../shared/panel-tree'
 import { normalizePanelLayouts } from '../../shared/panel-layouts'
 
@@ -131,6 +132,9 @@ export function registerSettingsHandlers(
     }
     if ('pinnedWebPanels' in args) {
       sanitizedArgs.pinnedWebPanels = normalizePinnedWebPanels(args.pinnedWebPanels)
+    }
+    if ('pinnedCanvasPanels' in args) {
+      sanitizedArgs.pinnedCanvasPanels = normalizePinnedCanvasPanels(args.pinnedCanvasPanels)
     }
     if ('pinnedTerminalPanels' in args) {
       sanitizedArgs.pinnedTerminalPanels = normalizePinnedTerminalPanels(args.pinnedTerminalPanels)

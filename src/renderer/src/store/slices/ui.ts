@@ -660,6 +660,11 @@ export type UISlice = {
   activePinnedWebPanelId: string | null
   openPinnedWebPanelPage: (panelId: string) => void
   closePinnedWebPanelPage: () => void
+  previousViewBeforeCanvasPanel: Exclude<TopLevelView, 'canvas-panel'>
+  /** Which pinned collab board the 'canvas-panel' view is showing (G3). */
+  activePinnedCanvasPanelId: string | null
+  openPinnedCanvasPanelPage: (panelId: string) => void
+  closePinnedCanvasPanelPage: () => void
   previousViewBeforeTerminalPanel: Exclude<TopLevelView, 'terminal-panel'>
   /** Which pinned terminal panel the 'terminal-panel' view is showing. */
   activePinnedTerminalPanelId: string | null
@@ -1266,6 +1271,20 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeWebPanel,
       activePinnedWebPanelId: null
+    })),
+  previousViewBeforeCanvasPanel: 'terminal',
+  activePinnedCanvasPanelId: null,
+  openPinnedCanvasPanelPage: (panelId) =>
+    set((state) => ({
+      activeView: 'canvas-panel',
+      activePinnedCanvasPanelId: panelId,
+      previousViewBeforeCanvasPanel:
+        state.activeView === 'canvas-panel' ? state.previousViewBeforeCanvasPanel : state.activeView
+    })),
+  closePinnedCanvasPanelPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeCanvasPanel,
+      activePinnedCanvasPanelId: null
     })),
   previousViewBeforeTerminalPanel: 'terminal',
   activePinnedTerminalPanelId: null,
