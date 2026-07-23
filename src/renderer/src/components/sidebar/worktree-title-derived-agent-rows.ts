@@ -167,7 +167,7 @@ function buildTitleDerivedAgentRow(args: {
       : isClaudeAgentsTitle
         ? 'claude'
         : resolveTitleDerivedAgentType(title, label, args.ownerAgentType)
-  const agentType = resolveTitleDerivedPaneAgent({
+  const identifiedAgentType = resolveTitleDerivedPaneAgent({
     title,
     defaultTitle: args.tab.defaultTitle,
     titleShowsActivity: Boolean(titleStatus && label),
@@ -175,10 +175,20 @@ function buildTitleDerivedAgentRow(args: {
     launchAgentType: args.ownerAgentType,
     foreground: args.paneForegroundAgentByPaneKey[paneKey]
   })
+  const launchAgent = args.tab.launchAgent ?? null
+  // Why: hook-less SSH Codex leaves a live pane at its cwd title after a turn (#10178).
+  // A process-identified pane is already idle above; this covers the title-only case.
+  if (
+    !identifiedAgentType &&
+    (!launchAgent || titleStatus === 'working' || titleStatus === 'permission')
+  ) {
+    return null
+  }
+  const agentType = identifiedAgentType ?? launchAgent
   if (!agentType) {
     return null
   }
-  // Why: the title sets activity only; a plain title on a process-identified pane is idle.
+  // Why: the title sets activity only; a plain title on a known pane is idle.
   const status = titleStatus ?? 'idle'
   const rowLabel =
     agentType === titleAgentType &&
