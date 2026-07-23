@@ -77,10 +77,7 @@ import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import {
-  selectNativeChatTabWideFallbackUnsafeTabsById,
-  selectTabAgentTypesByTabId
-} from './tab-agent-types-by-tab-id'
+import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 const isWindows = navigator.userAgent.includes('Windows')
@@ -448,16 +445,9 @@ function TabBarInner({
 
   // Why: tab-wide launch/title hints are safe only before split; gate the view-mode toggle to the active leaf's agent.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
-  // Why: agentStatusByPaneKey churns on every status flip; project {tabId:agentType} to re-render only on agent identity change.
-  const tabAgentTypesByTabId = useAppStore(
-    useShallow((s) =>
-      selectTabAgentTypesByTabId(s.agentStatusByPaneKey ?? {}, s.terminalLayoutsByTabId)
-    )
-  )
-  const nativeChatTabWideFallbackUnsafeTabsById = useAppStore(
-    useShallow((s) => selectNativeChatTabWideFallbackUnsafeTabsById(s.terminalLayoutsByTabId))
-  )
-  const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
+  // Why: every retained TabBar observes the same hot maps; one feature-gated selector shares their projections.
+  const { nativeChatEnabled, tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } =
+    useAppStore(useShallow(selectTabBarAgentProjections))
   const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
     isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
   )
