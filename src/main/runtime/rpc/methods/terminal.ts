@@ -77,11 +77,14 @@ type SnapshotFrameOptions = {
   source?: 'headless' | 'renderer'
   oscLinks?: TerminalOscLinkRange[]
   pendingEscapeTailAnsi?: string
+  alternateScreen?: boolean
+  scrollbackAnsiLength?: number
 }
 
 type SerializedSnapshot = {
   data: string
   scrollbackAnsi?: string
+  alternateScreen?: boolean
   cols: number
   rows: number
   seq?: number
@@ -665,6 +668,12 @@ function sendSnapshotFrames(
       source: options.source,
       oscLinks: options.oscLinks,
       pendingEscapeTailAnsi: options.pendingEscapeTailAnsi,
+      ...(options.alternateScreen
+        ? {
+            alternateScreen: true,
+            scrollbackAnsiLength: options.scrollbackAnsiLength ?? 0
+          }
+        : {}),
       truncated: options.truncated === true,
       truncatedByByteBudget: options.truncatedByByteBudget === true
     })
@@ -2096,6 +2105,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             source: serialized?.source,
             oscLinks: serialized?.oscLinks,
             pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
+            alternateScreen: serialized?.alternateScreen,
+            scrollbackAnsiLength: serialized?.scrollbackAnsi?.length,
             truncated: false,
             truncatedByByteBudget: serialized?.truncatedByByteBudget,
             data: serialized?.data ?? ''
@@ -2383,6 +2394,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             source: serialized?.source,
             oscLinks: serialized?.oscLinks,
             pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
+            alternateScreen: serialized?.alternateScreen,
+            scrollbackAnsiLength: serialized?.scrollbackAnsi?.length,
             data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')
           })
           // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.

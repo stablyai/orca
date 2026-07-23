@@ -71,6 +71,8 @@ export type RemoteRuntimeMultiplexedTerminal = {
     rows: number
     seq?: number
     source?: 'headless' | 'renderer'
+    alternateScreen?: boolean
+    scrollbackAnsi?: string
   } | null>
   close: () => void
 }
@@ -114,6 +116,8 @@ type RemoteRuntimeSnapshotInfo = {
   // must write it AFTER the replay reset so the next live chunk completes it
   // instead of rendering literally (#7329).
   pendingEscapeTailAnsi?: string
+  alternateScreen?: boolean
+  scrollbackAnsiLength?: number
 }
 
 type RemoteRuntimeSnapshotRequest = {
@@ -126,6 +130,8 @@ type RemoteRuntimeSnapshotRequest = {
       seq?: number
       source?: 'headless' | 'renderer'
       pendingEscapeTailAnsi?: string
+      alternateScreen?: boolean
+      scrollbackAnsi?: string
     } | null
   ) => void
   reject: (error: Error) => void
@@ -634,14 +640,28 @@ class RemoteRuntimeTerminalMultiplexer {
           ? info.requestId === pendingRequest.requestId
           : stream.initialSnapshotReceived)
       if (snapshotApplied) {
+        const foldedData = data ?? ''
+        const hasAltScreenBoundary =
+          info?.alternateScreen === true &&
+          typeof info.scrollbackAnsiLength === 'number' &&
+          Number.isInteger(info.scrollbackAnsiLength) &&
+          info.scrollbackAnsiLength >= 0 &&
+          info.scrollbackAnsiLength <= foldedData.length
+        const scrollbackAnsi = hasAltScreenBoundary
+          ? foldedData.slice(0, info.scrollbackAnsiLength)
+          : undefined
+        const snapshotData = hasAltScreenBoundary
+          ? foldedData.slice(info.scrollbackAnsiLength)
+          : foldedData
         if (matchesPendingRequest) {
           pendingRequest.resolve({
-            data: data ?? '',
+            data: snapshotData,
             cols: info?.cols ?? 80,
             rows: info?.rows ?? 24,
             seq: info?.seq,
             source: info?.source,
-            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
+            ...(hasAltScreenBoundary ? { alternateScreen: true, scrollbackAnsi } : {})
           })
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {
@@ -1118,6 +1138,8 @@ function decodeSnapshotInfo(
     requestId?: unknown
     truncated?: unknown
     pendingEscapeTailAnsi?: unknown
+    alternateScreen?: unknown
+    scrollbackAnsiLength?: unknown
   }>(payload)
   if (!raw) {
     return null
@@ -1130,7 +1152,10 @@ function decodeSnapshotInfo(
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
     truncated: raw.truncated === true,
     pendingEscapeTailAnsi:
-      typeof raw.pendingEscapeTailAnsi === 'string' ? raw.pendingEscapeTailAnsi : undefined
+      typeof raw.pendingEscapeTailAnsi === 'string' ? raw.pendingEscapeTailAnsi : undefined,
+    alternateScreen: raw.alternateScreen === true ? true : undefined,
+    scrollbackAnsiLength:
+      typeof raw.scrollbackAnsiLength === 'number' ? raw.scrollbackAnsiLength : undefined
   }
 }
 

@@ -45,6 +45,8 @@ class FakeMultiplexServer {
   snapshotRequests: (number | undefined)[] = []
   private heldManualRequestId: number | null = null
   private snapshotData = 'INITIAL'
+  private snapshotAlternateScreen = false
+  private snapshotScrollbackAnsiLength = 0
 
   constructor(
     private readonly toClient: (bytes: Uint8Array<ArrayBufferLike>) => void,
@@ -73,7 +75,9 @@ class FakeMultiplexServer {
       }
       // Resync request: the server serializes the *current* buffer, so recovery
       // includes everything the client missed.
-      this.snapshotData = 'RECOVERED'
+      if (typeof payload?.requestId !== 'number') {
+        this.snapshotData = 'RECOVERED'
+      }
       if (typeof payload?.requestId !== 'number' && this.holdNextRecoverySnapshot) {
         // The reply's binary frames were all dropped under backpressure.
         this.holdNextRecoverySnapshot = false
@@ -108,7 +112,13 @@ class FakeMultiplexServer {
         rows: 24,
         seq: options?.truncated ? undefined : this.cursorUnits,
         requestId,
-        truncated: options?.truncated
+        truncated: options?.truncated,
+        ...(this.snapshotAlternateScreen
+          ? {
+              alternateScreen: true,
+              scrollbackAnsiLength: this.snapshotScrollbackAnsiLength
+            }
+          : {})
       }),
       0
     )
@@ -166,6 +176,15 @@ class FakeMultiplexServer {
     this.heldManualRequestId = null
     this.snapshotData = 'MANUAL'
     this.sendSnapshot(requestId)
+  }
+
+  setSnapshot(
+    data: string,
+    options: { alternateScreen?: boolean; scrollbackAnsiLength?: number } = {}
+  ) {
+    this.snapshotData = data
+    this.snapshotAlternateScreen = options.alternateScreen === true
+    this.snapshotScrollbackAnsiLength = options.scrollbackAnsiLength ?? 0
   }
 }
 
@@ -248,6 +267,20 @@ describe('remote terminal frame-drop resync', () => {
     server.replaySnapshotCoveredOutput('ccc')
     server.output('ddd')
     expect(data).toEqual(['aaa', 'ddd'])
+  })
+
+  it('splits remote alternate-screen scrollback from a requested snapshot', async () => {
+    const { stream } = await subscribeClient()
+    server.setSnapshot('shell history\ralternate frame', {
+      alternateScreen: true,
+      scrollbackAnsiLength: 'shell history\r'.length
+    })
+
+    await expect(stream.serializeBuffer({ scrollbackRows: 100 })).resolves.toMatchObject({
+      data: 'alternate frame',
+      alternateScreen: true,
+      scrollbackAnsi: 'shell history\r'
+    })
   })
 
   it('retries a truncated recovery on a backoff without accepting output across the gap', async () => {
