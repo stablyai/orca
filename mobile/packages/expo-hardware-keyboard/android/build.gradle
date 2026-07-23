@@ -1,0 +1,19 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.hardwarekeyboard'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "expo.modules.hardwarekeyboard"
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.1"
+  }
+}

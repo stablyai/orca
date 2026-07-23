@@ -1,0 +1,29 @@
+{
+  "name": "@orca/expo-hardware-keyboard",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Native view capturing physical keyboard events for live terminal input",
+  "keywords": [
+    "expo",
+    "hardware-keyboard",
+    "react-native",
+    "terminal"
+  ],
+  "license": "MIT",
+  "author": "Orca contributors",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "expo-modules-core": "~55.0.25",
+    "typescript": "6.0.3"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}
