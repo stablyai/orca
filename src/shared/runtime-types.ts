@@ -78,8 +78,10 @@ export type RuntimeStatus = {
   runtimeProtocolVersion?: number
   minCompatibleRuntimeClientVersion?: number
   capabilities?: RuntimeCapability[]
-  // Why: optional fields let updated clients inventory both new and legacy paired servers.
-  appVersion?: string
+  // Why: optional fields let updated clients inventory both new and legacy paired
+  // servers. Absence or null means the server predates version reporting and is
+  // treated as older by the skew evaluator.
+  appVersion?: string | null
   remoteUpdateSupport?: RemoteServerUpdateSupport
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform

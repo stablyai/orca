@@ -3,6 +3,8 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { evaluateAppVersionSkew, type AppVersionSkew } from '../../../../shared/app-version-skew'
+import { getClientAppVersion } from '@/runtime/client-app-version'
 import {
   clearRecentRuntimeCompatibilityFailure,
   clearRuntimeCompatibilityCache,
@@ -18,8 +20,32 @@ import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-con
 export type RuntimeEnvironmentStatus = {
   status: RuntimeStatus | null
   appVersion?: string | null
+  /** Non-blocking client/server app-version skew; null when versions match,
+   * the server is unreachable, or this build's version is unknown. */
+  versionSkew?: AppVersionSkew | null
   checkedAt: number
   connectionGeneration?: number
+}
+
+/** Builds a store entry from one probe result, deriving app-version skew
+ * against this build. Shared by the boot/refresh probes and the host menu's
+ * manual "Check connection" so no ingestion path drops the skew verdict. */
+export async function buildRuntimeEnvironmentStatusEntry(
+  status: RuntimeStatus | null
+): Promise<RuntimeEnvironmentStatus> {
+  if (!status) {
+    return { status: null, checkedAt: Date.now() }
+  }
+  const clientAppVersion = await getClientAppVersion()
+  return {
+    status,
+    appVersion: status.appVersion ?? null,
+    versionSkew: evaluateAppVersionSkew({
+      clientAppVersion,
+      serverAppVersion: status.appVersion ?? null
+    }),
+    checkedAt: Date.now()
+  }
 }
 
 export type RuntimeStatusSlice = {
@@ -328,7 +354,10 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
       // setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
       // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
-      get().setRuntimeEnvironmentStatus(environmentId, { status, checkedAt: Date.now() })
+      get().setRuntimeEnvironmentStatus(
+        environmentId,
+        await buildRuntimeEnvironmentStatusEntry(status)
+      )
       return true
     } catch {
       get().setRuntimeEnvironmentStatus(environmentId, {

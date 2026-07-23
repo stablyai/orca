@@ -4891,6 +4891,9 @@ export class OrcaRuntimeService {
       liveLeafCount: this.leaves.size,
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+      // Why: read from env (stamped at startup in main/index.ts) so this module
+      // stays importable without Electron in unit tests.
+      appVersion: process.env.ORCA_APP_VERSION ?? null,
       // Why: headless orca serve cannot create/stream BrowserViews, so clients
       // must not treat browser panes as supported just because runtime RPC is up.
       capabilities,
