@@ -203,6 +203,7 @@ export default function AccountsScreen() {
     const activeSessionBar = getUsageBarState(activeUsage, 'session')
     const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
+    const activeFableBar = getUsageBarState(activeUsage, 'fableWeekly')
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     return (
       <View style={styles.section}>
@@ -239,6 +240,15 @@ export default function AccountsScreen() {
                     loading={activeWeeklyBar.loading}
                     resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
                   />
+                  {activeUsage?.fableWeekly != null ? (
+                    <UsageBar
+                      label="Fable"
+                      usedPercent={activeFableBar.usedPercent}
+                      unavailable={activeFableBar.unavailable}
+                      loading={activeFableBar.loading}
+                      resetText={getWindowResetLabel(activeUsage, 'fableWeekly', now)}
+                    />
+                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -262,6 +272,7 @@ export default function AccountsScreen() {
               (!isActive && inactiveEntry?.isFetching === true)
             const sessionBar = getUsageBarState(usage, 'session', isFetching)
             const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
+            const fableBar = getUsageBarState(usage, 'fableWeekly', isFetching)
             return (
               <View key={account.id}>
                 <View style={styles.separator} />
@@ -294,6 +305,15 @@ export default function AccountsScreen() {
                         loading={weeklyBar.loading}
                         resetText={getWindowResetLabel(usage, 'weekly', now)}
                       />
+                      {usage?.fableWeekly != null ? (
+                        <UsageBar
+                          label="Fable"
+                          usedPercent={fableBar.usedPercent}
+                          unavailable={fableBar.unavailable}
+                          loading={fableBar.loading}
+                          resetText={getWindowResetLabel(usage, 'fableWeekly', now)}
+                        />
+                      ) : null}
                     </View>
                     {usage?.error ? (
                       <Text style={styles.errorText} numberOfLines={1}>

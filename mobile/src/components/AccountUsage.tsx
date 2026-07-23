@@ -97,7 +97,8 @@ const styles = StyleSheet.create({
   usageLabel: {
     fontSize: typography.metaSize,
     color: colors.textMuted,
-    width: 22
+    // Why: minWidth keeps the short 5h/7d columns aligned while letting the wider Fable label take its natural width instead of wrapping.
+    minWidth: 22
   },
   usageTrack: {
     flex: 1,

@@ -208,4 +208,47 @@ describe('getUsageBarState', () => {
       loading: true
     })
   })
+
+  it('reads the Claude Fable weekly window', () => {
+    const bar = getUsageBarState(
+      makeLimits({
+        status: 'ok',
+        fableWeekly: {
+          usedPercent: 37,
+          windowMinutes: 10_080,
+          resetsAt: null,
+          resetDescription: null
+        }
+      }),
+      'fableWeekly'
+    )
+
+    expect(bar).toEqual({ usedPercent: 37, unavailable: false, loading: false })
+  })
+
+  it('reports the Fable window unavailable when the host omits it', () => {
+    expect(getUsageBarState(makeLimits({ status: 'ok' }), 'fableWeekly')).toEqual({
+      usedPercent: null,
+      unavailable: true,
+      loading: false
+    })
+  })
+})
+
+describe('hasActiveProviderUsage with fableWeekly only', () => {
+  it('treats a Fable-only payload as renderable usage', () => {
+    expect(
+      hasActiveProviderUsage(
+        makeLimits({
+          status: 'error',
+          fableWeekly: {
+            usedPercent: 5,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          }
+        })
+      )
+    ).toBe(true)
+  })
 })
