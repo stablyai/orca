@@ -3661,7 +3661,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   addPRConversationComment: async (repoPath, prNumber, body, options) => {
     const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath, options?.executionHostId)
     if (options?.executionHostId && !repo) {
-      return { ok: false, error: 'Repository execution host not found.' }
+      return {
+        ok: false,
+        error: translate(
+          'auto.store.slices.github.repositoryExecutionHostNotFound',
+          'Repository execution host not found.'
+        )
+      }
     }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
@@ -3742,7 +3748,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   addPRReviewCommentReply: async (repoPath, prNumber, commentId, body, options) => {
     const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath, options?.executionHostId)
     if (options?.executionHostId && !repo) {
-      return { ok: false, error: 'Repository execution host not found.' }
+      return {
+        ok: false,
+        error: translate(
+          'auto.store.slices.github.repositoryExecutionHostNotFound',
+          'Repository execution host not found.'
+        )
+      }
     }
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(

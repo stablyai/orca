@@ -217,6 +217,7 @@
         },
         "github": {
           "f129c42773": "GitHub did not return the new comment.",
+          "repositoryExecutionHostNotFound": "Repository execution host not found.",
           "683a21264b": "Row has no owner/repo/number.",
           "83f9b126ad": "Issue Type can only be set on Issues.",
           "f963485d37": "Row not found",

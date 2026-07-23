@@ -194,6 +194,7 @@
         },
         "github": {
           "f129c42773": "GitHub no devolvió el comentario nuevo.",
+          "repositoryExecutionHostNotFound": "No se encontró el host de ejecución del repositorio.",
           "683a21264b": "La fila no tiene owner/repo/number.",
           "83f9b126ad": "El campo Issue Type solo se puede configurar en issues.",
           "f963485d37": "No se encontró la fila",
