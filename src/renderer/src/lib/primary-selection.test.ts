@@ -135,9 +135,21 @@ describe('primary selection buffer', () => {
 describe('primary-selection native paste suppression', () => {
   beforeEach(() => {
     resetPrimarySelectionForTests()
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('does not arm suppression while primary selection is disabled', () => {
+    armPrimarySelectionNativePasteSuppression(1_000)
+    expect(shouldSuppressPrimarySelectionNativePaste(1_000)).toBe(false)
+  })
+
+  it('does not arm suppression off Linux, where there is no native follow-up paste', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' })
+    setPrimarySelectionEnabled(true)
     armPrimarySelectionNativePasteSuppression(1_000)
     expect(shouldSuppressPrimarySelectionNativePaste(1_000)).toBe(false)
   })

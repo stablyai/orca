@@ -41,6 +41,16 @@ function suppressEvent(event: Event): void {
   event.stopImmediatePropagation()
 }
 
+// Why: the native follow-up paste lands in xterm's hidden helper textarea;
+// scope terminal-armed suppression to that surface so unrelated document pastes
+// (right-click Paste, keyboard paste into another control) are never swallowed.
+function isTerminalNativePasteTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false
+  }
+  return target.classList.contains('xterm-helper-textarea') || target.closest('.xterm') !== null
+}
+
 function isPrimarySelectionPasteTargetCurrent(
   target: EditablePrimarySelectionPasteTarget
 ): boolean {
@@ -98,8 +108,9 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       }
       // Why: the integrated terminal owns its middle-click paste and cannot mark
       // a pending DOM target, so honor its armed window to swallow the follow-up
-      // native paste event that xterm would otherwise forward to the PTY.
-      if (shouldSuppressPrimarySelectionNativePaste()) {
+      // native paste event that xterm would otherwise forward to the PTY — but
+      // only for the terminal's own surface, never unrelated document pastes.
+      if (isTerminalNativePasteTarget(event.target) && shouldSuppressPrimarySelectionNativePaste()) {
         suppressEvent(event)
       }
     }

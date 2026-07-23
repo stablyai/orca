@@ -2708,6 +2708,10 @@ export default function TerminalPane({
       ) {
         event.preventDefault()
         event.stopPropagation()
+        // Why: auxclick fires at button release, when Chromium's native paste is
+        // imminent; re-arm here so a slow release past the mousedown window still
+        // swallows the follow-up paste.
+        armPrimarySelectionNativePasteSuppression()
       }
     },
     [getPrimarySelectionMiddleClickPane]

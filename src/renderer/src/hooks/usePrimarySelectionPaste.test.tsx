@@ -42,6 +42,17 @@ function appendTextarea(value = ''): HTMLTextAreaElement {
   return textarea
 }
 
+function appendXtermHelperTextarea(): HTMLTextAreaElement {
+  // Stand-in for xterm's hidden helper textarea inside its `.xterm` container.
+  const terminal = document.createElement('div')
+  terminal.className = 'xterm'
+  const textarea = document.createElement('textarea')
+  textarea.className = 'xterm-helper-textarea'
+  terminal.appendChild(textarea)
+  document.body.appendChild(terminal)
+  return textarea
+}
+
 function dispatchMiddleMouseDown(target: HTMLElement): MouseEvent {
   const event = new MouseEvent('mousedown', { bubbles: true, button: 1, cancelable: true })
   target.dispatchEvent(event)
@@ -204,7 +215,7 @@ describe('usePrimarySelectionPaste', () => {
     await renderProbe()
     // Stand-in for xterm's helper textarea, which owns its own middle-click
     // paste and never registers a pending primary-selection DOM target.
-    const terminalTextarea = appendTextarea()
+    const terminalTextarea = appendXtermHelperTextarea()
     let nativeBeforeInput!: Event
     const nativePaste = new Event('paste', { bubbles: true, cancelable: true })
 
@@ -217,6 +228,26 @@ describe('usePrimarySelectionPaste', () => {
     expect(nativeBeforeInput.defaultPrevented).toBe(true)
     expect(nativePaste.defaultPrevented).toBe(true)
     expect(readPrimarySelectionTextMock).not.toHaveBeenCalled()
+  })
+
+  it('does not suppress an unrelated document paste while the terminal window is armed', async () => {
+    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
+    // Armed window is active, but the paste targets a control outside the
+    // terminal (e.g. right-click Paste into a form field) and must survive.
+    shouldSuppressNativePasteMock.mockReturnValue(true)
+    await renderProbe()
+    const unrelatedTextarea = appendTextarea()
+    let nativeBeforeInput!: Event
+    const nativePaste = new Event('paste', { bubbles: true, cancelable: true })
+
+    await act(async () => {
+      nativeBeforeInput = dispatchNativePasteBeforeInput(unrelatedTextarea)
+      unrelatedTextarea.dispatchEvent(nativePaste)
+      await flushPromises()
+    })
+
+    expect(nativeBeforeInput.defaultPrevented).toBe(false)
+    expect(nativePaste.defaultPrevented).toBe(false)
   })
 
   it('does not suppress native paste when the terminal has not armed the window', async () => {
