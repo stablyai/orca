@@ -51,4 +51,17 @@ describe('isNativeChatPastedImagePath', () => {
     expect(isNativeChatPastedImagePath('/Users/me/Pictures/hero-image-2.png')).toBe(false)
     expect(isNativeChatPastedImagePath('/tmp/screenshot.png')).toBe(false)
   })
+
+  it('detects mobile Files-picker image uploads (orca-file-… with an image extension)', () => {
+    expect(isNativeChatPastedImagePath('/tmp/orca-file-1784234906335-f54c579b-photo.jpg')).toBe(
+      true
+    )
+    expect(isNativeChatPastedImagePath('C:\\Temp\\orca-file-1-2-photo.png')).toBe(true)
+  })
+
+  it('does not treat non-image mobile uploads as pasted images', () => {
+    expect(isNativeChatPastedImagePath('/tmp/orca-file-1784234906335-f54c579b-report.pdf')).toBe(
+      false
+    )
+  })
 })

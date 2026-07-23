@@ -59,6 +59,56 @@ describe('decodeGrokTranscriptLine', () => {
     })
   })
 
+  it('restores a mobile Files-picker image upload (orca-file-… name) as an image-ref', () => {
+    const imagePath = '/tmp/orca-file-1784234906335-f54c579b-819c-4c33-8bd1-2d34ebf871ab-photo.jpg'
+    const line = JSON.stringify({
+      type: 'user',
+      content: [
+        { type: 'text', text: `<user_query>\n${imagePath}Describe this image\n</user_query>` }
+      ]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-mobile-image')).toMatchObject({
+      role: 'user',
+      blocks: [
+        { type: 'image-ref', path: imagePath },
+        { type: 'text', text: 'Describe this image' }
+      ]
+    })
+  })
+
+  it('resolves multi-dot mobile upload names to their last image extension', () => {
+    const imagePath = '/tmp/orca-file-1784234906335-f54c579b-photo.jpg.backup.png'
+    const line = JSON.stringify({
+      type: 'user',
+      content: [
+        { type: 'text', text: `<user_query>\n${imagePath}Describe this image\n</user_query>` }
+      ]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-multidot')).toMatchObject({
+      role: 'user',
+      blocks: [
+        { type: 'image-ref', path: imagePath },
+        { type: 'text', text: 'Describe this image' }
+      ]
+    })
+  })
+
+  it('leaves non-image mobile uploads (orca-file-… .pdf) as plain text', () => {
+    const text =
+      '/tmp/orca-file-1784234906335-f54c579b-819c-4c33-8bd1-2d34ebf871ab-report.pdf summarize this'
+    const line = JSON.stringify({
+      type: 'user',
+      content: [{ type: 'text', text: `<user_query>${text}</user_query>` }]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-mobile-pdf')).toMatchObject({
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+  })
+
   it('restores an attachment-only pasted image from Grok transcript text', () => {
     const imagePath = '/tmp/orca-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png'
     const line = JSON.stringify({

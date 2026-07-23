@@ -1,6 +1,7 @@
 // Grok chat_history.jsonl line → NativeChatMessage decoder.
 
 import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
+import { IMAGE_FILE_EXTENSIONS } from '../../shared/image-file-extensions'
 import {
   asRecord,
   extractString,
@@ -213,12 +214,26 @@ function normalizeGrokUserQueryBlock(block: NativeChatBlock): NativeChatBlock[] 
   ]
 }
 
+// Mobile Files-picker uploads use `orca-file-<ts>-<uuid>-<name>.<ext>`; only
+// image extensions (from the shared list) are recovered as image attachments.
+// The name segment is restricted to the host sanitizer's allowlist charset and
+// matched greedily, so a multi-dot name (`photo.jpg.backup.png`) resolves to
+// its LAST image extension instead of truncating at the first. A non-image
+// name whose interior contains an image extension (`photo.jpg.tmp`) is still
+// ambiguous — Grok concatenates path and prompt with no delimiter — and will
+// mis-split; that is inherent to the format, not recoverable here.
+// (Regex is assembled from the static shared extension list, not user input.)
+const GROK_PASTED_IMAGE_NAME = `(?:orca-paste-[^\\\\/\\r\\n]+?\\.png|orca-file-[\\p{L}\\p{N}\\p{M}._-]+\\.(?:${IMAGE_FILE_EXTENSIONS.map((ext) => ext.slice(1)).join('|')}))`
+
+const GROK_PASTED_IMAGE_RE = new RegExp(
+  `^((?:[a-z]:[\\\\/]|\\/|[\\\\/]{2}[^\\\\/\\r\\n]+[\\\\/][^\\\\/\\r\\n]+[\\\\/])(?:.*?[\\\\/])?${GROK_PASTED_IMAGE_NAME})([\\s\\S]*)$`,
+  'iu'
+)
+
 function splitGrokPastedImageQuery(text: string): { path: string; query: string } | null {
   // Why: Grok 0.2.93 persists clipboard images as an absolute temp path directly
   // concatenated with the prompt; recover Orca's attachment without exposing it.
-  const match = text.match(
-    /^((?:[a-z]:[\\/]|\/|[\\/]{2}[^\\/\r\n]+[\\/][^\\/\r\n]+[\\/])(?:.*?[\\/])?orca-paste-[^\\/\r\n]+?\.png)([\s\S]*)$/i
-  )
+  const match = text.match(GROK_PASTED_IMAGE_RE)
   if (!match?.[1]) {
     return null
   }

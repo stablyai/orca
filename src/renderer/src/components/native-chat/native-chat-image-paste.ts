@@ -55,5 +55,10 @@ export function isNativeChatImageAttachmentPath(path: string): boolean {
  *  instead of the basename. */
 export function isNativeChatPastedImagePath(path: string): boolean {
   const base = path.split(/[\\/]/).findLast(Boolean) ?? path
-  return /^orca-paste-.+\.png$/i.test(base)
+  if (/^orca-paste-.+\.png$/i.test(base)) {
+    return true
+  }
+  // Mobile Files-picker uploads keep the original (sanitized) name behind an
+  // `orca-file-<ts>-<uuid>-` prefix; only image extensions are pasted images.
+  return /^orca-file-/i.test(base) && isImageDropPath(base)
 }
