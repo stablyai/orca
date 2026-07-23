@@ -828,17 +828,46 @@ function mergeFetchedProjectCompatibilityForHost({
         projectHasCurrentOwnerOutsideHost(project))
   )
   return {
-    projects: mergeProjectCompatibilityProjects(
-      preservedProjects.map((project) => {
-        const sourceRepoIds = getSourceRepoIdsOutsideHost(project, reposById, hostId)
-        return sourceRepoIds.length === project.sourceRepoIds.length
-          ? project
-          : { ...project, sourceRepoIds }
-      }),
-      fetchedProjects
+    projects: orderLikePrevious(
+      previous.projects,
+      mergeProjectCompatibilityProjects(
+        preservedProjects.map((project) => {
+          const sourceRepoIds = getSourceRepoIdsOutsideHost(project, reposById, hostId)
+          return sourceRepoIds.length === project.sourceRepoIds.length
+            ? project
+            : { ...project, sourceRepoIds }
+        }),
+        fetchedProjects
+      ),
+      (project) => project.id
     ),
-    projectHostSetups
+    projectHostSetups: orderLikePrevious(
+      previous.projectHostSetups,
+      projectHostSetups,
+      getProjectHostSetupOwnerKey
+    )
   }
+}
+
+// Why: merge order is preserved-then-fetched, so per-host refreshes rotate array
+// order without changing content — defeating no-op-set guards and re-rendering
+// every consumer each poll. Re-anchor to the previous array's order.
+function orderLikePrevious<T>(
+  previous: readonly T[],
+  next: readonly T[],
+  keyOf: (entry: T) => string
+): T[] {
+  const nextByKey = new Map(next.map((entry) => [keyOf(entry), entry]))
+  const ordered: T[] = []
+  for (const entry of previous) {
+    const match = nextByKey.get(keyOf(entry))
+    if (match !== undefined) {
+      ordered.push(match)
+      nextByKey.delete(keyOf(entry))
+    }
+  }
+  ordered.push(...nextByKey.values())
+  return ordered
 }
 
 function mergeById<T extends { id: string }>(base: readonly T[], overlay: readonly T[]): T[] {
@@ -1024,6 +1053,33 @@ async function fetchRepoCatalogForTarget(
     projectHostSetupCompatibility: await fetchProjectHostSetupCompatibility(target, repos),
     hostId: getRuntimeTargetHostId(target)
   }
+}
+
+// Why: runtime reposChanged events re-deliver identical catalogs every few
+// seconds; dropping keys whose content didn't change keeps references stable
+// so store subscribers don't re-render on each poll. Structural compare via
+// JSON is safe here — these values are IPC-shaped plain data built the same
+// way each fetch — and cheap relative to the fetch itself.
+function dropUnchangedStateKeys<T extends Record<string, unknown>>(
+  state: Record<string, unknown>,
+  partial: T
+): Partial<T> {
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(partial)) {
+    const current = state[key]
+    if (current === value) {
+      continue
+    }
+    try {
+      if (JSON.stringify(current) === JSON.stringify(value)) {
+        continue
+      }
+    } catch {
+      // Non-serializable value — treat as changed.
+    }
+    next[key] = value
+  }
+  return next as Partial<T>
 }
 
 function mergeFetchedRepoCatalog(
@@ -1783,7 +1839,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         finalizedHostRepos = finalizedRepos.filter(
           (repo) => getRepoExecutionHostId(repo) === result.hostId
         )
-        return {
+        const changed = dropUnchangedStateKeys(s, {
           repos: finalizedRepos,
           pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
           ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
@@ -1794,7 +1850,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             s.setupScriptPromptDismissedRepoIds,
             validRepoIds
           )
-        }
+        })
+        return Object.keys(changed).length > 0 ? changed : s
       })
       scheduleSafeAutoForkSync(get, finalizedHostRepos)
       return finalizedHostRepos

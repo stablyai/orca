@@ -257,6 +257,58 @@ function areLineageRecordsEqual(
   )
 }
 
+function areWorkspaceLineageRecordsEqual(
+  a: WorkspaceLineage | null | undefined,
+  b: WorkspaceLineage | null | undefined
+): boolean {
+  if (!a || !b) {
+    return !a && !b
+  }
+  return (
+    a.childWorkspaceKey === b.childWorkspaceKey &&
+    a.childInstanceId === b.childInstanceId &&
+    a.parentWorkspaceKey === b.parentWorkspaceKey &&
+    a.parentInstanceId === b.parentInstanceId &&
+    a.origin === b.origin &&
+    a.capture.source === b.capture.source &&
+    a.capture.confidence === b.capture.confidence &&
+    a.taskId === b.taskId &&
+    a.orchestrationRunId === b.orchestrationRunId &&
+    a.coordinatorHandle === b.coordinatorHandle &&
+    a.createdByTerminalHandle === b.createdByTerminalHandle &&
+    a.createdAt === b.createdAt
+  )
+}
+
+function lineageMapsEqual<T>(
+  current: Record<string, T>,
+  merged: Record<string, T>,
+  entryEqual: (a: T | undefined, b: T | undefined) => boolean
+): boolean {
+  const currentKeys = Object.keys(current)
+  if (currentKeys.length !== Object.keys(merged).length) {
+    return false
+  }
+  return currentKeys.every((key) => entryEqual(current[key], merged[key]))
+}
+
+// Shallow equality over event payloads, with one level of primitive-array
+// support (e.g. base-status recentSubjects). Nested objects fail safe (unequal).
+function shallowEqualRecords(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const aKeys = Object.keys(a)
+  if (aKeys.length !== Object.keys(b).length) {
+    return false
+  }
+  return aKeys.every((key) => {
+    const av = a[key]
+    const bv = b[key]
+    if (Array.isArray(av) && Array.isArray(bv)) {
+      return av.length === bv.length && av.every((item, i) => item === bv[i])
+    }
+    return av === bv
+  })
+}
+
 function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
   if (!current || current.length !== next.length) {
     return false
@@ -1260,14 +1312,36 @@ async function refreshWorktreeLineageForSettings(
 ): Promise<void> {
   const lineage = await listWorktreeLineageForRuntime(settings, options)
   const hostId = getSettingsFocusedExecutionHostId(settings)
-  set((s) => ({
-    worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
-    workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
-      s,
-      hostId,
-      lineage.workspaceLineageByChildKey
+  set((s) => applyLineageMerge(s, hostId, lineage))
+}
+
+// Why: lineage polls re-deliver identical payloads ~1/2s; skipping the set when
+// the merge is a no-op stops every store subscriber re-rendering on each poll.
+function applyLineageMerge(
+  s: AppState,
+  hostId: ExecutionHostId,
+  lineage: {
+    worktreeLineageById: Record<string, WorktreeLineage>
+    workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  }
+): AppState | Pick<AppState, 'worktreeLineageById' | 'workspaceLineageByChildKey'> {
+  const worktreeLineageById = mergeLineageForHost(s, hostId, lineage.worktreeLineageById)
+  const workspaceLineageByChildKey = mergeWorkspaceLineageForHost(
+    s,
+    hostId,
+    lineage.workspaceLineageByChildKey
+  )
+  if (
+    lineageMapsEqual(s.worktreeLineageById, worktreeLineageById, areLineageRecordsEqual) &&
+    lineageMapsEqual(
+      s.workspaceLineageByChildKey,
+      workspaceLineageByChildKey,
+      areWorkspaceLineageRecordsEqual
     )
-  }))
+  ) {
+    return s
+  }
+  return { worktreeLineageById, workspaceLineageByChildKey }
 }
 
 async function refreshRemoteWorktreeLineageBestEffort(
@@ -1282,14 +1356,7 @@ async function refreshRemoteWorktreeLineageBestEffort(
       reuseRecentCompatibilityFailure: true
     })
     const hostId = getSettingsFocusedExecutionHostId(settings)
-    set((s) => ({
-      worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
-      workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
-        s,
-        hostId,
-        lineage.workspaceLineageByChildKey
-      )
-    }))
+    set((s) => applyLineageMerge(s, hostId, lineage))
   } catch (err) {
     // Why: lineage is supplemental, so a remote timeout here must not discard a successful worktree refresh.
     console.error('Failed to fetch worktree lineage:', err)
@@ -2544,12 +2611,22 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           setup,
           matchOptions
         )
-
+        // Why: incoming can differ from the host-filtered view while the merged
+        // result still equals current state (other-host entries, sanitized
+        // links); skip the no-op set or every poll re-renders all subscribers.
+        const worktreesChanged = !areWorktreesEqual(s.worktreesByRepo[repoId], mergedWorktrees)
+        if (
+          !worktreesChanged &&
+          areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[repoId], mergedDetected) &&
+          removedIds.length === 0
+        ) {
+          return s
+        }
         return {
           // Why: a terminal can switch an active worktree's branch; refresh that live git identity but only bump sortEpoch when the payload actually changed.
           worktreesByRepo: { ...s.worktreesByRepo, [repoId]: mergedWorktrees },
           detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [repoId]: mergedDetected },
-          sortEpoch: s.sortEpoch + 1,
+          ...(worktreesChanged ? { sortEpoch: s.sortEpoch + 1 } : {}),
           ...(removedIds.length > 0 ? buildWorktreePurgeState(s, removedIds) : {})
         }
       })
@@ -3000,21 +3077,36 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   updateWorktreeBaseStatus: (event) => {
-    set((s) => ({
-      baseStatusByWorktreeId: {
-        ...s.baseStatusByWorktreeId,
-        [event.worktreeId]: event
+    set((s) => {
+      // Why: main pushes base status per worktree per poll; unchanged payloads
+      // must not allocate a new map or every subscriber re-renders on no-ops.
+      const current = s.baseStatusByWorktreeId[event.worktreeId]
+      if (current && shallowEqualRecords(current, event)) {
+        return s
       }
-    }))
+      return {
+        baseStatusByWorktreeId: {
+          ...s.baseStatusByWorktreeId,
+          [event.worktreeId]: event
+        }
+      }
+    })
   },
 
   updateWorktreeRemoteBranchConflict: (event) => {
-    set((s) => ({
-      remoteBranchConflictByWorktreeId: {
-        ...s.remoteBranchConflictByWorktreeId,
-        [event.worktreeId]: event
+    set((s) => {
+      // Why: same no-op guard as updateWorktreeBaseStatus.
+      const current = s.remoteBranchConflictByWorktreeId[event.worktreeId]
+      if (current && shallowEqualRecords(current, event)) {
+        return s
       }
-    }))
+      return {
+        remoteBranchConflictByWorktreeId: {
+          ...s.remoteBranchConflictByWorktreeId,
+          [event.worktreeId]: event
+        }
+      }
+    })
   },
 
   prefetchWorktreeCreateBase: async (repoId, baseBranch) => {
