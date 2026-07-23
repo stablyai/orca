@@ -95,7 +95,15 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
         const typed = ids as TuiAgent[]
         if (requestGeneration === localDetectionGeneration) {
           set({ detectedAgentIds: typed, isDetectingAgents: false })
-          detectedContextKey = contextKey
+          if (typed.length > 0) {
+            detectedContextKey = contextKey
+          } else {
+            // Why: initial detection may return empty when shell PATH hydration
+            // hasn't completed yet (slow login shell, corporate env setup).
+            // Don't cache empty results so subsequent callers re-probe once
+            // the shell is warmed up. See stablyai/orca#9011.
+            detectPromise = null
+          }
         }
         return typed
       })
@@ -140,8 +148,13 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
           })
           // Why: once refresh has run, treat its result as the current detection
           // snapshot so `ensureDetectedAgents` short-circuits.
-          detectedContextKey = contextKey
-          detectPromise = { key: contextKey, promise: Promise.resolve(typed) }
+          // Only cache non-empty results — an empty list may indicate that shell
+          // PATH hydration produced a minimal PATH. The next `ensureDetectedAgents`
+          // call should re-probe. See stablyai/orca#9011.
+          if (typed.length > 0) {
+            detectedContextKey = contextKey
+            detectPromise = { key: contextKey, promise: Promise.resolve(typed) }
+          }
         }
         return typed
       })

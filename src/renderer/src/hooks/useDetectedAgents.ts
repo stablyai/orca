@@ -125,6 +125,14 @@ export function useDetectedAgents(
       }
     } else {
       if (detectedIds === null) {
+        retriedEmptyTargetRef.current = null
+        void ensureLocal()
+      } else if (detectedIds.length === 0 && retriedEmptyTargetRef.current !== 'local') {
+        // Why: initial detection may return empty when shell PATH hydration
+        // hasn't completed yet (slow login shell, corporate env setup).
+        // Retry once so a subsequent probe picks up agents that are actually
+        // on PATH. See stablyai/orca#9011.
+        retriedEmptyTargetRef.current = 'local'
         void ensureLocal()
       }
     }
