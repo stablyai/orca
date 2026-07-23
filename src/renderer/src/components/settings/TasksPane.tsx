@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Check, Github, Gitlab } from 'lucide-react'
 import type { GlobalSettings, TaskProvider } from '../../../../shared/types'
 import {
@@ -80,6 +81,21 @@ const TASK_PROVIDER_OPTIONS: readonly {
 
 export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.JSX.Element {
   const visibleProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
+
+  const [linearTemplateDraft, setLinearTemplateDraft] = useState(
+    settings.linearLaunchPromptTemplate ?? ''
+  )
+  // Keep the draft in sync when the persisted value changes elsewhere.
+  useEffect(() => {
+    setLinearTemplateDraft(settings.linearLaunchPromptTemplate ?? '')
+  }, [settings.linearLaunchPromptTemplate])
+
+  const commitLinearTemplate = (): void => {
+    if ((settings.linearLaunchPromptTemplate ?? '') === linearTemplateDraft) {
+      return
+    }
+    updateSettings({ linearLaunchPromptTemplate: linearTemplateDraft })
+  }
 
   const toggleProvider = (provider: TaskProvider): void => {
     const isVisible = visibleProviders.includes(provider)
@@ -177,6 +193,43 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
               </button>
             )
           })}
+        </SearchableSetting>
+      </section>
+
+      <section className="space-y-3">
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.TasksPane.a1b2c3d4e5', 'Linear')}
+          description={translate(
+            'auto.components.settings.TasksPane.b2c3d4e5f6',
+            'Customize the first instruction Orca sends to the agent when you start a worktree from a Linear issue.'
+          )}
+        />
+        <SearchableSetting
+          title={translate('auto.components.settings.TasksPane.c3d4e5f6a7', 'Launch prompt template')}
+          description={translate(
+            'auto.components.settings.TasksPane.d4e5f6a7b8',
+            'Leave empty to use the default. The issue identifier and URL variables are shown in the field placeholder.'
+          )}
+          keywords={['linear', 'prompt', 'template', 'launch', 'instruction', 'identifier', 'url']}
+          className="space-y-2 py-2"
+        >
+          <textarea
+            aria-label={translate(
+              'auto.components.settings.TasksPane.c3d4e5f6a7',
+              'Launch prompt template'
+            )}
+            value={linearTemplateDraft}
+            rows={3}
+            spellCheck={false}
+            placeholder={translate(
+              'auto.components.settings.TasksPane.e5f6a7b8c9',
+              'Linked Linear issue: {{identifier}}\n{{url}}',
+              { identifier: '{{identifier}}', url: '{{url}}' }
+            )}
+            onChange={(event) => setLinearTemplateDraft(event.target.value)}
+            onBlur={commitLinearTemplate}
+            className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+          />
         </SearchableSetting>
       </section>
     </div>
