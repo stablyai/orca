@@ -46,8 +46,6 @@ let fakeQuickCommands: TerminalQuickCommand[] = [
   }
 ]
 
-const FAKE_TERMINALS = createMockTerminals(fakeWorktrees[0]?.worktreeId)
-
 export type RpcRequest = {
   id: string
   method: string
@@ -97,6 +95,13 @@ function repoSelectorToId(repoSelector: unknown): string | null {
     return null
   }
   return repoSelector.startsWith('id:') ? repoSelector.slice(3) : repoSelector
+}
+
+function terminalListWorktreeId(worktreeSelector: unknown): string | undefined {
+  if (typeof worktreeSelector === 'string' && worktreeSelector.length > 0) {
+    return worktreeSelector.startsWith('id:') ? worktreeSelector.slice(3) : worktreeSelector
+  }
+  return fakeWorktrees.find((worktree) => worktree.isActive)?.worktreeId
 }
 
 export function handleRequest(
@@ -271,15 +276,17 @@ export function handleRequest(
       break
     }
 
-    case 'terminal.list':
+    case 'terminal.list': {
+      const terminals = createMockTerminals(terminalListWorktreeId(request.params?.worktree))
       respond(
         success(request.id, {
-          terminals: FAKE_TERMINALS,
-          totalCount: FAKE_TERMINALS.length,
+          terminals,
+          totalCount: terminals.length,
           truncated: false
         })
       )
       break
+    }
 
     case 'terminal.subscribe': {
       respond(success(request.id, { type: 'scrollback', lines: FAKE_SCROLLBACK, truncated: false }))
