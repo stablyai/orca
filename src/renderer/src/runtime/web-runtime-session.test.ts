@@ -17,6 +17,10 @@ import {
   splitWebRuntimeTerminal
 } from './web-runtime-session'
 import {
+  peekWebSessionFocusIntent,
+  resetWebSessionFocusIntentForTests
+} from './web-session-focus-intent'
+import {
   isWebSessionCloseIntentPending,
   recordWebSessionCloseIntent,
   resetWebSessionCloseIntentForTests
@@ -551,8 +555,87 @@ describe('createWebRuntimeSessionTerminal', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     clearRuntimeCompatibilityCacheForTests()
+    resetWebSessionFocusIntentForTests()
     vi.clearAllMocks()
   })
+
+  it.each([
+    { sessionKind: 'fresh' as const, activate: true },
+    { sessionKind: 'fresh' as const, activate: false },
+    { sessionKind: 'resume' as const, activate: true },
+    { sessionKind: 'resume' as const, activate: false }
+  ])(
+    'keeps $sessionKind host creation background with activate=$activate while focus stays client-owned',
+    async ({ sessionKind, activate }) => {
+      const hostTabId = `host-${sessionKind}-${activate ? 'active' : 'background'}`
+      const runtimeCall = vi.fn(async (request: { method: string }) => {
+        if (request.method === 'status.get') {
+          return {
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeId: 'runtime-1',
+              graphStatus: 'ready',
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: ['agent-session.host-authority.v1']
+            }
+          }
+        }
+        if (
+          request.method === 'terminal.createAgentSession' ||
+          request.method === 'terminal.ensureAgentSession'
+        ) {
+          return {
+            id: 'agent-session',
+            ok: true,
+            result: {
+              terminal: {
+                handle: `term-${sessionKind}`,
+                worktreeId: WORKTREE_ID,
+                tabId: hostTabId,
+                leafId: 'leaf-1'
+              },
+              disposition: 'created'
+            }
+          }
+        }
+        return { id: 'list', ok: true, result: makeSnapshot() }
+      })
+      vi.stubGlobal('window', {
+        api: { runtimeEnvironments: { call: runtimeCall } }
+      })
+
+      await expect(
+        createWebRuntimeSessionTerminal({
+          worktreeId: WORKTREE_ID,
+          agentSessionKind: sessionKind,
+          launchAgent: 'codex',
+          ...(sessionKind === 'resume'
+            ? {
+                command: "codex resume 'session-1'",
+                providerSession: { key: 'session_id' as const, id: 'session-1' }
+              }
+            : {}),
+          activate
+        })
+      ).resolves.toEqual({ status: 'created' })
+
+      const authorityMethod =
+        sessionKind === 'resume' ? 'terminal.ensureAgentSession' : 'terminal.createAgentSession'
+      const authorityRequest = runtimeCall.mock.calls.find(
+        ([request]) => request.method === authorityMethod
+      )?.[0]
+      expect(authorityRequest).toMatchObject({
+        selector: ENVIRONMENT_ID,
+        method: authorityMethod,
+        params: { presentation: 'background' }
+      })
+      expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toBe(
+        activate ? hostTabId : null
+      )
+    }
+  )
 
   it('creates paired web agents through host authority so activation is mirrored', async () => {
     const snapshot = {
