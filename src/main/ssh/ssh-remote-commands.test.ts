@@ -20,8 +20,10 @@ import {
   commandInRemoteDirectory,
   commandWithNodePath,
   listRelayBaseDirsCommand,
+  listStaleRemoteUploadStagesCommand,
   makeRemoteDirectoryCommand,
   moveRemoteTreeCommand,
+  promoteRemoteTreeContentsCommand,
   probeDirectoryExistsCommand,
   probeRelayInstalledCommand,
   readRemoteHomeCommand,
@@ -150,6 +152,82 @@ describe('ssh remote command builders', () => {
     expect(windowsScript).toContain("-Destination 'C:/Users/me/relay/old.gc-tombstone'")
     expect(windowsScript).toContain("'MOVED'")
   })
+
+  it('enumerates Windows staging children before copying', () => {
+    const script = decodePowerShellCommand(
+      promoteRemoteTreeContentsCommand(windows, 'C:/Users/me/relay.upload-123', 'C:/Users/me/relay')
+    )
+    expect(script).toContain('Get-ChildItem -LiteralPath')
+    expect(script).toContain(' -Force -ErrorAction Stop | Copy-Item -Destination')
+    expect(script).not.toContain('Copy-Item -LiteralPath')
+    expect(script).toContain('Remove-Item -LiteralPath')
+    expect(script).toContain("$ErrorActionPreference = 'Stop'")
+    expect(script).toContain('Copy-Item -Destination')
+  })
+
+  it('removes POSIX staging only after the copy succeeds', () => {
+    const command = promoteRemoteTreeContentsCommand(
+      posix,
+      '/home/u/relay.upload-123',
+      '/home/u/relay'
+    )
+    expect(command).toContain("cp -a '/home/u/relay.upload-123'/. '/home/u/relay'/")
+    expect(command).toContain("&& rm -rf '/home/u/relay.upload-123'")
+    expect(command.indexOf('cp -a')).toBeLessThan(command.indexOf('rm -rf'))
+  })
+
+  it('collects only token-shaped stale upload stages, leaving fresh active stages untouched', () => {
+    const command = listStaleRemoteUploadStagesCommand(
+      posix,
+      '/home/u/.orca-remote/relay-1.0.0',
+      2 * 60 * 60
+    )
+    expect(command).toContain(
+      "-mindepth 1 -maxdepth 1 -type d -name 'relay-1.0.0.upload-*' -mmin +120"
+    )
+    expect(command).toContain('.upload-????????-????-????-????-????????????')
+    expect(command).toContain(`printf '%s\\n' "$d"`)
+  })
+
+  it('uses remote mtime and UUID provenance for Windows stage collection', () => {
+    const command = decodePowerShellCommand(
+      listStaleRemoteUploadStagesCommand(windows, 'C:/Users/me/relay-1.0.0', 2 * 60 * 60)
+    )
+    expect(command).toContain('LastWriteTimeUtc -lt $cutoff')
+    expect(command).toContain('upload-[0-9a-f]{8}-[0-9a-f]{4}')
+  })
+
+  it.runIf(process.platform !== 'win32')(
+    'lists only stale UUID upload stages in a real POSIX shell',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-upload-stage-'))
+      try {
+        const staleStage = join(root, 'relay-1.0.0.upload-123e4567-e89b-12d3-a456-426614174000')
+        const freshStage = join(root, 'relay-1.0.0.upload-123e4567-e89b-12d3-a456-426614174001')
+        const malformedStage = join(root, 'relay-1.0.0.upload-not-a-uuid')
+        mkdirSync(staleStage)
+        mkdirSync(freshStage)
+        mkdirSync(malformedStage)
+        const staleDate = new Date(Date.now() - 3 * 60 * 60_000)
+        utimesSync(staleStage, staleDate, staleDate)
+        utimesSync(malformedStage, staleDate, staleDate)
+
+        const command = listStaleRemoteUploadStagesCommand(
+          posix,
+          join(root, 'relay-1.0.0'),
+          2 * 60 * 60
+        )
+        const output = execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
+          .trim()
+          .split(/\r?\n/)
+          .filter(Boolean)
+
+        expect(output).toEqual([staleStage])
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('emits an explicit POSIX liveness result so GC can fail closed', () => {
     const command = relayLivenessProbeCommand(posix, '/home/u/.orca-remote/relay-0.1.0')

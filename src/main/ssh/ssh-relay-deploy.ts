@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 /* eslint-disable max-lines -- Why: one cohesive contract (version detect, install-locked deploy, native-deps probe, launch, GC); splitting risks install/GC drift. */
+import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { app } from 'electron'
 import type { SshConnection } from './ssh-connection'
@@ -46,9 +47,12 @@ import {
 } from './ssh-relay-build-toolchain'
 import {
   commandWithNodePath,
+  listStaleRemoteUploadStagesCommand,
   makeRemoteExecutableCommand,
+  promoteRemoteTreeContentsCommand,
   readRemoteHomeCommand,
-  removeRemoteFileCommand
+  removeRemoteFileCommand,
+  removeRemoteTreeCommand
 } from './ssh-remote-commands'
 import {
   isWindowsRemoteHost,
@@ -343,63 +347,92 @@ async function deployAndLaunchRelayAttempt(
     launchNamespace = launchFence.sftpNamespace
     deploySignal?.throwIfAborted()
   } else {
-    // Why: serialize concurrent first-installs via a host-native exclusive lock; the loser polls to re-check installed or steal a stale lock.
-    await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
-    ownsInstallLock = true
+    const uploadStageDir = `${remoteRelayDir}.upload-${randomUUID()}`
+    let uploadStageReady = true
+    let uploadStageCleanupAllowed = true
+    onProgress?.('Uploading relay...')
+    console.log('[ssh-relay] Uploading relay...')
     try {
-      // Re-probe after acquiring the lock — a sibling installer may have finished while we waited.
-      if (
-        !(await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform, {
-          signal: deploySignal
-        }))
-      ) {
-        launchNamespace = createInstallNamespaceIfSupported(
-          conn,
-          hostPlatform,
-          homeRelativeRelayDir
-        )
-
-        onProgress?.('Uploading relay...')
-        console.log('[ssh-relay] Uploading relay...')
-        await uploadRelay(
-          conn,
-          platform,
-          remoteRelayDir,
-          fullVersion,
-          hostPlatform,
-          deploySignal,
-          launchNamespace
-        )
-        console.log('[ssh-relay] Upload complete')
-
-        onProgress?.('Installing native dependencies...')
-        console.log('[ssh-relay] Installing native dependencies...')
-        await installNativeDeps(
-          conn,
-          remoteRelayDir,
-          platform,
-          hostPlatform,
-          nodePath,
-          deploySignal,
-          [],
-          launchNamespace
-        )
-        console.log('[ssh-relay] Native deps installed')
-
-        // Why: mark complete but retain the lock until launch makes daemon liveness observable to cross-version GC.
-        await finalizeInstall(conn, remoteRelayDir, hostPlatform, {
-          signal: deploySignal,
-          releaseLock: false
-        })
+      await recoverStaleUploadStages(conn, remoteRelayDir, hostPlatform, deploySignal)
+      try {
+        await uploadRelay(conn, platform, uploadStageDir, fullVersion, hostPlatform, deploySignal)
+      } catch (err) {
+        if (isUnconfirmedSshCommandTermination(err)) {
+          uploadStageCleanupAllowed = false
+        }
+        throw err
       }
-    } catch (err) {
-      // Why: leave a partial install dir (no .install-complete) so the next deploy re-runs upload + install.
-      // Why: keep the lock if remote termination was unconfirmed — stale recovery beats overlapping a still-running npm.
-      if (!isUnconfirmedSshCommandTermination(err)) {
-        await abandonInstall(conn, remoteRelayDir, hostPlatform)
-        ownsInstallLock = false
+
+      try {
+        await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
+        ownsInstallLock = true
+      } catch (err) {
+        if (isUnconfirmedSshCommandTermination(err)) {
+          ownsInstallLock = true
+        }
+        throw err
       }
-      throw err
+      try {
+        // Re-probe after acquiring the lock — a sibling installer may have finished while we waited.
+        if (
+          !(await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform, {
+            signal: deploySignal
+          }))
+        ) {
+          launchNamespace = await createRelayLaunchNamespace(
+            conn,
+            hostPlatform,
+            remoteRelayDir,
+            homeRelativeRelayDir,
+            deploySignal
+          )
+          await execHostCommand(
+            conn,
+            hostPlatform,
+            promoteRemoteTreeContentsCommand(hostPlatform, uploadStageDir, remoteRelayDir),
+            { signal: deploySignal }
+          )
+          uploadStageReady = false
+          console.log('[ssh-relay] Upload complete')
+
+          onProgress?.('Installing native dependencies...')
+          console.log('[ssh-relay] Installing native dependencies...')
+          await installNativeDeps(
+            conn,
+            remoteRelayDir,
+            platform,
+            hostPlatform,
+            nodePath,
+            deploySignal,
+            [],
+            launchNamespace
+          )
+          console.log('[ssh-relay] Native deps installed')
+
+          // Why: mark complete but retain the lock until launch makes daemon liveness observable to cross-version GC.
+          await finalizeInstall(conn, remoteRelayDir, hostPlatform, {
+            signal: deploySignal,
+            releaseLock: false
+          })
+        }
+      } catch (err) {
+        if (isUnconfirmedSshCommandTermination(err)) {
+          uploadStageCleanupAllowed = false
+        }
+        if (!isUnconfirmedSshCommandTermination(err)) {
+          await abandonInstall(conn, remoteRelayDir, hostPlatform)
+          ownsInstallLock = false
+        }
+        throw err
+      }
+    } finally {
+      if (uploadStageReady && uploadStageCleanupAllowed) {
+        await execHostCommand(
+          conn,
+          hostPlatform,
+          removeRemoteTreeCommand(hostPlatform, uploadStageDir)
+        ).catch(() => {})
+      }
     }
   }
 
@@ -504,6 +537,31 @@ async function uploadRelay(
         : undefined
     }
   )
+}
+
+const UPLOAD_STAGE_STALE_SECONDS = 40 * 60
+
+async function recoverStaleUploadStages(
+  conn: SshConnection,
+  remoteRelayDir: string,
+  hostPlatform: RemoteHostPlatform,
+  signal?: AbortSignal
+): Promise<void> {
+  const listing = await execHostCommand(
+    conn,
+    hostPlatform,
+    listStaleRemoteUploadStagesCommand(hostPlatform, remoteRelayDir, UPLOAD_STAGE_STALE_SECONDS),
+    { signal }
+  ).catch(() => '')
+  for (const stage of String(listing ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)) {
+    signal?.throwIfAborted()
+    await execHostCommand(conn, hostPlatform, removeRemoteTreeCommand(hostPlatform, stage), {
+      signal
+    }).catch(() => {})
+  }
 }
 
 /**

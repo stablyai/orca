@@ -1,5 +1,10 @@
 import type { RemoteHostPlatform } from './ssh-remote-platform'
-import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
+import {
+  isWindowsRemoteHost,
+  joinRemotePath,
+  remoteBasename,
+  remoteDirname
+} from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { shellEscape } from './ssh-connection-utils'
 
@@ -63,6 +68,19 @@ export function moveRemoteTreeCommand(
   )
 }
 
+export function promoteRemoteTreeContentsCommand(
+  host: RemoteHostPlatform,
+  sourcePath: string,
+  destinationPath: string
+): string {
+  if (!isWindowsRemoteHost(host)) {
+    return `cp -a ${shellEscape(sourcePath)}/. ${shellEscape(destinationPath)}/ && rm -rf ${shellEscape(sourcePath)}`
+  }
+  return powerShellCommand(
+    `$ErrorActionPreference = 'Stop'; Get-ChildItem -LiteralPath ${powerShellLiteral(sourcePath)} -Force -ErrorAction Stop | Copy-Item -Destination ${powerShellLiteral(destinationPath)} -Recurse -Force -ErrorAction Stop; Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Recurse -Force -ErrorAction Stop`
+  )
+}
+
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `touch ${shellEscape(remotePath)}`
@@ -111,6 +129,37 @@ export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: stri
       `$base = ${powerShellLiteral(baseDir)}`,
       'if (Test-Path -LiteralPath $base -PathType Container) {',
       'Get-ChildItem -LiteralPath $base -Directory | ForEach-Object { $_.Name }',
+      '}'
+    ].join(' ')
+  )
+}
+
+export function listStaleRemoteUploadStagesCommand(
+  host: RemoteHostPlatform,
+  remoteRelayDir: string,
+  staleSeconds: number
+): string {
+  const parent = remoteDirname(remoteRelayDir, host)
+  const base = remoteBasename(remoteRelayDir, host)
+  const pattern = `${base}.upload-*`
+  if (!isWindowsRemoteHost(host)) {
+    const parentArg = shellEscape(parent)
+    return [
+      `if [ -d ${parentArg} ]; then`,
+      `find ${parentArg} -mindepth 1 -maxdepth 1 -type d -name ${shellEscape(pattern)} -mmin +${Math.ceil(staleSeconds / 60)} -print |`,
+      `while IFS= read -r d; do case "$d" in *.upload-????????-????-????-????-????????????) printf '%s\n' "$d" ;; *) continue ;; esac; done;`,
+      'fi'
+    ].join(' ')
+  }
+  return powerShellCommand(
+    [
+      `$parent = ${powerShellLiteral(parent)}`,
+      `$pattern = ${powerShellLiteral(pattern)}`,
+      `$cutoff = [DateTime]::UtcNow.AddSeconds(-${Math.max(1, Math.ceil(staleSeconds))})`,
+      'if (Test-Path -LiteralPath $parent -PathType Container) {',
+      'Get-ChildItem -LiteralPath $parent -Directory -Filter $pattern | Where-Object {',
+      "$_.LastWriteTimeUtc -lt $cutoff -and $_.Name -match '\\.upload-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'",
+      '} | ForEach-Object { $_.FullName }',
       '}'
     ].join(' ')
   )
