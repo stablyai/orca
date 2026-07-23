@@ -79,6 +79,21 @@ export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise
   await AsyncStorage.setItem(AUTOCOMPLETE_KEY, String(enabled))
 }
 
+const DOUBLE_TAP_TAB_KEY = 'orca:terminalDoubleTapTabEnabled'
+
+export async function loadTerminalDoubleTapTabEnabled(): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(DOUBLE_TAP_TAB_KEY)
+    return raw === 'true'
+  } catch {
+    return false
+  }
+}
+
+export async function saveTerminalDoubleTapTabEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(DOUBLE_TAP_TAB_KEY, String(enabled))
+}
+
 const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
 
 export type DisabledTerminalLiveInputHandlesPreference = {

@@ -20,8 +20,10 @@ import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-aut
 import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
 import {
   loadTerminalAutocompleteEnabled,
+  loadTerminalDoubleTapTabEnabled,
   loadTerminalTextScale,
   saveTerminalAutocompleteEnabled,
+  saveTerminalDoubleTapTabEnabled,
   saveTerminalTextScale
 } from '../src/storage/preferences'
 
@@ -175,6 +177,25 @@ export default function TerminalSettingsScreen() {
     userToggledAutocompleteRef.current = true
     setAutocompleteEnabled(next)
     void saveTerminalAutocompleteEnabled(next)
+  }, [])
+
+  const [doubleTapTabEnabled, setDoubleTapTabEnabled] = useState(false)
+  const userToggledDoubleTapTabRef = useRef(false)
+  useEffect(() => {
+    let stale = false
+    void loadTerminalDoubleTapTabEnabled().then((enabled) => {
+      if (!stale && !userToggledDoubleTapTabRef.current) {
+        setDoubleTapTabEnabled(enabled)
+      }
+    })
+    return () => {
+      stale = true
+    }
+  }, [])
+  const toggleDoubleTapTab = useCallback((next: boolean) => {
+    userToggledDoubleTapTabRef.current = true
+    setDoubleTapTabEnabled(next)
+    void saveTerminalDoubleTapTabEnabled(next)
   }, [])
 
   useEffect(() => {
@@ -343,6 +364,21 @@ export default function TerminalSettingsScreen() {
             <Switch
               value={autocompleteEnabled}
               onValueChange={toggleAutocomplete}
+              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+              thumbColor={colors.textPrimary}
+            />
+          </View>
+          <View style={styles.separator} />
+          <View style={styles.row}>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Double-tap sends Tab</Text>
+              <Text style={styles.rowSublabel}>
+                {doubleTapTabEnabled ? 'On' : 'Off'} · Empty terminal space only
+              </Text>
+            </View>
+            <Switch
+              value={doubleTapTabEnabled}
+              onValueChange={toggleDoubleTapTab}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
               thumbColor={colors.textPrimary}
             />

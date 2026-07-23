@@ -116,6 +116,7 @@ import {
 } from '../../../../src/terminal/terminal-accessory-layout'
 import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
 import { sendTerminalLiveAccessoryRawBytes } from '../../../../src/terminal/terminal-live-accessory-raw-send'
+import { useTerminalDoubleTapTab } from '../../../../src/terminal/use-terminal-double-tap-tab'
 import {
   clearTerminalLiveInputFocusTimer,
   isTerminalLiveInputWithinByteLimit,
@@ -923,6 +924,7 @@ export default function SessionScreen() {
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   // Why: terminal command-bar autocomplete opt-in, reloaded on focus so a Settings → Terminal toggle takes effect on return.
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
+  const shouldSendTabForTap = useTerminalDoubleTapTab()
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
@@ -1100,7 +1102,11 @@ export default function SessionScreen() {
     activeSessionTabType: activeSessionTab?.type
   })
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
-  const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
+  const {
+    focusLiveInput,
+    handleTerminalTap: handleTerminalFocusTap,
+    resetLiveInputFocus
+  } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
     inputRef: liveInputRef,
@@ -3091,7 +3097,8 @@ export default function SessionScreen() {
       deviceToken: deviceTokenRef.current
     })
   }
-
+  const handleAccessoryKeyRef = useRef(handleAccessoryKey)
+  handleAccessoryKeyRef.current = handleAccessoryKey
   const sendLiveTerminalInput = useCallback(
     async (handle: string, bytes: string): Promise<boolean> => {
       const text = normalizeTerminalTextInput(bytes)
@@ -3205,6 +3212,16 @@ export default function SessionScreen() {
       liveInput: liveInputRef.current
     })
   }, [])
+
+  const handleTerminalTap = useCallback(
+    (handle: string) => {
+      handleTerminalFocusTap(handle)
+      if (handle === activeHandleRef.current && shouldSendTabForTap(handle)) {
+        void handleAccessoryKeyRef.current({ bytes: '\t' })
+      }
+    },
+    [handleTerminalFocusTap, shouldSendTabForTap]
+  )
 
   // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
@@ -3478,8 +3495,6 @@ export default function SessionScreen() {
   const repeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // Why: ref keeps repeat firing the current callback; else a mid-hold tab switch/reconnect routes bytes to a stale terminal.
-  const handleAccessoryKeyRef = useRef(handleAccessoryKey)
-  handleAccessoryKeyRef.current = handleAccessoryKey
   const stopAccessoryRepeat = useCallback(() => {
     if (repeatTimeoutRef.current) {
       clearTimeout(repeatTimeoutRef.current)
