@@ -346,6 +346,62 @@ describe('discoverCommitMessageModelsLocal', () => {
     )
   })
 
+  it('preserves Codex service tiers discovered from the local CLI', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('codex', undefined)
+    listeners.get('stdout:data')?.(
+      Buffer.from(
+        JSON.stringify({
+          models: [
+            {
+              slug: 'gpt-5.5',
+              display_name: 'GPT-5.5',
+              service_tiers: [
+                {
+                  id: 'priority',
+                  name: 'Fast',
+                  description: '1.5x speed, increased usage'
+                }
+              ]
+            }
+          ]
+        })
+      )
+    )
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      models: [
+        {
+          id: 'gpt-5.5',
+          serviceTiers: [
+            {
+              id: 'priority',
+              label: 'Fast',
+              description: '1.5x speed, increased usage'
+            }
+          ]
+        }
+      ]
+    })
+    expect(spawnMock).toHaveBeenCalledWith(
+      'codex',
+      ['debug', 'models'],
+      expect.objectContaining({ windowsHide: true })
+    )
+  })
+
   it('discovers dynamic models through the configured agent command override', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
     const child = {
@@ -556,6 +612,45 @@ describe('generateCommitMessageFromContext', () => {
       models: [
         { id: 'auto', label: 'Auto' },
         { id: 'gpt-5.2', label: 'GPT-5.2' }
+      ]
+    })
+  })
+
+  it('preserves Codex service tiers discovered through remote execution', async () => {
+    const execute = vi.fn(async () => ({
+      stdout: JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-5.5',
+            display_name: 'GPT-5.5',
+            service_tiers: [{ id: 'priority', name: 'Fast' }]
+          }
+        ]
+      }),
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    }))
+
+    const result = await discoverCommitMessageModelsRemote('codex', '/remote/repo', execute)
+
+    expect(execute).toHaveBeenCalledWith(
+      {
+        binary: 'codex',
+        args: ['debug', 'models'],
+        stdinPayload: null,
+        label: 'Codex'
+      },
+      '/remote/repo',
+      60_000
+    )
+    expect(result).toMatchObject({
+      success: true,
+      models: [
+        {
+          id: 'gpt-5.5',
+          serviceTiers: [{ id: 'priority', label: 'Fast' }]
+        }
       ]
     })
   })

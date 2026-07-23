@@ -258,9 +258,7 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.getByRole('button', { name: 'Session options Fast' }).textContent).toContain(
-      'Fast'
-    )
+    expect(screen.getByRole('button', { name: 'Fast mode Fast' }).textContent).toContain('Fast')
     expect(screen.queryByRole('button', { name: /^Effort/ })).toBeNull()
   })
 
@@ -315,6 +313,7 @@ describe('NativeChatSessionOptionPickers', () => {
           model(),
           {
             ...fast,
+            description: '1.5x speed, increased usage',
             kind: { type: 'boolean' },
             valueSource: 'unknown',
             action: { type: 'toggle-command' }
@@ -324,6 +323,8 @@ describe('NativeChatSessionOptionPickers', () => {
       />
     )
     expect(screen.getByText('Toggle fast mode')).not.toBeNull()
+    expect(screen.getByText('1.5x speed, increased usage')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Fast mode' })).not.toBeNull()
     expect(screen.queryByText('On')).toBeNull()
     expect(screen.queryByText('Off')).toBeNull()
     screen.getByText('Toggle fast mode').click()

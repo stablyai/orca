@@ -11,6 +11,12 @@ import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit
 
 export type ThinkingLevel = { id: string; label: string }
 
+export type ModelServiceTier = {
+  id: string
+  label: string
+  description?: string
+}
+
 export type CommitMessageModel = {
   /** Value passed to the agent CLI's --model flag. */
   id: string
@@ -20,6 +26,8 @@ export type CommitMessageModel = {
   thinkingLevels?: ThinkingLevel[]
   /** Required when thinkingLevels is present. */
   defaultThinkingLevel?: string
+  /** Runtime-advertised service tiers. Native chat uses these to gate speed controls. */
+  serviceTiers?: ModelServiceTier[]
 }
 
 export type CommitMessageAgentSpec = {
@@ -48,6 +56,7 @@ export type CommitMessageModelCapability = {
   label: string
   thinkingLevels?: ThinkingLevel[]
   defaultThinkingLevel?: string
+  serviceTiers?: ModelServiceTier[]
 }
 
 export type CommitMessageAgentCapability = {
@@ -139,6 +148,35 @@ function withOpenAiThinking(
     : {}
 }
 
+function parseModelServiceTiers(value: unknown): ModelServiceTier[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const tiers: ModelServiceTier[] = []
+  for (const candidate of value) {
+    if (typeof candidate !== 'object' || candidate === null) {
+      continue
+    }
+    const tier = candidate as Record<string, unknown>
+    if (
+      typeof tier.id !== 'string' ||
+      tier.id.trim().length === 0 ||
+      typeof tier.name !== 'string' ||
+      tier.name.trim().length === 0
+    ) {
+      continue
+    }
+    tiers.push({
+      id: tier.id.trim(),
+      label: tier.name.trim(),
+      ...(typeof tier.description === 'string' && tier.description.trim().length > 0
+        ? { description: tier.description.trim() }
+        : {})
+    })
+  }
+  return tiers
+}
+
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
   try {
     assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
@@ -148,27 +186,32 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
         display_name?: string
         supported_reasoning_levels?: { effort?: string }[]
         default_reasoning_level?: string
+        service_tiers?: unknown
       }[]
     }
     return uniqueModels(
       (parsed.models ?? [])
         .filter((model) => model.slug && model.display_name)
-        .map((model) => ({
-          id: model.slug!,
-          label: model.display_name!,
-          ...(model.supported_reasoning_levels?.length
-            ? {
-                thinkingLevels: model.supported_reasoning_levels
-                  .map((level) => level.effort)
-                  .filter((effort): effort is string => Boolean(effort))
-                  .map((effort) => ({
-                    id: effort,
-                    label: effort === 'xhigh' ? 'Extra High' : labelFromModelId(effort)
-                  })),
-                defaultThinkingLevel: model.default_reasoning_level ?? 'low'
-              }
-            : {})
-        }))
+        .map((model) => {
+          const serviceTiers = parseModelServiceTiers(model.service_tiers)
+          return {
+            id: model.slug!,
+            label: model.display_name!,
+            ...(model.supported_reasoning_levels?.length
+              ? {
+                  thinkingLevels: model.supported_reasoning_levels
+                    .map((level) => level.effort)
+                    .filter((effort): effort is string => Boolean(effort))
+                    .map((effort) => ({
+                      id: effort,
+                      label: effort === 'xhigh' ? 'Extra High' : labelFromModelId(effort)
+                    })),
+                  defaultThinkingLevel: model.default_reasoning_level ?? 'low'
+                }
+              : {}),
+            ...(serviceTiers.length > 0 ? { serviceTiers } : {})
+          }
+        })
     )
   } catch {
     return []
@@ -745,7 +788,10 @@ function toCommitMessageAgentCapability(
       id: model.id,
       label: model.label,
       ...(model.thinkingLevels ? { thinkingLevels: [...model.thinkingLevels] } : {}),
-      ...(model.defaultThinkingLevel ? { defaultThinkingLevel: model.defaultThinkingLevel } : {})
+      ...(model.defaultThinkingLevel ? { defaultThinkingLevel: model.defaultThinkingLevel } : {}),
+      ...(model.serviceTiers
+        ? { serviceTiers: model.serviceTiers.map((tier) => ({ ...tier })) }
+        : {})
     }))
   }
 }

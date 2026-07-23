@@ -83,9 +83,13 @@ export function nativeChatOptionsPillTitle(
 ): string {
   const effort = descriptors.find((descriptor) => descriptor.id === 'effort')
   // Why: an effort-backed group is primarily the effort picker, even when it also reports modes.
-  return effort
-    ? nativeChatSessionOptionLabel(effort)
-    : translate('components.native-chat.composer.sessionOptions', 'Session options')
+  if (effort) {
+    return nativeChatSessionOptionLabel(effort)
+  }
+  if (descriptors.length === 1) {
+    return nativeChatSessionOptionLabel(descriptors[0])
+  }
+  return translate('components.native-chat.composer.sessionOptions', 'Session options')
 }
 
 export function nativeChatOptionsPillLabel(
@@ -123,6 +127,9 @@ export function nativeChatOptionsPillLabel(
   }
   if (effort) {
     return nativeChatSessionOptionLabel(effort)
+  }
+  if (descriptors.length === 1) {
+    return nativeChatSessionOptionLabel(descriptors[0])
   }
   return translate('components.native-chat.composer.options', 'Options')
 }

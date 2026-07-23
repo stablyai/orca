@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { codexCatalogModelFromCapability } from '../../../../shared/agent-session-option-catalog-claude-codex'
 import {
   clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
@@ -67,6 +68,64 @@ describe('native chat PTY session options', () => {
         expect.objectContaining({ id: 'fastMode', valueSource: 'unknown' })
       ])
     )
+  })
+
+  it('gates the live Codex Fast action on the selected model capability', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'codex', {
+      model: 'gpt-5.5',
+      effort: 'high'
+    })
+    const dispatch = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'codex',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      initialModels: [
+        codexCatalogModelFromCapability({
+          id: 'gpt-5.5',
+          label: 'GPT-5.5',
+          thinkingLevels: [
+            { id: 'low', label: 'Low' },
+            { id: 'high', label: 'High' }
+          ],
+          defaultThinkingLevel: 'high',
+          serviceTiers: [
+            {
+              id: 'priority',
+              label: 'Fast',
+              description: '1.5x speed, increased usage'
+            }
+          ]
+        })
+      ],
+      dispatchCommand: dispatch
+    })!
+
+    expect(surface.getSnapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'effort' }),
+        expect.objectContaining({
+          id: 'fastMode',
+          description: '1.5x speed, increased usage',
+          action: { type: 'toggle-command' }
+        })
+      ])
+    )
+    await surface.invokeAction('fastMode')
+    expect(dispatch).toHaveBeenCalledWith('/fast')
+
+    surface.replaceModels([
+      codexCatalogModelFromCapability({
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
+        thinkingLevels: [
+          { id: 'low', label: 'Low' },
+          { id: 'high', label: 'High' }
+        ],
+        defaultThinkingLevel: 'high'
+      })
+    ])
+    expect(surface.getSnapshot().some(({ id }) => id === 'fastMode')).toBe(false)
   })
 
   it('dispatches a Claude effort setter and publishes the full snapshot', async () => {

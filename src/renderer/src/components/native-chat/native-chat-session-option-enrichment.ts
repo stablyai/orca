@@ -68,17 +68,20 @@ export function ensureNativeChatModelEnrichment(args: {
   void args
     .discover()
     .then((discovered) => {
-      entry.state = 'settled'
       if (!discovered || discovered.length === 0) {
+        // Why: PATH, auth, and remote hosts can recover without an app restart.
+        // A later surface retries while concurrent callers remain deduplicated.
+        entry.state = 'idle'
         return
       }
+      entry.state = 'settled'
       entry.models = mergeCatalogModels(catalog.models, discovered)
       for (const listener of entry.listeners) {
         listener([...entry.models])
       }
     })
     .catch(() => {
-      entry.state = 'settled'
+      entry.state = 'idle'
     })
 }
 

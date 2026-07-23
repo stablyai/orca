@@ -271,8 +271,14 @@ describe('git RPC methods', () => {
         .mockResolvedValue({ success: true, message: 'feat: test' }),
       discoverRuntimeCommitMessageModels: vi.fn().mockResolvedValue({
         success: true,
-        models: [{ id: 'auto', label: 'Auto' }],
-        defaultModelId: 'auto'
+        models: [
+          {
+            id: 'gpt-5.5',
+            label: 'GPT-5.5',
+            serviceTiers: [{ id: 'priority', label: 'Fast' }]
+          }
+        ],
+        defaultModelId: 'gpt-5.5'
       }),
       cancelRuntimeGenerateCommitMessage: vi.fn().mockResolvedValue({ ok: true }),
       abortRuntimeGitMerge: vi.fn().mockResolvedValue({ ok: true }),
@@ -288,11 +294,11 @@ describe('git RPC methods', () => {
       makeRequest('git.commit', { worktree: 'id:wt-1', message: 'feat: test' })
     )
     await dispatcher.dispatch(makeRequest('git.generateCommitMessage', { worktree: 'id:wt-1' }))
-    await dispatcher.dispatch(
+    const discoveryResponse = await dispatcher.dispatch(
       makeRequest('git.discoverCommitMessageModels', {
         worktree: 'id:wt-1',
-        agentId: 'cursor',
-        agentCmdOverrides: { cursor: 'cursor-agent' }
+        agentId: 'codex',
+        agentCmdOverrides: { codex: 'codex' }
       })
     )
     await dispatcher.dispatch(
@@ -323,8 +329,19 @@ describe('git RPC methods', () => {
 
     expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', 'feat: test')
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1')
-    expect(runtime.discoverRuntimeCommitMessageModels).toHaveBeenCalledWith('id:wt-1', 'cursor', {
-      agentCmdOverrides: { cursor: 'cursor-agent' }
+    expect(runtime.discoverRuntimeCommitMessageModels).toHaveBeenCalledWith('id:wt-1', 'codex', {
+      agentCmdOverrides: { codex: 'codex' }
+    })
+    expect(discoveryResponse).toMatchObject({
+      ok: true,
+      result: {
+        models: [
+          {
+            id: 'gpt-5.5',
+            serviceTiers: [{ id: 'priority', label: 'Fast' }]
+          }
+        ]
+      }
     })
     expect(runtime.cancelRuntimeGenerateCommitMessage).toHaveBeenCalledWith('id:wt-1')
     expect(runtime.abortRuntimeGitMerge).toHaveBeenCalledWith('id:wt-1')

@@ -100,7 +100,16 @@ const CommitMessageModelCapability = z.object({
   id: z.string(),
   label: z.string(),
   thinkingLevels: z.array(z.object({ id: z.string(), label: z.string() })).optional(),
-  defaultThinkingLevel: z.string().optional()
+  defaultThinkingLevel: z.string().optional(),
+  serviceTiers: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        description: z.string().optional()
+      })
+    )
+    .optional()
 })
 
 const CommitMessageAiSettings = z.object({

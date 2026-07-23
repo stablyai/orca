@@ -1,7 +1,8 @@
 import type { AgentType } from './agent-status-types'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
-  CODEX_SESSION_OPTION_CATALOG
+  CODEX_SESSION_OPTION_CATALOG,
+  codexCatalogModelFromCapability
 } from './agent-session-option-catalog-claude-codex'
 import {
   CURSOR_SESSION_OPTION_CATALOG,
@@ -14,6 +15,7 @@ import type {
   CatalogOption
 } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from './native-chat-session-options'
+import type { CommitMessageModelCapability } from './commit-message-agent-spec'
 
 export type {
   AgentSessionOptionCatalog,
@@ -57,8 +59,18 @@ export function catalogDefaultValues(model: CatalogModel): Record<string, Sessio
   return Object.fromEntries(model.options.map((option) => [option.id, option.kind.defaultValue]))
 }
 
+export function catalogModelFromDiscoveredCapability(
+  agent: AgentType,
+  model: CommitMessageModelCapability
+): CatalogModel {
+  return agent === 'codex'
+    ? codexCatalogModelFromCapability(model)
+    : { id: model.id, label: model.label, options: [] }
+}
+
 /** Merge live rows over the static seed while retaining only option shapes Orca
- * can actually map. Newly discovered ids remain model-only until cataloged. */
+ * can actually map. A provider may mark its discovered option set authoritative
+ * when the CLI reports per-model capabilities. */
 export function mergeCatalogModels(
   seed: readonly CatalogModel[],
   discovered: readonly CatalogModel[]
@@ -70,7 +82,11 @@ export function mergeCatalogModels(
       return model
     }
     discoveredById.delete(model.id)
-    return { ...model, ...live, options: model.options }
+    return {
+      ...model,
+      ...live,
+      options: live.optionsAuthoritative ? live.options : model.options
+    }
   })
   return [...merged, ...discoveredById.values()]
 }

@@ -713,27 +713,46 @@ describe('runtime git client', () => {
   })
 
   it('discovers commit-message models through the active runtime', async () => {
-    const agentCmdOverrides = { cursor: 'cursor-agent' }
+    const agentCmdOverrides = { codex: 'codex' }
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
-      result: { success: true, models: [{ id: 'auto', label: 'Auto' }], defaultModelId: 'auto' },
+      result: {
+        success: true,
+        models: [
+          {
+            id: 'gpt-5.5',
+            label: 'GPT-5.5',
+            serviceTiers: [{ id: 'priority', label: 'Fast' }]
+          }
+        ],
+        defaultModelId: 'gpt-5.5'
+      },
       _meta: { runtimeId: 'remote-runtime' }
     })
 
-    await discoverRuntimeCommitMessageModels(
+    const result = await discoverRuntimeCommitMessageModels(
       {
         settings: { activeRuntimeEnvironmentId: 'env-1', agentCmdOverrides },
         worktreeId: 'wt-1',
         worktreePath: '/repo'
       },
-      'cursor'
+      'codex'
     )
 
+    expect(result).toMatchObject({
+      success: true,
+      models: [
+        {
+          id: 'gpt-5.5',
+          serviceTiers: [{ id: 'priority', label: 'Fast' }]
+        }
+      ]
+    })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'git.discoverCommitMessageModels',
-      params: { worktree: 'id:wt-1', agentId: 'cursor', agentCmdOverrides },
+      params: { worktree: 'id:wt-1', agentId: 'codex', agentCmdOverrides },
       timeoutMs: 75_000
     })
     expect(gitDiscoverCommitMessageModels).not.toHaveBeenCalled()

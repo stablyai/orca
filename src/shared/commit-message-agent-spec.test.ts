@@ -203,7 +203,17 @@ describe('model discovery parsers', () => {
               slug: 'gpt-5.5',
               display_name: 'GPT-5.5',
               default_reasoning_level: 'low',
-              supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }]
+              supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }],
+              service_tiers: [
+                null,
+                { id: 1, name: 2 },
+                { id: 'flex', name: '', description: 'ignored' },
+                {
+                  id: ' priority ',
+                  name: ' Fast ',
+                  description: ' 1.5x speed, increased usage '
+                }
+              ]
             }
           ]
         })
@@ -216,7 +226,14 @@ describe('model discovery parsers', () => {
           { id: 'low', label: 'Low' },
           { id: 'high', label: 'High' }
         ],
-        defaultThinkingLevel: 'low'
+        defaultThinkingLevel: 'low',
+        serviceTiers: [
+          {
+            id: 'priority',
+            label: 'Fast',
+            description: '1.5x speed, increased usage'
+          }
+        ]
       }
     ])
   })

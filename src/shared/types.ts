@@ -3036,6 +3036,7 @@ export type CommitMessageAiModelCapability = {
   label: string
   thinkingLevels?: { id: string; label: string }[]
   defaultThinkingLevel?: string
+  serviceTiers?: { id: string; label: string; description?: string }[]
 }
 
 export type CommitMessageAiSettings = {

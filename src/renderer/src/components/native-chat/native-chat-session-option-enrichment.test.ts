@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
+import { codexCatalogModelFromCapability } from '../../../../shared/agent-session-option-catalog-claude-codex'
 import {
   clearNativeChatModelEnrichmentForTests,
   ensureNativeChatModelEnrichment,
@@ -42,15 +43,76 @@ describe('native chat session option enrichment', () => {
     expect(readNativeChatEnrichedModels('cursor', 'ssh:two')).toBeNull()
   })
 
-  it('falls back permanently to the seed after a failed once-per-host probe', async () => {
-    const discover = vi.fn().mockRejectedValue(new Error('offline'))
+  it('retries a later surface after a transient rejected probe', async () => {
+    const discover = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce([{ id: 'account-model', label: 'Account model', options: [] }])
     ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'local', discover })
     await vi.waitFor(() => expect(discover).toHaveBeenCalledOnce())
-    await Promise.resolve()
+
+    await vi.waitFor(() => {
+      ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'local', discover })
+      expect(discover).toHaveBeenCalledTimes(2)
+    })
+    await vi.waitFor(() =>
+      expect(readNativeChatEnrichedModels('cursor', 'local')).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'account-model' })])
+      )
+    )
+  })
+
+  it('retries a later surface after a transient empty probe', async () => {
+    const discover = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce([{ id: 'account-model', label: 'Account model', options: [] }])
 
     ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'local', discover })
-    expect(discover).toHaveBeenCalledOnce()
-    expect(readNativeChatEnrichedModels('cursor', 'local')).toBeNull()
+    await vi.waitFor(() => expect(discover).toHaveBeenCalledOnce())
+    await vi.waitFor(() => {
+      ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'local', discover })
+      expect(discover).toHaveBeenCalledTimes(2)
+    })
+    await vi.waitFor(() => expect(readNativeChatEnrichedModels('cursor', 'local')).not.toBeNull())
+  })
+
+  it('keeps Codex Fast capabilities isolated by host', async () => {
+    const fastModel = codexCatalogModelFromCapability({
+      id: 'gpt-5.5',
+      label: 'GPT-5.5',
+      serviceTiers: [{ id: 'priority', label: 'Fast' }]
+    })
+    const standardModel = codexCatalogModelFromCapability({
+      id: 'gpt-5.5',
+      label: 'GPT-5.5'
+    })
+
+    ensureNativeChatModelEnrichment({
+      agent: 'codex',
+      hostKey: 'ssh:fast',
+      discover: async () => [fastModel]
+    })
+    ensureNativeChatModelEnrichment({
+      agent: 'codex',
+      hostKey: 'ssh:standard',
+      discover: async () => [standardModel]
+    })
+
+    await vi.waitFor(() => expect(readNativeChatEnrichedModels('codex', 'ssh:fast')).not.toBeNull())
+    await vi.waitFor(() =>
+      expect(readNativeChatEnrichedModels('codex', 'ssh:standard')).not.toBeNull()
+    )
+    expect(
+      readNativeChatEnrichedModels('codex', 'ssh:fast')
+        ?.find(({ id }) => id === 'gpt-5.5')
+        ?.options.map(({ id }) => id)
+    ).toContain('fastMode')
+    expect(
+      readNativeChatEnrichedModels('codex', 'ssh:standard')
+        ?.find(({ id }) => id === 'gpt-5.5')
+        ?.options.map(({ id }) => id)
+    ).not.toContain('fastMode')
   })
 
   it('does not probe agents whose catalogs have no discovery command', () => {
