@@ -20,7 +20,8 @@ export function useSourceControlLinkedReviews({
   hostedReview,
   hostedReviewCreation,
   hostedReviewEntry,
-  remoteStatus
+  remoteStatus,
+  gitHostWebSchemes
 }: {
   activePrFromQueue: SourceControlWorktreeContext['activePrFromQueue']
   activeRepo: SourceControlWorktreeContext['activeRepo']
@@ -31,6 +32,7 @@ export function useSourceControlLinkedReviews({
   hostedReviewCreation: HostedReviewCreationEligibility | null
   hostedReviewEntry: SourceControlWorktreeContext['hostedReviewEntry']
   remoteStatus: SourceControlWorktreeContext['remoteStatus']
+  gitHostWebSchemes: Readonly<Record<string, 'http' | 'https'>> | null
 }) {
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const fallbackGitHubPRNumber = linkedGitHubPR == null ? (activePrFromQueue?.number ?? null) : null
@@ -54,7 +56,8 @@ export function useSourceControlLinkedReviews({
         repoRemoteName: activeRepo?.gitRemoteIdentity?.remoteName ?? null,
         repoRemoteUrl: activeRepo?.gitRemoteIdentity?.remoteUrl ?? null,
         pushTarget: activeWorktree?.pushTarget ?? null,
-        upstreamName: remoteStatus?.upstreamName ?? null
+        upstreamName: remoteStatus?.upstreamName ?? null,
+        webSchemeByHost: gitHostWebSchemes ?? null
       }),
     [
       activeRepo?.gitRemoteIdentity?.remoteName,
@@ -70,7 +73,8 @@ export function useSourceControlLinkedReviews({
       linkedGitHubPR,
       linkedGitLabMR,
       linkedGiteaPR,
-      remoteStatus?.upstreamName
+      remoteStatus?.upstreamName,
+      gitHostWebSchemes
     ]
   )
   const hasHostedReviewLink = hasPositiveHostedReviewNumberLink({

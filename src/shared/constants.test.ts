@@ -8,4 +8,7 @@ describe('getDefaultSettings', () => {
       'C:\\Users\\alice\\orca\\workspaces'
     )
   })
+  it('defaults git host web schemes empty so ssh remotes keep https until overridden', () => {
+    expect(getDefaultSettings('/tmp').gitHostWebSchemes).toEqual({})
+  })
 })
