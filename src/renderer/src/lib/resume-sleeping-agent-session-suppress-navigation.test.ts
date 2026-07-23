@@ -14,6 +14,9 @@ afterEach(() => {
 function makeRecord(
   overrides: Partial<SleepingAgentSessionRecord> = {}
 ): SleepingAgentSessionRecord {
+  // Why: the activation gate rejects records by absolute age from Date.now()
+  // (Task 3), so fixtures need a recent timestamp, not an epoch-adjacent one.
+  const now = Date.now()
   return {
     paneKey: 'tab-1:leaf-1',
     tabId: 'tab-1',
@@ -22,8 +25,8 @@ function makeRecord(
     providerSession: { key: 'session_id', id: 'sess-1' },
     prompt: 'finish the task',
     state: 'working',
-    capturedAt: 1,
-    updatedAt: 1,
+    capturedAt: now,
+    updatedAt: now,
     ...overrides
   }
 }

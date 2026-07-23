@@ -195,6 +195,8 @@ type StoreState = {
   getAgentLaunchConfigForStatusEntry: ReturnType<typeof vi.fn>
   getAgentLaunchConfigForStatusMetadata: ReturnType<typeof vi.fn>
   clearSleepingAgentSession: ReturnType<typeof vi.fn>
+  automaticAgentResumeClaimsByTabId: Record<string, unknown>
+  claimAutomaticAgentResume: ReturnType<typeof vi.fn>
   registerAgentLaunchConfig: ReturnType<typeof vi.fn>
   clearAgentLaunchConfig: ReturnType<typeof vi.fn>
   markWorktreeUnread: ReturnType<typeof vi.fn>
@@ -823,6 +825,8 @@ describe('connectPanePty', () => {
       clearSleepingAgentSession: vi.fn((paneKey: string) => {
         delete mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]
       }),
+      automaticAgentResumeClaimsByTabId: {},
+      claimAutomaticAgentResume: vi.fn(),
       registerAgentLaunchConfig: vi.fn(),
       clearAgentLaunchConfig: vi.fn(),
       markWorktreeUnread: vi.fn(),
@@ -2204,7 +2208,17 @@ describe('connectPanePty', () => {
 
     deferredSpawn.resolve('pty-resumed')
     await flushAsyncTicks()
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    // Why: the hibernated record must survive the in-place wake spawn too — it
+    // shares applyColdRestoreAgentResumeStartup/clearSleepingRecordAfterColdRestoreSpawn
+    // with disk-backed cold restore, so a failed wake must not lose the
+    // session; an automatic-resume claim is registered instead (Task 2).
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(mockStoreState.claimAutomaticAgentResume).toHaveBeenCalledWith('tab-1', {
+      worktreeId: 'wt-1',
+      launchAgent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-hibernated-inflight' }
+    })
   })
 
   it('re-arms the exact hibernation target after a replacement spawn fails', async () => {
@@ -7743,8 +7757,17 @@ describe('connectPanePty', () => {
         })
       })
     )
-    // Why: consuming the record prevents a later worktree activation from launching a duplicate resume tab.
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    // Why: the record must survive the spawn — deleting it here would lose the
+    // session forever if the resume fails before the agent's first hook event
+    // lands. An automatic-resume claim blocks duplicate worktree-activation
+    // launches in the meantime instead (Task 2).
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(mockStoreState.claimAutomaticAgentResume).toHaveBeenCalledWith('tab-1', {
+      worktreeId: 'wt-1',
+      launchAgent: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
+    })
   })
 
   it('resumes from an unambiguous legacy sleeping record when cold-restoring a preserved pane', async () => {
@@ -8321,7 +8344,15 @@ describe('connectPanePty', () => {
     )
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2)
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    // Why: the record must survive a fresh-shell fallback spawn too — the
+    // resume is not confirmed until the agent's own hook event lands.
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(mockStoreState.claimAutomaticAgentResume).toHaveBeenCalledWith('tab-1', {
+      worktreeId: 'wt-1',
+      launchAgent: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
+    })
   })
 
   it('resumes a local sleeping pane in place when the restored PTY hint is missing', async () => {
@@ -8424,7 +8455,15 @@ describe('connectPanePty', () => {
 
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2)
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    // Why: the record must survive the spawn — it is only replaced once the
+    // resumed agent's hook event confirms the session (Task 1's path).
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(mockStoreState.claimAutomaticAgentResume).toHaveBeenCalledWith('tab-1', {
+      worktreeId: 'wt-1',
+      launchAgent: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
+    })
   })
 
   it('keeps sleeping resume record when fresh cold-restore spawn fails', async () => {
@@ -14958,7 +14997,15 @@ describe('connectPanePty', () => {
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', freshPtyId)
     expect(window.api.pty.reportRendererSerializerReady).toHaveBeenCalledWith(freshPtyId)
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    // Why: the record must survive the spawn — it is only replaced once the
+    // resumed agent's hook event confirms the session (Task 1's path).
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(mockStoreState.claimAutomaticAgentResume).toHaveBeenCalledWith('tab-1', {
+      worktreeId: 'wt-1',
+      launchAgent: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
+    })
   })
 
   it('does not let a restored encoded PTY override the current worktree owner', async () => {

@@ -6,6 +6,9 @@ import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-
 const initialState = useAppStore.getState()
 
 function record(origin: 'live' | 'quit'): SleepingAgentSessionRecord {
+  // Why: the activation gate rejects records older than the absolute max age,
+  // so fixtures must use current timestamps.
+  const now = Date.now()
   return {
     paneKey: 'tab-1:leaf-1',
     tabId: 'tab-1',
@@ -14,8 +17,8 @@ function record(origin: 'live' | 'quit'): SleepingAgentSessionRecord {
     providerSession: { key: 'session_id', id: 'sess-1' },
     prompt: 'finish the task',
     state: 'working',
-    capturedAt: 1,
-    updatedAt: 1,
+    capturedAt: now,
+    updatedAt: now,
     origin
   }
 }

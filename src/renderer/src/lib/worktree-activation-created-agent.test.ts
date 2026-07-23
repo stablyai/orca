@@ -231,6 +231,9 @@ describe('activateAndRevealWorktree created agent reopen', () => {
       tabBarOrderByWorktree: {},
       pendingStartupByTabId: {},
       sleepingAgentSessionsByPaneKey: {
+        // Why: the activation gate rejects records by absolute age from
+        // Date.now() (Task 3), so this needs a recent timestamp, not an
+        // epoch-adjacent one.
         'slept-tab:0': {
           paneKey: 'slept-tab:0',
           tabId: 'slept-tab',
@@ -239,8 +242,8 @@ describe('activateAndRevealWorktree created agent reopen', () => {
           providerSession: { key: 'session_id', id: 'codex-session-1' },
           prompt: 'resume prior task',
           state: 'working',
-          capturedAt: 1000,
-          updatedAt: 1000,
+          capturedAt: Date.now(),
+          updatedAt: Date.now(),
           terminalTitle: 'Codex'
         }
       },

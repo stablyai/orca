@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: this file is the umbrella suite for the agent-status slice (freshness, tool/assistant fields, stateStartedAt, retention + prefix sweep). Splitting by sub-area would scatter shared helpers (createTestStore, fake timers); narrower edge-cases live in sibling agent-status-*.test.ts files already. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
@@ -1272,5 +1273,217 @@ describe('agent status retention + prefix sweep', () => {
     expect(retained['tab-a:0']).toBeDefined()
     expect(retained['tab-a:0'].worktreeId).toBe('wt-a')
     expect(retained['tab-b:0']).toBeUndefined()
+  })
+})
+
+describe('provider session rehydration from persisted sleeping record', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function seedPersistedRecord(
+    store: ReturnType<typeof createTestStore>,
+    overrides: Partial<SleepingAgentSessionRecord> = {}
+  ): void {
+    const record: SleepingAgentSessionRecord = {
+      paneKey: 'tab-1:leaf-1',
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'persisted-session' },
+      prompt: 'earlier prompt',
+      state: 'waiting',
+      capturedAt: 1000,
+      updatedAt: 1000,
+      origin: 'live',
+      ...overrides
+    }
+    store.setState({
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as Partial<AppState>)
+  }
+
+  it('adopts the persisted record session for a same-agent session-less status event', () => {
+    vi.useFakeTimers()
+    // Arrange: persisted record exists (as after hydration from disk), memory empty.
+    const store = createTestStore()
+    seedPersistedRecord(store)
+
+    // Act: title-detection style event — no providerSession metadata.
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'waiting', prompt: '', agentType: 'claude' },
+        'Claude',
+        undefined,
+        { worktreeId: 'wt-1' }
+      )
+
+    // Assert: entry adopted the persisted session; record survived.
+    const entry = store.getState().agentStatusByPaneKey['tab-1:leaf-1']
+    expect(entry?.providerSession).toEqual({ key: 'session_id', id: 'persisted-session' })
+    const record = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+    expect(record?.providerSession.id).toBe('persisted-session')
+  })
+
+  it('still drops the record when a different agent takes over the pane', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    seedPersistedRecord(store, { prompt: '' })
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: '', agentType: 'codex' },
+        'Codex',
+        undefined,
+        { worktreeId: 'wt-1' }
+      )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:leaf-1']
+    expect(entry?.providerSession).toBeUndefined()
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeUndefined()
+  })
+
+  it('does not resurrect a session for a done event', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    seedPersistedRecord(store, { prompt: '' })
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'done', prompt: '', agentType: 'claude' },
+        'Claude',
+        undefined,
+        { worktreeId: 'wt-1' }
+      )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:leaf-1']
+    expect(entry?.providerSession).toBeUndefined()
+  })
+})
+
+describe('automatic-resume claim release on session replacement (Task 2)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function seedClaimedRecord(store: ReturnType<typeof createTestStore>): void {
+    const record: SleepingAgentSessionRecord = {
+      paneKey: 'tab-1:leaf-1',
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'persisted-session' },
+      prompt: 'earlier prompt',
+      state: 'waiting',
+      capturedAt: 1000,
+      updatedAt: 1000,
+      origin: 'live'
+    }
+    store.setState({
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as Partial<AppState>)
+    // Why: mirrors the claim pty-connection.ts registers at cold-restore
+    // spawn time, before the resumed agent's own hook event has landed.
+    store.getState().claimAutomaticAgentResume('tab-1', {
+      worktreeId: 'wt-1',
+      launchAgent: 'claude',
+      providerSession: { key: 'session_id', id: 'persisted-session' }
+    })
+  }
+
+  it('releases the claim once a hook event reports a different provider session', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    seedClaimedRecord(store)
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'continuing', agentType: 'claude' },
+        'Claude',
+        undefined,
+        { worktreeId: 'wt-1', tabId: 'tab-1' },
+        { providerSession: { key: 'session_id', id: 'fresh-session' } }
+      )
+
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.providerSession.id
+    ).toBe('fresh-session')
+    expect(store.getState().automaticAgentResumeClaimsByTabId['tab-1']).toBeUndefined()
+  })
+
+  it('keeps the claim when the hook event confirms the same provider session', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    seedClaimedRecord(store)
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'continuing', agentType: 'claude' },
+        'Claude',
+        undefined,
+        { worktreeId: 'wt-1', tabId: 'tab-1' },
+        { providerSession: { key: 'session_id', id: 'persisted-session' } }
+      )
+
+    expect(store.getState().automaticAgentResumeClaimsByTabId['tab-1']).toEqual({
+      worktreeId: 'wt-1',
+      launchAgent: 'claude',
+      providerSession: { key: 'session_id', id: 'persisted-session' }
+    })
+  })
+
+  it('does not release a split-pane sibling claim owned by a different session', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    // Pane A's own sleeping record — the one whose hook event is about to fire.
+    const paneARecord: SleepingAgentSessionRecord = {
+      paneKey: 'tab-1:leaf-a',
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'pane-a-old' },
+      prompt: 'earlier prompt',
+      state: 'waiting',
+      capturedAt: 1000,
+      updatedAt: 1000,
+      origin: 'live'
+    }
+    store.setState({
+      sleepingAgentSessionsByPaneKey: { [paneARecord.paneKey]: paneARecord }
+    } as Partial<AppState>)
+    // Split tab: the tab-keyed claim currently belongs to pane B, not pane A
+    // (claimAutomaticAgentResume is last-write-wins per tab — see pty-connection.ts).
+    store.getState().claimAutomaticAgentResume('tab-1', {
+      worktreeId: 'wt-1',
+      launchAgent: 'claude',
+      providerSession: { key: 'session_id', id: 'pane-b-session' }
+    })
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-a',
+        { state: 'working', prompt: 'continuing', agentType: 'claude' },
+        'Claude',
+        undefined,
+        { worktreeId: 'wt-1', tabId: 'tab-1' },
+        { providerSession: { key: 'session_id', id: 'pane-a-new' } }
+      )
+
+    expect(store.getState().automaticAgentResumeClaimsByTabId['tab-1']).toEqual({
+      worktreeId: 'wt-1',
+      launchAgent: 'claude',
+      providerSession: { key: 'session_id', id: 'pane-b-session' }
+    })
   })
 })

@@ -28,8 +28,10 @@ describe('Pi session wake', () => {
       providerSession,
       prompt: '',
       state: 'working',
-      capturedAt: 1,
-      updatedAt: 1,
+      // Why: the activation gate rejects records older than the absolute
+      // max age, so fixtures must use current timestamps.
+      capturedAt: Date.now(),
+      updatedAt: Date.now(),
       origin: 'worktree-sleep'
     }
     const tab: TerminalTab = {

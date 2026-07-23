@@ -15,6 +15,11 @@ export const RESUMABLE_TUI_AGENTS = [
   'devin'
 ] as const satisfies readonly TuiAgent[]
 
+/** Why: resume records are pane state, not activity signals — a rebooted
+ * machine should restore agents no matter how long they idled before the
+ * quit. The absolute cap is defense in depth against zombie records. */
+export const SLEEPING_AGENT_RECORD_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
+
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
 
 export type AgentProviderSessionKey = 'session_id' | 'conversation_id'

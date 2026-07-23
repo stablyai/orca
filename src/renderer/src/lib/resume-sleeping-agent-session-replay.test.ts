@@ -14,6 +14,9 @@ afterEach(() => {
 function makeRecord(
   overrides: Partial<SleepingAgentSessionRecord> = {}
 ): SleepingAgentSessionRecord {
+  // Why: the activation gate rejects records by absolute age from Date.now()
+  // (Task 3), so fixtures need a recent timestamp, not an epoch-adjacent one.
+  const now = Date.now()
   return {
     paneKey: 'old-tab:leaf-1',
     tabId: 'old-tab',
@@ -22,8 +25,8 @@ function makeRecord(
     providerSession: { key: 'session_id', id: 'sess-1' },
     prompt: 'continue',
     state: 'working',
-    capturedAt: 1,
-    updatedAt: 1,
+    capturedAt: now,
+    updatedAt: now,
     origin: 'live',
     ...overrides
   }
@@ -52,6 +55,33 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
       launchAgent: record.agent,
       providerSession: record.providerSession
     })
+  })
+
+  it('does not clear its own record when a same-tab cold-restore claim covers the session', () => {
+    // Why: pty-connection.ts's cold-restore spawn registers a claim for its
+    // own tab before the resumed agent's first hook event lands (Task 2).
+    // Ordinary startup calls resumeSleepingAgentSessionsForWorktree right
+    // after that claim is registered — it must not treat the pane's own
+    // claim as evidence the record is a stale duplicate and clear it.
+    const record = makeRecord()
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab(record.tabId!)] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record },
+      automaticAgentResumeClaimsByTabId: {
+        [record.tabId!]: {
+          worktreeId: record.worktreeId,
+          launchAgent: record.agent,
+          providerSession: record.providerSession
+        }
+      }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    const state = useAppStore.getState()
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
   })
 
   it('does not fork a provider session that is already queued', () => {
