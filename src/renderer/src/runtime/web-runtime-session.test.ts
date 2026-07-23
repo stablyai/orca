@@ -77,6 +77,7 @@ vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
 
 const ENVIRONMENT_ID = 'web-env-1'
 const WORKTREE_ID = 'repo::/worktree'
+const FOCUS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 afterEach(() => resetWebSessionCloseIntentForTests())
 
@@ -594,7 +595,7 @@ describe('createWebRuntimeSessionTerminal', () => {
                 handle: `term-${sessionKind}`,
                 worktreeId: WORKTREE_ID,
                 tabId: hostTabId,
-                leafId: 'leaf-1'
+                paneKey: `${hostTabId}:${FOCUS_LEAF_ID}`
               },
               disposition: 'created'
             }
@@ -632,7 +633,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         params: { presentation: 'background' }
       })
       expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toEqual(
-        activate ? { hostTabId, leafId: 'leaf-1' } : null
+        activate ? { hostTabId, leafId: FOCUS_LEAF_ID } : null
       )
       expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledTimes(activate ? 1 : 0)
     }
@@ -681,7 +682,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             cwd: '/repo/packages/app',
             worktreeId: WORKTREE_ID,
             tabId: 'host-tab-2',
-            leafId: 'leaf-1'
+            paneKey: `host-tab-2:${FOCUS_LEAF_ID}`
           },
           disposition: 'created'
         }
@@ -906,7 +907,7 @@ describe('createWebRuntimeSessionTerminal', () => {
                 cwd: '/repo',
                 worktreeId: WORKTREE_ID,
                 tabId: 'host-tab-created',
-                leafId: 'leaf-created'
+                paneKey: `host-tab-created:${FOCUS_LEAF_ID}`
               },
               disposition: 'created'
             }
@@ -969,7 +970,7 @@ describe('createWebRuntimeSessionTerminal', () => {
               handle: 'term_replayed',
               worktreeId: WORKTREE_ID,
               tabId: 'host-tab-replayed',
-              leafId: 'leaf-replayed'
+              paneKey: `host-tab-replayed:${FOCUS_LEAF_ID}`
             },
             disposition: 'replayed'
           }
@@ -1206,7 +1207,7 @@ describe('createWebRuntimeSessionTerminal', () => {
               handle: 'term_created',
               worktreeId: WORKTREE_ID,
               tabId: 'host-tab-2',
-              leafId: 'leaf-1'
+              paneKey: `host-tab-2:${FOCUS_LEAF_ID}`
             },
             disposition: 'created'
           }

@@ -8,6 +8,7 @@ import type {
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsResult,
   RuntimeSessionTabCloseReason,
+  RuntimeTerminalCreate,
   RuntimeTerminalClose,
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
@@ -52,6 +53,7 @@ import {
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -134,6 +136,15 @@ type CreateWebRuntimeSessionTerminalArgs = {
 type CreatedWebRuntimeSessionTerminal = {
   outcome: WebRuntimeTerminalCreateOutcome
   hostTabId?: string
+}
+
+type CreatedAgentTerminalIdentity = Pick<RuntimeTerminalCreate, 'tabId' | 'paneKey'> & {
+  leafId?: string
+}
+
+function createdTerminalLeafId(terminal: CreatedAgentTerminalIdentity): string | undefined {
+  const pane = parsePaneKey(terminal.paneKey ?? '')
+  return pane && pane.tabId === terminal.tabId ? pane.leafId : undefined
 }
 
 export async function createWebRuntimeSessionTerminal(
@@ -254,7 +265,7 @@ async function createWebRuntimeSessionTerminalResult(
                 )
               )
       const created = await runRemoteAgentSessionLaunch<{
-        terminal: { tabId?: string; leafId?: string }
+        terminal: CreatedAgentTerminalIdentity
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
@@ -296,7 +307,9 @@ async function createWebRuntimeSessionTerminalResult(
       })
       hostCreated = true
       createdTabId = created.terminal.tabId
-      createdLeafId = created.terminal.leafId
+      createdLeafId = legacyAlreadyPlacedInGroup
+        ? created.terminal.leafId
+        : createdTerminalLeafId(created.terminal)
       if (args.targetGroupId && createdTabId && !legacyAlreadyPlacedInGroup) {
         await callEnvironment({
           method: 'session.tabs.move',

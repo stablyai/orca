@@ -426,6 +426,7 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
       legacy
     ].map(({ terminal }) => terminal.ptyId)
     expect(structuredPtyIds.every(Boolean)).toBe(true)
+    expect(new Set(structuredPtyIds).size).toBe(5)
     await expect
       .poll(
         () =>
@@ -480,6 +481,8 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
     expect(resumeBackground.mirror.activeTabId).toBe(resumeFocused.mirror.activeTabId)
     const fixturePids = readAgentSpawnPids()
     expect(fixturePids).toHaveLength(5)
+    expect(new Set(fixturePids).size).toBe(5)
+    expect(fixturePids.every(isProcessAlive)).toBe(true)
     const fixturePtyIds = finalTerminals
       .map((terminal) => terminal.ptyId)
       .filter((ptyId): ptyId is string => Boolean(ptyId))

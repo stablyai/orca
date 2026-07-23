@@ -1434,6 +1434,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
         "pnpm test:repro:remote-agent-session",
         "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/remote-agent-session-authority-repro.mjs",
+        "node --check config/scripts/remote-agent-session-process-cleanup.mjs && node config/scripts/remote-agent-session-authority-repro.mjs",
         "pnpm exec electron-vite build --mode e2e",
         "VITE_EXPOSE_STORE=true pnpm run build:web",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -1469,6 +1470,7 @@
         "src/renderer/src/runtime/remote-server-parity.test.ts",
         "tests/e2e/remote-agent-session-focus-authority.spec.ts",
         "config/scripts/remote-agent-session-authority-repro.mjs",
+        "config/scripts/remote-agent-session-process-cleanup.mjs",
         "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/terminal-orphan-owner.test.ts",
@@ -1608,6 +1610,12 @@
           ]
         },
         {
+          "file": "config/scripts/remote-agent-session-process-cleanup.mjs",
+          "assertions": [
+            "isolated daemon roots and captured descendants are verified dead before profile PID records are removed"
+          ]
+        },
+        {
           "file": "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
           "assertions": [
             "a durable host exit removes the terminal from two independent viewer mirrors instead of publishing a handle-less phantom",
@@ -1743,7 +1751,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Issue #10192 has byte-identical renderer-oracle evidence: origin/main@94d3db4a2 fails activated fresh and resume rows by requesting focused host presentation, the PR client change passes all four rows, and disabling it turns the activated rows red again. The original PR still fails an old-client focused request against a new headless host; host-boundary normalization turns that mixed-version control green while trusted local callers remain focused. Issue #9151 has local red/green evidence for completion authority. The exact retirement oracle is red on pre-#9687 commit 2a32c5c9a and PR #9053 head d3a1d3047, and green on main@4fce2de49. Saved CI artifacts are still needed."
+        "evidence": "Issue #10192 has byte-identical renderer-oracle evidence: origin/main@ee87bb38d (and earlier ef985ed80 and 94d3db4a2) fails activated fresh and resume rows by requesting focused host presentation, the PR client change passes all four rows, and disabling it turns the activated rows red again. The original PR still fails an old-client focused request against a new headless host; host-boundary normalization turns that mixed-version control green while trusted local callers remain focused. Issue #9151 has local red/green evidence for completion authority. The exact retirement oracle is red on pre-#9687 commit 2a32c5c9a and PR #9053 head d3a1d3047, and green on main@4fce2de49. Saved CI artifacts are still needed."
       },
       "performanceBudget": {
         "required": true,

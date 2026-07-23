@@ -14,6 +14,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
+import { cleanupIsolatedDaemons, isProcessAlive } from './remote-agent-session-process-cleanup.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const clientScript = path.join(import.meta.dirname, 'remote-agent-session-repro-client.mjs')
@@ -34,6 +35,8 @@ const exitTriggerPath = path.join(scratch, 'exit-agent')
 const agentSessionToken = '--orca-repro-agent-session'
 const childProcesses = new Set()
 let server = null
+let activePairingCode = null
+let activeWorktree = null
 
 try {
   mkdirSync(profilePath, { recursive: true })
@@ -67,6 +70,7 @@ try {
   const port = await reservePort()
   const firstReady = await startServer(port)
   const pairingCode = firstReady.pairing.url
+  activePairingCode = pairingCode
 
   const addedRepo = await callClient(pairingCode, 'repo.add', { path: projectPath })
   assertOk(addedRepo, 'fixture repo registration')
@@ -83,6 +87,7 @@ try {
     )
   }
   const worktree = `id:${fixtureWorktree.id}`
+  activeWorktree = worktree
   const freshRequest = {
     clientOperationId: `${Date.now()}-0123456789abcdef0123456789abcdef`,
     worktree,
@@ -145,6 +150,8 @@ try {
   const dispositions = [first.result.disposition, second.result.disposition].sort()
   assertJsonEqual(dispositions, ['adopted', 'created'], 'race dispositions')
   assertSameTerminal(first.result.terminal, second.result.terminal)
+  assertBackgroundSurface(first.result.terminal, 'first racing resume')
+  assertBackgroundSurface(second.result.terminal, 'second racing resume')
   await waitFor(() => countSpawnMarkers() === 2, 'exactly one fresh and one resumed spawn')
 
   const retry = await callClient(pairingCode, 'terminal.ensureAgentSession', resumeRequest)
@@ -153,6 +160,7 @@ try {
     throw new Error(`resume retry was ${retry.result.disposition}, expected adopted`)
   }
   assertSameTerminal(first.result.terminal, retry.result.terminal)
+  assertBackgroundSurface(retry.result.terminal, 'resume retry')
   const spawnCountAfterRetry = countSpawnMarkers()
   if (spawnCountAfterRetry !== 2) {
     throw new Error(
@@ -193,14 +201,14 @@ try {
   }, 'resume retirement without unrelated terminal loss')
 
   const oldTerminal = first.result.terminal
-  if (!oldTerminal.tabId || !oldTerminal.paneKey) {
+  if (!oldTerminal.tabId || !oldTerminal.paneKey || !oldTerminal.ptyId) {
     throw new Error(`retired terminal identity is incomplete: ${JSON.stringify(oldTerminal)}`)
   }
   const leafId = oldTerminal.paneKey.slice(oldTerminal.paneKey.indexOf(':') + 1)
   const staleWrite = await callClient(pairingCode, 'session.tabs.updatePaneLayout', {
     worktree,
     tabId: oldTerminal.tabId,
-    root: { type: 'leaf', id: leafId, ptyId: oldTerminal.ptyId ?? undefined }
+    root: { type: 'leaf', id: leafId, ptyId: oldTerminal.ptyId }
   })
   if (staleWrite.ok || staleWrite.error?.code !== 'invalid_argument') {
     throw new Error(`stale pane publication was not rejected: ${JSON.stringify(staleWrite)}`)
@@ -258,6 +266,7 @@ try {
   await stopServer()
   const restarted = await startServer(port)
   const restartPairingCode = restarted.pairing.url
+  activePairingCode = restartPairingCode
   const [afterRestartTerminals, afterRestartTabs] = await Promise.all([
     callClient(restartPairingCode, 'terminal.list', { worktree }),
     callClient(restartPairingCode, 'session.tabs.list', { worktree })
@@ -278,10 +287,17 @@ try {
     'PASS remote agent-session authority: fresh/resume focus isolation, response-loss replay, writable PTYs, one spawn per operation, retry adoption, unrelated survival, stale rejection, durable retirement\n'
   )
 } finally {
+  if (activePairingCode && activeWorktree) {
+    await callClient(activePairingCode, 'terminal.stop', { worktree: activeWorktree }).catch(
+      () => null
+    )
+  }
+  writeFileSync(exitTriggerPath, '')
   await stopServer().catch(() => {})
   for (const child of childProcesses) {
     child.kill()
   }
+  await cleanupIsolatedDaemons(profilePath)
   rmSync(scratch, { recursive: true, force: true })
 }
 
@@ -471,12 +487,9 @@ function readAgentSpawnPids() {
     .filter((pid) => Number.isInteger(pid) && pid > 0)
 }
 
-function isProcessAlive(pid) {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return error?.code !== 'ESRCH'
+function assertBackgroundSurface(terminal, description) {
+  if (terminal.surface !== 'background') {
+    throw new Error(`${description} returned ${terminal.surface}, expected background`)
   }
 }
 
