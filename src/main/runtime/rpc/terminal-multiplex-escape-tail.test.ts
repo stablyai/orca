@@ -48,9 +48,7 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
           cols: 80,
           rows: 24,
           // The dangling partial the emulator could not serialize.
-          pendingEscapeTailAnsi: '\x1b[3',
-          alternateScreen: true,
-          scrollbackAnsi: 'history'
+          pendingEscapeTailAnsi: '\x1b[3'
         }),
         getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
         getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
@@ -121,9 +119,136 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
         .map((frame) => decodeTerminalStreamFrame(frame))
         .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)!
       expect(decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
-        pendingEscapeTailAnsi: '\x1b[3',
+        pendingEscapeTailAnsi: '\x1b[3'
+      })
+
+      runtime.cleanupSubscription('terminal-multiplex:conn-1')
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('carries requested-snapshot alternate-screen metadata through the SnapshotStart frame', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const handlers = new Map<
+        number,
+        (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+      >()
+      const cleanups = new Map<string, () => void>()
+      const runtime = stubRuntime({
+        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi
+          .fn()
+          .mockResolvedValueOnce({
+            data: 'user@host:~$ ',
+            cols: 80,
+            rows: 24
+          })
+          .mockResolvedValueOnce({
+            data: 'alternate frame',
+            cols: 80,
+            rows: 24,
+            alternateScreen: true,
+            scrollbackAnsi: 'history\r\n'
+          }),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        registerRemoteTerminalViewSubscriber: vi.fn(() => () => {}),
+        subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+        getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        cleanupSubscription: vi.fn((id: string) => {
+          const cleanup = cleanups.get(id)
+          cleanups.delete(id)
+          cleanup?.()
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        updateDesktopViewport: vi.fn().mockResolvedValue(true)
+      })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.multiplex', {}),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-1',
+          sendBinary: (bytes) => {
+            binaryFrames.push(bytes)
+          },
+          registerBinaryStreamHandler: (streamId, handler) => {
+            handlers.set(streamId, handler)
+            return () => handlers.delete(streamId)
+          }
+        }
+      )
+
+      await vi.runOnlyPendingTimersAsync()
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+
+      const handler = handlers.get(0)!
+      handler(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Subscribe,
+            streamId: 0,
+            seq: 1,
+            payload: encodeTerminalStreamJson({
+              streamId: 5,
+              terminal: 'terminal-1',
+              client: { id: 'desktop-1', type: 'desktop' }
+            })
+          })
+        )!
+      )
+      for (let i = 0; i < 5; i += 1) {
+        await vi.runOnlyPendingTimersAsync()
+      }
+
+      handlers.get(5)!(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.SnapshotRequest,
+            streamId: 5,
+            seq: 2,
+            payload: encodeTerminalStreamJson({
+              requestId: 99,
+              scrollbackRows: 100
+            })
+          })
+        )!
+      )
+      for (let i = 0; i < 5; i += 1) {
+        await vi.runOnlyPendingTimersAsync()
+      }
+
+      const requestedSnapshotStart = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .find((frame) => {
+          if (frame?.opcode !== TerminalStreamOpcode.SnapshotStart) {
+            return false
+          }
+          const payload = decodeTerminalStreamJson<{ requestId?: unknown }>(frame.payload)
+          return payload?.requestId === 99
+        })!
+      expect(decodeTerminalStreamJson(requestedSnapshotStart.payload)).toMatchObject({
+        requestId: 99,
         alternateScreen: true,
-        scrollbackAnsiLength: 'history'.length
+        scrollbackAnsiLength: 'history\r\n'.length
       })
 
       runtime.cleanupSubscription('terminal-multiplex:conn-1')

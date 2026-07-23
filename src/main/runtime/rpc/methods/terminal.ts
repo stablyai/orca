@@ -668,11 +668,9 @@ function sendSnapshotFrames(
       source: options.source,
       oscLinks: options.oscLinks,
       pendingEscapeTailAnsi: options.pendingEscapeTailAnsi,
-      ...(options.alternateScreen
-        ? {
-            alternateScreen: true,
-            scrollbackAnsiLength: options.scrollbackAnsiLength ?? 0
-          }
+      ...(options.alternateScreen === true ? { alternateScreen: true } : {}),
+      ...(typeof options.scrollbackAnsiLength === 'number'
+        ? { scrollbackAnsiLength: options.scrollbackAnsiLength }
         : {}),
       truncated: options.truncated === true,
       truncatedByByteBudget: options.truncatedByByteBudget === true
@@ -2106,7 +2104,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             oscLinks: serialized?.oscLinks,
             pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
             alternateScreen: serialized?.alternateScreen,
-            scrollbackAnsiLength: serialized?.scrollbackAnsi?.length,
+            scrollbackAnsiLength:
+              typeof serialized?.scrollbackAnsi === 'string'
+                ? serialized.scrollbackAnsi.length
+                : undefined,
             truncated: false,
             truncatedByByteBudget: serialized?.truncatedByByteBudget,
             data: serialized?.data ?? ''
@@ -2394,8 +2395,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             source: serialized?.source,
             oscLinks: serialized?.oscLinks,
             pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
-            alternateScreen: serialized?.alternateScreen,
-            scrollbackAnsiLength: serialized?.scrollbackAnsi?.length,
             data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')
           })
           // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.

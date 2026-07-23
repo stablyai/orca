@@ -661,7 +661,8 @@ class RemoteRuntimeTerminalMultiplexer {
             seq: info?.seq,
             source: info?.source,
             pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
-            ...(hasAltScreenBoundary ? { alternateScreen: true, scrollbackAnsi } : {})
+            ...(info?.alternateScreen === true ? { alternateScreen: true } : {}),
+            ...(hasAltScreenBoundary ? { scrollbackAnsi } : {})
           })
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {

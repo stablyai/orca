@@ -11627,6 +11627,10 @@ describe('connectPanePty', () => {
       '\x1b[0m\x1b[?1049h\x1b[2J\x1b[H',
       expect.any(Function)
     )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      '\x1b[?1049l\x1b[2J\x1b[3J\x1b[H',
+      expect.any(Function)
+    )
     expect(pane.terminal.write).toHaveBeenCalledWith(
       'remote alt snapshot without history\r\n',
       expect.any(Function)

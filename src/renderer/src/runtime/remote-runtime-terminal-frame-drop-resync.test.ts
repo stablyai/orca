@@ -46,7 +46,7 @@ class FakeMultiplexServer {
   private heldManualRequestId: number | null = null
   private snapshotData = 'INITIAL'
   private snapshotAlternateScreen = false
-  private snapshotScrollbackAnsiLength = 0
+  private snapshotScrollbackAnsiLength: number | undefined
 
   constructor(
     private readonly toClient: (bytes: Uint8Array<ArrayBufferLike>) => void,
@@ -113,11 +113,9 @@ class FakeMultiplexServer {
         seq: options?.truncated ? undefined : this.cursorUnits,
         requestId,
         truncated: options?.truncated,
-        ...(this.snapshotAlternateScreen
-          ? {
-              alternateScreen: true,
-              scrollbackAnsiLength: this.snapshotScrollbackAnsiLength
-            }
+        ...(this.snapshotAlternateScreen ? { alternateScreen: true } : {}),
+        ...(typeof this.snapshotScrollbackAnsiLength === 'number'
+          ? { scrollbackAnsiLength: this.snapshotScrollbackAnsiLength }
           : {})
       }),
       0
@@ -184,7 +182,8 @@ class FakeMultiplexServer {
   ) {
     this.snapshotData = data
     this.snapshotAlternateScreen = options.alternateScreen === true
-    this.snapshotScrollbackAnsiLength = options.scrollbackAnsiLength ?? 0
+    this.snapshotScrollbackAnsiLength =
+      typeof options.scrollbackAnsiLength === 'number' ? options.scrollbackAnsiLength : undefined
   }
 }
 
@@ -281,6 +280,20 @@ describe('remote terminal frame-drop resync', () => {
       alternateScreen: true,
       scrollbackAnsi: 'shell history\r'
     })
+  })
+
+  it('preserves remote alternate-screen snapshots when no scrollback boundary is present', async () => {
+    const { stream } = await subscribeClient()
+    server.setSnapshot('alternate frame', {
+      alternateScreen: true
+    })
+
+    const snapshot = await stream.serializeBuffer({ scrollbackRows: 100 })
+    expect(snapshot).toMatchObject({
+      data: 'alternate frame',
+      alternateScreen: true
+    })
+    expect(snapshot?.scrollbackAnsi).toBeUndefined()
   })
 
   it('retries a truncated recovery on a backoff without accepting output across the gap', async () => {
