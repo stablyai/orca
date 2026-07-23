@@ -103,5 +103,5 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     const fast = values.fastMode === true ? '-fast' : ''
     return `${modelId}${effort}${fast}`
   },
-  listModels: { command: 'cursor-agent models', parse: parseCursorModels }
+  listModels: { command: 'cursor agent models', parse: parseCursorModels }
 }
