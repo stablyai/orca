@@ -1432,7 +1432,7 @@
         "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-orphan-owner.test.ts src/main/runtime/terminal-orphan-topology.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
       ],
       "testFiles": [
         "src/main/providers/pty-process-inspection.test.ts",
@@ -1444,6 +1444,7 @@
         "tests/e2e/remote-agent-completion-authority.unit.test.ts",
         "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
         "src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
         "src/renderer/src/lib/codex-session-restart.test.ts",
         "src/shared/claimed-agent-pty-owner.test.ts",
         "src/main/daemon/daemon-pty-adapter.test.ts",
@@ -1505,6 +1506,12 @@
           "file": "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
           "assertions": [
             "direct SSH terminals use strict main-process inspection rather than lax split IPC evidence"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "completion polling uses the atomic process-inspection boundary without regressing established lifecycle behavior"
           ]
         },
         {
@@ -1607,13 +1614,13 @@
           "summary": "The primary user topology used an isolated headed Orca desktop as the owning server and a separate paired Edge client. Host inspection reported Codex alive before, during, and after a page-scoped WebSocket fault; the client showed no completion toast, reconnected to the same live Codex TUI, and explicit stop restored the shell prompt with no child process."
         },
         {
-          "date": "2026-07-22",
+          "date": "2026-07-23",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts src/renderer/src/lib/codex-session-restart.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/lib/codex-session-restart.test.ts",
           "result": "passed",
-          "durationSeconds": 3.12,
-          "summary": "Ten focused files and 404 tests passed on the post-rebase candidate. The cross-boundary harness fails with the implementation reverted by dispatching process-exit from unavailable remote evidence. Direct SSH uses strict main-process inspection, daemon and relay inspection reject missing or unmapped sessions, and one stale pane cannot suppress restart notices for a separately confirmed Codex pane."
+          "durationSeconds": 11.96,
+          "summary": "Eleven focused files and 870 tests passed on the current-main candidate. The cross-boundary harness fails with the implementation reverted by dispatching process-exit from unavailable remote evidence. Direct SSH uses strict main-process inspection, daemon and relay inspection reject missing or unmapped sessions, the terminal lifecycle suite uses the atomic inspection boundary, and one stale pane cannot suppress restart notices for a separately confirmed Codex pane."
         },
         {
           "date": "2026-07-21",
