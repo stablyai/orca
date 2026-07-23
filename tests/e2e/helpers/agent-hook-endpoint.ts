@@ -55,6 +55,7 @@ export async function emitCodexHookStatus(
     paneKey: string
     worktreeId: string
     state: 'working' | 'done'
+    sessionId?: string
     prompt?: string
     lastAssistantMessage?: string
   }
@@ -64,10 +65,12 @@ export async function emitCodexHookStatus(
     status.state === 'working'
       ? {
           hook_event_name: 'UserPromptSubmit',
+          ...(status.sessionId ? { session_id: status.sessionId } : {}),
           prompt: status.prompt
         }
       : {
           hook_event_name: 'Stop',
+          ...(status.sessionId ? { session_id: status.sessionId } : {}),
           last_assistant_message: status.lastAssistantMessage
         }
   const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/codex`, {

@@ -14,6 +14,7 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 
 const PROVIDER_SESSION_ID = 'e2e-quit-resume-session'
@@ -61,45 +62,40 @@ test('resumes a done Codex TUI in its split pane after quit when the daemon PTY 
 
     const marker = `AGENT_QUIT_RESUME_${Date.now()}`
     const descriptor = await waitForActivePaneHookDescriptor(page)
+    const hookEndpoint = await readHookEndpoint(firstApp)
     const firstPtyId = await waitForActivePanePtyId(page)
     await execInTerminal(page, firstPtyId, `echo ${marker}`)
     await waitForTerminalOutput(page, marker)
 
-    // Why: a real agent run reports its provider session id over the hook
-    // server; seeding the same store entry keeps this test hermetic (no agent
-    // CLI install or auth) while exercising the identical persistence path.
-    await page.evaluate(
-      ({ paneKey, worktreeId: wtId, providerSessionId }) => {
-        const store = window.__store?.getState()
-        const providerSession = { key: 'session_id' as const, id: providerSessionId }
-        store?.setAgentStatus(
-          paneKey,
-          { state: 'working', prompt: 'finish the task', agentType: 'codex' },
-          'Codex',
-          undefined,
-          { worktreeId: wtId },
-          { providerSession }
-        )
-        store?.setAgentStatus(
-          paneKey,
-          {
-            state: 'done',
-            prompt: 'finish the task',
-            agentType: 'codex',
-            lastAssistantMessage: 'Task complete'
-          },
-          'Codex',
-          undefined,
-          { worktreeId: wtId },
-          { providerSession }
-        )
-      },
-      {
-        paneKey: descriptor.paneKey,
-        worktreeId: descriptor.worktreeId,
-        providerSessionId: PROVIDER_SESSION_ID
-      }
-    )
+    // Why: use the real hook server so the done snapshot is persisted and
+    // replayed during the second launch before the pane cold-restores.
+    await emitCodexHookStatus(hookEndpoint, {
+      paneKey: descriptor.paneKey,
+      worktreeId: descriptor.worktreeId,
+      state: 'working',
+      sessionId: PROVIDER_SESSION_ID,
+      prompt: 'finish the task'
+    })
+    await emitCodexHookStatus(hookEndpoint, {
+      paneKey: descriptor.paneKey,
+      worktreeId: descriptor.worktreeId,
+      state: 'done',
+      sessionId: PROVIDER_SESSION_ID,
+      lastAssistantMessage: 'Task complete'
+    })
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            (paneKey) => window.__store?.getState().agentStatusByPaneKey[paneKey],
+            descriptor.paneKey
+          ),
+        { timeout: 15_000 }
+      )
+      .toMatchObject({
+        state: 'done',
+        providerSession: { key: 'session_id', id: PROVIDER_SESSION_ID }
+      })
 
     const daemonPid = readDaemonPid(session.userDataDir)
 

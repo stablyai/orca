@@ -7742,6 +7742,82 @@ describe('connectPanePty', () => {
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
   })
 
+  it('delivers a hydrated quit record that arrives after cold-restore connect starts', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    let releaseReattach = (): void => {
+      throw new Error('Reattach gate was not initialized')
+    }
+    const reattachGate = new Promise<void>((resolve) => {
+      releaseReattach = resolve
+    })
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        await reattachGate
+        return {
+          id: 'fresh-pty',
+          coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+        }
+      }
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {}
+    } as StoreState
+
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+    })
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(5)
+
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.stringContaining('resume') })
+    )
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session-1' },
+      prompt: 'finish the task',
+      state: 'done',
+      capturedAt: 2,
+      updatedAt: 1,
+      launchConfig: {
+        agentCommand: 'codex',
+        agentArgs: '',
+        agentEnv: { CODEX_HOME: '/tmp/codex-home' }
+      },
+      origin: 'quit'
+    }
+    releaseReattach()
+    await flushAsyncTicks(20)
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    const resumeInput = transport.sendInput.mock.calls
+      .map(([input]) => input)
+      .find((input) => input.includes('codex-session-1'))
+    expect(resumeInput).toContain("'CODEX_HOME=/tmp/codex-home'")
+    expect(resumeInput).toContain(`'ORCA_PANE_KEY=${paneKey}'`)
+    expect(resumeInput).toMatch(/'ORCA_AGENT_LAUNCH_TOKEN=[0-9a-f-]+'/)
+    expect(resumeInput).toContain("codex 'resume' 'codex-session-1'")
+    expect(resumeInput?.endsWith('\r')).toBe(true)
+    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+  })
+
   it('resumes from an unambiguous legacy sleeping record when cold-restoring a preserved pane', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')

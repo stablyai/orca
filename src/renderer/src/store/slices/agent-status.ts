@@ -820,6 +820,22 @@ function recoveryRecordTargetsSameSession(
   )
 }
 
+function isStaleDoneReplayForQuitRecoveryRecord(
+  existing: SleepingAgentSessionRecord | undefined,
+  entry: AgentStatusEntry
+): existing is SleepingAgentSessionRecord {
+  return Boolean(
+    existing?.origin === 'quit' &&
+    entry.state === 'done' &&
+    entry.updatedAt <= existing.capturedAt &&
+    entry.agentType === existing.agent &&
+    entry.providerSession &&
+    (!entry.worktreeId || entry.worktreeId === existing.worktreeId) &&
+    (!entry.tabId || entry.tabId === existing.tabId) &&
+    agentProviderSessionsEqual(existing.agent, existing.providerSession, entry.providerSession)
+  )
+}
+
 function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
   return {
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
@@ -1988,7 +2004,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               [paneKey]: liveRecoveryRecord
             }
           }
-        } else if (existingSleepingRecord) {
+        } else if (
+          existingSleepingRecord &&
+          !isStaleDoneReplayForQuitRecoveryRecord(existingSleepingRecord, entry)
+        ) {
+          // Why: startup replays the persisted hook snapshot before the pane cold-restores.
+          // An older matching `done` row describes the TUI captured at quit and must not
+          // consume the only resume record before transport.connect can use it.
           nextSleepingAgentSessions = { ...s.sleepingAgentSessionsByPaneKey }
           delete nextSleepingAgentSessions[paneKey]
         }
