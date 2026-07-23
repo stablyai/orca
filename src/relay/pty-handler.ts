@@ -3,6 +3,7 @@ import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
@@ -47,6 +48,17 @@ import {
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
+import {
+  agentSessionOwnerBindingsEqual,
+  ClaimedAgentPtyOwnerRegistry
+} from '../shared/claimed-agent-pty-owner'
+import {
+  AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+  AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
+  isAgentSessionExecutionClaim,
+  isAgentSessionSurfaceBinding,
+  type AgentSessionOwnerBinding
+} from '../shared/agent-session-host-authority'
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
   return (
@@ -57,6 +69,7 @@ function isMissingNodePtyNativeBinding(error: unknown): boolean {
 
 type ManagedPty = {
   id: string
+  incarnationId: string
   pty: IPty
   initialCwd: string
   buffered: string
@@ -83,7 +96,19 @@ type ManagedPty = {
   startupIngress?: PtyStartupIngress
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
   ownerBackend: PtyOwnerBackend
+  agentSessionOwners?: AgentSessionOwnerBinding[]
 }
+
+type RelayAgentSessionCreateResult = {
+  id: string
+  incarnationId: string
+  replay?: string
+  agentSessionEnsure?: unknown
+}
+
+const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
+const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
+const AGENT_SESSION_CREATE_OPERATION_LIMIT = 4_096
 
 type PendingPtyOutput = {
   data: string
@@ -200,10 +225,12 @@ function resolvePtyShellOverride(shellOverride: string): string {
 
 type PtyProcessSummary = {
   id: string
+  incarnationId: string
   cwd: string
   title: string
   worktreeId?: string
   terminalHandle?: string
+  agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
 type SerializedPtyEntry = {
@@ -221,6 +248,7 @@ type SerializedPtyEntry = {
   envToDelete?: string[]
   /** Optional for state serialized by relays predating the credential guard. */
   gitCredentialPromptGuarded?: boolean
+  agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
 function sanitizeEnvToDelete(value: unknown): string[] {
@@ -283,6 +311,11 @@ export class PtyHandler {
   private exitListener: PtyExitListener | null = null
   // Why: env augmenters run on every spawn so each PTY sees live hook coords without the dispatcher knowing about agent hooks.
   private envAugmenters: PtyEnvAugmenter[] = []
+  private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
+  private readonly agentSessionCreateOperations = new Map<
+    string,
+    Promise<RelayAgentSessionCreateResult>
+  >()
 
   constructor(dispatcher: RelayDispatcher, graceTimeMs = DEFAULT_GRACE_TIME_MS) {
     this.dispatcher = dispatcher
@@ -535,8 +568,13 @@ export class PtyHandler {
       this.clearStartupCommandTimer(managed)
       this.releaseRelayIngress(managed)
       this.flushPtyOutput(managed.id)
-      this.dispatcher.notify('pty.exit', { id: managed.id, code: exitCode })
+      this.dispatcher.notify('pty.exit', {
+        id: managed.id,
+        code: exitCode,
+        incarnationId: managed.incarnationId
+      })
       this.notifyExitListener(managed)
+      this.agentSessionOwners.release(managed.id)
       this.ptys.delete(managed.id)
       this.clearPtyFlowState(managed.id)
       // Why: release the ptmx fd on natural exit, else the master fd leaks until GC (docs/fix-pty-fd-leak.md).
@@ -583,6 +621,11 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.clearBuffer', (p) => this.clearBuffer(p))
     this.dispatcher.onRequest('pty.hasChildProcesses', (p) => this.hasChildProcesses(p))
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
+    this.dispatcher.onRequest('pty.getCapabilities', async () => ({
+      startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
+      agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
+      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
+    }))
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
@@ -800,14 +843,141 @@ export class PtyHandler {
   private async spawn(
     params: Record<string, unknown>,
     context?: RequestContext
-  ): Promise<{ id: string }> {
+  ): Promise<RelayAgentSessionCreateResult> {
+    const operationId = params.agentSessionCreateOperationId
+    if (operationId === undefined) {
+      return await this.spawnOnce(params, context)
+    }
+    if (
+      typeof operationId !== 'string' ||
+      !AGENT_SESSION_CREATE_OPERATION_ID_PATTERN.test(operationId)
+    ) {
+      throw new Error('agent_session_operation_invalid')
+    }
+    const existing = this.agentSessionCreateOperations.get(operationId)
+    if (existing) {
+      return await existing
+    }
+    if (this.agentSessionCreateOperations.size >= AGENT_SESSION_CREATE_OPERATION_LIMIT) {
+      throw new Error('agent_session_operation_capacity')
+    }
+    const operation = this.spawnOnce(params, context)
+    this.agentSessionCreateOperations.set(operationId, operation)
+    try {
+      const result = await operation
+      this.expireAgentSessionCreateOperation(operationId, operation)
+      return result
+    } catch (error) {
+      const outcomeUnknown =
+        typeof error === 'object' &&
+        error !== null &&
+        'agentSessionOperationOutcome' in error &&
+        error.agentSessionOperationOutcome === 'unknown'
+      if (outcomeUnknown) {
+        // Why: the native PTY may be live; replay the same failure instead of spawning again.
+        this.expireAgentSessionCreateOperation(operationId, operation)
+      } else if (this.agentSessionCreateOperations.get(operationId) === operation) {
+        this.agentSessionCreateOperations.delete(operationId)
+      }
+      throw error
+    }
+  }
+
+  private expireAgentSessionCreateOperation(
+    operationId: string,
+    operation: Promise<RelayAgentSessionCreateResult>
+  ): void {
+    const timer = setTimeout(() => {
+      if (this.agentSessionCreateOperations.get(operationId) === operation) {
+        this.agentSessionCreateOperations.delete(operationId)
+      }
+    }, AGENT_SESSION_CREATE_OPERATION_RETENTION_MS)
+    timer.unref?.()
+  }
+
+  private async spawnOnce(
+    params: Record<string, unknown>,
+    context?: RequestContext
+  ): Promise<RelayAgentSessionCreateResult> {
     const env = params.env as Record<string, string> | undefined
     const worktreeId = env?.ORCA_WORKTREE_ID
     const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
     const cwd = typeof params.cwd === 'string' ? params.cwd : resolveDefaultCwd()
     const finishCreation = this.beginPtyCreation([worktreePath, cwd])
+    let physicalSpawnCommitted = false
+    const markPhysicalSpawnCommitted = (): void => {
+      physicalSpawnCommitted = true
+    }
     try {
-      return await this.spawnAfterAdmission(params, context)
+      const ensure = params.agentSessionEnsure as { claim?: unknown; surface?: unknown } | undefined
+      if (!ensure) {
+        return await this.spawnAfterAdmission(params, context, markPhysicalSpawnCommitted)
+      }
+      if (
+        !isAgentSessionExecutionClaim(ensure.claim) ||
+        !isAgentSessionSurfaceBinding(ensure.surface)
+      ) {
+        throw new Error('agent_session_identity_required')
+      }
+      const claim = ensure.claim
+      const surface = ensure.surface
+      const result = await this.agentSessionOwners.ensure({
+        claim,
+        surface,
+        spawn: async ({ generation }) => {
+          const created = await this.spawnAfterAdmission(
+            params,
+            context,
+            markPhysicalSpawnCommitted
+          )
+          const managed = this.ptys.get(created.id)
+          if (managed) {
+            managed.agentSessionOwners = [
+              {
+                claim,
+                generation,
+                phase: 'live',
+                ptyId: created.id,
+                surface
+              }
+            ]
+          }
+          return { ptyId: created.id }
+        },
+        isLive: (owner) => {
+          const managed = this.ptys.get(owner.ptyId)
+          return Boolean(
+            managed &&
+            !managed.disposed &&
+            (!managed.pty.pid || isProcessAlive(managed.pty.pid)) &&
+            managed.agentSessionOwners?.some((candidate) =>
+              agentSessionOwnerBindingsEqual(candidate, owner)
+            )
+          )
+        }
+      })
+      const managed = this.ptys.get(result.owner.ptyId)
+      if (!managed || managed.disposed) {
+        this.agentSessionOwners.release(result.owner.ptyId, result.owner.generation)
+        throw new Error('agent_session_exited_during_start')
+      }
+      managed.agentSessionOwners = this.agentSessionOwners.listForPty(managed.id)
+      return {
+        id: managed.id,
+        incarnationId: managed.incarnationId,
+        agentSessionEnsure: result,
+        ...(result.disposition === 'adopted' && managed.buffered
+          ? { replay: managed.buffered }
+          : {})
+      }
+    } catch (error) {
+      if (!physicalSpawnCommitted) {
+        throw error
+      }
+      const message = error instanceof Error ? error.message : String(error)
+      throw Object.assign(new Error(message), {
+        agentSessionOperationOutcome: 'unknown' as const
+      })
     } finally {
       finishCreation()
     }
@@ -815,8 +985,9 @@ export class PtyHandler {
 
   private async spawnAfterAdmission(
     params: Record<string, unknown>,
-    context?: RequestContext
-  ): Promise<{ id: string }> {
+    context?: RequestContext,
+    onPhysicalSpawnCommitted?: () => void
+  ): Promise<{ id: string; incarnationId: string }> {
     const pty = await this.loadPty()
     if (!pty) {
       throw new Error('node-pty is not available on this remote host')
@@ -875,7 +1046,16 @@ export class PtyHandler {
       emitReadyMarker: shouldEmitShellReadyMarker
     })
 
-    // Why: SSH exec channels give a minimal env; a login shell sources startup files so PATH includes Homebrew/nvm/user CLIs.
+    if (context?.signal?.aborted || context?.isStale()) {
+      // Why: cancellation remains side-effect-free until the exact native spawn seam.
+      throw new Error('client_disconnected')
+    }
+
+    // Why: SSH exec channels give the relay a minimal environment without
+    // .zprofile/.bash_profile sourced. Spawning a login shell ensures PATH
+    // includes Homebrew, nvm, and user-installed CLIs (claude, codex, gh).
+    // When overlays are injected, the launch wrapper keeps those paths after
+    // user startup files re-export their defaults.
     let term: IPty
     try {
       term = pty.spawn(shell, shellLaunch.args, {
@@ -895,6 +1075,7 @@ export class PtyHandler {
       }
       throw error
     }
+    onPhysicalSpawnCommitted?.()
 
     // Why: capture paneKey so the exit listener can evict per-pane caches without a separate ptyId→paneKey map.
     const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
@@ -909,6 +1090,7 @@ export class PtyHandler {
         : undefined
     const managed: ManagedPty = {
       id,
+      incarnationId: randomUUID(),
       pty: term,
       initialCwd: cwd,
       buffered: '',
@@ -942,8 +1124,10 @@ export class PtyHandler {
         : {})
     }
     this.wireAndStore(managed)
-    if (context?.isStale()) {
-      // Why: a client reconnect mid-spawn discards the response, so no renderer can own this PTY — shut it down.
+    if (context?.isStale() && !params.agentSessionEnsure && !params.agentSessionCreateOperationId) {
+      // Why: if the client reconnected while pty.spawn was in flight, the
+      // response is discarded and no renderer can own this PTY. Shut it down
+      // immediately so it does not linger as an unreachable remote shell.
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'terminate stale')
     } else if (managed.startupCommand) {
@@ -954,10 +1138,12 @@ export class PtyHandler {
           : STARTUP_COMMAND_WRITE_DELAY_MS
       )
     }
-    return { id }
+    return { id, incarnationId: managed.incarnationId }
   }
 
-  private async attach(params: Record<string, unknown>): Promise<{ replay?: string }> {
+  private async attach(
+    params: Record<string, unknown>
+  ): Promise<{ incarnationId: string; replay?: string }> {
     const id = params.id as string
     const managed = this.ptys.get(id)
     // Why: after dispose, pty.kill is a POSIX no-op; treat disposed as not-found so failures aren't silent.
@@ -971,6 +1157,7 @@ export class PtyHandler {
       this.releaseRelayIngress(managed)
       this.flushPtyOutput(id)
       this.notifyExitListener(managed)
+      this.agentSessionOwners.release(managed.id)
       disposeManagedPty(managed)
       this.ptys.delete(id)
       this.clearPtyFlowState(id)
@@ -998,11 +1185,11 @@ export class PtyHandler {
       this.pendingOutputByPty.delete(id)
       this.clearOutputFlushTimerIfIdle()
       if (params.suppressReplayNotification) {
-        return { replay: managed.buffered }
+        return { incarnationId: managed.incarnationId, replay: managed.buffered }
       }
       this.dispatcher.notify('pty.replay', { id, data: managed.buffered })
     }
-    return {}
+    return { incarnationId: managed.incarnationId }
   }
 
   private writeData(params: Record<string, unknown>): void {
@@ -1206,10 +1393,14 @@ export class PtyHandler {
         (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
       results.push({
         id,
+        incarnationId: managed.incarnationId,
         cwd: managed.initialCwd,
         title,
         ...(managed.worktreeId ? { worktreeId: managed.worktreeId } : {}),
-        ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
+        ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
+        ...(this.agentSessionOwners.listForPty(id).length
+          ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }
+          : {})
       })
     }
     return results
@@ -1321,6 +1512,7 @@ export class PtyHandler {
     })
     this.wireAndStore({
       id: entry.id,
+      incarnationId: randomUUID(),
       pty: term,
       initialCwd: entry.cwd,
       buffered: '',
@@ -1368,6 +1560,7 @@ export class PtyHandler {
     if (this.disposePromise) {
       return this.disposePromise
     }
+    this.agentSessionCreateOperations.clear()
     const disposePromise = this.disposePtys(options.waitForPhysicalExit !== false)
     this.disposePromise = disposePromise
     void disposePromise.catch(() => {
@@ -1427,6 +1620,7 @@ export class PtyHandler {
     }
     if (this.ptys.get(managed.id) === managed && !managed.disposed) {
       this.notifyExitListener(managed)
+      this.agentSessionOwners.release(managed.id)
       disposeManagedPty(managed)
       this.ptys.delete(managed.id)
       this.clearPtyFlowState(managed.id)

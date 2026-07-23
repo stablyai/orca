@@ -321,7 +321,10 @@ async function shouldPreserveDaemonWithLiveSessions(
   return true
 }
 
-function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
+function createOutOfProcessLauncher(
+  runtimeDir: string,
+  macosLoginSessionWatch = false
+): DaemonLauncher {
   return async (socketPath, tokenPath, suppliedPidPath, suppliedLaunchNonce) => {
     const entryPath = getDaemonEntryPath()
     const pidPath = suppliedPidPath ?? getDaemonPidPath(runtimeDir)
@@ -448,6 +451,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           pidPath,
           '--launch-nonce',
           launchNonce,
+          ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
           ...daemonLogArgs()
         ],
         {
@@ -625,7 +629,10 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   }
 }
 
-export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void> {
+export async function initDaemonPtyProvider(
+  signal?: AbortSignal,
+  options: { macosLoginSessionWatch?: boolean } = {}
+): Promise<void> {
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
   const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
@@ -636,7 +643,7 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
 
   const newSpawner = new DaemonSpawner({
     runtimeDir,
-    launcher: createOutOfProcessLauncher(runtimeDir)
+    launcher: createOutOfProcessLauncher(runtimeDir, options.macosLoginSessionWatch ?? false)
   })
 
   // Why: assign the module-level spawner/adapter only after both succeed, so a failed ensureRunning() leaves no stale spawner.
@@ -1020,7 +1027,11 @@ function legacyDaemonProcessMayBeAlive(runtimeDir: string, protocolVersion: numb
   }
 }
 
-async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPtyAdapter[]> {
+// Why: callers that own an isolated runtime namespace must keep discovery history out of app userData.
+export async function createLegacyDaemonAdapters(
+  runtimeDir: string,
+  historyPath = getHistoryDir()
+): Promise<DaemonPtyAdapter[]> {
   const adapters: DaemonPtyAdapter[] = []
   for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
     const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
@@ -1055,7 +1066,7 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
         socketPath,
         tokenPath,
         protocolVersion,
-        historyPath: getHistoryDir()
+        historyPath
       })
     )
   }

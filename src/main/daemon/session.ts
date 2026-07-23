@@ -11,6 +11,7 @@ import {
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import type { TuiAgent } from '../../shared/types'
+import { randomUUID } from 'node:crypto'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import {
   PtyStartupIngress,
@@ -92,11 +93,12 @@ export type SessionOptions = {
 type AttachedClient = {
   token: symbol
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
-  onExit: (code: number) => void
+  onExit: (code: number, incarnationId: string) => void
 }
 
 export class Session {
   readonly sessionId: string
+  readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
@@ -525,7 +527,7 @@ export class Session {
     this.emulator.dispose()
 
     for (const client of clientsToNotify) {
-      client.onExit(-1)
+      client.onExit(-1, this.incarnationId)
     }
   }
 
@@ -670,7 +672,7 @@ export class Session {
     this.disposeSubprocessHandle()
 
     for (const client of this.attachedClients) {
-      client.onExit(code)
+      client.onExit(code, this.incarnationId)
     }
 
     // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.

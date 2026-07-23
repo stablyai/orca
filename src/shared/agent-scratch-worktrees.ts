@@ -37,3 +37,27 @@ export function createAgentScratchWorktreePathMatcher(
 export function isAgentScratchWorktreePath(repoPath: string, worktreePath: string): boolean {
   return createAgentScratchWorktreePathMatcher([repoPath])(worktreePath)
 }
+
+/** Why: agent CLIs also mint whole scratch *repos* under these containers; a
+ *  repo registered at such a root is agent-internal, not a user project (#9388). */
+const AGENT_SCRATCH_REPO_ROOT_SEGMENTS: readonly (readonly string[])[] = [
+  ['.codex-tmp'],
+  ['.codex', 'vendor_imports'],
+  ['.claude', 'skills'],
+  ...AGENT_SCRATCH_PATH_PREFIXES
+]
+
+export function isAgentScratchRepoRootPath(repoPath: string): boolean {
+  const segments = normalizeRuntimePathForComparison(repoPath).split('/')
+  for (const marker of AGENT_SCRATCH_REPO_ROOT_SEGMENTS) {
+    // Why: match the marker anywhere above the repo root (the repo lives at or
+    // under the scratch container), unlike worktree matching which anchors to a
+    // registered checkout path.
+    for (let index = 0; index + marker.length <= segments.length; index += 1) {
+      if (marker.every((segment, offset) => segments[index + offset] === segment)) {
+        return true
+      }
+    }
+  }
+  return false
+}

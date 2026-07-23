@@ -9,7 +9,11 @@ type ProviderMock = IPtyProvider & {
   emitExit: (id: string, code: number) => void
 }
 
-function createProvider(label: string, sessions: string[] = []): ProviderMock {
+function createProvider(
+  label: string,
+  sessions: string[] = [],
+  authoritativeOwnerListings = false
+): ProviderMock {
   const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
     []
   const replayListeners: ((payload: { id: string; data: string }) => void)[] = []
@@ -22,6 +26,7 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
     }),
     attach: vi.fn(async () => {}),
     hasPty: vi.fn((id: string) => sessions.includes(id)),
+    providesAgentSessionOwnerListings: vi.fn(() => authoritativeOwnerListings),
     write: vi.fn(),
     resize: vi.fn(),
     shutdown: vi.fn(async (id: string) => {
@@ -95,7 +100,7 @@ function createDaemonAdapter(
   sessions: string[] = []
 ): DaemonPtyAdapter & ProviderMock {
   return {
-    ...createProvider(label, sessions),
+    ...createProvider(label, sessions, true),
     protocolVersion: 13,
     listSessions: vi.fn(async () => []),
     ackColdRestore: vi.fn(),
@@ -109,6 +114,16 @@ function createDaemonAdapter(
 }
 
 describe('DegradedDaemonPtyProvider', () => {
+  it('only delegates owner-listing authority to the provider that owns the id', async () => {
+    const current = createDaemonAdapter('daemon', ['daemon-session'])
+    const fallback = createProvider('fallback', [], true)
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.discoverDaemonSessions()
+
+    expect(provider.providesAgentSessionOwnerListings('daemon-session')).toBe(true)
+    expect(provider.providesAgentSessionOwnerListings('unknown-session')).toBe(false)
+  })
+
   it('routes fresh foreground confirmation to the session owner', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')

@@ -23,12 +23,19 @@ import {
   isStatefulRendererReplyCsiQuery,
   isStatelessRendererReplyCsiQuery
 } from '../../../../shared/terminal-reply-query-extraction'
-import { takeCurrentPtyDeliveryAckCredit } from './terminal-pty-ack-gate'
+import {
+  deliverTerminalDataWithDeferredCredit,
+  takeCurrentTerminalDeliveryCredit
+} from '@/lib/pane-manager/terminal-delivery-credit'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
+import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
+import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
+import { createUnresolvedOwnerPtyTransport } from './unresolved-owner-pty-transport'
+import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { getConnectionId } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -42,6 +49,11 @@ import {
   type HasPty
 } from './terminal-dead-session-reconcile'
 import type { PtyConnectionDeps } from './pty-connection-types'
+import {
+  consumeCommittedPtyShutdownExit,
+  deferPtyShutdownExit,
+  isHostPtySleepPending
+} from './pty-shutdown-exit-deferral'
 import {
   cancelPendingSafeFitContinuations,
   safeFit,
@@ -114,8 +126,8 @@ import {
   registerPtySerializer,
   registerPtyTitleSource
 } from './pty-buffer-serializer'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import {
   discardTerminalOutput,
   flushTerminalOutput,
@@ -221,8 +233,7 @@ import {
 import { resolveHiddenRestoreScrollbackRows } from './terminal-hidden-restore-scrollback'
 import {
   getExecutionHostIdForWorktree,
-  getSettingsForWorktreeRuntimeOwner,
-  getRuntimeEnvironmentIdForWorktree
+  getSettingsForWorktreeRuntimeOwner
 } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
@@ -2233,6 +2244,7 @@ export function connectPanePty(
     activePanePtyBinding = null
     activePanePtyBindingBoundAt = null
     delete pane.container.dataset.ptyId
+    delete pane.container.dataset.ptyRecoveryState
   }
 
   const agentCompletionCoordinator = createAgentCompletionCoordinator({
@@ -2439,17 +2451,31 @@ export function connectPanePty(
       })
     return claimKey
   }
-  const onExit = (ptyId: string): void => {
+  const onExit = (ptyId: string, opts: { preserveRendererBinding?: boolean } = {}): void => {
     if (handledExitPtyId === ptyId) {
       return
     }
+    if (deps.isPtyShutdownPending(ptyId) || isHostPtySleepPending(ptyId, runtimeEnvironmentId)) {
+      // Why: the transport emits exit once; replay it only after a verified commit so rollback keeps renderer state retryable.
+      deferPtyShutdownExit(ptyId, (settlement) => {
+        if (settlement === 'committed') {
+          onExit(ptyId, { preserveRendererBinding: true })
+        }
+      })
+      return
+    }
+    const preserveRendererBinding =
+      opts.preserveRendererBinding === true ||
+      consumeCommittedPtyShutdownExit(ptyId, runtimeEnvironmentId)
     resetRendererOrderedSeqForPtyExit(ptyId)
     const currentPaneTransport = deps.paneTransportsRef.current.get(pane.id)
     if (currentPaneTransport && currentPaneTransport !== transport) {
       // Why: an old transport can deliver a late exit after this pane has
       // rebound to a replacement PTY; only clear ownership for the exited id.
       handledExitPtyId = ptyId
-      deps.clearTabPtyId(deps.tabId, ptyId)
+      if (!preserveRendererBinding) {
+        deps.clearTabPtyId(deps.tabId, ptyId)
+      }
       deps.consumeSuppressedPtyExit(ptyId)
       scheduleRuntimeGraphSync()
       return
@@ -2464,12 +2490,14 @@ export function connectPanePty(
     // Why: the negotiating application died with its PTY; any replacement
     // session starts with kitty keyboard flags at zero.
     kittyKeyboardModes.reset()
-    const isSuppressedExit = deps.consumeSuppressedPtyExit(ptyId)
+    const isSuppressedExit = deps.consumeSuppressedPtyExit(ptyId) || preserveRendererBinding
     if (!isSuppressedExit) {
       deps.clearExitedPanePtyLayoutBinding(pane.id, ptyId)
     }
     deps.clearRuntimePaneTitle(deps.tabId, pane.id)
-    deps.clearTabPtyId(deps.tabId, ptyId)
+    if (!preserveRendererBinding) {
+      deps.clearTabPtyId(deps.tabId, ptyId)
+    }
     // Why: if the PTY exits abruptly (Ctrl-D, crash, shell termination) without
     // first emitting a non-agent title, the cache timer would persist as stale
     // state. Clear it unconditionally on PTY exit.
@@ -3172,15 +3200,47 @@ export function connectPanePty(
   // use the shared resolver instead of only looking up repo-backed worktrees.
   const worktree = getWorktreeMapFromState(state).get(deps.worktreeId)
   const worktreeConnectionId = getConnectionId(deps.worktreeId)
-  const connectionId = worktreeConnectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
+  const restoredPtyIdForTransport =
+    deps.restoredLeafId && deps.restoredPtyIdByLeafId
+      ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
+      : null
+  const operationRouteResolution = resolveWorktreeOperationRouteResult(state, deps.worktreeId)
+  const explicitRuntimeEnvironmentId =
+    operationRouteResolution.kind === 'resolved'
+      ? operationRouteResolution.route.runtimeEnvironmentId
+      : null
+  // Why: paired-web worktrees retain HUB execution identity; their runtime-scoped mirrored pane is the session-level transport owner.
+  const mirroredRuntimeOwners = new Set(
+    isWebTerminalSurfaceTabId(deps.tabId)
+      ? [restoredPtyIdForTransport, tab?.ptyId]
+          .map((ptyId) => (ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null))
+          .filter((environmentId): environmentId is string => Boolean(environmentId))
+      : []
+  )
+  const mirroredRuntimeEnvironmentId = mirroredRuntimeOwners.values().next().value ?? null
+  const terminalOwnerUnresolved =
+    mirroredRuntimeOwners.size > 1 ||
+    (operationRouteResolution.kind !== 'resolved' && !mirroredRuntimeEnvironmentId)
+  const runtimeEnvironmentId = explicitRuntimeEnvironmentId
+    ? explicitRuntimeEnvironmentId
+    : mirroredRuntimeEnvironmentId
+      ? mirroredRuntimeEnvironmentId
+      : null
+  // Why: an SSH host nested under a HUB is execution identity, not permission for the paired client to dial that host.
+  const connectionId =
+    !terminalOwnerUnresolved && runtimeEnvironmentId === null
+      ? (worktreeConnectionId ?? null)
+      : null
   const shellOverride = tab?.shellOverride
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
   // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
   // enables ConPTY synchronized-output protection, which strips an agent's
   // transient cursor-show (?25h) and leaves the cursor invisible. The execution
   // host is the authoritative signal: only a 'local' host is a local native PTY.
-  const executionHostId = getExecutionHostIdForWorktree(state, deps.worktreeId)
+  const executionHostId = terminalOwnerUnresolved
+    ? ('runtime:unresolved-owner' as const)
+    : getExecutionHostIdForWorktree(state, deps.worktreeId)
   const isNativeWindowsConpty = isLocalNativeWindowsConpty({
     userAgent: navigator.userAgent,
     connectionId,
@@ -3231,16 +3291,6 @@ export function connectPanePty(
     })
   }
 
-  const restoredPtyIdForTransport =
-    deps.restoredLeafId && deps.restoredPtyIdByLeafId
-      ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
-      : null
-  const remoteRuntimeOwnerForTransport =
-    (restoredPtyIdForTransport
-      ? getRemoteRuntimePtyEnvironmentId(restoredPtyIdForTransport)
-      : null) ?? (tab?.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null)
-  const runtimeEnvironmentId =
-    remoteRuntimeOwnerForTransport ?? getRuntimeEnvironmentIdForWorktree(state, deps.worktreeId)
   const localWindowsTerminalCapabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()
     : null
@@ -3288,7 +3338,13 @@ export function connectPanePty(
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
   let hasReceivedPtyOutput = false
   let deferredReattachLiveData:
-    | { data: string; ptyId: string | null; streamGeneration: number; meta?: PtyDataMeta }[]
+    | {
+        data: string
+        ptyId: string | null
+        streamGeneration: number
+        meta?: PtyDataMeta
+        ackCredit?: () => void
+      }[]
     | null = null
   let deferredReattachLiveDataChars = 0
   let reattachLiveDataDeferralDepth = 0
@@ -3325,6 +3381,7 @@ export function connectPanePty(
   const terminalColorQueryReplies = terminalTheme
     ? { foreground: terminalTheme.foreground, background: terminalTheme.background }
     : undefined
+  const agentLaunchPreferences = toAgentLaunchPreferences(paneStartup?.sessionOptions)
   const transportOptions = {
     cwd: deps.cwd,
     // Why: only fresh local IPC spawns may recover from a saved startup cwd
@@ -3338,6 +3395,7 @@ export function connectPanePty(
       ? undefined
       : paneStartup?.startupCommandDelivery,
     connectionId,
+    executionHostId,
     worktreeId: deps.worktreeId,
     // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
     // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
@@ -3353,6 +3411,18 @@ export function connectPanePty(
     ...(paneStartup?.resumeProviderSession
       ? { resumeProviderSession: paneStartup.resumeProviderSession }
       : {}),
+    ...((paneStartup?.initialAgentStatus?.prompt ?? paneStartup?.draftPrompt)
+      ? { agentPrompt: paneStartup?.initialAgentStatus?.prompt ?? paneStartup?.draftPrompt }
+      : {}),
+    ...(paneStartup?.initialAgentStatus?.prompt
+      ? { agentPromptDelivery: 'auto-submit' as const }
+      : paneStartup?.draftPrompt
+        ? { agentPromptDelivery: 'draft' as const }
+        : {}),
+    ...(paneStartup?.agentArgsOverride !== undefined
+      ? { agentArgsOverride: paneStartup.agentArgsOverride }
+      : {}),
+    ...(agentLaunchPreferences ? { agentLaunchPreferences } : {}),
     ...(launchToken ? { launchToken } : {}),
     ...(paneStartup?.launchAgent ? { launchAgent: paneStartup.launchAgent } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
@@ -3442,9 +3512,13 @@ export function connectPanePty(
         }
       : {})
   }
-  const transport = runtimeEnvironmentId
-    ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
-    : createIpcPtyTransport(transportOptions)
+  const transport = terminalOwnerUnresolved
+    ? createUnresolvedOwnerPtyTransport(
+        'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+      )
+    : runtimeEnvironmentId
+      ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
+      : createIpcPtyTransport(transportOptions)
   const canSendDesktopQueryReply = (): boolean => {
     const ptyId = transport.getPtyId()
     return !ptyId || !isPtyLocked(ptyId)
@@ -5228,6 +5302,13 @@ export function connectPanePty(
             if (isCurrent()) {
               onError(message)
             }
+          },
+          onRecoveryStateChange: (state: PtyTransportRecoveryState): void => {
+            if (isCurrent()) {
+              // Why: cached pixels remain visible while detached; expose transport truth for diagnostics and recovery UI.
+              pane.container.dataset.ptyRecoveryState = state.phase
+              deps.onPtyRecoveryStateRef?.current?.(pane.id, state)
+            }
           }
         }
       }
@@ -5743,7 +5824,7 @@ export function connectPanePty(
         foreground: foregroundOutput,
         beforeWrite: beforeTerminalOutputWrite,
         // Why: claim the delivery's parse-deferred ACK credit (null outside a delivery); the FIRST scheduler write carries it all and fires when bytes are consumed.
-        ackCredit: takeCurrentPtyDeliveryAckCredit() ?? undefined,
+        ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
         onBackgroundBacklogDropped: markHiddenOutputRestoreNeeded,
         latencySensitive:
           !foreground || parseHiddenStartupOutput
@@ -6837,20 +6918,26 @@ export function connectPanePty(
       }
       if (deferredReattachLiveData !== null) {
         // Why: a replacement stream must not inherit bytes or a gap marker from the replay owner it superseded.
-        deferredReattachLiveData = deferredReattachLiveData.filter(
-          (chunk) => chunk.streamGeneration === streamGeneration
-        )
+        deferredReattachLiveData = deferredReattachLiveData.filter((chunk) => {
+          const keep = chunk.streamGeneration === streamGeneration
+          if (!keep) {
+            chunk.ackCredit?.()
+          }
+          return keep
+        })
         deferredReattachLiveDataChars = deferredReattachLiveData.reduce(
           (total, chunk) => total + chunk.data.length,
           0
         )
         const oversized = data.length > MAX_DEFERRED_REATTACH_LIVE_CHARS
         const deferredData = oversized ? data.slice(-MAX_DEFERRED_REATTACH_LIVE_CHARS) : data
+        const ackCredit = takeCurrentTerminalDeliveryCredit()
         deferredReattachLiveData.push({
           data: deferredData,
           ptyId: transport.getPtyId(),
           streamGeneration,
-          ...(meta ? { meta } : {})
+          ...(meta ? { meta } : {}),
+          ...(ackCredit ? { ackCredit } : {})
         })
         deferredReattachLiveDataChars += deferredData.length
         // Why: one huge IPC frame would bypass the queue's memory bound; mark a stream gap so snapshot recovery replaces it, not a partial ANSI frame.
@@ -6862,6 +6949,7 @@ export function connectPanePty(
         ) {
           const removed = deferredReattachLiveData.shift()
           deferredReattachLiveDataChars -= removed?.data.length ?? 0
+          removed?.ackCredit?.()
           dropped = true
         }
         if (dropped && deferredReattachLiveData[0]) {
@@ -7067,6 +7155,9 @@ export function connectPanePty(
       const currentOwner = deferredReattachLiveDataOwners.get(currentGeneration)
       deferredReattachLiveDataOwners = new Map()
       if (disposed || !chunks) {
+        for (const chunk of chunks ?? []) {
+          chunk.ackCredit?.()
+        }
         return
       }
       // Why: paint the authoritative replay first, then admit deferred live chunks so the replay clear can't erase newer output.
@@ -7077,9 +7168,16 @@ export function connectPanePty(
           chunk.streamGeneration !== currentGeneration ||
           currentOwner?.failed === true
         ) {
+          chunk.ackCredit?.()
           continue
         }
-        dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
+        if (chunk.ackCredit) {
+          deliverTerminalDataWithDeferredCredit(chunk.ackCredit, () => {
+            dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
+          })
+        } else {
+          dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
+        }
         deliveredDeferredChunks += 1
       }
       if (deliveredDeferredChunks > 0) {
@@ -7707,6 +7805,12 @@ export function connectPanePty(
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
         : detachedLivePtyId
+    const runtimeHostPtyWakeHint =
+      runtimeEnvironmentId &&
+      candidateReattachSessionId &&
+      !isRemoteRuntimePtyId(candidateReattachSessionId)
+        ? candidateReattachSessionId
+        : null
     const sleptRemoteColdRestoreStartup = sleptRemoteRuntimeSessionId
       ? buildColdRestoreAgentResumeStartup()
       : null
@@ -7731,12 +7835,13 @@ export function connectPanePty(
     // Why: after a daemon crash + cold restore, a stale session-to-tab mapping can make a tab hold a ptyId from another worktree.
     // Restoring it would paint the wrong terminal content, so drop the reattach and spawn fresh.
     const deferredReattachSessionId =
-      candidateReattachSessionId &&
+      runtimeHostPtyWakeHint ??
+      (candidateReattachSessionId &&
       !isRemoteRuntimePtyId(candidateReattachSessionId) &&
       !candidateHasEagerBuffer &&
       isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
         ? candidateReattachSessionId
-        : null
+        : null)
     recordPtyConnectDiagnostic(
       `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hadExistingPaneTransportAtConnect} pendingKey=${pendingSpawnKey}`
     )
@@ -8113,6 +8218,14 @@ export function connectPanePty(
     reconcileIfSessionMissing,
     dispose() {
       disposed = true
+      // Why: a stalled xterm replay may never reach its finally; release live-frame credit when this renderer no longer owns the stream.
+      for (const chunk of deferredReattachLiveData ?? []) {
+        chunk.ackCredit?.()
+      }
+      deferredReattachLiveData = null
+      deferredReattachLiveDataChars = 0
+      reattachLiveDataDeferralDepth = 0
+      deferredReattachLiveDataOwners = new Map()
       cancelPendingSafeFitContinuations(pane)
       pendingHiddenSnapshotFit = null
       pendingReattachFit = null

@@ -184,10 +184,49 @@ describe('EmulatorBridge helper ownership', () => {
 
   it('rejects a capability the resolved backend does not support', async () => {
     const bridge = new EmulatorBridge()
-    // device-1 resolves to the iOS backend, which advertises no explicit-verb caps.
+    // device-1 resolves to the iOS backend, which does not advertise install.
     await expect(
       bridge.runCapability('install', { device: 'device-1' }, async () => 'unused')
     ).rejects.toMatchObject({ code: 'emulator_unsupported' })
+  })
+
+  it('routes ax to the active session ax endpoint on iOS', async () => {
+    const fetchAccessibilityTree = vi.fn(async () => ({ elements: [] }))
+    const bridge = new EmulatorBridge({ fetchAccessibilityTree })
+    bridge.registerActiveEmulator('wt-1', {
+      ...session('device-1'),
+      axUrl: 'http://127.0.0.1:3100/device-1/ax'
+    })
+
+    await expect(bridge.accessibilityTree({ worktreeId: 'wt-1' })).resolves.toEqual({
+      elements: []
+    })
+    expect(fetchAccessibilityTree).toHaveBeenCalledWith('http://127.0.0.1:3100/device-1/ax')
+  })
+
+  it('derives the ax endpoint for sessions registered without axUrl', async () => {
+    const fetchAccessibilityTree = vi.fn(async () => ({ elements: [] }))
+    const bridge = new EmulatorBridge({ fetchAccessibilityTree })
+    // e.g. renderer-supplied session info that predates ax derivation.
+    bridge.registerActiveEmulator('wt-1', {
+      ...session('device-1'),
+      streamUrl: 'http://127.0.0.1:3100/stream.mjpeg'
+    })
+
+    await expect(bridge.accessibilityTree({ worktreeId: 'wt-1' })).resolves.toEqual({
+      elements: []
+    })
+    expect(fetchAccessibilityTree).toHaveBeenCalledWith('http://127.0.0.1:3100/ax')
+  })
+
+  it('rejects ax when the session has no ax endpoint and none can be derived', async () => {
+    const bridge = new EmulatorBridge()
+    // session() streamUrl has no mjpeg suffix, so no /ax endpoint can be inferred.
+    bridge.registerActiveEmulator('wt-1', session('device-1'))
+
+    await expect(bridge.accessibilityTree({ worktreeId: 'wt-1' })).rejects.toMatchObject({
+      code: 'emulator_no_active'
+    })
   })
 
   it('kills the helper and shuts down the selected simulator', async () => {
@@ -379,6 +418,29 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       worktreeId: 'wt-1',
       info: session('device-1')
     })
+  })
+
+  it('routes emulatorAx through the bridge to the active session ax endpoint', async () => {
+    const fetchAccessibilityTree = vi.fn(async () => ({ elements: [{ label: 'Login' }] }))
+    const bridge = new EmulatorBridge({ fetchAccessibilityTree })
+    bridge.registerActiveEmulator('wt-1', {
+      ...session('device-1'),
+      axUrl: 'http://127.0.0.1:3100/device-1/ax'
+    })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    await expect(commands.emulatorAx({ worktree: 'wt-1' })).resolves.toEqual({
+      elements: [{ label: 'Login' }]
+    })
+    expect(fetchAccessibilityTree).toHaveBeenCalledWith('http://127.0.0.1:3100/device-1/ax')
   })
 
   it('rejects attach when mobile emulator is disabled', async () => {

@@ -1333,6 +1333,15 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
   if (!args.pr && !shouldClearHostedReviewForNoGitHubPR(hostedReviewEntry)) {
     return { cache: args.cache, accepted: hostedReviewEntry?.data == null }
   }
+  // Why: hosted-review fallbacks may be stale exact links; inherit branch provenance only when already proven.
+  const branchLookupGitHubPRNumber =
+    args.pr &&
+    args.linkedPRNumber == null &&
+    (args.fallbackPRSource !== 'hosted-review' ||
+      args.pr.number !== args.fallbackPRNumber ||
+      hostedReviewEntry?.branchLookupGitHubPRNumber === args.pr.number)
+      ? args.pr.number
+      : undefined
   return {
     cache: {
       ...args.cache,
@@ -1341,7 +1350,8 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
         fetchedAt: args.fetchedAt,
         linkedReviewHintKey: args.pr
           ? linkedReviewHintKey({ linkedGitHubPR: args.pr.number })
-          : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry)
+          : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry),
+        ...(branchLookupGitHubPRNumber !== undefined ? { branchLookupGitHubPRNumber } : {})
       }
     },
     accepted: true

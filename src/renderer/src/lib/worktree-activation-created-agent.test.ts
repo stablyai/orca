@@ -14,6 +14,14 @@ import {
 
 const initialAppStoreState = useAppStore.getState()
 
+function makeWebRuntimeWorktree() {
+  return {
+    ...makeWorktree(),
+    hostId: 'local' as const,
+    runtimeOwnerEnvironmentId: 'web-runtime-1'
+  }
+}
+
 afterEach(() => {
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   vi.unstubAllGlobals()
@@ -307,7 +315,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
   })
 
   it('asks the host runtime to activate the worktree in the paired web client', async () => {
-    const worktree = makeWorktree()
+    const worktree = makeWebRuntimeWorktree()
     const callRuntimeEnvironment = vi.fn().mockResolvedValue({
       ok: true,
       result: { repoId: worktree.repoId, worktreeId: worktree.id, activated: true }
@@ -445,7 +453,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
   })
 
   it('does not echo host-originated runtime activation events back to the host', async () => {
-    const worktree = makeWorktree()
+    const worktree = makeWebRuntimeWorktree()
     const callRuntimeEnvironment = vi.fn().mockResolvedValue({
       ok: true,
       result: { repoId: worktree.repoId, worktreeId: worktree.id, activated: true }
@@ -577,7 +585,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
   })
 
   it('respawns a host terminal when waking a slept web workspace with dead local PTYs', async () => {
-    const worktree = makeWorktree()
+    const worktree = makeWebRuntimeWorktree()
     const callRuntimeEnvironment = vi
       .fn()
       .mockResolvedValueOnce({

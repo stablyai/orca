@@ -12,6 +12,7 @@ import {
   Copy,
   GitFork,
   Maximize2,
+  MessageSquarePlus,
   Minimize2,
   PanelBottomClose,
   PanelsTopLeft,
@@ -52,6 +53,8 @@ export type NativeChatContextMenuActions = {
   canExpandPane: boolean
   isPaneExpanded: boolean
   onToggleExpand: () => void
+  canContinueAgentSessionInNewSession: boolean
+  onContinueAgentSessionInNewSession: () => void
   onForkAgentSession: () => void
   onSetTitle: () => void
   onCopyTerminalId: () => void
@@ -69,6 +72,8 @@ export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuAction
   canExpandPane: false,
   isPaneExpanded: false,
   onToggleExpand: () => {},
+  canContinueAgentSessionInNewSession: false,
+  onContinueAgentSessionInNewSession: () => {},
   onForkAgentSession: () => {},
   onSetTitle: () => {},
   onCopyTerminalId: () => {},
@@ -168,6 +173,15 @@ export function useNativeChatContextMenu({
                 'Switch to terminal view'
               )}
               <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          ) : null}
+          {actions.canContinueAgentSessionInNewSession ? (
+            <DropdownMenuItem onSelect={actions.onContinueAgentSessionInNewSession}>
+              <MessageSquarePlus />
+              {translate(
+                'components.agentSessionContinuation.continueInNewSession',
+                'Continue in New Session…'
+              )}
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem onSelect={actions.onForkAgentSession}>

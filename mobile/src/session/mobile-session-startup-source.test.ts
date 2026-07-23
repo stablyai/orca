@@ -29,6 +29,26 @@ describe('mobile session startup', () => {
     expect(autoCreateEffect).toContain('void handleCreateTerminal()')
   })
 
+  it('stops fallback list polling in the background and reconciles on resume', () => {
+    const pollEffect = sliceBetween(
+      "const refreshOnForeground = () => {\n        if (AppState.currentState !== 'active')",
+      '// Why: pick up Settings → Terminal text size on return'
+    )
+
+    expect(pollEffect).toContain(
+      "if (AppState.currentState !== 'active') {\n          return\n        }\n        void fetchSessionTabs()"
+    )
+    expect(pollEffect).toContain('void fetchTerminals()')
+    expect(pollEffect).toContain("AppState.addEventListener('change'")
+    expect(pollEffect).toContain("if (state === 'active') {\n          refreshOnForeground()")
+    expect(pollEffect).toContain('const interval = setInterval(refreshOnForeground, 2000)')
+    expect(pollEffect.lastIndexOf('\n      refreshOnForeground()')).toBeGreaterThan(
+      pollEffect.indexOf("AppState.addEventListener('change'")
+    )
+    expect(pollEffect).toContain('clearInterval(interval)')
+    expect(pollEffect).toContain('appStateSubscription.remove()')
+  })
+
   it('loads session tabs without waiting for desktop activation', () => {
     const startupEffect = sliceBetween(
       'void (async () => {',
@@ -46,6 +66,27 @@ describe('mobile session startup', () => {
     )
     expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
     expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
+  })
+
+  it('fails runtime capability gates closed before probing a replacement client', () => {
+    const capabilityEffect = sliceBetween(
+      'const hostQueryReplyInputSupportedRef = useRef(false)',
+      '// Why: read deviceToken from host record'
+    )
+    const probeStart = capabilityEffect.indexOf('startRuntimeCapabilityProbe(client,')
+
+    expect(probeStart).toBeGreaterThanOrEqual(0)
+    for (const reset of [
+      'setBrowserScreencastSupported(null)',
+      'setAgentSessionHistorySupported(null)',
+      'setQuickCommandsSupported(null)',
+      'setShowQuickCommands(false)',
+      'hostQueryReplyInputSupportedRef.current = false'
+    ]) {
+      const resetIndex = capabilityEffect.lastIndexOf(reset)
+      expect(resetIndex).toBeGreaterThanOrEqual(0)
+      expect(resetIndex).toBeLessThan(probeStart)
+    }
   })
 
   it('activates an already-selected pending terminal tab after hydration', () => {

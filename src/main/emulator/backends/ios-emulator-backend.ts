@@ -23,6 +23,7 @@ import {
 import type { EmulatorBridgeOptions } from '../emulator-bridge-types'
 import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emulator-gesture-sender'
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
+import { fetchServeSimAccessibilityTree, type FetchAccessibilityTree } from '../serve-sim-ax-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
 import type {
   BackendAvailability,
@@ -37,20 +38,23 @@ import type {
 export class IosEmulatorBackend implements EmulatorBackend {
   readonly kind = 'ios' as const
   readonly streamCodec = 'mjpeg' as const
-  // iOS exposes ax/permissions/etc. via `exec`; explicit verbs are Android-only for v1.
+  // iOS exposes install/launch/permissions/logcat via `exec`; ax has an explicit
+  // verb backed by the active session's serve-sim /ax endpoint.
   readonly capabilities: EmulatorBackendCapabilities = {
     install: false,
     launch: false,
     permissions: false,
-    accessibilityTree: false,
+    accessibilityTree: true,
     logcat: false
   }
 
   private cachedServeSimExecutable: ServeSimExecutable | undefined
   private readonly waitForEndpointReady: (endpoint: string) => Promise<boolean>
+  private readonly fetchAccessibilityTree: FetchAccessibilityTree
 
   constructor(options: EmulatorBridgeOptions = {}) {
     this.waitForEndpointReady = options.waitForEndpointReady ?? waitForServeSimEndpointReady
+    this.fetchAccessibilityTree = options.fetchAccessibilityTree ?? fetchServeSimAccessibilityTree
   }
 
   // Why: resolving the executable can materialize the serve-sim runtime (a one-time
@@ -168,6 +172,18 @@ export class IosEmulatorBackend implements EmulatorBackend {
   async rotate(deviceId: string, orientation: string): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
     await this.execServeSim(['rotate', orientation, '-d', udid])
+  }
+
+  // Mirrors gesture: the tree comes from the active session's helper endpoint,
+  // so without a session there is nothing to query.
+  async accessibilityTree(_deviceId: string, axUrl: string | null): Promise<unknown> {
+    if (!axUrl) {
+      throw new EmulatorError(
+        'emulator_no_active',
+        'No active emulator session for the accessibility tree. Start one first.'
+      )
+    }
+    return this.fetchAccessibilityTree(axUrl)
   }
 
   async exec(deviceId: string, command: string): Promise<unknown> {

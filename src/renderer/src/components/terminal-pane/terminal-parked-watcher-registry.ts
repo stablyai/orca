@@ -72,13 +72,10 @@ export function retireParkedTerminalTab(tabId: string): void {
 
 /**
  * Synchronously disposes any parked watcher subscribed to these PTYs.
- * shutdownWorktreeTerminals silences the live transports' final teardown
- * flush via unregisterPtyDataHandlers, but parked watchers ride the
- * dispatcher SIDECAR channel that call does not touch — without this, the
- * flush still marks unread and arms notification timers for a worktree that
- * is already sleeping or deleted. The tab entries are kept so a sleeping
- * parked tab does not restart watchers against its stale PTY ids; wake
- * re-mints the ids and the sync path restarts watchers then.
+ * Shutdown transactionally suspends dispatcher sidecars before teardown, then
+ * disposes their watchers only after commit. The tab entries remain so a
+ * sleeping parked tab cannot restart against stale PTY ids; wake re-mints the
+ * ids and the sync path restarts watchers then.
  */
 export function disposeParkedTerminalWatchersForPtyIds(ptyIds: readonly string[]): void {
   for (const entry of parkedWatchersByTabId.values()) {

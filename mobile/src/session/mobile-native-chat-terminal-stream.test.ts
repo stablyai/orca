@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isTerminalCoveredByNativeChat,
+  mobileNativeChatSubscribeViewport,
   mobileNativeChatTerminalCapabilities,
   resolveMobileNativeChatTerminalStreamAction
 } from './mobile-native-chat-terminal-stream'
@@ -32,6 +33,17 @@ describe('mobile native-chat terminal stream lifecycle', () => {
       mobileInputLeaseOnly: 1
     })
     expect(mobileNativeChatTerminalCapabilities(false)).toEqual({ terminalBinaryStream: 1 })
+  })
+
+  it('omits the viewport from a covered lease subscribe so the host keeps desktop dims', () => {
+    // Why: handleMobileSubscribe phone-fits the PTY whenever a viewport is present,
+    // even for a lease-only subscribe — entering chat must not resize the terminal.
+    expect(mobileNativeChatSubscribeViewport(true, { cols: 40, rows: 60 })).toBeUndefined()
+    expect(mobileNativeChatSubscribeViewport(false, { cols: 40, rows: 60 })).toEqual({
+      cols: 40,
+      rows: 60
+    })
+    expect(mobileNativeChatSubscribeViewport(false, null)).toBeUndefined()
   })
 
   it('records a cold-start cover before WebView readiness so return refreshes', () => {

@@ -16,6 +16,10 @@ import {
   getRecentSelfWrite,
   type RecentSelfWrite
 } from '@/components/editor/editor-self-write-registry'
+import {
+  hasActiveEditorPathMoves,
+  isActiveMoveSourcePath
+} from '@/components/editor/editor-path-move-inflight'
 import type { FsChangedPayload } from '../../../shared/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
@@ -27,6 +31,7 @@ import {
 } from './worktree-file-change-event'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-disk-mark'
+import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
 
 // Why: atomic writes burst same-path events; one reload dispatch each fans out into N EditorPanel rebuilds that can wedge the renderer (issue #826), so debounce per (worktreeId+path).
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
@@ -416,12 +421,22 @@ export function createExternalWatchEventHandler(
     // Why: mark editor tabs deleted/renamed instead of closing them so the user keeps in-memory content; a paired create means rename, a lone delete is hard.
     // Why: snapshot openFiles once so the delete/rename helpers share a consistent view without N store reads per payload.
     const openFilesAtStart = useAppStore.getState().openFiles
-    const deletedOpenEditorIds = collectDeletedOpenEditorIds(
+    const deletedOpenEditorIdsRaw = collectDeletedOpenEditorIds(
       payload,
       target.worktreeId,
       target.runtimeEnvironmentId,
       openFilesAtStart
     )
+    // Only pay the per-id lookup to suppress a move's own source-delete while a move is live; else the batch stays O(deletes).
+    const deletedOpenEditorIds = hasActiveEditorPathMoves()
+      ? deletedOpenEditorIdsRaw.filter((fileId) => {
+          const file = openFilesAtStart.find((f) => f.id === fileId)
+          return (
+            !file ||
+            !isActiveMoveSourcePath(target.worktreeId, target.runtimeEnvironmentId, file.filePath)
+          )
+        })
+      : deletedOpenEditorIdsRaw
     // Why: correlate creates to deletes by basename to avoid mislabelling unrelated create+delete pairs as "renamed"; default to 'deleted' when we can't correlate.
     const hasPairedCreate =
       deletedOpenEditorIds.length > 0 &&
@@ -533,6 +548,7 @@ export function createExternalWatchEventHandler(
         relativePath,
         runtimeEnvironmentId: target.runtimeEnvironmentId
       }
+      const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
       const matching = getOpenFilesForExternalFileChange(openFilesSnapshot, notification)
       if (matching.length === 0) {
         // Why: combined-diff tab has no in-memory content to clobber and guards its own reload, so notify it directly without self-write suppression.
@@ -543,13 +559,27 @@ export function createExternalWatchEventHandler(
       }
       const dirtyMatches = matching.filter((f) => f.isDirty)
       if (dirtyMatches.length > 0) {
-        // Why: an external write on a dirty tab must not vanish silently (issue #7265) — mark it so the editor shows a changed-on-disk banner with a reload path.
-        scheduleChangedOnDiskMark(
-          target,
-          notification,
-          // Why: canAutoSaveOpenFile is exactly the tabs that can hold unsaved edits (edit + unstaged diff) — the tabs the banner serves.
-          dirtyMatches.filter((dirtyFile) => canAutoSaveOpenFile(dirtyFile)).map((f) => f.id)
-        )
+        // canAutoSaveOpenFile is the set of tabs that can hold unsaved edits — the tabs the banner serves.
+        const dirtyIds = dirtyMatches.filter((f) => canAutoSaveOpenFile(f)).map((f) => f.id)
+        // A tab carrying move-echo provenance for this path may just be seeing the move's own echo; settle by
+        // disk identity below. Only a provenance-carrying tab can match, so skip the normalize when none has it.
+        let isSelfMoveEcho = false
+        if (dirtyMatches.some((f) => f.pendingSelfMoveEcho)) {
+          const normalizedAbsolutePath = normalizeRuntimePathForComparison(absolutePath)
+          isSelfMoveEcho = dirtyMatches.some(
+            (f) =>
+              f.pendingSelfMoveEcho &&
+              normalizeRuntimePathForComparison(f.pendingSelfMoveEcho.targetPath) ===
+                normalizedAbsolutePath
+          )
+        }
+        if (isSelfMoveEcho) {
+          // Real destination fs event confirms the echo — consume the provenance so a later genuine write takes the normal path.
+          scheduleSelfMoveEchoVerification(target, dirtyIds, true)
+        } else {
+          // An external write on a dirty tab must not vanish silently (issue #7265); mark it for the reload banner.
+          scheduleChangedOnDiskMark(target, notification, dirtyIds)
+        }
         if (dirtyMatches.length === matching.length) {
           if (hasCombinedDiffConsumer) {
             scheduleDebouncedExternalReload(notification)
@@ -558,7 +588,6 @@ export function createExternalWatchEventHandler(
         }
         // Clean sibling tabs (e.g. an unstaged diff of the same path) still reload below; consumers skip dirty files.
       }
-      const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
       const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
       if (recentSelfWrite) {
         scheduleSelfWriteAwareExternalReload(target, notification, matching[0], recentSelfWrite)
@@ -654,6 +683,129 @@ function scheduleChangedOnDiskMark(
       // Why: unreadable disk state can't disprove an external change — keep the conflict visible rather than risk a silent overwrite.
       markTabsChangedOnDisk(fileIds, target.connectionId)
     })
+}
+
+// Per-file generation so a newer echo-verify read supersedes an older one — overlapping reads can't clear each other's autosave gate or apply a stale verdict.
+const liveMoveVerifyGeneration = new Map<string, number>()
+let liveMoveVerifyCounter = 0
+
+type LiveMoveVerifyCandidate = {
+  fileId: string
+  baseline: string | undefined
+  generation: number
+  /** The move that installed the provenance; a newer move re-homing the tab supersedes this verification, even across a rekey. */
+  operationId?: string
+}
+
+// Resolve one candidate against the disk read (`diskSignature` null = binary/unreadable).
+// Fails CLOSED: anything but a proven baseline match surfaces the conflict, so a real external write is never swallowed.
+function resolveLiveMoveVerification(
+  candidate: LiveMoveVerifyCandidate,
+  diskSignature: string | null,
+  connectionId: string | undefined,
+  consumeProvenance: boolean
+): void {
+  const { fileId, baseline, generation, operationId } = candidate
+  if (liveMoveVerifyGeneration.get(fileId) !== generation) {
+    return // a newer verification owns this tab and its autosave gate
+  }
+  liveMoveVerifyGeneration.delete(fileId)
+  const state = useAppStore.getState()
+  state.setPendingLiveDiskVerification(fileId, false)
+  const file = state.openFiles.find((f) => f.id === fileId)
+  // Skip if the interim moved on: tab resolved, baseline advanced, or a different move replaced the provenance we captured.
+  if (
+    !file ||
+    !file.isDirty ||
+    file.externalMutation === 'changed' ||
+    file.lastKnownDiskSignature !== baseline ||
+    (operationId !== undefined && file.pendingSelfMoveEcho?.operationId !== operationId)
+  ) {
+    return
+  }
+  // Consume only when a real watcher event drove this check. The proactive post-commit verify must LEAVE the provenance,
+  // else the destination fs event (on FSEvents/SSH it lands after the faster local read) would raise a false conflict banner.
+  if (consumeProvenance) {
+    state.clearSelfMoveEcho(fileId)
+  }
+  const isMoveEcho = baseline !== undefined && diskSignature === baseline
+  if (!isMoveEcho) {
+    markFileChangedOnDisk(state, file, { connectionId, origin: 'live' })
+  }
+}
+
+/**
+ * Verify tabs whose destination echo was LATCHED before the rekey installed them: the coordinator calls this
+ * after a successful move so a pre-rekey event isn't lost and the autosave gate can't strand.
+ */
+export function verifyLatchedMoveDestinations(
+  worktreePath: string,
+  connectionId: string | undefined,
+  fileIds: readonly string[]
+): void {
+  const state = useAppStore.getState()
+  const gated = fileIds.filter(
+    (id) => state.openFiles.find((f) => f.id === id)?.pendingSelfMoveEcho
+  )
+  if (gated.length === 0) {
+    return
+  }
+  // consumeProvenance:false — safety net; leave the provenance so a destination watcher event after this read still reads as an echo.
+  // (Owner/worktree are resolved per-tab inside the read; worktreePath is unused, each tab reads at its own filePath.)
+  scheduleSelfMoveEchoVerification(
+    { worktreeId: '', worktreePath, connectionId, runtimeEnvironmentId: null },
+    gated,
+    false
+  )
+}
+
+// Settle each dirty tab by content identity: the move's own echo leaves disk == the tab's baseline, a genuine external write does not.
+// Autosave is suspended synchronously first so a write landing mid-read can't be overwritten before we decide.
+function scheduleSelfMoveEchoVerification(
+  target: WatchedTarget,
+  fileIds: string[],
+  consumeProvenance: boolean
+): void {
+  if (fileIds.length === 0) {
+    return
+  }
+  const state = useAppStore.getState()
+  for (const fileId of fileIds) {
+    const file = state.openFiles.find((f) => f.id === fileId)
+    if (!file || !file.isDirty || file.externalMutation === 'changed') {
+      continue
+    }
+    const generation = ++liveMoveVerifyCounter
+    liveMoveVerifyGeneration.set(fileId, generation)
+    state.setPendingLiveDiskVerification(fileId, true)
+    const candidate: LiveMoveVerifyCandidate = {
+      fileId,
+      baseline: file.lastKnownDiskSignature,
+      generation,
+      operationId: file.pendingSelfMoveEcho?.operationId
+    }
+    // Read the tab's OWN absolute path: a cross-worktree/floating tab's relativePath is relative to its own root (can be `../…`),
+    // never join it onto another worktree's path. readFileForEchoVerification dedups concurrent same-path reads, so siblings share one.
+    void readFileForEchoVerification({
+      runtimeEnvironmentId: file.runtimeEnvironmentId?.trim() || target.runtimeEnvironmentId,
+      filePath: file.filePath,
+      relativePath: file.relativePath,
+      worktreeId: file.worktreeId,
+      connectionId: target.connectionId
+    })
+      .then((result) => {
+        const diskSignature = result.isBinary ? null : getDiskBaselineSignature(result.content)
+        resolveLiveMoveVerification(
+          candidate,
+          diskSignature,
+          target.connectionId,
+          consumeProvenance
+        )
+      })
+      .catch(() =>
+        resolveLiveMoveVerification(candidate, null, target.connectionId, consumeProvenance)
+      )
+  }
 }
 
 function scheduleSelfWriteAwareExternalReload(

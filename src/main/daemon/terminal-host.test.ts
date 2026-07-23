@@ -883,6 +883,8 @@ describe('TerminalHost', () => {
     })
 
     it('does not list exited sessions', async () => {
+      const onSessionReaped = vi.fn()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn, onSessionReaped })
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -892,6 +894,7 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onExitCb?.(0)
       expect(host.listSessions()).toEqual([])
+      expect(onSessionReaped).toHaveBeenCalledWith('session-1')
     })
 
     it('never force-kills an exited session (recycled-pid SIGKILL safety)', async () => {

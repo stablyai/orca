@@ -91,6 +91,8 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */
+  lastUserPrompt?: string | null
   // Recoverable signal for sessions whose conversation transcript persisted zero
   // user/assistant turns: queued (never-flushed) prompts survive even when the
   // main conversation was lost.

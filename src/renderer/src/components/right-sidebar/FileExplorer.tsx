@@ -300,7 +300,8 @@ function FileExplorerFiles(): React.JSX.Element {
     expanded,
     toggleDir,
     refreshDir,
-    scrollRef
+    scrollRef,
+    getOperationOwnerForPath: (path) => rowProjection.getRowByPath(path)?.operationOwner
   })
 
   const lastResetWorktreePathRef = useRef<string | null>(null)
@@ -393,7 +394,8 @@ function FileExplorerFiles(): React.JSX.Element {
     refreshTree,
     inlineInput,
     dragSourcePath,
-    isNativeDragOver
+    isNativeDragOver,
+    operationOwner: rootCache?.operationOwner
   })
 
   useFileExplorerImport({
@@ -401,7 +403,8 @@ function FileExplorerFiles(): React.JSX.Element {
     activeWorktreeId,
     refreshDir,
     clearNativeDragState,
-    setSelectedPath: setSingleSelectedPath
+    setSelectedPath: setSingleSelectedPath,
+    operationOwner: rootCache?.operationOwner
   })
 
   const totalCount = visibleRowCount + (inlineInputIndex >= 0 ? 1 : 0)

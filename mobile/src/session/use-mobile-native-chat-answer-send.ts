@@ -3,16 +3,20 @@ import type { RpcClient } from '../transport/rpc-client'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
 import {
   buildAskAnswerKeys,
+  buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   type AskAnswerSelection,
   type AskPrompt
 } from './mobile-native-chat-ask'
-import { sendMobileNativeChatMessage } from './mobile-native-chat-send'
-import { shouldStepNativeChatAskAnswer } from '../../../src/shared/native-chat-agent-support'
+import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import {
+  resolveNativeChatTranscriptAgent,
+  shouldStepNativeChatAskAnswer
+} from '../../../src/shared/native-chat-agent-support'
 
-/** Sends an AskUserQuestion answer to the active chat pane. Claude's selector is
- *  answered by option-number keystrokes; other agents get pasted label text.
+/** Sends an ask-user answer to the active chat pane. Claude and Codex selectors
+ *  use their agent-specific keystrokes; other agents get pasted label text.
  *  Extracted from the session route to keep that file under its line cap and to
  *  own the pending-timer lifecycle in one place. */
 export type MobileNativeChatAnswerSend = {
@@ -32,8 +36,8 @@ function sanitizeAskFreeText(text: string): string {
 /**
  * Owns the ask-answer send sequence for the mobile native chat. Reads the live
  * pane/agent through refs (the route already keeps them current) so the returned
- * callbacks stay stable. Claude answers are delivered as `buildAskAnswerKeys`
- * keystroke groups written one selector-step apart over the EXISTING
+ * callbacks stay stable. Selector answers are delivered as keystroke groups
+ * written one step apart over the EXISTING
  * `terminal.send` passthrough (raw text, no enter) — same contract the
  * permission card already uses, so old runtimes replay them verbatim (no new
  * RPC; keystrokes are built client-side). The scheduled wait chain is cancelled
@@ -98,7 +102,8 @@ export function useMobileNativeChatAnswerSend(args: {
       // A new answer supersedes any still-pending keystroke writes.
       cancelPending()
       const generation = generationRef.current
-      const sendTerminal = (body: string, enter: boolean): Promise<boolean> => {
+      let sawUnknownOutcome = false
+      const sendTerminal = async (body: string, enter: boolean): Promise<boolean> => {
         const activeRoute = activeRouteRef.current
         if (
           !activeRoute.enabled ||
@@ -107,9 +112,9 @@ export function useMobileNativeChatAnswerSend(args: {
           activeRoute.streamIdentity !== streamIdentity ||
           handleRef.current !== handle
         ) {
-          return Promise.resolve(false)
+          return false
         }
-        return sendMobileNativeChatMessage({
+        const outcome = await sendMobileNativeChatMessageWithOutcome({
           client,
           terminal: handle,
           text: body,
@@ -118,6 +123,10 @@ export function useMobileNativeChatAnswerSend(args: {
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
             : {})
         })
+        if (outcome === 'unknown') {
+          sawUnknownOutcome = true
+        }
+        return outcome === 'accepted'
       }
       const wait = (ms: number): Promise<boolean> =>
         new Promise((resolve) => {
@@ -132,18 +141,26 @@ export function useMobileNativeChatAnswerSend(args: {
         })
       const fail = (): false => {
         if (generationRef.current === generation) {
-          onSendError('Answer not sent')
+          // Why: keystrokes that may have landed (ack lost / path cutover) must
+          // not read as a definite failure — a blind resend could double-step
+          // the selector.
+          onSendError(
+            sawUnknownOutcome
+              ? 'Answer unconfirmed — check chat before retrying'
+              : 'Answer not sent'
+          )
         }
         return false
       }
-      // Non-Claude question tools commit a pasted answer, so send the label text
-      // with one Enter. Claude's arrow-navigate selector ignores pasted labels
-      // (STA-1860): drive it by option-number keystrokes instead, one group per
-      // selector step so each renders before the next lands.
+      // Grok commits pasted labels; Claude and Codex need their selector-specific
+      // keystrokes paced so each step renders before the next lands.
       if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
         return (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
       }
-      const groups = buildAskAnswerKeys(prompt, selections)
+      const groups =
+        resolveNativeChatTranscriptAgent(agentRef.current) === 'codex'
+          ? buildCodexAskAnswerKeys(prompt, selections)
+          : buildAskAnswerKeys(prompt, selections)
       for (let index = 0; index < groups.length; index += 1) {
         if (generationRef.current !== generation) {
           return false

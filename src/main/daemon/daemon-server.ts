@@ -32,6 +32,10 @@ import {
   type HelloMessage,
   type DaemonRequest
 } from './types'
+import {
+  isAgentSessionExecutionClaim,
+  isAgentSessionSurfaceBinding
+} from '../../shared/agent-session-host-authority'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -53,6 +57,9 @@ export type DaemonServerOptions = {
   }
   ptySpawnHealthCheck?: () => Promise<void>
   preparePtySpawn?: () => Promise<void>
+  // Why: login-session death detection (#7936) probes on PTY-exit bursts and fresh app connections.
+  onPtySessionExit?: (sessionId: string) => void
+  onAuthenticatedClientPair?: () => void
   log?: DaemonFileLog
   spawnSubprocess: (opts: {
     sessionId: string
@@ -97,6 +104,7 @@ export class DaemonServer {
   private startedAtMs: number | null
   private protocolVersion: number
   private onIdleShutdown: () => void
+  private onAuthenticatedClientPair: () => void
   private ptySpawnHealthCheck: () => Promise<void>
   private preparePtySpawn: () => Promise<void>
   private log: DaemonFileLog
@@ -176,7 +184,11 @@ export class DaemonServer {
       now: () => Date.now()
     }
     this.token = randomUUID()
-    this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
+    this.onAuthenticatedClientPair = opts.onAuthenticatedClientPair ?? (() => {})
+    this.host = new TerminalHost({
+      spawnSubprocess: opts.spawnSubprocess,
+      ...(opts.onPtySessionExit ? { onSessionReaped: opts.onPtySessionExit } : {})
+    })
     this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
     this.preparePtySpawn = opts.preparePtySpawn ?? (() => Promise.resolve())
     this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() => ({
@@ -477,6 +489,8 @@ export class DaemonServer {
       }
       this.setupStreamSocket(socket, client)
       client.authenticatedPairEstablished = true
+      // Why: one-shot health probes authenticate only a control socket; they are not fresh app activity.
+      this.onAuthenticatedClientPair()
       // A complete app connection (unlike a probe) re-owns the endpoint and cancels pending retirement.
       this.initialAdoptionDeadlineMs = null
       this.retirementRequested = false
@@ -679,8 +693,16 @@ export class DaemonServer {
         }
         this.createOrAttachInFlight++
         const p = request.payload
+        let routedSessionId = p.sessionId
         let result: Awaited<ReturnType<TerminalHost['createOrAttach']>>
         try {
+          if (
+            p.agentSessionEnsure !== undefined &&
+            (!isAgentSessionExecutionClaim(p.agentSessionEnsure.claim) ||
+              !isAgentSessionSurfaceBinding(p.agentSessionEnsure.surface))
+          ) {
+            throw new Error('agent_session_identity_required')
+          }
           await this.preparePtySpawnUnlessCanceled(p.sessionId, clientId)
           result = await this.host.createOrAttach({
             sessionId: p.sessionId,
@@ -702,16 +724,20 @@ export class DaemonServer {
             ...(p.shellReadyTimeoutMs !== undefined
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
               : {}),
+            ...(p.agentSessionEnsure ? { agentSessionEnsure: p.agentSessionEnsure } : {}),
+            onSessionResolved: (sessionId) => {
+              routedSessionId = sessionId
+            },
             streamClient: {
               onData: (data, rawLength = data.length, transformed = false, seq) => {
                 // Scan BEFORE enqueue: the batcher may drop this chunk, but its facts must be captured regardless.
-                this.transientFactRelay.onSessionData(p.sessionId, data)
-                const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)
+                this.transientFactRelay.onSessionData(routedSessionId, data)
+                const lastInputAt = this.lastInputAtBySessionId.get(routedSessionId)
                 const isInteractiveOutput =
                   data.length <= DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS &&
                   lastInputAt !== undefined &&
                   performance.now() - lastInputAt <= DaemonServer.INTERACTIVE_OUTPUT_WINDOW_MS
-                this.streamDataBatcher.enqueue(clientId, p.sessionId, data, {
+                this.streamDataBatcher.enqueue(clientId, routedSessionId, data, {
                   flushImmediately: isInteractiveOutput,
                   flushMaxChars: DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS,
                   rawLength,
@@ -719,22 +745,22 @@ export class DaemonServer {
                   seq
                 })
               },
-              onExit: (code) => {
+              onExit: (code, incarnationId) => {
                 // Why: exit tears down renderer handlers, so it must ride the ordered queue behind final output.
-                this.log.log('session-exited', { sessionId: p.sessionId, code })
-                this.streamDataBatcher.enqueueControlEvent(clientId, p.sessionId, {
+                this.log.log('session-exited', { sessionId: routedSessionId, code })
+                this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
                   type: 'event',
                   event: 'exit',
-                  sessionId: p.sessionId,
-                  payload: { code }
+                  sessionId: routedSessionId,
+                  payload: { code, incarnationId }
                 })
                 this.streamDataBatcher.flush(clientId)
                 recordDaemonStreamBacklogEvent('sessionExit', {
-                  sessionIdSuffix: p.sessionId.slice(-10)
+                  sessionIdSuffix: routedSessionId.slice(-10)
                 })
-                this.transientFactRelay.onSessionExit(p.sessionId)
-                this.streamClientIdBySessionId.delete(p.sessionId)
-                this.lastInputAtBySessionId.delete(p.sessionId)
+                this.transientFactRelay.onSessionExit(routedSessionId)
+                this.streamClientIdBySessionId.delete(routedSessionId)
+                this.lastInputAtBySessionId.delete(routedSessionId)
                 this.reevaluateIdleShutdown()
               }
             }
@@ -743,18 +769,19 @@ export class DaemonServer {
           this.createOrAttachInFlight--
           this.reevaluateIdleShutdown()
         }
-        this.streamClientIdBySessionId.set(p.sessionId, clientId)
+        routedSessionId = result.agentSessionEnsure?.owner.ptyId ?? p.sessionId
+        this.streamClientIdBySessionId.set(routedSessionId, clientId)
         // Why an attach-time marker: background resync can precede this attach, so scan suppression must start at the new stream's head.
-        if (this.transientFactRelay.isBackgrounded(p.sessionId)) {
-          this.streamDataBatcher.enqueueControlEvent(clientId, p.sessionId, {
+        if (this.transientFactRelay.isBackgrounded(routedSessionId)) {
+          this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
             type: 'event',
             event: 'sessionBackgroundMarker',
-            sessionId: p.sessionId,
+            sessionId: routedSessionId,
             payload: { background: true }
           })
         }
         this.log.log(result.isNew ? 'session-created' : 'session-attached', {
-          sessionId: p.sessionId,
+          sessionId: routedSessionId,
           pid: result.pid
         })
         return {
@@ -762,9 +789,11 @@ export class DaemonServer {
           snapshot: result.snapshot,
           pid: result.pid,
           shellState: result.shellState,
+          incarnationId: result.incarnationId,
           ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
           wslDistro: result.wslDistro,
-          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {})
+          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
+          ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
         }
       }
 

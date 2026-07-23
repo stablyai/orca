@@ -4,10 +4,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 
 export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
   return {
-    title: translate(
-      'auto.components.settings.experimental.search.nativeChat.title',
-      'Native chat'
-    ),
+    title: translate('auto.components.settings.experimental.search.nativeChat.title', 'Chat UI'),
     description: translate(
       'auto.components.settings.experimental.search.nativeChat.description',
       'Preview the desktop chat surface for supported agent terminal sessions.'

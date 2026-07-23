@@ -32,7 +32,17 @@ describe('remote transport snapshot escape-tail threading (#7329)', () => {
     vi.clearAllMocks()
     subscriptionCallbacks = null
     subscriptionSendBinary.mockReset()
-    runtimeCall.mockResolvedValue({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+    runtimeCall.mockResolvedValue({
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'terminal-1',
+          tabId: 'tab-1',
+          leafId: 'pane:1',
+          worktreeId: 'wt-1'
+        }
+      }
+    })
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks

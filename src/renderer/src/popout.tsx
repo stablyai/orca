@@ -59,6 +59,9 @@ function PopoutSettingsSync(): null {
 
   useEffect(() => {
     let disposed = false
+    // Why: the preview terminal's copy/paste chords honor user keybinding
+    // overrides, which live in a separate file from settings.
+    void useAppStore.getState().fetchKeybindings()
     const setSettings = (next: GlobalSettings): void => {
       if (!disposed) {
         useAppStore.setState({ settings: next })

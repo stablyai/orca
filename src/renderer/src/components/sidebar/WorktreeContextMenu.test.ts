@@ -9,9 +9,11 @@ import {
   shouldContinueDeleteSiblingPositionRestore,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
+  hasWorktreeParentLink,
   isWorktreeParentPickerDisabled,
   selectMenuScopedMap
 } from './WorktreeContextMenu'
+import type { Worktree, WorktreeLineage } from '../../../../shared/types'
 
 describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
   // Why: the closed menu wrapper must stay inert to delete teardown's high-churn
@@ -139,6 +141,26 @@ describe('shouldContinueDeleteSiblingPositionRestore', () => {
 })
 
 describe('parent picker context menu affordance', () => {
+  it('offers unlink for valid inline-only legacy lineage after stable-update hydration', () => {
+    const parent = { id: 'repo::parent', instanceId: 'parent-instance' }
+    const lineage: WorktreeLineage = {
+      worktreeId: 'repo::child',
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parent.id,
+      parentWorktreeInstanceId: parent.instanceId,
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+      createdAt: 1
+    }
+    const child = {
+      id: lineage.worktreeId,
+      instanceId: lineage.worktreeInstanceId,
+      lineage
+    } as Worktree & { lineage: WorktreeLineage }
+
+    expect(hasWorktreeParentLink(child, {}, {})).toBe(true)
+  })
+
   it('uses set/change labels based on valid parent presence', () => {
     expect(getWorktreeParentPickerLabel(null)).toBe('Set Parent Worktree...')
     expect(getWorktreeParentPickerLabel('parent-1')).toBe('Change Parent Worktree...')

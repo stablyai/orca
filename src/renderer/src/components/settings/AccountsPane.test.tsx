@@ -54,10 +54,7 @@ describe('AccountsPane', () => {
   it('selects the WSL account location under auto when the global project runtime is WSL', () => {
     // Why: navigator.userAgent is a read-only prototype getter, so shadow it with
     // a configurable own property and remove that shadow afterward to restore it.
-    const originalOwnUserAgent = Object.getOwnPropertyDescriptor(
-      globalThis.navigator,
-      'userAgent'
-    )
+    const originalOwnUserAgent = Object.getOwnPropertyDescriptor(globalThis.navigator, 'userAgent')
     Object.defineProperty(globalThis.navigator, 'userAgent', {
       value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       configurable: true

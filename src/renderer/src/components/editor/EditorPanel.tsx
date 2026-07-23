@@ -60,7 +60,6 @@ function EditorPanelInner({
   const setMarkdownFrontmatterVisible = useAppStore((s) => s.setMarkdownFrontmatterVisible)
   const markdownTableOfContentsVisible = useAppStore((s) => s.markdownTableOfContentsVisible)
   const setMarkdownTableOfContentsVisible = useAppStore((s) => s.setMarkdownTableOfContentsVisible)
-  const closeFile = useAppStore((s) => s.closeFile)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
   const editorDraftSelector = useMemo(
     () => createEditorPanelDraftSelector(activeFile),
@@ -127,7 +126,7 @@ function EditorPanelInner({
     requestRenameForFile,
     closeRenameDialog,
     handleRenameConfirm
-  } = useUntitledFileRename({ openFiles, closeFile, openFile, clearUntitled })
+  } = useUntitledFileRename({ openFiles, clearUntitled })
 
   useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })

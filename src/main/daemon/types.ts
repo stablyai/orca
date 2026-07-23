@@ -12,10 +12,17 @@ export type {
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/types'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import type {
+  AgentSessionExecutionClaim,
+  AgentSessionOwnerBinding,
+  AgentSessionSurfaceBinding
+} from '../../shared/agent-session-host-authority'
 export type { TerminalModes } from './terminal-modes'
 import type { TerminalSnapshot } from './terminal-snapshot'
 export type { TerminalSnapshot } from './terminal-snapshot'
 export {
+  AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
@@ -72,6 +79,10 @@ export type CreateOrAttachRequest = {
     /** Recovered ANSI applied before the new subprocess can emit startup output. */
     historySeed?: string
     startupIngress?: PtyStartupIngressIntent
+    agentSessionEnsure?: {
+      claim: AgentSessionExecutionClaim
+      surface: AgentSessionSurfaceBinding
+    }
   }
 }
 
@@ -339,6 +350,7 @@ export type SystemResolverHealthResult = {
 
 export type SessionInfo = {
   sessionId: string
+  incarnationId?: string
   state: SessionState
   shellState: ShellReadyState
   isAlive: boolean
@@ -348,6 +360,7 @@ export type SessionInfo = {
   cols: number
   rows: number
   createdAt: number
+  agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
 // Why: SessionInfo + source protocol version, so the Manage Sessions UI can

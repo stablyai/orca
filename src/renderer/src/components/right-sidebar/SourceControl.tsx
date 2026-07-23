@@ -5769,7 +5769,6 @@ function SourceControlInner(): React.JSX.Element {
                 groupId={activeGroupId ?? activeWorktreeId}
                 showComposer={!showGenericEmptyState}
                 sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-                aiEnabled={sourceControlAiActionsVisible && resolvedCommitMessageAi?.ok === true}
                 aiAgentConfigured={resolvedCommitMessageAi?.ok === true}
                 isGenerating={isGenerating}
                 generateError={generateError}
@@ -6382,7 +6381,6 @@ type CommitAreaProps = {
   isCreatePrIntentInFlight?: boolean
   showComposer?: boolean
   sourceControlAiActionsVisible: boolean
-  aiEnabled: boolean
   aiAgentConfigured: boolean
   isGenerating: boolean
   generateError: string | null
@@ -6429,7 +6427,6 @@ export function CommitArea({
   isCreatePrIntentInFlight = false,
   showComposer = true,
   sourceControlAiActionsVisible,
-  aiEnabled,
   aiAgentConfigured,
   isGenerating,
   generateError,
@@ -6506,29 +6503,23 @@ export function CommitArea({
     .filter(Boolean)
     .join(' ')
 
-  // Why: only render Generate when it has a runnable path; else keep the composer focused on Commit.
+  // Why: config errors are surfaced by the generation dialog, so entry-point visibility only follows the feature toggle.
   // Why: Create PR intent owns generation, so a second composer spinner would stack on the primary spinner.
-  const showGenerate =
-    showComposer && aiEnabled && !isCreatePrIntentInFlight && (aiAgentConfigured || isGenerating)
-  let generateDisabledReason: string | undefined
+  const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
+  let generateTooltip: string | undefined
   if (isGenerating) {
-    generateDisabledReason = 'Generating commit message…'
+    generateTooltip = 'Generating commit message…'
   } else if (isCommitting) {
-    generateDisabledReason = 'Commit in progress…'
-  } else if (!aiAgentConfigured) {
-    generateDisabledReason = 'Pick an agent in Settings -> Git -> Source Control AI.'
+    generateTooltip = 'Commit in progress…'
   } else if (stagedCount === 0) {
-    generateDisabledReason = 'Stage at least one file to generate a message.'
+    generateTooltip = 'Stage at least one file to generate a message.'
   } else if (hasMessage) {
-    generateDisabledReason = 'Clear the message to regenerate.'
+    generateTooltip = 'Clear the message to regenerate.'
+  } else if (!aiAgentConfigured) {
+    generateTooltip = 'Pick an agent in Settings -> Git -> Source Control AI.'
   }
   const isGenerateDisabled =
-    !aiAgentConfigured ||
-    isGenerating ||
-    isCommitting ||
-    stagedCount === 0 ||
-    hasMessage ||
-    hasUnresolvedConflicts
+    isGenerating || isCommitting || stagedCount === 0 || hasMessage || hasUnresolvedConflicts
   const moreCommitAndRemoteActionsLabel = translate(
     'auto.components.right.sidebar.SourceControl.cc199ccc5f',
     'More commit and remote actions'
@@ -6646,7 +6637,7 @@ export function CommitArea({
                       onGenerate()
                     }}
                     title={
-                      generateDisabledReason ??
+                      generateTooltip ??
                       translate(
                         'auto.components.right.sidebar.SourceControl.b16b8f0e4b',
                         'ai commit msg'
@@ -6666,7 +6657,7 @@ export function CommitArea({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="left" sideOffset={6}>
-                  {generateDisabledReason ??
+                  {generateTooltip ??
                     translate(
                       'auto.components.right.sidebar.SourceControl.b16b8f0e4b',
                       'ai commit msg'

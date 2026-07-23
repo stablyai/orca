@@ -68,6 +68,10 @@ jobs:
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
+      # Surfaces workflow_dispatch inputs as a table in the job summary
+      # (kind, ref, dry_run, version_suffix) so runs are easy to audit.
+      - uses: m-s-abeer/update-gha-summary-with-workflow-inputs@v1
+
       - name: Checkout ref
         uses: actions/checkout@v6
         with:
