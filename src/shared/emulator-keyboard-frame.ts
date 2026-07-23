@@ -16,7 +16,13 @@ type ServeSimKeyboardModifiers = {
 
 export const SERVE_SIM_KEYBOARD_MESSAGE_TAG = 0x06
 
+// Why: pasteboard insertion sends one Cmd+V regardless of text length (unlike
+// per-char HID frames), so the cap only bounds RPC payloads and device
+// pasteboard writes. 16x the HID paste cap comfortably covers pasted documents.
+export const SERVE_SIM_TEXT_INSERT_MAX_BYTES = 64 * 1024
+
 const SHIFT_USAGE = 225
+const GUI_USAGE = 227
 const ASCII_KEY_USAGES: Record<string, KeyUsage> = buildAsciiKeyUsages()
 
 const NAMED_KEY_USAGES: Record<string, number> = {
@@ -118,6 +124,19 @@ export function buildServeSimKeyboardFramesForText(text: string): ServeSimKeyboa
     frames.push(...charFrames)
   }
   return frames
+}
+
+// Cmd+V for pasting device-pasteboard text; unlike letter usages, the paste
+// shortcut resolves through iOS's Latin layer, so it works on any hardware
+// keyboard layout the simulator has active.
+export function buildServeSimPasteChordFrames(): ServeSimKeyboardFrame[] {
+  const vUsage = ASCII_KEY_USAGES['v'].usage
+  return [
+    { type: 'down', usage: GUI_USAGE },
+    { type: 'down', usage: vUsage },
+    { type: 'up', usage: vUsage },
+    { type: 'up', usage: GUI_USAGE }
+  ]
 }
 
 export function encodeServeSimKeyboardFrame(key: ServeSimKeyboardFrame): Uint8Array<ArrayBuffer> {

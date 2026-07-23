@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildServeSimKeyboardFramesForKey,
   buildServeSimKeyboardFramesForText,
+  buildServeSimPasteChordFrames,
   encodeServeSimKeyboardFrame,
   SERVE_SIM_KEYBOARD_MESSAGE_TAG
 } from './emulator-keyboard-frame'
@@ -41,6 +42,15 @@ describe('serve-sim keyboard frames', () => {
   it('rejects unsupported non-US-keyboard text', () => {
     expect(buildServeSimKeyboardFramesForText('hello')).not.toBeNull()
     expect(buildServeSimKeyboardFramesForText('hello🙂')).toBeNull()
+  })
+
+  it('builds a Cmd+V paste chord wrapped in GUI modifier frames', () => {
+    expect(buildServeSimPasteChordFrames()).toEqual([
+      { type: 'down', usage: 227 },
+      { type: 'down', usage: 25 },
+      { type: 'up', usage: 25 },
+      { type: 'up', usage: 227 }
+    ])
   })
 
   it('encodes serve-sim keyboard messages with the binary keyboard tag', () => {
