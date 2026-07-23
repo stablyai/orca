@@ -836,12 +836,6 @@ const api = {
     },
     writeAccepted: (id: string, data: string): Promise<boolean> =>
       ipcRenderer.invoke('pty:writeAccepted', { id, data }),
-    onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
-        callback(payload)
-      ipcRenderer.on('pty:writeUnavailable', handler)
-      return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
-    },
 
     resize: (id: string, cols: number, rows: number): void => {
       ipcRenderer.send('pty:resize', { id, cols, rows })

@@ -14,7 +14,6 @@ import type { SubprocessHandle } from './session'
 import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
-import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
@@ -2225,50 +2224,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('respawn on daemon death', () => {
-    it('respawns after rejected input and keeps writes rejected until createOrAttach rebinds', async () => {
-      let respawnServer: DaemonServer | undefined
-      let respawnSubprocess: ReturnType<typeof createMockSubprocess> | undefined
-      const respawnFn = vi.fn(async () => {
-        respawnServer = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => {
-            respawnSubprocess = createMockSubprocess()
-            return respawnSubprocess
-          }
-        })
-        await respawnServer.start()
-      })
-      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
-      const { id } = await respawnAdapter.spawn({ cols: 80, rows: 24 })
-      const internals = respawnAdapter as unknown as {
-        sessionsAwaitingDaemonRecovery: Set<string>
-      }
-
-      await server.shutdown()
-      await waitFor(() => internals.sessionsAwaitingDaemonRecovery.has(id))
-
-      expect(() => respawnAdapter.write(id, 'first')).toThrow(PtyWriteUnavailableError)
-      expect(() => respawnAdapter.write(id, 'second')).toThrow(PtyWriteUnavailableError)
-      await waitFor(() => respawnFn.mock.calls.length === 1)
-
-      expect(respawnSubprocess).toBeUndefined()
-      expect(() => respawnAdapter.write(id, 'still-stale')).toThrow(PtyWriteUnavailableError)
-
-      await respawnAdapter.spawn({ sessionId: id, cols: 80, rows: 24 })
-      expect(() => respawnAdapter.write(id, 'rebound')).not.toThrow()
-      await waitFor(
-        () =>
-          respawnSubprocess !== undefined &&
-          vi.mocked(respawnSubprocess.write).mock.calls.length === 1
-      )
-      expect(respawnSubprocess?.write).toHaveBeenCalledWith('rebound')
-      expect(respawnFn).toHaveBeenCalledOnce()
-
-      respawnAdapter.dispose()
-      await respawnServer?.shutdown()
-    })
-
     it('respawns the daemon and retries when the socket disappears', async () => {
       let respawnServer: DaemonServer | undefined
       const respawnFn = vi.fn(async () => {

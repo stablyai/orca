@@ -11,7 +11,6 @@ import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { TuiAgent } from '../../shared/types'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
-import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
@@ -543,11 +542,11 @@ describe('registerPtyHandlers', () => {
     return writeCall[1] as (event: unknown, args: { id: string; data: string }) => void
   }
 
-  function installDaemonTestProvider(overrides: Record<string, unknown> = {}) {
+  function installDaemonTestProvider() {
     const spawn = vi.fn(async (options: { sessionId?: string }) => ({
       id: options.sessionId ?? 'daemon-pty'
     }))
-    const provider = {
+    setLocalPtyProvider({
       spawn,
       write: vi.fn(),
       resize: vi.fn(),
@@ -569,10 +568,8 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       attach: vi.fn(),
       getDefaultShell: vi.fn(),
-      getProfiles: vi.fn(),
-      ...overrides
-    }
-    setLocalPtyProvider(provider as never)
+      getProfiles: vi.fn()
+    } as never)
     return spawn
   }
 
@@ -12264,26 +12261,6 @@ describe('registerPtyHandlers', () => {
       })
     ).toBe(false)
     expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
-  })
-
-  it('asks the renderer to remount when the provider rejects a stale daemon write', async () => {
-    const write = vi.fn(() => {
-      throw new PtyWriteUnavailableError('daemon generation lost')
-    })
-    installDaemonTestProvider({ write })
-    registerPtyHandlers(mainWindow as never)
-    const result = (await handlers.get('pty:spawn')!(null, {
-      cols: 80,
-      rows: 24
-    })) as { id: string }
-    mainWindow.webContents.send.mockClear()
-
-    getPtyWriteListener()(mainWindowIpcEvent, { id: result.id, data: 'x' })
-
-    expect(write).toHaveBeenCalledWith(result.id, 'x')
-    expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:writeUnavailable', {
-      id: result.id
-    })
   })
 
   it('rejects malformed and cross-window pty write IPC before provider writes', async () => {

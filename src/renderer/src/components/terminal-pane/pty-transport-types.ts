@@ -76,7 +76,6 @@ type PtyCallbacks = {
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void
-  onWriteUnavailable?: () => void
   onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
 }
 

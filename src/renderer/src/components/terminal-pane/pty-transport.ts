@@ -18,7 +18,6 @@ import {
   ptyExitHandlers,
   ptyTeardownHandlers,
   ptyShutdownLifecycleHandlers,
-  ptyWriteUnavailableHandlers,
   ensurePtyDispatcher,
   getEagerPtyBufferHandle,
   isPtyDataHandlerShutdownPending
@@ -526,11 +525,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   // Why: a new pane can attach to the same ptyId before the old instance's detach() runs; track owned handlers so unregister never deletes the live one.
   const ownedDataAndReplayHandlers = new Map<
     string,
-    {
-      data: (data: string, meta?: PtyDataMeta) => void
-      replay: (data: string) => void
-      writeUnavailable: () => void
-    }
+    { data: (data: string, meta?: PtyDataMeta) => void; replay: (data: string) => void }
   >()
   const ownedExitHandlers = new Map<string, (code: number) => void>()
 
@@ -557,9 +552,6 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
       if (ptyReplayHandlers.get(id) === owned.replay) {
         ptyReplayHandlers.delete(id)
-      }
-      if (ptyWriteUnavailableHandlers.get(id) === owned.writeUnavailable) {
-        ptyWriteUnavailableHandlers.delete(id)
       }
     }
     ownedDataAndReplayHandlers.delete(id)
@@ -592,13 +584,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       )
     }
     ptyDataHandlers.set(id, dataHandler)
-    const writeUnavailable = (): void => storedCallbacks.onWriteUnavailable?.()
-    ptyWriteUnavailableHandlers.set(id, writeUnavailable)
-    ownedDataAndReplayHandlers.set(id, {
-      data: dataHandler,
-      replay: replayHandler,
-      writeUnavailable
-    })
+    ownedDataAndReplayHandlers.set(id, { data: dataHandler, replay: replayHandler })
     if (!isPtyDataHandlerShutdownPending(id)) {
       drainPreHandlerPtyData(id, dataHandler)
       drainRolledBackPtyShutdownData(id)
