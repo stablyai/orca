@@ -3,6 +3,7 @@ import type { KnownRuntimeEnvironment } from '../shared/runtime-environments'
 import { toRuntimeExecutionHostId } from '../shared/execution-host'
 import { selfHealRuntimeHostWorkspaceSessions } from './runtime-environment-host-session-self-heal'
 
+/** Build a minimal saved runtime environment record for use in these tests. */
 function environment(id: string): KnownRuntimeEnvironment {
   return {
     id,
@@ -28,6 +29,7 @@ function environment(id: string): KnownRuntimeEnvironment {
 const PRESENT = '11111111-1111-4111-8111-111111111111'
 const ABSENT = '83a64365-660b-4723-890e-9e557eb45e40'
 
+/** Fake host-session store whose prune spy reports the given removed host ids. */
 function makeStore(removedHostIds: readonly string[] = []) {
   const pruneOrphanedRuntimeHostWorkspaceSessions = vi.fn(
     (_knownEnvironmentIds: ReadonlySet<string>): readonly string[] => removedHostIds
