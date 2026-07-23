@@ -11,7 +11,11 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { prepareQuickOpenFiles, rankQuickOpenFiles } from '@/components/quick-open-search'
+import {
+  parseQuickOpenQuery,
+  prepareQuickOpenFiles,
+  rankQuickOpenFiles
+} from '@/components/quick-open-search'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
@@ -33,10 +37,12 @@ export default function QuickOpen(): React.JSX.Element | null {
   const closeModal = useAppStore((s) => s.closeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const openFile = useAppStore((s) => s.openFile)
+  const openFileAtLocation = useAppStore((s) => s.openFileAtLocation)
   const activeWorktree = useActiveWorktree()
 
   const [query, setQuery] = useState('')
-  const deferredQuery = useDeferredValue(query)
+  const parsedQuery = useMemo(() => parseQuickOpenQuery(query), [query])
+  const deferredFileQuery = useDeferredValue(parsedQuery.fileQuery)
   const { files, loading, loadError } = useRuntimeFileListForWorktree({
     enabled: visible,
     worktreeId: activeWorktreeId
@@ -62,8 +68,8 @@ export default function QuickOpen(): React.JSX.Element | null {
 
   const indexedFiles = useMemo(() => prepareQuickOpenFiles(files), [files])
   const filtered = useMemo(
-    () => rankQuickOpenFiles(deferredQuery, indexedFiles),
-    [deferredQuery, indexedFiles]
+    () => rankQuickOpenFiles(deferredFileQuery, indexedFiles),
+    [deferredFileQuery, indexedFiles]
   )
 
   const handleSelect = useCallback(
@@ -75,15 +81,28 @@ export default function QuickOpen(): React.JSX.Element | null {
       // the surface that was active before QuickOpen opened.
       skipReturnFocus()
       closeModal()
-      openFile({
+      const file = {
         filePath: joinPath(worktreePath, relativePath),
         relativePath,
         worktreeId: activeWorktreeId,
         language: detectLanguage(relativePath),
-        mode: 'edit'
-      })
+        mode: 'edit' as const
+      }
+      if (parsedQuery.location) {
+        openFileAtLocation(file, parsedQuery.location)
+      } else {
+        openFile(file)
+      }
     },
-    [activeWorktreeId, worktreePath, openFile, closeModal, skipReturnFocus]
+    [
+      activeWorktreeId,
+      worktreePath,
+      openFile,
+      openFileAtLocation,
+      parsedQuery.location,
+      closeModal,
+      skipReturnFocus
+    ]
   )
 
   const handleOpenChange = useCallback(
@@ -178,7 +197,7 @@ export default function QuickOpen(): React.JSX.Element | null {
       </div>
       {/* Accessibility: announce result count changes */}
       <div aria-live="polite" className="sr-only">
-        {deferredQuery.trim()
+        {deferredFileQuery.trim()
           ? translate('auto.components.QuickOpen.b227d88520', '{{value0}} files found', {
               value0: filtered.length
             })

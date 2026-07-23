@@ -3,12 +3,84 @@ import {
   QUICK_OPEN_QUERY_MAX_BYTES,
   QUICK_OPEN_RESULT_LIMIT,
   isQuickOpenQueryTooLarge,
+  parseQuickOpenQuery,
   prepareQuickOpenFiles,
   rankQuickOpenFiles,
   type QuickOpenIndexedFile
 } from './quick-open-search'
 
 describe('quick-open-search', () => {
+  it('ranks a line-targeted query using only the file path', () => {
+    const parsed = parseQuickOpenQuery('server/sendChatOperations.js:2304')
+    const files = prepareQuickOpenFiles([
+      'server/sendChatOperations.js',
+      'server/sendOperations.js',
+      'archive/sendChatOperations.js'
+    ])
+
+    expect(parsed).toEqual({
+      fileQuery: 'server/sendChatOperations.js',
+      location: { line: 2304 }
+    })
+    expect(rankQuickOpenFiles(parsed.fileQuery, files).map((item) => item.path)).toEqual([
+      'server/sendChatOperations.js'
+    ])
+  })
+
+  it('retains one-based line and column targets', () => {
+    expect(parseQuickOpenQuery('src/components/Button.tsx:12:7')).toEqual({
+      fileQuery: 'src/components/Button.tsx',
+      location: { line: 12, column: 7 }
+    })
+  })
+
+  it('leaves a query without a numeric target unchanged', () => {
+    expect(parseQuickOpenQuery('src/components/Button.tsx')).toEqual({
+      fileQuery: 'src/components/Button.tsx',
+      location: null
+    })
+  })
+
+  it.each([
+    'file.ts:abc',
+    'file.ts:0',
+    'file.ts:12:0',
+    'file.ts:',
+    'file.ts:12:',
+    'file.ts:1e309',
+    'file.ts:9007199254740992',
+    'file.ts:12:9007199254740992',
+    `file.ts:${'9'.repeat(400)}`,
+    ':12'
+  ])('keeps invalid location input in the file query: %s', (query) => {
+    expect(parseQuickOpenQuery(query)).toEqual({ fileQuery: query, location: null })
+  })
+
+  it('preserves Windows drive syntax while parsing a trailing location', () => {
+    expect(parseQuickOpenQuery('C:\\repo\\src\\Button.tsx:12:7')).toEqual({
+      fileQuery: 'C:\\repo\\src\\Button.tsx',
+      location: { line: 12, column: 7 }
+    })
+    expect(parseQuickOpenQuery('C:12')).toEqual({
+      fileQuery: 'C:12',
+      location: null
+    })
+    expect(parseQuickOpenQuery('C:\\repo\\src\\Button.tsx')).toEqual({
+      fileQuery: 'C:\\repo\\src\\Button.tsx',
+      location: null
+    })
+  })
+
+  it('keeps result ordering and limits based on the stripped path query', () => {
+    const files = prepareQuickOpenFiles(
+      Array.from({ length: 80 }, (_, index) => `src/match-${index}.ts`)
+    )
+    const parsed = parseQuickOpenQuery('match:42')
+
+    expect(rankQuickOpenFiles(parsed.fileQuery, files)).toEqual(rankQuickOpenFiles('match', files))
+    expect(rankQuickOpenFiles(parsed.fileQuery, files)).toHaveLength(QUICK_OPEN_RESULT_LIMIT)
+  })
+
   it('returns the first 50 paths with score 0 for an empty query', () => {
     const files = Array.from({ length: 75 }, (_, index) => `src/file-${index}.ts`)
 
@@ -126,7 +198,7 @@ describe('quick-open-search', () => {
   })
 
   it('rejects oversized pasted queries before reading indexed file candidates', () => {
-    const oversizedQuery = 'secret-quick-open'.repeat(QUICK_OPEN_QUERY_MAX_BYTES)
+    const oversizedQuery = `${'secret-quick-open'.repeat(QUICK_OPEN_QUERY_MAX_BYTES)}:12`
     const file = {
       path: 'src/secret.ts',
       inputIndex: 0,
@@ -139,7 +211,11 @@ describe('quick-open-search', () => {
     } as QuickOpenIndexedFile
 
     expect(isQuickOpenQueryTooLarge(oversizedQuery)).toBe(true)
-    expect(rankQuickOpenFiles(oversizedQuery, [file])).toEqual([])
+    expect(parseQuickOpenQuery(oversizedQuery)).toEqual({
+      fileQuery: oversizedQuery,
+      location: null
+    })
+    expect(rankQuickOpenFiles(parseQuickOpenQuery(oversizedQuery).fileQuery, [file])).toEqual([])
   })
 
   it('rejects oversized whitespace before trimming quick-open queries', () => {
@@ -162,5 +238,17 @@ describe('quick-open-search', () => {
       'src/components/Button.tsx',
       'src/components/ButtonGroup.tsx'
     ])
+  })
+
+  it('matches a Windows-style path after removing its location target', () => {
+    const files = prepareQuickOpenFiles([
+      'src/components/Button.tsx',
+      'src/components/ButtonGroup.tsx',
+      'src/routes/About.tsx'
+    ])
+    const parsed = parseQuickOpenQuery('src\\components\\Button.tsx:12:7')
+
+    expect(rankQuickOpenFiles(parsed.fileQuery, files)[0]?.path).toBe('src/components/Button.tsx')
+    expect(parsed.location).toEqual({ line: 12, column: 7 })
   })
 })
