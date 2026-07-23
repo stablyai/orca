@@ -706,7 +706,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   Execute: ['command'],
   MultiEdit: ['file_path', 'filePath', 'path'],
   NotebookEdit: ['file_path', 'filePath', 'path'],
-  Bash: ['command'],
+  Bash: ['command', 'cmd'],
   Glob: ['pattern'],
   Grep: ['pattern'],
   WebFetch: ['url'],
@@ -731,13 +731,14 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   search_replace: ['file_path', 'path', 'filePath'],
   write_to_file: ['TargetFile', 'path', 'file_path'],
   execute_code: ['code', 'command', 'cmd'],
-  apply_patch: ['path', 'file_path'],
+  apply_patch: ['command', 'path', 'file_path'],
+  spawn_agent: ['prompt', 'description', 'agent_type'],
   view_image: ['path', 'file_path'],
   AskUser: ['question', 'prompt', 'message'],
   ask_user: ['question', 'prompt', 'message'],
   AskUserQuestion: ['questions', 'question', 'prompt', 'message'],
   ask_user_question: ['questions', 'question', 'prompt', 'message'],
-  bash: ['command'],
+  bash: ['command', 'cmd'],
   powershell: ['command'],
   create: ['path', 'file_path'],
   read: ['path', 'file_path'],
@@ -1632,6 +1633,7 @@ function extractCodexToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
+  const update: ToolSnapshot = {}
   if (
     eventName === 'PreToolUse' ||
     eventName === 'PermissionRequest' ||
@@ -1643,22 +1645,32 @@ function extractCodexToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
-    return toolUpdate(
-      {
-        toolName,
-        toolInput,
-        interactivePrompt: deriveInteractivePrompt(toolName, rawInput, eventName)
-      },
-      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
+    Object.assign(
+      update,
+      toolUpdate(
+        {
+          toolName,
+          toolInput,
+          interactivePrompt: deriveInteractivePrompt(toolName, rawInput, eventName)
+        },
+        { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
+      )
     )
   }
-  if (eventName === 'Stop') {
-    const message = readString(hookPayload, 'last_assistant_message')
-    if (message) {
-      return { lastAssistantMessage: message }
+  if (eventName === 'PostToolUse') {
+    // Why: Codex posts the tool result on PostToolUse; surface it as the status row summary.
+    const responseText = extractToolResponseText(hookPayload.tool_response)
+    if (responseText) {
+      update.lastAssistantMessage = responseText
     }
   }
-  return {}
+  if (eventName === 'Stop' || eventName === 'SubagentStop') {
+    const message = readString(hookPayload, 'last_assistant_message')
+    if (message) {
+      update.lastAssistantMessage = message
+    }
+  }
+  return update
 }
 
 function extractGeminiToolFields(
@@ -3581,23 +3593,38 @@ function normalizeCodexSubagentLifecycleEvent(
     return null
   }
   const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  const agentType = readString(hookPayload, 'agent_type')
   if (eventName === 'SubagentStart') {
     upsertCodexSubagent(
       roster,
       agentId,
       {
-        agentType: readString(hookPayload, 'agent_type'),
+        agentType,
         model: readString(hookPayload, 'model'),
         state: 'working'
       },
       Date.now()
     )
+    // Why: child start has no tool_name; show the agent type in the status tool row.
+    if (agentType) {
+      resolveToolState(
+        state,
+        paneKey,
+        { toolName: agentType, hasToolUpdate: true },
+        {
+          resetOnNewTurn: false
+        }
+      )
+    }
   } else {
     finishCodexSubagent(roster, agentId)
+    const message = readString(hookPayload, 'last_assistant_message')
+    if (message) {
+      resolveToolState(state, paneKey, { lastAssistantMessage: message }, { resetOnNewTurn: false })
+    }
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }
-
 
 function resolveHookProviderSession(
   state: HookListenerState,
