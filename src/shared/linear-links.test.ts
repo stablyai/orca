@@ -45,11 +45,16 @@ describe('linear links', () => {
 
   it('parses bare Linear issue identifiers', () => {
     expect(parseLinearIssueInput('eng-123')).toEqual({ identifier: 'ENG-123' })
+    expect(parseLinearIssueInput('2eng-123')).toEqual({ identifier: '2ENG-123' })
   })
 
   it('parses Linear issue URLs with organization URL keys', () => {
     expect(parseLinearIssueInput('https://linear.app/acme/issue/eng-123/fix-auth')).toEqual({
       identifier: 'ENG-123',
+      organizationUrlKey: 'acme'
+    })
+    expect(parseLinearIssueInput('https://linear.app/acme/issue/2eng-123/fix-auth')).toEqual({
+      identifier: '2ENG-123',
       organizationUrlKey: 'acme'
     })
     expect(parseLinearIssueInput('https://linear.app/stably/issue/STA-335/test-issue')).toEqual({
