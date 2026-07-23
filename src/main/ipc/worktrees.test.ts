@@ -267,6 +267,7 @@ const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMO
 import {
   __getDetectedWorktreeScanCacheStatsForTests,
   __resetDetectedWorktreeScanCacheForTests,
+  DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
   registerWorktreeHandlers
 } from './worktrees'
 
@@ -2707,7 +2708,7 @@ describe('registerWorktreeHandlers', () => {
         ])
 
       await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
-      await vi.advanceTimersByTimeAsync(5_001)
+      await vi.advanceTimersByTimeAsync(DETECTED_WORKTREE_SCAN_CACHE_TTL_MS + 1)
       const second = (await handlers['worktrees:listDetected'](null, {
         repoId: 'repo-1'
       })) as { worktrees: Worktree[] }
