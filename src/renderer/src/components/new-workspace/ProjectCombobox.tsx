@@ -199,7 +199,7 @@ export default function ProjectCombobox({
                 key={option.id}
                 value={option.id}
                 onSelect={() => handleSelect(option.id)}
-                className="items-center gap-2 px-3 py-2"
+                className="items-center gap-2 px-3 py-1.5"
               >
                 <Check
                   className={cn(

@@ -287,9 +287,10 @@ function openRunTargetPicker(container: HTMLElement): void {
 }
 
 function findRunTargetItem(label: string): HTMLElement | undefined {
-  return [...document.body.querySelectorAll<HTMLElement>('[cmdk-item]')].find((item) =>
-    item.textContent?.includes(label)
-  )
+  // Why: "Add host" is a pinned footer button (mirrors the Project combobox), not a cmdk row.
+  return [
+    ...document.body.querySelectorAll<HTMLElement>('[cmdk-item], [data-run-target-add-host]')
+  ].find((item) => item.textContent?.includes(label))
 }
 
 let current: { container: HTMLDivElement; root: Root } | null = null
