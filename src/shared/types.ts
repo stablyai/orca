@@ -3000,7 +3000,11 @@ export type GhosttyImportPreview = {
 // Subset of onboarding Ghostty DiscoveryState statuses that emit telemetry; UI-only 'idle'/'detecting' don't.
 export type DiscoveryStatusEmitted = 'found' | 'absent' | 'imported'
 
-export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+export type NotificationEventSource =
+  | 'agent-task-complete'
+  | 'terminal-bell'
+  | 'orchestration-attention'
+  | 'test'
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
@@ -3014,6 +3018,9 @@ export type NotificationDispatchRequest = {
   worktreeLabel?: string
   hasMultipleActiveRepos?: boolean
   terminalTitle?: string
+  gateId?: string
+  taskId?: string
+  question?: string
   isActiveWorktree?: boolean
   agentType?: AgentType
   agentState?: AgentStatusState

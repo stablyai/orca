@@ -1557,6 +1557,11 @@ type RuntimeNotifier = {
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
+  decisionGatesChanged?(event: {
+    gateId?: string
+    question?: string
+    resolvedGateId?: string
+  }): void
   activateWorktree(
     repoId: string,
     worktreeId: string,
@@ -2312,7 +2317,7 @@ type ResolvedWorktreeInFlight = {
 // events after it — idempotent, no duplicate local pushes.
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
-  source: 'agent-task-complete' | 'terminal-bell' | 'test'
+  source: 'agent-task-complete' | 'terminal-bell' | 'orchestration-attention' | 'test'
   title: string
   body: string
   worktreeId?: string
@@ -3370,12 +3375,25 @@ export class OrcaRuntimeService {
       const { app } = require('electron')
       const dbPath = join(app.getPath('userData'), 'orchestration.db')
       this._orchestrationDb = new OrchestrationDb(dbPath)
+      this._orchestrationDb.restorePendingGateTaskStatuses()
     }
     return this._orchestrationDb
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
     this._orchestrationDb = db
+    db.restorePendingGateTaskStatuses()
+  }
+
+  notifyDecisionGatesChanged(
+    event: {
+      gateId?: string
+      question?: string
+      resolvedGateId?: string
+    } = {}
+  ): void {
+    this.notifier?.decisionGatesChanged?.(event)
+    this.emitClientEvent({ type: 'decisionGatesChanged', ...event })
   }
 
   setAutomationService(service: AutomationService): void {

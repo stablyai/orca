@@ -3056,6 +3056,9 @@ export type PreloadApi = {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeSyncWindowGraphResult>
     getStatus: () => Promise<RuntimeStatus>
     call: (args: { method: string; params?: unknown }) => Promise<RuntimeRpcResponse<unknown>>
+    onDecisionGatesChanged: (
+      callback: (event: { gateId?: string; question?: string; resolvedGateId?: string }) => void
+    ) => () => void
     getTerminalFitOverrides: () => Promise<
       { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
     >

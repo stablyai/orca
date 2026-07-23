@@ -21,6 +21,22 @@ describe('notification IPC admission', () => {
     expect(request).not.toHaveProperty('unknownPayload')
   })
 
+  it('admits bounded orchestration attention fields', () => {
+    expect(
+      normalizeNotificationDispatchRequest({
+        source: 'orchestration-attention',
+        gateId: 'gate_1',
+        taskId: 'task_1',
+        question: 'Proceed?'
+      })
+    ).toEqual({
+      source: 'orchestration-attention',
+      gateId: 'gate_1',
+      taskId: 'task_1',
+      question: 'Proceed?'
+    })
+  })
+
   it('rejects non-boolean control fields', () => {
     for (const field of [
       'requireDisplayConfirmation',

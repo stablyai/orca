@@ -55,6 +55,9 @@ function handleRuntimeClientEventResponse(
     for (const sshState of message.snapshot?.sshStates ?? []) {
       onEvent({ type: 'sshStateChanged', ...sshState })
     }
+    if (message.snapshot?.pendingDecisionGates !== undefined) {
+      onEvent({ type: 'decisionGatesChanged' })
+    }
     return
   }
   if (message.type === 'end') {
@@ -71,6 +74,7 @@ function isRuntimeClientEvent(
   return (
     message.type === 'reposChanged' ||
     message.type === 'worktreesChanged' ||
+    message.type === 'decisionGatesChanged' ||
     message.type === 'sshStateChanged' ||
     message.type === 'linearLinkedIssueUpdated' ||
     message.type === 'activateWorktree' ||

@@ -3988,6 +3988,16 @@ const api = {
     getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
       ipcRenderer.invoke('runtime:call', args),
+    onDecisionGatesChanged: (
+      callback: (event: { gateId?: string; question?: string; resolvedGateId?: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { gateId?: string; question?: string; resolvedGateId?: string }
+      ): void => callback(payload)
+      ipcRenderer.on('orchestration:decisionGatesChanged', listener)
+      return () => ipcRenderer.removeListener('orchestration:decisionGatesChanged', listener)
+    },
     getTerminalFitOverrides: (): Promise<
       { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
     > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),

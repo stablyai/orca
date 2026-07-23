@@ -1545,6 +1545,7 @@ describe('orchestration RPC methods', () => {
     it('creates a decision gate and blocks the task', async () => {
       setup()
       const task = db.createTask({ spec: 'needs approval' })
+      const changed = vi.spyOn(runtime, 'notifyDecisionGatesChanged')
 
       const result = (await call('orchestration.gateCreate', {
         task: task.id,
@@ -1555,6 +1556,10 @@ describe('orchestration RPC methods', () => {
       expect(result.gate.id).toMatch(/^gate_/)
       expect(result.gate.task_id).toBe(task.id)
       expect(result.gate.status).toBe('pending')
+      expect(changed).toHaveBeenCalledWith({
+        gateId: result.gate.id,
+        question: 'Proceed with migration?'
+      })
 
       const updated = db.getTask(task.id)
       expect(updated?.status).toBe('blocked')
@@ -1590,6 +1595,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'needs approval' })
       const gate = db.createGate({ taskId: task.id, question: 'Proceed?' })
+      const changed = vi.spyOn(runtime, 'notifyDecisionGatesChanged')
 
       const result = (await call('orchestration.gateResolve', {
         id: gate.id,
@@ -1598,9 +1604,41 @@ describe('orchestration RPC methods', () => {
 
       expect(result.gate.status).toBe('resolved')
       expect(result.gate.resolution).toBe('yes')
+      expect(changed).toHaveBeenCalledWith({ resolvedGateId: gate.id })
 
       const updated = db.getTask(task.id)
       expect(updated?.status).toBe('ready')
+    })
+
+    it('accepts exact free text even when options are configured', async () => {
+      setup()
+      const task = db.createTask({ spec: 'needs approval' })
+      const gate = db.createGate({
+        taskId: task.id,
+        question: 'Proceed?',
+        options: ['yes', 'no']
+      })
+
+      const result = (await call('orchestration.gateResolve', {
+        id: gate.id,
+        resolution: 'defer until Friday'
+      })) as { gate: { resolution: string } }
+
+      expect(result.gate.resolution).toBe('defer until Friday')
+    })
+
+    it('rejects a stale second resolution without overwriting or reviving the task', async () => {
+      setup()
+      const task = db.createTask({ spec: 'needs approval' })
+      const gate = db.createGate({ taskId: task.id, question: 'Proceed?' })
+      await call('orchestration.gateResolve', { id: gate.id, resolution: 'first' })
+      db.updateTaskStatus(task.id, 'completed')
+
+      await expect(
+        call('orchestration.gateResolve', { id: gate.id, resolution: 'stale' })
+      ).rejects.toThrow(`Gate already resolved: ${gate.id}`)
+      expect(db.getGate(gate.id)?.resolution).toBe('first')
+      expect(db.getTask(task.id)?.status).toBe('completed')
     })
 
     it('throws on nonexistent gate', async () => {

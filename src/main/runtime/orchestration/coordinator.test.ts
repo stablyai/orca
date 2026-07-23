@@ -389,6 +389,33 @@ describe('Coordinator', () => {
     expect(result.completedTasks).toContain(task.id)
   })
 
+  it('rejects coordinator gate options that are not a string array', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const task = db.createTask({ spec: 'needs approval' })
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 20
+    })
+    const runPromise = coordinator.run()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    db.insertMessage({
+      from: 'term_a',
+      to: 'coord',
+      subject: 'Need approval',
+      type: 'decision_gate',
+      payload: JSON.stringify({ taskId: task.id, question: 'Proceed?', options: ['yes', 1] })
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(db.listGates({ taskId: task.id })).toEqual([])
+    coordinator.stop()
+    await runPromise
+  })
+
   it('respects task DAG ordering', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()

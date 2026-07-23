@@ -13555,6 +13555,16 @@
           "undo": "Deshacer",
           "widthOption": "{{value0}} px"
         }
+      },
+      "orchestration": {
+        "DecisionGateAttention": {
+          "resolveFailed": "Unable to resolve decision",
+          "label": "Decisions",
+          "pending": "Pending decisions",
+          "loading": "Loading decisions…",
+          "answer": "Enter a response",
+          "submit": "Resolve"
+        }
       }
     },
     "i18n": {

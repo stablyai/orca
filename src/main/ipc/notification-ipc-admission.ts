@@ -16,6 +16,9 @@ const STRING_FIELDS = [
   'repoLabel',
   'worktreeLabel',
   'terminalTitle',
+  'gateId',
+  'taskId',
+  'question',
   'agentType',
   'agentState',
   'agentPrompt',
@@ -54,6 +57,7 @@ export function normalizeNotificationDispatchRequest(
   if (
     request.source !== 'agent-task-complete' &&
     request.source !== 'terminal-bell' &&
+    request.source !== 'orchestration-attention' &&
     request.source !== 'test'
   ) {
     return null
