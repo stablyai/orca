@@ -90,8 +90,18 @@ describe('readShellStartupEnvVar', () => {
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBeUndefined()
   })
 
-  it('reports startup-env probing as supported on macOS', () => {
-    expect(isShellStartupEnvProbeSupported()).toBe(true)
+  it('reports startup-env probing as supported on macOS and Linux', () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    try {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+      expect(isShellStartupEnvProbeSupported()).toBe(true)
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      expect(isShellStartupEnvProbeSupported()).toBe(true)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
   })
 
   it('returns undefined when no startup file matches', () => {

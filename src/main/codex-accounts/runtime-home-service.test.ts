@@ -1124,8 +1124,12 @@ describe('CodexRuntimeHomeService', () => {
 
   it('keeps Windows System Default on the managed lane when startup probing is unsupported', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const previousCodexHome = process.env.CODEX_HOME
+    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
+      delete process.env.CODEX_HOME
+      delete process.env.ORCA_CODEX_HOME
       const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
@@ -1138,6 +1142,16 @@ describe('CodexRuntimeHomeService', () => {
         })
       ).toBe(false)
     } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+      if (previousOrcaCodexHome === undefined) {
+        delete process.env.ORCA_CODEX_HOME
+      } else {
+        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+      }
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
