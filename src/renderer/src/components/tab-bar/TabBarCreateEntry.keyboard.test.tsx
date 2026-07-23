@@ -10,7 +10,8 @@ import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 // keyboard behavior under test only needs a controllable option list.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
 vi.mock('./tab-create-entry-action', () => ({
-  getTabEntryOptions: () => entryOptionsMock.options
+  getTabEntryOptions: () => entryOptionsMock.options,
+  getTabEntryAllowAbsolutePaths: () => true
 }))
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })

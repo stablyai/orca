@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { openTabEntryWithOperations, type TabEntryOperations } from './tab-create-entry-action'
+import {
+  openTabEntryWithOperations,
+  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  type TabEntryOperations
+} from './tab-create-entry-action'
 
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
 
@@ -12,6 +16,7 @@ describe('openTabEntryWithOperations', () => {
       isWebRuntimeSessionActive: vi.fn().mockReturnValue(false),
       openFile: vi.fn(),
       statRuntimePath: vi.fn().mockResolvedValue({ size: 1, isDirectory: false, mtime: 1 }),
+      authorizeExternalPath: vi.fn().mockResolvedValue(undefined),
       ...overrides
     }
   }
@@ -26,7 +31,8 @@ describe('openTabEntryWithOperations', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     },
-    activeRuntimeEnvironmentId: null
+    activeRuntimeEnvironmentId: null,
+    allowAbsolutePaths: true
   }
 
   it('stats existing files before opening and rejects directories', async () => {
@@ -220,5 +226,66 @@ describe('openTabEntryWithOperations', () => {
       targetGroupId: 'group-1',
       title: 'https://example.com/'
     })
+  })
+
+  it('authorizes and opens absolute local files in the target group', async () => {
+    const operations = makeOperations()
+
+    await openTabEntryWithOperations({
+      ...baseArgs,
+      classification: { kind: 'absolute-file', filePath: '/tmp/notes.md' },
+      query: '/tmp/notes.md',
+      operations
+    })
+
+    expect(operations.authorizeExternalPath).toHaveBeenCalledWith({ targetPath: '/tmp/notes.md' })
+    expect(operations.statRuntimePath).toHaveBeenCalledWith(
+      baseArgs.runtimeContext,
+      '/tmp/notes.md'
+    )
+    expect(operations.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/notes.md',
+        relativePath: '/tmp/notes.md',
+        worktreeId: 'wt-1'
+      }),
+      { preview: false, targetGroupId: 'group-1' }
+    )
+  })
+
+  it('normalizes worktree absolute paths to relative paths before opening', async () => {
+    const operations = makeOperations()
+
+    await openTabEntryWithOperations({
+      ...baseArgs,
+      classification: { kind: 'absolute-file', filePath: '/repo/src/index.ts' },
+      query: '/repo/src/index.ts',
+      operations
+    })
+
+    expect(operations.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/repo/src/index.ts',
+        relativePath: 'src/index.ts'
+      }),
+      { preview: false, targetGroupId: 'group-1' }
+    )
+  })
+
+  it('rejects absolute paths when remote workspaces disallow them', async () => {
+    const operations = makeOperations()
+
+    await expect(
+      openTabEntryWithOperations({
+        ...baseArgs,
+        allowAbsolutePaths: false,
+        classification: { kind: 'absolute-file', filePath: '/tmp/notes.md' },
+        query: '/tmp/notes.md',
+        operations
+      })
+    ).rejects.toThrow(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+
+    expect(operations.authorizeExternalPath).not.toHaveBeenCalled()
+    expect(operations.openFile).not.toHaveBeenCalled()
   })
 })

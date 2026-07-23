@@ -1,5 +1,6 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
+import { toWorktreeRelativePathOrAbsolute } from '@/lib/worktree-relative-path'
 import {
   createRuntimePath,
   statRuntimePath,
@@ -13,19 +14,26 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import type { RuntimeFileListState } from '../quick-open-file-list'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import {
   classifyTabEntryQuery,
-  type TabEntryActionClassification
+  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  type TabEntryActionClassification,
+  type TabEntryOptionsContext
 } from './tab-create-entry-classifier'
+import { getTabEntryAllowAbsolutePaths } from './tab-create-entry-local-path'
 export {
   classifyTabEntryQuery,
   getTabEntryOptions,
+  isTabEntryAbsolutePathLike,
+  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  validateNewTabEntryAbsolutePath,
   validateNewTabEntryRelativePath,
   type TabEntryActionClassification,
   type TabEntryClassification,
-  type TabEntryOption
+  type TabEntryOption,
+  type TabEntryOptionsContext
 } from './tab-create-entry-classifier'
+export { getTabEntryAllowAbsolutePaths } from './tab-create-entry-local-path'
 
 export type TabCreateEntryArgs = {
   classification?: TabEntryActionClassification
@@ -54,6 +62,7 @@ export type TabEntryOperations = {
     options?: { preview?: boolean; targetGroupId?: string }
   ) => void
   statRuntimePath: typeof statRuntimePath
+  authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
 }
 
 type OpenTabEntryWithOperationsArgs = {
@@ -64,6 +73,7 @@ type OpenTabEntryWithOperationsArgs = {
   worktreePath: string
   runtimeContext: RuntimeFileOperationArgs
   activeRuntimeEnvironmentId: string | null
+  allowAbsolutePaths: boolean
   classification?: TabEntryActionClassification
   operations: TabEntryOperations
 }
@@ -130,8 +140,40 @@ async function openExistingFile(args: {
   )
 }
 
+async function openAbsoluteFile(args: {
+  context: RuntimeFileOperationArgs
+  groupId: string
+  operations: TabEntryOperations
+  filePath: string
+  worktreeId: string
+  worktreePath: string
+}): Promise<void> {
+  await args.operations.authorizeExternalPath({ targetPath: args.filePath })
+  let stat: Awaited<ReturnType<typeof statRuntimePath>>
+  try {
+    stat = await args.operations.statRuntimePath(args.context, args.filePath)
+  } catch {
+    throw new Error(`File not found: ${args.filePath}`)
+  }
+  if (stat.isDirectory) {
+    throw new Error(`Cannot open a directory: ${args.filePath}`)
+  }
+
+  args.operations.openFile(
+    {
+      filePath: args.filePath,
+      relativePath: toWorktreeRelativePathOrAbsolute(args.filePath, args.worktreePath),
+      worktreeId: args.worktreeId,
+      language: detectLanguage(args.filePath),
+      mode: 'edit'
+    },
+    { preview: false, targetGroupId: args.groupId }
+  )
+}
+
 export async function openTabEntryWithOperations({
   activeRuntimeEnvironmentId,
+  allowAbsolutePaths,
   classification: selectedClassification,
   fileList,
   groupId,
@@ -141,7 +183,9 @@ export async function openTabEntryWithOperations({
   worktreeId,
   worktreePath
 }: OpenTabEntryWithOperationsArgs): Promise<void> {
-  const classification = selectedClassification ?? classifyTabEntryQuery(query, fileList)
+  const entryContext: TabEntryOptionsContext = { allowAbsolutePaths }
+  const classification =
+    selectedClassification ?? classifyTabEntryQuery(query, fileList, entryContext)
   if (classification.kind === 'empty' || classification.kind === 'blocked') {
     throw new Error(classification.message)
   }
@@ -173,6 +217,21 @@ export async function openTabEntryWithOperations({
         title: classification.url
       })
     }
+    return
+  }
+
+  if (classification.kind === 'absolute-file') {
+    if (!allowAbsolutePaths) {
+      throw new Error(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+    }
+    await openAbsoluteFile({
+      context: runtimeContext,
+      groupId,
+      operations,
+      filePath: classification.filePath,
+      worktreeId,
+      worktreePath
+    })
     return
   }
 
@@ -223,6 +282,7 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
     { worktreeId: args.worktreeId },
     worktree.path
   )
+  const allowAbsolutePaths = getTabEntryAllowAbsolutePaths(state, args.worktreeId)
   await openTabEntryWithOperations({
     query: args.query,
     fileList: args.fileList,
@@ -231,6 +291,7 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
     worktreePath: worktree.path,
     runtimeContext,
     activeRuntimeEnvironmentId: runtimeContext.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
+    allowAbsolutePaths,
     classification: args.classification,
     operations: {
       createBrowserTab: state.createBrowserTab,
@@ -238,7 +299,8 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
       createWebRuntimeSessionBrowserTab,
       isWebRuntimeSessionActive,
       openFile: state.openFile,
-      statRuntimePath
+      statRuntimePath,
+      authorizeExternalPath: window.api.fs.authorizeExternalPath
     }
   })
 }

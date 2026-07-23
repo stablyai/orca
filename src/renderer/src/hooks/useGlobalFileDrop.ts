@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { detectLanguage } from '@/lib/language-detect'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { toWorktreeRelativePathOrAbsolute } from '@/lib/worktree-relative-path'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
@@ -169,14 +169,6 @@ export function useGlobalFileDrop(): void {
               return
             }
 
-            let relativePath = filePath
-            if (worktreePath && isPathInsideWorktree(filePath, worktreePath)) {
-              const maybeRelative = toWorktreeRelativePath(filePath, worktreePath)
-              if (maybeRelative !== null && maybeRelative.length > 0) {
-                relativePath = maybeRelative
-              }
-            }
-
             // Why: the preload bridge already proved this OS drop landed on the
             // tab-strip editor target. Keeping the editor-open path centralized
             // here avoids the regression where CLI drops were all coerced into
@@ -184,7 +176,7 @@ export function useGlobalFileDrop(): void {
             store.setActiveTabType('editor')
             store.openFile({
               filePath,
-              relativePath,
+              relativePath: toWorktreeRelativePathOrAbsolute(filePath, worktreePath),
               worktreeId: activeWorktreeId,
               language: detectLanguage(filePath),
               mode: 'edit'

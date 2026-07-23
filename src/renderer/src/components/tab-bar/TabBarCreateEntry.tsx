@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
-import { getTabEntryOptions, type TabCreateEntryArgs } from './tab-create-entry-action'
+import {
+  getTabEntryAllowAbsolutePaths,
+  getTabEntryOptions,
+  type TabCreateEntryArgs
+} from './tab-create-entry-action'
 import {
   findMatchingTabAgentLaunchOptions,
   type TabAgentLaunchOption
@@ -23,6 +27,7 @@ import {
 } from './TabBarCreateEntryRow'
 import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 
 const EMPTY_AGENT_OPTIONS: readonly TabAgentLaunchOption[] = []
 const EMPTY_MENU_OPTIONS: readonly TabCreateMenuOption[] = []
@@ -62,6 +67,9 @@ export default function TabBarCreateEntry({
   const [lastMenuOpen, setLastMenuOpen] = useState(menuOpen)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileList = useRuntimeFileListForWorktree({ enabled: menuOpen, worktreeId })
+  const allowAbsolutePaths = useAppStore((state) =>
+    getTabEntryAllowAbsolutePaths(state, worktreeId)
+  )
 
   // Why: once ArrowDown moves focus into the static menu list, ArrowUp on the
   // first item should return to the search box so the keyboard trip isn't
@@ -105,13 +113,13 @@ export default function TabBarCreateEntry({
     [menuOptions, query]
   )
   const options = useMemo(() => {
-    const entryOptions = getTabEntryOptions(query, fileList)
+    const entryOptions = getTabEntryOptions(query, fileList, 4, { allowAbsolutePaths })
     if (matchingMenuOptions.length === 0) {
       return entryOptions
     }
     // Why: a matched create-menu action should win over a generic new-file fallback.
     return entryOptions.filter((option) => option.classification.kind !== 'new-file')
-  }, [fileList, matchingMenuOptions.length, query])
+  }, [allowAbsolutePaths, fileList, matchingMenuOptions.length, query])
   const matchingAgentOptions = useMemo(
     () => findMatchingTabAgentLaunchOptions(query, agentOptions),
     [agentOptions, query]
