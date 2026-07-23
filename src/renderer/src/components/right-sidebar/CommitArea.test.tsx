@@ -38,7 +38,6 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     isFixingCommitFailureWithAI: false,
     isFixingPushFailureWithAI: false,
     sourceControlAiActionsVisible: true,
-    aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
     generateError: null as string | null,
@@ -91,11 +90,13 @@ function renderCommitArea(props: Parameters<typeof CommitArea>[0]): string {
 }
 
 function firstButton(markup: string): string {
-  const match = markup.match(/<button\b[\s\S]*?<\/button>/)
-  if (!match) {
+  const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+    .map((match) => match[0])
+    .find((entry) => entry.includes('data-slot="button"'))
+  if (!button) {
     throw new Error('button not found')
   }
-  return match[0]
+  return button
 }
 
 function buttonContaining(markup: string, label: string): string {
@@ -500,7 +501,6 @@ describe('CommitArea', () => {
   it('hides the composer generate affordance while Create PR intent is in flight', () => {
     const markup = renderCommitArea({
       ...baseProps(),
-      aiEnabled: true,
       aiAgentConfigured: true,
       isGenerating: true,
       isCreatePrIntentInFlight: true,

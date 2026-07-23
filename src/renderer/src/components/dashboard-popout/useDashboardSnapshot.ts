@@ -18,6 +18,14 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 }
 
+/** Why: View Transition snapshots render in the browser top layer, which paints
+ *  above any z-index — so a card morphing columns would flicker OVER the open
+ *  terminal dialog (a z-50 Radix portal). Skip the transition while it's open;
+ *  the card just settles under the dialog, which the user isn't watching. */
+function terminalDialogIsOpen(): boolean {
+  return document.querySelector('[role="dialog"][data-state="open"]') !== null
+}
+
 /**
  * Pop-out side of the dashboard bridge: subscribe to snapshots relayed from the
  * main window and request an initial one on mount. When a card changes column
@@ -35,7 +43,12 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       columnSignatureRef.current = nextSignature
 
       const startViewTransition = document.startViewTransition?.bind(document)
-      if (!layoutChanged || prefersReducedMotion() || !startViewTransition) {
+      if (
+        !layoutChanged ||
+        prefersReducedMotion() ||
+        terminalDialogIsOpen() ||
+        !startViewTransition
+      ) {
         setSnapshot(next)
         return
       }

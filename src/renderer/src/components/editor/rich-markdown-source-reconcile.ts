@@ -26,6 +26,10 @@ export type ReconcileSerializedMarkdownParams = {
   roundTrip: (markdown: string) => string | null
 }
 
+export function restoreMarkdownSourceEol(markdown: string, source: string): string {
+  return restoreEol(toLf(markdown), detectDominantEol(source))
+}
+
 /**
  * Carries the user's edit into the original source style so untouched regions keep their non-canonical bytes.
  * Falls back to canonical `edited` when the transform can't be proven render-equivalent, so it never corrupts or relocates content.

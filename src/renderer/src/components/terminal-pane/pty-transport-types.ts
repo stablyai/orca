@@ -1,10 +1,18 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
+import type {
+  AgentLaunchPreferences,
+  AgentPromptDelivery
+} from '../../../../shared/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 
 export type PtyBufferSnapshot = {
@@ -69,6 +77,21 @@ type PtyCallbacks = {
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void
+  onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
+}
+
+export type PtyTransportRecoveryState = {
+  phase:
+    | 'connecting'
+    | 'connected'
+    | 'recovering'
+    | 'backoff'
+    | 'disconnected'
+    | 'offline'
+    | 'ended'
+    | 'disposed'
+  epoch: number
+  attempt: number
 }
 
 export type PtyTransport = {
@@ -86,6 +109,7 @@ export type PtyTransport = {
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
+    resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -121,11 +145,18 @@ export type PtyTransport = {
     }
   ) => boolean
   isConnected: () => boolean
+  getRecoveryState?: () => PtyTransportRecoveryState
+  /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
+  retryRecovery?: () => boolean
   getPtyId: () => string | null
   getConnectionId?: () => string | null | undefined
   /** The runtime captured by this transport; legacy remote PTY ids do not
    * encode their owner, and current worktree settings may have changed. */
   getRuntimeEnvironmentId?: () => string | null
+  /** Execution host captured at spawn; nested SSH differs from its outer runtime owner. */
+  getExecutionHostId?: () => ExecutionHostId | null
+  /** Host platform captured by the PTY owner; paired-client OS is not authoritative. */
+  getRemotePlatform?: () => NodeJS.Platform | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
   /** Drop cross-chunk parser carries (partial OSC-9999 prefix). Called when a
    *  model-restore marker reports dropped bytes — a carry spanning the gap
@@ -144,10 +175,16 @@ export type IpcPtyTransportOptions = {
   envToDelete?: string[]
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
+  agentPrompt?: string
+  agentPromptDelivery?: AgentPromptDelivery
+  agentArgsOverride?: string | null
+  agentLaunchPreferences?: AgentLaunchPreferences
   launchToken?: string
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
   worktreeId?: string
   tabId?: string
   leafId?: string

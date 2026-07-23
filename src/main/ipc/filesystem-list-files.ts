@@ -14,6 +14,8 @@ import {
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from '../../shared/quick-open-filter'
+import { isQuickOpenReaddirBudgetError } from '../../shared/quick-open-readdir-walk'
+import { buildInstallRgMessage } from '../../shared/quick-open-install-rg'
 import { listFilesWithGit } from './filesystem-list-files-git-fallback'
 
 export async function listQuickOpenFiles(
@@ -42,13 +44,20 @@ export async function listQuickOpenFiles(
   // can run.
   const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
   if (!rgAvailable) {
-    return listFilesWithGit(
-      authorizedRootPath,
-      excludePathPrefixes,
-      localGitOptions,
-      signal,
-      maxResults
-    )
+    try {
+      return await listFilesWithGit(
+        authorizedRootPath,
+        excludePathPrefixes,
+        localGitOptions,
+        signal,
+        maxResults
+      )
+    } catch (err) {
+      if (!isQuickOpenReaddirBudgetError(err)) {
+        throw err
+      }
+      throw new Error(await buildInstallRgMessage(err))
+    }
   }
 
   const files = new Set<string>()

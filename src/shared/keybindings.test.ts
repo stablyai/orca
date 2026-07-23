@@ -472,6 +472,19 @@ describe('keybindings', () => {
     ])
   })
 
+  it('flags the global send-review-notes command against editor chords it can shadow', () => {
+    // Why: it fires from the global capture handler even while the editor is
+    // focused, so Settings must warn when a user binds it over Add Review Note.
+    expect(
+      findKeybindingConflicts('darwin', { 'sourceControl.sendReviewNotes': ['Mod+Shift+A'] })
+    ).toContainEqual(
+      expect.objectContaining({
+        binding: 'Mod+Shift+A',
+        actionIds: expect.arrayContaining(['editor.addReviewNote', 'sourceControl.sendReviewNotes'])
+      })
+    )
+  })
+
   it('defaults tab-switch chords to the swapped convention for fresh installs', () => {
     // New users get the widespread mapping: Shift+bracket cycles all tabs,
     // Alt+bracket cycles within the active type.

@@ -27,6 +27,15 @@ describe('pairing offer', () => {
     expect(decodePairingOffer(encodePairingOffer(scopedOffer))).toEqual(scopedOffer)
   })
 
+  it('round-trips a TLS reverse-proxy endpoint with an explicit port and path', () => {
+    const proxiedOffer = {
+      ...offer,
+      endpoint: 'wss://proxy.example:443/orca/runtime'
+    }
+
+    expect(decodePairingOffer(encodePairingOffer(proxiedOffer))).toEqual(proxiedOffer)
+  })
+
   it('encoded URL uses base64url (no +, /, or = characters)', () => {
     const url = encodePairingOffer(offer)
     const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!

@@ -138,20 +138,24 @@ export function TerminalSshReconnectOverlay({
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/75 px-6 py-8 backdrop-blur-[1px]"
-      data-terminal-ssh-reconnect-overlay="true"
+      className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex justify-center"
+      data-terminal-ssh-reconnect-banner={status}
     >
-      <div className="pointer-events-auto flex w-full max-w-sm flex-col gap-3 rounded-md border border-border bg-card px-4 py-4 text-card-foreground shadow-xs">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
-            {isConnecting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <ServerOff className="size-4" />
-            )}
-          </div>
-          <div className="min-w-0 space-y-1">
-            <div className="text-sm font-semibold">
+      <div
+        className="pointer-events-auto flex w-full max-w-xl items-center gap-3 rounded-md border border-border bg-card/95 px-3 py-3 text-card-foreground shadow-xs backdrop-blur-[1px]"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
+          {isConnecting ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <ServerOff className="size-4" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="shrink-0 text-sm font-semibold">
               {targetRemoved
                 ? translate(
                     'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedTitle',
@@ -162,56 +166,56 @@ export function TerminalSshReconnectOverlay({
                     'SSH connection required'
                   )}
             </div>
-            <div className="text-xs leading-5 text-muted-foreground">
-              {targetRemoved
-                ? translate(
-                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedBody',
-                    'The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.'
-                  )
-                : messageForStatus(status, targetLabel)}
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <Server className="size-3.5 shrink-0" />
+              <span className="truncate font-medium">{targetLabel}</span>
             </div>
           </div>
-        </div>
-        <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/40 px-3 py-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <Server className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate text-xs font-medium">{targetLabel}</span>
-          </div>
-          {targetRemoved ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={worktreeId ? () => runWorktreeDelete(worktreeId) : undefined}
-              disabled={!worktreeId}
-            >
-              {translate(
-                'auto.components.terminal.pane.TerminalSshReconnectOverlay.removeWorkspaceButton',
-                'Remove workspace'
-              )}
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              onClick={showConnect ? () => void handleConnect() : undefined}
-              disabled={!showConnect || isConnecting}
-            >
-              {!showConnect || isConnecting ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  {translate(
-                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectingButton',
-                    'Connecting...'
-                  )}
-                </>
-              ) : (
-                translate(
-                  'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectButton',
-                  'Connect'
+          <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
+            {targetRemoved
+              ? translate(
+                  'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedBody',
+                  'The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.'
                 )
-              )}
-            </Button>
-          )}
+              : messageForStatus(status, targetLabel)}
+          </div>
         </div>
+        {targetRemoved ? (
+          <Button
+            className="shrink-0"
+            size="sm"
+            variant="outline"
+            onClick={worktreeId ? () => runWorktreeDelete(worktreeId) : undefined}
+            disabled={!worktreeId}
+          >
+            {translate(
+              'auto.components.terminal.pane.TerminalSshReconnectOverlay.removeWorkspaceButton',
+              'Remove workspace'
+            )}
+          </Button>
+        ) : (
+          <Button
+            className="shrink-0"
+            size="sm"
+            onClick={showConnect ? () => void handleConnect() : undefined}
+            disabled={!showConnect || isConnecting}
+          >
+            {!showConnect || isConnecting ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                {translate(
+                  'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectingButton',
+                  'Connecting...'
+                )}
+              </>
+            ) : (
+              translate(
+                'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectButton',
+                'Connect'
+              )
+            )}
+          </Button>
+        )}
       </div>
     </div>
   )

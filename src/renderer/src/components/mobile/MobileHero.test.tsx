@@ -138,9 +138,12 @@ describe('HeroFlow height', () => {
       pairQrDataUrl: 'data:image/png;base64,qr',
       relayDegraded: true
     })
-    expect(screen.getByTestId('relay-degraded-notice')).toHaveTextContent(
-      'only works on your local network'
-    )
+    const notice = screen.getByTestId('relay-degraded-notice')
+    expect(notice).toHaveTextContent('only works on your local network')
+    // Why: wrap-capable text item inside the fixed QR track (#9700); bare text
+    // nodes in a flex row cannot shrink below max-content and overflow the track.
+    expect(notice.querySelector('.min-w-0')).not.toBeNull()
+    expect(notice.className).toMatch(/\bmin-w-0\b/)
     expect(screen.getByText('Orca Relay is in beta.')).toBeInTheDocument()
   })
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import type { TerminalQuickCommand } from '../../../src/shared/types'
 import {
   applyTerminalQuickCommandMutation,
@@ -41,6 +42,30 @@ type MutationContext = {
 function readQuickCommands(result: unknown): TerminalQuickCommand[] | null {
   const list = (result as { terminalQuickCommands?: unknown } | null)?.terminalQuickCommands
   return parseNormalizedTerminalQuickCommands(list)
+}
+
+const LOAD_CUTOVER_MAX_RETRIES = 5
+
+// Why: opening the sheet right after connecting over relay races the relay→direct
+// cutover, which rejects in-flight one-shots while connState stays 'connected';
+// the read is side-effect-free, so replay it instead of stranding an empty sheet.
+async function loadQuickCommandsWithCutoverRetry(
+  client: RpcClient,
+  cancelled: () => boolean
+): Promise<RpcResponse> {
+  for (let migrationRetry = 0; ; migrationRetry += 1) {
+    try {
+      return await client.sendRequest('settings.getTerminalQuickCommands')
+    } catch (error) {
+      if (
+        cancelled() ||
+        !isLogicalClientCutoverError(error) ||
+        migrationRetry >= LOAD_CUTOVER_MAX_RETRIES
+      ) {
+        throw error
+      }
+    }
+  }
 }
 
 export function useQuickCommands({ client, enabled }: Args): QuickCommandsState {
@@ -90,7 +115,13 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
         ) {
           return
         }
-        const response = await client.sendRequest('settings.getTerminalQuickCommands')
+        const response = await loadQuickCommandsWithCutoverRetry(
+          client,
+          () =>
+            stale ||
+            operationId !== operationIdRef.current ||
+            mutationContextRef.current !== mutationContext
+        )
         if (
           stale ||
           operationId !== operationIdRef.current ||

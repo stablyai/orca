@@ -75,12 +75,6 @@ import {
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
-  getRememberedGhCwdResolutionFailure,
-  isGhCwdRepoResolutionFailure,
-  rememberGhCwdResolutionFailure
-} from './gh-cwd-repo-negative-cache'
-import type { GitHubRepoContext } from './github-repository-identity'
-import {
   getGitHubApiRepositoryForRemote,
   getIssueGitHubApiRepository,
   getOriginGitHubApiRepository,
@@ -1001,7 +995,7 @@ function normalizeWorkItemPage(page: number | undefined): number {
 
 function buildWorkItemListRequest(args: {
   kind: 'issue' | 'pr'
-  ownerRepo: OwnerRepo | null
+  ownerRepo: OwnerRepo
   limit: number
   query: ParsedTaskQuery
   page: number
@@ -1009,7 +1003,7 @@ function buildWorkItemListRequest(args: {
   const { kind, ownerRepo, limit, query, page } = args
   const searchParts: string[] = []
 
-  if (kind === 'issue' && ownerRepo) {
+  if (kind === 'issue') {
     searchParts.push(`repo:${ownerRepo.owner}/${ownerRepo.repo}`)
   }
   searchParts.push(kind === 'issue' ? 'is:issue' : 'is:pr')
@@ -1076,9 +1070,7 @@ function buildWorkItemListRequest(args: {
     '--json',
     WORK_ITEM_PR_LIST_JSON_FIELDS
   ]
-  if (ownerRepo) {
-    out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
-  }
+  out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
   out.push('--search', searchParts.join(' '))
   return { args: out, offset: (page - 1) * limit }
 }
@@ -1122,30 +1114,6 @@ async function resolvePrWorkItemSource(
   return { source, originCandidate, upstreamCandidate }
 }
 
-/**
- * gh exec relying on gh's own cwd→repo resolution. Serves a remembered resolution failure
- * without spawning, so a remote-less repo costs one gh spawn per config change/TTL, not two per refresh.
- */
-async function ghCwdResolvedExec(
-  context: GitHubRepoContext,
-  args: string[],
-  ghOptions: GhExecOptions
-): Promise<{ stdout: string; stderr: string }> {
-  const remembered = await getRememberedGhCwdResolutionFailure(context)
-  if (remembered !== null) {
-    throw new Error(remembered)
-  }
-  try {
-    return await ghExecFileAsync(args, ghOptions)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    if (isGhCwdRepoResolutionFailure(message)) {
-      await rememberGhCwdResolutionFailure(context, message)
-    }
-    throw err
-  }
-}
-
 async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -1156,104 +1124,87 @@ async function listRecentWorkItems(
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
-  const ghOptions = ghRepoExecOptions(repoContext)
-  const requiresExplicitRepo = Boolean(connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const recentQuery = parseTaskQuery('is:open')
-  const issueRequest = buildWorkItemListRequest({
-    kind: 'issue',
-    ownerRepo: issueOwnerRepo,
-    limit,
-    query: recentQuery,
-    page
-  })
-  const prRequest = buildWorkItemListRequest({
-    kind: 'pr',
-    ownerRepo: prOwnerRepo,
-    limit,
-    query: recentQuery,
-    page
-  })
-  if (noCache) {
+  const issueRequest = issueOwnerRepo
+    ? buildWorkItemListRequest({
+        kind: 'issue',
+        ownerRepo: issueOwnerRepo,
+        limit,
+        query: recentQuery,
+        page
+      })
+    : null
+  const prRequest = prOwnerRepo
+    ? buildWorkItemListRequest({
+        kind: 'pr',
+        ownerRepo: prOwnerRepo,
+        limit,
+        query: recentQuery,
+        page
+      })
+    : null
+  if (noCache && issueRequest) {
     issueRequest.args.splice(1, 2)
   }
-  if (issueOwnerRepo || prOwnerRepo || requiresExplicitRepo) {
-    // Why: allSettled so a 403 on the issue side doesn't zero the PR half — partial results + banner (parent doc §2).
-    const [issuesSettled, prsSettled] = await Promise.allSettled([
-      issueOwnerRepo
-        ? ghExecFileAsync(issueRequest.args, {
-            ...ghOptions,
-            ...githubHostExecOptions(issueOwnerRepo)
-          })
-        : requiresExplicitRepo
-          ? Promise.resolve({ stdout: '[]' })
-          : ghCwdResolvedExec(repoContext, issueRequest.args, ghOptions),
-      prOwnerRepo
-        ? ghExecFileAsync(prRequest.args, { ...ghOptions, ...githubHostExecOptions(prOwnerRepo) })
-        : requiresExplicitRepo
-          ? Promise.resolve({ stdout: '[]' })
-          : ghCwdResolvedExec(repoContext, prRequest.args, ghOptions)
-    ])
-
-    let issues: MainWorkItem[] = []
-    let issuesError: ClassifiedError | undefined
-    if (issuesSettled.status === 'fulfilled') {
-      issues = (JSON.parse(issuesSettled.value.stdout) as Record<string, unknown>[])
-        // Why: search/issues can still return PRs (pull_request marker) even with is:issue; filter them out.
-        .filter((item) => !('pull_request' in item))
-        .map(mapIssueWorkItem)
-    } else {
-      const stderr =
-        issuesSettled.reason instanceof Error
-          ? issuesSettled.reason.message
-          : String(issuesSettled.reason)
-      issuesError = classifyListIssuesError(stderr)
-    }
-
-    let prs: MainWorkItem[] = []
-    if (prsSettled.status === 'fulfilled') {
-      prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[])
-        .slice(prRequest.offset, prRequest.offset + limit)
-        .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
-      prs = await hydrateWorkItemRepositoryMergeMetadata(prs, prOwnerRepo, {
-        ...ghOptions,
-        ...githubHostExecOptions(prOwnerRepo)
-      })
-    } else {
-      // Why: re-throw PR errors so the cross-repo aggregator counts the repo failed; this feature only fixes issue-side swallowing (#1076).
-      // Why: log issuesError first so a both-sides-failed case isn't blind to the classification we're about to drop.
-      if (issuesError) {
-        console.warn(
-          'listRecentWorkItems: both issue and PR sides failed; issuesError was classified:',
-          issuesError.type,
-          issuesError.message
-        )
-      }
-      throw prsSettled.reason
-    }
-
-    return {
-      items: sortWorkItemsByNumber([...issues, ...prs]).slice(0, limit),
-      issuesError
-    }
-  }
-
-  // Why: non-GitHub remotes have no sources for a partial-failure banner, so keep Promise.all (reject-all) instead of allSettled.
-  const [issuesResult, prsResult] = await Promise.all([
-    ghCwdResolvedExec(repoContext, issueRequest.args, ghOptions),
-    ghCwdResolvedExec(repoContext, prRequest.args, ghOptions)
+  // Why: unresolved sources must stay empty — an unscoped Search API would return other public repos' issues (#9660).
+  // Why: allSettled so a 403 on the issue side doesn't zero the PR half (partial results + banner).
+  const [issuesSettled, prsSettled] = await Promise.allSettled([
+    issueRequest && issueOwnerRepo
+      ? ghExecFileAsync(issueRequest.args, {
+          ...ghOptions,
+          ...githubHostExecOptions(issueOwnerRepo)
+        })
+      : Promise.resolve({ stdout: '[]' }),
+    prRequest && prOwnerRepo
+      ? ghExecFileAsync(prRequest.args, {
+          ...ghOptions,
+          ...githubHostExecOptions(prOwnerRepo)
+        })
+      : Promise.resolve({ stdout: '[]' })
   ])
 
-  const issues = (JSON.parse(issuesResult.stdout) as Record<string, unknown>[])
-    .filter((item) => !('pull_request' in item))
-    .map(mapIssueWorkItem)
-  const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[])
-    .slice(prRequest.offset, prRequest.offset + limit)
-    .map((item) => mapPullRequestWorkItem(item, null))
+  let issues: MainWorkItem[] = []
+  let issuesError: ClassifiedError | undefined
+  if (issuesSettled.status === 'fulfilled') {
+    issues = (JSON.parse(issuesSettled.value.stdout) as Record<string, unknown>[])
+      // Why: search/issues can still return PRs (pull_request marker) even with is:issue; filter them out.
+      .filter((item) => !('pull_request' in item))
+      .map(mapIssueWorkItem)
+  } else {
+    const stderr =
+      issuesSettled.reason instanceof Error
+        ? issuesSettled.reason.message
+        : String(issuesSettled.reason)
+    issuesError = classifyListIssuesError(stderr)
+  }
+
+  let prs: MainWorkItem[] = []
+  if (prsSettled.status === 'fulfilled') {
+    prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[])
+      .slice(prRequest?.offset ?? 0, (prRequest?.offset ?? 0) + limit)
+      .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
+    prs = await hydrateWorkItemRepositoryMergeMetadata(prs, prOwnerRepo, {
+      ...ghOptions,
+      ...githubHostExecOptions(prOwnerRepo)
+    })
+  } else {
+    // Why: re-throw PR errors so the cross-repo aggregator counts the repo failed; this feature only fixes issue-side swallowing (#1076).
+    // Why: log issuesError first so a both-sides-failed case isn't blind to the classification we're about to drop.
+    if (issuesError) {
+      console.warn(
+        'listRecentWorkItems: both issue and PR sides failed; issuesError was classified:',
+        issuesError.type,
+        issuesError.message
+      )
+    }
+    throw prsSettled.reason
+  }
 
   return {
-    items: sortWorkItemsByNumber([...issues, ...prs]).slice(0, limit)
+    items: sortWorkItemsByNumber([...issues, ...prs]).slice(0, limit),
+    issuesError
   }
 }
 
@@ -1267,9 +1218,7 @@ async function listQueriedWorkItems(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
-  const ghOptions = ghRepoExecOptions(repoContext)
-  const requiresExplicitRepo = Boolean(connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const hasPrOnlyFilter =
     query.state === 'merged' ||
@@ -1287,7 +1236,7 @@ async function listQueriedWorkItems(
     if (!issueScope) {
       return { items: [] }
     }
-    if (requiresExplicitRepo && !issueOwnerRepo) {
+    if (!issueOwnerRepo) {
       return { items: [] }
     }
     const request = buildWorkItemListRequest({
@@ -1298,12 +1247,10 @@ async function listQueriedWorkItems(
       page: page ?? 1
     })
     try {
-      const { stdout } = issueOwnerRepo
-        ? await ghExecFileAsync(request.args, {
-            ...ghOptions,
-            ...githubHostExecOptions(issueOwnerRepo)
-          })
-        : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
+      const { stdout } = await ghExecFileAsync(request.args, {
+        ...ghOptions,
+        ...githubHostExecOptions(issueOwnerRepo)
+      })
       const items = (JSON.parse(stdout) as Record<string, unknown>[])
         .filter((item) => !('pull_request' in item))
         .map(mapIssueWorkItem)
@@ -1324,7 +1271,7 @@ async function listQueriedWorkItems(
     if (!prScope) {
       return []
     }
-    if (requiresExplicitRepo && !prOwnerRepo) {
+    if (!prOwnerRepo) {
       return []
     }
     const request = buildWorkItemListRequest({
@@ -1335,12 +1282,10 @@ async function listQueriedWorkItems(
       page: page ?? 1
     })
     try {
-      const { stdout } = prOwnerRepo
-        ? await ghExecFileAsync(request.args, {
-            ...ghOptions,
-            ...githubHostExecOptions(prOwnerRepo)
-          })
-        : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
+      const { stdout } = await ghExecFileAsync(request.args, {
+        ...ghOptions,
+        ...githubHostExecOptions(prOwnerRepo)
+      })
       const mapped = (JSON.parse(stdout) as Record<string, unknown>[])
         .slice(request.offset, request.offset + limit)
         .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))

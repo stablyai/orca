@@ -20,6 +20,10 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
+import {
+  getCyclicProjectedWorktreeLineageIds,
+  getLineageRenderInfo
+} from './worktree-lineage-projection'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -133,6 +137,8 @@ export function computeVisibleWorktreeIds(
     visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
     defaultHostId: ExecutionHostId
     worktreeLineageById: Record<string, WorktreeLineage>
+    injectLineageAncestors?: boolean
+    forcedVisibleWorktreeIds?: readonly string[]
   }
 ): string[] {
   let all: Worktree[] = getAllWorktreesFromState({ worktreesByRepo })
@@ -186,6 +192,17 @@ export function computeVisibleWorktreeIds(
     )
   }
 
+  if (opts.forcedVisibleWorktreeIds && opts.forcedVisibleWorktreeIds.length > 0) {
+    const includedIds = new Set(all.map((worktree) => worktree.id))
+    for (const worktreeId of opts.forcedVisibleWorktreeIds) {
+      const worktree = lineageAncestorById.get(worktreeId)
+      if (worktree && !includedIds.has(worktreeId)) {
+        includedIds.add(worktreeId)
+        all.push(worktree)
+      }
+    }
+  }
+
   // Apply cached sort order. Items not yet in the cache (e.g. brand-new
   // worktrees before the next sortEpoch bump) are appended at the end.
   const orderIndex = new Map(sortedIds.map((id, i) => [id, i]))
@@ -195,11 +212,10 @@ export function computeVisibleWorktreeIds(
     return ai - bi
   })
 
-  return addVisibleLineageAncestors(
-    all.map((w) => w.id),
-    lineageAncestorById,
-    opts.worktreeLineageById
-  )
+  const visibleIds = all.map((w) => w.id)
+  return opts.injectLineageAncestors === false
+    ? visibleIds
+    : addVisibleLineageAncestors(visibleIds, lineageAncestorById, opts.worktreeLineageById)
 }
 
 /** Filters folder rows by host and sleeping state using their synthetic activity key. */
@@ -253,6 +269,7 @@ function addVisibleLineageAncestors(
   const result: string[] = []
   const included = new Set<string>()
   const visiting = new Set<string>()
+  const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeById)
 
   const addWithAncestors = (id: string): void => {
     if (included.has(id) || visiting.has(id)) {
@@ -263,16 +280,11 @@ function addVisibleLineageAncestors(
       return
     }
     visiting.add(id)
-    const lineage = lineageById[id]
-    const parent = lineage ? worktreeById.get(lineage.parentWorktreeId) : undefined
-    if (
-      parent &&
-      worktree.instanceId === lineage.worktreeInstanceId &&
-      parent.instanceId === lineage.parentWorktreeInstanceId
-    ) {
+    const lineage = getLineageRenderInfo(worktree, lineageById, worktreeById, cyclicLineageIds)
+    if (lineage.state === 'valid') {
       // Why: sidebar lineage is structural. If a filtered child is visible,
       // its valid parent must be rendered too so the hierarchy remains legible.
-      addWithAncestors(parent.id)
+      addWithAncestors(lineage.parent.id)
     }
     visiting.delete(id)
     if (!included.has(id)) {

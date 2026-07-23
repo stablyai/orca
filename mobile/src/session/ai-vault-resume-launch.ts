@@ -4,7 +4,10 @@ import {
   buildAiVaultResumeShellCommand,
   realHomeCodexResumeEnvDeletion
 } from '../../../src/shared/ai-vault-types'
-import { isLegacySharedCodexHome } from '../../../src/shared/ai-vault-resume-preparation'
+import {
+  isAiVaultPrepareSessionResumeUnavailableError,
+  isLegacySharedCodexHome
+} from '../../../src/shared/ai-vault-resume-preparation'
 import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
 import type { SleepingAgentLaunchConfig } from '../../../src/shared/agent-session-resume'
 import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
@@ -170,6 +173,10 @@ export async function prepareMobileAiVaultSessionResume(
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
   if (!response.ok) {
+    if (isAiVaultPrepareSessionResumeUnavailableError(response.error)) {
+      // Why: older hosts cannot prepare, but their shared home still supports the legacy resume path.
+      return session
+    }
     throw new Error(
       response.error?.message || 'Could not prepare this legacy Codex session. Retry resume.'
     )
@@ -194,7 +201,10 @@ export async function resumeAiVaultSessionInTerminal(
       ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
       ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
-      ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {})
+      ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
+      activate: false,
+      select: true,
+      navigation: 'caller'
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )

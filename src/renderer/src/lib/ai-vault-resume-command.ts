@@ -6,6 +6,7 @@ import {
 } from '../../../shared/ai-vault-types'
 import {
   isResumableTuiAgent,
+  type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
 import {
@@ -41,6 +42,7 @@ export type AiVaultResumeStartup = {
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
+  providerSession?: AgentProviderSessionMetadata
 }
 
 type AiVaultResumeWorktreeArgs = {
@@ -80,6 +82,7 @@ export function buildAiVaultResumeStartupForWorktree(
 }
 
 function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVaultResumeStartup {
+  const providerSession = getAiVaultAgentProviderSession(args.session)
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
@@ -89,7 +92,8 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
   ) {
     return {
       command: args.session.resumeCommand,
-      ...realHomeCodexResumeEnvDeletion(args.session)
+      ...realHomeCodexResumeEnvDeletion(args.session),
+      ...(providerSession ? { providerSession } : {})
     }
   }
   const platform =
@@ -109,10 +113,10 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
         ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
         : 'powershell'
       : undefined
-  if (isResumableTuiAgent(args.session.agent)) {
+  if (providerSession && isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
-      providerSession: { key: 'session_id', id: args.session.sessionId },
+      providerSession,
       cmdOverrides: {
         ...args.state.settings?.agentCmdOverrides,
         ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
@@ -136,7 +140,8 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
         }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         ...realHomeCodexResumeEnvDeletion(args.session),
-        launchConfig: startupPlan.launchConfig
+        launchConfig: startupPlan.launchConfig,
+        providerSession
       }
     }
   }
@@ -175,6 +180,23 @@ function resolveAiVaultResumeShell(args: AiVaultResumeWorktreeArgs): AgentStartu
       ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
       : undefined
   return resolveStartupShell(platform, shell)
+}
+
+export function getAiVaultAgentProviderSession(
+  session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
+): AgentProviderSessionMetadata | null {
+  if (!isResumableTuiAgent(session.agent)) {
+    return null
+  }
+  if (session.agent === 'antigravity') {
+    return { key: 'conversation_id', id: session.sessionId }
+  }
+  if (session.agent === 'pi') {
+    return session.filePath
+      ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
+      : null
+  }
+  return { key: 'session_id', id: session.sessionId }
 }
 
 function getAiVaultResumeCodexHome(

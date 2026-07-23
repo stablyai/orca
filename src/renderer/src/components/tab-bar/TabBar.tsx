@@ -38,7 +38,8 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { type AgentDetectionTarget, useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { normalizeRelativePath } from '@/lib/path'
 import {
@@ -77,10 +78,7 @@ import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import {
-  selectNativeChatTabWideFallbackUnsafeTabsById,
-  selectTabAgentTypesByTabId
-} from './tab-agent-types-by-tab-id'
+import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 const isWindows = navigator.userAgent.includes('Windows')
@@ -91,7 +89,6 @@ type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWork
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
-const AGENT_DETECTION_LOCAL_TARGET_KEY = 'local'
 
 function getProjectRuntimeShellMenuMode(
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -325,36 +322,7 @@ function TabBarInner({
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
-  const agentDetectionTargetKey = useAppStore((s): string | undefined => {
-    const connectionId = getConnectionIdFromState(s, worktreeId)
-    if (connectionId === undefined) {
-      return undefined
-    }
-    const normalizedConnectionId = connectionId?.trim()
-    if (normalizedConnectionId) {
-      return `ssh:${normalizedConnectionId}`
-    }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim()
-    if (runtimeEnvironmentId) {
-      return `runtime:${runtimeEnvironmentId}`
-    }
-    return AGENT_DETECTION_LOCAL_TARGET_KEY
-  })
-  const agentDetectionTarget = useMemo<AgentDetectionTarget | undefined>(() => {
-    if (agentDetectionTargetKey === undefined) {
-      return undefined
-    }
-    if (agentDetectionTargetKey === AGENT_DETECTION_LOCAL_TARGET_KEY) {
-      return { kind: 'local' }
-    }
-    if (agentDetectionTargetKey.startsWith('ssh:')) {
-      return { kind: 'ssh', connectionId: agentDetectionTargetKey.slice('ssh:'.length) }
-    }
-    if (agentDetectionTargetKey.startsWith('runtime:')) {
-      return { kind: 'runtime', environmentId: agentDetectionTargetKey.slice('runtime:'.length) }
-    }
-    return { kind: 'local' }
-  }, [agentDetectionTargetKey])
+  const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
   const { detectedIds } = useDetectedAgents(agentDetectionTarget)
   const agentLaunchOptions = useMemo(
     () =>
@@ -448,16 +416,9 @@ function TabBarInner({
 
   // Why: tab-wide launch/title hints are safe only before split; gate the view-mode toggle to the active leaf's agent.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
-  // Why: agentStatusByPaneKey churns on every status flip; project {tabId:agentType} to re-render only on agent identity change.
-  const tabAgentTypesByTabId = useAppStore(
-    useShallow((s) =>
-      selectTabAgentTypesByTabId(s.agentStatusByPaneKey ?? {}, s.terminalLayoutsByTabId)
-    )
-  )
-  const nativeChatTabWideFallbackUnsafeTabsById = useAppStore(
-    useShallow((s) => selectNativeChatTabWideFallbackUnsafeTabsById(s.terminalLayoutsByTabId))
-  )
-  const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
+  // Why: every retained TabBar observes the same hot maps; one feature-gated selector shares their projections.
+  const { nativeChatEnabled, tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } =
+    useAppStore(useShallow(selectTabBarAgentProjections))
   const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
     isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
   )

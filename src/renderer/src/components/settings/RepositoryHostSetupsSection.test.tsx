@@ -69,11 +69,12 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
-function renderSection(repo: Repo): void {
+function renderSection(repo: Repo, selectedProjectSetupId?: string): void {
   act(() => {
     root.render(
       React.createElement(RepositoryHostSetupsSection, {
         repo,
+        selectedProjectSetupId,
         forceVisible: true,
         searchQuery: '',
         searchEntries: []
@@ -201,10 +202,140 @@ describe('RepositoryHostSetupsSection', () => {
     // The single project pane switches host in place — no navigation.
     expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
       'github:stablyai/orca',
-      toSshExecutionHostId('openclaw 2')
+      toSshExecutionHostId('openclaw 2'),
+      'remote-repo'
     )
     expect(openSettingsPage).not.toHaveBeenCalled()
     expect(openSettingsTarget).not.toHaveBeenCalled()
+  })
+
+  it('keeps nested SSH setups distinct and derives readiness from their HUB owner', () => {
+    const remoteRepo = makeRepo({
+      id: 'remote-repo',
+      displayName: 'Orca',
+      path: '/srv/orca',
+      executionHostId: 'runtime:hub'
+    })
+    useAppStore.setState({
+      repos: [remoteRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'direct-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'remote-repo',
+          hostId: 'runtime:hub',
+          executionHostId: 'ssh:direct',
+          runtimeOwnerEnvironmentId: 'hub',
+          path: '/srv/orca'
+        }),
+        makeSetup({
+          id: 'jump-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'remote-repo',
+          hostId: 'runtime:hub',
+          executionHostId: 'ssh:jump',
+          runtimeOwnerEnvironmentId: 'hub',
+          path: '/srv/orca'
+        })
+      ],
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'hub',
+          {
+            checkedAt: 1,
+            appVersion: '1.8.0',
+            status: {
+              runtimeId: 'runtime-hub',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: 1,
+              capabilities: []
+            }
+          }
+        ]
+      ]),
+      sshStateByEnvironment: new Map([
+        [
+          'hub',
+          {
+            connectionStates: new Map([
+              [
+                'direct',
+                {
+                  targetId: 'direct',
+                  status: 'connected',
+                  error: null,
+                  reconnectAttempt: 0
+                }
+              ],
+              [
+                'jump',
+                {
+                  targetId: 'jump',
+                  status: 'disconnected',
+                  error: null,
+                  reconnectAttempt: 0
+                }
+              ]
+            ]),
+            targetLabels: new Map([
+              ['direct', 'Direct box'],
+              ['jump', 'Jump box']
+            ]),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true
+          }
+        ]
+      ])
+    })
+
+    renderSection(remoteRepo, 'jump-setup')
+
+    expect(container.textContent).toContain('Direct box')
+    expect(container.textContent).toContain('Jump box')
+    expect(container.textContent).toContain('Ready')
+    expect(container.textContent).toContain('Disconnected')
+    expect(findButton('Open')).toBeTruthy()
+    const currentSetup = container.querySelector('[data-current="true"]')
+    expect(currentSetup?.textContent).toContain('Jump box')
+    expect(currentSetup?.textContent).toContain('Disconnected')
+    expect(currentSetup?.textContent).not.toContain('Direct box')
+    expect(currentSetup?.textContent).not.toContain('Ready')
+  })
+
+  it('shows HUB-local setups as disconnected when their owning runtime is unreachable', () => {
+    const remoteRepo = makeRepo({
+      id: 'remote-repo',
+      displayName: 'Orca',
+      path: '/srv/orca',
+      executionHostId: 'runtime:hub'
+    })
+    useAppStore.setState({
+      repos: [remoteRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'hub-local-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'remote-repo',
+          hostId: 'runtime:hub',
+          executionHostId: 'local',
+          runtimeOwnerEnvironmentId: 'hub',
+          path: '/srv/orca'
+        })
+      ],
+      runtimeStatusByEnvironmentId: new Map([['hub', { checkedAt: 1, status: null }]])
+    })
+
+    renderSection(remoteRepo)
+
+    expect(container.textContent).toContain('Disconnected')
+    expect(container.textContent).not.toContain('Ready')
   })
 
   it('removes independent setup metadata instead of opening an empty repo target', async () => {

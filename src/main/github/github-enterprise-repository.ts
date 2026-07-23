@@ -90,10 +90,8 @@ function normalizeGitHubHost(host: string): NormalizedGitHubHost | null {
     return null
   }
   const hostname = match[1]
-  const rawPort = match[2] ?? null
-  // Why: default web ports do not distinguish a gh auth host from the same
-  // hostname without an explicit port.
-  const port = rawPort === '80' || rawPort === '443' ? null : rawPort
+  // Why: remote URL parsing already removes protocol-default ports; any port left here identifies the endpoint.
+  const port = match[2] ?? null
   return { hostname, port, authority: port ? `${hostname}:${port}` : hostname }
 }
 
@@ -114,10 +112,11 @@ function authenticatedHostFromInventory(host: string, output: string): string | 
   if (exact) {
     return exact.authority
   }
-  const compatible = inventory.filter(
-    (candidate) =>
-      candidate.hostname === requested.hostname && (!requested.port || candidate.port === null)
-  )
+  // Why: a non-default web port identifies the API endpoint; portless credentials target a different server.
+  if (requested.port) {
+    return null
+  }
+  const compatible = inventory.filter((candidate) => candidate.hostname === requested.hostname)
   // Why: an SSH remote has no API port. Only a unique auth-inventory host can
   // safely supply it; multiple ported endpoints on one hostname are ambiguous.
   return compatible.length === 1 ? compatible[0].authority : null

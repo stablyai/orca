@@ -37,6 +37,7 @@
   --mp-flow-card-border-width: 1px;
   --mp-flow-card-inset: calc(var(--mp-flow-card-padding) + var(--mp-flow-card-border-width));
   --mp-flow-shell-height: 400px;
+  --mp-qr-large-size: 184px;
   --m-bg-base: #111111;
   --m-bg-panel: #1a1a1a;
   --m-bg-raised: #242424;
@@ -583,14 +584,15 @@
 
 .mobile-page-root .mp-qr-large {
   box-sizing: border-box;
-  width: 184px;
-  height: 184px;
+  width: var(--mp-qr-large-size);
+  height: var(--mp-qr-large-size);
+  /* Why: keep img size in lockstep with the box (padding 10px each side). */
   padding: 10px;
 }
 
 .mobile-page-root .mp-qr-large img {
-  width: 164px;
-  height: 164px;
+  width: calc(var(--mp-qr-large-size) - 20px);
+  height: calc(var(--mp-qr-large-size) - 20px);
 }
 
 .mobile-page-root .mp-qr-refreshing {
@@ -615,6 +617,19 @@
   flex-direction: column;
   align-items: center;
   gap: 10px;
+  /* Why: stack sits in a fixed QR grid track; fill the track so under-QR copy
+     has a definite width to wrap against. */
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Why: align-items:center sizes children to max-content. Cap width AND set
+   min-width:0 so max-width can actually win over flex/grid min-size:auto and
+   long under-QR copy (relay-degraded notice, regenerate label) wraps. */
+.mobile-page-root .mp-qr-stack > * {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .mobile-page-root .mp-link-under {
@@ -639,17 +654,24 @@
   cursor: not-allowed;
 }
 
-/* Step 1 (Get the app) — borderless layout, page-1 typography */
+/* Step 1 (Get the app) + Step 2 (Pair) — QR column width */
+/* Why: pin the QR column to the QR's own width rather than `auto`. When the flow
+   card is narrow (mp-hero pins it to minmax(360px,560px)) an `auto` track grows
+   to its content's max-content — the relay-degraded notice under the pairing QR
+   is an unwrapped single line — starving the minmax(0,1fr) copy column to ~1 char
+   wide, so CJK copy wrapped one glyph per line (#9700). A fixed track stops that
+   starvation; .mp-qr-stack min-width:0 + max-width:100% (and the notice's
+   min-w-0 text span) stop the notice overflowing the track. */
 .mobile-page-root .mp-step2-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) var(--mp-qr-large-size);
   gap: 28px;
   align-items: start;
 }
 
 .mobile-page-root .mp-pairing-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) var(--mp-qr-large-size);
   grid-template-areas:
     'copy qr'
     'relay qr'
@@ -661,10 +683,12 @@
 
 .mobile-page-root .mp-pairing-copy {
   grid-area: copy;
+  min-width: 0;
 }
 
 .mobile-page-root .mp-pairing-qr {
   grid-area: qr;
+  min-width: 0;
   /* Why: the QR belongs to the pairing heading, not the paragraph below it. */
   margin-top: 48px;
 }

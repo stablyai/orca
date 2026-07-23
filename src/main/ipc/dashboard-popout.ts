@@ -1,5 +1,6 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
+import type { KeybindingService } from '../keybindings/keybinding-service'
 import type { DashboardSnapshot } from '../../shared/dashboard-snapshot'
 import {
   createOrFocusDashboardPopout,
@@ -25,7 +26,10 @@ function isDashboardEnabled(store: Store): boolean {
   return store.getSettings().experimentalAgentDashboardPopout === true
 }
 
-export function registerDashboardPopoutHandlers(store: Store): void {
+export function registerDashboardPopoutHandlers(
+  store: Store,
+  keybindings?: KeybindingService
+): void {
   ipcMain.removeHandler('dashboardPopout:open')
   ipcMain.removeHandler('dashboard:publishSnapshot')
   ipcMain.removeHandler('dashboard:requestSnapshot')
@@ -52,7 +56,9 @@ export function registerDashboardPopoutHandlers(store: Store): void {
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
-    createOrFocusDashboardPopout(store)
+    createOrFocusDashboardPopout(store, undefined, {
+      getKeybindings: () => keybindings?.getOverrides()
+    })
   })
 
   // Relay: the main renderer publishes derived snapshots; forward to the popout.

@@ -324,8 +324,7 @@ export function activateAndRevealWorktree(
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
     void activateWebRuntimeSessionWorktree({
       worktreeId,
-      environmentId: ownerRuntimeEnvironmentId,
-      notifyDesktop: (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+      environmentId: ownerRuntimeEnvironmentId
     })
   }
 

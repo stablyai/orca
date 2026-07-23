@@ -1,10 +1,12 @@
+import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   writeHooksJson,
-  writeManagedScript
+  writeManagedScript,
+  type HooksConfig
 } from '../agent-hooks/installer-utils'
 import {
   readHooksJsonRemote,
@@ -17,8 +19,10 @@ import {
   buildWindowsHookStdinDrainEpilogue,
   WINDOWS_HOOK_STDIN_DRAIN_LABEL
 } from '../agent-hooks/hook-stdin-contract'
+import { getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedHooks,
+  applyManagedStatusLine,
   CLAUDE_EVENTS,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
@@ -28,7 +32,12 @@ import {
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
   getRemoteManagedCommand,
+  getStatusLineInstallMarkerPath,
+  getStatusLineScriptFileName,
+  getStatusLineScriptPath,
+  getStatusLineSlotState,
   removeManagedHooks,
+  removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
 
@@ -175,7 +184,7 @@ export class ClaudeHookService {
     }
 
     const command = getManagedCommand(scriptPath)
-    const nextConfig = applyManagedHooks(
+    let nextConfig = applyManagedHooks(
       config,
       command,
       getManagedScriptFileName(this.options.settings)
@@ -184,8 +193,36 @@ export class ClaudeHookService {
       scriptPath,
       getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
     )
+    // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
+    if (this.options.agent === 'claude') {
+      nextConfig = this.installManagedStatusLine(nextConfig)
+    }
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
+  }
+
+  // Why: the statusline feed is opportunistic (usage display, not agent status); a user who deleted the
+  // managed entry has opted out, and the marker distinguishes that deletion from a first install.
+  private installManagedStatusLine(config: HooksConfig): HooksConfig {
+    const scriptFileName = getStatusLineScriptFileName(this.options.settings)
+    const markerPath = getStatusLineInstallMarkerPath(this.options.settings)
+    const slot = getStatusLineSlotState(config, scriptFileName)
+    if (slot === 'user' || (slot === 'empty' && existsSync(markerPath))) {
+      return config
+    }
+    const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
+    writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
+    const next = applyManagedStatusLine(
+      config,
+      getManagedCommand(statusLineScriptPath),
+      scriptFileName
+    )
+    try {
+      writeFileSync(markerPath, '')
+    } catch {
+      // Best-effort: a missing marker only means one future user deletion gets re-installed once.
+    }
+    return next
   }
 
   // Why: install the Claude hook on the remote box (via SFTP); POSIX-only by design (Windows-remote deferred).
@@ -218,6 +255,9 @@ export class ClaudeHookService {
         remoteScriptPath,
         getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
       )
+      // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
+      // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different
+      // account than the locally selected one, so its usage must not feed the local bar (live feed is host-local only).
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {
@@ -250,12 +290,24 @@ export class ClaudeHookService {
         detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-    const { config: nextConfig, changed } = removeManagedHooks(
+    const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
       config,
       getManagedScriptFileName(this.options.settings)
     )
-    if (changed) {
+    const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
+      hooksRemoved,
+      getStatusLineScriptFileName(this.options.settings)
+    )
+    if (hooksChanged || statusLineChanged) {
       writeHooksJson(configPath, nextConfig)
+    }
+    if (this.options.agent === 'claude') {
+      try {
+        // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
+        rmSync(getStatusLineInstallMarkerPath(this.options.settings), { force: true })
+      } catch {
+        // ignore — marker cleanup is best-effort
+      }
     }
     return this.getStatus()
   }

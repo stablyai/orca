@@ -235,7 +235,7 @@ yay -S stably-orca-bin
 
 - **Discord:** 加入 **[Discord](https://discord.gg/fzjDKHxv8Q)** 社区。
 - **Twitter / X:** 关注 **[@orca_build](https://x.com/orca_build)** 获取更新和公告。
-- **微信:** 第一、二个微信群均已满，现在可以加入第三个群。
+- **微信:** 其他群已满，现在加入第 5 群。
 
   <img src="../assets/wechat-qr.jpg" alt="Orca 社区微信群二维码" width="160" />
 

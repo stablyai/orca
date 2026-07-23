@@ -174,13 +174,17 @@ export async function removeSettingsProjectFromAllHosts(
 export function getSettingsProjectHostRepo(
   settingsProject: SettingsProject,
   repos: readonly Repo[],
-  selectedHostId: ExecutionHostId | undefined
+  selectedHostId: ExecutionHostId | undefined,
+  selectedSetupId?: string
 ): Repo | undefined {
   const effectiveHostId = resolveEffectiveProjectHost(settingsProject.setups, selectedHostId)
   if (!effectiveHostId) {
     return undefined
   }
   const effectiveSetup =
+    settingsProject.setups.find(
+      (setup) => setup.id === selectedSetupId && setup.hostId === effectiveHostId
+    ) ??
     settingsProject.setups.find((setup) => setup.hostId === effectiveHostId) ??
     settingsProject.setups[0]
   return (

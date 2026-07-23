@@ -34,7 +34,7 @@ export function ChangesModeView({
   viewStateScopeId: string
   diffViewStateKey: string
   onContentChange: (content: string) => void
-  onSave: (content: string) => Promise<void>
+  onSave: (content: string) => Promise<boolean>
 }): React.JSX.Element {
   if (!dc) {
     return (

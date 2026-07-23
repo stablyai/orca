@@ -73,6 +73,12 @@ import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-un
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
 import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
+import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import {
+  assertEditorFileOperationCurrent,
+  captureEditorFileOperationProvenance,
+  getEditorFileOperationContext
+} from '@/lib/editor-file-operation-owner'
 
 export type {
   ActiveRightSidebarTab,
@@ -208,6 +214,8 @@ export type OpenFile = {
   isDirty: boolean
   // Why: remote untitled cleanup must target the creating environment even if the user later switches runtime.
   runtimeEnvironmentId?: string | null
+  /** Host provenance captured when the tab opened; mutations reject replacement owners. */
+  operationProvenance?: EditorFileOperationProvenance
   /** Why: preview tabs mirror a source file's live draft; storing its ID lets the preview follow unsaved edits without becoming editable. */
   markdownPreviewSourceFileId?: string
   /** Hash fragment to reveal when a preview tab opens from a link (`./guide.md#setup`); kept on tab state so repeat opens can retarget it. */
@@ -235,6 +243,10 @@ export type OpenFile = {
   lastKnownDiskSignature?: string
   /** Why: gates autosave for restored dirty tabs until the conflict scan compares disk vs baseline, else a slow SSH read loses the race. Not persisted. */
   pendingDiskBaselineVerification?: boolean
+  /** Why: gates autosave during a live self-move echo's disk verification; separate flag from the restored scan's so the two can't clear each other's gate. Not persisted. */
+  pendingLiveDiskVerification?: boolean
+  /** Why: routes an Orca-owned move's destination-watcher echo into content verification. On the tab so it survives the atomic rekey; operationId supersedes a stale verification on re-move. Not persisted. */
+  pendingSelfMoveEcho?: { operationId: string; targetPath: string }
   /** Why: diff bodies are cached in EditorPanel; bump this on re-select so the panel refetches instead of reusing a stale snapshot. */
   diffContentReloadNonce?: number
   /** Why: bumping refetches clean tabs — the user's manual recovery when a remote watcher misses an external write. */
@@ -462,6 +474,15 @@ export type EditorSlice = {
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
   setLastKnownDiskSignature: (fileId: string, signature: string) => void
   clearPendingDiskBaselineVerification: (fileId: string) => void
+  setPendingDiskBaselineVerification: (fileId: string, value: boolean) => void
+  setPendingLiveDiskVerification: (fileId: string, value: boolean) => void
+  clearSelfMoveEcho: (fileId: string) => void
+  /** Atomically retargets open editor sessions across an Orca-owned move — one commit-only update migrating every path-derived id + all id-keyed state, no close/reopen. Returns collision/stale without mutating. */
+  rekeyOpenFilesForPathChange: (args: {
+    rekeys: readonly OpenFilePathRekey[]
+    /** When set, dirty autosave-capable destinations get move-echo provenance + a synchronous autosave gate so the watcher can content-verify the echo. */
+    moveOperationId?: string
+  }) => RekeyOpenFilesResult
   clearUntitled: (fileId: string) => void
   openDiff: (
     worktreeId: string,
@@ -939,7 +960,7 @@ function isSameEditorOwner(
   )
 }
 
-function buildOwnedEditorFileId(
+export function buildOwnedEditorFileId(
   filePath: string,
   worktreeId: string,
   runtimeEnvironmentId: string | null | undefined
@@ -948,7 +969,7 @@ function buildOwnedEditorFileId(
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
-function buildDiffEditorFileId(
+export function buildDiffEditorFileId(
   worktreeId: string,
   diffSource: DiffSource,
   relativePath: string,
@@ -1008,7 +1029,7 @@ function getReusableOpenFileModes(mode: OpenFile['mode']): readonly OpenFile['mo
   return [mode]
 }
 
-function resolveEditorFileIdForOwner(
+export function resolveEditorFileIdForOwner(
   state: Pick<EditorSlice, 'openFiles'>,
   filePath: string,
   worktreeId: string,
@@ -1161,7 +1182,8 @@ function migrateHydratedEditorTabsAndGroups(
     }
     const tabIdMigrations = new Map<string, string>()
     const nextTabs = tabs.map((tab) => {
-      if (tab.contentType !== 'editor') {
+      // Why: widened for the shared live-move rekey — a move retargets every editor-family tab (diff/conflict-review/check-details), not only plain 'editor'.
+      if (!isEditorTabContentType(tab.contentType)) {
         return tab
       }
       const nextId = idMigrations.get(tab.id) ?? tab.id
@@ -1226,17 +1248,47 @@ function migrateHydratedEditorTabsAndGroups(
   }
 }
 
+/** One tab's migration in an Orca-owned move; precomputed by the move coordinator. */
+export type OpenFilePathRekey = {
+  oldFileId: string
+  newFileId: string
+  oldFilePath: string
+  newFilePath: string
+  newRelativePath: string
+  newLanguage?: string
+  newMarkdownPreviewSourceFileId?: string
+  /** Explicit rename of an untitled file consumes its untitled status. */
+  consumeUntitled?: boolean
+}
+
+export type RekeyOpenFilesResult = { ok: true } | { ok: false; reason: 'collision' | 'stale' }
+
+function rekeyFileIdRecord<T>(
+  record: Record<string, T>,
+  migrations: ReadonlyMap<string, string>
+): Record<string, T> {
+  let changed = false
+  const next: Record<string, T> = {}
+  for (const [key, value] of Object.entries(record)) {
+    const mapped = migrations.get(key)
+    if (mapped !== undefined && mapped !== key) {
+      next[mapped] = value
+      changed = true
+    } else {
+      next[key] = value
+    }
+  }
+  return changed ? next : record
+}
+
 function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): void {
   const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
-  const repo = state.repos.find((candidate) => candidate.id === repoId)
   const owningRuntimeEnvironmentId = file.runtimeEnvironmentId?.trim()
-  // Why: untitled placeholders may live on a remote runtime/SSH target; route through the runtime-aware client, not local FS.
-  const context = {
-    settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
-    worktreeId: file.worktreeId,
-    worktreePath: worktree?.path ?? null,
-    connectionId: repo?.connectionId ?? undefined
+  let context: ReturnType<typeof getEditorFileOperationContext>
+  try {
+    context = getEditorFileOperationContext(state, file, worktree?.path ?? null)
+  } catch {
+    return
   }
   void deleteRuntimeRelativePath(context, file.relativePath)
     .then((deletedRemotely) => {
@@ -1541,8 +1593,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
       const worktreeId = file.worktreeId
-      const runtimeEnvironmentId =
-        file.runtimeEnvironmentId === null
+      let operationProvenance = file.operationProvenance
+      if (!operationProvenance && file.mode === 'edit' && file.readOnly !== true) {
+        try {
+          operationProvenance = captureEditorFileOperationProvenance(
+            s,
+            worktreeId,
+            options?.suppressActiveRuntimeFallback ? null : file.runtimeEnvironmentId,
+            options?.suppressActiveRuntimeFallback === true ||
+              file.runtimeEnvironmentId !== undefined
+          )
+        } catch (error) {
+          toast.error(extractIpcErrorMessage(error, 'Failed to resolve file owner.'))
+          // Why: mirrored tabs can arrive before their graph row; allow convergence while mutation paths still fail closed without provenance.
+        }
+      }
+      const runtimeEnvironmentId = operationProvenance
+        ? operationProvenance.generation.route.runtimeEnvironmentId
+        : file.runtimeEnvironmentId === null
           ? null
           : (file.runtimeEnvironmentId ??
             (options?.suppressActiveRuntimeFallback
@@ -1648,7 +1716,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           // Replace in-place to preserve tab position
           newFiles = s.openFiles.map((f, i) =>
             i === existingPreviewIdx
-              ? { ...file, id, isDirty: false, isPreview: true, runtimeEnvironmentId }
+              ? {
+                  ...file,
+                  id,
+                  isDirty: false,
+                  isPreview: true,
+                  runtimeEnvironmentId,
+                  operationProvenance
+                }
               : f
           )
           // Swap the old preview ID for the new one in the stored tab bar order
@@ -1731,7 +1806,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             id,
             isDirty: false,
             isPreview: isPreview || undefined,
-            runtimeEnvironmentId
+            runtimeEnvironmentId,
+            operationProvenance
           }
         ],
         ...tabBarUpdate,
@@ -1760,13 +1836,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     try {
-      const connectionId =
-        state.repos.find((entry) => entry.id === worktree.repoId)?.connectionId ?? undefined
+      const operationProvenance = captureEditorFileOperationProvenance(
+        state,
+        worktreeId,
+        undefined,
+        false
+      )
+      const operationContext = getEditorFileOperationContext(
+        state,
+        { worktreeId, operationProvenance },
+        worktree.path
+      )
       const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
         worktree.path,
         worktreeId,
-        connectionId,
-        get().settings
+        operationContext.connectionId,
+        operationContext.settings,
+        operationProvenance,
+        operationContext.expectedSshConnectionGeneration,
+        operationContext.expectedSshTargetId,
+        operationContext.expectedExecutionHostId,
+        () => assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
       )
       if (!fileInfo) {
         return
@@ -2394,6 +2484,176 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         )
       }
     }),
+
+  setPendingDiskBaselineVerification: (fileId, value) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      const next = value || undefined
+      if (!file || file.pendingDiskBaselineVerification === next) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, pendingDiskBaselineVerification: next } : f
+        )
+      }
+    }),
+
+  setPendingLiveDiskVerification: (fileId, value) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      const next = value || undefined
+      if (!file || file.pendingLiveDiskVerification === next) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, pendingLiveDiskVerification: next } : f
+        )
+      }
+    }),
+
+  clearSelfMoveEcho: (fileId) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (!file?.pendingSelfMoveEcho) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, pendingSelfMoveEcho: undefined } : f
+        )
+      }
+    }),
+
+  rekeyOpenFilesForPathChange: ({ rekeys, moveOperationId }) => {
+    if (rekeys.length === 0) {
+      return { ok: true }
+    }
+    let result: RekeyOpenFilesResult = { ok: true }
+    set((s) => {
+      const migrations = new Map<string, string>()
+      const rekeyByOldId = new Map<string, OpenFilePathRekey>()
+      for (const rekey of rekeys) {
+        migrations.set(rekey.oldFileId, rekey.newFileId)
+        rekeyByOldId.set(rekey.oldFileId, rekey)
+      }
+      const openById = new Map(s.openFiles.map((f) => [f.id, f]))
+
+      // Preflight (atomic with apply): every source still open, target ids unique,
+      // and no target id belongs to an UNAFFECTED live session (never merge two).
+      const seenNewIds = new Set<string>()
+      for (const rekey of rekeys) {
+        if (!openById.has(rekey.oldFileId)) {
+          result = { ok: false, reason: 'stale' }
+          return s
+        }
+        if (seenNewIds.has(rekey.newFileId)) {
+          result = { ok: false, reason: 'collision' }
+          return s
+        }
+        seenNewIds.add(rekey.newFileId)
+        const occupier = openById.get(rekey.newFileId)
+        if (occupier && !migrations.has(occupier.id)) {
+          result = { ok: false, reason: 'collision' }
+          return s
+        }
+      }
+
+      const nextOpenFiles = s.openFiles.map((f) => {
+        const rekey = rekeyByOldId.get(f.id)
+        if (!rekey) {
+          return f
+        }
+        // Spread the whole OpenFile so fields this action doesn't know about survive; change only the path-derived ones.
+        // Gate atomically here so autosave is suspended before any echo can be verified (only a dirty autosave-capable tab can be clobbered).
+        const gatesEcho =
+          moveOperationId !== undefined &&
+          f.isDirty &&
+          // A 'changed' tab is already autosave-suspended via externalMutation; gating it would strand the gate (verification skips a 'changed' tab), so leave the banner as terminal.
+          f.externalMutation !== 'changed' &&
+          (f.mode === 'edit' || (f.mode === 'diff' && f.diffSource === 'unstaged'))
+        return {
+          ...f,
+          id: rekey.newFileId,
+          filePath: rekey.newFilePath,
+          relativePath: rekey.newRelativePath,
+          // A moved tab's id no longer matches the host snapshot, so leaving it host-owned would cull it (losing the draft); the coordinator close-notifies the host's old-path tab. (Re-homing the host tab in place is a follow-up.)
+          mirroredFromRuntimeSession: undefined,
+          ...(rekey.newLanguage !== undefined ? { language: rekey.newLanguage } : {}),
+          ...(rekey.newMarkdownPreviewSourceFileId !== undefined
+            ? { markdownPreviewSourceFileId: rekey.newMarkdownPreviewSourceFileId }
+            : {}),
+          ...(rekey.consumeUntitled
+            ? { isUntitled: undefined, deleteUntouchedOnClose: undefined }
+            : {}),
+          ...(gatesEcho
+            ? {
+                pendingLiveDiskVerification: true,
+                pendingSelfMoveEcho: {
+                  operationId: moveOperationId,
+                  targetPath: rekey.newFilePath
+                }
+              }
+            : {})
+        }
+      })
+
+      const activeFileIdByWorktree: Record<string, string | null> = {}
+      for (const [wtId, activeId] of Object.entries(s.activeFileIdByWorktree)) {
+        activeFileIdByWorktree[wtId] = activeId ? (migrations.get(activeId) ?? activeId) : activeId
+      }
+
+      // Partition by each moved file's OWN worktree: the same path can be open in more than one worktree (e.g. a floating workspace), and tab-bar / group state is per-worktree.
+      const migrationsByWorktree: Record<string, Map<string, string>> = {}
+      for (const rekey of rekeys) {
+        const wtId = openById.get(rekey.oldFileId)!.worktreeId
+        ;(migrationsByWorktree[wtId] ??= new Map()).set(rekey.oldFileId, rekey.newFileId)
+      }
+
+      const tabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
+      for (const [wtId, wtMigrations] of Object.entries(migrationsByWorktree)) {
+        const prevBarOrder = tabBarOrderByWorktree[wtId]
+        if (prevBarOrder) {
+          tabBarOrderByWorktree[wtId] = prevBarOrder.map((id) => wtMigrations.get(id) ?? id)
+        }
+      }
+
+      const reveal = s.pendingEditorReveal
+      const rekeyForReveal = reveal
+        ? rekeys.find((r) => r.oldFilePath === reveal.filePath)
+        : undefined
+
+      return {
+        openFiles: nextOpenFiles,
+        editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
+        editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
+        markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
+        editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
+        markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
+        markdownTableOfContentsVisible: rekeyFileIdRecord(
+          s.markdownTableOfContentsVisible,
+          migrations
+        ),
+        activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
+        activeFileIdByWorktree,
+        tabBarOrderByWorktree,
+        ...migrateHydratedEditorTabsAndGroups(s, migrationsByWorktree),
+        ...(reveal && rekeyForReveal
+          ? {
+              pendingEditorReveal: {
+                ...reveal,
+                filePath: rekeyForReveal.newFilePath,
+                // matchesPendingEditorReveal prefers fileId, so migrate it too or
+                // the reveal would never match the rekeyed tab.
+                ...(reveal.fileId ? { fileId: migrations.get(reveal.fileId) ?? reveal.fileId } : {})
+              }
+            }
+          : {})
+      }
+    })
+    return result
+  },
 
   clearUntitled: (fileId) =>
     set((s) => ({

@@ -51,7 +51,7 @@ export function MobileOnboardingPage({
         </Text>
         <Text style={styles.body}>
           {isSessionView
-            ? 'Choose whether supported agent sessions open in the terminal or native chat on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
+            ? 'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
             : 'Get notified on this device when an agent needs your input or finishes a task.'}
         </Text>
       </View>
@@ -88,8 +88,8 @@ function SessionViewChoices({
   return (
     <>
       <ChoiceButton
-        label="Use native chat"
-        accessibilityLabel="Open sessions in native chat"
+        label="Use Chat UI"
+        accessibilityLabel="Open sessions in Chat UI"
         primary
         busy={busyChoice === 'chat'}
         disabled={disabled}

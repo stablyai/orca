@@ -1,3 +1,5 @@
+import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
+
 // Why: declares the Orca runtime RPC compatibility contract. Desktop,
 // headless server, CLI, and mobile builds may drift in app version, but
 // they must agree on this protocol range before runtime RPCs are allowed.
@@ -51,6 +53,16 @@ export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-comman
 // replay ambiguous cutovers when the host advertises idempotent create support.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+// Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
+export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
+  'terminal.create-idempotency.v2' as const
+export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
+export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
+  'agent-session.host-authority.v1' as const
+// Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
+export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
+export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
+  'Remote file changes require a newer Orca server. Update the HUB and try again.'
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -69,7 +81,11 @@ export const RUNTIME_CAPABILITIES = [
   AI_VAULT_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
-  WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  REMOTE_SERVER_UPDATE_CAPABILITY,
+  AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
+  FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})
