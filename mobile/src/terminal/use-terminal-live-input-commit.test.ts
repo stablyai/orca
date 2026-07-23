@@ -6,10 +6,18 @@ import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS } from './terminal-live-hangul-mirror'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
+type DeferredSend = {
+  readonly bytes: string
+  readonly resolve: (value: boolean) => void
+}
+
 type TerminalLiveInputCommitHarness = {
   readonly captures: readonly string[]
   readonly handlers: ReturnType<typeof useTerminalLiveInputCommit<string>>
   readonly sent: readonly string[]
+  readonly invokeOrder: readonly string[]
+  readonly pendingSends: DeferredSend[]
+  readonly resolveNextSend: (value?: boolean) => void
   readonly setActiveSessionTabType: (next: string | undefined) => void
   readonly setConnected: (next: boolean) => void
   readonly setSendResult: (next: boolean) => void
@@ -18,6 +26,10 @@ type TerminalLiveInputCommitHarness = {
 
 type TerminalLiveInputCommitHarnessOptions = {
   readonly sendResult?: boolean
+  /** When set, overrides sendResult per payload (for accept/reject control cases). */
+  readonly acceptSend?: (bytes: string) => boolean
+  /** Hold each send until resolveNextSend — for queue-ordering race tests. */
+  readonly deferSends?: boolean
 }
 
 function suppressReactTestRendererDeprecationWarning(): () => void {
@@ -33,7 +45,9 @@ function suppressReactTestRendererDeprecationWarning(): () => void {
 }
 
 function createTerminalLiveInputCommitHarness({
-  sendResult = true
+  sendResult = true,
+  acceptSend,
+  deferSends = false
 }: TerminalLiveInputCommitHarnessOptions = {}): TerminalLiveInputCommitHarness {
   const activeHandle = 'terminal-a'
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
@@ -49,10 +63,24 @@ function createTerminalLiveInputCommitHarness({
   }
   const sent: string[] = []
   let currentSendResult = sendResult
+  const invokeOrder: string[] = []
+  const pendingSends: DeferredSend[] = []
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
     current: async (_handle, bytes) => {
+      invokeOrder.push(bytes)
+      if (deferSends) {
+        return new Promise<boolean>((resolve) => {
+          pendingSends.push({
+            bytes,
+            resolve: (value) => {
+              sent.push(bytes)
+              resolve(value)
+            }
+          })
+        })
+      }
       sent.push(bytes)
-      return currentSendResult
+      return acceptSend ? acceptSend(bytes) : currentSendResult
     }
   }
   // Refs never re-render; only these variables re-run the hook's clear effects.
@@ -93,6 +121,15 @@ function createTerminalLiveInputCommitHarness({
     captures,
     handlers,
     sent,
+    invokeOrder,
+    pendingSends,
+    resolveNextSend: (value = true): void => {
+      const next = pendingSends.shift()
+      if (!next) {
+        throw new Error('no deferred send to resolve')
+      }
+      next.resolve(value)
+    },
     setActiveSessionTabType: (next: string | undefined): void => {
       currentActiveSessionTabType = next
       // Ref and prop derive from the same activeSessionTab in the real route, so
@@ -174,8 +211,8 @@ describe('terminal live input commit hook', () => {
     // When
     handlers.handleLiveInputSubmit()
 
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
+    // Then: held commit + CR are one queued payload
+    await vi.waitFor(() => expect(sent).toEqual(['한\r']))
   })
 
   it('Given no pending text When submit is requested Then sends only carriage return', async () => {
@@ -189,7 +226,7 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent).toEqual(['\r']))
   })
 
-  it('Given a rejected held-text send When submit is requested Then suppresses the carriage return', async () => {
+  it('Given a rejected held-text submit When the combined payload fails Then still only one ordered attempt', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
     handlers.handleLiveInputChange('한')
@@ -199,8 +236,8 @@ describe('terminal live input commit hook', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    // Then: the held commit went out but was not accepted, so no \r follows
-    await vi.waitFor(() => expect(sent).toEqual(['한']))
+    // Then: held+\r is one queued payload (cannot suppress only CR after a failed held half)
+    await vi.waitFor(() => expect(sent).toEqual(['한\r']))
   })
 
   it('Given ASCII typing When changes arrive Then mirrors immediately', async () => {
@@ -324,8 +361,8 @@ describe('terminal live input commit hook', () => {
     // When
     handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Tab' } })
 
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['한', '\t']))
+    // Then: held preedit is not on the PTY — one ordered payload holds-before-Tab
+    await vi.waitFor(() => expect(sent).toEqual(['한\t']))
   })
 
   it('Given Hangul pending When the tab type lags to undefined Then keeps the composition state', async () => {
@@ -338,7 +375,7 @@ describe('terminal live input commit hook', () => {
     handlers.handleLiveInputSubmit()
 
     // Then: an unknown tab type is not "left the terminal", so pending still flushes
-    await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
+    await vi.waitFor(() => expect(sent).toEqual(['한\r']))
   })
 
   it('Given Hangul pending When the tab genuinely changes to non-terminal Then clears the composition state', async () => {
@@ -350,8 +387,398 @@ describe('terminal live input commit hook', () => {
     setActiveSessionTabType('chat')
     handlers.handleLiveInputSubmit()
 
-    // Then: pending was dropped, so submit sends only the carriage return
-    await vi.waitFor(() => expect(sent).toEqual(['\r']))
+    // Then: pending was dropped and the surface is not live — no control is queued
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sent).toEqual([])
+  })
+
+  /**
+   * RN 0.83.9: onChangeText then onSelectionChange for the edit. Simulate the
+   * paired end-of-field selection, then a later cursor-only trackpad move.
+   */
+  async function typeFieldThenMoveCaret(
+    handlers: ReturnType<typeof createTerminalLiveInputCommitHarness>['handlers'],
+    fieldText: string,
+    nextCollapsedUtf16: number
+  ): Promise<void> {
+    handlers.handleLiveInputChange(fieldText)
+    // Paired selection after the text change (caret at end) — not a trackpad move.
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: fieldText.length, end: fieldText.length } }
+    })
+    await Promise.resolve()
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: nextCollapsedUtf16, end: nextCollapsedUtf16 } }
+    })
+  }
+
+  it('Given end-to-middle trackpad move When selection collapses Then sends ordered ArrowLeft bytes', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    await typeFieldThenMoveCaret(handlers, 'abcdef', 3)
+
+    await vi.waitFor(() => expect(sent).toEqual(['abcdef', '\x1b[D'.repeat(3)]))
+  })
+
+  it('Given repeated selection at the same index Then sends nothing more', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    await typeFieldThenMoveCaret(handlers, 'abc', 1)
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2)]))
+
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 1, end: 1 } }
+    })
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 1, end: 1 } }
+    })
+
+    await Promise.resolve()
+    expect(sent).toEqual(['abc', '\x1b[D'.repeat(2)])
+  })
+
+  it('Given middle caret When moved right Then sends ordered ArrowRight bytes', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    await typeFieldThenMoveCaret(handlers, 'abcdef', 2)
+    await vi.waitFor(() => expect(sent).toEqual(['abcdef', '\x1b[D'.repeat(4)]))
+
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 5, end: 5 } }
+    })
+
+    await vi.waitFor(() => expect(sent).toEqual(['abcdef', '\x1b[D'.repeat(4), '\x1b[C'.repeat(3)]))
+  })
+
+  it('Given middle insertion When text changes Then PTY converges to abcXdef with caret after X', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    await typeFieldThenMoveCaret(handlers, 'abcdef', 3)
+    await vi.waitFor(() => expect(sent).toEqual(['abcdef', '\x1b[D'.repeat(3)]))
+
+    handlers.handleLiveInputChange('abcXdef')
+    // Paired selection after insert (RN order) must not emit a second arrow plan.
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 4, end: 4 } }
+    })
+
+    await vi.waitFor(() =>
+      expect(sent).toEqual([
+        'abcdef',
+        '\x1b[D'.repeat(3),
+        '\x1b[C'.repeat(3) + '\x7f'.repeat(3) + 'Xdef' + '\x1b[D'.repeat(3)
+      ])
+    )
+  })
+
+  it('Given middle deletion When text shortens Then restores, erases, and reseats the caret', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    await typeFieldThenMoveCaret(handlers, 'abXcd', 3)
+    await vi.waitFor(() => expect(sent).toEqual(['abXcd', '\x1b[D'.repeat(2)]))
+
+    handlers.handleLiveInputChange('abcd')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 2, end: 2 } }
+    })
+
+    await vi.waitFor(() =>
+      expect(sent).toEqual([
+        'abXcd',
+        '\x1b[D'.repeat(2),
+        '\x1b[C'.repeat(2) + '\x7f'.repeat(3) + 'cd' + '\x1b[D'.repeat(2)
+      ])
+    )
+  })
+
+  it('Given emoji field When caret crosses the emoji Then arrow counts are code-point safe', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    const text = 'a👍b'
+    // UTF-16: a=0..1, 👍=1..3, b=3..4 — caret before b is utf16 offset 3
+    await typeFieldThenMoveCaret(handlers, text, 3)
+
+    await vi.waitFor(() => expect(sent).toEqual([text, '\x1b[D']))
+  })
+
+  it('Given held Hangul When selection moves left Then flushes the syllable before arrows', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('한')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 1, end: 1 } }
+    })
+    handlers.handleLiveInputChange('한글')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 2, end: 2 } }
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['한']))
+    await Promise.resolve()
+
+    // Cursor-only move (no preceding text change) — flush held then ArrowLeft.
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 1, end: 1 } }
+    })
+
+    await vi.waitFor(() => expect(sent).toEqual(['한', '글' + '\x1b[D']))
+  })
+
+  it('Given held Hangul When end-of-field selection repeats Then does not flush early', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('한')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 1, end: 1 } }
+    })
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 1, end: 1 } }
+    })
+
+    await Promise.resolve()
+    expect(sent).toEqual([])
+  })
+
+  it('Given Hangul composition When paired selections follow each change Then does not flush or leak preedit jamo', async () => {
+    // Given / When: RN delivers onChange then onSelectionChange per composition step
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    for (const fieldText of ['ㅎ', '하', '한', '한ㄱ', '한그', '한글']) {
+      handlers.handleLiveInputChange(fieldText)
+      handlers.handleLiveInputSelectionChange({
+        nativeEvent: { selection: { start: fieldText.length, end: fieldText.length } }
+      })
+    }
+
+    // Then: only the stable prefix streamed; held trailing syllable never flushed by selection
+    await vi.waitFor(() => expect(sent).toEqual(['한']))
+    expect(sent.some((payload) => payload.includes('ㅎ') || payload.includes('ㄱ'))).toBe(false)
+  })
+
+  it('Given physical ArrowLeft with field text When keypress and selection both fire Then sends a single arrow', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    await typeFieldThenMoveCaret(handlers, 'abc', 3)
+    await vi.waitFor(() => expect(sent).toEqual(['abc']))
+
+    // Hardware keyboards can emit both events; keypress must not PTY-send when the field owns the caret.
+    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'ArrowLeft' } })
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 2, end: 2 } }
+    })
+
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D']))
+    expect(sent.filter((payload) => payload === '\x1b[D')).toHaveLength(1)
+  })
+
+  it('Given physical ArrowRight with field text When keypress and selection both fire Then sends a single arrow', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    await typeFieldThenMoveCaret(handlers, 'abc', 1)
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2)]))
+
+    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'ArrowRight' } })
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 2, end: 2 } }
+    })
+
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2), '\x1b[C']))
+    expect(sent.filter((payload) => payload === '\x1b[C')).toHaveLength(1)
+  })
+
+  it('Given stale handle When selection arrives Then rejects and sends nothing', async () => {
+    const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('abc')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 3, end: 3 } }
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['abc']))
+
+    // Tab left the terminal surface — live selection must not move a foreign PTY.
+    setActiveSessionTabType('chat')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 0, end: 0 } }
+    })
+
+    await Promise.resolve()
+    expect(sent).toEqual(['abc'])
+  })
+
+  it('Given pending field When submit runs Then selection state resets so later arrows do not reuse it', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    await typeFieldThenMoveCaret(handlers, 'abc', 1)
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2)]))
+
+    handlers.handleLiveInputSubmit()
+    // Mid-caret restore + CR are one control payload after the trackpad lefts.
+    await vi.waitFor(() =>
+      expect(sent).toEqual(['abc', '\x1b[D'.repeat(2), '\x1b[C'.repeat(2) + '\r'])
+    )
+
+    handlers.handleLiveInputChange('z')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 1, end: 1 } }
+    })
+    await vi.waitFor(() =>
+      expect(sent).toEqual(['abc', '\x1b[D'.repeat(2), '\x1b[C'.repeat(2) + '\r', 'z'])
+    )
+  })
+
+  it('Given non-terminal mode change When selection fires Then sends nothing', async () => {
+    const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('abc')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 3, end: 3 } }
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['abc']))
+    setActiveSessionTabType('chat')
+
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 0, end: 0 } }
+    })
+
+    await Promise.resolve()
+    expect(sent).toEqual(['abc'])
+  })
+
+  it('Given mid-field caret When accessory Left is accepted Then next typed char starts fresh without canceling the control', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    await typeFieldThenMoveCaret(handlers, 'abc', 1)
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2)]))
+
+    const result = await handlers.handleLiveInputAccessoryBytes({ bytes: '\x1b[D' })
+    expect(result).toEqual({ kind: 'handled' })
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2), '\x1b[D']))
+
+    // Fresh field session at the moved PTY position — no restore/suffix repair of "abc".
+    handlers.handleLiveInputChange('z')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 1, end: 1 } }
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2), '\x1b[D', 'z']))
+    expect(sent.some((payload) => payload.includes('\x7f'))).toBe(false)
+  })
+
+  it('Given sent-only accessory control When send fails Then local session still ended so next typing is fresh', async () => {
+    // Trackpad multi-arrow payload still accepts; single accessory Left rejects.
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({
+      acceptSend: (bytes) => bytes !== '\x1b[D'
+    })
+    await typeFieldThenMoveCaret(handlers, 'abc', 1)
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2)]))
+
+    const result = await handlers.handleLiveInputAccessoryBytes({ bytes: '\x1b[D' })
+    expect(result).toEqual({ kind: 'handled' })
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2), '\x1b[D']))
+
+    // Session ended on queue regardless of accept — no suffix repair against "abc".
+    handlers.handleLiveInputChange('z')
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D'.repeat(2), '\x1b[D', 'z']))
+  })
+
+  it('Given accepted Tab with field text When next char is typed Then starts a fresh field session', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('abc')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 3, end: 3 } }
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['abc']))
+
+    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Tab' } })
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\t']))
+
+    handlers.handleLiveInputChange('z')
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\t', 'z']))
+  })
+
+  it('Given accepted Escape with field text When next char is typed Then starts a fresh field session', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('abc')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 3, end: 3 } }
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['abc']))
+
+    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Escape' } })
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b']))
+
+    handlers.handleLiveInputChange('z')
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b', 'z']))
+  })
+
+  it('Given failed non-arrow special control When send is rejected Then session was still cleared for a fresh next edit', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({
+      acceptSend: (bytes) => bytes !== '\x1b'
+    })
+    handlers.handleLiveInputChange('abc')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 3, end: 3 } }
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['abc']))
+
+    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Escape' } })
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b']))
+
+    handlers.handleLiveInputChange('z')
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b', 'z']))
+  })
+
+  it('Given deferred accessory Left When new Hangul arrives Then control settles before the new session payload', async () => {
+    const { handlers, sent, invokeOrder, pendingSends, resolveNextSend } =
+      createTerminalLiveInputCommitHarness({ deferSends: true })
+
+    handlers.handleLiveInputChange('abc')
+    await vi.waitFor(() => expect(pendingSends.length).toBe(1))
+    resolveNextSend(true)
+    await vi.waitFor(() => expect(sent).toEqual(['abc']))
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { selection: { start: 3, end: 3 } }
+    })
+
+    const accessoryPromise = handlers.handleLiveInputAccessoryBytes({ bytes: '\x1b[D' })
+    await vi.waitFor(() => expect(pendingSends.map((p) => p.bytes)).toEqual(['\x1b[D']))
+
+    // New IME session while control is still pending — must not be invoked yet.
+    handlers.handleLiveInputChange('한')
+    await Promise.resolve()
+    expect(invokeOrder).toEqual(['abc', '\x1b[D'])
+    expect(pendingSends).toHaveLength(1)
+
+    resolveNextSend(true)
+    await accessoryPromise
+    await vi.waitFor(() => expect(pendingSends.map((p) => p.bytes)).toEqual(['한']))
+    resolveNextSend(true)
+    await vi.waitFor(() => expect(sent).toEqual(['abc', '\x1b[D', '한']))
+  })
+
+  it('Given deferred submit When new Hangul arrives Then submit payload settles before the new Hangul', async () => {
+    const { handlers, sent, invokeOrder, pendingSends, resolveNextSend } =
+      createTerminalLiveInputCommitHarness({ deferSends: true })
+
+    handlers.handleLiveInputChange('한')
+    await vi.waitFor(() => expect(pendingSends.length).toBe(0))
+    // Held is not sent until commit; submit queues held+\r as one payload.
+    handlers.handleLiveInputSubmit()
+    await vi.waitFor(() => expect(pendingSends.map((p) => p.bytes)).toEqual(['한\r']))
+
+    handlers.handleLiveInputChange('가')
+    await Promise.resolve()
+    expect(invokeOrder).toEqual(['한\r'])
+    expect(pendingSends).toHaveLength(1)
+
+    resolveNextSend(true)
+    await vi.waitFor(() => expect(pendingSends.map((p) => p.bytes)).toEqual(['가']))
+    resolveNextSend(true)
+    await vi.waitFor(() => expect(sent).toEqual(['한\r', '가']))
+  })
+
+  it('Given deferred external flush When new Hangul arrives Then flush settles before the new session', async () => {
+    const { handlers, sent, invokeOrder, pendingSends, resolveNextSend } =
+      createTerminalLiveInputCommitHarness({ deferSends: true })
+
+    handlers.handleLiveInputChange('한')
+    const flushPromise = handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
+    await vi.waitFor(() => expect(pendingSends.map((p) => p.bytes)).toEqual(['한']))
+
+    handlers.handleLiveInputChange('글')
+    await Promise.resolve()
+    expect(invokeOrder).toEqual(['한'])
+    expect(pendingSends).toHaveLength(1)
+
+    resolveNextSend(true)
+    await flushPromise
+    await vi.waitFor(() => expect(pendingSends.map((p) => p.bytes)).toEqual(['글']))
+    resolveNextSend(true)
+    await vi.waitFor(() => expect(sent).toEqual(['한', '글']))
   })
 
   it('Given bytes lost in a silent stall When the disconnect is detected Then the first post-recovery send carries no stale fragment or phantom erases', async () => {

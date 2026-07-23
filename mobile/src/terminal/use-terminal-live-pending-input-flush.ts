@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
-import {
-  buildTerminalLiveMirrorPayload,
-  computeTerminalLiveMirrorStep,
-  TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS
-} from './terminal-live-hangul-mirror'
+import { TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS } from './terminal-live-hangul-mirror'
 import {
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
+import {
+  planTerminalLiveFieldTextChange,
+  planTerminalLiveSelectionMove,
+  type TerminalLiveNativeSelection,
+  type TerminalLiveSelectionCursorState
+} from './terminal-live-selection-cursor'
+import {
+  buildTerminalLiveFieldCommitPrefix,
+  buildTerminalLiveQueuedControlPayload,
+  type TerminalLiveQueueControlOptions
+} from './terminal-live-control-payload'
+import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 
 type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly activeHandleRef: RefObject<string | null>
@@ -20,16 +28,6 @@ type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly setLiveInputCapture: (text: string) => void
 }
 
-type TerminalLivePendingInputFlush = {
-  readonly applyLiveInputMirror: (handle: string, fieldText: string) => void
-  readonly clearPendingLiveInputCommit: () => void
-  readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
-  readonly heldLiveInputTextRef: RefObject<string>
-  readonly pendingLiveInputHandleRef: RefObject<string | null>
-  readonly sentLiveInputTextRef: RefObject<string>
-  readonly waitForPendingLiveInputFlush: () => Promise<boolean>
-}
-
 export function useTerminalLivePendingInputFlush<TTabType extends string>({
   activeHandleRef,
   activeSessionTabTypeRef,
@@ -37,14 +35,16 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
   setLiveInputCapture
-}: TerminalLivePendingInputFlushOptions<TTabType>): TerminalLivePendingInputFlush {
+}: TerminalLivePendingInputFlushOptions<TTabType>) {
   const heldCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingLiveInputFlushRef = useRef<Promise<boolean> | null>(null)
   const heldLiveInputTextRef = useRef('')
   const sentLiveInputTextRef = useRef('')
   const pendingLiveInputHandleRef = useRef<string | null>(null)
+  const ptyCursorCodePointRef = useRef(0)
+  const mirroredFieldTextRef = useRef('')
   const runMirrorStepRef = useRef<
-    (handle: string, fieldText: string, commitHeld: boolean) => Promise<boolean>
+    (handle: string, rawFieldText: string, commitHeld: boolean) => Promise<boolean>
   >(async () => false)
 
   const clearHeldCommitTimer = useCallback(() => {
@@ -59,6 +59,8 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     heldLiveInputTextRef.current = ''
     sentLiveInputTextRef.current = ''
     pendingLiveInputHandleRef.current = null
+    ptyCursorCodePointRef.current = 0
+    mirroredFieldTextRef.current = ''
   }, [clearHeldCommitTimer])
 
   const clearPendingLiveInputCommit = useCallback(() => {
@@ -71,39 +73,46 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef)
   }, [])
 
-  const runMirrorStep = useCallback(
-    async (handle: string, fieldText: string, commitHeld: boolean): Promise<boolean> => {
-      if (
-        handle !== activeHandleRef.current ||
-        (activeSessionTabTypeRef.current != null &&
-          activeSessionTabTypeRef.current !== 'terminal') ||
-        !liveInputTerminalHandlesRef.current.has(handle)
-      ) {
-        // Why: a stale handle must not keep local mirror state alive — the next
-        // active terminal would inherit wrong erase counts. A null tab type is
-        // "unknown" during tab-list lag, not "left the terminal", so it must not trip.
-        resetMirrorState()
-        return false
-      }
+  const isHandleLive = useCallback(
+    (handle: string): boolean =>
+      handle === activeHandleRef.current &&
+      (activeSessionTabTypeRef.current == null || activeSessionTabTypeRef.current === 'terminal') &&
+      liveInputTerminalHandlesRef.current.has(handle),
+    [activeHandleRef, activeSessionTabTypeRef, liveInputTerminalHandlesRef]
+  )
 
-      const step = computeTerminalLiveMirrorStep(sentLiveInputTextRef.current, fieldText, {
-        commitHeld
-      })
-      sentLiveInputTextRef.current = step.nextSentText
-      heldLiveInputTextRef.current = step.heldText
+  const readCursorState = useCallback(
+    (): TerminalLiveSelectionCursorState => ({
+      sentText: sentLiveInputTextRef.current,
+      heldText: heldLiveInputTextRef.current,
+      ptyCursorCodePoint: ptyCursorCodePointRef.current,
+      fieldText: mirroredFieldTextRef.current
+    }),
+    []
+  )
+
+  const applyPlanState = useCallback(
+    (
+      handle: string,
+      plan: {
+        readonly nextSentText: string
+        readonly heldText: string
+        readonly nextPtyCursorCodePoint: number
+        readonly nextFieldText: string
+      }
+    ): void => {
+      sentLiveInputTextRef.current = plan.nextSentText
+      heldLiveInputTextRef.current = plan.heldText
+      ptyCursorCodePointRef.current = plan.nextPtyCursorCodePoint
+      mirroredFieldTextRef.current = plan.nextFieldText
       pendingLiveInputHandleRef.current =
-        step.heldText.length > 0 || step.nextSentText.length > 0 ? handle : null
+        plan.heldText.length > 0 || plan.nextSentText.length > 0 ? handle : null
+    },
+    []
+  )
 
-      clearHeldCommitTimer()
-      if (step.heldText.length > 0) {
-        heldCommitTimerRef.current = setTimeout(() => {
-          heldCommitTimerRef.current = null
-          const heldField = sentLiveInputTextRef.current + heldLiveInputTextRef.current
-          void runMirrorStepRef.current(handle, heldField, true)
-        }, TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
-      }
-
-      const payload = buildTerminalLiveMirrorPayload(step)
+  const queuePayload = useCallback(
+    (handle: string, payload: string): Promise<boolean> => {
       if (payload.length === 0) {
         return waitForPendingLiveInputFlush()
       }
@@ -111,23 +120,132 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         sendLiveTerminalInputRef.current(handle, payload)
       )
     },
+    [sendLiveTerminalInputRef, waitForPendingLiveInputFlush]
+  )
+
+  const scheduleHeldCommit = useCallback(
+    (handle: string): void => {
+      clearHeldCommitTimer()
+      if (heldLiveInputTextRef.current.length === 0) {
+        return
+      }
+      heldCommitTimerRef.current = setTimeout(() => {
+        heldCommitTimerRef.current = null
+        const heldField = sentLiveInputTextRef.current + heldLiveInputTextRef.current
+        void runMirrorStepRef.current(handle, heldField, true)
+      }, TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+    },
+    [clearHeldCommitTimer]
+  )
+
+  const runMirrorStep = useCallback(
+    async (handle: string, rawFieldText: string, commitHeld: boolean): Promise<boolean> => {
+      if (!isHandleLive(handle)) {
+        // Why: stale handle must not keep erase counts; null tab type is unknown lag.
+        resetMirrorState()
+        return false
+      }
+      const plan = planTerminalLiveFieldTextChange(readCursorState(), rawFieldText, null, {
+        normalize: normalizeTerminalTextInput,
+        commitHeld
+      })
+      applyPlanState(handle, plan)
+      scheduleHeldCommit(handle)
+      return queuePayload(handle, plan.payload)
+    },
     [
-      activeHandleRef,
-      activeSessionTabTypeRef,
-      clearHeldCommitTimer,
-      liveInputTerminalHandlesRef,
+      applyPlanState,
+      isHandleLive,
+      queuePayload,
+      readCursorState,
       resetMirrorState,
-      sendLiveTerminalInputRef,
-      waitForPendingLiveInputFlush
+      scheduleHeldCommit
     ]
   )
   runMirrorStepRef.current = runMirrorStep
 
   const applyLiveInputMirror = useCallback(
-    (handle: string, fieldText: string): void => {
-      void runMirrorStep(handle, fieldText, false)
+    (
+      handle: string,
+      rawFieldText: string,
+      selection?: TerminalLiveNativeSelection | null
+    ): void => {
+      if (!isHandleLive(handle)) {
+        resetMirrorState()
+        return
+      }
+      const plan = planTerminalLiveFieldTextChange(
+        readCursorState(),
+        rawFieldText,
+        selection ?? null,
+        {
+          normalize: normalizeTerminalTextInput,
+          commitHeld: false
+        }
+      )
+      applyPlanState(handle, plan)
+      scheduleHeldCommit(handle)
+      void queuePayload(handle, plan.payload)
     },
-    [runMirrorStep]
+    [
+      applyPlanState,
+      isHandleLive,
+      queuePayload,
+      readCursorState,
+      resetMirrorState,
+      scheduleHeldCommit
+    ]
+  )
+
+  const applyLiveInputSelection = useCallback(
+    (handle: string, rawFieldText: string, selection: TerminalLiveNativeSelection): void => {
+      if (!isHandleLive(handle)) {
+        resetMirrorState()
+        return
+      }
+      const plan = planTerminalLiveSelectionMove(readCursorState(), selection, {
+        normalize: normalizeTerminalTextInput,
+        rawFieldText
+      })
+      if (!plan) {
+        return
+      }
+      applyPlanState(handle, plan)
+      scheduleHeldCommit(handle)
+      void queuePayload(handle, plan.payload)
+    },
+    [
+      applyPlanState,
+      isHandleLive,
+      queuePayload,
+      readCursorState,
+      resetMirrorState,
+      scheduleHeldCommit
+    ]
+  )
+
+  // Why: control bytes share the mirror send chain; commit-before-control snapshots
+  // restore/held into the same payload without applying plan state (caller clears).
+  const queueLiveInputControl = useCallback(
+    (handle: string, bytes: string, options: TerminalLiveQueueControlOptions): Promise<boolean> => {
+      if (!isHandleLive(handle)) {
+        resetMirrorState()
+        return Promise.resolve(false)
+      }
+      const ownsFieldState =
+        pendingLiveInputHandleRef.current === handle &&
+        (sentLiveInputTextRef.current.length > 0 ||
+          heldLiveInputTextRef.current.length > 0 ||
+          ptyCursorCodePointRef.current > 0)
+      const payload = buildTerminalLiveQueuedControlPayload({
+        state: readCursorState(),
+        ownsFieldState,
+        commitFieldBeforeControl: options.commitFieldBeforeControl,
+        controlBytes: bytes
+      })
+      return queuePayload(handle, payload)
+    },
+    [isHandleLive, queuePayload, readCursorState, resetMirrorState]
   )
 
   const flushPendingLiveInputText = useCallback(
@@ -140,40 +258,35 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         clearPendingLiveInputCommit()
         return waitForPendingLiveInputFlush()
       }
-
       const heldText = heldLiveInputTextRef.current
-      const result =
-        heldText.length > 0
-          ? await runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
-          : await waitForPendingLiveInputFlush()
-
-      // Why: an explicit flush ends the field's editing session; the echoed PTY
-      // text stays, so local mirror state must restart from empty.
+      const sentText = sentLiveInputTextRef.current
+      const needsEndRestore =
+        heldText.length > 0 || ptyCursorCodePointRef.current < Array.from(sentText).length
+      // Snapshot then clear old session sync before await so new IME is not wiped.
+      const sendPromise = needsEndRestore
+        ? queuePayload(handle, buildTerminalLiveFieldCommitPrefix(readCursorState()))
+        : waitForPendingLiveInputFlush()
       clearPendingLiveInputCommit()
-      return result
+      return sendPromise
     },
-    [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
+    [clearPendingLiveInputCommit, queuePayload, readCursorState, waitForPendingLiveInputFlush]
   )
 
   useEffect(() => {
     return () => {
-      if (heldCommitTimerRef.current) {
-        clearTimeout(heldCommitTimerRef.current)
-        heldCommitTimerRef.current = null
-      }
-      heldLiveInputTextRef.current = ''
-      sentLiveInputTextRef.current = ''
-      pendingLiveInputHandleRef.current = null
+      resetMirrorState()
       pendingLiveInputFlushRef.current = null
     }
-  }, [])
+  }, [resetMirrorState])
 
   return {
     applyLiveInputMirror,
+    applyLiveInputSelection,
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
     heldLiveInputTextRef,
     pendingLiveInputHandleRef,
+    queueLiveInputControl,
     sentLiveInputTextRef,
     waitForPendingLiveInputFlush
   }

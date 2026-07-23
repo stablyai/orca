@@ -49,6 +49,24 @@ describe('terminal live special key decision', () => {
     })
     expect(decision.kind).toBe('send-now')
   })
+
+  it('Given ArrowLeft/Right with field text Then edits locally so selection sync owns the PTY caret', () => {
+    expect(
+      getTerminalLiveSpecialKeyDecision({ key: 'ArrowLeft', heldText: '', sentText: 'abc' })
+    ).toEqual({ kind: 'local-edit' })
+    expect(
+      getTerminalLiveSpecialKeyDecision({ key: 'ArrowRight', heldText: '한', sentText: '' })
+    ).toEqual({ kind: 'local-edit' })
+  })
+
+  it('Given ArrowLeft with an empty field Then sends terminal arrow bytes', () => {
+    const decision = getTerminalLiveSpecialKeyDecision({
+      key: 'ArrowLeft',
+      heldText: '',
+      sentText: ''
+    })
+    expect(decision.kind).toBe('send-now')
+  })
 })
 
 describe('terminal live accessory bytes decision', () => {

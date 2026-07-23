@@ -42,6 +42,15 @@ export function getTerminalLiveSpecialKeyDecision({
     return { kind: 'local-edit' }
   }
 
+  // Why: with field text, iOS trackpad/hardware arrows move the native caret and
+  // onSelectionChange syncs the PTY; sending here would double-step.
+  if (
+    (key === 'ArrowLeft' || key === 'ArrowRight') &&
+    (heldText.length > 0 || sentText.length > 0)
+  ) {
+    return { kind: 'local-edit' }
+  }
+
   if (heldText.length > 0) {
     return { kind: 'commit-held-then-send', bytes }
   }
