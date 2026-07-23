@@ -201,6 +201,7 @@ async function createWebRuntimeSessionTerminalResult(
     if (agent) {
       let legacyAlreadyPlacedInGroup = false
       // Why: structured creation cannot yet express afterTabId; keep the exact legacy placement contract until it can.
+      // Why: focus belongs to the paired client; a headless execution host has no renderer to focus.
       const hostAuthority = args.afterTabId
         ? undefined
         : args.agentSessionKind === 'resume'
@@ -218,7 +219,7 @@ async function createWebRuntimeSessionTerminalResult(
                       ...(args.launchPreferences
                         ? { launchPreferences: args.launchPreferences }
                         : {}),
-                      presentation: args.activate === false ? 'background' : 'focused'
+                      presentation: 'background'
                     },
                     timeoutMs: 15_000
                   })) as RuntimeRpcResponse<RuntimeEnsureAgentSessionResult>
@@ -243,7 +244,7 @@ async function createWebRuntimeSessionTerminalResult(
                           : {}),
                         ...(args.cwd ? { startupCwd: args.cwd } : {}),
                         ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-                        presentation: args.activate === false ? 'background' : 'focused'
+                        presentation: 'background'
                       },
                       clientOperationId
                     ),

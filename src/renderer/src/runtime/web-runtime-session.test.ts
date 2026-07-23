@@ -646,6 +646,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
+      expectedEnvironmentPairingRevision: undefined,
       method: 'terminal.createAgentSession',
       params: {
         clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
@@ -657,7 +658,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         startupCwd: '/repo/packages/app',
         viewMode: 'chat',
-        presentation: 'focused'
+        presentation: 'background'
       },
       timeoutMs: 15_000
     })
@@ -1093,6 +1094,11 @@ describe('createWebRuntimeSessionTerminal', () => {
       'session.tabs.createTerminal',
       'session.tabs.list'
     ])
+    expect(runtimeCall.mock.calls[1]?.[0]).toMatchObject({
+      params: {
+        presentation: 'background'
+      }
+    })
     expect(runtimeCall.mock.calls[2]?.[0]).toMatchObject({
       params: {
         command: "codex resume 'session-1'",
