@@ -2155,6 +2155,9 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),
     // Why: these per-tab/per-pty terminal+agent maps evict on the single removeWorktree teardown path; the bulk reconcile / remove-project / hydration-stale paths run no teardown, so without these each strands an entry per tab/pane of externally-removed worktrees.
     lastKnownRelayPtyIdByTabId: omitByTabId(s.lastKnownRelayPtyIdByTabId),
+    // Why: liveness-authoritative reconnect maps (orphan sweep reads them); drop purged tabs' entries here too so a re-materialized id can't inherit phantom liveness.
+    pendingReconnectPtyIdByTabId: omitByTabId(s.pendingReconnectPtyIdByTabId),
+    deferredSshSessionIdsByTabId: omitByTabId(s.deferredSshSessionIdsByTabId),
     pendingInitialCwdByTabId: omitByTabId(s.pendingInitialCwdByTabId),
     pendingIssueCommandSplitByTabId: omitByTabId(s.pendingIssueCommandSplitByTabId),
     pendingSetupSplitByTabId: omitByTabId(s.pendingSetupSplitByTabId),

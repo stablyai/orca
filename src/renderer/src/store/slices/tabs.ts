@@ -27,7 +27,11 @@ import {
 } from './tab-group-state'
 import { isPaneColumnSplitDropNoOp } from './pane-column-split-drop-no-op'
 import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydration'
-import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
+import {
+  buildOrphanTerminalCleanupPatch,
+  getOrphanTerminalIds,
+  terminalTabHasReconnectablePty
+} from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -1759,9 +1763,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (unifiedTerminalEntityIds.has(tab.id)) {
         return false
       }
-      // Why: migration filter — tab.ptyId (preserved sessionId) keeps slept tabs in the sweep for wake reattach; NOT a liveness check (use ptyIdsByTabId).
-      const livePtyIds = state.ptyIdsByTabId[tab.id] ?? []
-      return livePtyIds.length > 0 || tab.ptyId != null
+      // Why: migration filter — keep any tab still owning a live/reconnecting
+      // PTY (preserved sessionId or a reconnect-map session) so it re-enters the
+      // unified model for wake/reconnect reattach instead of vanishing (#9911).
+      return terminalTabHasReconnectablePty(state, tab.id, tab.ptyId)
     })
     const orphanTerminalIds = getOrphanTerminalIds(state, worktreeId)
     const ensuredGroupState =

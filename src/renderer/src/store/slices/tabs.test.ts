@@ -1831,6 +1831,45 @@ describe('TabsSlice', () => {
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBeNull()
     })
 
+    // Regression for #9911: a reconnecting terminal (ptyId/ptyIdsByTabId cleared
+    // on SSH-relay drop or hydration, live session held in a reconnect map) whose
+    // unified entry is transiently absent must not be hard-deleted by the orphan
+    // sweep before reconnect rebinds it.
+    it('keeps a reconnecting terminal whose live session survives only in a reconnect map', () => {
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'reconnecting-terminal',
+              ptyId: null,
+              worktreeId: WT,
+              title: 'claude',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'reconnecting-terminal': [] },
+        pendingReconnectPtyIdByTabId: { 'reconnecting-terminal': 'session-live' },
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: {},
+        activeGroupIdByWorktree: {}
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      // The live tab survives the sweep…
+      expect(state.tabsByWorktree[WT].map((tab) => tab.id)).toContain('reconnecting-terminal')
+      // …and is re-migrated into the unified model so it renders and can reattach.
+      expect(state.unifiedTabsByWorktree[WT].map((tab) => tab.entityId)).toContain(
+        'reconnecting-terminal'
+      )
+      expect(result.renderableTabCount).toBe(1)
+    })
+
     it('keeps simulator tabs because they reconnect their own backing stream', () => {
       const terminalGroupId = 'g-terminal'
       const simulatorGroupId = 'g-simulator'

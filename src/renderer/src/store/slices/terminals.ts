@@ -2068,7 +2068,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Why: a passed ptyId means the PTY actually exited — drop its lastKnown so restart won't reattach a dead relay; bulk clear (connection_lost) keeps it during relay grace.
       const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
       if (ptyId && nextLastKnownRelay[tabId] === ptyId) {
-        delete nextLastKnownRelay[tabId]
+        // Why: the relay slot holds ONE id per tab (the last pane to bind). If
+        // that pane exits, promote a surviving pane instead of clearing — else the
+        // survivor is left visible only in the layout leaf map, and a later
+        // relay-drop bulk-clear lets the orphan sweep delete the still-live tab
+        // (the orphan predicate reads this map but not layout leaves) (#9911).
+        const survivingPtyId = remainingPtyIds.at(-1)
+        if (survivingPtyId) {
+          nextLastKnownRelay[tabId] = survivingPtyId
+        } else {
+          delete nextLastKnownRelay[tabId]
+        }
       }
 
       return {
@@ -3432,6 +3442,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
       const repo = repoId ? get().repos.find((entry) => entry.id === repoId) : null
       if (!repo?.connectionId) {
+        continue
+      }
+      // Why: a repo can outlive its SSH target when the target was removed out of
+      // band (a crash between removal and cleanup, or edited out of the config).
+      // Once the authoritative target list has loaded, don't re-defer sessions for
+      // a target it no longer lists — a stranded deferred id reads as liveness and
+      // the orphan sweep could never remove the dead tab. Defer while the list is
+      // still unknown so a normal cold-start reconnect isn't dropped (#9911).
+      if (get().sshTargetsHydrated && !get().sshTargetLabels.has(repo.connectionId)) {
         continue
       }
       const sshConnected = get().sshConnectionStates.get(repo.connectionId)?.status === 'connected'
