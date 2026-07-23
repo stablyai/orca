@@ -1165,6 +1165,35 @@ describe('SshConnection', () => {
     expect(conn.usesSystemSshTransport()).toBe(true)
   })
 
+  it('accepts GitHub restricted-shell SSH probes with the real git:// advisory transcript', async () => {
+    // Real 4-line stderr GitHub returns for an invalid command (issue #6988).
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(
+        1,
+        'Invalid command: echo ORCA-SYSTEM-SSH-OK\n' +
+          '  You appear to be using ssh to clone a git:// URL.\n' +
+          '  Make sure your core.gitProxy config option and the\n' +
+          '  GIT_PROXY_COMMAND environment variable are NOT set.'
+      )
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'git'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
   it('accepts GitHub restricted-shell SSH probes when OpenSSH config resolution fails', async () => {
     vi.stubEnv('ORCA_SSH_FORCE_SYSTEM_TRANSPORT', '1')
     vi.mocked(resolveWithSshG).mockRejectedValueOnce(new Error('ssh -G failed'))
