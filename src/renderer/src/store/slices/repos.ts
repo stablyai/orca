@@ -613,9 +613,9 @@ function mergeProjectHostSetupCompatibility(
   derived: Pick<RepoSlice, 'projects' | 'projectHostSetups'>,
   fetched: ProjectHostSetupProjection
 ): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const fetchedSetupOwners = new Set(fetched.setups.map(getProjectHostSetupOwnerKey))
+  const fetchedRepoSetupKeys = new Set(fetched.setups.map(getRepoDerivedSetupKey))
   const derivedSetups = derived.projectHostSetups.filter(
-    (setup) => !fetchedSetupOwners.has(getProjectHostSetupOwnerKey(setup))
+    (setup) => !fetchedRepoSetupKeys.has(getRepoDerivedSetupKey(setup))
   )
   const projectHostSetups = mergeProjectHostSetupsByOwner(derivedSetups, fetched.setups)
   const setupProjectIds = new Set(projectHostSetups.map((setup) => setup.projectId))
@@ -626,6 +626,11 @@ function mergeProjectHostSetupCompatibility(
     ),
     projectHostSetups
   }
+}
+
+function getRepoDerivedSetupKey(setup: ProjectHostSetup): string {
+  // Why: authoritative routing provenance may be absent from the repo-derived fallback it replaces.
+  return JSON.stringify([setup.hostId, setup.repoId || setup.id])
 }
 
 function getProjectHostSetupOwnerKey(setup: ProjectHostSetup): string {
