@@ -12,17 +12,24 @@ type TerminalSearchProps = {
   onClose: () => void
   searchAddon: SearchAddon | null
   searchStateRef: React.RefObject<SearchState>
+  inputRef?: React.RefObject<HTMLInputElement | null>
 }
+
+// Why: mirrors xterm SearchAddon.onDidChangeResults payload; resultIndex is -1
+// when the match count exceeds the addon highlight limit (default 1000).
+const EMPTY_RESULTS = { resultIndex: -1, resultCount: 0 }
 
 export default function TerminalSearch({
   isOpen,
   onClose,
   searchAddon,
-  searchStateRef
+  searchStateRef,
+  inputRef
 }: TerminalSearchProps): React.JSX.Element | null {
   const [query, setQuery] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [regex, setRegex] = useState(false)
+  const [results, setResults] = useState(EMPTY_RESULTS)
   const requestQuery = getFindRequestQuery(query)
 
   // Why: the default xterm SearchAddon highlights blend into common
@@ -68,9 +75,29 @@ export default function TerminalSearch({
     }
   }, [searchAddon, requestQuery, searchOptions])
 
-  const handleInputRef = useCallback((input: HTMLInputElement | null): void => {
-    input?.focus()
-  }, [])
+  const handleInputRef = useCallback(
+    (input: HTMLInputElement | null): void => {
+      if (inputRef) {
+        inputRef.current = input
+      }
+      // Why: focus + select on open so the query is immediately editable.
+      input?.focus()
+      input?.select()
+    },
+    [inputRef]
+  )
+
+  // Why: the SearchAddon emits result index/count only when decorations are
+  // enabled (they are here). All match navigation — panel buttons, Enter, and
+  // Cmd+G in keyboard-handlers — routes through this addon, so one subscription
+  // keeps the indicator in sync everywhere.
+  useEffect(() => {
+    if (!searchAddon) {
+      return
+    }
+    const disposable = searchAddon.onDidChangeResults(setResults)
+    return () => disposable.dispose()
+  }, [searchAddon])
 
   useEffect(() => {
     // Keep the ref in sync so the keyboard handler (Cmd+G / Cmd+Shift+G)
@@ -79,10 +106,12 @@ export default function TerminalSearch({
 
     if (!isOpen) {
       searchAddon?.clearDecorations()
+      setResults(EMPTY_RESULTS)
       return
     }
     if (!requestQuery) {
       searchAddon?.clearDecorations()
+      setResults(EMPTY_RESULTS)
       return
     }
     if (searchAddon) {
@@ -113,11 +142,19 @@ export default function TerminalSearch({
     return null
   }
 
+  const matchStatus = !requestQuery
+    ? '0/0'
+    : results.resultCount === 0
+      ? translate('auto.components.TerminalSearch.10e039b591', 'No results')
+      : results.resultIndex === -1
+        ? `${results.resultCount}+`
+        : `${results.resultIndex + 1}/${results.resultCount}`
+
   return (
     <div
       data-terminal-search-root
       className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
-      style={{ width: 300 }}
+      style={{ width: 340 }}
       onKeyDown={handleKeyDown}
     >
       <input
@@ -154,6 +191,10 @@ export default function TerminalSearch({
       >
         <Regex size={14} />
       </Button>
+
+      <span className="shrink-0 whitespace-nowrap px-1 text-xs tabular-nums text-zinc-400">
+        {matchStatus}
+      </span>
 
       <div className="mx-0.5 h-4 w-px bg-zinc-700" />
 

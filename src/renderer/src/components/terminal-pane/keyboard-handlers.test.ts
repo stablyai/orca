@@ -4,6 +4,7 @@ import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
 import {
   matchFileSearchShortcut,
   matchSearchNavigate,
+  resolveSearchToggleAction,
   resolveTerminalKeyboardShortcutAction,
   runTerminalSearchNavigation
 } from './keyboard-handlers'
@@ -219,5 +220,15 @@ describe('matchFileSearchShortcut', () => {
         'sidebar.search.toggle': []
       })
     ).toBe(false)
+  })
+})
+
+describe('resolveSearchToggleAction', () => {
+  it('opens the search bar when it is closed', () => {
+    expect(resolveSearchToggleAction(false)).toBe('open')
+  })
+
+  it('refocuses (does not close) when the search bar is already open', () => {
+    expect(resolveSearchToggleAction(true)).toBe('refocus')
   })
 })

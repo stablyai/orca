@@ -367,6 +367,13 @@ export default function TerminalPane({
   const searchOpenRef = useRef(false)
   searchOpenRef.current = searchOpen
   const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  // Why: a repeat Cmd+F while search is open should re-focus + select the query
+  // (matching the editor find bar) instead of toggling the panel closed.
+  const focusSearchInput = useCallback((): void => {
+    searchInputRef.current?.focus()
+    searchInputRef.current?.select()
+  }, [])
   const [pendingCloseConfirmation, setPendingCloseConfirmation] = useState<{
     paneId: number
     copyKind: CloseTerminalDialogCopyKind
@@ -1714,6 +1721,7 @@ export default function TerminalPane({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
+    focusSearchInput,
     onSearchSelectedText: handleSearchSelectedText,
     onRequestClosePane: handleRequestClosePane,
     onClearPaneScrollback: clearPaneScrollback,
@@ -2921,6 +2929,7 @@ export default function TerminalPane({
             onClose={() => setSearchOpen(false)}
             searchAddon={activePane.searchAddon ?? null}
             searchStateRef={searchStateRef}
+            inputRef={searchInputRef}
           />,
           activePane.container
         )}

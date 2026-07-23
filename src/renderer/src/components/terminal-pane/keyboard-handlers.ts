@@ -161,6 +161,16 @@ export function runTerminalSearchNavigation(
       )
 }
 
+/**
+ * Pure decision for the Cmd+F terminal-search shortcut. When the search bar is
+ * already open, a repeat Cmd+F re-focuses + selects the input (like the editor
+ * find bar) instead of toggling it closed; Esc is the only close path.
+ * Extracted so the branch logic is testable without DOM dependencies.
+ */
+export function resolveSearchToggleAction(searchOpen: boolean): 'open' | 'refocus' {
+  return searchOpen ? 'refocus' : 'open'
+}
+
 export function matchFileSearchShortcut(
   e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'>,
   platform: KeybindingPlatform,
@@ -194,6 +204,7 @@ type KeyboardHandlersDeps = {
   persistLayoutSnapshot: () => void
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
+  focusSearchInput: () => void
   onSearchSelectedText: (text: string) => void
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
@@ -229,6 +240,7 @@ export function useTerminalKeyboardShortcuts({
   persistLayoutSnapshot,
   toggleExpandPane,
   setSearchOpen,
+  focusSearchInput,
   onSearchSelectedText,
   onRequestClosePane,
   onClearPaneScrollback,
@@ -457,11 +469,17 @@ export function useTerminalKeyboardShortcuts({
       }
 
       // Keep Cmd+F bound to the terminal search until the app has a real
-      // top-level find-in-page flow to fall back to.
+      // top-level find-in-page flow to fall back to. A repeat Cmd+F while the
+      // bar is open re-focuses + selects the query (like the editor find bar)
+      // rather than toggling it closed; Esc is the only close path.
       if (action.type === 'toggleSearch') {
         e.preventDefault()
         e.stopImmediatePropagation()
-        setSearchOpen((prev) => !prev)
+        if (resolveSearchToggleAction(searchOpenRef.current) === 'refocus') {
+          focusSearchInput()
+        } else {
+          setSearchOpen(true)
+        }
         return
       }
 
@@ -675,6 +693,7 @@ export function useTerminalKeyboardShortcuts({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
+    focusSearchInput,
     onSearchSelectedText,
     onRequestClosePane,
     onClearPaneScrollback,
