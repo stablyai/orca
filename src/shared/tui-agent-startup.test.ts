@@ -29,6 +29,19 @@ function unwrapPowerShellScript(command: string | undefined): string {
 }
 
 describe('tui agent startup plans', () => {
+  it('uses AdaL interactive startup without adding unsupported CLI arguments', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'adal',
+      prompt: 'fix the bug',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchConfig.agentCommand).toBe('adal')
+    expect(plan?.launchCommand).toBe('adal')
+    expect(plan?.followupPrompt).toBe('fix the bug')
+  })
+
   it.each(['powershell', 'cmd'] as const)(
     'keeps the established invalid-quote error on %s',
     (shell) => {

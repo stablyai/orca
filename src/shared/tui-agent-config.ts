@@ -83,6 +83,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt'
   },
+  adal: {
+    detectCmd: 'adal',
+    launchCmd: 'adal',
+    expectedProcess: 'adal',
+    // Why: `-q` is headless, so keep the TUI alive and inject only after its process owns the terminal.
+    promptInjectionMode: 'stdin-after-start'
+  },
   autohand: {
     detectCmd: 'autohand',
     launchCmd: 'autohand',

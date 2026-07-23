@@ -60,6 +60,13 @@ describe('tui agent permissions', () => {
     ).toBe('yolo')
   })
 
+  it("uses AdaL's documented auto-approval flag", () => {
+    expect(YOLO_TUI_AGENT_ARGS.adal).toBe('--yolo')
+    expect(
+      resolveTuiAgentPermissionMode({ agent: 'adal', agentArgs: '--yolo', agentEnv: {} })
+    ).toBe('yolo')
+  })
+
   it('resolves one empty Codex launch as manual', () => {
     expect(resolveTuiAgentPermissionMode({ agent: 'codex', agentArgs: '', agentEnv: {} })).toBe(
       'manual'
