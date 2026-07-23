@@ -456,6 +456,7 @@ function App(): React.JSX.Element {
       setRightSidebarTab: s.setRightSidebarTab,
       showRightSidebarFiles: s.showRightSidebarFiles,
       showRightSidebarSearch: s.showRightSidebarSearch,
+      openDiffNotesSendMenuForActiveWorktree: s.openDiffNotesSendMenuForActiveWorktree,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -1673,6 +1674,15 @@ function App(): React.JSX.Element {
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
         return
+      }
+
+      // Unbound by default; opens the active worktree's Source Control notes send picker. Only consumes the chord when there are unsent notes.
+      if (matchShortcut('sourceControl.sendReviewNotes')) {
+        if (actions.openDiffNotesSendMenuForActiveWorktree()) {
+          input.preventDefault()
+          notifyTerminalCapture('sourceControl.sendReviewNotes')
+          return
+        }
       }
 
       if (matchShortcut('sidebar.checks.toggle')) {

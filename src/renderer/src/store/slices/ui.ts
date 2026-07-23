@@ -593,6 +593,11 @@ export type UISlice = {
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
   sendPromptToSidebarAgentTarget: (paneKey: string) => Promise<boolean>
+  /** Bumped to ask the active worktree's Source Control notes send menu to open (keyboard shortcut). `issuedAt` bounds staleness so a request the menu never consumed can't reopen it much later. */
+  diffNotesSendMenuOpenRequest: { worktreeId: string; nonce: number; issuedAt: number } | null
+  /** Reveal Source Control and request its notes send menu open; returns false (no-op) when the active worktree has no unsent notes. */
+  openDiffNotesSendMenuForActiveWorktree: () => boolean
+  consumeDiffNotesSendMenuOpenRequest: (worktreeId: string) => void
   /** Per-agent "I've looked at this" timestamps (paneKey → ts). A row is unvisited when no ack exists or stateStartedAt is newer than the last ack. Persisted so visited rows don't return bold on relaunch. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
@@ -1008,6 +1013,32 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       get().revealWorktreeInSidebar(args.worktreeId, { behavior: 'auto', highlight: true })
     }
   },
+  diffNotesSendMenuOpenRequest: null,
+  openDiffNotesSendMenuForActiveWorktree: () => {
+    const worktreeId = get().activeWorktreeId
+    if (!worktreeId) {
+      return false
+    }
+    // Why: no unsent notes means nothing to send, so don't hijack focus or reveal the panel.
+    if (
+      !get()
+        .getDiffComments(worktreeId)
+        .some((comment) => !comment.sentAt)
+    ) {
+      return false
+    }
+    get().setRightSidebarTab('source-control')
+    get().setRightSidebarOpen(true)
+    const nonce = (get().diffNotesSendMenuOpenRequest?.nonce ?? 0) + 1
+    set({ diffNotesSendMenuOpenRequest: { worktreeId, nonce, issuedAt: Date.now() } })
+    return true
+  },
+  consumeDiffNotesSendMenuOpenRequest: (worktreeId) =>
+    set((s) =>
+      s.diffNotesSendMenuOpenRequest?.worktreeId === worktreeId
+        ? { diffNotesSendMenuOpenRequest: null }
+        : s
+    ),
   closeAgentSendPopoverTargetMode: (id, instanceId) =>
     set((s) => {
       if (!s.agentSendPopoverTargetMode) {
