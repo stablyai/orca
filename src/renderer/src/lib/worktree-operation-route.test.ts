@@ -60,6 +60,58 @@ describe('resolveWorktreeOperationRouteResult', () => {
     })
   })
 
+  it('uses an exact SSH worktree owner when repository ids overlap across hosts', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          repos: [
+            { id: 'repo-1', executionHostId: 'local' },
+            {
+              id: 'repo-1',
+              connectionId: 'builder',
+              executionHostId: 'ssh:builder'
+            }
+          ],
+          worktreesByRepo: {
+            'repo-1': [worktree('ssh:builder')]
+          }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: {
+        executionHostId: 'ssh:builder',
+        runtimeEnvironmentId: null
+      }
+    })
+  })
+
+  it('fails closed when two HUB repositories claim the same SSH worktree owner', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          repos: [
+            {
+              id: 'repo-1',
+              connectionId: 'shared-target',
+              executionHostId: 'runtime:hub-a'
+            },
+            {
+              id: 'repo-1',
+              connectionId: 'shared-target',
+              executionHostId: 'runtime:hub-b'
+            }
+          ],
+          worktreesByRepo: {
+            'repo-1': [worktree('ssh:shared-target')]
+          }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({ kind: 'ambiguous' })
+  })
+
   it('fails closed when the same SSH worktree is projected by two HUBs', () => {
     expect(
       resolveWorktreeOperationRouteResult(

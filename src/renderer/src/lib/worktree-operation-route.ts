@@ -71,6 +71,32 @@ function addRoute(
   routes.set(JSON.stringify(route), route)
 }
 
+function resolveRepoRouteForExactSshOwner(
+  repos: WorktreeOperationRouteState['repos'],
+  owner: WorktreeOperationOwnerRecord
+): WorktreeOperationRouteResolution {
+  const parsedHost = parseExecutionHostId(owner.hostId)
+  if (!repos || parsedHost?.kind !== 'ssh') {
+    return { kind: 'missing' }
+  }
+  const routes = new Map<string, WorktreeOperationRoute>()
+  for (const repo of repos) {
+    if (
+      repo.id !== owner.repoId ||
+      (getRepoExecutionHostId(repo) !== parsedHost.id &&
+        repo.connectionId?.trim() !== parsedHost.targetId)
+    ) {
+      continue
+    }
+    addRoute(routes, routeForOwner({ hostId: getRepoExecutionHostId(repo) }))
+  }
+  const route = routes.values().next().value
+  if (routes.size === 1 && route) {
+    return { kind: 'resolved', route }
+  }
+  return routes.size > 1 ? { kind: 'ambiguous' } : { kind: 'missing' }
+}
+
 function resolveExactWorktreeRoute(
   state: WorktreeOperationRouteState,
   owner: WorktreeOperationOwnerRecord
@@ -82,7 +108,12 @@ function resolveExactWorktreeRoute(
   if (route.runtimeEnvironmentId || parseExecutionHostId(route.executionHostId)?.kind !== 'ssh') {
     return { kind: 'resolved', route }
   }
-  const repoRoute = resolveIndexedRepoOperationRoute(state.repos, owner.repoId)
+  // Why: an exact SSH worktree owner disambiguates same-id local/SSH repos while still recovering a paired HUB transport from its connection.
+  const exactSshRepoRoute = resolveRepoRouteForExactSshOwner(state.repos, owner)
+  const repoRoute =
+    exactSshRepoRoute.kind === 'missing'
+      ? resolveIndexedRepoOperationRoute(state.repos, owner.repoId)
+      : exactSshRepoRoute
   if (repoRoute.kind === 'ambiguous') {
     return repoRoute
   }
