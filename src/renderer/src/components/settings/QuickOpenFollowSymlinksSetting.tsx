@@ -17,6 +17,10 @@ const DESCRIPTION_KEY =
 const DESCRIPTION_FALLBACK =
   'Include files inside symlinked directories in Quick Open (Cmd/Ctrl+P). Off by default because following symlinks can reach content outside the workspace.'
 
+/**
+ * Settings toggle for `quickOpenFollowSymlinks`: when on, Quick Open descends
+ * into in-root symlinked directories. Off by default (secure default).
+ */
 export function QuickOpenFollowSymlinksSetting({
   settings,
   updateSettings
