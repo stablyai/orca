@@ -76,9 +76,19 @@ export function UsageBar({
         )}
       </View>
       {resetText ? (
-        <Text style={styles.usageResetText} numberOfLines={1}>
-          {resetText}
-        </Text>
+        <View style={styles.usageBar}>
+          {/* Why: invisible copy of the label reserves its exact width, so the countdown stays aligned with the track for any label ("7d" or "Fable"). */}
+          <Text
+            style={[styles.usageLabel, styles.usageResetSpacer]}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            {label}
+          </Text>
+          <Text style={styles.usageResetText} numberOfLines={1}>
+            {resetText}
+          </Text>
+        </View>
       ) : null}
     </View>
   )
@@ -122,9 +132,11 @@ const styles = StyleSheet.create({
   },
   // Why: indented past the window label so the countdown aligns with the
   // start of the track above it.
+  usageResetSpacer: {
+    opacity: 0
+  },
   usageResetText: {
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginLeft: 22 + spacing.xs
+    color: colors.textMuted
   }
 })
