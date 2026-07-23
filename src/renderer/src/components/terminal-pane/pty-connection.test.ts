@@ -874,6 +874,7 @@ describe('connectPanePty', () => {
           reportGeometry: vi.fn(),
           getMainBufferSnapshot: vi.fn().mockResolvedValue(null),
           getForegroundProcess: vi.fn().mockResolvedValue(null),
+          inspectProcess: vi.fn(),
           confirmForegroundProcess: vi.fn().mockResolvedValue(null),
           hasChildProcesses: vi.fn().mockResolvedValue(false),
           write: vi.fn(),
@@ -910,6 +911,11 @@ describe('connectPanePty', () => {
     vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation((id) =>
       window.api.pty.getForegroundProcess(id)
     )
+    vi.mocked(window.api.pty.inspectProcess).mockImplementation(async (id) => {
+      const foregroundProcess = await window.api.pty.getForegroundProcess(id)
+      const hasChildProcesses = await window.api.pty.hasChildProcesses(id)
+      return { foregroundProcess, hasChildProcesses }
+    })
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
       return 1
