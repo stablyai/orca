@@ -1095,7 +1095,13 @@ describe('createWebRuntimeSessionTerminal', () => {
       'session.tabs.list'
     ])
     expect(runtimeCall.mock.calls[1]?.[0]).toMatchObject({
+      selector: ENVIRONMENT_ID,
+      method: 'terminal.ensureAgentSession',
       params: {
+        kind: 'explicit',
+        worktree: `id:${WORKTREE_ID}`,
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'session-1' },
         presentation: 'background'
       }
     })
