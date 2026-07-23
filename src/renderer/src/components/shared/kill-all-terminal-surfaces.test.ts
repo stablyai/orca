@@ -25,7 +25,7 @@ function unified(
 }
 
 function state(overrides: Partial<KillAllTerminalSurfaceState> = {}): KillAllTerminalSurfaceState {
-  return {
+  const state = {
     activeWorktreeId: null,
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
@@ -35,6 +35,27 @@ function state(overrides: Partial<KillAllTerminalSurfaceState> = {}): KillAllTer
     deferredSshSessionIdsByTabId: {},
     pendingReconnectPtyIdByTabId: {},
     ...overrides
+  }
+  const worktreeIds = new Set([
+    ...Object.keys(state.tabsByWorktree),
+    ...Object.keys(state.unifiedTabsByWorktree)
+  ])
+  const runtimeOwnerEnvironmentId = state.settings?.activeRuntimeEnvironmentId ?? undefined
+  return {
+    ...state,
+    repos: [],
+    worktreesByRepo: {
+      'fixture-repo': [...worktreeIds].map((id) => ({
+        id,
+        repoId: 'fixture-repo',
+        hostId: 'local',
+        runtimeOwnerEnvironmentId
+      }))
+    },
+    detectedWorktreesByRepo: {},
+    runtimeEnvironments: [],
+    runtimeEnvironmentCatalogHydrated: true,
+    removedRuntimeEnvironmentIds: new Set()
   }
 }
 
@@ -489,14 +510,14 @@ describe('runKillAllTerminalSurfaces', () => {
       runtimeTerminals: [],
       cleanupOnlyPtyIds: ['remote:env-1@@terminal-1']
     })
-    expect(killPty).toHaveBeenCalledWith('pty-first')
-    expect(killPty).toHaveBeenCalledWith('pty-second')
+    expect(killPty).not.toHaveBeenCalledWith('pty-first')
+    expect(killPty).not.toHaveBeenCalledWith('pty-second')
     expect(killPty).not.toHaveBeenCalledWith('pty-shared-after-yield')
     expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['survivor'])
     expect(summary).toMatchObject({
       closeAttemptCount: 3,
       absentTargetCount: 3,
-      exactKillAcceptedCount: 2,
+      exactKillAcceptedCount: 0,
       closeYieldCount: 1
     })
   })
@@ -507,6 +528,11 @@ describe('runKillAllTerminalSurfaces', () => {
     const previousState = useAppStore.getState()
     useAppStore.setState({
       activeWorktreeId: null,
+      repos: [],
+      worktreesByRepo: {
+        'fixture-repo': [{ id: 'wt', repoId: 'fixture-repo', hostId: 'local' }]
+      } as never,
+      detectedWorktreesByRepo: {},
       tabsByWorktree: { wt: tabs },
       unifiedTabsByWorktree: {},
       ptyIdsByTabId

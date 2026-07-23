@@ -90,6 +90,7 @@
     "test:e2e:terminal-perf:html-report": "node config/scripts/generate-terminal-perf-html-report.mjs",
     "test:e2e:ssh-docker-perf": "node config/scripts/run-ssh-docker-perf-e2e.mjs",
     "test:e2e:ssh-docker-watcher-isolation": "node config/scripts/run-ssh-docker-watcher-isolation-e2e.mjs",
+    "test:e2e:nested-runtime-ssh": "node config/scripts/run-nested-runtime-ssh-e2e.mjs",
     "test:e2e:source-control-scale": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/source-control-large-file-count.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "win-update-e2e": "node tools/win-update-e2e/run.mjs",
     "win-crash-survival-e2e": "node tools/win-crash-survival-e2e/run.mjs",

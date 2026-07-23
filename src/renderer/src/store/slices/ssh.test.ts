@@ -197,6 +197,29 @@ describe('createSshSlice', () => {
     expect(store.getState().sshConnectedGeneration).toBe(1)
   })
 
+  it('publishes an authoritative SSH connection generation change', () => {
+    const store = createTestStore()
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      connectionGeneration: 1
+    })
+    const previousState = store.getState()
+
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      connectionGeneration: 2
+    })
+
+    expect(store.getState()).not.toBe(previousState)
+    expect(store.getState().sshConnectionStates.get('ssh-1')?.connectionGeneration).toBe(2)
+  })
+
   it('publishes a connected-state folder capability change', () => {
     const store = createTestStore()
     store.getState().setSshConnectionState('ssh-1', {

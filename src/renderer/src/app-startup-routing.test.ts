@@ -6,7 +6,8 @@ describe('renderer startup runtime routing', () => {
   it('hydrates persisted UI before local catalog and worktree hydration', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const startupBlockStart = source.indexOf('void (async () => {')
-    const startupBlockEnd = source.indexOf("timeRendererStartupStep('session-get'")
+    // Why: concurrent startup branches all settle before hydrate-session-stores.
+    const startupBlockEnd = source.indexOf("timeRendererStartupSyncStep('hydrate-session-stores'")
     const startupBlock = source.slice(startupBlockStart, startupBlockEnd)
 
     const indexInStartupBlock = (needle: string): number => {
@@ -25,7 +26,7 @@ describe('renderer startup runtime routing', () => {
     const localFoldersIndex = indexInStartupBlock(
       "actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })"
     )
-    const sessionIndex = source.indexOf("timeRendererStartupStep('session-get'")
+    const sessionIndex = indexInStartupBlock("timeRendererStartupStep('session-get'")
     const hydrationWorktreesIndex = source.indexOf(
       "timeRendererStartupStep('fetch-hydration-worktrees'"
     )
@@ -34,12 +35,14 @@ describe('renderer startup runtime routing', () => {
 
     expect(settingsIndex).toBeGreaterThanOrEqual(0)
     expect(startupBlockEnd).toBeGreaterThan(startupBlockStart)
+    // Persisted UI hydrates before any local catalog/session/worktree read kicks off.
     expect(settingsIndex).toBeLessThan(uiGetIndex)
     expect(uiGetIndex).toBeLessThan(hydrateUiIndex)
     expect(hydrateUiIndex).toBeLessThan(localReposIndex)
+    // The local catalog chain stays internally ordered (folders merge against project groups).
     expect(localReposIndex).toBeLessThan(localGroupsIndex)
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
-    expect(localFoldersIndex).toBeLessThan(sessionIndex)
+    expect(localReposIndex).toBeLessThan(sessionIndex)
     expect(sessionIndex).toBeLessThan(hydrationWorktreesIndex)
     const hydrationWorktreeBlock = source.slice(
       hydrationWorktreesIndex,
@@ -68,6 +71,15 @@ describe('renderer startup runtime routing', () => {
       source.indexOf('actions.pruneLastVisitedTimestamps()', fullWorktreesIndex)
     ).toBeGreaterThan(fullWorktreesIndex)
     expect(lineageIndex).toBe(-1)
+
+    // The catalog and selective hydration chains overlap, but both settle before recovery or hydration.
+    const joinStart = indexInStartupBlock('await Promise.allSettled([')
+    expect(joinStart).toBeGreaterThan(hydrateUiIndex)
+    const joinBlock = source.slice(joinStart, startupBlockEnd)
+    expect(joinBlock).toContain('hydrationSessionChain')
+    expect(joinBlock).toContain('localCatalogChain')
+    expect(startupBlock).not.toContain('await Promise.all([')
+    expect(startupBlock).not.toContain("actions.fetchAllWorktrees({ hydrationPurge: 'defer' })")
   })
 
   it('refreshes remote catalogs after startup hydration succeeds', () => {

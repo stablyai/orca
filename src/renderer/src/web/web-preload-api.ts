@@ -64,6 +64,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostScope,
   normalizeExecutionHostId,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
@@ -82,6 +83,7 @@ import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentag
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
+import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
 import {
   findKeybindingConflicts,
   formatKeybindingList,
@@ -133,6 +135,7 @@ import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle
 } from '@/components/native-chat/native-chat-runtime-contract'
+import { createWebFileMutationMethods } from './web-file-mutation-methods'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -236,6 +239,16 @@ type WebSettingsApi = NonNullable<PreloadApi['settings']>
 type WebKeybindingsApi = NonNullable<PreloadApi['keybindings']>
 type WebGitHubApi = NonNullable<PreloadApi['gh']>
 type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<WebGitHubApi[K]>>
+type WebRuntimeResultCaller = <TResult>(
+  method: string,
+  params?: unknown,
+  timeoutMs?: number
+) => Promise<TResult>
+type WebRuntimeEnvelopeCaller = <TResult>(
+  method: string,
+  params?: unknown,
+  timeoutMs?: number
+) => Promise<RuntimeRpcResponse<TResult>>
 type WebGitHubRouteKey =
   | 'repoSlug'
   | 'repoUpstream'
@@ -1678,54 +1691,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         worktree: toRuntimeWorktreeSelector(file.worktree.id)
       })
     },
-    writeFile: async ({ filePath, content }) => {
-      const file = await resolveRuntimeFilePath(filePath)
-      await callRuntimeResult('files.write', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        relativePath: file.relativePath,
-        content
-      })
-    },
-    createFile: async ({ filePath }) => {
-      const file = await resolveRuntimeFilePath(filePath)
-      await callRuntimeResult('files.createFile', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        relativePath: file.relativePath
-      })
-    },
-    createDir: async ({ dirPath }) => {
-      const file = await resolveRuntimeFilePath(dirPath)
-      await callRuntimeResult('files.createDir', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        relativePath: file.relativePath
-      })
-    },
-    rename: async ({ oldPath, newPath }) => {
-      const oldFile = await resolveRuntimeFilePath(oldPath)
-      const newFile = await resolveRuntimeFilePath(newPath)
-      await callRuntimeResult('files.rename', {
-        worktree: toRuntimeWorktreeSelector(oldFile.worktree.id),
-        oldRelativePath: oldFile.relativePath,
-        newRelativePath: newFile.relativePath
-      })
-    },
-    copy: async ({ sourcePath, destinationPath }) => {
-      const source = await resolveRuntimeFilePath(sourcePath)
-      const destination = await resolveRuntimeFilePath(destinationPath)
-      await callRuntimeResult('files.copy', {
-        worktree: toRuntimeWorktreeSelector(source.worktree.id),
-        sourceRelativePath: source.relativePath,
-        destinationRelativePath: destination.relativePath
-      })
-    },
-    deletePath: async ({ targetPath, recursive }) => {
-      const file = await resolveRuntimeFilePath(targetPath)
-      await callRuntimeResult('files.delete', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        relativePath: file.relativePath,
-        recursive
-      })
-    },
+    ...createWebFileMutationMethods({
+      captureSession: captureWebFileMutationSession
+    }),
     authorizeExternalPath: () => Promise.resolve(),
     stat: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
@@ -3025,7 +2993,9 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       if (!requireActiveEnvironmentOrNull()) {
         return []
       }
-      const { targets } = await callRuntimeResult<{ targets: SshTarget[] }>('ssh.listTargets')
+      const { targets } = await callRuntimeResult<{ targets: SshTarget[] }>(
+        'ssh.listTargetSummaries'
+      )
       return targets
     },
     listRemovedTargetLabels: async () => {
@@ -3147,7 +3117,74 @@ function withRuntimeRepoMutationOwner(
 }
 
 function withRuntimeWorktreeOwner<T extends Worktree>(worktree: T, hostId: ExecutionHostId): T {
-  return { ...worktree, hostId }
+  const runtimeOwner = parseExecutionHostId(hostId)
+  if (runtimeOwner?.kind !== 'runtime') {
+    return worktree
+  }
+  return { ...worktree, runtimeOwnerEnvironmentId: runtimeOwner.environmentId }
+}
+
+function captureWebFileMutationSession(): {
+  resolveFilePath: (filePath: string) => Promise<Awaited<ReturnType<typeof resolveRuntimeFilePath>>>
+  assertMutationSupported: () => Promise<void>
+  callRuntimeResult: WebRuntimeResultCaller
+  getSshState: (targetId: string) => Promise<SshConnectionState | null>
+} {
+  const environment = requireActiveEnvironment()
+  const client = getClientForEnvironment(environment)
+  const assertCurrent = (): void => {
+    if (activeClient !== client || requireActiveEnvironmentOrNull()?.id !== environment.id) {
+      throw new Error('Runtime pairing changed; refresh and try again')
+    }
+  }
+  const callBoundRuntimeEnvelope: WebRuntimeEnvelopeCaller = async <TResult>(
+    method: string,
+    params?: unknown,
+    timeoutMs?: number
+  ): Promise<RuntimeRpcResponse<TResult>> => {
+    assertCurrent()
+    const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
+      assertCurrent()
+      return client.call(method, params, { timeoutMs })
+    })
+    assertCurrent()
+    updateEnvironmentFromResponse(environment, response)
+    return response as RuntimeRpcResponse<TResult>
+  }
+  const callBoundRuntimeResult: WebRuntimeResultCaller = async <TResult>(
+    method: string,
+    params?: unknown,
+    timeoutMs?: number
+  ): Promise<TResult> => {
+    const response = await callBoundRuntimeEnvelope<TResult>(method, params, timeoutMs)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    return response.result as TResult
+  }
+  return {
+    resolveFilePath: (filePath) =>
+      resolveRuntimeFilePath(
+        filePath,
+        undefined,
+        callBoundRuntimeResult,
+        callBoundRuntimeEnvelope,
+        false,
+        environment.id
+      ),
+    assertMutationSupported: async () => {
+      assertFileMutationOwnershipCapability(
+        await callBoundRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
+      )
+    },
+    callRuntimeResult: callBoundRuntimeResult,
+    getSshState: async (targetId) =>
+      (
+        await callBoundRuntimeResult<{ state: SshConnectionState | null }>('ssh.getState', {
+          targetId
+        })
+      ).state
+  }
 }
 
 async function saveClipboardImageAsTempFileInRuntime(
@@ -3639,28 +3676,44 @@ async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
   return worktrees
 }
 
-async function listAllRuntimeDetectedWorktrees(): Promise<Worktree[]> {
-  if (cachedDetectedWorktrees && Date.now() - cachedDetectedWorktrees.loadedAt < 5_000) {
+async function listAllRuntimeDetectedWorktrees(
+  callResult: WebRuntimeResultCaller = callRuntimeResult,
+  callEnvelope: WebRuntimeEnvelopeCaller = callRuntimeEnvelope,
+  useCache = true,
+  expectedEnvironmentId = requireActiveEnvironment().id
+): Promise<Worktree[]> {
+  if (
+    useCache &&
+    cachedDetectedWorktrees &&
+    Date.now() - cachedDetectedWorktrees.loadedAt < 5_000
+  ) {
     return cachedDetectedWorktrees.worktrees
   }
 
-  const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
+  assertActiveEnvironment(expectedEnvironmentId)
+  const repos = (await callResult<{ repos: Repo[] }>('repo.list')).repos
   const detectedLists = await Promise.all(
-    owned.result.repos.map((repo) => callRuntimeDetectedWorktrees(repo.id, owned.environmentId))
+    repos.map((repo) =>
+      callRuntimeDetectedWorktrees(repo.id, expectedEnvironmentId, callResult, callEnvelope)
+    )
   )
   const worktrees = detectedLists.flatMap((result) => result.worktrees)
-  assertActiveEnvironment(owned.environmentId)
-  cachedDetectedWorktrees = { loadedAt: Date.now(), worktrees }
+  assertActiveEnvironment(expectedEnvironmentId)
+  if (useCache) {
+    cachedDetectedWorktrees = { loadedAt: Date.now(), worktrees }
+  }
   return worktrees
 }
 
 async function callRuntimeDetectedWorktrees(
   repoId: string,
-  expectedEnvironmentId = requireActiveEnvironment().id
+  expectedEnvironmentId = requireActiveEnvironment().id,
+  callResult: WebRuntimeResultCaller = callRuntimeResult,
+  callEnvelope: WebRuntimeEnvelopeCaller = callRuntimeEnvelope
 ): Promise<DetectedWorktreeListResult> {
   assertActiveEnvironment(expectedEnvironmentId)
   const hostId = toRuntimeExecutionHostId(expectedEnvironmentId)
-  const response = await callRuntimeEnvelope<DetectedWorktreeListResult>(
+  const response = await callEnvelope<DetectedWorktreeListResult>(
     'worktree.detectedList',
     { repo: repoId },
     15_000
@@ -3678,7 +3731,7 @@ async function callRuntimeDetectedWorktrees(
   }
 
   assertActiveEnvironment(expectedEnvironmentId)
-  const legacy = await callRuntimeResult<{ worktrees: Worktree[] }>(
+  const legacy = await callResult<{ worktrees: Worktree[] }>(
     'worktree.list',
     { repo: repoId, limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT },
     15_000
@@ -3713,9 +3766,20 @@ function isMissingPathError(error: unknown): boolean {
   return /\bENOENT\b|not found|no such file/i.test(error.message)
 }
 
-async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Worktree> {
+async function resolveRuntimeWorktreeByPath(
+  worktreePath: string,
+  callResult: WebRuntimeResultCaller = callRuntimeResult,
+  callEnvelope: WebRuntimeEnvelopeCaller = callRuntimeEnvelope,
+  useDetectedWorktreeCache = true,
+  expectedEnvironmentId = requireActiveEnvironment().id
+): Promise<Worktree> {
   // Why: hidden-but-open worktrees must still resolve, but `worktree.list` is sidebar-visible only — resolve via detected rows.
-  const worktrees = await listAllRuntimeDetectedWorktrees()
+  const worktrees = await listAllRuntimeDetectedWorktrees(
+    callResult,
+    callEnvelope,
+    useDetectedWorktreeCache,
+    expectedEnvironmentId
+  )
   const match = worktrees
     .map((worktree) => ({
       worktree,
@@ -3731,11 +3795,27 @@ async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Workt
 
 async function resolveRuntimeFilePath(
   filePath: string,
-  preferredWorktreePath?: string
+  preferredWorktreePath?: string,
+  callResult: WebRuntimeResultCaller = callRuntimeResult,
+  callEnvelope: WebRuntimeEnvelopeCaller = callRuntimeEnvelope,
+  useDetectedWorktreeCache = true,
+  expectedEnvironmentId = requireActiveEnvironment().id
 ): Promise<{ worktree: Worktree; relativePath: string }> {
   const worktree = preferredWorktreePath
-    ? await resolveRuntimeWorktreeByPath(preferredWorktreePath)
-    : await resolveRuntimeWorktreeByPath(filePath)
+    ? await resolveRuntimeWorktreeByPath(
+        preferredWorktreePath,
+        callResult,
+        callEnvelope,
+        useDetectedWorktreeCache,
+        expectedEnvironmentId
+      )
+    : await resolveRuntimeWorktreeByPath(
+        filePath,
+        callResult,
+        callEnvelope,
+        useDetectedWorktreeCache,
+        expectedEnvironmentId
+      )
   const relativePath = relativePathInsideRoot(worktree.path, filePath)
   if (relativePath === null) {
     throw new Error(`File is outside runtime worktree: ${filePath}`)

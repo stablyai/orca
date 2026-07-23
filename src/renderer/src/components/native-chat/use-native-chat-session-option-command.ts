@@ -67,7 +67,7 @@ export function useNativeChatSessionOptionCommand(args: {
         cancelNativeChatPtySends(target.ptyId)
         await waitForNativeChatPtyIdle(target.ptyId)
         if (!mountedRef.current || sendController.signal.aborted) {
-          throw new Error('Native chat command was canceled because the composer closed.')
+          throw new Error('Chat UI command was canceled because the composer closed.')
         }
         const detectClaudeConfirmation =
           options?.detectAgentInteraction === 'claude-model-switch-confirmation'
@@ -80,7 +80,7 @@ export function useNativeChatSessionOptionCommand(args: {
           activeObserversRef.current.add(observer)
           await observer.ready
           if (!mountedRef.current || sendController.signal.aborted) {
-            throw new Error('Native chat command was canceled because the composer closed.')
+            throw new Error('Chat UI command was canceled because the composer closed.')
           }
           // Why: arm only after the observer reaches the live PTY tail, then
           // submit immediately so historical output cannot satisfy the match.

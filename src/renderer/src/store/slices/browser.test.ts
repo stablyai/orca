@@ -754,7 +754,17 @@ describe('createBrowserSlice runtime guard', () => {
     createWebRuntimeSessionBrowserTabMock.mockResolvedValueOnce(false)
     store.setState({
       activeWorktreeId: 'wt-remote',
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
     })
 
     await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
@@ -778,7 +788,17 @@ describe('createBrowserSlice runtime guard', () => {
     createWebRuntimeSessionBrowserTabMock.mockRejectedValueOnce(new Error('remote down'))
     store.setState({
       activeWorktreeId: 'wt-remote',
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
     })
 
     await store.getState().openNewBrowserTabInActiveWorkspace('group-1')

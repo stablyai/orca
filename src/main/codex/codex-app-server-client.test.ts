@@ -321,7 +321,7 @@ describe('runCodexHookTrustGrantSession', () => {
     })
 
     const result = await runCodexHookTrustGrantSession(request)
-    expect(result.outcome).toBe('verify-failed')
+    expect(result).toMatchObject({ outcome: 'verify-failed', reasonClass: 'list-mismatch' })
   })
 
   it('rejects duplicate normalized aliases that conceal a missing expected key', async () => {
@@ -337,7 +337,8 @@ describe('runCodexHookTrustGrantSession', () => {
     })
 
     await expect(runCodexHookTrustGrantSession(request)).resolves.toMatchObject({
-      outcome: 'verify-failed'
+      outcome: 'verify-failed',
+      reasonClass: 'list-mismatch'
     })
     expect(existsSync(recordFile)).toBe(false)
   })

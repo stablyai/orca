@@ -93,6 +93,8 @@ import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
@@ -1102,7 +1104,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (!worktreeId) {
       return
     }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    const worktreeRoute =
+      worktreeId === FLOATING_TERMINAL_WORKTREE_ID || workspaceScope?.type === 'folder'
+        ? null
+        : resolveWorktreeOperationRouteResult(state, worktreeId)
+    if (worktreeRoute && worktreeRoute.kind !== 'resolved') {
+      return
+    }
+    const runtimeEnvironmentId = worktreeRoute
+      ? worktreeRoute.route.runtimeEnvironmentId
+      : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
     if (runtimeEnvironmentId) {
       const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
       await createWebRuntimeSessionTerminal({
@@ -1150,16 +1162,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
     retireParkedTerminalTab(tabId)
     if (retiresSession) {
-      const fallbackRuntimeEnvironmentId = retirementPlan.worktreeId
-        ? getRuntimeEnvironmentIdForWorktree(get(), retirementPlan.worktreeId)
-        : null
+      const fallbackWorktreeRoute = retirementPlan.worktreeId
+        ? resolveTerminalWorktreeRoute(get(), retirementPlan.worktreeId)
+        : { runtimeEnvironmentId: null }
       const retirementTasks: Promise<unknown>[] = opts?.localPtyTeardownOwnedExternally
         ? []
         : retirementPlan.localOrSshPtyIds.map(async (ptyId) => window.api.pty.kill(ptyId))
       const localOrSshTaskCount = retirementTasks.length
       if (!opts?.remoteCloseOwnedByHost) {
         for (const terminal of retirementPlan.runtimeTerminals) {
-          const environmentId = terminal.environmentId ?? fallbackRuntimeEnvironmentId
+          if (!terminal.environmentId && !fallbackWorktreeRoute) {
+            continue
+          }
+          const environmentId =
+            terminal.environmentId ?? fallbackWorktreeRoute?.runtimeEnvironmentId
           retirementTasks.push(
             callRuntimeRpc(
               environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
@@ -1837,7 +1853,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const owningWorktreeId = Object.keys(state.unifiedTabsByWorktree).find((wId) =>
         (state.unifiedTabsByWorktree[wId] ?? []).some((entry) => entry.id === item.id)
       )
-      if (owningWorktreeId && getRuntimeEnvironmentIdForWorktree(state, owningWorktreeId)) {
+      if (
+        owningWorktreeId &&
+        resolveTerminalWorktreeRoute(state, owningWorktreeId)?.runtimeEnvironmentId
+      ) {
         void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
           setWebRuntimeTabProps({ worktreeId: owningWorktreeId, tabId: item.id, color })
         )

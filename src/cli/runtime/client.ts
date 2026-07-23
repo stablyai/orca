@@ -126,7 +126,12 @@ export class RuntimeClient {
           runtime: {
             state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
             reachable: true,
-            runtimeId: response.result.runtimeId
+            runtimeId: response.result.runtimeId,
+            ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+            ...(response.result.remoteUpdateSupport
+              ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
+              : {}),
+            ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {})
           },
           graph: {
             state: graphState

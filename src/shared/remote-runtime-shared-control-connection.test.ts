@@ -63,6 +63,34 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect('sendSharedControlEncryptedBinary' in sharedControlProtocol).toBe(false)
   })
 
+  it('replaces a stuck pre-ready socket when a one-shot probe proves reachability', () => {
+    const connection = new RemoteRuntimeSharedControlConnection({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:1',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+    })
+    const close = vi.fn()
+    const cleanup = vi.fn()
+    const open = vi.fn()
+    const unsafe = connection as unknown as {
+      state: string
+      ws: { readyState: number; close: () => void } | null
+      socketCleanup: (() => void) | null
+      open: () => void
+    }
+    unsafe.state = 'awaiting_ready'
+    unsafe.ws = { readyState: 0, close }
+    unsafe.socketCleanup = cleanup
+    unsafe.open = open
+
+    connection.reconnectNow()
+
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledOnce()
+    expect(open).toHaveBeenCalledOnce()
+  })
+
   it('logs unknown response ids without breaking pending requests', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const server = await createServer({ sendUnknownResponseBeforeResponse: true })
@@ -199,9 +227,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const onClose = vi.fn()
 
     const unsafe = connection as unknown as {
-      reconnect: { attempt: number }
+      reconnect: {
+        attempt: number
+        scheduleWithDefaultBackoff: (intentionallyClosed: boolean, open: () => void) => void
+      }
       subscriptions: Map<string, unknown>
-      scheduleReconnect: () => void
     }
     unsafe.reconnect.attempt = 7
     unsafe.subscriptions.set('sub-1', {
@@ -215,7 +245,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       remoteSubscriptionId: null
     })
 
-    unsafe.scheduleReconnect()
+    unsafe.reconnect.scheduleWithDefaultBackoff(false, () => {})
 
     expect(onClose).not.toHaveBeenCalled()
     expect(connection.getDiagnostics()).toMatchObject({

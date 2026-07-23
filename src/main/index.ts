@@ -56,7 +56,16 @@ import {
   registerAppMenu,
   rebuildAppMenu
 } from './menu/register-app-menu'
-import { checkForUpdatesFromMenu, isQuittingForUpdate, resolveUpdateInstallMode } from './updater'
+import {
+  checkForRemoteServerUpdate,
+  checkForUpdatesFromMenu,
+  downloadRemoteServerUpdate,
+  getRemoteServerUpdaterSnapshot,
+  installRemoteServerUpdate,
+  isQuittingForUpdate,
+  resolveUpdateInstallMode
+} from './updater'
+import { configureRemoteServerUpdater } from './runtime/remote-server-updater'
 import type { TuiAgent, UpdateCheckOptions } from '../shared/types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
@@ -150,7 +159,7 @@ import {
   ensureRealHomeCodexHookState,
   isRealHomeCodexHookLaneUsable
 } from './codex/codex-real-home-hook-install'
-import { setCodexTrustGrantTelemetry } from './codex/codex-hook-trust-grant'
+import { setCodexTrustGrantTelemetry } from './codex/codex-trust-grant-telemetry'
 import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
@@ -454,6 +463,12 @@ const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
 installUncaughtPipeErrorGuard()
 // Why: expose the app version via process.env so main and the forked daemon can set TERM_PROGRAM_VERSION without importing electron.
 process.env.ORCA_APP_VERSION = app.getVersion()
+configureRemoteServerUpdater({
+  getSnapshot: getRemoteServerUpdaterSnapshot,
+  check: checkForRemoteServerUpdate,
+  download: downloadRemoteServerUpdate,
+  install: installRemoteServerUpdate
+})
 patchPackagedProcessPath()
 // Why: the sync seed above covers early IPC (homebrew/nix); the async login-shell probe below (packaged only) then adds the user's rc PATH.
 if (app.isPackaged && process.platform !== 'win32') {
@@ -1852,11 +1867,14 @@ app.whenReady().then(async () => {
   // Why: the trust-grant module is bundled into plain-node CLI entries where
   // the telemetry client cannot load, so the tracker is injected here instead
   // of imported there.
-  setCodexTrustGrantTelemetry(({ outcome, hostKind, reason }) => {
+  setCodexTrustGrantTelemetry(({ outcome, hostKind, lane, reason, errorClass, verifyClass }) => {
     track('codex_trust_grant', {
       outcome,
       host_kind: hostKind,
-      ...(reason !== undefined ? { fallback_reason: reason } : {})
+      lane,
+      ...(reason !== undefined ? { fallback_reason: reason } : {}),
+      ...(errorClass !== undefined ? { error_class: errorClass } : {}),
+      ...(verifyClass !== undefined ? { verify_class: verifyClass } : {})
     })
   })
   // Why: the error-tracking lane (telemetry-error-tracking.md) is its own
@@ -2258,6 +2276,11 @@ app.whenReady().then(async () => {
   })
   // Why: parallel E2E Electron instances would race the fixed port (EADDRINUSE); port 0 gives each a random OS-assigned port.
   const isE2E = Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
+  const requestedE2EWsPort = process.env.ORCA_E2E_RUNTIME_WS_PORT
+  const e2eWsPort = requestedE2EWsPort === undefined ? 0 : Number(requestedE2EWsPort)
+  if (isE2E && (!Number.isInteger(e2eWsPort) || e2eWsPort < 0 || e2eWsPort > 65_535)) {
+    throw new Error(`Invalid ORCA_E2E_RUNTIME_WS_PORT value: ${requestedE2EWsPort}`)
+  }
   // Why: pin dev to 6769 so `pnpm dev` doesn't race packaged Orca on 6768 and fall back to a random port, breaking deterministic mobile pairing/repro (STA-1511).
   const devWsPort = is.dev && !isE2E ? 6769 : undefined
   let serveOptions: ServeOptions | null = null
@@ -2275,7 +2298,7 @@ app.whenReady().then(async () => {
     // Why: mobile pairing needs the stable pre-setName() path (getCanonicalUserDataPath), not a late app.getPath('userData') that drops paired devices across restarts.
     userDataPath: getCanonicalUserDataPath(),
     enableWebSocket: true,
-    ...(isE2E ? { wsPort: 0 } : {}),
+    ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
       ? {

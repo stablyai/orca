@@ -34,6 +34,8 @@ import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
+import { createUnresolvedOwnerPtyTransport } from './unresolved-owner-pty-transport'
+import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { getConnectionId } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -124,8 +126,8 @@ import {
   registerPtySerializer,
   registerPtyTitleSource
 } from './pty-buffer-serializer'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import {
   discardTerminalOutput,
   flushTerminalOutput,
@@ -231,8 +233,7 @@ import {
 import { resolveHiddenRestoreScrollbackRows } from './terminal-hidden-restore-scrollback'
 import {
   getExecutionHostIdForWorktree,
-  getSettingsForWorktreeRuntimeOwner,
-  getRuntimeEnvironmentIdForWorktree
+  getSettingsForWorktreeRuntimeOwner
 } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
@@ -3199,15 +3200,47 @@ export function connectPanePty(
   // use the shared resolver instead of only looking up repo-backed worktrees.
   const worktree = getWorktreeMapFromState(state).get(deps.worktreeId)
   const worktreeConnectionId = getConnectionId(deps.worktreeId)
-  const connectionId = worktreeConnectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
+  const restoredPtyIdForTransport =
+    deps.restoredLeafId && deps.restoredPtyIdByLeafId
+      ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
+      : null
+  const operationRouteResolution = resolveWorktreeOperationRouteResult(state, deps.worktreeId)
+  const explicitRuntimeEnvironmentId =
+    operationRouteResolution.kind === 'resolved'
+      ? operationRouteResolution.route.runtimeEnvironmentId
+      : null
+  // Why: paired-web worktrees retain HUB execution identity; their runtime-scoped mirrored pane is the session-level transport owner.
+  const mirroredRuntimeOwners = new Set(
+    isWebTerminalSurfaceTabId(deps.tabId)
+      ? [restoredPtyIdForTransport, tab?.ptyId]
+          .map((ptyId) => (ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null))
+          .filter((environmentId): environmentId is string => Boolean(environmentId))
+      : []
+  )
+  const mirroredRuntimeEnvironmentId = mirroredRuntimeOwners.values().next().value ?? null
+  const terminalOwnerUnresolved =
+    mirroredRuntimeOwners.size > 1 ||
+    (operationRouteResolution.kind !== 'resolved' && !mirroredRuntimeEnvironmentId)
+  const runtimeEnvironmentId = explicitRuntimeEnvironmentId
+    ? explicitRuntimeEnvironmentId
+    : mirroredRuntimeEnvironmentId
+      ? mirroredRuntimeEnvironmentId
+      : null
+  // Why: an SSH host nested under a HUB is execution identity, not permission for the paired client to dial that host.
+  const connectionId =
+    !terminalOwnerUnresolved && runtimeEnvironmentId === null
+      ? (worktreeConnectionId ?? null)
+      : null
   const shellOverride = tab?.shellOverride
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
   // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
   // enables ConPTY synchronized-output protection, which strips an agent's
   // transient cursor-show (?25h) and leaves the cursor invisible. The execution
   // host is the authoritative signal: only a 'local' host is a local native PTY.
-  const executionHostId = getExecutionHostIdForWorktree(state, deps.worktreeId)
+  const executionHostId = terminalOwnerUnresolved
+    ? ('runtime:unresolved-owner' as const)
+    : getExecutionHostIdForWorktree(state, deps.worktreeId)
   const isNativeWindowsConpty = isLocalNativeWindowsConpty({
     userAgent: navigator.userAgent,
     connectionId,
@@ -3258,16 +3291,6 @@ export function connectPanePty(
     })
   }
 
-  const restoredPtyIdForTransport =
-    deps.restoredLeafId && deps.restoredPtyIdByLeafId
-      ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
-      : null
-  const remoteRuntimeOwnerForTransport =
-    (restoredPtyIdForTransport
-      ? getRemoteRuntimePtyEnvironmentId(restoredPtyIdForTransport)
-      : null) ?? (tab?.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null)
-  const runtimeEnvironmentId =
-    remoteRuntimeOwnerForTransport ?? getRuntimeEnvironmentIdForWorktree(state, deps.worktreeId)
   const localWindowsTerminalCapabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()
     : null
@@ -3372,6 +3395,7 @@ export function connectPanePty(
       ? undefined
       : paneStartup?.startupCommandDelivery,
     connectionId,
+    executionHostId,
     worktreeId: deps.worktreeId,
     // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
     // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
@@ -3488,9 +3512,13 @@ export function connectPanePty(
         }
       : {})
   }
-  const transport = runtimeEnvironmentId
-    ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
-    : createIpcPtyTransport(transportOptions)
+  const transport = terminalOwnerUnresolved
+    ? createUnresolvedOwnerPtyTransport(
+        'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+      )
+    : runtimeEnvironmentId
+      ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
+      : createIpcPtyTransport(transportOptions)
   const canSendDesktopQueryReply = (): boolean => {
     const ptyId = transport.getPtyId()
     return !ptyId || !isPtyLocked(ptyId)
@@ -7777,6 +7805,12 @@ export function connectPanePty(
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
         : detachedLivePtyId
+    const runtimeHostPtyWakeHint =
+      runtimeEnvironmentId &&
+      candidateReattachSessionId &&
+      !isRemoteRuntimePtyId(candidateReattachSessionId)
+        ? candidateReattachSessionId
+        : null
     const sleptRemoteColdRestoreStartup = sleptRemoteRuntimeSessionId
       ? buildColdRestoreAgentResumeStartup()
       : null
@@ -7801,12 +7835,13 @@ export function connectPanePty(
     // Why: after a daemon crash + cold restore, a stale session-to-tab mapping can make a tab hold a ptyId from another worktree.
     // Restoring it would paint the wrong terminal content, so drop the reattach and spawn fresh.
     const deferredReattachSessionId =
-      candidateReattachSessionId &&
+      runtimeHostPtyWakeHint ??
+      (candidateReattachSessionId &&
       !isRemoteRuntimePtyId(candidateReattachSessionId) &&
       !candidateHasEagerBuffer &&
       isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
         ? candidateReattachSessionId
-        : null
+        : null)
     recordPtyConnectDiagnostic(
       `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hadExistingPaneTransportAtConnect} pendingKey=${pendingSpawnKey}`
     )

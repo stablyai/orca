@@ -46,6 +46,7 @@ import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import { createOrcaProfilesSlice } from './orca-profiles'
 import { createNewIssueDraftSlice } from './new-issue-draft'
+import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -95,7 +96,8 @@ export function createTestStore() {
     ...createPinnedTabCloseConfirmSlice(...a),
     ...createRecentlyClosedTabsSlice(...a),
     ...createOrcaProfilesSlice(...a),
-    ...createNewIssueDraftSlice(...a)
+    ...createNewIssueDraftSlice(...a),
+    ...createRemoteServerUpdatesSlice(...a)
   }))
 }
 
@@ -107,7 +109,7 @@ export function seedStore(
   // so the test files can stay under the enforced max-lines limit without
   // disabling the lint rule and hiding further growth.
   store.setState({
-    repos: [TEST_REPO],
+    repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     ...state
   })
 }
@@ -135,6 +137,17 @@ export function makeWorktree(
     lastActivityAt: 0,
     ...overrides
   }
+}
+
+export function makeRuntimeOwnedWorktree(
+  overrides: Partial<Worktree> & { id: string; repoId: string },
+  runtimeEnvironmentId = 'runtime-1'
+): Worktree {
+  return makeWorktree({
+    ...overrides,
+    hostId: overrides.hostId ?? 'local',
+    runtimeOwnerEnvironmentId: runtimeEnvironmentId
+  })
 }
 
 export function makeTab(

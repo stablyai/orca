@@ -83,11 +83,13 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
       }
     }, RESUME_DAEMON_AFTER_MS)
     try {
-      const secondLaunch = await session.launch()
-      secondApp = secondLaunch.app
-      secondApp.process().stderr?.on('data', (chunk: Buffer) => {
-        stderrLines.push(chunk.toString())
+      // Why: capture stderr from process start — the daemon guard logs its
+      // preservation decision during main-process startup, which can complete
+      // before firstWindow resolves, so a post-launch listener would miss it.
+      const secondLaunch = await session.launch({
+        onStderr: (chunk) => stderrLines.push(chunk)
       })
+      secondApp = secondLaunch.app
 
       await waitForSessionReady(secondLaunch.page)
       await expect
@@ -101,11 +103,15 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
       await waitForPaneCount(secondLaunch.page, 1, 30_000)
       await waitForTerminalOutput(secondLaunch.page, marker, 20_000)
 
-      // The guard path must actually have run: the daemon failed the health
-      // check and was preserved because its live session was verified.
+      // The guard path must actually have run and chosen preserve over replace:
+      // the daemon failed the health check yet was kept because its live session
+      // was verified. Match the stable "preserve…daemon…health check" concepts
+      // (not the exact wording) so a benign log reword doesn't flake, and
+      // confirm the replace path stayed off.
       await expect
         .poll(() => stderrLines.join(''), { timeout: 10_000 })
-        .toContain('Preserving daemon that failed the health check')
+        .toMatch(/preserv\w*\s+daemon[^\n]*health check/i)
+      expect(stderrLines.join('')).not.toMatch(/\breplacing daemon\b/i)
       expect(readDaemonPid(session.userDataDir)).toBe(daemonPid)
       // Why: a killed daemon cold-restores scrollback from history, so the
       // marker text alone cannot distinguish a live session from a dead one.

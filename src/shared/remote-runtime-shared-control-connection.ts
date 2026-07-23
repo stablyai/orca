@@ -119,6 +119,20 @@ export class RemoteRuntimeSharedControlConnection {
     })
   }
 
+  reconnectNow(): void {
+    const ready = isSharedControlReady({
+      state: this.state,
+      ws: this.ws,
+      sharedKey: this.sharedKey
+    })
+    if (this.intentionallyClosed || ready) {
+      return
+    }
+    // Why: a successful one-shot status probe proves the restarted endpoint is reachable; replace even a stuck CONNECTING/awaiting-ready socket instead of waiting behind stale backoff.
+    this.closeSocket(remoteRuntimeUnavailableError('Refreshing remote runtime control transport.'))
+    this.open()
+  }
+
   private ensureReadyWithTimeout(timeoutMs: number): Promise<void> {
     if (isSharedControlReady({ state: this.state, ws: this.ws, sharedKey: this.sharedKey })) {
       return Promise.resolve()
@@ -225,20 +239,15 @@ export class RemoteRuntimeSharedControlConnection {
     sharedControlSubscriptions.replaySharedControlSubscriptions({
       subscriptions: this.subscriptions,
       send: (subscription) => this.sendSubscription(subscription),
-      // Why: only reconnects tag replays; first connects stay on the gated path.
       tagReplayedResponses: this.everReady
     })
     this.everReady = true
   }
 
   private closeSubscription(requestId: string): void {
-    const subscription = this.subscriptions.get(requestId)
-    if (!subscription) {
-      return
-    }
     sharedControlSubscriptions.closeSharedControlLogicalSubscription({
       subscriptions: this.subscriptions,
-      subscription,
+      subscription: this.subscriptions.get(requestId),
       request: (method, params) => this.sendSubscriptionCleanupRequest(method, params)
     })
     this.reconnect.clearWhenIdle(this.subscriptions.size === 0 && this.state === 'closed')
@@ -276,13 +285,11 @@ export class RemoteRuntimeSharedControlConnection {
     }
     this.lastError = error.message
     if (this.subscriptions.size > 0 && !this.intentionallyClosed) {
-      this.scheduleReconnect()
+      this.reconnect.scheduleWithDefaultBackoff(this.intentionallyClosed, () => this.open())
     }
   }
 
   private closeSocket(error?: Error): void {
-    const cleanup = this.socketCleanup
-    const ws = this.ws
     closeSharedControlSocket({
       environmentId: this.options.environmentId,
       state: this.state,
@@ -290,8 +297,8 @@ export class RemoteRuntimeSharedControlConnection {
       subscriptions: this.subscriptions,
       readyWaiters: this.readyWaiters,
       lastClose: this.lastClose,
-      socketCleanup: cleanup,
-      ws,
+      socketCleanup: this.socketCleanup,
+      ws: this.ws,
       error,
       clearReadyStableTimer: () => this.readyStableReset.clear()
     })
@@ -299,14 +306,6 @@ export class RemoteRuntimeSharedControlConnection {
     this.sharedKey = null
     this.socketCleanup = null
     this.state = 'closed'
-  }
-
-  private scheduleReconnect(): void {
-    this.reconnect.schedule({
-      intentionallyClosed: this.intentionallyClosed,
-      delaysMs: [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000],
-      open: () => this.open()
-    })
   }
 
   private scheduleReconnectAttemptReset(): void {

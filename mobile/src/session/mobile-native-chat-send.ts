@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 
 type MobileTerminalClient = {
@@ -15,9 +16,9 @@ type MobileNativeChatSendArgs = {
   mobileClient?: MobileTerminalClient
 }
 
-/** 'unknown' = the RPC failed after the request hit the wire (relay drop or
- *  response timeout) — the desktop may have delivered the text and only the ack
- *  was lost, so callers must not present it as a definite send failure. */
+/** 'unknown' = the RPC failed without proof the request never reached the
+ *  desktop (ack loss after a write, or a cutover that cannot tell whether the
+ *  frame was written) — callers must not present it as a definite send failure. */
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown'
 
 export async function sendMobileNativeChatMessageWithOutcome(
@@ -32,7 +33,14 @@ export async function sendMobileNativeChatMessageWithOutcome(
     })
     return isTerminalSendRpcAccepted(response) ? 'accepted' : 'rejected'
   } catch (error) {
-    return isRpcDeliveryUnknown(error) ? 'unknown' : 'rejected'
+    // Why: a logical relay↔direct cutover rejects the in-flight send without
+    // knowing whether its frame reached the wire (the desktop may have delivered
+    // it), so treat it as delivery-ambiguous like physical ack-loss — never
+    // retry (double-send risk) and never a definite "not sent" that would hide
+    // a real delivery.
+    return isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)
+      ? 'unknown'
+      : 'rejected'
   }
 }
 

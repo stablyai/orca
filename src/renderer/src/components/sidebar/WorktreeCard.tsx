@@ -81,8 +81,19 @@ import {
 import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  selectRuntimeAwareSshStatus,
+  selectRuntimeAwareSshTargetLabel
+} from '@/store/slices/runtime-environment-ssh'
+import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 
 type WorktreeRenameRequest = {
   worktreeId: string
@@ -331,35 +342,59 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   // SSH disconnected state
+  const sshOwnerEnvironmentId = useAppStore((s) =>
+    repo?.connectionId ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id) : null
+  )
   const sshStatus = useAppStore((s) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
     if (!repo?.connectionId || isRuntimeOwnedSshTargetId(repo.connectionId)) {
       return null
     }
-    const state = s.sshConnectionStates.get(repo.connectionId)
-    return state?.status ?? 'disconnected'
+    return selectRuntimeAwareSshStatus(s, sshOwnerEnvironmentId, repo.connectionId)
   })
+  useEffect(() => {
+    if (sshOwnerEnvironmentId) {
+      void hydrateRuntimeEnvironmentSshState(sshOwnerEnvironmentId).catch(() => {})
+    }
+  }, [sshOwnerEnvironmentId])
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   // Why: terminal views have their own reconnect overlay; reserve the blocking dialog for non-terminal views (default to terminal when ambiguous).
   const activeViewIsTerminal = useAppStore(
     (s) => (s.activeTabTypeByWorktree?.[worktree.id] ?? 'terminal') === 'terminal'
   )
 
+  const parsedRepoHost = parseExecutionHostId(repo?.executionHostId)
+  const runtimeOwnerEnvironmentId =
+    worktree.runtimeOwnerEnvironmentId ??
+    (parsedRepoHost?.kind === 'runtime' ? parsedRepoHost.environmentId : null)
+  const runtimeHostId = runtimeOwnerEnvironmentId
+    ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
+    : null
+  const runtimeEnvironmentName = useAppStore((s) =>
+    runtimeOwnerEnvironmentId
+      ? (s.runtimeEnvironments.find((environment) => environment.id === runtimeOwnerEnvironmentId)
+          ?.name ?? null)
+      : null
+  )
+  const runtimeHostLabel = runtimeHostId
+    ? (getHostDisplayLabelOverrides(settings).get(runtimeHostId) ?? runtimeEnvironmentName)
+    : null
   // Why: runtime ("Orca server") hosts get the same disconnected dimming as SSH when their environment has no live status.
   const isRuntimeDisconnected = useAppStore((s) => {
-    const parsed = parseExecutionHostId(repo?.executionHostId)
-    if (parsed?.kind !== 'runtime') {
+    if (!runtimeOwnerEnvironmentId) {
       return false
     }
-    return !s.runtimeStatusByEnvironmentId.get(parsed.environmentId)?.status
+    return !s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)?.status
   })
   // Why: the reconnect dialog blocks, so it never auto-shows for the active card (would steal app-wide focus); opens only on deliberate focus (handleClick).
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
-  // Why: read the target label from the store (hydrated in useIpcEvents.ts) instead of a listTargets IPC per card.
+  // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
   const sshTargetLabel = useAppStore((s) =>
-    repo?.connectionId ? (s.sshTargetLabels.get(repo.connectionId) ?? '') : ''
+    repo?.connectionId
+      ? selectRuntimeAwareSshTargetLabel(s, sshOwnerEnvironmentId, repo.connectionId)
+      : ''
   )
 
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
@@ -1390,31 +1425,42 @@ const WorktreeCard = React.memo(function WorktreeCard({
               </Tooltip>
             )}
 
-            {!repo?.connectionId &&
-              parseExecutionHostId(repo?.executionHostId)?.kind === 'runtime' && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="shrink-0 inline-flex items-center">
-                      {isRuntimeDisconnected ? (
-                        <ServerOff className="size-3 text-red-400" />
-                      ) : (
-                        <Server className="size-3 text-muted-foreground" />
-                      )}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    {isRuntimeDisconnected
+            {!repo?.connectionId && parsedRepoHost?.kind === 'runtime' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="shrink-0 inline-flex items-center">
+                    {isRuntimeDisconnected ? (
+                      <ServerOff className="size-3 text-red-400" />
+                    ) : (
+                      <Server className="size-3 text-muted-foreground" />
+                    )}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  {isRuntimeDisconnected
+                    ? runtimeHostLabel
                       ? translate(
+                          'auto.components.sidebar.WorktreeCard.runtimeHostDisconnectedNamed',
+                          '{{hostName}} disconnected',
+                          { hostName: runtimeHostLabel }
+                        )
+                      : translate(
                           'auto.components.sidebar.WorktreeCard.runtimeHostDisconnected',
                           'Server disconnected'
+                        )
+                    : runtimeHostLabel
+                      ? translate(
+                          'auto.components.sidebar.WorktreeCard.runtimeHostProjectNamed',
+                          'Project on {{hostName}}',
+                          { hostName: runtimeHostLabel }
                         )
                       : translate(
                           'auto.components.sidebar.WorktreeCard.runtimeHostProject',
                           'Project on Orca server'
                         )}
-                  </TooltipContent>
-                </Tooltip>
-              )}
+                </TooltipContent>
+              </Tooltip>
+            )}
 
             {showInlineRepoBadge && (
               <RepoIdentityChip repo={repo}>

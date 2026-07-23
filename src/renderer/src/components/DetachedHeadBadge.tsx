@@ -12,15 +12,13 @@ type DetachedHeadBadgeProps = {
   label?: 'sidebar' | 'source-control'
   side?: React.ComponentProps<typeof TooltipContent>['side']
   className?: string
-  tabIndex?: number
 }
 
 export function DetachedHeadBadge({
   display,
   label = 'source-control',
   side = 'right',
-  className,
-  tabIndex
+  className
 }: DetachedHeadBadgeProps): React.JSX.Element {
   const visibleLabel = label === 'sidebar' ? display.sidebarLabel : display.sourceControlLabel
 
@@ -29,8 +27,6 @@ export function DetachedHeadBadge({
       <TooltipTrigger asChild>
         <Badge
           variant="outline"
-          aria-label={display.tooltip}
-          tabIndex={tabIndex}
           className={cn(
             'h-[18px] shrink-0 gap-1 rounded px-1.5 text-[10px] font-medium leading-none',
             'border-[color:color-mix(in_srgb,var(--git-decoration-modified)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--git-decoration-modified)_8%,transparent)] text-[color:var(--git-decoration-modified)]',
@@ -38,7 +34,7 @@ export function DetachedHeadBadge({
           )}
         >
           <GitCommitHorizontal className="size-2.5" />
-          <span className="min-w-0 truncate">{visibleLabel}</span>
+          {visibleLabel}
         </Badge>
       </TooltipTrigger>
       <TooltipContent side={side} sideOffset={8}>

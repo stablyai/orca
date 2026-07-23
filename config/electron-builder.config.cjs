@@ -11,6 +11,7 @@ const {
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
+const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
@@ -133,6 +134,12 @@ module.exports = {
     'node_modules/sherpa-onnx*/**'
   ],
   afterPack: async (context) => {
+    // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
+    // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
+    // Fail packaging if any bundled native binary exceeds the supported floor.
+    if (context.electronPlatformName === 'linux') {
+      verifyLinuxGlibcFloor(context.appOutDir)
+    }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
         ? join(

@@ -17,10 +17,7 @@ import { detectAgentPermission } from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
 import { openMobileNativeChatFile } from './mobile-native-chat-open-file'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
-import {
-  sendMobileNativeChatMessage,
-  sendMobileNativeChatMessageWithOutcome
-} from './mobile-native-chat-send'
+import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
@@ -175,7 +172,7 @@ export function useMobileNativeChatController(args: {
       return false
     }
     cancelNativeChatAnswer()
-    const accepted = await sendMobileNativeChatMessage({
+    const outcome = await sendMobileNativeChatMessageWithOutcome({
       client,
       terminal: handle,
       text: String.fromCharCode(27),
@@ -184,10 +181,14 @@ export function useMobileNativeChatController(args: {
         ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
         : {})
     })
-    if (!accepted) {
+    if (outcome === 'unknown') {
+      // Why: the Escape may have landed (ack lost / path cutover) — a definite
+      // "not sent" would invite a second Escape into a changed prompt state.
+      onSendError('Cancel unconfirmed — check chat before retrying')
+    } else if (outcome === 'rejected') {
       onSendError('Cancel not sent')
     }
-    return accepted
+    return outcome === 'accepted'
   }, [
     activeHandleRef,
     cancelNativeChatAnswer,

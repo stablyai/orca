@@ -51,6 +51,9 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'repo_not_found',
   'timeout',
   'invalid_limit',
+  'remote_update_manual_required',
+  'remote_update_not_available',
+  'remote_update_not_downloaded',
   ...AGENT_SESSION_RPC_ERROR_CODES
 ])
 

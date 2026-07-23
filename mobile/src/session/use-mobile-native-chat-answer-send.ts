@@ -9,7 +9,7 @@ import {
   type AskAnswerSelection,
   type AskPrompt
 } from './mobile-native-chat-ask'
-import { sendMobileNativeChatMessage } from './mobile-native-chat-send'
+import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
 import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
@@ -102,7 +102,8 @@ export function useMobileNativeChatAnswerSend(args: {
       // A new answer supersedes any still-pending keystroke writes.
       cancelPending()
       const generation = generationRef.current
-      const sendTerminal = (body: string, enter: boolean): Promise<boolean> => {
+      let sawUnknownOutcome = false
+      const sendTerminal = async (body: string, enter: boolean): Promise<boolean> => {
         const activeRoute = activeRouteRef.current
         if (
           !activeRoute.enabled ||
@@ -111,9 +112,9 @@ export function useMobileNativeChatAnswerSend(args: {
           activeRoute.streamIdentity !== streamIdentity ||
           handleRef.current !== handle
         ) {
-          return Promise.resolve(false)
+          return false
         }
-        return sendMobileNativeChatMessage({
+        const outcome = await sendMobileNativeChatMessageWithOutcome({
           client,
           terminal: handle,
           text: body,
@@ -122,6 +123,10 @@ export function useMobileNativeChatAnswerSend(args: {
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
             : {})
         })
+        if (outcome === 'unknown') {
+          sawUnknownOutcome = true
+        }
+        return outcome === 'accepted'
       }
       const wait = (ms: number): Promise<boolean> =>
         new Promise((resolve) => {
@@ -136,7 +141,14 @@ export function useMobileNativeChatAnswerSend(args: {
         })
       const fail = (): false => {
         if (generationRef.current === generation) {
-          onSendError('Answer not sent')
+          // Why: keystrokes that may have landed (ack lost / path cutover) must
+          // not read as a definite failure — a blind resend could double-step
+          // the selector.
+          onSendError(
+            sawUnknownOutcome
+              ? 'Answer unconfirmed — check chat before retrying'
+              : 'Answer not sent'
+          )
         }
         return false
       }

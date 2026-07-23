@@ -593,6 +593,11 @@ export type UISlice = {
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
   sendPromptToSidebarAgentTarget: (paneKey: string) => Promise<boolean>
+  /** Bumped to ask the active worktree's Source Control notes send menu to open (keyboard shortcut). `issuedAt` bounds staleness so a request the menu never consumed can't reopen it much later. */
+  diffNotesSendMenuOpenRequest: { worktreeId: string; nonce: number; issuedAt: number } | null
+  /** Reveal Source Control and request its notes send menu open; returns false (no-op) when the active worktree has no unsent notes. */
+  openDiffNotesSendMenuForActiveWorktree: () => boolean
+  consumeDiffNotesSendMenuOpenRequest: (worktreeId: string) => void
   /** Per-agent "I've looked at this" timestamps (paneKey → ts). A row is unvisited when no ack exists or stateStartedAt is newer than the last ack. Persisted so visited rows don't return bold on relaunch. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
@@ -744,7 +749,12 @@ export type UISlice = {
   clearSettingsTarget: () => void
   /** Which host the Projects Settings pane shows per project (keyed by projectId). Ephemeral on purpose — never persisted, so reload reopens on the effective host. */
   settingsProjectHostSelection: Record<string, ExecutionHostId>
-  setSettingsProjectHostSelection: (projectId: string, hostId: ExecutionHostId) => void
+  settingsProjectSetupSelection: Record<string, string>
+  setSettingsProjectHostSelection: (
+    projectId: string,
+    hostId: ExecutionHostId,
+    setupId?: string
+  ) => void
   /** One-shot Appearance accordion to expand for nested Settings deep links (e.g. Usage percentages under Window & Sidebar). Cleared when Appearance consumes it. */
   appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
   setAppearanceAccordionDeepLink: (
@@ -1003,6 +1013,32 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       get().revealWorktreeInSidebar(args.worktreeId, { behavior: 'auto', highlight: true })
     }
   },
+  diffNotesSendMenuOpenRequest: null,
+  openDiffNotesSendMenuForActiveWorktree: () => {
+    const worktreeId = get().activeWorktreeId
+    if (!worktreeId) {
+      return false
+    }
+    // Why: no unsent notes means nothing to send, so don't hijack focus or reveal the panel.
+    if (
+      !get()
+        .getDiffComments(worktreeId)
+        .some((comment) => !comment.sentAt)
+    ) {
+      return false
+    }
+    get().setRightSidebarTab('source-control')
+    get().setRightSidebarOpen(true)
+    const nonce = (get().diffNotesSendMenuOpenRequest?.nonce ?? 0) + 1
+    set({ diffNotesSendMenuOpenRequest: { worktreeId, nonce, issuedAt: Date.now() } })
+    return true
+  },
+  consumeDiffNotesSendMenuOpenRequest: (worktreeId) =>
+    set((s) =>
+      s.diffNotesSendMenuOpenRequest?.worktreeId === worktreeId
+        ? { diffNotesSendMenuOpenRequest: null }
+        : s
+    ),
   closeAgentSendPopoverTargetMode: (id, instanceId) =>
     set((s) => {
       if (!s.agentSendPopoverTargetMode) {
@@ -1459,18 +1495,30 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
   settingsProjectHostSelection: {},
+  settingsProjectSetupSelection: {},
   // Why: renderer-only, never persisted — no window.api.ui.set, and absent from the debounced UI writer in App.tsx.
-  setSettingsProjectHostSelection: (projectId, hostId) =>
-    set((s) =>
-      s.settingsProjectHostSelection[projectId] === hostId
-        ? s
-        : {
-            settingsProjectHostSelection: {
-              ...s.settingsProjectHostSelection,
-              [projectId]: hostId
-            }
-          }
-    ),
+  setSettingsProjectHostSelection: (projectId, hostId, setupId) =>
+    set((s) => {
+      const nextSetupSelections = { ...s.settingsProjectSetupSelection }
+      if (setupId) {
+        nextSetupSelections[projectId] = setupId
+      } else {
+        delete nextSetupSelections[projectId]
+      }
+      if (
+        s.settingsProjectHostSelection[projectId] === hostId &&
+        s.settingsProjectSetupSelection[projectId] === setupId
+      ) {
+        return s
+      }
+      return {
+        settingsProjectHostSelection: {
+          ...s.settingsProjectHostSelection,
+          [projectId]: hostId
+        },
+        settingsProjectSetupSelection: nextSetupSelections
+      }
+    }),
   appearanceAccordionDeepLink: null,
   setAppearanceAccordionDeepLink: (section) => set({ appearanceAccordionDeepLink: section }),
   clearAppearanceAccordionDeepLink: () => set({ appearanceAccordionDeepLink: null }),

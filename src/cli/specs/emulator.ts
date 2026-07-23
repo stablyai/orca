@@ -108,7 +108,7 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'ax'],
-    summary: 'Dump the Android accessibility (uiautomator) tree',
+    summary: 'Dump the device accessibility tree (uiautomator on Android, serve-sim AX on iOS)',
     usage: 'orca emulator ax [--device <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree']
   },

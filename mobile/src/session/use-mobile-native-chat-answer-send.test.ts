@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentType } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
 import type { AskPrompt } from './mobile-native-chat-ask'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
@@ -241,6 +242,17 @@ describe('useMobileNativeChatAnswerSend', () => {
     await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(false)
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledWith('Answer not sent')
+  })
+
+  it('reports an ambiguous write as unconfirmed instead of a definite failure', async () => {
+    const onSendError = vi.fn()
+    const sendRequest = vi
+      .fn()
+      .mockRejectedValue(markRpcDeliveryUnknown(new Error('Connection closed')))
+    await mount({ sendRequest } as unknown as RpcClient, onSendError)
+
+    await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(false)
+    expect(onSendError).toHaveBeenCalledWith('Answer unconfirmed — check chat before retrying')
   })
 
   it('rejects an empty selection without writing anything', async () => {

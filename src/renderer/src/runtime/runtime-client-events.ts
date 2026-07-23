@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/runtime-client-events'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
+import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
@@ -23,7 +24,8 @@ export async function subscribeRuntimeClientEvents(
     {
       selector: environmentId,
       method: 'runtime.clientEvents.subscribe',
-      timeoutMs: 15_000
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(environmentId)
     },
     {
       onResponse: (response) => {
@@ -49,7 +51,13 @@ function handleRuntimeClientEventResponse(
     onReplayedAfterReconnect?.()
   }
   const message = response.result as RuntimeClientEventStreamMessage
-  if (message.type === 'ready' || message.type === 'end') {
+  if (message.type === 'ready') {
+    for (const sshState of message.snapshot?.sshStates ?? []) {
+      onEvent({ type: 'sshStateChanged', ...sshState })
+    }
+    return
+  }
+  if (message.type === 'end') {
     return
   }
   if (isRuntimeClientEvent(message)) {

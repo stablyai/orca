@@ -267,7 +267,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       isActive: true
     }
     // Client closed host-tab-1; an in-flight pre-close snapshot still lists it.
-    recordWebSessionCloseIntent(ENV, WT, 'host-tab-1', NOW)
+    recordWebSessionCloseIntent({ environmentId: ENV }, WT, 'host-tab-1', NOW)
     const stalePreClose = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([surface]),
@@ -306,7 +306,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const authoritative = makeSnapshot([surface], { snapshotVersion: 6 })
 
     const initial = makeState()
-    recordWebSessionCloseIntent(ENV, WT, 'host-tab-1', NOW)
+    recordWebSessionCloseIntent({ environmentId: ENV }, WT, 'host-tab-1', NOW)
     const hiddenPatch = applyFreshWebSessionTabsSnapshot(initial, authoritative, ENV, NOW)
     const hidden = { ...initial, ...(hiddenPatch as Partial<WebSessionTabsSyncState>) }
     expect((hidden.tabsByWorktree[WT] ?? []).map((tab) => tab.id)).not.toContain(
@@ -315,7 +315,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     // The host vetoed lifecycle cleanup because the PTY is still live. Its
     // unchanged snapshot must become usable immediately, without a new publish.
-    clearWebSessionCloseIntent(ENV, WT, 'host-tab-1')
+    clearWebSessionCloseIntent({ environmentId: ENV }, WT, 'host-tab-1')
     acceptReplayedWebSessionTabsSnapshot(ENV, WT)
     const restoredPatch = applyFreshWebSessionTabsSnapshot(hidden, authoritative, ENV, NOW + 1)
     const restored = { ...hidden, ...(restoredPatch as Partial<WebSessionTabsSyncState>) }
@@ -327,7 +327,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('does not let a replay reset clear another close intent from an older snapshot', () => {
     const current = makeSnapshot([], { snapshotVersion: 6, activeTabType: null })
     expect(shouldApplyWebSessionTabsSnapshot(current, ENV)).toBe(true)
-    recordWebSessionCloseIntent(ENV, WT, 'host-tab-2', NOW)
+    recordWebSessionCloseIntent({ environmentId: ENV }, WT, 'host-tab-2', NOW)
 
     acceptReplayedWebSessionTabsSnapshot(ENV, WT)
     const state = makeState()
@@ -339,7 +339,9 @@ describe('applyWebSessionTabsSnapshot', () => {
     )
 
     expect(stalePatch).toBe(state)
-    expect(isWebSessionCloseIntentPending(ENV, WT, 'host-tab-2', NOW + 1)).toBe(true)
+    expect(isWebSessionCloseIntentPending({ environmentId: ENV }, WT, 'host-tab-2', NOW + 1)).toBe(
+      true
+    )
   })
 
   it('keeps a client reorder until the host echoes it (no order snap-back)', () => {
@@ -373,7 +375,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     // Client dragged tab 2 ahead of tab 1; an in-flight snapshot still has the
     // original host order.
-    recordWebSessionReorderIntent(WT, 'host-group-1', [local2, local1], NOW)
+    recordWebSessionReorderIntent({ environmentId: ENV }, WT, 'host-group-1', [local2, local1], NOW)
     const stalePreMove = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot(surfaces, { tabGroups: groupWithOrder(['host-tab-1', 'host-tab-2']) }),
@@ -1167,7 +1169,6 @@ describe('applyWebSessionTabsSnapshot', () => {
     ) as Partial<WebSessionTabsSyncState>
 
     const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
-    console.error('PATCH tabs', JSON.stringify(patch.tabsByWorktree?.[WT]))
     expect(patch.tabsByWorktree?.[WT]?.[0]?.viewMode).toBe('chat')
     expect(
       patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === mirroredId)?.viewMode
@@ -2363,7 +2364,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const existingTabId = toWebTerminalSurfaceTabId('host-tab-1')
     const newTabId = toWebTerminalSurfaceTabId('host-tab-2')
     // Simulate createWebRuntimeSessionTerminal recording focus intent for the new tab.
-    recordWebSessionFocusIntent(WT, `host-tab-2::${SECOND_LEAF_ID}`)
+    recordWebSessionFocusIntent({ environmentId: ENV }, WT, `host-tab-2::${SECOND_LEAF_ID}`)
     const existingUnifiedTab: Tab = {
       id: existingTabId,
       entityId: existingTabId,
