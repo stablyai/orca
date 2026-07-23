@@ -523,6 +523,7 @@ function mapRpcRateLimitWindows(result: RpcRateLimitsResult | undefined): {
   const weeklyFallback =
     !weeklyRaw &&
     hasMappableRpcWindow(result?.secondary) &&
+    !hasRpcWindowDuration(result.secondary, CODEX_SESSION_WINDOW_MINUTES) &&
     result.secondary !== sessionRaw &&
     result.secondary !== sessionFallback
       ? result.secondary

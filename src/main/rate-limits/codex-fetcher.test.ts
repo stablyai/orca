@@ -385,6 +385,24 @@ describe('fetchCodexRateLimits', () => {
     })
   })
 
+  it('does not map a duplicate session-duration window into the weekly slot', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, {
+      primary: { usedPercent: 11, windowDurationMins: 300 },
+      secondary: { usedPercent: 12, windowDurationMins: 300 }
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: { usedPercent: 11, windowMinutes: 300 },
+      weekly: null
+    })
+  })
+
   it('fills reset-credit count from the backend when the installed app-server omits it', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
