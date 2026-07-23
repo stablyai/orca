@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const gitExecFileAsync = vi.fn()
-vi.mock('./runner', () => ({
-  gitExecFileAsync: (...args: unknown[]) => gitExecFileAsync(...args)
-}))
-
-let signature: string | undefined
-const readLocalGitConfigSignature = vi.fn(async () => signature)
-vi.mock('../github/local-git-config-signature', () => ({
-  readLocalGitConfigSignature: (...args: unknown[]) => readLocalGitConfigSignature(...args)
-}))
+const { gitExecFileAsync, readLocalGitConfigSignature, state } = vi.hoisted(() => {
+  const state = { signature: undefined as string | undefined }
+  return {
+    state,
+    gitExecFileAsync: vi.fn(),
+    readLocalGitConfigSignature: vi.fn(async () => state.signature)
+  }
+})
+vi.mock('./runner', () => ({ gitExecFileAsync }))
+vi.mock('../github/local-git-config-signature', () => ({ readLocalGitConfigSignature }))
 
 import {
   __resetGitRemoteMetadataCacheForTests,
@@ -22,7 +22,7 @@ beforeEach(() => {
   __resetGitRemoteMetadataCacheForTests()
   gitExecFileAsync.mockReset()
   readLocalGitConfigSignature.mockClear()
-  signature = 'sig-1'
+  state.signature = 'sig-1'
 })
 
 describe('git-remote-metadata', () => {
@@ -42,7 +42,7 @@ describe('git-remote-metadata', () => {
     gitExecFileAsync.mockResolvedValue({ stdout: 'origin\n', stderr: '' })
 
     await getRemoteListRaw('/repo')
-    signature = 'sig-2'
+    state.signature = 'sig-2'
     await getRemoteListRaw('/repo')
 
     expect(gitExecFileAsync).toHaveBeenCalledTimes(2)
@@ -97,7 +97,7 @@ describe('git-remote-metadata', () => {
   })
 
   it('caches on the TTL path when no signature is available (WSL/relay)', async () => {
-    signature = undefined
+    state.signature = undefined
     gitExecFileAsync.mockResolvedValue({ stdout: 'origin\n', stderr: '' })
 
     await getRemoteListRaw('/repo')
