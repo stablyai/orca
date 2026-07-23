@@ -653,8 +653,9 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       }
       // Why: Pi identity is resumable with no turn row and while idle after done, so manual
       // sleep must promote both instead of deleting the checkpoint.
+      const { resumeScope: _resumeScope, ...worktreeRecord } = existing
       records[existing.paneKey] = {
-        ...existing,
+        ...worktreeRecord,
         state: 'working',
         capturedAt,
         updatedAt: capturedAt,
@@ -771,6 +772,7 @@ function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.lastAssistantMessage === next.lastAssistantMessage &&
     existing.interrupted === next.interrupted &&
     existing.origin === next.origin &&
+    existing.resumeScope === next.resumeScope &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
 }
@@ -1593,7 +1595,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               ? { connectionId: existingRecord.connectionId }
               : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
-          origin: 'live'
+          origin: 'live',
+          ...(agent === 'pi' ? { resumeScope: 'pane' as const } : {})
         }
         removedLiveStatus = existingStatus !== undefined
         const nextLive = removedLiveStatus ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey

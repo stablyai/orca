@@ -123,7 +123,8 @@ describe('recordAgentProviderSession', () => {
       agent: 'pi',
       providerSession,
       launchConfig,
-      origin: 'live'
+      origin: 'live',
+      resumeScope: 'pane'
     })
 
     const liveRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
@@ -136,6 +137,9 @@ describe('recordAgentProviderSession', () => {
       launchConfig,
       origin: 'worktree-sleep'
     })
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.resumeScope
+    ).toBeUndefined()
   })
 
   it('does not reuse Pi launch config when the session file identity changes', () => {
