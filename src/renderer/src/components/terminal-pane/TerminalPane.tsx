@@ -2896,16 +2896,23 @@ export default function TerminalPane({
           onRestartDaemon={() => daemonActions.setPending('restart')}
         />
       )}
-      {showSshReconnectOverlay && sshReconnectTargetId && sshReconnectStatus ? (
-        <TerminalSshReconnectOverlay
-          targetId={sshReconnectTargetId}
-          targetLabel={sshReconnectTargetLabel}
-          status={sshReconnectStatus}
-          targetRemoved={sshReconnectTargetRemoved}
-          worktreeId={worktreeId}
-          sshOwnerEnvironmentId={sshReconnectEnvironmentId}
-        />
-      ) : null}
+      {/* Why: portal into the pane so the banner stacks above the xterm canvas (sibling mount painted under WebGL). */}
+      {showSshReconnectOverlay && sshReconnectTargetId && sshReconnectStatus
+        ? managedPanes.map((pane) =>
+            createPortal(
+              <TerminalSshReconnectOverlay
+                targetId={sshReconnectTargetId}
+                targetLabel={sshReconnectTargetLabel}
+                status={sshReconnectStatus}
+                targetRemoved={sshReconnectTargetRemoved}
+                worktreeId={worktreeId}
+                sshOwnerEnvironmentId={sshReconnectEnvironmentId}
+              />,
+              pane.container,
+              `ssh-reconnect-${pane.id}`
+            )
+          )
+        : null}
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
