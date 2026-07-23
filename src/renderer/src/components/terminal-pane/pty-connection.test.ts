@@ -16514,6 +16514,7 @@ describe('connectPanePty', () => {
       terminalTitle: 'experimental-agent-observability',
       paneKey: makePaneKey('tab-1', LEAF_1)
     })
+    expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
   })
 
   it('does not dispatch generic spinner completions when process inspection finds no agent', async () => {
