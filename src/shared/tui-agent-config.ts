@@ -212,8 +212,9 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   cursor: {
-    detectCmd: 'cursor-agent',
-    launchCmd: 'cursor-agent',
+    detectCmd: 'cursor',
+    detectCmdAliases: ['cursor-agent', 'agent'],
+    launchCmd: 'cursor agent',
     expectedProcess: 'cursor-agent',
     promptInjectionMode: 'argv',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
