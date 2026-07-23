@@ -80,7 +80,7 @@ import {
   hasRepoWorktreeBasePath,
   shouldSetDisplayName,
   mergeWorktree,
-  areWorktreePathsEqual
+  findListedWorktreeByPath
 } from './worktree-logic'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
@@ -2378,7 +2378,11 @@ export async function createLocalWorktree(
       ? listWorktrees(repo.path, localWorktreeGitOptions)
       : listWorktrees(repo.path)
   )
-  const created = gitWorktrees.find((gw) => areWorktreePathsEqual(gw.path, worktreePath))
+  // Why: local immutable Linux (/home → /var/home) reports the realpath in
+  // `git worktree list`; resolve symlinks only for native host Git (not WSL).
+  const created = await findListedWorktreeByPath(gitWorktrees, worktreePath, {
+    resolveSymlinks: !localWorktreeGitOptions.wslDistro
+  })
   if (!created) {
     throw new Error('Worktree created but not found in listing')
   }

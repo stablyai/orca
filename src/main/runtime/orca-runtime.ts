@@ -808,7 +808,8 @@ import {
   mergeWorktree,
   sanitizeWorktreeName,
   shouldSetDisplayName,
-  areWorktreePathsEqual
+  areWorktreePathsEqual,
+  findListedWorktreeByPath
 } from '../ipc/worktree-logic'
 import { worktreePathComparisonKey } from '../ipc/worktree-path-comparison'
 import {
@@ -18741,7 +18742,11 @@ export class OrcaRuntimeService {
     const gitWorktrees = hasLocalWorktreeGitOptions
       ? await listWorktrees(repo.path, localWorktreeGitOptions)
       : await listWorktrees(repo.path)
-    const created = gitWorktrees.find((gw) => areWorktreePathsEqual(gw.path, worktreePath))
+    // Why: native host Git may list the realpath while we requested a symlink path
+    // (e.g. /home → /var/home on immutable Linux). Skip host realpath for WSL.
+    const created = await findListedWorktreeByPath(gitWorktrees, worktreePath, {
+      resolveSymlinks: !localWorktreeGitOptions.wslDistro
+    })
     if (!created) {
       throw new Error('Worktree created but not found in listing')
     }

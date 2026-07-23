@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 
@@ -97,6 +98,57 @@ export function dedupeWorktreesByPath<T extends { path: string }>(
 
 function looksLikePosixAbsolutePath(pathValue: string): boolean {
   return pathValue.startsWith('/') && !pathValue.startsWith('//')
+}
+
+export type FindListedWorktreeByPathOptions = {
+  platform?: NodeJS.Platform
+  /**
+   * When true (default), fall back to filesystem realpath if string comparison
+   * fails. Disable for WSL/SSH listings where host realpath is not authoritative.
+   */
+  resolveSymlinks?: boolean
+  resolveRealPath?: (pathValue: string) => Promise<string>
+}
+
+/**
+ * Find a worktree row for a path we just created. String equality is preferred;
+ * local symlink roots (e.g. /home → /var/home on immutable Linux) need realpath.
+ */
+export async function findListedWorktreeByPath<T extends { path: string }>(
+  worktrees: readonly T[],
+  requestedPath: string,
+  options: FindListedWorktreeByPathOptions = {}
+): Promise<T | undefined> {
+  const platform = options.platform ?? process.platform
+  const direct = worktrees.find((worktree) =>
+    areWorktreePathsEqual(worktree.path, requestedPath, platform)
+  )
+  if (direct) {
+    return direct
+  }
+  if (options.resolveSymlinks === false) {
+    return undefined
+  }
+
+  const resolveRealPath = options.resolveRealPath ?? ((pathValue: string) => realpath(pathValue))
+  let requestedReal: string
+  try {
+    requestedReal = await resolveRealPath(requestedPath)
+  } catch {
+    return undefined
+  }
+
+  for (const worktree of worktrees) {
+    try {
+      const listedReal = await resolveRealPath(worktree.path)
+      if (areWorktreePathsEqual(listedReal, requestedReal, platform)) {
+        return worktree
+      }
+    } catch {
+      // Why: a missing/stale listing path should not abort the search of other rows.
+    }
+  }
+  return undefined
 }
 
 function normalizeWindowsWorktreePathForComparison(pathValue: string): string {
