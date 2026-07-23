@@ -29,11 +29,12 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
     --files-modified "path/a,path/b" \\
     --report-path "<optional: path to the full artifact>"
 
-  # BEHAVIOR RULE: send a heartbeat every 5 minutes
-  # while actively working on the task. The coordinator uses this to
-  # distinguish "still thinking" from "hung / crashed." Skip heartbeats only
+  # BEHAVIOR RULE: send heartbeat/status only on meaningful phase transitions
+  # (investigating|implementing|reviewing|waiting), not on a timer. A healthy
+  # long wait is silent — do not emit periodic "alive" ticks. Skip heartbeats
   # while blocked inside \`check --wait\` or \`ask\` — those calls are
-  # themselves liveness signals.
+  # themselves liveness signals. Coordinators distinguish hung workers via
+  # lifecycle mail, terminal liveness sweeps, and those blocking waits.
   #
   # Include BOTH taskId and dispatchId in the payload: the coordinator
   # attributes the heartbeat to the specific dispatch context, not just
