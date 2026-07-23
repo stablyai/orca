@@ -3535,7 +3535,15 @@ export class OrcaRuntimeService {
 
   private emitClientEvent(event: RuntimeClientEvent): void {
     for (const listener of this.clientEventListeners) {
-      listener(event)
+      try {
+        listener(event)
+      } catch (error) {
+        // Why: client-event delivery is best-effort fan-out (e.g. a paired-client relay that can
+        // throw on a broken pipe); one failing subscriber must never abort the emitting operation.
+        // A throw here once escaped acquireWorktreeTerminalSpawn after it took the per-worktree
+        // terminal mutation, leaking it and wedging that worktree's sleep until app restart.
+        console.error('[runtime] client event listener threw', { eventType: event.type, error })
+      }
     }
   }
 
