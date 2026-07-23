@@ -1,14 +1,5 @@
-/**
- * Tracks the current typed-but-unsubmitted input line for terminal
- * autosuggest, driven by either OSC133 delivery path: main-authority
- * `pty:sideEffect` facts (onPromptEndFact/onCommandStartedFact) or the
- * renderer byte-mode scanner (handlePtyData, wired in a later task).
- *
- * Why two-phase capture: OSC133;B (prompt-end) fires once the prompt is
- * drawn but before the user types, so we snapshot the cursor position then
- * and re-read the buffer from that column up to the live cursor on demand —
- * this avoids re-parsing prompt text and tolerates prompts of any shape.
- */
+// Why: snapshots the prompt-end cursor position rather than re-parsing prompt text,
+// so it tolerates prompts of any shape and reads the live input line on demand.
 import type { Terminal } from '@xterm/xterm'
 
 export type TerminalAutosuggestLineTracker = {

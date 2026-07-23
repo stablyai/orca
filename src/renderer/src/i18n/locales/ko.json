@@ -129,6 +129,15 @@
       }
     }
   },
+  "shortcuts": {
+    "conflictsWith": "{{binding}}이(가) {{labels}}과(와) 충돌합니다.",
+    "filter": {
+      "all": "전체",
+      "modified": "수정됨",
+      "unassigned": "미할당",
+      "conflicts": "충돌"
+    }
+  },
   "auto": {
     "App": {
       "221a95ba38": "온보딩을 다시 시도하거나 닫고 앱에서 계속하세요.",
@@ -14579,6 +14588,24 @@
       "invalidUrl": "유효한 프록시 URL을 입력하세요.",
       "unsupportedScheme": "http, https, socks, socks4, socks5 중 하나의 프록시 URL을 사용하세요.",
       "missingHost": "프록시 URL에는 호스트가 포함되어야 합니다."
+    }
+  },
+  "automations": {
+    "usage": {
+      "unavailable": "사용량을 사용할 수 없음",
+      "noneYet": "아직 실행 사용량이 없습니다"
+    },
+    "nextRun": {
+      "paused": "일시 중지됨"
+    },
+    "hermesCronOutput": {
+      "scheduleLabel": "일정"
+    }
+  },
+  "sidebar": {
+    "workspaceKanban": {
+      "newWorkspaceIn": "{{status}}에 새 워크스페이스 만들기",
+      "addProjectToCreate": "워크스페이스를 만들려면 프로젝트를 추가하세요"
     }
   }
 }

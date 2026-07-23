@@ -129,6 +129,15 @@
       }
     }
   },
+  "shortcuts": {
+    "conflictsWith": "{{binding}} entra en conflicto con {{labels}}.",
+    "filter": {
+      "all": "Todos",
+      "modified": "Modificados",
+      "unassigned": "Sin asignar",
+      "conflicts": "Conflictos"
+    }
+  },
   "auto": {
     "App": {
       "221a95ba38": "Vuelve a intentar la configuración inicial o ciérrala y continúa en la aplicación.",
@@ -14579,6 +14588,24 @@
       "invalidUrl": "Introduzca una URL de proxy válida.",
       "unsupportedScheme": "Use una URL de proxy http, https, socks, socks4 o socks5.",
       "missingHost": "La URL del proxy debe incluir un host."
+    }
+  },
+  "automations": {
+    "usage": {
+      "unavailable": "Uso no disponible",
+      "noneYet": "Aún no hay uso de ejecuciones"
+    },
+    "nextRun": {
+      "paused": "Pausado"
+    },
+    "hermesCronOutput": {
+      "scheduleLabel": "Programación"
+    }
+  },
+  "sidebar": {
+    "workspaceKanban": {
+      "newWorkspaceIn": "Nuevo espacio de trabajo en {{status}}",
+      "addProjectToCreate": "Añade un proyecto para crear espacios de trabajo"
     }
   }
 }

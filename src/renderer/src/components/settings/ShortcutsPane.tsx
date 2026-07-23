@@ -3,12 +3,15 @@ import {
   findKeybindingConflicts,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
-  getKeybindingDefinition,
   keybindingFromInputForAction,
   normalizeKeybindingListForAction,
   type KeybindingActionId,
   type KeybindingInput
 } from '../../../../shared/keybindings'
+import {
+  getLocalizedKeybindingDefinition,
+  getLocalizedKeybindingGroupTitle
+} from './keybinding-copy'
 import {
   EMPTY_DISABLED_TUI_AGENTS,
   disabledAgentTabActionIds,
@@ -101,12 +104,15 @@ export function ShortcutsPane(): React.JSX.Element {
       ignoredActionIds: ignoredConflictActionIds
     })) {
       const labels = conflict.actionIds
-        .map((id) => getKeybindingDefinition(id)?.title ?? id)
+        .map((id) => getLocalizedKeybindingDefinition(id)?.title ?? id)
         .join(', ')
       for (const actionId of conflict.actionIds) {
         result.set(actionId, [
           ...(result.get(actionId) ?? []),
-          `${formatKeybindingList([conflict.binding], platform)} conflicts with ${labels}.`
+          translate('shortcuts.conflictsWith', '{{binding}} conflicts with {{labels}}.', {
+            binding: formatKeybindingList([conflict.binding], platform),
+            labels
+          })
         ])
       }
     }
@@ -115,14 +121,14 @@ export function ShortcutsPane(): React.JSX.Element {
   const shortcutGroups = useMemo<ShortcutRowsByGroup[]>(
     () =>
       groups.map((group) => ({
-        title: group.title,
+        title: getLocalizedKeybindingGroupTitle(group.title),
         rows: group.items.map((item) => {
           const effective = getEffectiveKeybindingsForAction(item.id, platform, keybindings)
           const modified = hasOwnBindingOverride(keybindings, item.id)
           const warnings = conflictByAction.get(item.id) ?? []
           return {
             item,
-            groupTitle: group.title,
+            groupTitle: getLocalizedKeybindingGroupTitle(group.title),
             effective,
             modified,
             warnings,
@@ -188,11 +194,14 @@ export function ShortcutsPane(): React.JSX.Element {
     if (blockingConflict) {
       const labels = blockingConflict.actionIds
         .filter((id) => id !== actionId)
-        .map((id) => getKeybindingDefinition(id)?.title ?? id)
+        .map((id) => getLocalizedKeybindingDefinition(id)?.title ?? id)
         .join(', ')
       setErrors((prev) => ({
         ...prev,
-        [actionId]: `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with ${labels}.`
+        [actionId]: translate('shortcuts.conflictsWith', '{{binding}} conflicts with {{labels}}.', {
+          binding: formatKeybindingList([blockingConflict.binding], platform),
+          labels
+        })
       }))
       return false
     }

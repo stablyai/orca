@@ -152,6 +152,15 @@
       }
     }
   },
+  "shortcuts": {
+    "conflictsWith": "{{binding}} conflicts with {{labels}}.",
+    "filter": {
+      "all": "All",
+      "modified": "Modified",
+      "unassigned": "Unassigned",
+      "conflicts": "Conflicts"
+    }
+  },
   "auto": {
     "App": {
       "221a95ba38": "Retry onboarding or close it and continue in the app.",
@@ -14403,7 +14412,7 @@
     "hourly": "Hourly at :{{minute}}",
     "daily": "Daily at {{time}}",
     "weekdays": "Weekdays at {{time}}",
-    "weekly": "{{day}} at {{time}}",
+    "weekly": "{{day}}s at {{time}}",
     "custom": "Custom schedule",
     "invalid": "Invalid schedule",
     "validCustomCron": "Valid custom cron",
@@ -14579,6 +14588,24 @@
       "invalidUrl": "Enter a valid proxy URL.",
       "unsupportedScheme": "Use an http, https, socks, socks4, or socks5 proxy URL.",
       "missingHost": "Proxy URL must include a host."
+    }
+  },
+  "automations": {
+    "usage": {
+      "unavailable": "Usage unavailable",
+      "noneYet": "No run usage yet"
+    },
+    "nextRun": {
+      "paused": "Paused"
+    },
+    "hermesCronOutput": {
+      "scheduleLabel": "Schedule"
+    }
+  },
+  "sidebar": {
+    "workspaceKanban": {
+      "newWorkspaceIn": "New workspace in {{status}}",
+      "addProjectToCreate": "Add a project to create workspaces"
     }
   }
 }

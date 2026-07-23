@@ -2121,17 +2121,12 @@ export function connectPanePty(
     // byte authority after this function explicitly revoked routing trust.
     sampleVisiblePaneForegroundAgent(true)
   }
-  // Why: per-pane command-autosuggest state. Gated on the setting so a disabled
-  // feature constructs nothing and does zero per-keystroke/per-chunk work. The
-  // tracker's prompt boundary is driven by either delivery path (byte-mode
-  // commandLifecycle callbacks below, or main-authority facts further down); the
-  // session pool records commands run this session, seeded once with persisted
-  // HISTFILE history after the shell is known.
-  const autosuggestEnabled = useAppStore.getState().settings?.terminalAutosuggestEnabled !== false
-  const autosuggestLineTracker = autosuggestEnabled
-    ? createTerminalAutosuggestLineTracker(pane.terminal)
-    : null
-  const autosuggestSessionPool = autosuggestEnabled ? createTerminalAutosuggestSessionPool() : null
+  // Why: always constructed (cheap); the setting is checked live at read-time instead,
+  // so toggling it reaches already-open panes rather than only new connections.
+  const autosuggestEnabledAtConnect =
+    useAppStore.getState().settings?.terminalAutosuggestEnabled !== false
+  const autosuggestLineTracker = createTerminalAutosuggestLineTracker(pane.terminal)
+  const autosuggestSessionPool = createTerminalAutosuggestSessionPool()
   let autosuggestPersistedHistory: readonly string[] = []
   const recordSubmittedAutosuggestCommand = (): void => {
     // Why: snapshot the typed line BEFORE resetting the tracker — command-start
@@ -3229,14 +3224,9 @@ export function connectPanePty(
   const connectionId = worktreeConnectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
-  // Why: seed the autosuggest pool once from this worktree's persisted HISTFILE so a
-  // fresh session can suggest previously-run commands before any run again. Main resolves
-  // the shell: an explicit override is passed through; when absent (the common OS default
-  // login shell case) main resolves process.env.SHELL and returns the kind, so the renderer
-  // no longer needs to identify the shell itself. Skipped for SSH worktrees (connectionId):
-  // the remote HISTFILE isn't on this machine's filesystem (see task-10 report). Best-effort:
-  // failures degrade to session-only suggestions.
-  if (autosuggestEnabled && !connectionId) {
+  // Why: seeds the suggestion pool from persisted HISTFILE; skipped for SSH since the
+  // remote history isn't on this machine (falls back to session-only suggestions).
+  if (autosuggestEnabledAtConnect && !connectionId) {
     void window.api.terminal
       .readHistoryFile({
         worktreeId: deps.worktreeId,
@@ -8143,7 +8133,7 @@ export function connectPanePty(
       return isHiddenDeliveryGateManagedPty(transport.getPtyId())
     },
     getAutosuggestActiveState() {
-      if (!autosuggestLineTracker || !autosuggestSessionPool) {
+      if (useAppStore.getState().settings?.terminalAutosuggestEnabled === false) {
         return null
       }
       // Why: session-run commands rank ahead of persisted history (both already
@@ -8158,19 +8148,19 @@ export function connectPanePty(
       )
     },
     subscribeAutosuggest(listener) {
-      if (!autosuggestLineTracker) {
-        return () => {}
-      }
       // Why: state can change from prompt transitions (tracker), typing/cursor
-      // movement (onCursorMove), and geometry changes that invalidate the ghost
-      // pixel position (onResize) — recompute on all three.
+      // movement (onCursorMove), geometry changes that invalidate the ghost
+      // pixel position (onResize), and scrollback scrolling which moves the
+      // tracked row on/off screen (onScroll) — recompute on all four.
       const unsubscribeTracker = autosuggestLineTracker.onChange(listener)
       const cursorDisposable = pane.terminal.onCursorMove(listener)
       const resizeDisposable = pane.terminal.onResize(listener)
+      const scrollDisposable = pane.terminal.onScroll(listener)
       return () => {
         unsubscribeTracker()
         cursorDisposable.dispose()
         resizeDisposable.dispose()
+        scrollDisposable.dispose()
       }
     },
     // Why: visible-resume size readback repairs dropped hidden resizes without refitting against xterm's transient hidden DOM fallback.

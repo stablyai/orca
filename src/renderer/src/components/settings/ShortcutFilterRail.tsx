@@ -7,6 +7,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { getLocalizedKeybindingTitle } from './keybinding-copy'
 import { translate } from '@/i18n/i18n'
 
 export type ShortcutFilter = 'all' | 'modified' | 'unassigned' | 'conflicts'
@@ -50,7 +51,7 @@ export function normalizeShortcutLocalSearchQuery(query: string): string | null 
 
 export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEntry {
   return {
-    title: row.item.title,
+    title: getLocalizedKeybindingTitle(row.item),
     description: translate(
       'auto.components.settings.ShortcutFilterRail.1d5634ba31',
       '{{value0}} shortcut',
@@ -96,6 +97,9 @@ export function matchesShortcutLocalSearch(
     return false
   }
   const searchableText = [
+    getLocalizedKeybindingTitle(row.item),
+    // Why: keep the raw English title searchable too, so a user who still types
+    // the English name (habit, or a screenshot/doc referencing it) also matches.
     row.item.title,
     row.item.id,
     row.groupTitle,
@@ -124,7 +128,7 @@ export function ShortcutFilterRail({
 }): React.JSX.Element {
   const filters = (Object.keys(SHORTCUT_FILTER_LABELS) as ShortcutFilter[]).map((id) => ({
     id,
-    label: SHORTCUT_FILTER_LABELS[id],
+    label: translate(`shortcuts.filter.${id}`, SHORTCUT_FILTER_LABELS[id]),
     count: filterCounts[id]
   }))
 

@@ -13,17 +13,8 @@ export type ActiveAutosuggestState = {
   foregroundColor: string
 }
 
-/**
- * Derives the ghost-text overlay state for a pane, or null when nothing should
- * show. Pure so it stays testable without React/xterm — the caller supplies the
- * candidate pool (session + persisted history, most-recent-first) and the theme
- * foreground color.
- *
- * Suppressed (returns null, not an empty remainder) when: bracketed paste is
- * active (a paste is landing, not typed input), the cursor is not exactly at
- * end-of-input (mid-edit or navigated past the text), there is no tracked input,
- * or no candidate extends the current input.
- */
+// Why: returns null (not an empty remainder) during a paste, mid-edit, or with no
+// matching candidate, so the overlay never shows a suggestion that isn't real.
 export function computeActiveAutosuggestState(
   terminal: Terminal,
   lineTracker: Pick<

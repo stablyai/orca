@@ -64,8 +64,10 @@ export default function WorkspaceKanbanStatusLane({
   const meta = getWorkspaceStatusVisualMeta(status)
   const localizedStatusLabel = getLocalizedWorkspaceStatusLabel(status)
   const createTooltip = canCreateWorktree
-    ? `New workspace in ${localizedStatusLabel}`
-    : 'Add a project to create workspaces'
+    ? translate('sidebar.workspaceKanban.newWorkspaceIn', 'New workspace in {{status}}', {
+        status: localizedStatusLabel
+      })
+    : translate('sidebar.workspaceKanban.addProjectToCreate', 'Add a project to create workspaces')
   const createButton = (
     <Button
       type="button"

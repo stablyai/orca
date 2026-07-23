@@ -8,9 +8,8 @@ import {
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 
-// Steps have no id field; the data-contextual-tour-target token in the selector is the stable per-step key.
 export function getContextualTourStepKey(step: ContextualTourStep): string {
-  return step.targetSelector.match(/data-contextual-tour-target="([^"]+)"/)?.[1] ?? step.targetSelector
+  return step.id
 }
 
 function localizeContextualTourAction(
@@ -40,7 +39,12 @@ function localizeContextualTourStep(
     fallbackCopy: step.fallbackCopy
       ? translate(`contextualTours.${tourId}.${stepKey}.fallbackCopy`, step.fallbackCopy)
       : step.fallbackCopy,
-    primaryAction: localizeContextualTourAction(tourId, stepKey, 'primaryActionLabel', step.primaryAction),
+    primaryAction: localizeContextualTourAction(
+      tourId,
+      stepKey,
+      'primaryActionLabel',
+      step.primaryAction
+    ),
     secondaryAction: localizeContextualTourAction(
       tourId,
       stepKey,
@@ -54,8 +58,8 @@ function localizeContextualTour(tour: ContextualTour): ContextualTour {
   return { ...tour, steps: tour.steps.map((step) => localizeContextualTourStep(tour.id, step)) }
 }
 
-export const getLocalizedContextualTours = createLocalizedCatalog(
-  (): readonly ContextualTour[] => CONTEXTUAL_TOURS.map(localizeContextualTour)
+export const getLocalizedContextualTours = createLocalizedCatalog((): readonly ContextualTour[] =>
+  CONTEXTUAL_TOURS.map(localizeContextualTour)
 )
 
 export function getLocalizedContextualTour(id: ContextualTourId): ContextualTour {

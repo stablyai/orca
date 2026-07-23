@@ -152,6 +152,15 @@
       }
     }
   },
+  "shortcuts": {
+    "conflictsWith": "{{binding}} ขัดแย้งกับ {{labels}}",
+    "filter": {
+      "all": "ทั้งหมด",
+      "modified": "แก้ไขแล้ว",
+      "unassigned": "ยังไม่กำหนด",
+      "conflicts": "ขัดแย้ง"
+    }
+  },
   "auto": {
     "App": {
       "221a95ba38": "ลองเริ่ม onboarding ใหม่ หรือปิดแล้วใช้งานแอปต่อไป",
@@ -14579,6 +14588,24 @@
       "invalidUrl": "กรอก URL ของ Proxy ที่ถูกต้อง",
       "unsupportedScheme": "ใช้ URL ของ Proxy แบบ http, https, socks, socks4 หรือ socks5",
       "missingHost": "URL ของ Proxy ต้องมี host"
+    }
+  },
+  "automations": {
+    "usage": {
+      "unavailable": "ไม่มีข้อมูลการใช้งาน",
+      "noneYet": "ยังไม่มีการใช้งานจากการรัน"
+    },
+    "nextRun": {
+      "paused": "หยุดชั่วคราว"
+    },
+    "hermesCronOutput": {
+      "scheduleLabel": "กำหนดการ"
+    }
+  },
+  "sidebar": {
+    "workspaceKanban": {
+      "newWorkspaceIn": "สร้าง workspace ใหม่ใน {{status}}",
+      "addProjectToCreate": "เพิ่ม project เพื่อสร้าง workspace"
     }
   }
 }

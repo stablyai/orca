@@ -129,6 +129,15 @@
       }
     }
   },
+  "shortcuts": {
+    "conflictsWith": "{{binding}} は {{labels}} と競合しています。",
+    "filter": {
+      "all": "すべて",
+      "modified": "変更済み",
+      "unassigned": "未割り当て",
+      "conflicts": "競合"
+    }
+  },
   "auto": {
     "App": {
       "221a95ba38": "オンボーディングを再試行するか、オンボーディングを閉じてアプリで続行します。",
@@ -14579,6 +14588,24 @@
       "invalidUrl": "有効なプロキシURLを入力してください。",
       "unsupportedScheme": "http、https、socks、socks4、socks5のいずれかのプロキシURLを使用してください。",
       "missingHost": "プロキシURLにはホストを含める必要があります。"
+    }
+  },
+  "automations": {
+    "usage": {
+      "unavailable": "使用量を利用できません",
+      "noneYet": "まだ実行の使用量がありません"
+    },
+    "nextRun": {
+      "paused": "一時停止中"
+    },
+    "hermesCronOutput": {
+      "scheduleLabel": "スケジュール"
+    }
+  },
+  "sidebar": {
+    "workspaceKanban": {
+      "newWorkspaceIn": "{{status}} に新しいワークスペースを作成",
+      "addProjectToCreate": "ワークスペースを作成するにはプロジェクトを追加してください"
     }
   }
 }

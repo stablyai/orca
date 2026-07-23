@@ -18,9 +18,8 @@ function isENOENT(error: unknown): boolean {
   )
 }
 
-/** Resolve the host's default login shell kind (matches LocalPtyProvider + the
- *  daemon adapter, which both spawn `process.env.SHELL || '/bin/zsh'` on POSIX).
- *  Windows has no POSIX-style shared default HISTFILE, so it has no default here. */
+// Why: matches LocalPtyProvider/daemon's `process.env.SHELL || '/bin/zsh'` spawn default;
+// Windows has no POSIX-style shared default HISTFILE, so it has none here.
 function resolveDefaultLocalShellKind(): ShellKind {
   if (process.platform === 'win32') {
     return 'unknown'
@@ -28,17 +27,8 @@ function resolveDefaultLocalShellKind(): ShellKind {
   return resolveShellKind(process.env.SHELL || '/bin/zsh')
 }
 
-/** Reads a worktree's persisted shell history file. Returns the raw content and the
- *  resolved shell kind, or null when the shell has no HISTFILE support (fish/pwsh/
- *  powershell/cmd) or nothing has been written yet.
- *
- *  When `shellPath` is omitted the host default login shell is resolved — this is the
- *  dominant case (a plain terminal on the OS login shell), where the renderer has no
- *  explicit shell override to report. An explicit `shellPath` is honored strictly (a
- *  fish override reads no bash/zsh history), so the default only kicks in when absent.
- *
- *  Local-filesystem read only: SSH-hosted worktrees write their HISTFILE on the remote
- *  host, so callers must skip this for remote worktrees (see task-10 report). */
+// Why: shellPath omitted means the host default login shell, resolved here rather than
+// by the caller; local-filesystem only, SSH worktrees must skip this (remote HISTFILE).
 export async function readTerminalHistoryFile(args: {
   worktreeId: string
   shellPath?: string

@@ -79,6 +79,19 @@ describe('automation-schedule-copy', () => {
     await setRendererUiLanguage(UI_LANGUAGE_ENGLISH)
   })
 
+  it('does not append a Latin "s" onto a non-English weekday name', async () => {
+    // Why: regression for a bug where `${weekday}s` concatenated in JS before
+    // translate() ever ran, corrupting every non-English weekly schedule label.
+    await setRendererUiLanguage(UI_LANGUAGE_SPANISH)
+    const wednesday = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(
+      new Date(2026, 0, 7)
+    )
+    const label = getLocalizedAutomationScheduleLabel('45 16 * * 3')
+    expect(label).toContain(wednesday)
+    expect(label).not.toContain(`${wednesday}s`)
+    await setRendererUiLanguage(UI_LANGUAGE_ENGLISH)
+  })
+
   it('reports the schedule kind alongside the localized label for cron expressions', () => {
     const custom = getLocalizedAutomationCronScheduleClassification('*/30 9-17 * * MON-FRI')
     expect(custom.kind).toBe('custom')

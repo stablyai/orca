@@ -129,6 +129,15 @@
       }
     }
   },
+  "shortcuts": {
+    "conflictsWith": "{{binding}} 与 {{labels}} 冲突。",
+    "filter": {
+      "all": "全部",
+      "modified": "已修改",
+      "unassigned": "未分配",
+      "conflicts": "冲突"
+    }
+  },
   "auto": {
     "App": {
       "221a95ba38": "重试入门引导，或关闭后继续使用应用。",
@@ -14579,6 +14588,24 @@
       "invalidUrl": "请输入有效的代理 URL。",
       "unsupportedScheme": "请使用 http、https、socks、socks4 或 socks5 代理 URL。",
       "missingHost": "代理 URL 必须包含主机。"
+    }
+  },
+  "automations": {
+    "usage": {
+      "unavailable": "用量不可用",
+      "noneYet": "尚无运行用量"
+    },
+    "nextRun": {
+      "paused": "已暂停"
+    },
+    "hermesCronOutput": {
+      "scheduleLabel": "计划"
+    }
+  },
+  "sidebar": {
+    "workspaceKanban": {
+      "newWorkspaceIn": "在{{status}}中新建工作区",
+      "addProjectToCreate": "添加项目以创建工作区"
     }
   }
 }

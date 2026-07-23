@@ -40,9 +40,10 @@ function localizeAutomationScheduleKind(
         time: formatScheduleClockTime(hour, minute)
       })
     case 'weekly':
-      // Why: matches the raw formatter's `${day}s at ${time}` pluralization (e.g. "Mondays").
-      return translate('automationSchedule.weekly', '{{day}} at {{time}}', {
-        day: `${formatScheduleWeekdayName(dayOfWeek)}s`,
+      // Why: English pluralizes the weekday ("Mondays") inside the template itself, not by
+      // concatenating "s" onto {{day}} in JS — other locales don't pluralize this way.
+      return translate('automationSchedule.weekly', '{{day}}s at {{time}}', {
+        day: formatScheduleWeekdayName(dayOfWeek),
         time: formatScheduleClockTime(hour, minute)
       })
     case 'custom':

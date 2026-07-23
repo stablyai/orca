@@ -17,8 +17,8 @@ const getLocalizedDefaultStatusLabels = createLocalizedCatalog(
     )
 )
 
-// Why: users can rename/reorder statuses that keep a default id, so only translate
-// labels still matching the shipped default text — a customized label must survive untouched.
+// Why: infers "still default" by string equality (no explicit flag exists), so editing
+// a shipped default's English text later would wrongly read old users' labels as customized.
 export function getLocalizedWorkspaceStatusLabel(status: WorkspaceStatusDefinition): string {
   if (DEFAULT_LABEL_BY_STATUS_ID.get(status.id) !== status.label) {
     return status.label

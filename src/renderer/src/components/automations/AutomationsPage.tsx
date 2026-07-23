@@ -2424,11 +2424,11 @@ export default function AutomationsPage(): React.JSX.Element {
                       usageSummary.estimatedCostUsd
                     )} est. · ${formatAutomationTokens(usageSummary.totalTokens)} tokens`
                   : usageSummary.unavailableRuns > 0
-                    ? 'Usage unavailable'
-                    : 'No run usage yet'
+                    ? translate('automations.usage.unavailable', 'Usage unavailable')
+                    : translate('automations.usage.noneYet', 'No run usage yet')
               const nextRunLabel = automation.enabled
                 ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
-                : 'Paused'
+                : translate('automations.nextRun.paused', 'Paused')
               const scheduleLabel = getLocalizedAutomationScheduleLabel(automation.rrule)
               return (
                 <ContextMenu key={automation.id}>
@@ -2603,7 +2603,7 @@ export default function AutomationsPage(): React.JSX.Element {
               }
               const nextRunLabel = entry.job.enabled
                 ? formatExternalDate(entry.job.nextRunAt, relativeNow)
-                : 'Paused'
+                : translate('automations.nextRun.paused', 'Paused')
               const entrySshStatus =
                 entry.manager.target.type === 'ssh'
                   ? sshConnectionStates.get(entry.manager.target.connectionId)?.status

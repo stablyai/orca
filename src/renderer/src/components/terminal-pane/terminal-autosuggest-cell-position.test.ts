@@ -40,4 +40,16 @@ describe('cellToPixelPosition', () => {
     // Absolute row 5000 with viewportY 4998 is on-screen row 2, not 5000 cells down.
     expect(cellToPixelPosition(terminal, 5000, 5)).toEqual({ top: 20 + 2 * 20, left: 10 + 5 * 10 })
   })
+
+  it('returns null when the row has scrolled above the visible viewport', () => {
+    const terminal = makeFakeTerminal({ width: 800, height: 480, left: 10, top: 20 })
+    // viewportY 0, row -1 would be one line above the top of the screen.
+    expect(cellToPixelPosition(terminal, -1, 5)).toBeNull()
+  })
+
+  it('returns null when the row has scrolled below the visible viewport', () => {
+    const terminal = makeFakeTerminal({ width: 800, height: 480, left: 10, top: 20 })
+    // rows is 24 (0-23 on-screen), so absolute row 24 is one past the bottom.
+    expect(cellToPixelPosition(terminal, 24, 5)).toBeNull()
+  })
 })

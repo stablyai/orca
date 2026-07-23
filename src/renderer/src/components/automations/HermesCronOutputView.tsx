@@ -44,7 +44,9 @@ function isScheduleMetadataLabel(label: string): boolean {
 }
 
 function getMetadataDisplayLabel(label: string): string {
-  return isScheduleMetadataLabel(label) ? 'Schedule' : label
+  return isScheduleMetadataLabel(label)
+    ? translate('automations.hermesCronOutput.scheduleLabel', 'Schedule')
+    : label
 }
 
 type MetadataIconStyle = { icon: LucideIcon; iconClass: string; ringClass: string }
