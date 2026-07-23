@@ -278,6 +278,69 @@ describe('getLaunchableWorkItemDraftContent', () => {
   })
 })
 
+describe('buildLinearLaunchContextBlock with a custom template', () => {
+  it('substitutes {{identifier}} and {{url}}', () => {
+    expect(
+      buildLinearLaunchContextBlock({
+        identifier: 'ENG-123',
+        url: 'https://linear.app/acme/issue/ENG-123/test',
+        template: 'Work on {{identifier}} — {{url}}'
+      })
+    ).toBe('Work on ENG-123 — https://linear.app/acme/issue/ENG-123/test')
+  })
+
+  it('drops lines that are empty after substitution', () => {
+    expect(
+      buildLinearLaunchContextBlock({
+        identifier: '  ',
+        url: 'https://linear.app/acme/issue/ENG-123/test',
+        template: '{{identifier}}\n{{url}}'
+      })
+    ).toBe('https://linear.app/acme/issue/ENG-123/test')
+  })
+
+  it('returns null when the rendered template is empty', () => {
+    expect(
+      buildLinearLaunchContextBlock({
+        identifier: 'ENG-123',
+        url: 'https://x',
+        template: '{{missing}}'
+      })
+    ).toBeNull()
+  })
+
+  it('falls back to the built-in output when the template is blank', () => {
+    expect(
+      buildLinearLaunchContextBlock({
+        identifier: 'ENG-123',
+        url: 'https://linear.app/acme/issue/ENG-123/test',
+        template: '   '
+      })?.split('\n')
+    ).toEqual(['Linked Linear issue: ENG-123', 'https://linear.app/acme/issue/ENG-123/test'])
+  })
+
+  it('threads the template through resolveQuickCreateLinkedWorkItemPrompt', () => {
+    const result = resolveQuickCreateLinkedWorkItemPrompt(
+      { number: 0, ...LINEAR_ITEM },
+      'note',
+      'Do {{identifier}}'
+    )
+    expect(result.draftPrompt).toBe('note\n\nDo ENG-123\n')
+  })
+
+  it('threads the template through getLinkedWorkItemPromptContext', () => {
+    expect(
+      getLinkedWorkItemPromptContext(LINEAR_ITEM, 'Do {{identifier}}').linkedContextBlocks
+    ).toEqual(['Do ENG-123'])
+  })
+
+  it('threads the template through getLaunchableWorkItemDraftContent', () => {
+    expect(
+      getLaunchableWorkItemDraftContent({ ...LINEAR_ITEM, pasteContent: '', template: 'Do {{identifier}}' })
+    ).toBe('Do ENG-123\n')
+  })
+})
+
 describe('buildAgentPromptWithContext', () => {
   it('appends link-only Linear references alongside prompt attachments', () => {
     const linearBlock = buildLinearLaunchContextBlock({
