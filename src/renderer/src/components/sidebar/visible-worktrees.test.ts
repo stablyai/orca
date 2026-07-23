@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { useAppStore } from '@/store'
 import {
   computeClearFilterActions,
   computeVisibleWorktreeIds,
@@ -689,14 +690,53 @@ describe('computeClearFilterActions', () => {
 })
 
 describe('getVisibleWorktreeIds caching', () => {
+  beforeEach(() => {
+    useAppStore.setState(useAppStore.getInitialState(), true)
+  })
+
   afterEach(() => {
-    // Why: guarantee cleanup after each test so failures do not leak cached state.
     setVisibleWorktreeIds([])
+    useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
   it('preserves cached rendered order when setVisibleWorktreeIds is populated', () => {
+    const worktrees = [makeWorktree('wt-1'), makeWorktree('wt-2'), makeWorktree('wt-3')]
+    useAppStore.setState({
+      repos: [makeRepo('repo1', 'Repo 1', '#000')],
+      worktreesByRepo: { repo1: worktrees },
+      sortBy: 'name'
+    })
     setVisibleWorktreeIds(['wt-2', 'wt-1', 'wt-3'])
-    expect(getVisibleWorktreeIds().slice(0, 3)).toEqual(['wt-2', 'wt-1', 'wt-3'])
+    expect(getVisibleWorktreeIds()).toEqual(['wt-2', 'wt-1', 'wt-3'])
+  })
+
+  it('drops stale cached IDs and appends newly visible worktrees in live order', () => {
+    const archived = makeWorktree('wt-3')
+    archived.isArchived = true
+    useAppStore.setState({
+      repos: [makeRepo('repo1', 'Repo 1', '#000')],
+      worktreesByRepo: {
+        repo1: [makeWorktree('wt-1'), makeWorktree('wt-2'), archived, makeWorktree('wt-4')]
+      },
+      sortBy: 'name'
+    })
+    setVisibleWorktreeIds(['wt-2', 'wt-3', 'deleted', 'wt-1'])
+
+    expect(getVisibleWorktreeIds()).toEqual(['wt-2', 'wt-1', 'wt-4'])
+  })
+
+  it('revalidates cached IDs against current visibility filters', () => {
+    useAppStore.setState({
+      repos: [makeRepo('repo1', 'Repo 1', '#000'), makeRepo('repo2', 'Repo 2', '#111')],
+      worktreesByRepo: {
+        repo1: [makeWorktree('wt-1', 'repo1')],
+        repo2: [makeWorktree('wt-2', 'repo2')]
+      },
+      sortBy: 'name'
+    })
+    setVisibleWorktreeIds(['wt-1', 'wt-2'])
+    useAppStore.setState({ filterRepoIds: ['repo2'] })
+
+    expect(getVisibleWorktreeIds()).toEqual(['wt-2'])
   })
 })
-

@@ -244,7 +244,8 @@ function addVisibleLineageAncestors(
  * recomputes sort order from a live Zustand snapshot, the Cmd+1–9 shortcut
  * could target a different worktree than what's rendered at that sidebar
  * position. By caching the IDs that WorktreeList actually rendered, the
- * shortcut numbering always matches the sidebar card order.
+ * shortcut numbering preserves the last sidebar card order while the panel
+ * is hidden.
  */
 let _cachedVisibleIds: string[] = []
 
@@ -261,9 +262,9 @@ export function setVisibleWorktreeIds(ids: string[]): void {
  * state. Called by the App-level Cmd+1–9 handler (not a React hook — reads
  * store snapshot at call time).
  *
- * If WorktreeList has rendered at least once, returns the cached IDs so the
- * shortcut numbering matches the sidebar. Falls back to a live recomputation
- * only before WorktreeList's first render (e.g. app startup).
+ * If WorktreeList has rendered at least once, preserves the cached relative
+ * order for IDs that remain visible, then appends newly visible IDs in live
+ * sort order. Falls back to the live order before WorktreeList's first render.
  */
 export function getVisibleWorktreeIds(): string[] {
   const state = useAppStore.getState()
