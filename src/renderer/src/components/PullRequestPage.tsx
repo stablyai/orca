@@ -91,7 +91,10 @@ import {
   getLargeDiffRenderLimit,
   type LargeDiffRenderLimit
 } from '@/components/editor/large-diff-render-limit'
-import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
+import {
+  getCombinedDiffBranchEntriesInTreeOrder,
+  type CombinedDiffFileTreeEntry
+} from '@/components/editor/combined-diff-file-tree-model'
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult
@@ -2275,7 +2278,10 @@ function PRFilesCombinedDiffViewer({
     if (entriesCacheRef.current?.signature === diffEntrySignature) {
       return entriesCacheRef.current.entries
     }
-    const nextEntries = files.map(gitHubPRFileToBranchEntry)
+    const nextEntries = getCombinedDiffBranchEntriesInTreeOrder(
+      'commit',
+      files.map(gitHubPRFileToBranchEntry)
+    )
     entriesCacheRef.current = {
       signature: diffEntrySignature,
       entries: nextEntries
