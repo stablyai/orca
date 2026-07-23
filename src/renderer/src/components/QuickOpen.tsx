@@ -19,10 +19,7 @@ import {
 } from '@/components/quick-open-search'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { orderQuickOpenByRecency, recentQuickOpenPaths } from '@/components/quick-open-recent-files'
-import {
-  buildRecentTabSwitcherModel,
-  normalizeCtrlTabOrderMode
-} from '@/components/tab-bar/recent-tab-switching'
+import { buildRecentTabSwitcherModel } from '@/components/tab-bar/recent-tab-switching'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
 import {
@@ -103,13 +100,11 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     }
     // Why: the true last-visited order lives in the group's Ctrl+Tab MRU stack,
     // not openFiles insertion order. Sample it at open time (the popup is
-    // transient, so mid-open staleness can't happen).
+    // transient, so mid-open staleness can't happen). Always request 'mru' —
+    // "recent files" means most-recently-used regardless of the user's Ctrl+Tab
+    // cycling preference (sequential would leak visual tab order here).
     const state = useAppStore.getState()
-    const model = buildRecentTabSwitcherModel(
-      state,
-      activeWorktreeId,
-      normalizeCtrlTabOrderMode(state.settings?.ctrlTabOrderMode)
-    )
+    const model = buildRecentTabSwitcherModel(state, activeWorktreeId, 'mru')
     const mruOpenFileIds = (model?.items ?? [])
       .filter((item) => item.type === 'editor')
       .map((item) => item.id)
