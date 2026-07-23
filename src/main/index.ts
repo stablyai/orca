@@ -110,6 +110,7 @@ import {
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
 import {
+  configureStartupDiagnosticsLogFile,
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
   logStartupMilestone
@@ -472,7 +473,12 @@ const TRAY_CREATE_FALLBACK_MS = 12_000
 
 const startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
 if (startupDiagnosticsEnabled) {
+  // Why: stderr redirection alone can't be captured for a packaged Windows
+  // GUI-subsystem exe launched normally (double-click, Start Menu) — mirror
+  // to a file so a user can reproduce the issue without a console.
+  configureStartupDiagnosticsLogFile(join(app.getPath('userData'), 'startup-diagnostics.log'))
   logStartupDiagnostic('before-single-instance-lock', {
+    pid: process.pid,
     version: app.getVersion(),
     packaged: app.isPackaged,
     platform: process.platform,
@@ -601,6 +607,7 @@ const hasSingleInstanceLock = skipSingleInstanceLock
     : acquireSingleInstanceLock(app, requestDesktopActivation)
 if (startupDiagnosticsEnabled) {
   logStartupDiagnostic('single-instance-lock-result', {
+    pid: process.pid,
     acquired: hasSingleInstanceLock,
     bypassed: bypassSingleInstanceLock,
     skippedForDev: skipSingleInstanceLock

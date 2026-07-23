@@ -1,17 +1,35 @@
-import { writeSync } from 'node:fs'
+import { appendFileSync, writeSync } from 'node:fs'
 
 export const STARTUP_DIAGNOSTICS_ENV = 'ORCA_STARTUP_DIAGNOSTICS'
 
 export type StartupDiagnosticSink = (fd: number, text: string) => unknown
 
+let diagnosticsLogFilePath: string | undefined
+
+// Why: a packaged Windows GUI-subsystem exe launched without an inherited
+// console (double-click, Start Menu) has no reliable stderr to redirect, so
+// fd-2 writes alone are not capturable. A file sink lets a user reproduce a
+// startup issue normally and hand back the log afterward.
+export function configureStartupDiagnosticsLogFile(path: string | undefined): void {
+  diagnosticsLogFilePath = path
+}
+
 export function writeStartupDiagnosticLine(
   message: string,
   write: StartupDiagnosticSink = writeSync
 ): void {
+  const line = message.endsWith('\n') ? message : `${message}\n`
   try {
-    write(2, message.endsWith('\n') ? message : `${message}\n`)
+    write(2, line)
   } catch {
     console.error(message)
+  }
+  if (diagnosticsLogFilePath) {
+    try {
+      appendFileSync(diagnosticsLogFilePath, line)
+    } catch {
+      // Best-effort: never let log-file capture block startup.
+    }
   }
 }
 
