@@ -780,7 +780,7 @@ export function RuntimeEnvironmentsPane({
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.RuntimeEnvironmentsPane.connectToRemoteServersHelp',
-                'Pair another Orca runtime, then connect or disconnect it here. Use Advanced > Active Server only when you want to change the default host.'
+                'Pair another Orca runtime, then connect or disconnect it here.'
               )}
             </p>
           </div>

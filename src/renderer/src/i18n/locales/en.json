@@ -6470,7 +6470,7 @@
           "serverDisconnected": "Disconnected",
           "disconnectedServer": "Disconnected from {{value0}}.",
           "connectToRemoteServers": "Connect to remote servers",
-          "connectToRemoteServersHelp": "Pair another Orca runtime, then connect or disconnect it here. Use Advanced > Active Server only when you want to change the default host.",
+          "connectToRemoteServersHelp": "Pair another Orca runtime, then connect or disconnect it here.",
           "activeServerRowHelp": "Active server for server-routed projects, terminals, and provider checks.",
           "disconnect": "Disconnect",
           "connect": "Connect",
