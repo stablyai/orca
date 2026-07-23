@@ -638,7 +638,10 @@ export function FileExplorerRow({
             className={cn(
               'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
-              isIgnored && 'italic'
+              // Why: italic glyphs overhang their advance width; truncate's
+              // overflow:hidden clips it, shaving the last char (".md" → ".ma").
+              // pr-0.5 reserves room for the slant so the final letter survives.
+              isIgnored && 'italic pr-0.5'
             )}
             style={
               nodeStatus
