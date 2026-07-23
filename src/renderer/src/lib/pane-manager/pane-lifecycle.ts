@@ -6,7 +6,11 @@ import {
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { cancelDeferredScrollRestore } from './pane-scroll'
-import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
+import {
+  activateOrcaTerminalUnicodeProvider,
+  setTerminalEastAsianAmbiguousWidthMode
+} from '../../../../shared/terminal-unicode-provider'
+import { useAppStore } from '@/store'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
 import {
@@ -76,6 +80,11 @@ export function openTerminal(
   )
 
   // Activate Unicode v11 before every restore/write path: xterm bakes widths into cells, and default v6 mismeasures CJK/emoji/ZWJ into broken glyphs.
+  // Why: wide ambiguous mode must be applied before the first write so restore
+  // and live streams bake the same cell widths (#9958).
+  setTerminalEastAsianAmbiguousWidthMode(
+    useAppStore.getState().settings?.terminalEastAsianAmbiguousWidth
+  )
   activateOrcaTerminalUnicodeProvider(terminal)
 
   // Any joiner scans the whole grid each repaint; register lazily before the first live/replayed RTL parse.

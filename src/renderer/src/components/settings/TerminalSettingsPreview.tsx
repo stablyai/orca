@@ -127,7 +127,9 @@ export function TerminalSettingsPreview({
       cursorStyle: settings.terminalCursorStyle,
       cursorBlink: settings.terminalCursorBlink,
       fontSize: settings.terminalFontSize,
-      fontFamily: buildFontFamily(effectiveFontFamily),
+      fontFamily: buildFontFamily(effectiveFontFamily, {
+        eastAsianAmbiguousWide: settings.terminalEastAsianAmbiguousWidth === 'wide'
+      }),
       fontWeight: weights.fontWeight,
       fontWeightBold: weights.fontWeightBold,
       lineHeight: terminalLineHeight,
@@ -173,7 +175,9 @@ export function TerminalSettingsPreview({
       settings.terminalFontWeightBold
     )
     terminal.options.fontSize = settings.terminalFontSize
-    terminal.options.fontFamily = buildFontFamily(effectiveFontFamily)
+    terminal.options.fontFamily = buildFontFamily(effectiveFontFamily, {
+      eastAsianAmbiguousWide: settings.terminalEastAsianAmbiguousWidth === 'wide'
+    })
     terminal.options.fontWeight = weights.fontWeight
     terminal.options.fontWeightBold = weights.fontWeightBold
     terminal.options.lineHeight = terminalLineHeight
@@ -186,6 +190,7 @@ export function TerminalSettingsPreview({
     settings.terminalFontWeightBold,
     effectiveFontFamily,
     settings.terminalFontWeight,
+    settings.terminalEastAsianAmbiguousWidth,
     terminalLineHeight,
     settings.terminalCursorStyle,
     settings.terminalCursorBlink

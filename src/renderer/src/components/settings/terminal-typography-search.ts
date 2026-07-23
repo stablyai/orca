@@ -97,6 +97,33 @@ const getTerminalTypographySearchEntryCatalog = createLocalizedCatalog(() => [
         'font features'
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.eastAsianAmbiguous',
+      'Ambiguous Character Width'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.eastAsianAmbiguousDesc',
+      'Treat East Asian Ambiguous characters (① ■ ★ →) as single- or double-width cells. Narrow matches modern CLIs; Wide matches conhost/CJK locales.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.103cdb862f',
+        'typography'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.cjk', 'cjk'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.eastAsian', 'east asian'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.ambiguous', 'ambiguous'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.doubleWidth',
+        'double width'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.wide', 'wide'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.narrow', 'narrow'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.unicode', 'unicode')
+    ]
   }
 ])
 
