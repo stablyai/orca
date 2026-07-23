@@ -267,6 +267,15 @@ describe('Gitea client', () => {
     )
   })
 
+  it('treats HTTP 404 as "no PR" even in the throwing variant', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ message: 'not found' }, { status: 404 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    // 404 = resource absent (PR deleted, private repo masked) — an accepted
+    // "no PR", not a lookup failure worth rejecting the IPC handler over.
+    await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).resolves.toBeNull()
+  })
+
   it('expires successful scans and bounds retained repository listings', async () => {
     vi.useFakeTimers()
     try {

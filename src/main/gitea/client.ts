@@ -97,7 +97,11 @@ async function requestJsonAtBase<T>(
     })
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
-      if (throwOnFailure) {
+      // Why: 404 means the resource is absent (PR deleted, repo not on this
+      // forge, or Gitea masking a private repo) — that's an accepted "no PR",
+      // not a transport/auth failure. Throwing it spammed the main-process log
+      // on every hostedReview:forBranch refresh for unaffiliated branches.
+      if (throwOnFailure && response.status !== 404) {
         throw new Error(`Gitea request failed: HTTP ${response.status}`)
       }
       return null
