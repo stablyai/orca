@@ -35,7 +35,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo, Worktree, WorkspaceStatus } from '../../../../shared/types'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -65,6 +65,7 @@ type Props = {
   contentClassName?: string
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
+  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onOpenChange?: (open: boolean) => void
 }
 
@@ -284,6 +285,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   contentClassName,
   selectedWorktrees,
   onContextMenuSelect,
+  onAssignWorkspaceStatus,
   onOpenChange
 }: Props) {
   const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
@@ -504,6 +506,15 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleAssignWorkspaceStatus = useCallback(
     (status: string) => {
       setMenuOpenState(false)
+      if (onAssignWorkspaceStatus) {
+        onAssignWorkspaceStatus(
+          activeContextWorktrees.map((item) => item.id),
+          status
+        )
+        return
+      }
+      // Why: outside the workspace board (e.g. the sidebar list) status changes
+      // are local-only; Linear sync is scoped to board moves like drag-and-drop.
       void Promise.all(
         activeContextWorktrees.map((item) =>
           getWorkspaceStatus(item, workspaceStatuses) === status
@@ -512,7 +523,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         )
       )
     },
-    [activeContextWorktrees, setMenuOpenState, updateWorktreeMeta, workspaceStatuses]
+    [
+      activeContextWorktrees,
+      onAssignWorkspaceStatus,
+      setMenuOpenState,
+      updateWorktreeMeta,
+      workspaceStatuses
+    ]
   )
 
   const handleRename = useCallback(() => {

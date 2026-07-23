@@ -288,6 +288,30 @@ export default function WorkspaceKanbanDrawer({
     },
     [maybeSyncWorkspaceBoardTaskStatuses, updateWorktreeMeta, workspaceStatuses, worktreeById]
   )
+  // Why: the board's context-menu "Move to Status" must funnel through the same
+  // local-first + Linear-sync path as drag-and-drop. Without this callback the
+  // menu only writes the local status and silently drops the Linear sync.
+  const moveWorktreesToStatus = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      const updates = new Map<string, Partial<WorktreeMeta>>()
+      const changedIds: string[] = []
+      for (const worktreeId of worktreeIds) {
+        const current = worktreeById.get(worktreeId)
+        if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
+          continue
+        }
+        changedIds.push(worktreeId)
+        updates.set(worktreeId, { workspaceStatus: status })
+      }
+      if (changedIds.length === 0) {
+        return
+      }
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
+      void updateWorktreesMeta(updates)
+      maybeSyncWorkspaceBoardTaskStatuses(changedIds, status)
+    },
+    [maybeSyncWorkspaceBoardTaskStatuses, updateWorktreesMeta, workspaceStatuses, worktreeById]
+  )
   const getSourceStatusKeys = useCallback(
     (worktreeIds: readonly string[]): WorkspaceStatus[] =>
       worktreeIds.flatMap((worktreeId) => {
@@ -775,6 +799,7 @@ export default function WorkspaceKanbanDrawer({
               onActivate={handleWorktreeActivate}
               onSelectionGesture={updateSelectionForGesture}
               onContextMenuSelect={selectForContextMenu}
+              onAssignWorkspaceStatus={moveWorktreesToStatus}
               onCreateWorktree={createWorktreeForStatus}
               onColumnResizeStart={onColumnResizeStart}
               onColumnResizeKeyDown={onColumnResizeKeyDown}

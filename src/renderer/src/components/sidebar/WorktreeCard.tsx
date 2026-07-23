@@ -35,6 +35,7 @@ import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-revi
 import type {
   GitHubWorkItem,
   Worktree,
+  WorkspaceStatus,
   Repo,
   IssueInfo,
   LinearIssue
@@ -133,6 +134,7 @@ type WorktreeCardProps = {
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
+  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onCardDragStart?: (
     event: React.DragEvent<HTMLDivElement>,
     worktreeId: string,
@@ -216,6 +218,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onImmediateActivate,
   onSelectionGesture,
   onContextMenuSelect,
+  onAssignWorkspaceStatus,
   onCardDragStart,
   onCardDragEnd,
   nativeDragEnabled = true,
@@ -1905,6 +1908,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           worktree={worktree}
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
+          onAssignWorkspaceStatus={onAssignWorkspaceStatus}
         >
           {cardBody}
         </WorktreeContextMenu>
