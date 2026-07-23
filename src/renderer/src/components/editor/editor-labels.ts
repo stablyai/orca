@@ -1,5 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
 import { basename } from '@/lib/path'
+import { formatFileCompareTabLabel } from '@/lib/file-explorer-file-compare'
 import { translate } from '@/i18n/i18n'
 
 type EditorLabelVariant = 'fileName' | 'relativePath' | 'fullPath'
@@ -89,6 +90,9 @@ export function getEditorDisplayLabel(
           ref: file.commitCompare.compareRef
         })
       : translate('auto.components.editor.editorLabels.commitDiffFallback', 'Commit diff')
+  }
+  if (source === 'file-compare' && file.compareTarget) {
+    return formatFileCompareTabLabel(file.relativePath, file.compareTarget.relativePath)
   }
 
   return getDiffTabLabel(getBaseLabel(file, variant), source)

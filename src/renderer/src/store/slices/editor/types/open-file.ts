@@ -13,6 +13,7 @@ import type {
   CommitCompareSnapshot,
   ConflictReviewState,
   DiffSource,
+  FileCompareTarget,
   OpenCheckRunDetailsState,
   OpenConflictMetadata
 } from '../../../../../../shared/editor-tab-view-types'
@@ -53,6 +54,8 @@ export type OpenFile = {
   /** Hash fragment to reveal when a preview tab opens from a link (`./guide.md#setup`); kept on tab state so repeat opens can retarget it. */
   markdownPreviewAnchor?: string
   diffSource?: DiffSource
+  /** Right-hand file when `diffSource === 'file-compare'`. */
+  compareTarget?: FileCompareTarget
   branchCompare?: BranchCompareSnapshot
   commitCompare?: CommitCompareSnapshot
   branchOldPath?: string
