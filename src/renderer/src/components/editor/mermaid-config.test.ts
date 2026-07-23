@@ -9,7 +9,8 @@ describe('getMermaidConfig', () => {
       securityLevel: 'strict',
       suppressErrorRendering: true,
       theme: 'default',
-      htmlLabels: false
+      htmlLabels: false,
+      secure: expect.arrayContaining(['themeCSS', 'themeVariables', 'htmlLabels', 'securityLevel'])
     })
   })
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import type mermaidNamespace from 'mermaid'
-import DOMPurify from 'dompurify'
 import { getMermaidConfig } from './mermaid-config'
+import { sanitizeMermaidSvg } from './mermaid-svg-sanitization'
 import { translate } from '@/i18n/i18n'
 
 type MermaidApi = typeof mermaidNamespace
@@ -73,12 +73,8 @@ export default function MermaidBlock({
         mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
         if (!cancelled && containerRef.current) {
-          // Why: allow SVG styles, filters, and foreignObjects so Mermaid themes and labels survive DOMPurify sanitization.
-          containerRef.current.innerHTML = DOMPurify.sanitize(svg, {
-            USE_PROFILES: { svg: true, svgFilters: true },
-            ADD_TAGS: ['style', 'foreignObject'],
-            ADD_ATTR: ['target']
-          })
+          // Why: replace with a sanitized fragment to avoid a serialize/reparse mutation-XSS sink.
+          containerRef.current.replaceChildren(sanitizeMermaidSvg(svg))
           setError(null)
         }
       } catch (err) {

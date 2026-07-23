@@ -7,6 +7,7 @@ declare module 'mermaid' {
     htmlLabels?: boolean
     securityLevel?: 'strict' | 'loose' | 'antiscript' | 'sandbox'
     suppressErrorRendering?: boolean
+    secure?: string[]
   }
 
   type MermaidRenderResult = {

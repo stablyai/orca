@@ -1,7 +1,7 @@
 # wsl-default-distro-gh-fallback Specification
 
 ## Purpose
-TBD - created by archiving change wsl-default-distro-gh-fallback. Update Purpose after archive.
+Pin global CLI WSL fallbacks to the user's configured `terminalWindowsWslDistro`.
 ## Requirements
 ### Requirement: Pin Fallback Distro to Preference
 The system MUST route global CLI command executions (such as rate limits and project discovery) through the user-pinned `terminalWindowsWslDistro` setting if host executables are missing and a WSL environment is available.
