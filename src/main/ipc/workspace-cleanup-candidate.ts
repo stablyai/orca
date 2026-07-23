@@ -58,7 +58,9 @@ export async function buildWorkspaceCleanupCandidate(args: {
     repoId: repo.id,
     repoName: repo.displayName,
     connectionId: repo.connectionId ?? null,
-    displayName: worktree.displayName,
+    // Why: displayName is typed non-optional but arrives undefined at runtime for
+    // persisted/discovered worktrees (crash 99657ab1); coalesce so the string-typed row is honest.
+    displayName: worktree.displayName ?? '',
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,
     tier: 'review',
@@ -102,7 +104,8 @@ export function buildWorkspaceCleanupCandidateFromError(
     repoId: repo.id,
     repoName: repo.displayName,
     connectionId: repo.connectionId ?? null,
-    displayName: worktree.displayName,
+    // Why: same runtime-undefined displayName guard as buildWorkspaceCleanupCandidate (crash 99657ab1).
+    displayName: worktree.displayName ?? '',
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,
     tier: 'protected',

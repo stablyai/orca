@@ -1,5 +1,6 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { compareDisplayName } from '@/lib/worktree-display-name-order'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -185,11 +186,11 @@ function compareRows(
     case 'size':
       return left.sizeBytes - right.sizeBytes
     case 'name':
-      return left.displayName.localeCompare(right.displayName)
+      return compareDisplayName(left.displayName, right.displayName)
     case 'repo':
       return (
         left.repoDisplayName.localeCompare(right.repoDisplayName) ||
-        left.displayName.localeCompare(right.displayName)
+        compareDisplayName(left.displayName, right.displayName)
       )
     case 'activity':
       return left.lastActivityAt - right.lastActivityAt
@@ -207,7 +208,7 @@ export function sortWorkspaceSpaceRows(
     return (
       primary ||
       right.sizeBytes - left.sizeBytes ||
-      left.displayName.localeCompare(right.displayName)
+      compareDisplayName(left.displayName, right.displayName)
     )
   })
 }

@@ -159,6 +159,22 @@ describe('workspace space presentation helpers', () => {
     ])
   })
 
+  it('sorts rows with an undefined displayName without throwing (crash 99657ab1)', () => {
+    // displayName is typed string but arrives undefined for persisted/discovered rows.
+    const rows = [
+      row({ worktreeId: 'named', displayName: 'Beta', sizeBytes: 10 }),
+      row({ worktreeId: 'unnamed', displayName: undefined as unknown as string, sizeBytes: 10 })
+    ]
+
+    expect(() => sortWorkspaceSpaceRows(rows, 'name', 'asc')).not.toThrow()
+    expect(() => sortWorkspaceSpaceRows(rows, 'repo', 'asc')).not.toThrow()
+    // Undefined coalesces to '' which sorts before a real name.
+    expect(sortWorkspaceSpaceRows(rows, 'name', 'asc').map((item) => item.worktreeId)).toEqual([
+      'unnamed',
+      'named'
+    ])
+  })
+
   it('filters by search text and deletable status', () => {
     const rows = [
       row({ worktreeId: 'a', displayName: 'Frontend Cache', repoDisplayName: 'app' }),

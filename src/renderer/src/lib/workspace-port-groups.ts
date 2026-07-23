@@ -1,4 +1,5 @@
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import { compareDisplayName } from './worktree-display-name-order'
 
 export type WorkspacePortGroup = {
   worktreeId: string
@@ -78,7 +79,8 @@ export function getWorkspacePortGroups(
     .map((group) => ({ ...group, ports: [...group.ports].sort(comparePorts) }))
     .sort(
       (a, b) =>
-        a.displayName.localeCompare(b.displayName) ||
+        // Why: owner.displayName copies the same runtime-undefined worktree name (crash 99657ab1).
+        compareDisplayName(a.displayName, b.displayName) ||
         (a.ports[0]?.port ?? 0) - (b.ports[0]?.port ?? 0)
     )
   workspaceGroupsCache.set(scan, groups)

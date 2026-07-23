@@ -58,6 +58,7 @@ import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { branchName } from '@/lib/git-utils'
+import { basename } from '@/lib/path'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
 import {
@@ -329,6 +330,18 @@ type WorktreeWithLineage = Worktree & {
   lineage?: WorktreeLineage | null
 }
 
+// Why: Worktree.displayName is typed string, but stale/older-host detection payloads
+// reach the renderer with it undefined (crash 99657ab1). This is the single entry point
+// every persisted/discovered worktree flows through, so normalizing here once guarantees
+// a real name for all downstream consumers instead of guarding each read site.
+export function worktreeDisplayNameOrFallback(
+  worktree: Pick<Worktree, 'displayName' | 'branch' | 'path'>
+): string {
+  return (
+    worktree.displayName || branchName(worktree.branch ?? '') || basename(worktree.path ?? '') || ''
+  )
+}
+
 function toVisibleWorktree(worktree: DetectedWorktreeListResult['worktrees'][number]): Worktree {
   const {
     ownership: _ownership,
@@ -336,7 +349,7 @@ function toVisibleWorktree(worktree: DetectedWorktreeListResult['worktrees'][num
     visible: _visible,
     ...base
   } = worktree
-  return base
+  return { ...base, displayName: worktreeDisplayNameOrFallback(base) }
 }
 
 // Why: runtime payloads describe execution from the HUB's perspective; project that location without losing the paired transport owner.

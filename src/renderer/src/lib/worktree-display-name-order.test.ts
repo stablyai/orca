@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/types'
-import { compareWorktreeDisplayName } from './worktree-display-name-order'
+import { compareDisplayName, compareWorktreeDisplayName } from './worktree-display-name-order'
 
 // displayName is typed `string`, but crash 99657ab1 proved it arrives undefined
 // at runtime for persisted/discovered worktrees. Force that shape here.
@@ -56,5 +56,19 @@ describe('compareWorktreeDisplayName', () => {
         return compareWorktreeDisplayName(x, y)
       })
     ).not.toThrow()
+  })
+})
+
+describe('compareDisplayName', () => {
+  it('coalesces undefined and null so localeCompare never throws (crash 99657ab1)', () => {
+    expect(() => compareDisplayName(undefined, 'Beta')).not.toThrow()
+    expect(() => compareDisplayName(null, undefined)).not.toThrow()
+    expect(compareDisplayName(undefined, 'Beta')).toBeLessThan(0)
+    expect(compareDisplayName('Beta', null)).toBeGreaterThan(0)
+    expect(compareDisplayName(undefined, null)).toBe(0)
+  })
+
+  it('orders defined names lexicographically', () => {
+    expect(compareDisplayName('Apple', 'Banana')).toBeLessThan(0)
   })
 })

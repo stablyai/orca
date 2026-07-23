@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../shared/types'
+import type { Repo, Worktree } from '../shared/types'
 import type { Store } from './persistence'
 
 const { listRepoWorktreesMock, getSshFilesystemProviderMock, getSshGitProviderMock } = vi.hoisted(
@@ -32,7 +32,11 @@ vi.mock('./providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
 }))
 
-import { analyzeWorkspaceSpace, WorkspaceSpaceScanCancelledError } from './workspace-space-analysis'
+import {
+  analyzeWorkspaceSpace,
+  createBaseWorktreeRow,
+  WorkspaceSpaceScanCancelledError
+} from './workspace-space-analysis'
 
 function createStore(repos: Repo[]): Store {
   return {
@@ -392,5 +396,57 @@ describe('analyzeWorkspaceSpace', () => {
     expect(result.worktrees).toEqual([])
     expect(result.repos[0]?.error).toContain('not connected')
     expect(result.unavailableWorktreeCount).toBe(1)
+  })
+})
+
+describe('createBaseWorktreeRow', () => {
+  const repo = {
+    id: 'repo',
+    path: '/tmp/repo',
+    displayName: 'Repo',
+    badgeColor: '#000',
+    addedAt: 0
+  } as Repo
+
+  function worktree(overrides: Partial<Worktree>): Worktree {
+    return {
+      id: 'repo::/tmp/repo/wt',
+      repoId: 'repo',
+      path: '/tmp/repo/wt',
+      branch: 'refs/heads/wt',
+      head: 'abc',
+      isBare: false,
+      isMainWorktree: false,
+      displayName: 'Workspace',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      ...overrides
+    }
+  }
+
+  it('coalesces an undefined displayName to an empty string (crash 99657ab1)', () => {
+    // displayName is typed string but reaches this row builder undefined for
+    // persisted/discovered worktrees; the public analyzeWorkspaceSpace entry can't
+    // reproduce it because mergeWorktree always backfills, so exercise it directly.
+    const row = createBaseWorktreeRow(
+      repo,
+      worktree({ displayName: undefined as unknown as string }),
+      0
+    )
+
+    expect(row.displayName).toBe('')
+  })
+
+  it('preserves a defined displayName', () => {
+    const row = createBaseWorktreeRow(repo, worktree({ displayName: 'Beta' }), 0)
+
+    expect(row.displayName).toBe('Beta')
   })
 })

@@ -98,7 +98,8 @@ import {
   createWorktreeSlice,
   getHostedReviewLinkMutationGenerationForTests,
   getHostedReviewLinkWorktreeAliasCountForTests,
-  resetHostedReviewLinkMutationGenerationForTests
+  resetHostedReviewLinkMutationGenerationForTests,
+  worktreeDisplayNameOrFallback
 } from './worktrees'
 import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 import { getHostedReviewCacheKey } from './hosted-review'
@@ -7830,5 +7831,46 @@ describe('pending worktree creation state', () => {
     store.getState().setActiveWorktree(wt.id)
 
     expect(store.getState().activePendingCreationId).toBeNull()
+  })
+})
+
+describe('worktreeDisplayNameOrFallback', () => {
+  // Boundary guard for crash 99657ab1: detection payloads reach the renderer with an
+  // undefined displayName even though the type says string; this is the single entry
+  // point that must guarantee a real name for every downstream consumer.
+  it('keeps a defined displayName', () => {
+    expect(
+      worktreeDisplayNameOrFallback({ displayName: 'Beta', branch: 'refs/heads/wt', path: '/r/wt' })
+    ).toBe('Beta')
+  })
+
+  it('falls back to the short branch name when displayName is undefined', () => {
+    expect(
+      worktreeDisplayNameOrFallback({
+        displayName: undefined as unknown as string,
+        branch: 'refs/heads/feature/foo',
+        path: '/r/wt'
+      })
+    ).toBe('feature/foo')
+  })
+
+  it('falls back to the path basename when displayName and branch are empty', () => {
+    expect(
+      worktreeDisplayNameOrFallback({
+        displayName: undefined as unknown as string,
+        branch: undefined as unknown as string,
+        path: '/repos/app/my-worktree'
+      })
+    ).toBe('my-worktree')
+  })
+
+  it('returns an empty string when nothing is available (never throws)', () => {
+    expect(
+      worktreeDisplayNameOrFallback({
+        displayName: undefined as unknown as string,
+        branch: undefined as unknown as string,
+        path: undefined as unknown as string
+      })
+    ).toBe('')
   })
 })
