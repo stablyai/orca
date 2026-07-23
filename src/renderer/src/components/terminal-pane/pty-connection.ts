@@ -3564,8 +3564,8 @@ export function connectPanePty(
   // pre-existing session when a late reattach resolves, so a remount racing
   // a slow-but-alive connect costs a wasted view rebuild, not a shell.
   const TRANSPORT_CONNECT_SETTLE_GRACE_MS = 60_000
-  const requestRecoveryForUndeliverableInput = (): void => {
-    if (transport.isConnected?.() && transport.getPtyId() !== null) {
+  const requestRecoveryForUndeliverableInput = (providerRejected = false): void => {
+    if (!providerRejected && transport.isConnected?.() && transport.getPtyId() !== null) {
       return
     }
     // Why: input rejected while a connect/reattach is still settling is "not
@@ -5264,6 +5264,11 @@ export function connectPanePty(
           onError: (message: string): void => {
             if (isCurrent()) {
               onError(message)
+            }
+          },
+          onWriteUnavailable: (): void => {
+            if (isCurrent()) {
+              requestRecoveryForUndeliverableInput(true)
             }
           },
           onRecoveryStateChange: (state: PtyTransportRecoveryState): void => {

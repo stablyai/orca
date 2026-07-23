@@ -1327,6 +1327,7 @@ export type PreloadApi = {
     }>
     write: (id: string, data: string) => void
     writeAccepted: (id: string, data: string) => Promise<boolean>
+    onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
     resize: (id: string, cols: number, rows: number) => void
     claimViewport: (id: string, cols: number, rows: number) => void
     reportGeometry: (id: string, cols: number, rows: number) => void

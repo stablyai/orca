@@ -43,6 +43,7 @@ import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-d
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 
 type ColdRestorePayload = {
   scrollback: string
@@ -115,6 +116,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private respawnAdoptionClosed = false
   // Why: concurrent spawn() calls hitting a dead daemon would each fork their own; this promise coalesces respawns so only the first forks and the rest await it.
   private respawnPromise: Promise<void> | null = null
+  // Why: repeated keystrokes against one dead socket must not start parallel
+  // reconnect attempts before the renderer can remount the lost sessions.
+  private writeRecoveryPromise: Promise<void> | null = null
   private dataListeners: ((payload: {
     id: string
     data: string
@@ -137,6 +141,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private sleepRestoreSessionIds = new Set<string>()
   private activeSessionIds = new Set<string>()
+  // Why: a replacement daemon has none of the old PTYs. Keep public liveness until
+  // the renderer remounts through createOrAttach, but reject stale writes.
+  private sessionsAwaitingDaemonRecovery = new Set<string>()
   private sessionIncarnations = new Map<string, string>()
   private pendingSpawnOperationsBySessionId = new Map<string, Set<PendingDaemonSpawnOperation>>()
   private pendingClaimSpawnOperations = new Set<PendingDaemonSpawnOperation>()
@@ -189,6 +196,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.supportsAuthoritativeBufferSnapshots = this.protocolVersion >= 20
     this.supportsStartupIngress = supportsPtyStartupIngress(this.protocolVersion)
     this.client.onDisconnected(() => {
+      for (const id of this.activeSessionIds) {
+        this.sessionsAwaitingDaemonRecovery.add(id)
+      }
       for (const id of this.pausedProducerSessionIds) {
         this.producerResumesOwedOnReconnect.add(id)
       }
@@ -247,7 +257,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     ) {
       throw new Error('agent_session_claim_unavailable')
     }
-    let sessionId = opts.sessionId!
+    const requestedSessionId = opts.sessionId!
+    let sessionId = requestedSessionId
     let wslDistro = resolveWslSessionContext({
       cwd: opts.cwd,
       sessionId,
@@ -351,6 +362,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       throw new Error('agent_session_claim_unavailable')
     }
     sessionId = result.agentSessionEnsure?.owner.ptyId ?? sessionId
+    this.sessionsAwaitingDaemonRecovery.delete(requestedSessionId)
+    this.sessionsAwaitingDaemonRecovery.delete(sessionId)
     const exitedResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
     if (exitedResult) {
       return exitedResult
@@ -590,6 +603,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       cols: 80,
       rows: 24
     })
+    this.sessionsAwaitingDaemonRecovery.delete(id)
   }
 
   hasPty(id: string): boolean {
@@ -598,6 +612,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   write(id: string, data: string): void {
     this.markSessionDirty(id)
+    if (this.sessionsAwaitingDaemonRecovery.has(id) || !this.client.isConnected()) {
+      this.reconnectAfterWriteFailure()
+      throw new PtyWriteUnavailableError(`Daemon PTY "${id}" is awaiting recovery`)
+    }
     this.client.notify('write', { sessionId: id, data })
   }
 
@@ -965,6 +983,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
     this.sessionsNeedingFullCheckpoint.clear()
+    this.sessionsAwaitingDaemonRecovery.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
     this.stopCheckpointTimer()
@@ -1057,6 +1076,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.wslDistrosBySessionId.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
+    this.sessionsAwaitingDaemonRecovery.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side (TerminalHost.dispose); here the adapter only marks sessions
@@ -1395,6 +1415,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
   }
 
+  private reconnectAfterWriteFailure(): void {
+    if (this.writeRecoveryPromise || this.respawnAdoptionClosed || !this.respawnFn) {
+      return
+    }
+    this.writeRecoveryPromise = this.withDaemonRetry(() => this.ensureConnected())
+      .catch((error) => console.warn('[daemon] Failed to recover after rejected PTY input:', error))
+      .finally(() => {
+        this.writeRecoveryPromise = null
+      })
+  }
+
   private async replaceUnhealthyMacResolverDaemonBeforeNewPty(): Promise<void> {
     if (!this.respawnFn) {
       return
@@ -1543,6 +1574,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
           return
         }
         this.activeSessionIds.delete(event.sessionId)
+        this.sessionsAwaitingDaemonRecovery.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
         // Why: a reused sessionId must not inherit the dead session's owed resume (stray resumePty) or backgrounded/thinned state.
         this.pausedProducerSessionIds.delete(event.sessionId)
