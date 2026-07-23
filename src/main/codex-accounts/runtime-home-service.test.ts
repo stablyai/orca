@@ -210,6 +210,18 @@ function normalizeLinkTarget(linkTarget: string): string {
     : linkTarget
 }
 
+function withPlatform<T>(platform: NodeJS.Platform, callback: () => T): T {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return callback()
+  } finally {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  }
+}
+
 function expectResourceLinkedOrCopied(targetPath: string, sourcePath: string): void {
   expect(existsSync(targetPath)).toBe(true)
   if (!lstatSync(targetPath).isSymbolicLink()) {
@@ -1029,73 +1041,105 @@ describe('CodexRuntimeHomeService', () => {
   })
 
   it('routes host system default to the real home when the flag is ON', async () => {
-    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    try {
+      const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
 
-    expect(service.isHostSystemDefaultRealHome()).toBe(true)
-    expect(service.prepareForCodexLaunch()).toBeNull()
-    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
-      getRuntimeCodexHomePath(),
-      getSystemCodexHomePath()
-    ])
-    service.setRealHomeLaneGate(() => false)
-    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
-    const markerPath = join(
-      testState.userDataDir,
-      'codex-session-backfill',
-      'backfill-complete.json'
-    )
-    mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
-    writeFileSync(markerPath, '{}\n', 'utf-8')
-    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(existsSync(markerPath)).toBe(false)
-    service.setRealHomeLaneGate(() => true)
-    const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
-    writeFileSync(markerPath, '{}\n', 'utf-8')
-    expect(service.isHostSystemDefaultRealHome({ CODEX_HOME: perSpawnCustomHome })).toBe(false)
-    expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: perSpawnCustomHome })).toBe(
-      getRuntimeCodexHomePath()
-    )
-    expect(existsSync(markerPath)).toBe(true)
-    if (process.platform !== 'win32') {
-      // Why: shell startup CODEX_HOME discovery is a POSIX-shell lane; Windows
-      // must not invoke an ambient WSL bash while evaluating this contract.
-      writeFileSync(
-        join(testState.fakeHomeDir, '.zshrc'),
-        'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',
-        'utf-8'
+      expect(service.isHostSystemDefaultRealHome()).toBe(true)
+      expect(service.prepareForCodexLaunch()).toBeNull()
+      expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
+        getRuntimeCodexHomePath(),
+        getSystemCodexHomePath()
+      ])
+      service.setRealHomeLaneGate(() => false)
+      expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
+        getRuntimeCodexHomePath()
+      ])
+      const markerPath = join(
+        testState.userDataDir,
+        'codex-session-backfill',
+        'backfill-complete.json'
       )
-      const shellLaunchEnv = { HOME: testState.fakeHomeDir, SHELL: '/bin/zsh' }
-      expect(service.isHostSystemDefaultRealHome(shellLaunchEnv)).toBe(false)
-      expect(service.prepareForCodexLaunch(undefined, shellLaunchEnv)).toBe(
+      mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
+      writeFileSync(markerPath, '{}\n', 'utf-8')
+      expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+      expect(existsSync(markerPath)).toBe(false)
+      service.setRealHomeLaneGate(() => true)
+      const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
+      writeFileSync(markerPath, '{}\n', 'utf-8')
+      expect(service.isHostSystemDefaultRealHome({ CODEX_HOME: perSpawnCustomHome })).toBe(false)
+      expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: perSpawnCustomHome })).toBe(
         getRuntimeCodexHomePath()
       )
-    }
-    const previousCodexHome = process.env.CODEX_HOME
-    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
-    process.env.CODEX_HOME = getRuntimeCodexHomePath()
-    process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
-    try {
-      // Background fetchers prefer ambient CODEX_HOME when passed null, so an
-      // explicit path proves nested Orca launches cannot poll the managed home.
-      expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
-      process.env.CODEX_HOME = getSystemCodexHomePath()
-      delete process.env.ORCA_CODEX_HOME
-      expect(service.isHostSystemDefaultRealHome()).toBe(true)
-      process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
-      expect(service.isHostSystemDefaultRealHome()).toBe(false)
-      expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
-    } finally {
-      if (previousCodexHome === undefined) {
-        delete process.env.CODEX_HOME
-      } else {
-        process.env.CODEX_HOME = previousCodexHome
+      expect(existsSync(markerPath)).toBe(true)
+      if (process.platform !== 'win32') {
+        // Why: shell startup CODEX_HOME discovery is a POSIX-shell lane; Windows
+        // must not invoke an ambient WSL bash while evaluating this contract.
+        writeFileSync(
+          join(testState.fakeHomeDir, '.zshrc'),
+          'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',
+          'utf-8'
+        )
+        const shellLaunchEnv = { HOME: testState.fakeHomeDir, SHELL: '/bin/zsh' }
+        expect(service.isHostSystemDefaultRealHome(shellLaunchEnv)).toBe(false)
+        expect(service.prepareForCodexLaunch(undefined, shellLaunchEnv)).toBe(
+          getRuntimeCodexHomePath()
+        )
       }
-      if (previousOrcaCodexHome === undefined) {
+      const previousCodexHome = process.env.CODEX_HOME
+      const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+      process.env.CODEX_HOME = getRuntimeCodexHomePath()
+      process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
+      try {
+        // Background fetchers prefer ambient CODEX_HOME when passed null, so an
+        // explicit path proves nested Orca launches cannot poll the managed home.
+        expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+        process.env.CODEX_HOME = getSystemCodexHomePath()
         delete process.env.ORCA_CODEX_HOME
-      } else {
-        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+        expect(service.isHostSystemDefaultRealHome()).toBe(true)
+        process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
+        expect(service.isHostSystemDefaultRealHome()).toBe(false)
+        expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
+      } finally {
+        if (previousCodexHome === undefined) {
+          delete process.env.CODEX_HOME
+        } else {
+          process.env.CODEX_HOME = previousCodexHome
+        }
+        if (previousOrcaCodexHome === undefined) {
+          delete process.env.ORCA_CODEX_HOME
+        } else {
+          process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+        }
+      }
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('keeps Windows System Default on the managed lane when startup probing is unsupported', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+
+      expect(service.isHostSystemDefaultRealHome()).toBe(false)
+      expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+      expect(
+        service.isHostSystemDefaultRealHome({
+          CODEX_HOME: join(testState.fakeHomeDir, 'explicit-codex-home')
+        })
+      ).toBe(false)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
       }
     }
   })
@@ -1304,7 +1348,7 @@ describe('CodexRuntimeHomeService', () => {
     const service = new CodexRuntimeHomeService(store as never)
 
     // The broken account is dropped and the launch resolves to the real home.
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(withPlatform('darwin', () => service.prepareForCodexLaunch())).toBeNull()
     expect(store.getSettings().activeCodexManagedAccountId).toBeNull()
   })
 
@@ -1580,8 +1624,8 @@ describe('CodexRuntimeHomeService', () => {
     // syncForCurrentSelection), then Codex launches on the real home.
     settings.activeCodexManagedAccountId = null
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
-    expect(service.isHostSystemDefaultRealHome()).toBe(true)
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(withPlatform('darwin', () => service.isHostSystemDefaultRealHome())).toBe(true)
+    expect(withPlatform('darwin', () => service.prepareForCodexLaunch())).toBeNull()
 
     // E owns refreshes in place, so takeover ignores later shared-mirror bytes.
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(managedAuth)
@@ -1626,13 +1670,17 @@ describe('CodexRuntimeHomeService', () => {
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
     const syncSpy = vi.spyOn(service, 'syncForCurrentSelection')
 
-    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(withPlatform('darwin', () => service.prepareForRateLimitFetch())).toBe(
+      getSystemCodexHomePath()
+    )
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(managedAuth)
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
     expect(syncSpy).not.toHaveBeenCalled()
 
-    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(withPlatform('darwin', () => service.prepareForRateLimitFetch())).toBe(
+      getSystemCodexHomePath()
+    )
+    expect(withPlatform('darwin', () => service.prepareForCodexLaunch())).toBeNull()
     expect(syncSpy).not.toHaveBeenCalled()
   })
 
@@ -1672,7 +1720,7 @@ describe('CodexRuntimeHomeService', () => {
     // The active account's canonical auth disappears before launch. This is the
     // same-account auto-deselect path, where no ordinary outgoing switch runs.
     rmSync(join(managedHomePath1, 'auth.json'), { force: true })
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(withPlatform('darwin', () => service.prepareForCodexLaunch())).toBeNull()
 
     // Missing canonical auth clears selection without reviving shared bytes.
     expect(existsSync(join(managedHomePath1, 'auth.json'))).toBe(false)
@@ -1684,8 +1732,8 @@ describe('CodexRuntimeHomeService', () => {
     expect(warnSpy).toHaveBeenCalled()
 
     // The follow-up launch takes the real-home lane and remains fail-closed.
-    expect(service.isHostSystemDefaultRealHome()).toBe(true)
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(withPlatform('darwin', () => service.isHostSystemDefaultRealHome())).toBe(true)
+    expect(withPlatform('darwin', () => service.prepareForCodexLaunch())).toBeNull()
     expect(existsSync(join(managedHomePath1, 'auth.json'))).toBe(false)
   })
 
@@ -1721,7 +1769,7 @@ describe('CodexRuntimeHomeService', () => {
 
     writeFileSync(runtimeAuthPath, mismatchedAuth, 'utf-8')
     rmSync(join(managedHomePath, 'auth.json'), { force: true })
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(withPlatform('darwin', () => service.prepareForCodexLaunch())).toBeNull()
 
     expect(existsSync(join(managedHomePath, 'auth.json'))).toBe(false)
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
@@ -1773,7 +1821,7 @@ describe('CodexRuntimeHomeService', () => {
 
     // A subsequent real-home launch also leaves both stores untouched.
     const syncSpy = vi.spyOn(service, 'syncForCurrentSelection')
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(withPlatform('darwin', () => service.prepareForCodexLaunch())).toBeNull()
     expect(syncSpy).not.toHaveBeenCalled()
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(managedAuth)
   })

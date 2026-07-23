@@ -10,7 +10,11 @@ vi.mock('fs', () => ({
   readFileSync: readFileSyncMock
 }))
 
-import { __resetShellStartupEnvCache, readShellStartupEnvVar } from './shell-startup-env'
+import {
+  __resetShellStartupEnvCache,
+  isShellStartupEnvProbeSupported,
+  readShellStartupEnvVar
+} from './shell-startup-env'
 
 describe('readShellStartupEnvVar', () => {
   const originalPlatform = process.platform
@@ -82,7 +86,12 @@ describe('readShellStartupEnvVar', () => {
   it('returns undefined on Windows', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     mockStartupFiles({ '.zshrc': 'export OPENCODE_CONFIG_DIR=/win\n' })
+    expect(isShellStartupEnvProbeSupported()).toBe(false)
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBeUndefined()
+  })
+
+  it('reports startup-env probing as supported on macOS', () => {
+    expect(isShellStartupEnvProbeSupported()).toBe(true)
   })
 
   it('returns undefined when no startup file matches', () => {
