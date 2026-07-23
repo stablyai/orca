@@ -283,7 +283,10 @@ export const electronViteConfig: UserConfig = {
         input: {
           index: resolve('src/renderer/index.html'),
           popout: resolve('src/renderer/popout.html'),
-          web: resolve('src/renderer/web-index.html')
+          web: resolve('src/renderer/web-index.html'),
+          // Why: isolated terminal host page — its own renderer process via <webview>
+          // so app-renderer churn can't block keystroke echo.
+          'terminal-host': resolve('src/renderer/terminal-host.html')
         }
       }
     }

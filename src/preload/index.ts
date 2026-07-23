@@ -15,6 +15,12 @@ import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
+import {
+  TERMINAL_HOST_APPEARANCE_CHANNEL,
+  TERMINAL_HOST_EVENT_CHANNEL,
+  type TerminalHostAppearance,
+  type TerminalHostEmbedderEvent
+} from '../shared/terminal-host-bridge'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -866,6 +872,9 @@ const api = {
   } satisfies PreloadApi['workspacePorts'],
 
   pty: {
+    // Why a preload constant (not IPC): the terminal-process-isolation flag is an
+    // env var only main/preload can read; renderer branches on it synchronously.
+    processIsolationEnabled: process.env.ORCA_TERMINAL_PROCESS_ISOLATION === '1',
     spawn: (opts: {
       cols: number
       rows: number
@@ -1203,6 +1212,20 @@ const api = {
       killAll: () => ipcRenderer.invoke('pty:management:killAll'),
       killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
       restart: () => ipcRenderer.invoke('pty:management:restart')
+    }
+  },
+
+  terminalHost: {
+    /** Guest-side: forward a bridge event to the embedding app renderer. No-op outside a <webview>. */
+    sendToEmbedder: (event: TerminalHostEmbedderEvent): void => {
+      ipcRenderer.sendToHost(TERMINAL_HOST_EVENT_CHANNEL, event)
+    },
+    /** Guest-side: live appearance pushes from the embedder (theme/font/cursor). */
+    onAppearance: (callback: (appearance: TerminalHostAppearance) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: TerminalHostAppearance) =>
+        callback(payload)
+      ipcRenderer.on(TERMINAL_HOST_APPEARANCE_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(TERMINAL_HOST_APPEARANCE_CHANNEL, listener)
     }
   },
 

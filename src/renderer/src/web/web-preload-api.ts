@@ -795,6 +795,11 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     shell: createShellApi(),
     skills: createSkillsApi(),
     pty: createPtyApi(),
+    // Web clients have no <webview> guest; the bridge surface is inert.
+    terminalHost: {
+      sendToEmbedder: () => {},
+      onAppearance: () => () => {}
+    },
     ssh: createSshApi(),
     wsl: {
       isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
@@ -2954,6 +2959,8 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
 
 function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
   return {
+    // Web clients have no webview tag, so terminal process isolation never applies.
+    processIsolationEnabled: false,
     spawn: () => Promise.reject(new Error('Local PTYs are unavailable in the web client.')),
     write: () => {},
     writeAccepted: () => Promise.resolve(false),

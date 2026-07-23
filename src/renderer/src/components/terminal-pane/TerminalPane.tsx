@@ -227,6 +227,9 @@ import {
   setRegularTerminalInputFocusAttribute
 } from './regular-terminal-focus-ownership'
 import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
+import TerminalWebviewHost, {
+  isTerminalProcessIsolationEnabled
+} from './TerminalWebviewHost'
 
 type TerminalPaneProps = {
   tabId: string
@@ -274,7 +277,48 @@ function formatClipboardImagePasteError(error: unknown): string {
   return `Image paste failed: ${detail}`
 }
 
-export default function TerminalPane({
+function arePaneTitleOverlayRectsEqual(
+  a: Record<number, PaneTitleOverlayRect>,
+  b: Record<number, PaneTitleOverlayRect>
+): boolean {
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  if (aKeys.length !== bKeys.length) {
+    return false
+  }
+  return aKeys.every((key) => {
+    const paneId = Number(key)
+    const left = Math.abs((a[paneId]?.left ?? 0) - (b[paneId]?.left ?? 0))
+    const top = Math.abs((a[paneId]?.top ?? 0) - (b[paneId]?.top ?? 0))
+    const width = Math.abs((a[paneId]?.width ?? 0) - (b[paneId]?.width ?? 0))
+    return left < 0.5 && top < 0.5 && width < 0.5
+  })
+}
+
+export default function TerminalPane(props: TerminalPaneProps): React.JSX.Element {
+  // Terminal process isolation prototype (ORCA_TERMINAL_PROCESS_ISOLATION=1):
+  // local panes render in an isolated <webview> renderer so app churn can't
+  // block echo. Remote/runtime panes always take the legacy path (Phase A scope).
+  const isolate = useAppStore(
+    (store) =>
+      isTerminalProcessIsolationEnabled() &&
+      !getConnectionIdFromState(store, props.worktreeId) &&
+      getExplicitRuntimeEnvironmentIdForWorktree(store, props.worktreeId) === null
+  )
+  if (isolate) {
+    return (
+      <TerminalWebviewHost
+        tabId={props.tabId}
+        worktreeId={props.worktreeId}
+        cwd={props.cwd}
+        onPtyExit={props.onPtyExit}
+      />
+    )
+  }
+  return <LegacyTerminalPane {...props} />
+}
+
+function LegacyTerminalPane({
   tabId,
   worktreeId,
   cwd,
