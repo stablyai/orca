@@ -1,17 +1,25 @@
 import React from 'react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
+import type { IssueSourceSelectorProps } from '@/components/github/IssueSourceSelector'
+import { cn } from '@/lib/utils'
 import type { WorkItemSourceSearch } from './use-work-item-source-search'
 
 export function SmartWorkspaceSourceTabs({
   model,
   onModeChange,
   inputRef,
-  tabsListRef
+  tabsListRef,
+  issueSource
 }: {
   model: Pick<WorkItemSourceSearch, 'mode' | 'availableModes'>
   onModeChange: (mode: WorkItemSourceSearch['mode']) => void
   inputRef?: React.RefObject<HTMLInputElement | null>
   tabsListRef?: React.RefObject<HTMLDivElement | null>
+  issueSource?: Pick<
+    IssueSourceSelectorProps,
+    'preference' | 'origin' | 'upstream' | 'disabled' | 'onChange'
+  > | null
 }): React.JSX.Element {
   return (
     <div className="flex min-w-0 items-center gap-2 border-b border-border/40">
@@ -52,6 +60,20 @@ export function SmartWorkspaceSourceTabs({
           ))}
         </TabsList>
       </Tabs>
+      {issueSource ? (
+        <div className={cn(issueSourceChipClass, 'shrink-0')} data-composer-issue-source="true">
+          <IssueSourceSelector
+            preference={issueSource.preference}
+            origin={issueSource.origin}
+            upstream={issueSource.upstream}
+            density="compact"
+            // Why: compact U/O only changes issue routing, not PR routing — keep
+            // "Showing issues from …" so the control does not look PR-scoped.
+            disabled={issueSource.disabled}
+            onChange={issueSource.onChange}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }
