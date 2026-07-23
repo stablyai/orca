@@ -12,8 +12,17 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
-import { prepareQuickOpenFiles, rankQuickOpenFiles } from '@/components/quick-open-search'
+import {
+  prepareQuickOpenFiles,
+  rankQuickOpenFiles,
+  QUICK_OPEN_RESULT_LIMIT
+} from '@/components/quick-open-search'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
+import { orderQuickOpenByRecency, recentQuickOpenPaths } from '@/components/quick-open-recent-files'
+import {
+  buildRecentTabSwitcherModel,
+  normalizeCtrlTabOrderMode
+} from '@/components/tab-bar/recent-tab-switching'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
 import {
@@ -53,6 +62,9 @@ export default function QuickOpen(): React.JSX.Element | null {
 function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element {
   const closeModal = useAppStore((s) => s.closeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeFileId = useAppStore((s) => s.activeFileId)
+  const openFiles = useAppStore((s) => s.openFiles)
+  const recentlyClosedByWorktree = useAppStore((s) => s.recentlyClosedEditorTabsByWorktree)
   const openFile = useAppStore((s) => s.openFile)
   const activeWorktree = useActiveWorktree()
 
@@ -83,10 +95,41 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   }
 
   const indexedFiles = useMemo(() => prepareQuickOpenFiles(files), [files])
-  const filtered = useMemo(
-    () => rankQuickOpenFiles(deferredQuery, indexedFiles),
-    [deferredQuery, indexedFiles]
-  )
+  // Why: with no query the fuzzy ranker just returns the file-listing walk order,
+  // which is meaningless to the user. Seed it with recently opened/closed files.
+  const recentPaths = useMemo(() => {
+    if (!visible || !activeWorktreeId) {
+      return []
+    }
+    // Why: the true last-visited order lives in the group's Ctrl+Tab MRU stack,
+    // not openFiles insertion order. Sample it at open time (the popup is
+    // transient, so mid-open staleness can't happen).
+    const state = useAppStore.getState()
+    const model = buildRecentTabSwitcherModel(
+      state,
+      activeWorktreeId,
+      normalizeCtrlTabOrderMode(state.settings?.ctrlTabOrderMode)
+    )
+    const mruOpenFileIds = (model?.items ?? [])
+      .filter((item) => item.type === 'editor')
+      .map((item) => item.id)
+    return recentQuickOpenPaths({
+      mruOpenFileIds,
+      openFiles,
+      recentlyClosed: recentlyClosedByWorktree[activeWorktreeId] ?? [],
+      activeWorktreeId,
+      activeFileId
+    })
+  }, [visible, openFiles, recentlyClosedByWorktree, activeWorktreeId, activeFileId])
+  const filtered = useMemo(() => {
+    if (!deferredQuery.trim()) {
+      return orderQuickOpenByRecency(recentPaths, files, QUICK_OPEN_RESULT_LIMIT).map((path) => ({
+        path,
+        score: 0
+      }))
+    }
+    return rankQuickOpenFiles(deferredQuery, indexedFiles)
+  }, [deferredQuery, indexedFiles, files, recentPaths])
 
   const handleSelect = useCallback(
     (relativePath: string) => {
