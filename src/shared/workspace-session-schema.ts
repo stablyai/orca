@@ -22,6 +22,7 @@ import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { isWorkspaceKey } from './workspace-scope'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
+import { terminalArchiveHintsByPaneKeySchema } from './terminal-archive-types'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -253,6 +254,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   activeTabId: z.string().nullable(),
   tabsByWorktree: z.record(z.string(), z.array(terminalTabSchema)),
   terminalLayoutsByTabId: z.record(terminalTabIdSchema, terminalLayoutSnapshotSchema),
+  terminalArchiveHintsByPaneKey: terminalArchiveHintsByPaneKeySchema.optional(),
   activeWorktreeIdsOnShutdown: z.array(z.string()).optional(),
   openFilesByWorktree: z.record(z.string(), z.array(persistedOpenFileSchema)).optional(),
   activeFileIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),

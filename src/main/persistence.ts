@@ -235,12 +235,20 @@ import {
 } from '../shared/workspace-scope'
 import {
   collectTerminalScrollbackSnapshotRefs,
+  collectTerminalArchiveScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
   getProfileTerminalScrollbackSnapshotRoot,
   migrateWorkspaceSessionTerminalScrollbackSnapshots,
   readTerminalScrollbackSnapshotSync,
   type TerminalScrollbackSnapshotStorage
 } from './terminal-scrollback-snapshots'
+import {
+  normalizeTerminalArchiveRetentionDays,
+  terminalArchivesByIdSchema,
+  type ArchivedTerminalTab
+} from '../shared/terminal-archive-types'
+import { TerminalArchiveStore } from './terminal-archive-store'
+import type { TerminalArchiveSnapshotSource } from '../shared/workspace-session-terminal-archive'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
@@ -603,6 +611,33 @@ function migrateTerminalScrollbackRows(settings: unknown): {
     rows,
     needsSave: !hasRows || hasLegacyBytes || legacySettings.terminalScrollbackRows !== rows
   }
+}
+
+function migrateTerminalArchiveRetentionDays(settings: unknown): {
+  days: number
+  needsSave: boolean
+} {
+  const raw =
+    settings && typeof settings === 'object'
+      ? (settings as { terminalArchiveRetentionDays?: unknown }).terminalArchiveRetentionDays
+      : undefined
+  const days = normalizeTerminalArchiveRetentionDays(raw)
+  return { days, needsSave: raw !== days }
+}
+
+function parseTerminalArchives(raw: unknown): {
+  archives: Record<string, ArchivedTerminalTab>
+  needsSave: boolean
+} {
+  if (raw === undefined) {
+    return { archives: {}, needsSave: false }
+  }
+  const parsed = terminalArchivesByIdSchema.safeParse(raw)
+  if (!parsed.success) {
+    console.warn('[persistence] Ignoring invalid terminal archive metadata')
+    return { archives: {}, needsSave: true }
+  }
+  return { archives: parsed.data as Record<string, ArchivedTerminalTab>, needsSave: false }
 }
 
 function migrateTerminalTuiScrollSensitivityDefault(settings: GlobalSettings | undefined): {
@@ -2549,14 +2584,15 @@ function backfillFolderScopeConnectionIds(state: PersistedState): {
 function deleteRemovedTerminalScrollbackSnapshots(
   prior: WorkspaceSessionState | undefined,
   next: WorkspaceSessionState,
-  storage?: TerminalScrollbackSnapshotStorage
+  storage?: TerminalScrollbackSnapshotStorage,
+  protectedRefs: ReadonlySet<string> = new Set()
 ): void {
   if (!prior) {
     return
   }
   const nextRefs = collectTerminalScrollbackSnapshotRefs(next)
   for (const ref of collectTerminalScrollbackSnapshotRefs(prior)) {
-    if (!nextRefs.has(ref)) {
+    if (!nextRefs.has(ref) && !protectedRefs.has(ref)) {
       deleteTerminalScrollbackSnapshotSync(ref, storage)
     }
   }
@@ -2830,6 +2866,16 @@ export class Store {
         if (migratedTerminalScrollback.needsSave) {
           this.loadNeedsSave = true
         }
+        const migratedTerminalArchiveRetention = migrateTerminalArchiveRetentionDays(
+          parsed.settings
+        )
+        if (migratedTerminalArchiveRetention.needsSave) {
+          this.loadNeedsSave = true
+        }
+        const parsedTerminalArchives = parseTerminalArchives(parsed.terminalArchivesById)
+        if (parsedTerminalArchives.needsSave) {
+          this.loadNeedsSave = true
+        }
         const migratedTerminalTuiScrollSensitivity = migrateTerminalTuiScrollSensitivityDefault(
           parsed.settings
         )
@@ -3056,6 +3102,7 @@ export class Store {
           workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
             parsed.workspaceLineageByChildKey
           ),
+          terminalArchivesById: parsedTerminalArchives.archives,
           settings: {
             ...defaults.settings,
             // Why (#7977): keep persisted experimentalNewWorktreeCardStyle:true — v1.4.130's onboarding auto-wrote it as a plain boolean, so it's indistinguishable from a real opt-in; only the default changed.
@@ -3104,6 +3151,7 @@ export class Store {
             floatingTerminalTrustedCwds: migratedFloatingTerminalTrustedCwds,
             floatingTerminalCwdMigratedToAppWorkspace: true,
             terminalScrollbackRows: migratedTerminalScrollback.rows,
+            terminalArchiveRetentionDays: migratedTerminalArchiveRetention.days,
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
@@ -5249,6 +5297,11 @@ export class Store {
         updates.terminalScrollbackRows
       )
     }
+    if ('terminalArchiveRetentionDays' in updates) {
+      sanitizedUpdates.terminalArchiveRetentionDays = normalizeTerminalArchiveRetentionDays(
+        updates.terminalArchiveRetentionDays
+      )
+    }
     if (
       'terminalTuiScrollSensitivity' in updates ||
       'terminalTuiScrollSensitivityDefaultedToOne' in updates
@@ -5648,6 +5701,82 @@ export class Store {
     return readTerminalScrollbackSnapshotSync(ref, this.terminalScrollbackSnapshotStorage)
   }
 
+  getTerminalArchives(): Record<string, ArchivedTerminalTab> {
+    return { ...this.state.terminalArchivesById }
+  }
+
+  getTerminalArchiveRetentionDays(): number {
+    return normalizeTerminalArchiveRetentionDays(this.state.settings.terminalArchiveRetentionDays)
+  }
+
+  /** Archive metadata is the durability boundary: callers must not retire a PTY until this succeeds. */
+  replaceTerminalArchivesAndFlush(archives: Record<string, ArchivedTerminalTab>): void {
+    const previous = this.state.terminalArchivesById
+    this.state.terminalArchivesById = archives
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      this.state.terminalArchivesById = previous
+      throw error
+    }
+  }
+
+  createTerminalArchiveStore(snapshotSource: TerminalArchiveSnapshotSource): TerminalArchiveStore {
+    return new TerminalArchiveStore(
+      {
+        getTerminalArchives: () => this.getTerminalArchives(),
+        replaceTerminalArchivesAndFlush: (archives) =>
+          this.replaceTerminalArchivesAndFlush(archives),
+        getTerminalArchiveRetentionDays: () => this.getTerminalArchiveRetentionDays(),
+        isExecutionHostReachable: (hostId) => this.isArchiveExecutionHostReachable(hostId),
+        worktreeExists: (worktreeId, hostId) => this.archiveWorktreeExists(worktreeId, hostId),
+        isTerminalScrollbackSnapshotLive: (ref) => this.isTerminalScrollbackSnapshotLive(ref),
+        terminalScrollbackSnapshotStorage: this.terminalScrollbackSnapshotStorage
+      },
+      snapshotSource
+    )
+  }
+
+  private isArchiveExecutionHostReachable(hostId: ExecutionHostId): boolean {
+    if (hostId === LOCAL_EXECUTION_HOST_ID) {
+      return true
+    }
+    return this.state.repos.some((repo) => getRepoExecutionHostId(repo) === hostId)
+  }
+
+  private archiveWorktreeExists(worktreeId: string, hostId: ExecutionHostId): boolean {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    const repo = this.state.repos.find((entry) => entry.id === repoId)
+    return Boolean(
+      repo && getRepoExecutionHostId(repo) === hostId && this.state.worktreeMeta[worktreeId]
+    )
+  }
+
+  private isTerminalScrollbackSnapshotLive(ref: string): boolean {
+    if (collectTerminalArchiveScrollbackSnapshotRefs(this.state.terminalArchivesById).has(ref)) {
+      return true
+    }
+    if (collectTerminalScrollbackSnapshotRefs(this.state.workspaceSession).has(ref)) {
+      return true
+    }
+    return Object.values(this.state.workspaceSessionsByHostId ?? {}).some((session) =>
+      session ? collectTerminalScrollbackSnapshotRefs(session).has(ref) : false
+    )
+  }
+
+  private getTerminalScrollbackRefsOutsideLocalSession(): Set<string> {
+    const refs = collectTerminalArchiveScrollbackSnapshotRefs(this.state.terminalArchivesById)
+    for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
+      if (!session) {
+        continue
+      }
+      for (const ref of collectTerminalScrollbackSnapshotRefs(session)) {
+        refs.add(ref)
+      }
+    }
+    return refs
+  }
+
   /** Resolve the worktree a terminal tab belongs to; more reliable than agent-echoed hook fields. */
   getWorktreeIdForTab(tabId: string): string | undefined {
     return findWorktreeIdForTab(this.getWorkspaceSession(), tabId)
@@ -5813,7 +5942,12 @@ export class Store {
       this.terminalScrollbackSnapshotStorage
     )
     session = migratedScrollback.session
-    deleteRemovedTerminalScrollbackSnapshots(prior, session, this.terminalScrollbackSnapshotStorage)
+    deleteRemovedTerminalScrollbackSnapshots(
+      prior,
+      session,
+      this.terminalScrollbackSnapshotStorage,
+      this.getTerminalScrollbackRefsOutsideLocalSession()
+    )
     this.state.workspaceSession = session
     this.scheduleSave()
   }

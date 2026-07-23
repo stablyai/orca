@@ -7110,6 +7110,119 @@ describe('Store', () => {
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
   })
 
+  it('keeps an archive sidecar live when its active session reference is removed', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/worktree'
+    store.addRepo(makeRepo({ id: 'repo-1', connectionId: 'ssh-target-1' }))
+    const archiveStore = store.createTerminalArchiveStore({
+      capture: async () => ({
+        kind: 'captured-bytes' as const,
+        buffer: 'archived scrollback',
+        source: 'renderer' as const,
+        truncated: false,
+        byteLength: Buffer.byteLength('archived scrollback')
+      })
+    })
+    const archive = await archiveStore.archiveTerminalTab({
+      operationId: 'close-intent-archive-ref',
+      sourceTabId: 'tab-archive',
+      executionHostId: 'local',
+      worktreeId,
+      title: 'Archived terminal',
+      layout: {
+        root: { type: 'leaf', leafId: TEST_LEAF_1 },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null
+      },
+      panesByLeafId: { [TEST_LEAF_1]: { archivedLeafId: TEST_LEAF_1, cwd: '/worktree' } },
+      sourcePaneIdentityByLeafId: {
+        [TEST_LEAF_1]: {
+          paneKey: `tab-archive:${TEST_LEAF_1}`,
+          incarnationId: 'archive-incarnation'
+        }
+      },
+      reason: 'user-close'
+    })
+    const ref = archive.panesByLeafId[TEST_LEAF_1]?.snapshot?.ref
+    if (!ref) {
+      throw new Error('expected archive snapshot')
+    }
+    const sessionWithArchiveRef: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'tab-archive', ptyId: 'remote-pty', worktreeId })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-archive': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          scrollbackRefsByLeafId: { [TEST_LEAF_1]: ref }
+        }
+      }
+    }
+    store.setWorkspaceSession(sessionWithArchiveRef)
+    store.setWorkspaceSession(getDefaultWorkspaceSession())
+
+    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(true)
+
+    store.replaceTerminalArchivesAndFlush({})
+    store.setWorkspaceSession(sessionWithArchiveRef)
+    store.setWorkspaceSession(getDefaultWorkspaceSession())
+
+    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
+  })
+
+  it.each([
+    [0, 1],
+    [1, 1],
+    [365, 365],
+    [366, 365],
+    [1.6, 2],
+    [Number.NaN, 7]
+  ])('normalizes terminal archive retention %s to %s', async (input, expected) => {
+    const store = await createStore()
+    store.updateSettings({ terminalArchiveRetentionDays: input } as never)
+
+    expect(store.getSettings().terminalArchiveRetentionDays).toBe(expected)
+  })
+
+  it('drops terminal archive records with unknown fields during migration', async () => {
+    const archiveId = '11111111-1111-4111-8111-111111111111'
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalArchiveRetentionDays: 366 },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      terminalArchivesById: {
+        [archiveId]: {
+          schemaVersion: 1,
+          id: archiveId,
+          operationId: 'close-1',
+          sourceTabId: 'tab-1',
+          executionHostId: 'local',
+          worktreeId: 'repo-1::/worktree',
+          title: 'Terminal',
+          layout: { root: null, activeLeafId: null, expandedLeafId: null },
+          panesByLeafId: {},
+          reason: 'user-close',
+          archivedAt: 1,
+          expiresAt: 2,
+          restoreCount: 0,
+          terminalHandle: 'must-not-persist'
+        }
+      },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getTerminalArchives()).toEqual({})
+    expect(store.getSettings().terminalArchiveRetentionDays).toBe(365)
+  })
+
   it('reads only the replay tail from oversized terminal scrollback snapshots', async () => {
     const store = await createStore()
     const ref = 'v1-00000000000000000000000000000000'

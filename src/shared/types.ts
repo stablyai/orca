@@ -43,6 +43,7 @@ import type {
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+import type { ArchivedTerminalTab, TerminalArchiveHint } from './terminal-archive-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1087,6 +1088,8 @@ export type WorkspaceSessionState = {
   /** Keys may be legacy raw worktree IDs or canonical WorkspaceKey values. */
   tabsByWorktree: Record<string, TerminalTab[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  /** Capture-only terminal facts. These never become a second live-agent authority. */
+  terminalArchiveHintsByPaneKey?: Record<string, TerminalArchiveHint>
   /** Worktree IDs that had at least one tab with a live PTY at shutdown.
    *  Used on startup to eagerly re-spawn PTY processes so the Active filter
    *  works immediately after restart. */
@@ -2725,6 +2728,8 @@ export type GlobalSettings = {
   /** Where the repo setup script runs on workspace create; defaults to a background "Setup" tab to keep the main terminal usable. */
   setupScriptLaunchMode: SetupScriptLaunchMode
   terminalScrollbackRows: number
+  /** Durable terminal archives expire after this many days; intentionally no infinite-retention mode. */
+  terminalArchiveRetentionDays?: number
   /** Optional app-level proxy for Electron networking and local PTYs; empty preserves system/inherited proxy env. */
   httpProxyUrl?: string
   /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
@@ -3463,6 +3468,8 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:); 'local' stays in workspaceSession so pre-partition builds keep working. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
+  /** Main-owned archive metadata; scrollback bytes remain in terminal-scrollback sidecars. */
+  terminalArchivesById: Record<string, ArchivedTerminalTab>
   sshTargets: SshTarget[]
   /** SSH config aliases the user deleted; suppresses re-import from ~/.ssh/config so a deleted host doesn't reappear. */
   deletedSshConfigAliases: string[]

@@ -12,6 +12,7 @@ import {
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { WorkspaceSessionState } from '../shared/types'
+import type { ArchivedTerminalTab } from '../shared/terminal-archive-types'
 import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
   TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
@@ -19,6 +20,7 @@ import {
 
 const SNAPSHOT_DIR_NAME = 'terminal-scrollback'
 const REF_PREFIX = 'v1'
+const ARCHIVE_REF_PREFIX = 'v1a'
 
 export type TerminalScrollbackSnapshotStorage = {
   snapshotRoot?: string
@@ -42,8 +44,20 @@ export function makeTerminalScrollbackSnapshotRef(tabId: string, leafId: string)
   return `${REF_PREFIX}-${hash}`
 }
 
+export function makeTerminalArchiveScrollbackSnapshotRef(
+  archiveId: string,
+  leafId: string,
+  snapshotVersion = ''
+): string {
+  const hash = createHash('sha256')
+    .update(`archive\0${archiveId}\0${leafId}\0${snapshotVersion}`)
+    .digest('hex')
+    .slice(0, 32)
+  return `${ARCHIVE_REF_PREFIX}-${hash}`
+}
+
 function snapshotPath(ref: string, snapshotRoot: string): string | null {
-  if (!/^v1-[0-9a-f]{32}$/.test(ref)) {
+  if (!/^(?:v1|v1a)-[0-9a-f]{32}$/.test(ref)) {
     return null
   }
   return join(snapshotRoot, `${ref}.bin`)
@@ -63,7 +77,7 @@ function snapshotReadPaths(ref: string, storage?: TerminalScrollbackSnapshotStor
   return fallbackPath ? [primaryPath, fallbackPath] : [primaryPath]
 }
 
-function trailingUtf8Bytes(value: string, maxBytes: number): Buffer {
+export function trailingUtf8Bytes(value: string, maxBytes: number): Buffer {
   const bytes = Buffer.from(value, 'utf-8')
   if (bytes.length <= maxBytes) {
     return bytes
@@ -133,6 +147,60 @@ export function writeTerminalScrollbackSnapshotSync(args: {
   }
 }
 
+export type TerminalArchiveScrollbackSnapshotWriteResult =
+  | { kind: 'written'; ref: string; byteLength: number; truncated: boolean }
+  | { kind: 'empty' }
+  | { kind: 'failed' }
+
+export function writeTerminalArchiveScrollbackSnapshotSync(args: {
+  archiveId: string
+  leafId: string
+  buffer: string
+  snapshotVersion?: string
+  storage?: TerminalScrollbackSnapshotStorage
+}): TerminalArchiveScrollbackSnapshotWriteResult {
+  if (!args.buffer) {
+    return { kind: 'empty' }
+  }
+  const ref = makeTerminalArchiveScrollbackSnapshotRef(
+    args.archiveId,
+    args.leafId,
+    args.snapshotVersion
+  )
+  const snapshotRoot = getSnapshotRoot(args.storage)
+  const path = snapshotPath(ref, snapshotRoot)
+  if (!path) {
+    return { kind: 'failed' }
+  }
+  const sourceByteLength = Buffer.byteLength(args.buffer, 'utf-8')
+  const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
+  try {
+    mkdirSync(snapshotRoot, { recursive: true, mode: 0o700 })
+    const tmpPath = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+    let renamed = false
+    try {
+      writeFileSync(tmpPath, bytes, { mode: 0o600 })
+      renameSync(tmpPath, path)
+      renamed = true
+    } finally {
+      if (!renamed) {
+        rmSync(tmpPath, { force: true })
+      }
+    }
+    return {
+      kind: 'written',
+      ref,
+      byteLength: bytes.byteLength,
+      truncated: bytes.byteLength < sourceByteLength
+    }
+  } catch (err) {
+    console.warn(
+      `[terminal-scrollback] Failed to write archive snapshot: ${err instanceof Error ? err.message : String(err)}`
+    )
+    return { kind: 'failed' }
+  }
+}
+
 export function readTerminalScrollbackSnapshotSync(
   ref: string,
   storage?: TerminalScrollbackSnapshotStorage
@@ -165,6 +233,20 @@ export function collectTerminalScrollbackSnapshotRefs(session: WorkspaceSessionS
   for (const layout of Object.values(session.terminalLayoutsByTabId ?? {})) {
     for (const ref of Object.values(layout.scrollbackRefsByLeafId ?? {})) {
       refs.add(ref)
+    }
+  }
+  return refs
+}
+
+export function collectTerminalArchiveScrollbackSnapshotRefs(
+  archives: Record<string, ArchivedTerminalTab> | undefined
+): Set<string> {
+  const refs = new Set<string>()
+  for (const archive of Object.values(archives ?? {})) {
+    for (const pane of Object.values(archive.panesByLeafId)) {
+      if (pane.snapshot?.ref) {
+        refs.add(pane.snapshot.ref)
+      }
     }
   }
   return refs
