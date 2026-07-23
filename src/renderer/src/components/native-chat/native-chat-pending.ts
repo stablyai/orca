@@ -17,7 +17,10 @@ import {
   shouldSuppressNativeChatExitForPane as shouldSuppressNativeChatExitForPaneImpl
 } from './native-chat-exit-suppress'
 
-export { NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS } from './native-chat-exit-suppress'
+export {
+  getNativeChatExitSuppressRemainingMs,
+  NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
+} from './native-chat-exit-suppress'
 
 export type NativeChatPendingSendScope = {
   paneKey: string

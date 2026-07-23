@@ -210,6 +210,20 @@ describe('resolveNativeChatLeafRoute', () => {
     ).toEqual({ chatLeafId: 'exited-agent', exitChat: false })
   })
 
+  it('does not retarget to an eligible sibling while suppress is active (#10098)', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'sending-leaf',
+        activeLeafId: 'agent-sibling',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        chatLeafHasConfirmedAgentExit: true,
+        suppressExitChat: true
+      })
+    ).toEqual({ chatLeafId: 'sending-leaf', exitChat: false })
+  })
+
   it('still exits when suppress is set but the chat leaf is gone', () => {
     expect(
       resolveNativeChatLeafRoute({

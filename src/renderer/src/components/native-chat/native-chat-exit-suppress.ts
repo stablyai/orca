@@ -32,6 +32,18 @@ export function shouldSuppressNativeChatExitForPane(
   return lastSentAt !== undefined && nowMs - lastSentAt < NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
 }
 
+/** Remaining grace ms for a pane after its last optimistic send (0 if none/expired). */
+export function getNativeChatExitSuppressRemainingMs(paneKey: string, nowMs = Date.now()): number {
+  if (!paneKey) {
+    return 0
+  }
+  const lastSentAt = lastOptimisticSendAtByPaneKey.get(paneKey)
+  if (lastSentAt === undefined) {
+    return 0
+  }
+  return Math.max(NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS - (nowMs - lastSentAt), 0)
+}
+
 export function clearNativeChatExitSuppressForTests(): void {
   lastOptimisticSendAtByPaneKey.clear()
 }
