@@ -9,8 +9,9 @@ type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDi
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
 export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+export { findCreatedWorktree } from './created-worktree-reconciliation'
 export { mergeWorktree } from './worktree-metadata-merge'
-export { areWorktreePathsEqual, findListedWorktreeByPath } from './worktree-path-comparison'
+export { areWorktreePathsEqual } from './worktree-path-comparison'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
