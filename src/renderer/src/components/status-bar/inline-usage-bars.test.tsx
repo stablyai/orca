@@ -99,17 +99,18 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain('32% used now')
   })
 
-  it('uses the reported duration for a sole Codex weekly primary window', async () => {
+  it('labels a sole Codex weekly window as weekly, not a 5h session', async () => {
     const { InlineUsageBars } = await import('./StatusBar')
+    // Shape the classifier emits for a weekly-only plan: session cleared, weekly set.
     const limits: ProviderRateLimits = {
       provider: 'codex',
-      session: {
+      session: null,
+      weekly: {
         usedPercent: 37,
         windowMinutes: 10_080,
         resetsAt: null,
         resetDescription: null
       },
-      weekly: null,
       updatedAt: Date.now(),
       error: null,
       status: 'ok'

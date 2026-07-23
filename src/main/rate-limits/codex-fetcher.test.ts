@@ -325,7 +325,7 @@ describe('fetchCodexRateLimits', () => {
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
-  it('normalizes Codex RPC remaining-minute windows to fixed display durations', async () => {
+  it('normalizes floor-rounded Codex RPC window durations to canonical display durations', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {

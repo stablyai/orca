@@ -482,7 +482,7 @@ function mapRpcWindow(
 
   return {
     usedPercent: Math.min(100, Math.max(0, raw.usedPercent)),
-    // Why: windowDurationMins reports remaining minutes, but the UI needs the fixed bucket duration for "5h"/"wk" labels.
+    // Why: windowDurationMins is a fixed per-window bucket size that legacy Codex paths floor-round (e.g. 299, 10079); normalize to the canonical duration for stable "5h"/"wk" labels.
     windowMinutes: expectedWindowMinutes,
     resetsAt,
     resetDescription
