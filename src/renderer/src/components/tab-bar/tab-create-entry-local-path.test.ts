@@ -78,7 +78,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
         ]
       },
       runtimeEnvironmentCatalogHydrated: true,
-      runtimeEnvironments: [{ id: 'hub-a' }],
+      runtimeEnvironments: [{ id: 'hub-a' } as never],
       removedRuntimeEnvironmentIds: new Set(),
       settings: { activeRuntimeEnvironmentId: 'hub-a' } as never
     })

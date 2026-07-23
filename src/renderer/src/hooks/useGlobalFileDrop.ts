@@ -119,12 +119,11 @@ export function useGlobalFileDrop(): void {
               if (result.kind === 'directory') {
                 continue
               }
-              const maybeRelative = toWorktreeRelativePath(result.destPath, worktreePath)
               store.setActiveTabType('editor')
               store.openFile(
                 {
                   filePath: result.destPath,
-                  relativePath: maybeRelative ?? result.destPath,
+                  relativePath: toWorktreeRelativePathOrAbsolute(result.destPath, worktreePath),
                   worktreeId: activeWorktreeId,
                   runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
                   language: detectLanguage(result.destPath),

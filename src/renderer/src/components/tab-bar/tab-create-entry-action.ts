@@ -1,3 +1,4 @@
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { toWorktreeRelativePathOrAbsolute } from '@/lib/worktree-relative-path'
