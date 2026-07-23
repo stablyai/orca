@@ -155,11 +155,8 @@ export function NativeChatQuestionCard({
         ) : null}
 
         <div className="overflow-hidden rounded-lg border border-input bg-card shadow-xs">
-          <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-            <p
-              className="min-w-0 truncate text-sm font-semibold text-foreground"
-              title={q.question}
-            >
+          <div className="flex items-start justify-between gap-2 px-3.5 py-2.5">
+            <p className="min-w-0 break-words text-sm font-semibold text-foreground">
               {q.question}
             </p>
             <button
@@ -264,7 +261,7 @@ function OptionRow({
       // assistive tech.
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
+        'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
         selected ? 'bg-accent' : 'hover:bg-accent'
       )}
     >
@@ -277,13 +274,9 @@ function OptionRow({
         {selected ? <Check className="size-3.5" strokeWidth={3} /> : badge}
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-sm text-foreground" title={label}>
-          {label}
-        </span>
+        <span className="block break-words text-sm text-foreground">{label}</span>
         {description ? (
-          <span className="block truncate text-xs text-muted-foreground" title={description}>
-            {description}
-          </span>
+          <span className="block break-words text-xs text-muted-foreground">{description}</span>
         ) : null}
       </span>
     </button>
