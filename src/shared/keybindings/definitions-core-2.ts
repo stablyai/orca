@@ -167,6 +167,15 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'tab.moveToSplitRight',
+    title: 'Move tab to split right',
+    group: 'Tabs',
+    scope: 'tabs',
+    // Why: distinct from terminal.splitRight (pane-only); Cursor/VS Code users expect Mod+\ for layout split (#10055).
+    searchKeywords: ['shortcut', 'tab', 'split', 'pane', 'column', 'right', 'layout', 'move'],
+    defaultBindings: platformBindings(['Mod+\\'])
+  },
+  {
     id: 'tab.reopenClosed',
     title: 'Reopen closed tab',
     group: 'Tabs',
