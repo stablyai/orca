@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
-import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
+import type { SshConnectionState, SshTargetSummary } from '../../../shared/ssh-types'
 import { callRuntimeRpc } from './runtime-rpc-client'
+import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 
 /**
  * Mirrors a remote Orca server's own SSH targets into that environment's
@@ -16,22 +17,33 @@ function environmentTarget(environmentId: string): { kind: 'environment'; enviro
   return { kind: 'environment', environmentId }
 }
 
-async function fetchEnvironmentSshTargets(environmentId: string): Promise<SshTarget[]> {
-  const { targets } = await callRuntimeRpc<{ targets: SshTarget[] }>(
+async function fetchEnvironmentSshTargets(environmentId: string): Promise<SshTargetSummary[]> {
+  const { targets } = await callRuntimeRpc<{ targets: SshTargetSummary[] }>(
     environmentTarget(environmentId),
-    'ssh.listTargets',
+    'ssh.listTargetSummaries',
     undefined,
     { timeoutMs: SSH_RPC_TIMEOUT_MS }
   )
-  return targets
+  if (!Array.isArray(targets)) {
+    throw new Error('Remote SSH target metadata is invalid')
+  }
+  return targets.map((target) => {
+    if (typeof target.id !== 'string' || typeof target.label !== 'string') {
+      throw new Error('Remote SSH target metadata is invalid')
+    }
+    return { id: target.id, label: target.label }
+  })
 }
 
 /** Applies the environment's target list, then best-effort removal tombstones.
  * Targets land first — a removed-labels failure must not discard them
  * (they alone are enough evidence for the ghost-host derivation). */
-async function syncEnvironmentSshTargetMetadata(environmentId: string): Promise<SshTarget[]> {
+async function syncEnvironmentSshTargetMetadata(
+  environmentId: string,
+  generation: number
+): Promise<SshTargetSummary[]> {
   const targets = await fetchEnvironmentSshTargets(environmentId)
-  useAppStore.getState().setEnvironmentSshTargetsMetadata(environmentId, targets)
+  useAppStore.getState().setEnvironmentSshTargetsMetadata(environmentId, targets, generation)
   try {
     const { labels } = await callRuntimeRpc<{ labels: Record<string, string> }>(
       environmentTarget(environmentId),
@@ -39,7 +51,7 @@ async function syncEnvironmentSshTargetMetadata(environmentId: string): Promise<
       undefined,
       { timeoutMs: SSH_RPC_TIMEOUT_MS }
     )
-    useAppStore.getState().setEnvironmentRemovedSshTargetLabels(environmentId, labels)
+    useAppStore.getState().setEnvironmentRemovedSshTargetLabels(environmentId, labels, generation)
   } catch {
     // Best-effort — a missing map just falls back to the raw target id.
   }
@@ -48,7 +60,8 @@ async function syncEnvironmentSshTargetMetadata(environmentId: string): Promise<
 
 async function fetchEnvironmentSshConnectionStates(
   environmentId: string,
-  targets: readonly SshTarget[]
+  targets: readonly SshTargetSummary[],
+  generation: number
 ): Promise<void> {
   for (const target of targets) {
     try {
@@ -59,11 +72,12 @@ async function fetchEnvironmentSshConnectionStates(
         { timeoutMs: SSH_RPC_TIMEOUT_MS }
       )
       if (state) {
-        useAppStore.getState().setEnvironmentSshConnectionState(environmentId, target.id, state)
+        useAppStore
+          .getState()
+          .setEnvironmentSshConnectionState(environmentId, target.id, state, generation)
       }
     } catch {
-      // A missing state just reads as 'disconnected'; the overlay's Connect
-      // action and push events converge it.
+      // Why: a timeout or unsupported RPC is not authoritative evidence that the HUB's SSH link disconnected.
     }
   }
 }
@@ -72,8 +86,9 @@ type HydrationEntry = { promise: Promise<void>; rerunRequested: boolean }
 const hydrationsInFlight = new Map<string, HydrationEntry>()
 
 async function runEnvironmentSshHydration(environmentId: string): Promise<void> {
-  const targets = await syncEnvironmentSshTargetMetadata(environmentId)
-  await fetchEnvironmentSshConnectionStates(environmentId, targets)
+  const generation = getEnvironmentSshStateGeneration(environmentId)
+  const targets = await syncEnvironmentSshTargetMetadata(environmentId, generation)
+  await fetchEnvironmentSshConnectionStates(environmentId, targets, generation)
 }
 
 /**
@@ -103,11 +118,19 @@ export async function hydrateRuntimeEnvironmentSshState(
   }
   const entry: HydrationEntry = { promise: Promise.resolve(), rerunRequested: false }
   entry.promise = (async () => {
+    let lastError: unknown = null
     try {
-      await runEnvironmentSshHydration(environmentId)
-      while (entry.rerunRequested) {
+      do {
         entry.rerunRequested = false
-        await runEnvironmentSshHydration(environmentId)
+        try {
+          await runEnvironmentSshHydration(environmentId)
+          lastError = null
+        } catch (error) {
+          lastError = error
+        }
+      } while (entry.rerunRequested)
+      if (lastError) {
+        throw lastError
       }
     } finally {
       hydrationsInFlight.delete(environmentId)
@@ -128,12 +151,16 @@ export async function hydrateRuntimeEnvironmentSshState(
 export function applyRuntimeEnvironmentSshStateChanged(
   environmentId: string,
   targetId: string,
-  state: SshConnectionState
+  state: SshConnectionState,
+  generation = getEnvironmentSshStateGeneration(environmentId)
 ): void {
+  if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
+    return
+  }
   const store = useAppStore.getState()
   const bucket = store.sshStateByEnvironment.get(environmentId)
   if (bucket?.targetsHydrated && bucket.targetLabels.has(targetId)) {
-    store.setEnvironmentSshConnectionState(environmentId, targetId, state)
+    store.setEnvironmentSshConnectionState(environmentId, targetId, state, generation)
     return
   }
   void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
@@ -146,6 +173,7 @@ export async function connectRuntimeEnvironmentSshTarget(
   environmentId: string,
   targetId: string
 ): Promise<SshConnectionState | null> {
+  const generation = getEnvironmentSshStateGeneration(environmentId)
   const { state } = await callRuntimeRpc<{ state: SshConnectionState | null }>(
     environmentTarget(environmentId),
     'ssh.connect',
@@ -153,7 +181,9 @@ export async function connectRuntimeEnvironmentSshTarget(
     { timeoutMs: 60_000 }
   )
   if (state) {
-    useAppStore.getState().setEnvironmentSshConnectionState(environmentId, targetId, state)
+    useAppStore
+      .getState()
+      .setEnvironmentSshConnectionState(environmentId, targetId, state, generation)
   }
   return state
 }
@@ -161,5 +191,8 @@ export async function connectRuntimeEnvironmentSshTarget(
 /** Resyncs the environment's target metadata after a failed connect so a
  * stale overlay converges to the ghost/re-adopted state (STA-1468). */
 export async function resyncRuntimeEnvironmentSshTargets(environmentId: string): Promise<void> {
-  await syncEnvironmentSshTargetMetadata(environmentId)
+  await syncEnvironmentSshTargetMetadata(
+    environmentId,
+    getEnvironmentSshStateGeneration(environmentId)
+  )
 }

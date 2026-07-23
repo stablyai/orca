@@ -15,6 +15,7 @@ export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-rea
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -57,6 +58,7 @@ import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -462,6 +464,11 @@ function getProvider(connectionId: string | null | undefined): IPtyProvider {
 function getProviderForPty(ptyId: string): IPtyProvider {
   const connectionId = ptyOwnership.get(ptyId)
   if (connectionId === undefined) {
+    const parsedSshId = parseAppSshPtyId(ptyId)
+    if (parsedSshId) {
+      // Why: disconnected SSH PTYs retain their encoded owner and must never fall through to the HUB-local provider.
+      return getProvider(parsedSshId.connectionId)
+    }
     return localProvider
   }
   return getProvider(connectionId)
@@ -1580,6 +1587,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
+  ipcMain.removeHandler('pty:inspectProcess')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
@@ -2458,6 +2466,7 @@ export function registerPtyHandlers(
   }
 
   const syntheticKillExitPtyIds = new Map<string, NodeJS.Timeout>()
+  const reversibleStopOwnersByPtyId = new Map<string, number>()
 
   function rememberSyntheticKillExit(id: string): void {
     const existing = syntheticKillExitPtyIds.get(id)
@@ -2523,7 +2532,10 @@ export function registerPtyHandlers(
     // Why: the renderer also drops its cumulative total on pty:exit, so a reused id restarts aligned at zero on both sides.
     rendererDeliveryAccountingByPty.delete(payload.id)
     recordPtyRendererDeliveryPressure()
-    mainWindow.webContents.send('pty:exit', payload)
+    mainWindow.webContents.send('pty:exit', {
+      ...payload,
+      ...(reversibleStopOwnersByPtyId.has(payload.id) ? { preserveRendererBinding: true } : {})
+    })
   }
 
   async function shutdownProviderAndDetectExit(
@@ -3201,7 +3213,9 @@ export function registerPtyHandlers(
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
+      let releaseWorktreeSpawn: (() => void) | undefined
       try {
+        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
         try {
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
@@ -3435,14 +3449,22 @@ export function registerPtyHandlers(
         }
         if (hostSessionBinding) {
           try {
-            hostSessionBinding.store.persistPtyBinding({
+            const binding = {
               worktreeId: hostSessionBinding.worktreeId,
               tabId: hostSessionBinding.tabId,
               leafId: hostSessionBinding.leafId,
               ptyId: result.id,
               ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
               ...(cwd ? { startupCwd: cwd } : {})
-            })
+            }
+            if (args.connectionId) {
+              hostSessionBinding.store.persistPtyBinding(
+                binding,
+                toSshExecutionHostId(args.connectionId)
+              )
+            } else {
+              hostSessionBinding.store.persistPtyBinding(binding)
+            }
           } catch (err) {
             console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
             deletePtyOwnership(result.id)
@@ -3551,13 +3573,13 @@ export function registerPtyHandlers(
         rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, err)
         throw err
       } finally {
+        releaseWorktreeSpawn?.()
         finishTerminalInstall()
       }
     },
     write: (ptyId, data) => {
-      const provider = getProviderForPty(ptyId)
       try {
-        provider.write(ptyId, data)
+        getProviderForPty(ptyId).write(ptyId, data)
         return true
       } catch {
         return false
@@ -3623,6 +3645,26 @@ export function registerPtyHandlers(
         return true
       }
       return killWithCurrentProvider()
+    },
+    markReversibleStops: (ptyIds) => {
+      for (const ptyId of ptyIds) {
+        reversibleStopOwnersByPtyId.set(ptyId, (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) + 1)
+      }
+      let released = false
+      return () => {
+        if (released) {
+          return
+        }
+        released = true
+        for (const ptyId of ptyIds) {
+          const owners = (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) - 1
+          if (owners > 0) {
+            reversibleStopOwnersByPtyId.set(ptyId, owners)
+          } else {
+            reversibleStopOwnersByPtyId.delete(ptyId)
+          }
+        }
+      }
     },
     stopAndWait: async (ptyId, opts) => {
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
@@ -3712,6 +3754,7 @@ export function registerPtyHandlers(
         return null
       }
     },
+    inspectProcess: async (ptyId) => inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId),
     confirmForegroundProcess: async (ptyId) => {
       try {
         const provider = getProviderForPty(ptyId)
@@ -4305,7 +4348,9 @@ export function registerPtyHandlers(
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
+      let releaseWorktreeSpawn: (() => void) | undefined
       try {
+        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
         try {
           if (preAllocatedHandle) {
             trustedTerminalHandleEnv.add(preAllocatedHandle)
@@ -4478,14 +4523,19 @@ export function registerPtyHandlers(
           validatedLeafId !== null
         ) {
           try {
-            store.persistPtyBinding({
+            const binding = {
               worktreeId: args.worktreeId,
               tabId: args.tabId,
               leafId: validatedLeafId,
               ptyId: result.id,
               ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
               ...(cwd ? { startupCwd: cwd } : {})
-            })
+            }
+            if (args.connectionId) {
+              store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
+            } else {
+              store.persistPtyBinding(binding)
+            }
           } catch (err) {
             console.error('[pty] failed to persist PTY binding after spawn:', err)
             if (!result.isReattach) {
@@ -4683,6 +4733,7 @@ export function registerPtyHandlers(
         rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
         throw err
       } finally {
+        releaseWorktreeSpawn?.()
         finishTerminalInstall()
       }
     }
@@ -5287,6 +5338,10 @@ export function registerPtyHandlers(
       }
       return getProviderForPty(args.id).getForegroundProcess(args.id)
     }
+  )
+
+  ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) =>
+    inspectPtyProviderProcess(getProviderForPty(args.id), args.id)
   )
 
   ipcMain.handle(

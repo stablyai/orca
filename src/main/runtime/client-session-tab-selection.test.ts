@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
+import type { PersistedMobileClientTabSelections } from '../../shared/types'
 import {
   activateClientSessionTabSelection,
   ClientSessionTabSelectionStore,
   deriveClientSessionTabSelection,
   projectClientSessionTabSelection
 } from './client-session-tab-selection'
+import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
 
 function snapshot(activeTabId = 'terminal-a::leaf-a'): RuntimeMobileSessionTabsResult {
   const tabs = [
@@ -137,5 +139,148 @@ describe('client session-tab selection', () => {
     expect(projected.activeTabId).toBe('terminal-a::leaf-a')
     expect(projected.activeGroupId).toBe('group-left')
     expect(projected.tabs.find((tab) => tab.isActive)?.id).toBe('terminal-a::leaf-a')
+  })
+
+  it('persists activations and restores them across a store rebuild (host restart)', () => {
+    const persisted: PersistedMobileClientTabSelections[] = []
+    const store = new ClientSessionTabSelectionStore()
+    store.setPersistListener((state) => persisted.push(state))
+
+    store.activate(snapshot(), 'device-a', 'browser-unified')
+
+    expect(persisted).toHaveLength(1)
+    expect(persisted[0]?.['device-a']?.['wt-1']?.activeTabId).toBe('browser-unified')
+
+    const restarted = new ClientSessionTabSelectionStore()
+    restarted.hydrate(persisted[0]!)
+    const projected = restarted.project(snapshot(), 'device-a')
+
+    expect(projected.activeTabId).toBe('browser-unified')
+    expect(projected.tabs.find((tab) => tab.isActive)?.id).toBe('browser-unified')
+    expect(restarted.project(snapshot(), 'device-b').activeTabId).toBe('terminal-a::leaf-a')
+  })
+
+  it('persists forgetClient and forgetWorktree removals', () => {
+    const persisted: PersistedMobileClientTabSelections[] = []
+    const store = new ClientSessionTabSelectionStore()
+    store.activate(snapshot(), 'device-a', 'browser-unified')
+    store.setPersistListener((state) => persisted.push(state))
+
+    store.forgetWorktree('wt-1')
+    expect(persisted.at(-1)).toEqual({})
+
+    store.activate(snapshot(), 'device-a', 'browser-unified')
+    store.forgetClient('device-a')
+    expect(persisted.at(-1)).toEqual({})
+    // Why: forgetting state that is already gone must not rewrite the persisted file.
+    const writes = persisted.length
+    store.forgetClient('device-a')
+    store.forgetWorktree('wt-1')
+    expect(persisted.length).toBe(writes)
+  })
+
+  it('moves persisted selections when a worktree identity changes', () => {
+    const persisted: PersistedMobileClientTabSelections[] = []
+    const store = new ClientSessionTabSelectionStore()
+    store.activate(snapshot(), 'device-a', 'browser-unified')
+    store.setPersistListener((state) => persisted.push(state))
+
+    store.migrateWorktree('wt-1', 'wt-renamed')
+
+    expect(persisted).toEqual([
+      {
+        'device-a': {
+          'wt-renamed': {
+            activeTabId: 'browser-unified',
+            activeGroupId: 'group-right',
+            activeTabIdByGroupId: {
+              'group-left': 'terminal-a',
+              'group-right': 'browser-unified'
+            }
+          }
+        }
+      }
+    ])
+    expect(store.project({ ...snapshot(), worktree: 'wt-renamed' }, 'device-a').activeTabId).toBe(
+      'browser-unified'
+    )
+  })
+
+  it('does not persist topology-only projections from unrelated worktrees', () => {
+    const persisted: PersistedMobileClientTabSelections[] = []
+    const store = new ClientSessionTabSelectionStore()
+    store.setPersistListener((state) => persisted.push(state))
+
+    store.project({ ...snapshot(), worktree: 'listed-only' }, 'device-a')
+    store.activate(snapshot(), 'device-a', 'browser-unified')
+
+    expect(persisted).toEqual([
+      {
+        'device-a': {
+          'wt-1': {
+            activeTabId: 'browser-unified',
+            activeGroupId: 'group-right',
+            activeTabIdByGroupId: { 'group-right': 'browser-unified' }
+          }
+        }
+      }
+    ])
+
+    store.forgetWorktree('listed-only')
+    expect(persisted).toHaveLength(1)
+  })
+
+  it('does not let an empty snapshot wipe a hydrated selection before tabs arrive', () => {
+    const store = new ClientSessionTabSelectionStore()
+    store.hydrate({
+      'device-a': {
+        'wt-1': { activeTabId: 'browser-unified', activeGroupId: null, activeTabIdByGroupId: {} }
+      }
+    })
+
+    const empty = {
+      ...snapshot(),
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabGroups: [],
+      tabs: []
+    }
+    expect(store.project(empty, 'device-a').activeTabId).toBeNull()
+
+    expect(store.project(snapshot(), 'device-a').activeTabId).toBe('browser-unified')
+  })
+
+  it('drops malformed persisted payloads instead of hydrating them', () => {
+    expect(
+      normalizePersistedMobileClientTabSelections({
+        'device-a': {
+          'wt-1': { activeTabId: 'tab-1', activeGroupId: null, activeTabIdByGroupId: { g: 'tab' } },
+          'wt-bad': { activeTabId: 42, activeGroupId: null, activeTabIdByGroupId: { g: 7 } }
+        },
+        'device-bad': 'nope',
+        'device-empty': {}
+      })
+    ).toEqual({
+      'device-a': {
+        'wt-1': { activeTabId: 'tab-1', activeGroupId: null, activeTabIdByGroupId: { g: 'tab' } }
+      }
+    })
+    expect(normalizePersistedMobileClientTabSelections(null)).toEqual({})
+    expect(normalizePersistedMobileClientTabSelections('garbage')).toEqual({})
+    expect(normalizePersistedMobileClientTabSelections([{ 'wt-1': {} }])).toEqual({})
+    expect(
+      normalizePersistedMobileClientTabSelections({
+        'device-array': [{ activeTabId: 'tab-1' }],
+        'device-selection-array': { 'wt-1': ['tab-1'] },
+        'device-group-array': {
+          'wt-1': { activeTabId: 'tab-1', activeGroupId: null, activeTabIdByGroupId: ['tab-1'] }
+        }
+      })
+    ).toEqual({
+      'device-group-array': {
+        'wt-1': { activeTabId: 'tab-1', activeGroupId: null, activeTabIdByGroupId: {} }
+      }
+    })
   })
 })

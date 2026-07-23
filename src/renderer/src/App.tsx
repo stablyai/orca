@@ -345,6 +345,9 @@ const SshPassphraseDialog = lazy(() =>
 const UpdateCard = lazy(() =>
   import('./components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
 )
+const RemoteServerUpdateDialog = lazy(
+  () => import('./components/settings/RemoteServerUpdateDialog')
+)
 const ContextualTourOverlay = lazy(() =>
   import('./components/contextual-tours/ContextualTourOverlay').then((module) => ({
     default: module.ContextualTourOverlay
@@ -456,6 +459,7 @@ function App(): React.JSX.Element {
       setRightSidebarTab: s.setRightSidebarTab,
       showRightSidebarFiles: s.showRightSidebarFiles,
       showRightSidebarSearch: s.showRightSidebarSearch,
+      openDiffNotesSendMenuForActiveWorktree: s.openDiffNotesSendMenuForActiveWorktree,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -855,31 +859,71 @@ function App(): React.JSX.Element {
             hydratePersistedUI: actions.hydratePersistedUI
           })
         )
-        const startupRuntimeHostIds = await timeRendererStartupStep(
+        // Why: list-runtime-session-hosts reads no repo state, so overlap it with the repo scan
+        // instead of paying its IPC round-trip serially before repos. .catch marks rejections handled
+        // if an earlier await throws first; the value is awaited below and surfaces any error there.
+        const runtimeHostsPromise = timeRendererStartupStep(
           'list-runtime-session-hosts',
           listRuntimeSessionHostIdsForStartup
         )
+        runtimeHostsPromise.catch(() => {})
         // Why: saved remote runtimes can spend the full connect timeout; load only the local catalog for first paint and refresh remotes after hydration.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
         )
-        await timeRendererStartupStep('fetch-project-groups-local', () =>
-          actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
-        )
-        await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
-          actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
-        )
-        await timeRendererStartupStep('fetch-worktrees', () =>
-          actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
-        )
-        // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
-        const sessionRead = await timeRendererStartupStep('session-get', () =>
-          fetchWorkspaceSessionWithRuntimeHostOwners(
-            window.api.session,
-            useAppStore.getState().repos,
-            startupRuntimeHostIds
+        // Why: folder workspaces merge against projectGroups (repos.ts fetchFolderWorkspacesForAllHosts),
+        // so keep this two-step catalog chain internally ordered; it is otherwise independent of
+        // repos/worktrees/session and overlaps the worktree scan below.
+        const localCatalogChain = (async () => {
+          await timeRendererStartupStep('fetch-project-groups-local', () =>
+            actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
+          )
+          await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
+            actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+          )
+        })()
+        // Why: chain session-get off runtimeHostsPromise instead of awaiting the host ids here, so
+        // fetch-worktrees and the catalog chain start immediately (neither needs the ids) — awaiting
+        // the host-list IPC first would re-serialize the worktree scan behind host discovery when the
+        // IPC is the slower of the two. Only session-get waits on the ids.
+        const sessionReadPromise = runtimeHostsPromise.then((startupRuntimeHostIds) =>
+          // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
+          timeRendererStartupStep('session-get', () =>
+            fetchWorkspaceSessionWithRuntimeHostOwners(
+              window.api.session,
+              useAppStore.getState().repos,
+              startupRuntimeHostIds
+            )
           )
         )
+        // Why: once repos is loaded, fetch-worktrees (snapshots repos), session-get (repos-independent
+        // local disk read), and the local catalog chain are mutually independent — run them concurrently
+        // so the two disk reads hide behind the O(repos) worktree git scan (the startup long pole).
+        // fetchAllWorktrees({hydrationPurge:'defer'}) returns before its folderWorkspaces read (the purge
+        // guard in worktrees.ts), so it needs no catalog ordering here. session-get is a pure read;
+        // hydrate-session-stores below still runs only after all three settle. See #18.
+        // Why (#18 review): join on allSettled, NOT fail-fast Promise.all. A fast rejection from one branch
+        // would drop into the catch/recovery path (which reconnects terminals and flips readiness) while a
+        // sibling hydration task is still in flight and mutating catalog/worktree state — the old serial flow
+        // guaranteed no hydration step ran during recovery. Wait for all three to settle, then surface the
+        // first rejection so recovery still triggers, but only once nothing is left writing to the store.
+        const [worktreesOutcome, sessionOutcome, catalogOutcome] = await Promise.allSettled([
+          timeRendererStartupStep('fetch-worktrees', () =>
+            actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
+          ),
+          sessionReadPromise,
+          localCatalogChain
+        ])
+        if (worktreesOutcome.status === 'rejected') {
+          throw worktreesOutcome.reason
+        }
+        if (sessionOutcome.status === 'rejected') {
+          throw sessionOutcome.reason
+        }
+        if (catalogOutcome.status === 'rejected') {
+          throw catalogOutcome.reason
+        }
+        const sessionRead = sessionOutcome.value
         await keybindingsPromise
         if (!cancelled) {
           const sessionHydrationOptions = {
@@ -1673,6 +1717,15 @@ function App(): React.JSX.Element {
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
         return
+      }
+
+      // Unbound by default; opens the active worktree's Source Control notes send picker. Only consumes the chord when there are unsent notes.
+      if (matchShortcut('sourceControl.sendReviewNotes')) {
+        if (actions.openDiffNotesSendMenuForActiveWorktree()) {
+          input.preventDefault()
+          notifyTerminalCapture('sourceControl.sendReviewNotes')
+          return
+        }
       }
 
       if (matchShortcut('sidebar.checks.toggle')) {
@@ -2535,6 +2588,15 @@ function App(): React.JSX.Element {
             >
               <SkillFreshnessUpdateDialog />
             </RecoverableRenderErrorBoundary>
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.remote-server-update-dialog"
+                surface="overlay"
+                compact
+              >
+                <RemoteServerUpdateDialog />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
       </TooltipProvider>

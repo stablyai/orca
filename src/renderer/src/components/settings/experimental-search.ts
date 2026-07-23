@@ -249,7 +249,7 @@ export function getExperimentalSearchEntry() {
       )
     ),
     nativeChat: findEntry(
-      translate('auto.components.settings.experimental.search.nativeChat.title', 'Native chat')
+      translate('auto.components.settings.experimental.search.nativeChat.title', 'Chat UI')
     ),
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')

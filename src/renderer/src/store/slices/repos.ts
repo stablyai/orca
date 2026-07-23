@@ -86,10 +86,13 @@ import { isRemovedRuntimeHostId } from './stale-runtime-host-rows'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
+import { getEnvironmentSshStateGeneration } from './runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
 
 const ERROR_TOAST_DURATION = 60_000
 const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
 const safeAutoForkSyncAttempts = new Map<string, { attemptedAt: number; promise?: Promise<void> }>()
+const runtimeRepoFetchGenerationByEnvironment = new Map<string, number>()
 
 export type RepoUpdate = Partial<
   Pick<
@@ -379,13 +382,17 @@ function setupWithFetchedOwner(
   target: ReturnType<typeof getActiveRuntimeTarget>
 ): ProjectHostSetup {
   const hostId = getRuntimeTargetHostId(target)
-  if (target.kind !== 'environment' || setup.hostId !== LOCAL_EXECUTION_HOST_ID) {
+  if (target.kind !== 'environment') {
     return setup
   }
+  const executionHostId = setup.executionHostId ?? setup.hostId
   return {
     ...setup,
     hostId,
-    executionHostId: hostId
+    executionHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? hostId : executionHostId,
+    runtimeOwnerEnvironmentId: target.environmentId,
+    // Why: paired clients route through the HUB and must not treat its private SSH target as client-local configuration.
+    connectionId: null
   }
 }
 
@@ -630,7 +637,12 @@ function mergeProjectHostSetupCompatibility(
 }
 
 function getProjectHostSetupOwnerKey(setup: ProjectHostSetup): string {
-  return `${setup.hostId}:${setup.repoId || setup.id}`
+  return JSON.stringify([
+    setup.hostId,
+    setup.executionHostId ?? setup.hostId,
+    setup.runtimeOwnerEnvironmentId ?? null,
+    setup.repoId || setup.id
+  ])
 }
 
 function mergeProjectHostSetupsByOwner(
@@ -1593,11 +1605,29 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   fetchRuntimeEnvironmentRepos: async (environmentId) => {
+    const requestGeneration = (runtimeRepoFetchGenerationByEnvironment.get(environmentId) ?? 0) + 1
+    runtimeRepoFetchGenerationByEnvironment.set(environmentId, requestGeneration)
+    const connectionGeneration = getEnvironmentSshStateGeneration(environmentId)
+    const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
     try {
       const target = { kind: 'environment' as const, environmentId }
       const catalog = await fetchRepoCatalogForTarget(target)
+      if (
+        runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
+        getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
+        getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
+      ) {
+        return []
+      }
       let finalizedHostRepos: Repo[] = []
       set((s) => {
+        if (
+          runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
+          getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
+          getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
+        ) {
+          return s
+        }
         // Why: skip merging a runtime env removed while this Connect-flow fetch was in flight, so purged repos aren't re-added (#8881).
         if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
           return s

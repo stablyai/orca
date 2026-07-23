@@ -3092,7 +3092,7 @@ describe('OrcaRuntimeRpcServer', () => {
         id: 'req_resolve_pane',
         authToken: metadata!.authToken,
         method: 'terminal.resolvePane',
-        params: { paneKey: `tab-right:${bottomLeaf}` }
+        params: { paneKey: `tab-right:${bottomLeaf}`, worktreeId }
       })
       expect(resolvePaneResponse).toMatchObject({
         id: 'req_resolve_pane',
@@ -3102,9 +3102,22 @@ describe('OrcaRuntimeRpcServer', () => {
             handle: handleByLeaf.get(bottomLeaf),
             tabId: 'tab-right',
             leafId: bottomLeaf,
-            ptyId: 'pty-bottom'
+            ptyId: 'pty-bottom',
+            worktreeId
           }
         }
+      })
+
+      const wrongOwnerResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_resolve_pane_wrong_owner',
+        authToken: metadata!.authToken,
+        method: 'terminal.resolvePane',
+        params: { paneKey: `tab-right:${bottomLeaf}`, worktreeId: 'other-worktree' }
+      })
+      expect(wrongOwnerResponse).toMatchObject({
+        id: 'req_resolve_pane_wrong_owner',
+        ok: false,
+        error: { message: 'terminal_not_found' }
       })
     } finally {
       await server.stop()

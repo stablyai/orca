@@ -1387,7 +1387,10 @@
       "surfaces": [
         "remote agent launch and explicit resume",
         "multi-client remote runtime sessions",
+        "headed desktop remote-server pairing",
+        "headless remote-server parity",
         "daemon and relay reconnect",
+        "remote completion classification across disconnect and reconnect",
         "terminal exit retirement and restart restore",
         "mixed-version fallback"
       ],
@@ -1410,21 +1413,39 @@
         "local",
         "daemon",
         "ssh",
+        "wsl",
         "remote-runtime"
       ],
-      "coverageNotes": "Deterministic macOS tests cover controller claims, daemon and SSH/relay operation replay, mixed-version selection, runtime ownership, exact provisional handoff, and durable terminal retirement. The real repro runs two independent clients against one headless remote Orca runtime over the encrypted pairing path and a real daemon-backed PTY. SSH coverage is contract/fault-injection coverage; WSL and live SSH hosts remain gaps.",
+      "coverageNotes": "Deterministic macOS tests cover controller claims, daemon and SSH/relay operation replay, mixed-version selection, runtime ownership, exact provisional handoff, durable terminal retirement, two independent viewer mirrors, guarded adoption of legacy live PTYs, and completion classification when either the outer remote transport or authoritative host/provider process inspection becomes unreachable. The adoption harness models v1.4.150 agent/setup/shell tabs, current-generation restart and reconnect, exact handle/incarnation/worktree/host checks, topology CAS, competing clients, split-pane/group restoration, WSL ownership, and SSH owner rejection. The secondary parity repro runs independent clients against one headless remote Orca runtime over encrypted pairing and a real daemon-backed PTY. The primary headed topology was exercised with an isolated macOS Orca desktop server, a separate paired Edge client, a real Codex process, injected WebSocket loss, reconnect, and explicit stop; host inspection and visible client state agreed throughout. SSH coverage is provider/relay contract and fault-injection coverage only; it does not substitute for paired-server coverage. Live Windows, Linux, WSL, and SSH hosts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8878",
+        "https://github.com/stablyai/orca/issues/9151",
         "https://github.com/stablyai/orca/issues/9352",
         "https://github.com/stablyai/orca/pull/9687"
       ],
-      "invariant": "For every claim-capable execution route, one provider-session identity has at most one live PTY owner and one canonical host surface across concurrent clients, retries, reconnects, and stale publications. A physical exit retires that exact incarnation durably so stale client state and host restart cannot recreate it. Mixed-version routes select the unchanged legacy request before any authority side effect or execution-owner-local filesystem access.",
-      "oracle": "Race independent clients and repeated operation IDs, then assert one physical spawn and one canonical PTY/surface; inject exit-before-reply, provider disconnect, conflicting claim scope, and old daemon/relay capabilities; assert safe adoption or explicit failure without a second spawn. After exact exit, assert terminal and tab listings omit the surface, a stale publication cannot restore it, restart cannot resurrect it, and an exact provisional handoff is consumed even when exit wins before the next snapshot.",
+      "invariant": "For every claim-capable execution route, one provider-session identity has at most one live PTY owner and one canonical host surface across concurrent clients, retries, reconnects, and stale publications. A live orphan may be adopted only when the controller proves its exact handle and incarnation, its worktree and host owner match, no competing visual owner exists, and a host topology CAS wins. A viewer may classify completion only from successful host/provider inspection or explicit lifecycle evidence; transport, handle, or provider unavailability remains unknown and breaks any consecutive-idle proof. A physical exit retires that exact incarnation durably so stale client state and host restart cannot recreate it. Mixed-version routes select the unchanged legacy request before any authority side effect or execution-owner-local filesystem access.",
+      "oracle": "Race independent clients and repeated operation IDs, then assert one physical spawn and one canonical PTY/surface; inject exit-before-reply, provider disconnect, conflicting claim scope, old daemon/relay capabilities, reused handles, stale incarnations, owner mismatch, and topology revision conflict; assert safe adoption or explicit failure without a second spawn or wrong-process attachment. Restore legacy split panes and groups beside a newer host-owned tab, preserving output, input, resize, titles, tab/leaf identity, active group, and multi-client convergence. For completion, drive a known running agent through outer transport loss, authoritative provider rejection, reconnect, explicit stop, real exit status, and successful hook completion; assert unavailable evidence never dispatches completion and two fresh authoritative idle samples are required after the gap. After exact exit, assert terminal and tab listings omit the surface, a stale publication cannot restore it, restart cannot resurrect it, and an exact provisional handoff is consumed even when exit wins before the next snapshot.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/claimed-agent-pty-owner.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/runtime/orca-runtime-agent-session-operation.test.ts src/main/runtime/remote-agent-session-host-authority.integration.test.ts src/main/runtime/orca-runtime-terminal-retirement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts",
-        "pnpm test:repro:remote-agent-session"
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
+        "pnpm test:repro:remote-agent-session",
+        "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-orphan-owner.test.ts src/main/runtime/terminal-orphan-topology.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
       ],
       "testFiles": [
+        "src/main/providers/pty-process-inspection.test.ts",
+        "src/main/daemon/terminal-host.test.ts",
+        "src/main/daemon/daemon-pty-router.test.ts",
+        "src/main/daemon/degraded-daemon-pty-provider.test.ts",
+        "src/relay/pty-handler.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "tests/e2e/remote-agent-completion-authority.unit.test.ts",
+        "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
+        "src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "src/renderer/src/lib/codex-session-restart.test.ts",
         "src/shared/claimed-agent-pty-owner.test.ts",
         "src/main/daemon/daemon-pty-adapter.test.ts",
         "src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts",
@@ -1434,9 +1455,71 @@
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
         "src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts",
         "src/renderer/src/runtime/web-runtime-session.test.ts",
-        "src/renderer/src/runtime/web-session-tabs-sync.test.ts"
+        "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
+        "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/terminal-orphan-owner.test.ts",
+        "src/main/runtime/terminal-orphan-topology.test.ts",
+        "src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts",
+        "src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "completion-sensitive process inspection preserves authoritative host/provider failures"
+          ]
+        },
+        {
+          "file": "src/main/providers/pty-process-inspection.test.ts",
+          "assertions": [
+            "dedicated provider inspection preserves failures and rejects missing PTYs instead of returning idle evidence"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-router.test.ts",
+          "assertions": [
+            "completion inspection rejects an unmapped session instead of borrowing the current daemon"
+          ]
+        },
+        {
+          "file": "src/main/daemon/degraded-daemon-pty-provider.test.ts",
+          "assertions": [
+            "completion inspection rejects an unmapped session instead of borrowing the local fallback"
+          ]
+        },
+        {
+          "file": "src/relay/pty-handler.test.ts",
+          "assertions": [
+            "strict relay inspection rejects a missing PTY"
+          ]
+        },
+        {
+          "file": "tests/e2e/remote-agent-completion-authority.unit.test.ts",
+          "assertions": [
+            "transport loss remains unknown through reconnect and cannot dispatch completion",
+            "returned unavailability or a thrown transport failure interrupts consecutive-idle proof and requires two fresh authoritative idle samples",
+            "explicit stop, real exit status, and genuine successful completion remain distinct"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
+          "assertions": [
+            "direct SSH terminals use strict main-process inspection rather than lax split IPC evidence"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "completion polling uses the atomic process-inspection boundary without regressing established lifecycle behavior"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/codex-session-restart.test.ts",
+          "assertions": [
+            "one unreachable pane cannot suppress restart notices for another authoritatively confirmed Codex pane"
+          ]
+        },
         {
           "file": "src/shared/claimed-agent-pty-owner.test.ts",
           "assertions": [
@@ -1485,9 +1568,60 @@
             "only an exact structured-create handoff retires its provisional tab",
             "an absent host tab retires its exact provisional handoff only after a causally post-create snapshot while unrelated tabs remain"
           ]
+        },
+        {
+          "file": "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
+          "assertions": [
+            "a durable host exit removes the terminal from two independent viewer mirrors instead of publishing a handle-less phantom",
+            "one exact exit produces one same-epoch higher-version host publication and one durable persistence flush",
+            "same-epoch stale publications cannot resurrect the retired surface after reconnect"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "v1.4.150-shaped agent, setup, and shell PTYs adopt as one CAS transaction while stale incarnation and competing clients fail safely",
+            "current-generation restart and disconnect/reconnect preserve output, input, resize, title, tab, leaf, handle, and incarnation identity",
+            "split-pane and multi-group legacy topology merges beside a newer host-owned terminal without replacing it",
+            "equivalent Windows and separator-normalized persisted worktree keys canonicalize without duplicate terminal topology",
+            "connection mismatch, reused handles, SSH ownership mismatch, and stale topology revisions cannot claim a live PTY while WSL ownership succeeds"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts",
+          "assertions": [
+            "absence stays pending until an exact live orphan adoption settles",
+            "client pane and group topology is pruned to exact orphan claims and translated to host tab identities",
+            "a missing split leaf remains recoverable when another leaf in the same tab is already host-owned"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts",
+          "assertions": [
+            "mixed-version inventory without incarnation evidence remains visible but cannot adopt",
+            "a truncated legacy unfiltered inventory cannot hide a candidate whose liveness is unresolved"
+          ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-07-22",
+          "runner": "manual",
+          "platform": "macos",
+          "command": "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop",
+          "result": "passed",
+          "durationSeconds": 549,
+          "summary": "The primary user topology used an isolated headed Orca desktop as the owning server and a separate paired Edge client. Host inspection reported Codex alive before, during, and after a page-scoped WebSocket fault; the client showed no completion toast, reconnected to the same live Codex TUI, and explicit stop restored the shell prompt with no child process."
+        },
+        {
+          "date": "2026-07-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/lib/codex-session-restart.test.ts",
+          "result": "passed",
+          "durationSeconds": 11.96,
+          "summary": "Eleven focused files and 870 tests passed on the current-main candidate. The cross-boundary harness fails with the implementation reverted by dispatching process-exit from unavailable remote evidence. Direct SSH uses strict main-process inspection, daemon and relay inspection reject missing or unmapped sessions, the terminal lifecycle suite uses the atomic inspection boundary, and one stale pane cannot suppress restart notices for a separately confirmed Codex pane."
+        },
         {
           "date": "2026-07-21",
           "runner": "local",
@@ -1498,13 +1632,40 @@
           "summary": "Ten focused files and 325 tests passed after the final review fixes, covering claim scope, mixed-version Pi/SSH fallback ordering, operation replay, terminal retirement, causal inventory fencing, exact concurrent handoff confirmation, daemon-generation integration, transport behavior, and remote host integration."
         },
         {
-          "date": "2026-07-21",
+          "date": "2026-07-22",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm test:repro:remote-agent-session",
           "result": "passed",
-          "durationSeconds": 48.47,
-          "summary": "The build-backed headless remote Orca harness passed over encrypted WebSocket pairing with two independent clients, proving one spawn, retry adoption, durable exit retirement, stale-publication rejection, and no restart resurrection."
+          "durationSeconds": 48.63,
+          "summary": "The secondary build-backed headless parity harness passed post-rebase on main@72a2d7bc7 over encrypted WebSocket pairing with independent clients, proving one spawn, retry adoption, durable exit retirement, stale-publication rejection, and no restart resurrection."
+        },
+        {
+          "date": "2026-07-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
+          "result": "failed",
+          "durationSeconds": 3.11,
+          "summary": "The exact cross-boundary oracle failed on pre-#9687 commit 2a32c5c9a because the retired publication still contained the pinned persisted terminal surface."
+        },
+        {
+          "date": "2026-07-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
+          "result": "failed",
+          "durationSeconds": 3.48,
+          "summary": "The exact strengthened oracle failed on PR #9053 head d3a1d3047 because its stale-headless pruning retained the pinned persisted terminal surface."
+        },
+        {
+          "date": "2026-07-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.18,
+          "summary": "The same strengthened oracle passed on main@4fce2de49."
         }
       ],
       "runtimeBudget": {
@@ -1517,24 +1678,165 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The motivating remote-client duplicate-resume and exited-surface repros are encoded in deterministic lower-layer tests and the real remote harness; saved CI red/green artifacts are still needed."
+        "evidence": "Issue #9151 has local red/green evidence: current main dispatches process-exit from a stale remote handle, while the fix preserves unknown liveness and requires fresh consecutive idle evidence after reconnect. The exact retirement oracle is red on pre-#9687 commit 2a32c5c9a and PR #9053 head d3a1d3047 because the pinned persisted surface remains in the host publication, and green on main@4fce2de49. Duplicate-resume red evidence remains encoded in lower-layer tests; saved CI artifacts are still needed."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Agent-session reconciliation runs only at explicit claim admission, dedupes concurrent provider listing, and adds no polling or renderer output work. Create-operation ledgers are capped globally and per client, expire after 24 hours, and reject rather than evict live replay fences. Capability caches are bounded or connection-scoped, and exact handoffs are consumed by the next authoritative snapshot."
+        "evidence": "Agent-session reconciliation runs only at explicit claim admission, dedupes concurrent provider listing, and adds no polling or renderer output work. Completion inspection reuses the coordinator's per-pane in-flight guard, global concurrency/rate queue, and existing error backoff; the strict daemon path reduces two foreground RPCs to one. Create-operation ledgers are capped globally and per client, expire after 24 hours, and reject rather than evict live replay fences. Capability caches are bounded or connection-scoped, and exact handoffs are consumed by the next authoritative snapshot."
       },
       "promotionCriteria": [
         "Run the focused gate and remote-server repro for at least 100 consecutive passes or 14 days across required CI platforms.",
         "Attach saved red/green evidence for duplicate remote resume and exit-before-snapshot retirement.",
-        "Add live Linux/Windows and SSH/WSL provider evidence before claiming full platform/provider coverage."
+        "Automate the headed Orca desktop-server journey with a separate paired client; add a physical host only when OS, ConPTY, update, sleep, firewall, or window lifecycle is causal.",
+        "Add live SSH/WSL provider evidence before claiming full provider coverage; Docker SSH proves only the SSH provider/relay path."
       ],
       "knownGaps": [
-        "The real remote-server harness currently runs on macOS and uses a local daemon-backed execution owner; Linux and Windows runs remain uncollected.",
-        "SSH and relay failure ordering is deterministic contract coverage, not a live SSH-host journey; WSL has no provider-specific run.",
+        "The primary headed macOS desktop-server journey is collected but not automated in CI; Windows and Linux window, ConPTY, update, sleep/wake, and firewall behavior remain uncollected.",
+        "Mixed-version pairings remain conservative only when the completion-aware client and strict-inspection host changes are both present; older peers retain their legacy classification behavior.",
+        "The secondary headless parity harness runs on macOS with a local daemon-backed execution owner and independent short-lived encrypted RPC clients; two persistent viewer-store mirrors and reconnect ordering are joined deterministically in the cross-boundary unit test rather than mounted live.",
+        "SSH and relay failure ordering is deterministic provider-contract coverage, not a live SSH-host journey or paired-Orca-server proof; WSL has no provider-specific run, and Linux and Windows runs remain uncollected.",
         "Fresh-launch operation replay is memory-backed and intentionally does not survive runtime restart; a durable operation journal is a documented future extension.",
         "Automatic sleep checkpoints, verified nested-SSH execution namespaces, and multi-process profile coordination remain outside v1."
       ],
       "demotionRule": "Keep experimental or demote if the focused gate flakes without a product or harness bug, if a retry can physically spawn twice, if a stale exit/publication can replace or resurrect a terminal, or if mixed-version fallback occurs after an authority side effect."
+    },
+    {
+      "id": "runtime-routing.active-server-preference",
+      "title": "Active Server changes only through its explicit Advanced control",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-routing",
+      "layer": "main-preload-renderer-persistence-contract",
+      "surfaces": [
+        "Advanced Active Server setting",
+        "saved server Connect and Disconnect",
+        "remote workspace navigation",
+        "terminal reveal and create",
+        "browser and mobile handoff",
+        "app restart"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows",
+        "mobile"
+      ],
+      "providers": [
+        "local",
+        "remote-runtime",
+        "ssh",
+        "wsl"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "remote-runtime",
+        "ssh",
+        "wsl"
+      ],
+      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, and restart reset of transient routing are covered. Live desktop UI runs remain uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/9687"
+      ],
+      "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Generic settings mutation cannot bypass the dedicated preference IPC.",
+      "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat with multiple clients and servers, browser host switches, remote-owned and local-owned workspaces, pairing/connect/disconnect, and generic settings writes. Assert only the dedicated validated preference method changes activeRuntimeEnvironmentId and stale host-operation completions cannot overwrite the newly selected transient host.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/web/web-preload-api.test.ts --maxWorkers=1"
+      ],
+      "testFiles": [
+        "src/main/ipc/settings.test.ts",
+        "src/main/ipc/runtime-environments.test.ts",
+        "src/renderer/src/store/slices/settings.test.ts",
+        "src/renderer/src/store/slices/browser.test.ts",
+        "src/renderer/src/components/settings/browser-session-host-selection.test.ts",
+        "src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts",
+        "src/renderer/src/components/status-bar/SshStatusSegment.test.ts",
+        "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
+        "src/renderer/src/hooks/useIpcEvents.test.ts",
+        "src/renderer/src/web/web-preload-api.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/settings.test.ts",
+          "assertions": [
+            "generic settings IPC strips activeRuntimeEnvironmentId while the dedicated validated IPC persists it",
+            "invalid preference types and unknown server identities cannot mutate the durable preference"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/useIpcEvents.test.ts",
+          "assertions": [
+            "Local desktop remains the durable default after transient Windows 2 navigation and a focused local terminal reveal succeeds",
+            "local and remote terminal create route by target workspace ownership instead of the durable preference"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/browser.test.ts",
+          "assertions": [
+            "multiple clients select different transient browser hosts without changing Active Server",
+            "restart clears transient browser host override while retaining the durable local preference",
+            "late profile and import results update only their captured host and cannot overwrite a newer selection"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/browser-session-host-selection.test.ts",
+          "assertions": [
+            "a removed transient server override falls back to an available host instead of leaving browser settings on an invalid option"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts",
+          "assertions": [
+            "connection status and the Advanced default-host selection are distinct concepts"
+          ]
+        },
+        {
+          "file": "src/renderer/src/web/web-preload-api.test.ts",
+          "assertions": [
+            "generic web settings writes cannot mutate Active Server",
+            "the dedicated web preference setter rejects unknown server identities without corrupting the saved choice"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/web/web-preload-api.test.ts --maxWorkers=1",
+          "result": "passed",
+          "durationSeconds": 6.55,
+          "summary": "Ten files and 282 tests passed, including the composed Local -> Windows 2 navigation -> local reveal -> restart regression, dedicated-only preference persistence, removed transient-host fallback, multi-client browser routing, late host-operation suppression, and web pairing/preference separation."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "focused persistence and routing contract tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic gate with no soak history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The user-observed local terminal reveal failure and unintended Active Server switch are encoded by deterministic routing and persistence tests; a saved intentional-break artifact is not yet attached."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Preference writes are explicit user actions; transient routing adds no polling and uses existing host/worktree indexes."
+      },
+      "promotionCriteria": [
+        "Run the focused gate in soak across macOS, Linux, and Windows.",
+        "Attach a live Windows Local -> Windows 2 -> local reveal -> restart artifact.",
+        "Attach saved red/green evidence for generic settings mutation and transient connection routing."
+      ],
+      "knownGaps": [
+        "The exact journey is deterministic contract coverage, not a packaged Windows UI automation run.",
+        "Browser/mobile handoff is covered through transient routing state and preload contracts, not a live phone browser session."
+      ],
+      "demotionRule": "Demote or block release if any non-Advanced path mutates Active Server, if local reveal depends on the durable default instead of workspace ownership, or if transient host state survives restart."
     },
     {
       "id": "terminal-geometry.visible-convergence",
@@ -4567,16 +4869,18 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the runtime-RPC stream budgets on main@1282f5c2d. PR #5824 adds a platform-neutral mobile decision gate proving chat-covered terminal streams pause and resume only after the mounted WebView is ready; live Android restore evidence remains required. The pending stack adds byte-exact 512KB/2MB/256KB/48KB budget assertions; legacy JSON subscribe parity remains undecided.",
+      "coverageNotes": "Local macOS evidence covers runtime-RPC stream budgets plus paired-renderer parse/discard credit. Deferred credit is shared by local and remote transports, batches ACKs at 192 KiB or 4 ms, grows per-stream windows from 512 KiB to 2 MiB and aggregate windows from 2 MiB to 8 MiB, bounds queued output to 256 KiB per stream, and caps each multiplex connection at 32 active or pending streams for an 8 MiB aggregate pending-output ceiling. Deterministic tests cover replay ordering, stale generations, malformed frames, hidden panes, queue eviction, disposal, send/recovery failure, repeated pending-slot replacement, reconnect, and round-robin fairness. The opt-in benchmark covers 1/20/100 ms RTT and 1/4/8 viewers, exact protocol-frame allocations, scheduler CPU, and measured @xterm/headless parser CPU/retained heap. Live Android restore evidence, browser/WebGL parser measurements, and legacy JSON subscribe parity remain required.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
         "https://github.com/stablyai/orca/pull/7009"
       ],
-      "invariant": "Runtime and mobile terminal subscriptions must cap initial snapshots, live output buffered while snapshots load, chunk sizes, and batch sizes; a terminal covered by native chat must have no live output subscription and must restore from fresh scrollback when revealed, while preserving output order, input locks, resize/driver events, and fallback parity or explicit fallback deprecation.",
-      "oracle": "The current executable slice asserts mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, binary live output queued while the initial snapshot loads stays <=256KB while preserving the newest tail, large binary output is split into <=48KB frames, output bursts are coalesced before emit, aborts do not register stale listeners, and stale mobile resize re-stream completions are dropped. The mobile native-chat decision test asserts an active stream pauses while covered and resumes only for a ready active terminal. JSON fallback parity and live Android scrollback restoration remain explicit gaps.",
+      "invariant": "Runtime and mobile terminal subscriptions must cap initial snapshots, live output buffered while snapshots load, chunk sizes, batches, and aggregate in-flight credit. ACK means the renderer parsed the bytes or intentionally discarded them; receipt-time ACK is forbidden. Every replay, stale-generation, malformed-frame, hidden-pane, eviction, disposal, error, and reconnect path must settle credit exactly once so streams neither leak memory nor stall. A terminal covered by native chat must restore from fresh scrollback when revealed, while preserving output order, input locks, resize/driver events, fairness, and fallback parity or explicit fallback deprecation.",
+      "oracle": "Assert mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, live output queued while snapshots load stays <=256KB per stream, large output splits into <=48KB frames, and output bursts coalesce. Feed paired output through the xterm parse callback and prove ACK is deferred until parse or intentional discard, then inject stale generation, malformed/transformed frames, replay failure, queue eviction, hidden panes, pane disposal, ACK send failure, recovery serialization failure, and reconnect races; assert ordered replay and exactly-once credit settlement. Fill the aggregate window across bulk and interactive streams, ACK once, and prove round-robin progress. Run the opt-in 64 MiB/viewer RTT matrix and enforce bounded 8 MiB aggregate in-flight memory, >7 MiB/s/viewer at 100 ms RTT, and <200 ms completion spread. JSON fallback parity and live Android scrollback restoration remain explicit gaps.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/terminal-pty-ack-gate.test.ts src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts src/renderer/src/runtime/runtime-terminal-stream.test.ts --maxWorkers=1",
+        "ORCA_TERMINAL_PERF_BENCH=1 pnpm exec vitest run --config config/vitest.config.ts --disableConsoleIntercept src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts",
         "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
         "pnpm --dir mobile exec vitest run --root .. mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
       ],
@@ -4584,6 +4888,12 @@
         "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
         "src/main/runtime/rpc/terminal-output-batching.test.ts",
         "src/main/runtime/rpc/terminal-multiplex.test.ts",
+        "src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-pty-ack-gate.test.ts",
+        "src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts",
+        "src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
+        "src/renderer/src/runtime/runtime-terminal-stream.test.ts",
         "mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
         "mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
       ],
@@ -4608,7 +4918,33 @@
           "assertions": [
             "requested snapshots fall back smaller when serialized data exceeds the send budget",
             "oversized live output frames are bounded for subscribed binary streams",
-            "multibyte live output flushes when encoded bytes reach the batch budget"
+            "multibyte live output flushes when encoded bytes reach the batch budget",
+            "adaptive credit grows only after ACK, stays globally bounded, and drains pending streams round-robin",
+            "send and recovery serialization failures detach once instead of leaking credit or retrying forever",
+            "32 active or pending slots cap aggregate queued output and repeated pending-slot subscribe cancels its older waiter"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts",
+          "assertions": [
+            "nested synchronous deliveries restore the outer credit owner",
+            "unclaimed intentional discards settle automatically while every claimed scheduler child must settle before the parent credits"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
+          "assertions": [
+            "paired renderer ACK waits for xterm parse completion or explicit discard",
+            "192 KiB parsed output batches into one ACK while the 4 ms timer releases interactive output",
+            "malformed frames, malformed transformed output, disposal, late parse, renderer delivery failure, and ACK transport failure release credit or close the owning stream without reordering output"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts",
+          "assertions": [
+            "one through eight viewers stay within the 8 MiB aggregate adaptive window",
+            "the 100 ms RTT model sustains more than 7 MiB/s per viewer with less than 200 ms fairness spread",
+            "the opt-in benchmark reports RTT throughput, scheduler CPU time, exact protocol frame allocations, completion spread, and measured @xterm/headless parser CPU and retained heap"
           ]
         },
         {
@@ -4645,6 +4981,15 @@
           "result": "passed",
           "durationSeconds": 0.2,
           "summary": "The focused mobile native-chat suite passed with 3 terminal-stream lifecycle assertions in the staged PR #5824 worktree."
+        },
+        {
+          "date": "2026-07-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_TERMINAL_PERF_BENCH=1 pnpm exec vitest run --config config/vitest.config.ts --disableConsoleIntercept src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.91,
+          "summary": "The 1/20/100 ms RTT x 1/4/8 viewer matrix stayed at or below 8 MiB in flight with zero completion spread. At 100 ms it modeled 18.8 MiB/s per viewer for 1-4 viewers and 9.7 MiB/s for 8 viewers. Measured @xterm/headless parsing was 26.7/63.6/95.3 aggregate MiB/s for 1/4/8 viewers, with 84.4/236.5/336.0 ms CPU and 2893/13409/28991 KiB retained heap for 4 MiB per viewer."
         }
       ],
       "runtimeBudget": {
@@ -4661,7 +5006,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "This gate is the byte and batching budget for runtime/mobile terminal streaming."
+        "evidence": "Parsed/discarded credit uses 192 KiB/4 ms ACK batching, 512 KiB-to-2 MiB adaptive per-stream windows, a 2 MiB-to-8 MiB aggregate window, <=48 KiB output frames, <=256 KiB queued output per stream, and <=32 streams per connection (8 MiB aggregate pending output). The 64 MiB/viewer model gate requires >7 MiB/s/viewer at 100 ms RTT, <200 ms completion spread, and aggregate in-flight bytes <=8 MiB. The 2026-07-22 run modeled 9.7 MiB/s/viewer at 100 ms with eight viewers and measured @xterm/headless at 95.3 aggregate MiB/s, 336.0 ms parser CPU, and 28991 KiB retained heap for eight 4 MiB viewers."
       },
       "promotionCriteria": [
         "Gate binary multiplex first.",
@@ -4670,7 +5015,8 @@
       ],
       "knownGaps": [
         "The pure mobile decision gate does not yet prove live Android WebView scrollback restore after a chat toggle.",
-        "Legacy JSON subscribe parity is undecided."
+        "Legacy JSON subscribe parity is undecided.",
+        "The parser measurement uses @xterm/headless; browser renderer/WebGL CPU, GPU, and allocation behavior still need packaged-app performance evidence."
       ],
       "demotionRule": "Cannot promote while a supported stream path has uncapped snapshot or live-output buffering."
     },

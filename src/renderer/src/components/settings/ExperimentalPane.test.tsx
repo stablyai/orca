@@ -213,13 +213,13 @@ describe('ExperimentalPane', () => {
     expect(markup).toContain('aria-checked="true"')
   })
 
-  it('shows native chat default-mode as a child setting only when native chat is enabled', async () => {
+  it('shows Chat UI default-mode as a child setting only when Chat UI is enabled', async () => {
     const updateSettings = vi.fn()
     const disabledSettings = getDefaultSettings('/tmp')
     const disabledMarkup = renderToStaticMarkup(
       <ExperimentalPane settings={disabledSettings} updateSettings={vi.fn()} />
     )
-    expect(disabledMarkup).toContain('Native chat')
+    expect(disabledMarkup).toContain('Chat UI')
     expect(disabledMarkup).not.toContain('Default view')
 
     const settings = {
@@ -231,7 +231,7 @@ describe('ExperimentalPane', () => {
 
     expect(container.textContent).toContain('Default view')
     expect(container.textContent).toContain('Terminal chat')
-    expect(container.textContent).toContain('Native chat')
+    expect(container.textContent).toContain('Chat UI')
     expect(
       container
         .querySelector('[data-slot="native-chat-default-view-select"]')
@@ -242,7 +242,7 @@ describe('ExperimentalPane', () => {
       container.querySelectorAll<HTMLButtonElement>('[data-slot="select-item"]')
     ).find((button) => button.getAttribute('data-value') === 'native-chat')
     if (!nativeChatOption) {
-      throw new Error('Native chat default-view option was not rendered')
+      throw new Error('Chat UI default-view option was not rendered')
     }
 
     await act(async () => {

@@ -17,6 +17,7 @@ import { TerminalHostTombstones } from './terminal-host-tombstones'
 import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { WedgedSessionReconciler } from './wedged-session-reconciler'
+import { isShellProcess } from '../../shared/agent-detection'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 export type { TerminalHostOptions } from './terminal-host-options'
@@ -28,6 +29,7 @@ export class TerminalHost {
   private sessionTeardown = new TerminalSessionTeardown(this.sessions)
   private killedTombstones: TerminalHostTombstones
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
+  private onSessionReaped: TerminalHostOptions['onSessionReaped']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
   private maxTombstones: number
   private creationFenced = false
@@ -38,6 +40,7 @@ export class TerminalHost {
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
+    this.onSessionReaped = opts.onSessionReaped
     this.onFinalCheckpoint = opts.onFinalCheckpoint
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
     this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
@@ -122,6 +125,7 @@ export class TerminalHost {
     }
     session.dispose()
     this.sessions.delete(sessionId)
+    this.onSessionReaped?.(sessionId)
   }
 
   signal(sessionId: string, sig: string): void {
@@ -144,6 +148,17 @@ export class TerminalHost {
       return null
     }
     return session.getForegroundProcess()
+  }
+
+  inspectProcess(sessionId: string): {
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+  } {
+    const foregroundProcess = this.getAliveSession(sessionId).getForegroundProcess()
+    return {
+      foregroundProcess,
+      hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess)
+    }
   }
 
   async confirmForegroundProcess(sessionId: string): Promise<string | null> {

@@ -28,6 +28,7 @@
     "../src/main/codex/codex-managed-trust-reconciliation.ts",
     "../src/main/codex/codex-process-exit-deadline.ts",
     "../src/main/codex/codex-trust-config-rollback.ts",
+    "../src/main/codex/codex-trust-grant-telemetry.ts",
     "../src/main/codex/codex-trust-grant-host.ts",
     "../src/main/codex/codex-trust-grant-ledger.ts",
     "../src/main/codex/codex-user-hook-trust-rebase-client.ts",

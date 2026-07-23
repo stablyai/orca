@@ -16,6 +16,7 @@ import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
+import { UnpairedDeviceAuthThrottle } from './rpc/unpaired-device-auth-throttle'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,
@@ -340,6 +341,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'ssh.getState',
   'ssh.listRemovedTargetLabels',
   'ssh.listTargets',
+  'ssh.listTargetSummaries',
   'speech.dictation.cancel',
   'speech.dictation.chunk',
   'speech.dictation.finish',
@@ -360,6 +362,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'terminal.ensureAgentSession',
   'terminal.focus',
   'terminal.agentStatus',
+  'terminal.adoptOrphans',
   'terminal.getAutoRestoreFit',
   'terminal.isRunningAgent',
   'terminal.list',
@@ -437,6 +440,8 @@ export class OrcaRuntimeRpcServer {
   private transports: RuntimeTransportMetadata[] = []
   private mobileSocketWiring: MobileSocketWiring | null = null
   private mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
+  private onUnpairedDeviceAuthFailure: (() => void) | null = null
+  private unpairedDeviceAuthThrottle: UnpairedDeviceAuthThrottle | null = null
   private readonly binaryStreamHandlers = new Map<
     string,
     Map<number, (frame: TerminalStreamFrame) => void>
@@ -519,6 +524,11 @@ export class OrcaRuntimeRpcServer {
       this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     }
     return updated
+  }
+
+  // Why: only the desktop shell can surface UI; headless serve leaves this unset.
+  setOnUnpairedDeviceAuthFailure(callback: (() => void) | null): void {
+    this.onUnpairedDeviceAuthFailure = callback
   }
 
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
@@ -888,6 +898,10 @@ export class OrcaRuntimeRpcServer {
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {}),
             ...(this.preferPinnedWsPort ? { preferPinnedPort: true } : {})
           })
+          // Why: session-scoped (recreated per start) so each desktop launch may notify once.
+          this.unpairedDeviceAuthThrottle = new UnpairedDeviceAuthThrottle({
+            onTrigger: () => this.onUnpairedDeviceAuthFailure?.()
+          })
           const mobileSocketWiring = new MobileSocketWiring({
             deviceRegistry: pairingIdentity.deviceRegistry,
             e2eeKeypair: pairingIdentity.e2eeKeypair,
@@ -923,6 +937,12 @@ export class OrcaRuntimeRpcServer {
               this.binaryStreamHandlers.delete(socket.connectionId)
               if (!hasOtherConnections) {
                 this.runtime.onClientDisconnected(socket.device.deviceToken)
+              }
+            },
+            // Why: relay attempts are authorized upstream; only direct failures should prompt local re-pairing.
+            onUnpairedDeviceAuthFailure: (metadata) => {
+              if (metadata.transport === 'direct') {
+                this.unpairedDeviceAuthThrottle?.recordFailure()
               }
             }
           })

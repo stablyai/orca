@@ -37,7 +37,9 @@ async function getLiveCodexSessionPtyIds(state: AppState): Promise<string[]> {
       const foregroundProcesses = await Promise.all(
         ptyIds.map((ptyId) =>
           inspectRuntimeTerminalProcess(state.settings, ptyId).then(
-            (inspection) => inspection.foregroundProcess
+            (inspection) => inspection.foregroundProcess,
+            // Why: one stale remote pane must not hide restart notices for other confirmed Codex panes.
+            () => null
           )
         )
       )

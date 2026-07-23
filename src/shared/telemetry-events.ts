@@ -367,11 +367,15 @@ const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).stri
 // Rollout signal for granting Codex hook trust via codex app-server RPCs
 // instead of Orca's self-computed trusted_hash. `fallback`/`verify_failed`
 // spikes mean the RPC lane is not taking; steady-state ledger skips are not
-// reported (they would only measure launch volume).
+// reported (they would only measure launch volume). `lane` attributes the
+// grant surface (real ~/.codex vs managed home); `error_class`/`verify_class`
+// are closed classifications so `error` fallbacks are diagnosable in the
+// field — e.g. `binary-missing` = codex CLI absent, no rollout impact.
 const codexTrustGrantSchema = z
   .object({
     outcome: z.enum(['granted', 'fallback', 'verify_failed']),
     host_kind: z.enum(['native', 'wsl']),
+    lane: z.enum(['real-home', 'managed']),
     fallback_reason: z
       .enum([
         'disabled',
@@ -381,6 +385,19 @@ const codexTrustGrantSchema = z
         'verify-failed',
         'retry-cached',
         'error'
+      ])
+      .optional(),
+    error_class: z
+      .enum(['binary-missing', 'timeout', 'entry-failed', 'early-exit', 'rpc-failed', 'unexpected'])
+      .optional(),
+    verify_class: z
+      .enum([
+        'list-mismatch',
+        'post-grant-untrusted',
+        'post-grant-mismatch',
+        'unexpected-key',
+        'duplicate-key',
+        'coverage'
       ])
       .optional()
   })

@@ -131,4 +131,13 @@ describe('mobile RPC allowlist', () => {
 
     expect(missing).toEqual([])
   })
+
+  it('does not grant mobile credentials control over host updates', () => {
+    const allowed = mobileRpcAllowlist()
+    expect(
+      ['updater.getStatus', 'updater.check', 'updater.download', 'updater.install'].filter(
+        (method) => allowed.has(method)
+      )
+    ).toEqual([])
+  })
 })

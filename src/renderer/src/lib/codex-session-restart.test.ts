@@ -53,7 +53,8 @@ describe('markLiveCodexSessionsForRestart', () => {
         pty: {
           ...originalWindow?.api?.pty,
           getForegroundProcess: vi.fn(),
-          hasChildProcesses: vi.fn().mockResolvedValue(false)
+          hasChildProcesses: vi.fn().mockResolvedValue(false),
+          inspectProcess: vi.fn()
         },
         runtimeEnvironments: {
           ...originalWindow?.api?.runtimeEnvironments,
@@ -72,14 +73,17 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 
   it('marks a live Codex PTY for restart', async () => {
-    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
+    vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
+      foregroundProcess: 'codex',
+      hasChildProcesses: false
+    })
 
     await markLiveCodexSessionsForRestart({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
 
-    expect(window.api.pty.getForegroundProcess).toHaveBeenCalledWith('pty-1')
+    expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-1')
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
@@ -117,14 +121,10 @@ describe('markLiveCodexSessionsForRestart', () => {
         'tab-2': ['pty-3']
       }
     })
-    vi.mocked(window.api.pty.getForegroundProcess).mockImplementation((ptyId) => {
-      if (ptyId === 'pty-1') {
-        return Promise.resolve('codex')
-      }
-      if (ptyId === 'pty-3') {
-        return Promise.resolve('codex-aarch64-ap')
-      }
-      return Promise.resolve('zsh')
+    vi.mocked(window.api.pty.inspectProcess).mockImplementation(async (ptyId) => {
+      const foregroundProcess =
+        ptyId === 'pty-1' ? 'codex' : ptyId === 'pty-3' ? 'codex-aarch64-ap' : 'zsh'
+      return { foregroundProcess, hasChildProcesses: false }
     })
 
     await markLiveCodexSessionsForRestart({
@@ -145,7 +145,10 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 
   it('does not mark non-codex foreground processes', async () => {
-    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('zsh')
+    vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
+      foregroundProcess: 'zsh',
+      hasChildProcesses: false
+    })
 
     await markLiveCodexSessionsForRestart({
       previousAccountLabel: ACCOUNT_A,
@@ -155,8 +158,33 @@ describe('markLiveCodexSessionsForRestart', () => {
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
   })
 
+  it('still marks a confirmed Codex pane when another pane is unreachable', async () => {
+    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-stale'] } })
+    vi.mocked(window.api.pty.inspectProcess).mockImplementation(async (ptyId) => {
+      if (ptyId === 'pty-stale') {
+        throw new Error('terminal_gone')
+      }
+      return { foregroundProcess: 'codex', hasChildProcesses: true }
+    })
+
+    await markLiveCodexSessionsForRestart({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B
+    })
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({
+      'pty-1': {
+        previousAccountLabel: ACCOUNT_A,
+        nextAccountLabel: ACCOUNT_B
+      }
+    })
+  })
+
   it('treats codex.exe as codex for Windows PTYs', async () => {
-    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex.exe')
+    vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
+      foregroundProcess: 'codex.exe',
+      hasChildProcesses: false
+    })
 
     await markLiveCodexSessionsForRestart({
       previousAccountLabel: ACCOUNT_A,
@@ -170,7 +198,10 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 
   it('treats codex-prefixed packaged binaries as codex', async () => {
-    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex-aarch64-ap')
+    vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
+      foregroundProcess: 'codex-aarch64-ap',
+      hasChildProcesses: false
+    })
 
     await markLiveCodexSessionsForRestart({
       previousAccountLabel: ACCOUNT_A,
@@ -184,7 +215,10 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 
   it('clears stale restart notices when the selected account switches back to the live pane account', async () => {
-    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
+    vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
+      foregroundProcess: 'codex',
+      hasChildProcesses: false
+    })
 
     await markLiveCodexSessionsForRestart({
       previousAccountLabel: ACCOUNT_A,
@@ -202,7 +236,10 @@ describe('markLiveCodexSessionsForRestart', () => {
   })
 
   it('preserves the pane original account across repeated switches until restart', async () => {
-    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
+    vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
+      foregroundProcess: 'codex',
+      hasChildProcesses: false
+    })
 
     await markLiveCodexSessionsForRestart({
       previousAccountLabel: ACCOUNT_A,
@@ -255,7 +292,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       nextAccountLabel: ACCOUNT_B
     })
 
-    expect(window.api.pty.getForegroundProcess).not.toHaveBeenCalled()
+    expect(window.api.pty.inspectProcess).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'terminal.inspectProcess',

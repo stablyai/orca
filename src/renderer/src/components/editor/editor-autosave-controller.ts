@@ -6,7 +6,7 @@ import { getConnectionIdForFile } from '@/lib/connection-context'
 import { shouldPersistWorkspaceSession } from '@/lib/workspace-session'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
@@ -98,11 +98,11 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         }
 
         const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
-        const connectionId =
-          getConnectionIdForFile(liveFile.worktreeId, liveFile.filePath) ?? undefined
         const worktree = liveFile.worktreeId
           ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
           : null
+        const fileContext = getEditorFileOperationContext(state, liveFile, worktree?.path ?? null)
+        const connectionId = fileContext.connectionId
         // Why: stamp before writing so useEditorExternalWatch ignores our own fs:changed echo (editor-self-write-registry).
         recordSelfWrite(
           liveFile.filePath,
@@ -113,16 +113,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
             : undefined
         )
         try {
-          await writeRuntimeFile(
-            {
-              settings: settingsForRuntimeOwner(state.settings, liveFile.runtimeEnvironmentId),
-              worktreeId: liveFile.worktreeId,
-              worktreePath: worktree?.path ?? null,
-              connectionId
-            },
-            liveFile.filePath,
-            contentToSave
-          )
+          await writeRuntimeFile(fileContext, liveFile.filePath, contentToSave)
         } catch (error) {
           // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.
           clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)

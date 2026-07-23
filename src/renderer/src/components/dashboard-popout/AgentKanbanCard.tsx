@@ -98,7 +98,8 @@ export const AgentKanbanCard = memo(
           >
             {card.worktreeName}
           </span>
-          <AgentStateDot state={card.dotState} className="ml-auto" />
+          {/* The summary pill already carries the attention glyph. */}
+          {card.askSummary ? null : <AgentStateDot state={card.dotState} className="ml-auto" />}
         </div>
 
         {card.lastUserMessage || card.lastAgentMessage ? (

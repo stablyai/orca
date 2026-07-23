@@ -694,10 +694,14 @@ describe('registerPtyHandlers', () => {
 
   function registerAgentClaimController(): {
     spawn: (args: Record<string, unknown>) => Promise<unknown>
+    write: (ptyId: string, data: string) => boolean
+    resize: (ptyId: string, cols: number, rows: number) => boolean
   } {
     let controller:
       | {
           spawn: (args: Record<string, unknown>) => Promise<unknown>
+          write: (ptyId: string, data: string) => boolean
+          resize: (ptyId: string, cols: number, rows: number) => boolean
         }
       | undefined
     const runtime = {
@@ -713,6 +717,34 @@ describe('registerPtyHandlers', () => {
     }
     return controller
   }
+
+  it('fails closed instead of routing encoded SSH PTY writes locally after disconnect', () => {
+    const connectionId = 'ssh-1'
+    const ptyId = `ssh:${connectionId}@@remote-pty`
+    const localProvider = createAgentClaimProvider({})
+    const sshProvider = createAgentClaimProvider({})
+    setLocalPtyProvider(localProvider as never)
+    registerSshPtyProvider(connectionId, sshProvider as never)
+    setPtyOwnership(ptyId, connectionId)
+    const controller = registerAgentClaimController()
+
+    unregisterSshPtyProvider(connectionId)
+    clearPtyOwnershipForConnection(connectionId)
+
+    expect(controller.write(ptyId, 'input')).toBe(false)
+    expect(controller.resize(ptyId, 100, 40)).toBe(false)
+    expect(localProvider.write).not.toHaveBeenCalled()
+    expect(localProvider.resize).not.toHaveBeenCalled()
+
+    registerSshPtyProvider(connectionId, sshProvider as never)
+    expect(controller.write(ptyId, 'reconnected')).toBe(true)
+    expect(controller.resize(ptyId, 120, 50)).toBe(true)
+    expect(sshProvider.write).toHaveBeenCalledWith(ptyId, 'reconnected')
+    expect(sshProvider.resize).toHaveBeenCalledWith(ptyId, 120, 50)
+
+    unregisterSshPtyProvider(connectionId)
+    clearProviderPtyState(ptyId)
+  })
 
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {
     const provider = createAgentClaimProvider({})
@@ -3647,12 +3679,15 @@ describe('registerPtyHandlers', () => {
             state: 'attached'
           })
         )
-        expect(store.persistPtyBinding).toHaveBeenCalledWith({
-          worktreeId: 'wt-1',
-          tabId: 'tab-1',
-          leafId,
-          ptyId: 'ssh-pty'
-        })
+        expect(store.persistPtyBinding).toHaveBeenCalledWith(
+          {
+            worktreeId: 'wt-1',
+            tabId: 'tab-1',
+            leafId,
+            ptyId: 'ssh-pty'
+          },
+          'ssh:ssh-1'
+        )
 
         store.upsertSshRemotePtyLease.mockClear()
         store.persistPtyBinding.mockClear()
@@ -4073,6 +4108,60 @@ describe('registerPtyHandlers', () => {
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
+      })
+
+      it('classifies host reversible-stop exits for the attached renderer', async () => {
+        vi.useFakeTimers()
+        const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(async (id: string) => {
+            for (const listener of exitListeners) {
+              listener({ id, code: 0 })
+            }
+          }),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn((listener: (payload: { id: string; code: number }) => void) => {
+            exitListeners.add(listener)
+            return () => exitListeners.delete(listener)
+          }),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          markReversibleStops: (ptyIds: readonly string[]) => () => void
+          stopAndWait: (ptyId: string) => Promise<boolean>
+        }
+        const release = controller.markReversibleStops(['local-pty'])
+
+        const stopPromise = controller.stopAndWait('local-pty')
+        await vi.advanceTimersByTimeAsync(1_200)
+        await expect(stopPromise).resolves.toBe(true)
+        release()
+
+        expect(
+          mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+        ).toEqual([['pty:exit', { id: 'local-pty', code: 0, preserveRendererBinding: true }]])
       })
 
       it('passes keepHistory through runtime controller stopAndWait', async () => {
@@ -7049,12 +7138,15 @@ describe('registerPtyHandlers', () => {
         state: 'attached'
       })
     )
-    expect(store.persistPtyBinding).toHaveBeenCalledWith({
-      worktreeId: 'wt-remote',
-      tabId: 'tab-remote',
-      leafId,
-      ptyId: 'ssh:ssh-1@@relay-pty'
-    })
+    expect(store.persistPtyBinding).toHaveBeenCalledWith(
+      {
+        worktreeId: 'wt-remote',
+        tabId: 'tab-remote',
+        leafId,
+        ptyId: 'ssh:ssh-1@@relay-pty'
+      },
+      'ssh:ssh-1'
+    )
     expect(store.persistPtyBinding.mock.invocationCallOrder[0]!).toBeLessThan(
       store.upsertSshRemotePtyLease.mock.invocationCallOrder[0]!
     )
@@ -7198,12 +7290,15 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding: true
       })
 
-      expect(store.persistPtyBinding).toHaveBeenCalledWith({
-        worktreeId: 'wt-remote',
-        tabId: 'tab-remote',
-        leafId,
-        ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
-      })
+      expect(store.persistPtyBinding).toHaveBeenCalledWith(
+        {
+          worktreeId: 'wt-remote',
+          tabId: 'tab-remote',
+          leafId,
+          ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
+        },
+        'ssh:ssh-reattach-ok'
+      )
       expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
         expect.objectContaining({
           targetId: 'ssh-reattach-ok',
@@ -12115,7 +12210,6 @@ describe('registerPtyHandlers', () => {
       expect(result).toEqual({
         id: expect.any(String),
         pid: 12345,
-        wslDistro: null,
         incarnationId: expect.any(String)
       })
       expect(spawnMock).toHaveBeenCalledTimes(1)

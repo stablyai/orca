@@ -189,6 +189,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getForegroundProcess(id)
   }
 
+  async inspectProcess(
+    id: string
+  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+    return this.adapterForInspection(id).inspectProcess(id)
+  }
+
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.adapterFor(id).confirmForegroundProcess(id)
   }
@@ -346,6 +352,17 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
     return this.sessionAdapters.get(sessionId) ?? this.current
+  }
+
+  private adapterForInspection(sessionId: string): DaemonPtyAdapter {
+    const adapter =
+      this.sessionAdapters.get(sessionId) ??
+      this.allAdapters().find((candidate) => candidate.hasPty(sessionId))
+    if (!adapter) {
+      throw new Error('terminal_gone')
+    }
+    this.sessionAdapters.set(sessionId, adapter)
+    return adapter
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

@@ -5525,6 +5525,7 @@ function SourceControlInner(): React.JSX.Element {
                   groupId={activeGroupId ?? activeWorktreeId}
                   comments={diffCommentsForActive}
                   triggerClassName="size-6"
+                  respondToOpenRequest
                 />
                 {diffCommentCount > 0 && (
                   <TooltipProvider delayDuration={400}>

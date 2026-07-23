@@ -9703,6 +9703,110 @@ describe('Store', () => {
 
   // ── Live Claude PTY session ids (STA-1246) ─────────────────────────
 
+  describe('mobileClientTabSelectionsByDeviceId', () => {
+    it('persists device tab selections across reloads and drops malformed payloads', async () => {
+      const store = await createStore()
+      store.setMobileClientTabSelections({
+        'device-a': {
+          'repo-1::/tmp/wt': { activeTabId: 'tab-1', activeGroupId: 'g1', activeTabIdByGroupId: {} }
+        }
+      })
+      store.flush()
+
+      const reloaded = await createStore()
+      expect(reloaded.getMobileClientTabSelections()['device-a']?.['repo-1::/tmp/wt']).toEqual({
+        activeTabId: 'tab-1',
+        activeGroupId: 'g1',
+        activeTabIdByGroupId: {}
+      })
+
+      writeDataFile({ mobileClientTabSelectionsByDeviceId: { 'device-a': 'corrupt' } })
+      const corrupted = await createStore()
+      expect(corrupted.getMobileClientTabSelections()).toEqual({})
+    })
+
+    it('prunes selections for a removed repo worktree', async () => {
+      const store = await createStore()
+      store.addRepo(makeRepo())
+      store.setMobileClientTabSelections({
+        'device-a': {
+          'r1::/tmp/wt': {
+            activeTabId: 'tab-1',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          },
+          'other-repo::/tmp/wt': {
+            activeTabId: 'tab-2',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          }
+        }
+      })
+
+      store.removeProject('r1')
+      store.flush()
+
+      expect(store.getMobileClientTabSelections()['device-a']).toEqual({
+        'other-repo::/tmp/wt': {
+          activeTabId: 'tab-2',
+          activeGroupId: null,
+          activeTabIdByGroupId: {}
+        }
+      })
+      const reloaded = await createStore()
+      expect(reloaded.getMobileClientTabSelections()['device-a']).toEqual({
+        'other-repo::/tmp/wt': {
+          activeTabId: 'tab-2',
+          activeGroupId: null,
+          activeTabIdByGroupId: {}
+        }
+      })
+    })
+
+    it('prunes selections when a folder workspace is removed directly or with its group', async () => {
+      const store = await createStore()
+      const directGroup = store.createProjectGroup({
+        name: 'Direct',
+        parentPath: '/tmp/direct',
+        createdFrom: 'manual'
+      })
+      const directWorkspace = store.createFolderWorkspace({
+        projectGroupId: directGroup.id,
+        name: 'Direct workspace'
+      })
+      const cascadeGroup = store.createProjectGroup({
+        name: 'Cascade',
+        parentPath: '/tmp/cascade',
+        createdFrom: 'manual'
+      })
+      const cascadeWorkspace = store.createFolderWorkspace({
+        projectGroupId: cascadeGroup.id,
+        name: 'Cascade workspace'
+      })
+      store.setMobileClientTabSelections({
+        'device-a': {
+          [folderWorkspaceKey(directWorkspace.id)]: {
+            activeTabId: 'tab-direct',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          },
+          [folderWorkspaceKey(cascadeWorkspace.id)]: {
+            activeTabId: 'tab-cascade',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          }
+        }
+      })
+
+      store.removeFolderWorkspace(directWorkspace.id)
+      store.deleteProjectGroup(cascadeGroup.id)
+      store.flush()
+
+      const reloaded = await createStore()
+      expect(reloaded.getMobileClientTabSelections()).toEqual({})
+    })
+  })
+
   describe('claudeLivePtySessionIds', () => {
     it('persists added ids across reloads and removes them durably', async () => {
       const store = await createStore()
@@ -10360,6 +10464,22 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(store.getWorktreeLineage(CHILD)?.parentWorktreeId).toBe(NEW)
   })
 
+  it('moves persisted mobile selections across reloads', async () => {
+    const store = await createStore()
+    store.setMobileClientTabSelections({
+      'device-a': {
+        [OLD]: { activeTabId: 'tab-1', activeGroupId: null, activeTabIdByGroupId: {} }
+      }
+    })
+
+    store.migrateWorktreeIdentity(OLD, NEW)
+    store.flush()
+
+    expect(store.getMobileClientTabSelections()['device-a']?.[OLD]).toBeUndefined()
+    const reloaded = await createStore()
+    expect(reloaded.getMobileClientTabSelections()['device-a']?.[NEW]?.activeTabId).toBe('tab-1')
+  })
+
   it('accumulates prior ids across chained renames', async () => {
     const store = await createStore()
     store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
@@ -10389,6 +10509,35 @@ describe('Store host-partitioned workspace sessions', () => {
   const makeHostSession = (activeRepoId: string): WorkspaceSessionState => ({
     ...getDefaultWorkspaceSession(),
     activeRepoId
+  })
+
+  const makeBoundHostSession = (ptyId: string | null): WorkspaceSessionState => ({
+    ...getDefaultWorkspaceSession(),
+    activeRepoId: 'repo-1',
+    activeWorktreeId: 'repo-1::/worktree',
+    activeTabId: 'tab-1',
+    tabsByWorktree: {
+      'repo-1::/worktree': [
+        {
+          id: 'tab-1',
+          worktreeId: 'repo-1::/worktree',
+          title: 'Terminal',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1,
+          ptyId
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      'tab-1': {
+        root: { type: 'leaf', leafId: TEST_LEAF_1 },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null,
+        ptyIdsByLeafId: ptyId ? { [TEST_LEAF_1]: ptyId } : {}
+      }
+    }
   })
 
   it('migrates a legacy workspaceSession blob into the local partition', async () => {
@@ -10530,6 +10679,81 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(
       store.getWorkspaceSession('runtime:env-b').terminalTopologyRevisionByRepoId?.duplicate
     ).toBe(7)
+  })
+
+  it('persists an SSH PTY binding only in the SSH host partition', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(makeBoundHostSession(null), 'local')
+    store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
+
+    store.persistPtyBinding(
+      {
+        worktreeId: 'repo-1::/worktree',
+        tabId: 'tab-1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'ssh:ssh-1@@remote-pty'
+      },
+      'ssh:ssh-1'
+    )
+
+    expect(
+      store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
+    ).toBe('ssh:ssh-1@@remote-pty')
+    expect(
+      store.getWorkspaceSession('local').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
+    ).toBeNull()
+  })
+
+  it('rolls back a failed SSH PTY binding flush in the SSH host partition', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(makeBoundHostSession(null), 'local')
+    store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
+    const flush = vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('disk unavailable')
+    })
+
+    expect(() =>
+      store.persistPtyBinding(
+        {
+          worktreeId: 'repo-1::/worktree',
+          tabId: 'tab-1',
+          leafId: TEST_LEAF_1,
+          ptyId: 'ssh:ssh-1@@remote-pty'
+        },
+        'ssh:ssh-1'
+      )
+    ).toThrow('disk unavailable')
+    flush.mockRestore()
+
+    expect(
+      store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
+    ).toBeNull()
+    expect(
+      store.getWorkspaceSession('local').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
+    ).toBeNull()
+  })
+
+  it('clears expired SSH PTY bindings from the SSH partition and legacy local copy', async () => {
+    const store = await createStore()
+    const ptyId = 'ssh:ssh-1@@remote-pty'
+    store.setWorkspaceSession(makeBoundHostSession(ptyId), 'local')
+    store.setWorkspaceSession(makeBoundHostSession(ptyId), 'ssh:ssh-1')
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'repo-1::/worktree',
+      tabId: 'tab-1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+
+    store.markSshRemotePtyLease('ssh-1', ptyId, 'expired')
+
+    for (const hostId of ['local', 'ssh:ssh-1']) {
+      const session = store.getWorkspaceSession(hostId)
+      expect(session.tabsByWorktree['repo-1::/worktree'][0]?.ptyId).toBeNull()
+      expect(session.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({})
+    }
   })
 
   it('defaults an omitted hostId to the local partition', async () => {

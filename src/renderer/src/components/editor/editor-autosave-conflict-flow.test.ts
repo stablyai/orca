@@ -129,7 +129,9 @@ describe('editor autosave changed-on-disk conflict flow', () => {
       await vi.advanceTimersByTimeAsync(1500)
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/repo/file.ts',
-        content: 'user edit'
+        content: 'user edit',
+        connectionId: undefined,
+        expectedExecutionHostId: 'local'
       })
     } finally {
       cleanup()
@@ -160,7 +162,9 @@ describe('editor autosave changed-on-disk conflict flow', () => {
       await vi.advanceTimersByTimeAsync(1500)
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/repo/file.ts',
-        content: 'restored draft'
+        content: 'restored draft',
+        connectionId: undefined,
+        expectedExecutionHostId: 'local'
       })
     } finally {
       cleanup()
@@ -179,7 +183,9 @@ describe('editor autosave changed-on-disk conflict flow', () => {
 
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/repo/file.ts',
-        content: 'user version'
+        content: 'user version',
+        connectionId: undefined,
+        expectedExecutionHostId: 'local'
       })
       const file = store.getState().openFiles[0]
       expect(file?.isDirty).toBe(false)

@@ -27,6 +27,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     onError?: (error: { code: string; message: string }) => void
     onClose?: () => void
   } | null = null
+  let resolvedPaneHandle = 'terminal-1'
 
   function emitMultiplexReady(): void {
     subscriptionCallbacks?.onResponse({
@@ -132,9 +133,55 @@ describe('createRemoteRuntimePtyTransport', () => {
     }))
     vi.clearAllMocks()
     subscriptionCallbacks = null
+    resolvedPaneHandle = 'terminal-1'
     subscriptionSendBinary.mockReset()
     refreshSessionTabsSnapshot.mockClear()
-    runtimeCall.mockResolvedValue({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+    runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
+      if (request.method === 'session.tabs.activate') {
+        const params = request.params as { tabId: string; leafId?: string }
+        const resolvedLeafId = params.leafId ?? 'pane:1'
+        return {
+          ok: true,
+          result: {
+            worktree: 'id:wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: `${params.tabId}::${resolvedLeafId}`,
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: `${params.tabId}::${resolvedLeafId}`,
+                parentTabId: params.tabId,
+                leafId: resolvedLeafId,
+                title: 'Terminal',
+                isActive: true,
+                status: 'ready',
+                terminal: resolvedPaneHandle
+              }
+            ]
+          }
+        }
+      }
+      if (request.method === 'terminal.resolvePane') {
+        const params = request.params as { paneKey: string; worktreeId: string }
+        const separator = params.paneKey.indexOf(':')
+        const handle = resolvedPaneHandle
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle,
+              tabId: params.paneKey.slice(0, separator),
+              leafId: params.paneKey.slice(separator + 1),
+              worktreeId: params.worktreeId
+            }
+          }
+        }
+      }
+      return { ok: true, result: { terminal: { handle: 'terminal-1' } } }
+    })
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
@@ -622,16 +669,242 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  it('resolves web mirrors through host session inventory, not client-side pane aliases', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@stale-client-handle',
+      cols: 100,
+      rows: 30,
+      callbacks: {}
+    })
+
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    expect(latestSubscribePayload()).toMatchObject({
+      terminal: 'terminal-1',
+      viewport: { cols: 100, rows: 30 }
+    })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'session.tabs.activate' })
+    )
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.resolvePane',
+        params: { paneKey: 'host-tab-1:pane:1', worktreeId: 'wt-1' }
+      })
+    )
+  })
+
+  it('resolves a HUB-native SSH PTY wake hint to its runtime terminal handle', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
+      if (request.method === 'terminal.resolvePane') {
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'hub-terminal-1',
+              tabId: 'tab-1',
+              leafId,
+              ptyId: 'ssh:hub-private@@pty-2',
+              worktreeId: 'wt-1',
+              executionHostId: 'ssh:hub-private',
+              hostPlatform: 'win32'
+            }
+          }
+        }
+      }
+      throw new Error(`Unexpected method ${request.method}`)
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('hub-env', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId
+    })
+
+    const result = await transport.connect({
+      url: '',
+      cols: 120,
+      rows: 40,
+      sessionId: 'ssh:hub-private@@pty-2',
+      callbacks: {}
+    })
+
+    expect(result).toEqual({ id: 'remote:hub-env@@hub-terminal-1', replay: '' })
+    expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-1')
+    expect(transport.getExecutionHostId?.()).toBe('ssh:hub-private')
+    expect(transport.getRemotePlatform?.()).toBe('win32')
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'hub-env',
+        method: 'terminal.resolvePane',
+        params: {
+          paneKey: `tab-1:${leafId}`,
+          worktreeId: 'wt-1'
+        }
+      })
+    )
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.create' })
+    )
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    expect(latestSubscribePayload()).toMatchObject({ terminal: 'hub-terminal-1' })
+  })
+
+  it('verifies a legacy pane response against the requested worktree session', async () => {
+    runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
+      if (request.method === 'terminal.resolvePane') {
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'legacy-terminal-1',
+              tabId: 'tab-1',
+              leafId: 'pane:1',
+              ptyId: 'ssh:hub-private@@pty-2'
+            }
+          }
+        }
+      }
+      if (request.method === 'session.tabs.list') {
+        return {
+          ok: true,
+          result: {
+            worktree: 'id:wt-1',
+            publicationEpoch: 'legacy-epoch',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: 'tab-1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'tab-1::pane:1',
+                parentTabId: 'tab-1',
+                leafId: 'pane:1',
+                title: 'Terminal',
+                isActive: true,
+                status: 'ready',
+                terminal: 'legacy-terminal-1'
+              }
+            ]
+          }
+        }
+      }
+      throw new Error(`Unexpected method ${request.method}`)
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('legacy-env', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:legacy-env@@legacy-terminal-1',
+      cols: 100,
+      rows: 30,
+      callbacks: {}
+    })
+
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    emitSnapshot(latestSubscribePayload().streamId, 'legacy state')
+    expect(transport.isConnected()).toBe(true)
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'session.tabs.list',
+        params: { worktree: 'id:wt-1' }
+      })
+    )
+    expect(latestSubscribePayload()).toMatchObject({ terminal: 'legacy-terminal-1' })
+  })
+
+  it('rejects a legacy pane handle absent from the requested worktree session', async () => {
+    runtimeCall.mockImplementation(async (request: { method: string }) => {
+      if (request.method === 'terminal.resolvePane') {
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'foreign-terminal',
+              tabId: 'tab-1',
+              leafId: 'pane:1',
+              ptyId: 'ssh:hub-private@@foreign-pty'
+            }
+          }
+        }
+      }
+      if (request.method === 'session.tabs.list') {
+        return {
+          ok: true,
+          result: {
+            worktree: 'id:wt-1',
+            publicationEpoch: 'legacy-epoch',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: 'tab-1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'tab-1::pane:1',
+                parentTabId: 'tab-1',
+                leafId: 'pane:1',
+                title: 'Terminal',
+                isActive: true,
+                status: 'ready',
+                terminal: 'worktree-terminal'
+              }
+            ]
+          }
+        }
+      }
+      throw new Error(`Unexpected method ${request.method}`)
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('legacy-env', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:legacy-env@@foreign-terminal',
+      callbacks: { onError }
+    })
+
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith('terminal_owner_mismatch'))
+    expect(transport.isConnected()).toBe(false)
+    expect(runtimeSubscribe).not.toHaveBeenCalled()
+  })
+
   it('scopes the same legacy handle independently for each runtime environment', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const first = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
-    const second = createRemoteRuntimePtyTransport('env-2', { worktreeId: 'wt-2' })
+    const first = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'leaf-1'
+    })
+    const second = createRemoteRuntimePtyTransport('env-2', {
+      worktreeId: 'wt-2',
+      tabId: 'tab-2',
+      leafId: 'leaf-2'
+    })
 
     first.attach({ existingPtyId: 'remote:terminal-1', callbacks: {} })
     second.attach({ existingPtyId: 'remote:terminal-1', callbacks: {} })
 
-    expect(first.getPtyId()).toBe('remote:env-1@@terminal-1')
-    expect(second.getPtyId()).toBe('remote:env-2@@terminal-1')
+    await vi.waitFor(() => {
+      expect(first.getPtyId()).toBe('remote:env-1@@terminal-1')
+      expect(second.getPtyId()).toBe('remote:env-2@@terminal-1')
+    })
   })
 
   it('parks passive peers when another remote desktop owns the grid', async () => {
@@ -701,7 +974,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     second.destroy?.()
   })
 
-  it('routes encoded restored terminal ids to their owning runtime environment', async () => {
+  it('does not let an encoded restored terminal id override the current worktree owner', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-2', {
       worktreeId: 'wt-1',
@@ -722,7 +995,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(runtimeSubscribe).toHaveBeenCalledWith(
       expect.objectContaining({
-        selector: 'env-1',
+        selector: 'env-2',
         method: 'terminal.multiplex'
       }),
       expect.any(Object)
@@ -732,6 +1005,40 @@ describe('createRemoteRuntimePtyTransport', () => {
       terminal: 'terminal-1',
       viewport: { cols: 120, rows: 40 }
     })
+  })
+
+  it('attaches an environment-scoped handle when an older runtime lacks pane resolution', async () => {
+    runtimeCall.mockImplementation(async (request: { method: string }) => {
+      if (request.method === 'terminal.resolvePane') {
+        return {
+          ok: false,
+          error: { code: 'method_not_found', message: 'Unknown method: terminal.resolvePane' }
+        }
+      }
+      return { ok: true, result: {} }
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('legacy-env', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:legacy-env@@terminal-legacy',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    emitSnapshot(latestSubscribePayload().streamId, 'legacy state')
+    expect(transport.isConnected()).toBe(true)
+    expect(transport.getPtyId()).toBe('remote:legacy-env@@terminal-legacy')
+    expect(runtimeSubscribe).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'legacy-env', method: 'terminal.multiplex' }),
+      expect.any(Object)
+    )
   })
 
   it('re-derives the host session handle after a transport close instead of resubscribing the stale one', async () => {
@@ -923,6 +1230,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       onPtyRebind
     })
 
+    resolvedPaneHandle = 'terminal-stale'
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-stale',
       cols: 80,
@@ -1036,6 +1344,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         onPtyRebind
       })
 
+      resolvedPaneHandle = 'terminal-stale'
       transport.attach({
         existingPtyId: 'remote:env-1@@terminal-stale',
         cols: 80,
@@ -1170,6 +1479,81 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  it('keeps a mounted HUB mirror alive when the old stream ends before the replacement snapshot', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+    const onPtyExit = vi.fn()
+    const onPtySpawn = vi.fn()
+    const onPtyRebind = vi.fn()
+    const onExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('hub-env', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'pane:1',
+      onPtyExit,
+      onPtySpawn,
+      onPtyRebind
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:hub-env@@terminal-before-restart',
+      cols: 100,
+      rows: 30,
+      callbacks: { onExit }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const oldStreamId = latestSubscribePayload().streamId
+
+    runtimeCall.mockImplementation(async (args: { method: string }) =>
+      args.method === 'session.tabs.list' ? new Promise(() => {}) : { ok: true, result: {} }
+    )
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'end', streamId: oldStreamId, code: 0 }
+    })
+
+    expect(onExit).not.toHaveBeenCalled()
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBe('remote:hub-env@@terminal-1')
+    expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
+
+    handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+      {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-after-restart',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: 'host-tab-1::pane:1',
+        activeTabType: 'terminal',
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'host-tab-1::pane:1',
+            parentTabId: 'host-tab-1',
+            leafId: 'pane:1',
+            title: 'Terminal',
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-after-restart'
+          }
+        ]
+      },
+      'hub-env'
+    )
+
+    await vi.waitFor(() =>
+      expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-after-restart' })
+    )
+    expect(transport.getPtyId()).toBe('remote:hub-env@@terminal-after-restart')
+    expect(onPtyRebind).toHaveBeenCalledWith(
+      'remote:hub-env@@terminal-after-restart',
+      'remote:hub-env@@terminal-1'
+    )
+    expect(onPtySpawn).not.toHaveBeenCalled()
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(onExit).not.toHaveBeenCalled()
+  })
+
   it('coalesces concurrent stale errors for the handle that was replaced', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
@@ -1180,6 +1564,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       onPtyExit
     })
 
+    resolvedPaneHandle = 'terminal-stale'
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-stale',
       cols: 80,
@@ -1264,6 +1649,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       onPtyExit
     })
 
+    resolvedPaneHandle = 'terminal-exited'
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-exited',
       cols: 80,
@@ -1287,6 +1673,118 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.getRecoveryState?.().phase).toBe('ended')
   })
 
+  it('asks the HUB to recover an expired SSH pane and rebinds the host identity', async () => {
+    const onError = vi.fn()
+    const onPtyExit = vi.fn()
+    const onPtyRebind = vi.fn()
+    resolvedPaneHandle = 'terminal-expired'
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('hub-env', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'pane:1',
+      onPtyExit,
+      onPtyRebind
+    })
+    transport.attach({
+      existingPtyId: 'remote:hub-env@@terminal-expired',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'terminal.recoverPane') {
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'terminal-replacement',
+              tabId: 'host-tab-1',
+              leafId: 'pane:1',
+              ptyId: 'ssh-private-pty',
+              worktreeId: 'wt-1'
+            }
+          }
+        }
+      }
+      return { ok: true, result: {} }
+    })
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'error',
+        streamId: latestSubscribePayload().streamId,
+        message: 'SSH_SESSION_EXPIRED: relay identity changed'
+      }
+    })
+
+    await vi.waitFor(() =>
+      expect(transport.getPtyId()).toBe('remote:hub-env@@terminal-replacement')
+    )
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'hub-env',
+      method: 'terminal.recoverPane',
+      params: {
+        paneKey: 'host-tab-1:pane:1',
+        worktreeId: 'wt-1',
+        expectedTerminal: 'terminal-expired'
+      },
+      timeoutMs: 15_000
+    })
+    expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-replacement' })
+    expect(onPtyRebind).toHaveBeenCalledWith(
+      'remote:hub-env@@terminal-replacement',
+      'remote:hub-env@@terminal-expired'
+    )
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when an older HUB cannot recover an expired SSH pane', async () => {
+    const onError = vi.fn()
+    resolvedPaneHandle = 'terminal-expired'
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('legacy-hub', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'pane:1'
+    })
+    transport.attach({
+      existingPtyId: 'remote:legacy-hub@@terminal-expired',
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'terminal.recoverPane') {
+        return {
+          ok: false,
+          error: { code: 'method_not_found', message: 'Unknown method: terminal.recoverPane' }
+        }
+      }
+      return { ok: true, result: {} }
+    })
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'error',
+        streamId: latestSubscribePayload().streamId,
+        message: 'SSH_SESSION_EXPIRED: relay identity changed'
+      }
+    })
+
+    await vi.waitFor(() =>
+      expect(onError).toHaveBeenCalledWith('Unknown method: terminal.recoverPane')
+    )
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.create' })
+    )
+    expect(transport.getPtyId()).toBe('remote:legacy-hub@@terminal-expired')
+    expect(transport.isConnected()).toBe(false)
+  })
+
   it('ignores stale stream end after reattaching a newer remote terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
@@ -1297,6 +1795,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       onPtyExit
     })
 
+    resolvedPaneHandle = 'terminal-old'
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-old',
       cols: 80,
@@ -1305,14 +1804,19 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
     const oldStreamId = latestSubscribePayload().streamId
+    const oldSubscriptionCallbacks = subscriptionCallbacks
 
+    resolvedPaneHandle = 'terminal-new'
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-new',
       cols: 80,
       rows: 24,
       callbacks: {}
     })
-    subscriptionCallbacks?.onResponse({
+    await vi.waitFor(() => {
+      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-new')
+    })
+    oldSubscriptionCallbacks?.onResponse({
       ok: true,
       result: { type: 'end', streamId: oldStreamId }
     })
@@ -1354,14 +1858,17 @@ describe('createRemoteRuntimePtyTransport', () => {
         leafId: 'pane:1'
       })
 
+      resolvedPaneHandle = 'terminal-old'
       transport.attach({
         existingPtyId: 'remote:env-1@@terminal-old',
         cols: 80,
         rows: 24,
         callbacks: {}
       })
+      await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-old'))
       expect(transport.sendInput('queued-for-old')).toBe(true)
 
+      resolvedPaneHandle = 'terminal-new'
       transport.attach({
         existingPtyId: 'remote:env-1@@terminal-new',
         cols: 80,
@@ -1406,6 +1913,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         return newStream
       })
     vi.doMock('../../runtime/remote-runtime-terminal-multiplexer', () => ({
+      REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE: 'remote_terminal_snapshot_too_large',
       getRemoteRuntimeTerminalMultiplexer: vi.fn(() => ({ subscribeTerminal }))
     }))
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -1418,12 +1926,15 @@ describe('createRemoteRuntimePtyTransport', () => {
       onPtyExit
     })
 
+    resolvedPaneHandle = 'terminal-old'
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-old',
       cols: 80,
       rows: 24,
       callbacks: { onError }
     })
+    await vi.waitFor(() => expect(subscribeTerminal).toHaveBeenCalledOnce())
+    resolvedPaneHandle = 'terminal-new'
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-new',
       cols: 80,
@@ -1471,25 +1982,17 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
       subscriptionSendBinary.mockClear()
 
-      expect(transport.sendInput('x')).toBe(true)
+      // Why: replacement input stays disabled until terminal.resolvePane proves the new handle belongs to this pane.
+      expect(transport.sendInput('x')).toBe(false)
       vi.advanceTimersByTime(8)
 
       const inputFrames = subscriptionSendBinary.mock.calls
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
       expect(inputFrames).toEqual([])
-      expect(runtimeCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'terminal.send',
-        params: {
-          terminal: 'terminal-new',
-          text: 'x',
-          client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
-          viewport: { cols: 80, rows: 24 },
-          claimViewport: true
-        },
-        timeoutMs: 15_000
-      })
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.send' })
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -1543,11 +2046,11 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     const connect = transport.connect({ url: '', callbacks: {} })
-    transport.attach({ existingPtyId: 'remote:env-2@@terminal-late', callbacks: {} })
+    transport.attach({ existingPtyId: 'remote:env-2@@terminal-attached', callbacks: {} })
     resolveCreate({ ok: true, result: { terminal: { handle: 'terminal-late' } } })
     await connect
 
-    expect(transport.getPtyId()).toBe('remote:env-2@@terminal-late')
+    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-attached')
     expect(onPtySpawn).not.toHaveBeenCalled()
     expect(runtimeCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -2007,6 +2510,45 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
   })
 
+  it('retires a host mirror that is authoritatively absent', async () => {
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'session.tabs.activate') {
+        return { ok: false, error: { code: 'runtime_error', message: 'tab_not_found' } }
+      }
+      if (args.method === 'terminal.recoverPane') {
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'terminal-created-on-hub',
+              tabId: 'host-tab-1',
+              leafId: 'leaf-1',
+              ptyId: 'ssh-private-pty',
+              worktreeId: 'wt-1'
+            }
+          }
+        }
+      }
+      return { ok: true, result: {} }
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('hub-env', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'leaf-1'
+    })
+
+    const onError = vi.fn()
+    await expect(transport.connect({ url: '', callbacks: { onError } })).resolves.toBeUndefined()
+    expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.recoverPane' })
+    )
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.create' })
+    )
+  })
+
   it('activates the requested split leaf for pending host session mirrors', async () => {
     runtimeCall.mockImplementation((args) => {
       if (args.method === 'session.tabs.activate') {
@@ -2291,7 +2833,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
-  it('does not close a split parent when the requested leaf times out but a sibling is ready', async () => {
+  it('leaves a timed-out pending split untouched without closing its parent', async () => {
     vi.useFakeTimers()
     try {
       const splitSnapshot = {
@@ -2328,7 +2870,17 @@ describe('createRemoteRuntimePtyTransport', () => {
         if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
           return Promise.resolve({ ok: true, result: splitSnapshot })
         }
-        return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+        return Promise.resolve({
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'terminal-2',
+              tabId: 'host-tab-1',
+              leafId: 'leaf-2',
+              worktreeId: 'wt-1'
+            }
+          }
+        })
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
@@ -2342,7 +2894,10 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.advanceTimersByTimeAsync(15_000)
 
       await expect(connect).resolves.toBeUndefined()
-      expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+      expect(onError).not.toHaveBeenCalled()
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.recoverPane' })
+      )
       expect(
         runtimeCall.mock.calls.some((call) => call[0].method.startsWith('session.tabs.close'))
       ).toBe(false)
@@ -2351,7 +2906,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
-  it('stops polling without closing the host tab when a mirror never publishes a ready handle', async () => {
+  it('does not mutate a mirror whose handle readiness remains unknown', async () => {
     vi.useFakeTimers()
     try {
       const pendingSnapshot = {
@@ -2378,7 +2933,17 @@ describe('createRemoteRuntimePtyTransport', () => {
         if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
           return Promise.resolve({ ok: true, result: pendingSnapshot })
         }
-        return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+        return Promise.resolve({
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'terminal-resolved',
+              tabId: 'host-tab-1',
+              leafId: 'leaf-1',
+              worktreeId: 'wt-1'
+            }
+          }
+        })
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
@@ -2392,7 +2957,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.advanceTimersByTimeAsync(15_000)
 
       await expect(connect).resolves.toBeUndefined()
-      expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+      expect(onError).not.toHaveBeenCalled()
       expect(runtimeCall).toHaveBeenCalledWith(
         expect.objectContaining({ method: 'session.tabs.activate' })
       )
@@ -2405,6 +2970,9 @@ describe('createRemoteRuntimePtyTransport', () => {
         expect.objectContaining({
           method: 'terminal.create'
         })
+      )
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.recoverPane' })
       )
       const closeCalls = runtimeCall.mock.calls.filter((call) =>
         String(call[0].method).startsWith('session.tabs.close')

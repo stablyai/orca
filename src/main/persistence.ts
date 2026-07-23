@@ -48,6 +48,7 @@ import type {
   ProjectGroup,
   FolderWorkspace,
   SparsePreset,
+  PersistedMobileClientTabSelections,
   WorktreeMeta,
   WorktreeLineage,
   WorkspaceLineage,
@@ -77,6 +78,7 @@ import {
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
+import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
 import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
 import {
   removeRepoFromHostWorkspaceSessions,
@@ -3034,6 +3036,9 @@ export class Store {
             normalizedProjectGroups
           ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
+          mobileClientTabSelectionsByDeviceId: normalizePersistedMobileClientTabSelections(
+            parsed.mobileClientTabSelectionsByDeviceId
+          ),
           workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
             parsed.workspaceLineageByChildKey
           ),
@@ -3910,8 +3915,10 @@ export class Store {
         ? { ...repo, projectGroupId: null }
         : repo
     )
+    const removedFolderWorkspaceKeys = new Set<string>()
     for (const workspace of this.state.folderWorkspaces ?? []) {
       if (deletedGroupIds.has(workspace.projectGroupId)) {
+        removedFolderWorkspaceKeys.add(folderWorkspaceKey(workspace.id))
         this.state.workspaceSession = removeWorkspaceSessionOwner(
           this.state.workspaceSession,
           folderWorkspaceKey(workspace.id)
@@ -3922,6 +3929,7 @@ export class Store {
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
     )
+    this.pruneMobileClientTabSelections((worktreeId) => removedFolderWorkspaceKeys.has(worktreeId))
     this.scheduleSave()
     return true
   }
@@ -4071,6 +4079,7 @@ export class Store {
       folderWorkspaceKey(id)
     )!
     this.removeWorkspaceLineageForFolderParent(id)
+    this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
     this.scheduleSave()
     return true
   }
@@ -4247,6 +4256,22 @@ export class Store {
       }
       if (parentScope?.type === 'worktree' && belongsToHost(parentScope.worktreeId)) {
         delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+      }
+    }
+    this.pruneMobileClientTabSelections(belongsToHost)
+  }
+
+  private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
+    for (const [clientNavigationId, selectionsByWorktree] of Object.entries(
+      this.state.mobileClientTabSelectionsByDeviceId ?? {}
+    )) {
+      for (const worktreeId of Object.keys(selectionsByWorktree)) {
+        if (matchesWorktreeId(worktreeId)) {
+          delete selectionsByWorktree[worktreeId]
+        }
+      }
+      if (Object.keys(selectionsByWorktree).length === 0) {
+        delete this.state.mobileClientTabSelectionsByDeviceId?.[clientNavigationId]
       }
     }
   }
@@ -4487,6 +4512,17 @@ export class Store {
   }
 
   // ── Sparse Presets ─────────────────────────────────────────────────
+
+  // ── Mobile client tab selections ──────────────────────────────────
+
+  getMobileClientTabSelections(): PersistedMobileClientTabSelections {
+    return this.state.mobileClientTabSelectionsByDeviceId ?? {}
+  }
+
+  setMobileClientTabSelections(next: PersistedMobileClientTabSelections): void {
+    this.state.mobileClientTabSelectionsByDeviceId = next
+    this.scheduleSave()
+  }
 
   getSparsePresets(repoId: string): SparsePreset[] {
     return [...(this.state.sparsePresetsByRepo[repoId] ?? [])].sort((left, right) =>
@@ -5034,6 +5070,11 @@ export class Store {
     changed = migrateSession(this.state.workspaceSession) || changed
     for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
       changed = migrateSession(session) || changed
+    }
+    for (const selectionsByWorktree of Object.values(
+      this.state.mobileClientTabSelectionsByDeviceId ?? {}
+    )) {
+      changed = moveKey(selectionsByWorktree) || changed
     }
     const showDotfiles = this.state.ui?.showDotfilesByWorktree
     if (showDotfiles) {
@@ -5869,17 +5910,24 @@ export class Store {
   }
 
   // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
-  persistPtyBinding(args: {
-    worktreeId: string
-    tabId: string
-    leafId: string
-    ptyId: string
-    incarnationId?: string
-    startupCwd?: string
-  }): void {
-    const session = this.state.workspaceSession
-    if (!session) {
-      return
+  persistPtyBinding(
+    args: {
+      worktreeId: string
+      tabId: string
+      leafId: string
+      ptyId: string
+      incarnationId?: string
+      startupCwd?: string
+    },
+    hostId?: string | null
+  ): void {
+    const resolvedHostId = this.resolveHostId(hostId)
+    const session = this.getWorkspaceSession(resolvedHostId)
+    if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolvedHostId]: session
+      }
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
     const paneKey = `${args.tabId}:${args.leafId}`
@@ -5894,6 +5942,16 @@ export class Store {
       session.terminalTopologyRevisionByRepoId = {
         ...session.terminalTopologyRevisionByRepoId,
         [repoId]: currentRevision + 1
+      }
+    }
+    const restoreSession = (): void => {
+      if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+        this.state.workspaceSession = sessionBeforeBinding
+      } else {
+        this.state.workspaceSessionsByHostId = {
+          ...this.state.workspaceSessionsByHostId,
+          [resolvedHostId]: sessionBeforeBinding
+        }
       }
     }
     if (args.incarnationId) {
@@ -5939,7 +5997,7 @@ export class Store {
       try {
         this.flushOrThrow()
       } catch (err) {
-        this.state.workspaceSession = sessionBeforeBinding
+        restoreSession()
         throw err
       }
       return
@@ -5987,7 +6045,7 @@ export class Store {
     try {
       this.flushOrThrow()
     } catch (err) {
-      this.state.workspaceSession = sessionBeforeBinding
+      restoreSession()
       throw err
     }
   }
@@ -6352,54 +6410,61 @@ export class Store {
     targetId: string,
     leases: SshRemotePtyLease[]
   ): boolean {
-    const session = this.state.workspaceSession
-    if (!leases?.length || !session) {
+    if (!leases?.length) {
       return false
     }
     let changed = false
-    for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-      for (const tab of tabs) {
-        if (
-          tab.ptyId &&
-          leases.some((lease) =>
-            this.sshRemotePtyLeaseMayReferenceBinding(lease, {
-              ptyId: tab.ptyId!,
-              worktreeId,
-              targetId,
-              tabId: tab.id
-            })
-          )
-        ) {
-          tab.ptyId = null
-          changed = true
-        }
-      }
-    }
-    for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
-      const bindings = layout.ptyIdsByLeafId
-      if (!bindings) {
-        continue
-      }
-      const worktreeId = Object.entries(session.tabsByWorktree ?? {}).find(([, tabs]) =>
-        tabs.some((tab) => tab.id === tabId)
-      )?.[0]
-      const nextBindings = Object.fromEntries(
-        Object.entries(bindings).filter(
-          ([leafId, ptyId]) =>
-            !leases.some((lease) =>
+    const sessions = new Set(
+      [
+        this.state.workspaceSession,
+        this.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)]
+      ].filter((session): session is WorkspaceSessionState => Boolean(session))
+    )
+    for (const session of sessions) {
+      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+        for (const tab of tabs) {
+          if (
+            tab.ptyId &&
+            leases.some((lease) =>
               this.sshRemotePtyLeaseMayReferenceBinding(lease, {
-                ptyId,
-                targetId,
+                ptyId: tab.ptyId!,
                 worktreeId,
-                tabId,
-                leafId
+                targetId,
+                tabId: tab.id
               })
             )
+          ) {
+            tab.ptyId = null
+            changed = true
+          }
+        }
+      }
+      for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
+        const bindings = layout.ptyIdsByLeafId
+        if (!bindings) {
+          continue
+        }
+        const worktreeId = Object.entries(session.tabsByWorktree ?? {}).find(([, tabs]) =>
+          tabs.some((tab) => tab.id === tabId)
+        )?.[0]
+        const nextBindings = Object.fromEntries(
+          Object.entries(bindings).filter(
+            ([leafId, ptyId]) =>
+              !leases.some((lease) =>
+                this.sshRemotePtyLeaseMayReferenceBinding(lease, {
+                  ptyId,
+                  targetId,
+                  worktreeId,
+                  tabId,
+                  leafId
+                })
+              )
+          )
         )
-      )
-      if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
-        layout.ptyIdsByLeafId = nextBindings
-        changed = true
+        if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
+          layout.ptyIdsByLeafId = nextBindings
+          changed = true
+        }
       }
     }
     if (changed) {

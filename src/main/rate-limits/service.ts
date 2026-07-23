@@ -1540,7 +1540,11 @@ export class RateLimitService {
             signal
           }),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
+        fetchOpenCodeGoRateLimits(
+          cookie,
+          workspaceIdOverride || undefined,
+          this.networkProxySettingsResolver?.()
+        ),
         fetchKimiRateLimits(),
         miniMaxConfigResult.error
           ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))

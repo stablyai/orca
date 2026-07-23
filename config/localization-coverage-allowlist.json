@@ -5,5 +5,40 @@
     "text": "Terminal 1",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "语言",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "語言",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "언어",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "言語",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "Idioma",
+    "dynamic": false,
+    "count": 1
   }
 ]

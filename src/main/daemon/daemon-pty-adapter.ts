@@ -10,6 +10,7 @@ import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
@@ -822,6 +823,18 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return foregroundProcess !== null && !isShellProcess(foregroundProcess)
   }
 
+  async inspectProcess(
+    id: string
+  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+    if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
+      throw new Error('terminal_liveness_unavailable')
+    }
+    return this.client.request<{
+      foregroundProcess: string | null
+      hasChildProcesses: boolean
+    }>('inspectProcess', { sessionId: id })
+  }
+
   async getForegroundProcess(id: string): Promise<string | null> {
     try {
       const result = await this.client.request<{ foregroundProcess: string | null }>(
@@ -921,6 +934,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
           title: 'shell',
           ...(worktreeId ? { worktreeId } : {}),
           ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {}),
+          ...(s.wslDistro !== undefined ? { wslDistro: s.wslDistro } : {}),
           ...this.validatedAgentSessionOwners(s.agentSessionOwners)
         }
       })

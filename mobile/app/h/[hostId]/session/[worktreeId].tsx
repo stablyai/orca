@@ -182,6 +182,7 @@ import { useTerminalLiveInputModePreference } from '../../../../src/session/use-
 import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { resolveMobileFileTabDoc } from '../../../../src/files/mobile-file-tab-doc'
+import { captureMobileFileMutationOwnership } from '../../../../src/files/mobile-file-mutation-ownership'
 import { openMobileTerminalFileTap } from '../../../../src/session/mobile-terminal-file-tap-open'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
@@ -1377,7 +1378,10 @@ export default function SessionScreen() {
         {
           terminal: handle,
           client: { id: deviceTokenRef.current!, type: 'mobile' as const },
-          viewport: viewportRef.current ?? undefined,
+          viewport: nativeChatTerminalStream.mobileNativeChatSubscribeViewport(
+            covered,
+            viewportRef.current
+          ),
           capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered)
         },
         (result) => {
@@ -2455,6 +2459,7 @@ export default function SessionScreen() {
     terminalFrameHeightRef,
     viewportRef,
     viewportMeasuredRef,
+    nativeChatCoveredRef: showNativeChatRef,
     clientRef,
     deviceTokenRef,
     initializedHandlesRef,
@@ -2706,14 +2711,25 @@ export default function SessionScreen() {
       if (connState !== 'connected') {
         return
       }
-      void fetchSessionTabs()
-      void fetchTerminals()
-      // Why: live subscription keeps stream ownership, but the fallback list poll should stop while this route is hidden.
-      const interval = setInterval(() => {
+      const refreshOnForeground = () => {
+        if (AppState.currentState !== 'active') {
+          return
+        }
         void fetchSessionTabs()
         void fetchTerminals()
-      }, 2000)
-      return () => clearInterval(interval)
+      }
+      const appStateSubscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+          refreshOnForeground()
+        }
+      })
+      // Why: live subscription keeps stream ownership, but the fallback list poll should stop while this route is hidden or backgrounded.
+      const interval = setInterval(refreshOnForeground, 2000)
+      refreshOnForeground()
+      return () => {
+        clearInterval(interval)
+        appStateSubscription.remove()
+      }
     }, [connState, fetchSessionTabs, fetchTerminals])
   )
 
@@ -3886,11 +3902,12 @@ export default function SessionScreen() {
 
     try {
       const worktree = `id:${worktreeId}`
+      const mutationOwnership = await captureMobileFileMutationOwnership(client, worktree)
       for (let attempt = 1; attempt <= 100; attempt += 1) {
         const relativePath = attempt === 1 ? 'untitled.md' : `untitled-${attempt}.md`
         const createResponse = await client.sendRequest(
           'files.createFile',
-          { worktree, relativePath },
+          { worktree, relativePath, ...mutationOwnership },
           { timeoutMs: 15_000 }
         )
         if (!createResponse.ok) {
@@ -4514,14 +4531,24 @@ export default function SessionScreen() {
               >
                 <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
               </Pressable>
-              {quickCommandsSupported === true ? (
-                <QuickCommandsTabButton
-                  disabled={
-                    creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+              {/* Why: stable placement matters, while old hosts must stay gated because they strip agentPrompt. */}
+              <QuickCommandsTabButton
+                disabled={
+                  creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+                }
+                onPress={() => {
+                  if (quickCommandsSupported === true) {
+                    setShowQuickCommands(true)
+                    return
                   }
-                  onPress={() => setShowQuickCommands(true)}
-                />
-              ) : null}
+                  showToast(
+                    quickCommandsSupported === false
+                      ? 'Desktop update required for quick commands'
+                      : 'Checking desktop capabilities — try again in a moment',
+                    1600
+                  )
+                }}
+              />
             </View>
           )}
         </SafeAreaView>

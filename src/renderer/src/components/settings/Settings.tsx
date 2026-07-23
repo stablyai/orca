@@ -280,7 +280,9 @@ function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
+  const setActiveRuntimeEnvironmentPreference = useAppStore(
+    (s) => s.setActiveRuntimeEnvironmentPreference
+  )
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
@@ -293,6 +295,7 @@ function Settings(): React.JSX.Element {
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
   const clearSettingsTarget = useAppStore((s) => s.clearSettingsTarget)
   const settingsProjectHostSelection = useAppStore((s) => s.settingsProjectHostSelection)
+  const settingsProjectSetupSelection = useAppStore((s) => s.settingsProjectSetupSelection)
   const setSettingsProjectHostSelection = useAppStore((s) => s.setSettingsProjectHostSelection)
   const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
@@ -366,6 +369,8 @@ function Settings(): React.JSX.Element {
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
+  const [sshHostAddIntentSignal, setSshHostAddIntentSignal] = useState(0)
+  const [remoteServerAddIntentSignal, setRemoteServerAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
@@ -649,6 +654,10 @@ function Settings(): React.JSX.Element {
     }
     if (settingsNavigationTarget.intent === 'add-quick-command') {
       setQuickCommandAddIntentSignal((signal) => signal + 1)
+    } else if (settingsNavigationTarget.intent === 'add-ssh-host') {
+      setSshHostAddIntentSignal((signal) => signal + 1)
+    } else if (settingsNavigationTarget.intent === 'add-remote-orca-server') {
+      setRemoteServerAddIntentSignal((signal) => signal + 1)
     }
     setMountedSectionIds((previous) => {
       if (previous.has(paneSectionId)) {
@@ -865,14 +874,21 @@ function Settings(): React.JSX.Element {
       const repo = getSettingsProjectHostRepo(
         settingsProject,
         repos,
-        settingsProjectHostSelection[settingsProject.projectId]
+        settingsProjectHostSelection[settingsProject.projectId],
+        settingsProjectSetupSelection[settingsProject.projectId]
       )
       if (repo) {
         reposByHostIdentity.set(getRepoHostIdentity(repo), repo)
       }
     }
     return [...reposByHostIdentity.values()]
-  }, [neededSectionIds, repos, settingsProjectHostSelection, settingsProjectList])
+  }, [
+    neededSectionIds,
+    repos,
+    settingsProjectHostSelection,
+    settingsProjectList,
+    settingsProjectSetupSelection
+  ])
 
   useEffect(() => {
     const repoHostIdentitySet = new Set(repos.map(getRepoHostIdentity))
@@ -1598,9 +1614,10 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('servers') ? (
                     <RuntimeEnvironmentsPane
                       settings={settings}
-                      switchRuntimeEnvironment={switchRuntimeEnvironment}
+                      setActiveRuntimeEnvironmentPreference={setActiveRuntimeEnvironmentPreference}
                       canGeneratePairingUrl={!isWebClient}
                       allowLocalRuntime={!isWebClient}
+                      addServerIntentSignal={remoteServerAddIntentSignal}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1615,7 +1632,9 @@ function Settings(): React.JSX.Element {
                     )}
                     searchEntries={getSectionSearchEntries('ssh')}
                   >
-                    {isSectionMounted('ssh') ? <SshPane /> : null}
+                    {isSectionMounted('ssh') ? (
+                      <SshPane addTargetIntentSignal={sshHostAddIntentSignal} />
+                    ) : null}
                   </SettingsSection>
                 ) : null}
 
@@ -1711,7 +1730,8 @@ function Settings(): React.JSX.Element {
                   const repo = getSettingsProjectHostRepo(
                     settingsProject,
                     repos,
-                    settingsProjectHostSelection[settingsProject.projectId]
+                    settingsProjectHostSelection[settingsProject.projectId],
+                    settingsProjectSetupSelection[settingsProject.projectId]
                   )
                   if (!repo) {
                     return null
@@ -1744,6 +1764,9 @@ function Settings(): React.JSX.Element {
                           updateRepo={updateRepo}
                           removeProject={() => void removeProjectAllHosts(settingsProject.setups)}
                           project={project}
+                          selectedProjectSetupId={
+                            settingsProjectSetupSelection[settingsProject.projectId]
+                          }
                           isLocalWindowsProject={
                             getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
                             isWindowsTerminalHost

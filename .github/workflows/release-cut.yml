@@ -68,6 +68,10 @@ jobs:
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
+      # Surfaces workflow_dispatch inputs as a table in the job summary
+      # (kind, ref, dry_run, version_suffix) so runs are easy to audit.
+      - uses: m-s-abeer/update-gha-summary-with-workflow-inputs@v1
+
       - name: Checkout ref
         uses: actions/checkout@v6
         with:
@@ -1326,7 +1330,8 @@ jobs:
           }
 
           Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
-          & 'node_modules/app-builder-bin/win/x64/app-builder.exe' blockmap --input 'dist/orca-windows-setup.exe' --output 'dist/orca-windows-setup.exe.blockmap'
+          node config/scripts/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
+          if ($LASTEXITCODE -ne 0) { throw "blockmap generation failed with exit code $LASTEXITCODE" }
 
           $installer = Get-Item 'dist/orca-windows-setup.exe'
           $blockmap = Get-Item 'dist/orca-windows-setup.exe.blockmap'

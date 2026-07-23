@@ -19,7 +19,9 @@ describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
   let onReplay: ((payload: { id: string; data: string }) => void) | null = null
-  let onExit: ((payload: { id: string; code: number }) => void) | null = null
+  let onExit:
+    | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
+    | null = null
 
   function flushPtySideEffects(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 0))
@@ -50,10 +52,18 @@ describe('createIpcPtyTransport', () => {
             onReplay = callback
             return () => {}
           }),
-          onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
-            onExit = callback
-            return () => {}
-          })
+          onExit: vi.fn(
+            (
+              callback: (payload: {
+                id: string
+                code: number
+                preserveRendererBinding?: boolean
+              }) => void
+            ) => {
+              onExit = callback
+              return () => {}
+            }
+          )
         }
       }
     } as unknown as typeof window
@@ -1575,16 +1585,31 @@ describe('createIpcPtyTransport', () => {
     expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
 
     // Simulate shutdownWorktreeTerminals: unregister data handlers before kill.
-    unregisterPtyDataHandlers(['pty-1'])
+    const snapshots = unregisterPtyDataHandlers(['pty-1'])
 
     // Final burst after the handler was removed: its title change and BEL must not produce a notification.
     onData?.({ id: 'pty-1', data: ']0;Claude done' })
     expect(onAgentBecameIdle).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
 
+    for (const snapshot of snapshots) {
+      snapshot.commit()
+    }
+
     // Exit handler should still work (exit handlers are kept alive)
     onExit?.({ id: 'pty-1', code: -1 })
     expect(onPtyExit).toHaveBeenCalledWith('pty-1')
+  })
+
+  it('marks a host reversible-stop exit before delivering it to the pane', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { consumeCommittedPtyShutdownExit } = await import('./pty-shutdown-exit-deferral')
+    const transport = createIpcPtyTransport()
+    await transport.connect({ url: '', callbacks: {} })
+
+    onExit?.({ id: 'pty-1', code: 0, preserveRendererBinding: true })
+
+    expect(consumeCommittedPtyShutdownExit('pty-1')).toBe(true)
   })
 
   it('restores data handlers when an intentional shutdown fails before exit', async () => {
@@ -1603,9 +1628,62 @@ describe('createIpcPtyTransport', () => {
     expect(onDataCallback).not.toHaveBeenCalled()
 
     restorePtyDataHandlersAfterFailedShutdown(snapshots)
+    expect(onDataCallback).toHaveBeenCalledWith('final burst while detached')
     onData?.({ id: 'pty-1', data: 'live again' })
 
     expect(onDataCallback).toHaveBeenCalledWith('live again')
+  })
+
+  it('retains rollback replay until a pane detached during sleep registers again', async () => {
+    const {
+      createIpcPtyTransport,
+      restorePtyDataHandlersAfterFailedShutdown,
+      unregisterPtyDataHandlers
+    } = await import('./pty-transport')
+    const first = createIpcPtyTransport()
+    await first.connect({ url: '', callbacks: { onReplayData: vi.fn() } })
+
+    const snapshots = unregisterPtyDataHandlers(['pty-1'])
+    onReplay?.({ id: 'pty-1', data: 'rollback replay while hidden' })
+    first.destroy?.()
+    restorePtyDataHandlersAfterFailedShutdown(snapshots)
+
+    const replayedAfterAttach = vi.fn()
+    const replacement = createIpcPtyTransport()
+    await replacement.connect({
+      url: '',
+      callbacks: { onReplayData: replayedAfterAttach }
+    })
+
+    expect(replayedAfterAttach).toHaveBeenCalledWith('rollback replay while hidden')
+  })
+
+  it('keeps handlers suspended until every overlapping shutdown owner rolls back', async () => {
+    const {
+      createIpcPtyTransport,
+      restorePtyDataHandlersAfterFailedShutdown,
+      unregisterPtyDataHandlers
+    } = await import('./pty-transport')
+    const { ptyDataSidecars } = await import('./pty-dispatcher')
+    const onDataCallback = vi.fn()
+    const sidecar = vi.fn()
+    const transport = createIpcPtyTransport()
+
+    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
+
+    const first = unregisterPtyDataHandlers(['pty-1'])
+    const second = unregisterPtyDataHandlers(['pty-1'])
+    ptyDataSidecars.set('pty-1', new Set([sidecar]))
+    onData?.({ id: 'pty-1', data: 'buffered while both owners are pending' })
+
+    restorePtyDataHandlersAfterFailedShutdown(first)
+    expect(onDataCallback).not.toHaveBeenCalled()
+    expect(sidecar).not.toHaveBeenCalled()
+
+    restorePtyDataHandlersAfterFailedShutdown(second)
+    expect(onDataCallback).toHaveBeenCalledWith('buffered while both owners are pending')
+    expect(sidecar).toHaveBeenCalledWith('buffered while both owners are pending')
+    ptyDataSidecars.delete('pty-1')
   })
 
   it('unregisterPtyDataHandlers cancels staleTitleTimer so it cannot fire stale idle transition', async () => {
@@ -1634,13 +1712,16 @@ describe('createIpcPtyTransport', () => {
       vi.advanceTimersByTime(0)
 
       // Unregister must cancel the staleTitleTimer and reset the tracker so no stale idle transition fires.
-      unregisterPtyDataHandlers(['pty-1'])
+      const snapshots = unregisterPtyDataHandlers(['pty-1'])
 
       // Advance past the 3 s stale-title timeout
       vi.advanceTimersByTime(4000)
 
       // The staleTitleTimer must NOT have fired onAgentBecameIdle
       expect(onAgentBecameIdle).not.toHaveBeenCalled()
+      for (const snapshot of snapshots) {
+        snapshot.commit()
+      }
     } finally {
       vi.useRealTimers()
     }
@@ -2074,6 +2155,41 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onReplayData).toHaveBeenCalledWith('hello')
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
+  })
+
+  it('suspends passive remote output until host sleep is cancelled', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { applyHostWorktreeTerminalSleepState } = await import('./pty-shutdown-exit-deferral')
+    const onData = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    await transport.connect({ url: '', callbacks: { onData } })
+    const { streamId } = latestRemoteSubscribePayload()
+    const started = {
+      type: 'worktreeTerminalSleepState' as const,
+      worktreeId: 'repo1::/remote/wt',
+      generation: 7,
+      phase: 'started' as const,
+      ptyIds: ['host-pty-1'],
+      terminalHandles: ['term-remote']
+    }
+
+    applyHostWorktreeTerminalSleepState('env-1', started)
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId,
+        seq: 1,
+        payload: encodeTerminalStreamText('teardown output')
+      })
+    )
+    expect(onData).not.toHaveBeenCalled()
+
+    applyHostWorktreeTerminalSleepState('env-1', { ...started, phase: 'cancelled' })
+    expect(onData).toHaveBeenCalledWith('teardown output', expect.objectContaining({ seq: 1 }))
   })
 
   it('routes provider resumes through the host authority without sending the client command', async () => {

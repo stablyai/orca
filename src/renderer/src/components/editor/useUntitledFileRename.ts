@@ -1,11 +1,10 @@
 import { useCallback, useState } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
 import { dirname, joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { createRuntimePath, runtimePathExists } from '@/runtime/runtime-file-client'
 import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 
@@ -46,16 +45,11 @@ export function useUntitledFileRename({
       const oldPath = renameDialogFile.filePath
       const worktreeRoot = getUntitledFileRoot(renameDialogFile)
       const newPath = joinPath(worktreeRoot, newRelPath)
-      const connectionId = getConnectionId(renameDialogFile.worktreeId) ?? undefined
-      const fileContext = {
-        settings: settingsForRuntimeOwner(
-          useAppStore.getState().settings,
-          renameDialogFile.runtimeEnvironmentId
-        ),
-        worktreeId: renameDialogFile.worktreeId,
-        worktreePath: worktreeRoot,
-        connectionId
-      }
+      const fileContext = getEditorFileOperationContext(
+        useAppStore.getState(),
+        renameDialogFile,
+        worktreeRoot
+      )
 
       if (newPath !== oldPath && (await runtimePathExists(fileContext, newPath))) {
         setRenameError('A file with that name already exists')

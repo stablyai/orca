@@ -10,8 +10,10 @@ startup. Current Orca builds start Xvfb automatically for `orca serve` when no
 not required. When `DISPLAY` is set, Orca uses that display instead of starting
 a competing Xvfb process.
 
-The supported deployment matrix covers Ubuntu 22.04 and 24.04 and current
-Debian stable. Package names can differ on other Debian-derived releases.
+The supported deployment matrix covers Ubuntu 20.04, 22.04, and 24.04 and
+current Debian stable — anything with glibc 2.31 or newer (see
+[Linux glibc compatibility](./linux-glibc-compatibility.md)). Package names can
+differ on other Debian-derived releases.
 
 ## Ubuntu and Debian prerequisites
 

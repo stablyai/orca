@@ -271,7 +271,7 @@ jobs:
             throw 'Signed Windows installer was not returned by SignPath.'
           }
           Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
-          & 'node_modules/app-builder-bin/win/x64/app-builder.exe' blockmap --input 'dist/orca-windows-setup.exe' --output 'dist/orca-windows-setup.exe.blockmap'
+          node config/scripts/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $installer = Get-Item 'dist/orca-windows-setup.exe'

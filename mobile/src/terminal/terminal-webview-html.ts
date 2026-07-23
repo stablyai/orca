@@ -290,6 +290,7 @@ window.onerror = function(msg) {
   var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
   var terminalThemeInput = null;
   var terminalTheme = defaultTheme;
+  var terminalMinimumContrastRatio = 3;
   var webglAddon = null;
   var webglRecoveryTimer = null;
   var activeAltScreenSnapshot = false;
@@ -714,6 +715,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       cols: cols || 80,
       rows: rows || 24,
       theme: terminalTheme,
+      minimumContrastRatio: terminalMinimumContrastRatio,
       fontFamily: terminalFontFamily,
       fontSize: fontPxForScale(currentTextScale),
       fontWeight: '300',

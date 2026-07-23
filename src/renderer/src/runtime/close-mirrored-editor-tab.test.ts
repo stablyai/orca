@@ -47,7 +47,12 @@ describe('notifyHostOfMirroredEditorClose', () => {
     notifyHostOfMirroredEditorClose(buildState(), 'wt-1', 'file-1')
 
     expect(
-      isWebSessionCloseIntentPending('env-1', 'wt-1', toHostSessionTabId('host-tab-1'), now)
+      isWebSessionCloseIntentPending(
+        { environmentId: 'env-1' },
+        'wt-1',
+        toHostSessionTabId('host-tab-1'),
+        now
+      )
     ).toBe(true)
   })
 

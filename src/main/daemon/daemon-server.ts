@@ -57,6 +57,9 @@ export type DaemonServerOptions = {
   }
   ptySpawnHealthCheck?: () => Promise<void>
   preparePtySpawn?: () => Promise<void>
+  // Why: login-session death detection (#7936) probes on PTY-exit bursts and fresh app connections.
+  onPtySessionExit?: (sessionId: string) => void
+  onAuthenticatedClientPair?: () => void
   log?: DaemonFileLog
   spawnSubprocess: (opts: {
     sessionId: string
@@ -101,6 +104,7 @@ export class DaemonServer {
   private startedAtMs: number | null
   private protocolVersion: number
   private onIdleShutdown: () => void
+  private onAuthenticatedClientPair: () => void
   private ptySpawnHealthCheck: () => Promise<void>
   private preparePtySpawn: () => Promise<void>
   private log: DaemonFileLog
@@ -180,7 +184,11 @@ export class DaemonServer {
       now: () => Date.now()
     }
     this.token = randomUUID()
-    this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
+    this.onAuthenticatedClientPair = opts.onAuthenticatedClientPair ?? (() => {})
+    this.host = new TerminalHost({
+      spawnSubprocess: opts.spawnSubprocess,
+      ...(opts.onPtySessionExit ? { onSessionReaped: opts.onPtySessionExit } : {})
+    })
     this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
     this.preparePtySpawn = opts.preparePtySpawn ?? (() => Promise.resolve())
     this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() => ({
@@ -481,6 +489,8 @@ export class DaemonServer {
       }
       this.setupStreamSocket(socket, client)
       client.authenticatedPairEstablished = true
+      // Why: one-shot health probes authenticate only a control socket; they are not fresh app activity.
+      this.onAuthenticatedClientPair()
       // A complete app connection (unlike a probe) re-owns the endpoint and cancels pending retirement.
       this.initialAdoptionDeadlineMs = null
       this.retirementRequested = false
@@ -898,6 +908,9 @@ export class DaemonServer {
 
       case 'getForegroundProcess':
         return { foregroundProcess: this.host.getForegroundProcess(request.payload.sessionId) }
+
+      case 'inspectProcess':
+        return this.host.inspectProcess(request.payload.sessionId)
 
       case 'confirmForegroundProcess':
         return {

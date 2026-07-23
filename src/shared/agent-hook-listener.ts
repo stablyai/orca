@@ -32,10 +32,10 @@ import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
-  finishClaudeSubagent,
   foldClaudeBackgroundTasksIntoRoster,
+  idleClaudeTeammateByName,
   readClaudeBackgroundAgentTasks,
-  removeClaudeTeammateByName,
+  stopClaudeSubagent,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
 } from './claude-subagent-roster'
@@ -2350,8 +2350,8 @@ function normalizeClaudeSubagentLifecycleEvent(
     if (!teammateName) {
       return null
     }
-    // Why: only working children keep a row; TeammateIdle is the fallback finish signal when a named agent's SubagentStop was lost (its background_tasks never stops reading "running").
-    removeClaudeTeammateByName(roster, teammateName)
+    // Why: on claude 2.1.21x teammates are turn-based — TeammateIdle means "turn over, awaiting mail", not finished. The row parks as idle (confirmed teammate) instead of leaving, so the sidebar keeps showing resumable children.
+    idleClaudeTeammateByName(roster, teammateName)
     clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
       claudeTeammateIdMatchesName(waitingAgentId, teammateName)
     )
@@ -2368,8 +2368,8 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
-      // Why: SubagentStop is the reliable finish signal even for teammate-shaped ids (their background_tasks stay "running" forever); a resumed teammate re-earns its row.
-      finishClaudeSubagent(roster, agentId)
+      // Why: one-shot stops are true finishes (row removed); teammate-shaped stops are turn ends on 2.1.21x — the row parks idle and a later SubagentStart revives it.
+      stopClaudeSubagent(roster, agentId)
       // Why: a blocked child that dies without another tool event would pin its permission/question wait on the pane forever — nothing else references that agent again.
       clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
     }
@@ -2393,11 +2393,12 @@ export function seedClaudeSubagentRosterFromSnapshots(
   }
   const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
   for (const snapshot of snapshots) {
-    // Why: the roster tracks only working children now; a persisted idle snapshot (from a build that kept idle rows) is finished — drop it so restart doesn't resurrect the stale pile.
+    // Why: idle-teammate liveness can't be proven across a restart (its TeammateIdle confirmation is gone); only working seeds restore, and a live teammate re-earns its row via SubagentStart.
     if (snapshot.state !== 'working') {
       continue
     }
     roster.set(snapshot.id, {
+      state: 'working',
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
@@ -3229,13 +3230,17 @@ function normalizeCodexEvent(
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
+  // Why: Codex's request_user_input (0.145+) is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting like grok's ask_user_question.
+  const isUserInputPreTool =
+    eventName === 'PreToolUse' &&
+    isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
   const stateName =
     eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
-    eventName === 'PreToolUse' ||
+    (eventName === 'PreToolUse' && !isUserInputPreTool) ||
     eventName === 'PostToolUse'
       ? 'working'
-      : eventName === 'PermissionRequest'
+      : eventName === 'PermissionRequest' || isUserInputPreTool
         ? 'waiting'
         : eventName === 'Stop'
           ? 'done'

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import {
   sendMobileNativeChatMessage,
   sendMobileNativeChatMessageWithOutcome
@@ -84,6 +85,32 @@ describe('sendMobileNativeChatMessage', () => {
     await expect(
       sendMobileNativeChatMessage({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe(false)
+  })
+
+  it('reports an unknown outcome when a logical cutover interrupts the send', async () => {
+    const client = {
+      sendRequest: vi.fn().mockRejectedValue(new LogicalClientCutoverError())
+    } as unknown as RpcClient
+
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hello' })
+    ).resolves.toBe('unknown')
+    // The boolean wrapper still treats unknown as not-accepted (never retried here).
+    await expect(
+      sendMobileNativeChatMessage({ client, terminal: 'term', text: 'hello' })
+    ).resolves.toBe(false)
+  })
+
+  it('treats a cross-bundle cutover error (matched by message) as unknown', async () => {
+    // Why: instanceof can miss across bundle copies, so cutover is also matched
+    // by its message — that path must still land on ambiguous, not rejected.
+    const client = {
+      sendRequest: vi.fn().mockRejectedValue(new Error('RPC interrupted by connection migration'))
+    } as unknown as RpcClient
+
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hello' })
+    ).resolves.toBe('unknown')
   })
 
   it('reports acceptance and host rejection as definite outcomes', async () => {

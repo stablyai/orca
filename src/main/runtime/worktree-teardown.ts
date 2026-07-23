@@ -26,9 +26,8 @@ export type WorktreeTeardownResult = {
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 
-// Why: margin so a bounded daemon RPC rejects BEFORE the sweep deadline and its
-// rejection can propagate — otherwise the outer deadline wins with a confusing
-// "Timed out waiting for physical PTY teardown" instead of the accurate stop failure.
+// Why: reserve time after bounded stop RPCs to recheck whether a reported
+// failure actually left a live PTY before the outer sweep deadline.
 export const WORKTREE_TEARDOWN_RPC_MARGIN_MS = 500
 
 // Absolute deadline (epoch ms) threaded into provider RPCs on the destructive
@@ -150,13 +149,39 @@ export async function killAllProcessesForWorktree(
   result.providerStopped = providerStopped
   result.registryStopped = registryStopped
   if (deps.requirePhysicalStop) {
-    const stops = await Promise.all(stopAttempts.values())
-    if (stops.some((stopped) => !stopped)) {
+    const stopResults = await Promise.all(
+      [...stopAttempts].map(async ([ptyId, stopped]) => [ptyId, await stopped] as const)
+    )
+    const failedPtyIds = stopResults.filter(([, stopped]) => !stopped).map(([ptyId]) => ptyId)
+    const failedPtysExited =
+      failedPtyIds.length === 0 ||
+      (await verifyFailedPtysExited(failedPtyIds, deps.localProvider, deadline))
+    if (!failedPtysExited) {
       throw new Error(`Failed to physically stop every PTY for worktree: ${worktreeId}`)
+    }
+    for (const ptyId of failedPtyIds) {
+      clearStoppedPtyState(ptyId, deps.onPtyStopped)
     }
   }
 
   return result
+}
+
+async function verifyFailedPtysExited(
+  failedPtyIds: readonly string[],
+  provider: IPtyProvider,
+  deadline: number
+): Promise<boolean> {
+  const sessions = await settleBeforeDeadline(
+    () => provider.listProcesses({ deadlineMs: deadline }),
+    null,
+    deadline
+  ).catch(() => null)
+  if (!sessions) {
+    return false
+  }
+  const livePtyIds = new Set(sessions.map((session) => session.id))
+  return failedPtyIds.every((ptyId) => !livePtyIds.has(ptyId))
 }
 
 async function settleBeforeDeadline<T>(

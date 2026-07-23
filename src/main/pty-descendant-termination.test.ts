@@ -90,10 +90,25 @@ describe('collectDescendantRows', () => {
     expect(snapshot.capturedAtMs).toBe(CAPTURED_AT_MS)
   })
 
-  it('returns a null root pgid when the root row is already gone', () => {
+  it('sweeps nothing when the root row is already gone (a vacated PID has no findable tree)', () => {
+    // The root (10) is absent from the table: it has exited. Row 20 still points
+    // at ppid 10, but that is a PID-reuse coincidence, not a real descendant —
+    // never collect it.
     const snapshot = collectDescendantRows(10, [row(20, 10, 20)], CAPTURED_AT_MS)
     expect(snapshot.rootPgid).toBeNull()
-    expect(snapshot.descendants.map((r) => r.pid)).toEqual([20])
+    expect(snapshot.descendants).toEqual([])
+  })
+
+  it('does not sweep unrelated processes that merely reference a vacated root PID as ppid', () => {
+    // The PTY root (500) has exited, so its row is absent. Other live processes
+    // (501/502/503) still list ppid 500 — either not-yet-reparented orphans or, in
+    // the hazardous case, children of a process that recycled PID 500. The walk is
+    // seeded only by a stale number, so it cannot tell them apart and must sweep
+    // none. (A root PID recycled to a *live* process would appear in the table and
+    // is out of scope for this guard.)
+    const table = [row(501, 500, 500), row(502, 500, 500), row(503, 500, 500)]
+    const snapshot = collectDescendantRows(500, table, CAPTURED_AT_MS)
+    expect(snapshot.descendants).toEqual([])
   })
 })
 
@@ -112,6 +127,21 @@ describe('captureDescendantSnapshot', () => {
       platform: 'darwin'
     })
     expect(result).toEqual(snapshot([row(20, 10, 20)]))
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('captures no descendants and signals nothing when the root PID was already recycled', async () => {
+    // End-to-end proof for the #9191-class hazard: the captured PTY root (500) is
+    // gone; only unrelated live processes reference its vacated PID. Neither the
+    // snapshot nor the terminator may touch them.
+    const readTable = vi
+      .fn()
+      .mockResolvedValue(tableCapture([row(501, 500, 500), row(502, 500, 500), row(503, 500, 500)]))
+    const result = await captureDescendantSnapshot(500, { readTable, platform: 'darwin' })
+    expect(result?.descendants).toEqual([])
+    const sendSignal = vi.fn()
+    terminateDescendantSnapshot(result!, { sendSignal })
+    expect(sendSignal).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
 

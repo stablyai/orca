@@ -6,7 +6,10 @@ describe('renderer startup runtime routing', () => {
   it('hydrates persisted UI before local catalog and worktree hydration', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const startupBlockStart = source.indexOf('void (async () => {')
-    const startupBlockEnd = source.indexOf("timeRendererStartupStep('session-get'")
+    // Why (#18): worktrees/session-get/catalog now run concurrently, so session-get is no longer the
+    // block terminator. End the slice at hydrate-session-stores (runs after the Promise.all settles) so
+    // every concurrent fetch falls inside the analyzed block.
+    const startupBlockEnd = source.indexOf("timeRendererStartupSyncStep('hydrate-session-stores'")
     const startupBlock = source.slice(startupBlockStart, startupBlockEnd)
 
     const settingsIndex = startupBlock.indexOf('actions.fetchSettings()')
@@ -23,6 +26,7 @@ describe('renderer startup runtime routing', () => {
     const localFoldersIndex = startupBlock.indexOf(
       "actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })"
     )
+    const sessionGetIndex = startupBlock.indexOf("timeRendererStartupStep('session-get'")
     const localWorktreesIndex = startupBlock.indexOf(
       "actions.fetchAllWorktrees({ hydrationPurge: 'defer' })"
     )
@@ -30,13 +34,33 @@ describe('renderer startup runtime routing', () => {
 
     expect(settingsIndex).toBeGreaterThanOrEqual(0)
     expect(startupBlockEnd).toBeGreaterThan(startupBlockStart)
+    // Persisted UI hydrates before any local catalog/session/worktree read kicks off.
     expect(settingsIndex).toBeLessThan(uiGetIndex)
     expect(uiGetIndex).toBeLessThan(hydrateUiIndex)
     expect(hydrateUiIndex).toBeLessThan(localReposIndex)
+    // The local catalog chain stays internally ordered (folders merge against project groups).
     expect(localReposIndex).toBeLessThan(localGroupsIndex)
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
-    expect(localFoldersIndex).toBeLessThan(localWorktreesIndex)
+    // Worktree scan and session read both start only after repos is loaded (they snapshot/route on it),
+    // but run concurrently with the catalog chain — see the Promise.all assertion below.
+    expect(localReposIndex).toBeLessThan(sessionGetIndex)
+    expect(localReposIndex).toBeLessThan(localWorktreesIndex)
+    // Lineage is deferred to post-hydration remote refresh, not part of the local hydration block.
     expect(lineageIndex).toBe(-1)
+
+    // Guard the concurrency itself: fetch-worktrees, the session read, and the local catalog chain must be
+    // joined in a single allSettled so the two disk reads hide behind the O(repos) worktree scan — AND so a
+    // fast rejection can't enter recovery while a sibling is still mutating the store (allSettled, not
+    // fail-fast Promise.all).
+    const joinStart = startupBlock.indexOf('await Promise.allSettled([')
+    expect(joinStart).toBeGreaterThan(hydrateUiIndex)
+    const joinBlock = startupBlock.slice(joinStart)
+    expect(joinBlock).toContain("timeRendererStartupStep('fetch-worktrees'")
+    expect(joinBlock).toContain('sessionReadPromise')
+    expect(joinBlock).toContain('localCatalogChain')
+    // The join must not be fail-fast: a bare `Promise.all([` on these branches would re-introduce the
+    // recovery-during-hydration race.
+    expect(startupBlock).not.toContain('await Promise.all([')
   })
 
   it('refreshes remote catalogs after startup hydration succeeds', () => {

@@ -13,16 +13,11 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Behavior-preserving: keep synthetic-pid sessions probing as alive so the wedged-ConPTY exit synthesis
-// never fires against these fake pids.
-vi.mock('../pty/os-process-termination', () => ({
-  isProcessAlive: () => true,
-  killOsProcessTree: vi.fn()
-}))
+vi.mock('../pty/os-process-termination', () => ({ isProcessAlive: () => true }))
 
-function createMockSubprocess(
-  options: { startupCommandDeliveredInShellArgs?: boolean; shellPath?: string } = {}
-): SubprocessHandle {
+type MockSubprocessOptions = { startupCommandDeliveredInShellArgs?: boolean; shellPath?: string }
+
+function createMockSubprocess(options: MockSubprocessOptions = {}): SubprocessHandle {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
@@ -90,6 +85,9 @@ describe('TerminalHost', () => {
   afterEach(async () => {
     await host.dispose()
   })
+
+  it('rejects missing strict inspection', () =>
+    expect(() => host.inspectProcess('missing-session')).toThrow('not found'))
 
   describe('createOrAttach', () => {
     it('creates a new session when none exists', async () => {
@@ -506,7 +504,6 @@ describe('TerminalHost', () => {
       }
     })
 
-
     it('throws for non-existent session', () => {
       expect(() => host.kill('missing')).toThrow('Session not found')
     })
@@ -891,6 +888,8 @@ describe('TerminalHost', () => {
     })
 
     it('does not list exited sessions', async () => {
+      const onSessionReaped = vi.fn()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn, onSessionReaped })
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -900,6 +899,7 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onExitCb?.(0)
       expect(host.listSessions()).toEqual([])
+      expect(onSessionReaped).toHaveBeenCalledWith('session-1')
     })
 
     it('never force-kills an exited session (recycled-pid SIGKILL safety)', async () => {

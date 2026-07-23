@@ -1,5 +1,13 @@
 import React from 'react'
-import { Bell, CalendarClock, EyeOff, LayoutDashboard, Search, Smartphone } from 'lucide-react'
+import {
+  Bell,
+  CalendarClock,
+  EyeOff,
+  LayoutDashboard,
+  MessageCircleQuestion,
+  Search,
+  Smartphone
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -44,10 +52,7 @@ export function shouldShowAutomationsButton(
   return settings?.showAutomationsButton !== false
 }
 
-// Per-state dot colors mirror AgentStateDot so the sidebar counts read the same
-// as the board (amber = needs you, yellow = working, neutral = idle, emerald = done).
-const DASHBOARD_BUCKET_DOT_CLASS: Record<DashboardBucket, string> = {
-  attention: 'bg-amber-500',
+const DASHBOARD_BUCKET_DOT_CLASS: Record<'working' | 'idle', string> = {
   working: 'bg-yellow-500',
   idle: 'bg-neutral-500/50'
 }
@@ -80,7 +85,11 @@ function DashboardBucketCounts({
           aria-label={`${dashboardBucketLabel(bucket)}: ${counts[bucket]}`}
           className="inline-flex items-center gap-1 text-[10px] tabular-nums text-worktree-sidebar-foreground/55"
         >
-          <span className={cn('size-1.5 rounded-full', DASHBOARD_BUCKET_DOT_CLASS[bucket])} />
+          {bucket === 'attention' ? (
+            <MessageCircleQuestion className="size-2.5 text-amber-500" aria-hidden />
+          ) : (
+            <span className={cn('size-1.5 rounded-full', DASHBOARD_BUCKET_DOT_CLASS[bucket])} />
+          )}
           {counts[bucket]}
         </span>
       ))}

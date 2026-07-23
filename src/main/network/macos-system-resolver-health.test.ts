@@ -132,6 +132,23 @@ resolver #1
     expect(child.listenerCount('close')).toBe(0)
   })
 
+  it('kills scutil and removes listeners when its owner stops', async () => {
+    mockPlatform('darwin')
+    const child = createMockScutilProcess()
+    vi.mocked(spawn).mockReturnValue(child)
+    const abortController = new AbortController()
+
+    const healthPromise = readCurrentProcessMacSystemResolverHealth(abortController.signal)
+    abortController.abort()
+
+    await expect(healthPromise).resolves.toBe('unknown')
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
+
   it('removes scutil listeners when the child closes normally', async () => {
     mockPlatform('darwin')
     const child = createMockScutilProcess()
