@@ -154,6 +154,7 @@ import {
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import {
+  firesNativePasteEvent,
   getClipboardEventText,
   isClipboardEventPasteRequired
 } from './terminal-clipboard-event-paste'
@@ -2074,9 +2075,11 @@ export default function TerminalPane({
         }
         return
       }
-      if (isClipboardEventPasteRequired()) {
+      if (isClipboardEventPasteRequired() && firesNativePasteEvent(e, isMac)) {
         // Why: without navigator.clipboard the chord's native paste event is the
         // only clipboard access — let its default fire and handle it in onPaste.
+        // A remapped chord (e.g. Ctrl+Y) fires no paste event, so keep consuming it
+        // below instead of letting xterm encode it to the PTY as a raw control char.
         return
       }
       e.preventDefault()
