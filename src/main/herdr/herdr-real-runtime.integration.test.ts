@@ -49,7 +49,10 @@ runRealHerdr('real Herdr runtime graph', () => {
       createdAt: 1
     }
     const transport = new HerdrCliHostTransport({
-      commandFor: localHerdrCommand(herdrBinary!),
+      commandFor: localHerdrCommand(herdrBinary!, {
+        ...process.env,
+        XDG_CONFIG_HOME: configHome
+      }),
       timeoutMs: 30_000
     })
     const manager = new HerdrRuntimeManager(transport)

@@ -9,7 +9,7 @@ const spawnMock = vi.hoisted(() => vi.fn())
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
-import { HerdrCliHostTransport } from './herdr-cli-host-transport'
+import { HerdrCliHostTransport, localHerdrCommand } from './herdr-cli-host-transport'
 import { HerdrSshHostTransport } from './herdr-ssh-host-transport'
 
 type MockChildProcess = Omit<ChildProcessWithoutNullStreams, 'stdout'> & {
@@ -37,6 +37,44 @@ function createSshChannel(): ClientChannel & { close: ReturnType<typeof vi.fn> }
 }
 
 describe('Herdr terminal control transports', () => {
+  it('uses the configured environment for local Herdr commands', () => {
+    const child = createChildProcess()
+    spawnMock.mockReturnValueOnce(child)
+    const env = { ...process.env, XDG_CONFIG_HOME: '/tmp/orca-herdr-test' }
+    const transport = new HerdrCliHostTransport({ commandFor: localHerdrCommand('herdr', env) })
+
+    transport.controlTerminal('session', 'pane', { cols: 80, rows: 24 })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'herdr',
+      expect.any(Array),
+      expect.objectContaining({ env })
+    )
+  })
+
+  it('drains local and remote controller stderr streams', async () => {
+    const child = createChildProcess()
+    spawnMock.mockReturnValueOnce(child)
+    const local = new HerdrCliHostTransport({
+      commandFor: (args) => ({ file: 'herdr', args })
+    })
+
+    local.controlTerminal('session', 'pane', { cols: 80, rows: 24 })
+
+    expect(child.stderr.listenerCount('data')).toBeGreaterThan(0)
+
+    const channel = createSshChannel()
+    const connection = {
+      exec: vi.fn().mockResolvedValue(channel)
+    } as unknown as SshConnection
+    const remote = new HerdrSshHostTransport(connection)
+
+    remote.controlTerminal('session', 'pane', { cols: 80, rows: 24 })
+
+    await vi.waitFor(() => expect(connection.exec).toHaveBeenCalledTimes(1))
+    expect(channel.stderr.listenerCount('data')).toBeGreaterThan(0)
+  })
+
   it('closes a local controller instead of throwing on malformed frame JSON', () => {
     const child = createChildProcess()
     spawnMock.mockReturnValueOnce(child)

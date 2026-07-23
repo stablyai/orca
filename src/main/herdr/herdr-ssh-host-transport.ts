@@ -131,6 +131,8 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
           return
         }
         channel = opened
+        // Why: a long-lived controller must consume stderr or SSH flow control can block Herdr.
+        opened.stderr.on('data', () => undefined)
         opened.on('data', (chunk: Buffer) => {
           stdout += chunk.toString('utf8')
           for (;;) {

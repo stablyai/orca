@@ -23043,7 +23043,8 @@ export class OrcaRuntimeService {
     const leafId = randomUUID()
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
-    const existingLayout = this.store?.getWorkspaceSession?.().terminalLayoutsByTabId?.[parentTabId]
+    const existingLayout =
+      this.store?.getWorkspaceSession?.()?.terminalLayoutsByTabId?.[parentTabId]
     const terminalLayout = buildHeadlessTerminalSplitLayout(
       existingLayout ? this.cloneTerminalLayoutSnapshot(existingLayout) : undefined,
       {
@@ -23082,6 +23083,7 @@ export class OrcaRuntimeService {
 
     const persistedSplit = createdPty
       ? this.persistHeadlessTerminalSplit({
+          worktreeId: workspace.id,
           tabId: parentTabId,
           leafId,
           ptyId: createdPty.ptyId,

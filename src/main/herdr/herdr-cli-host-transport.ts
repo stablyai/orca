@@ -8,12 +8,11 @@ import type {
   HerdrTerminalControlOptions,
   HerdrTerminalFrame
 } from './herdr-runtime-contract'
-import {
-  HerdrEventSubscriptionBuffer,
-  herdrEventsSubscribeRequest
-} from './herdr-event-subscription'
+import type { HerdrEventSubscriptionBuffer } from './herdr-event-subscription'
+import { createHerdrCliEventSubscription } from './herdr-cli-event-subscription'
+import type { HerdrCommand } from './herdr-command'
 
-export type HerdrCommand = { file: string; args: string[] }
+export { localHerdrCommand } from './herdr-command'
 
 export type HerdrCliHostTransportOptions = {
   commandFor: (herdrArgs: string[]) => HerdrCommand
@@ -42,51 +41,7 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
   }
 
   subscribeEvents(sessionName: string, afterSequence: number): HerdrEventSubscriptionBuffer {
-    const command = this.options.commandFor(['--session', sessionName, 'api', 'bridge'])
-    const child = spawn(command.file, command.args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
-    })
-    const subscription = new HerdrEventSubscriptionBuffer(() => {
-      child.stdin.end()
-      child.kill()
-    })
-    let stdout = ''
-    let stderr = ''
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
-      stdout += chunk
-      for (;;) {
-        const newline = stdout.indexOf('\n')
-        if (newline === -1) {
-          break
-        }
-        const line = stdout.slice(0, newline).trim()
-        stdout = stdout.slice(newline + 1)
-        if (!line) {
-          continue
-        }
-        try {
-          subscription.acceptLine(line)
-        } catch (error) {
-          subscription.fail(error)
-        }
-      }
-    })
-    child.stderr.on('data', (chunk: string) => (stderr += chunk))
-    child.once('error', (error) => subscription.fail(error))
-    child.once('close', (code) => {
-      if (code !== 0) {
-        subscription.fail(
-          new Error(
-            stderr.trim() || `Herdr event subscription exited with code ${code ?? 'unknown'}`
-          )
-        )
-      }
-    })
-    child.stdin.write(herdrEventsSubscribeRequest(afterSequence))
-    return subscription
+    return createHerdrCliEventSubscription(this.options.commandFor, sessionName, afterSequence)
   }
 
   controlTerminal(
@@ -112,7 +67,8 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
     const command = this.options.commandFor(args)
     const child = spawn(command.file, command.args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
+      windowsHide: true,
+      ...(command.env ? { env: command.env } : {})
     })
     const frameListeners = new Set<(frame: HerdrTerminalFrame) => void>()
     const closedListeners = new Set<(event: HerdrTerminalClosed) => void>()
@@ -132,6 +88,8 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
     }
 
     child.stdout.setEncoding('utf8')
+    // Why: a long-lived controller must consume stderr or its pipe can block Herdr.
+    child.stderr.on('data', () => undefined)
     child.stdout.on('data', (chunk: string) => {
       stdout += chunk
       for (;;) {
@@ -224,7 +182,8 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
     return await new Promise((resolve, reject) => {
       const child = spawn(command.file, command.args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true
+        windowsHide: true,
+        ...(command.env ? { env: command.env } : {})
       })
       let stdout = ''
       let stderr = ''
@@ -257,7 +216,8 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
     return await new Promise((resolve, reject) => {
       const child = spawn(command.file, command.args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true
+        windowsHide: true,
+        ...(command.env ? { env: command.env } : {})
       })
       let stdout = ''
       let stderr = ''
@@ -307,8 +267,4 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
       child.stdin.write(input)
     })
   }
-}
-
-export function localHerdrCommand(executable = 'herdr'): (args: string[]) => HerdrCommand {
-  return (args) => ({ file: executable, args })
 }

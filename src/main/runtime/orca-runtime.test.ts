@@ -12017,12 +12017,17 @@ describe('OrcaRuntimeService', () => {
     const sourceEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
     const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    const workspaceSessionStore = store as typeof store & {
+      getWorkspaceSession: () => unknown
+    }
+    Object.assign(workspaceSessionStore, { getWorkspaceSession: vi.fn(() => undefined) })
 
     await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject({
       handle: expect.stringMatching(/^term_/),
       tabId: sourceEnv.ORCA_TAB_ID,
       paneRuntimeId: -1
     })
+    delete (workspaceSessionStore as { getWorkspaceSession?: unknown }).getWorkspaceSession
 
     const splitEnv =
       (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
