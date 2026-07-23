@@ -7663,7 +7663,7 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('resumes from the quit-captured sleeping record when cold-restoring after an app restart', async () => {
+  it('resumes from a done quit-captured record when cold-restoring after an app restart', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -7696,9 +7696,10 @@ describe('connectPanePty', () => {
           agent: 'codex',
           providerSession: { key: 'session_id', id: 'codex-session-1' },
           prompt: 'finish the task',
-          state: 'working',
+          state: 'done',
           capturedAt: 1,
-          updatedAt: 1
+          updatedAt: 1,
+          origin: 'quit'
         }
       }
     } as StoreState
@@ -8504,7 +8505,7 @@ describe('connectPanePty', () => {
     expect(createdTransportOptions[0]?.command).toBe("codex 'resume' 'codex-session-1'")
   })
 
-  it('does not consume the sleeping record when daemon reattach returns a live snapshot', async () => {
+  it('does not consume a done quit-captured record when daemon reattach returns a live snapshot', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('tab-pty')
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -8525,9 +8526,10 @@ describe('connectPanePty', () => {
           agent: 'codex',
           providerSession: { key: 'session_id', id: 'codex-session-1' },
           prompt: 'finish the task',
-          state: 'working',
+          state: 'done',
           capturedAt: 1,
-          updatedAt: 1
+          updatedAt: 1,
+          origin: 'quit'
         }
       }
     } as StoreState

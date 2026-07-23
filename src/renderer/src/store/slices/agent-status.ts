@@ -2753,18 +2753,21 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
           if (entry.state === 'done') {
             const existing = next[entry.paneKey]
-            if (!isCompletedPiWithLiveRecoveryRecord(entry, existing)) {
+            if (isCompletedPiWithLiveRecoveryRecord(entry, existing)) {
+              if (mode === 'periodic') {
+                continue
+              }
+              const record = { ...existing, capturedAt, origin }
+              if (!sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
+                next[entry.paneKey] = record
+                changed = true
+              }
               continue
             }
+            // Why: `done` ends a turn, not the interactive TUI; quit must retain its resume id (#10140).
             if (mode === 'periodic') {
               continue
             }
-            const record = { ...existing, capturedAt, origin }
-            if (!sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
-              next[entry.paneKey] = record
-              changed = true
-            }
-            continue
           }
           const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)
           if (!worktreeId) {

@@ -817,26 +817,6 @@ describe('captureAllSleepingAgentSessions', () => {
     })
   })
 
-  it('skips done agents — there is no turn left to resume', () => {
-    const store = createTestStore()
-    const entry = makeAgentEntry({
-      paneKey: 'tab-1:leaf-1',
-      worktreeId: 'wt-1',
-      sessionId: 'sess-1'
-    })
-    entry.state = 'done'
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-      },
-      agentStatusByPaneKey: { 'tab-1:leaf-1': entry }
-    } as Partial<AppState>)
-
-    store.getState().captureAllSleepingAgentSessions('quit')
-
-    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
-  })
-
   it('skips agents without a resumable provider session', () => {
     const store = createTestStore()
     store.setState({
