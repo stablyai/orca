@@ -2,10 +2,9 @@ import React, { useMemo } from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { chipStyle, singleSelectChipColors } from './single-select-chip-colors'
-import { sortRows } from '../../../../shared/github-project-group-sort'
+import { EMPTY_GROUP_KEY, sortRows } from '../../../../shared/github-project-group-sort'
 import {
   buildBoardColumns,
-  NO_VALUE_COLUMN_KEY,
   resolveBoardGroupField,
   type ProjectBoardColumn
 } from '../../../../shared/github-project-board-columns'
@@ -29,7 +28,7 @@ export default function ProjectBoardView({ table, onOpenDialog }: Props): React.
       <div className="flex min-h-[120px] flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
         {translate(
           'auto.components.github.project.ProjectBoardView.no-group-field',
-          'This board has no single-select field to group by.'
+          'This board has no field to group by.'
         )}
       </div>
     )
@@ -54,7 +53,7 @@ export default function ProjectBoardView({ table, onOpenDialog }: Props): React.
           // Why: the shared column builder can't reach translate(); swap its
           // English no-value label for the localized one here.
           label={
-            column.key === NO_VALUE_COLUMN_KEY
+            column.key === EMPTY_GROUP_KEY
               ? translate(
                   'auto.components.github.project.ProjectBoardView.no-value-column',
                   'No {{value0}}',

@@ -2117,7 +2117,8 @@
           },
           "ProjectGroupHeader": {
             "82a22d2079": "現在",
-            "244c9e7d06": "全て"
+            "244c9e7d06": "全て",
+            "no-value-group": "{{value0}} なし"
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "プロジェクト行のプレビュー。",
@@ -2216,7 +2217,7 @@
             }
           },
           "ProjectBoardView": {
-            "no-group-field": "このボードにはグループ化に使える単一選択フィールドがありません。",
+            "no-group-field": "このボードにはグループ化に使えるフィールドがありません。",
             "empty": "このビューのフィルターに一致する項目はありません。",
             "restricted": "制限事項",
             "no-value-column": "{{value0}} なし"

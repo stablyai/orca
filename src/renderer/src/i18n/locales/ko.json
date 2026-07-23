@@ -2119,7 +2119,8 @@
           },
           "ProjectGroupHeader": {
             "82a22d2079": "현재",
-            "244c9e7d06": "모두"
+            "244c9e7d06": "모두",
+            "no-value-group": "{{value0}} 없음"
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "프로젝트 행 미리보기.",
@@ -2218,7 +2219,7 @@
             }
           },
           "ProjectBoardView": {
-            "no-group-field": "이 보드에는 그룹화할 단일 선택 필드가 없습니다.",
+            "no-group-field": "이 보드에는 그룹화할 필드가 없습니다.",
             "empty": "이 보기의 필터와 일치하는 항목이 없습니다.",
             "restricted": "제한된 항목",
             "no-value-column": "{{value0}} 없음"

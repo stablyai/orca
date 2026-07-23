@@ -2117,7 +2117,8 @@
           },
           "ProjectGroupHeader": {
             "82a22d2079": "当前",
-            "244c9e7d06": "全部"
+            "244c9e7d06": "全部",
+            "no-value-group": "无 {{value0}}"
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "项目行预览。",
@@ -2216,7 +2217,7 @@
             }
           },
           "ProjectBoardView": {
-            "no-group-field": "此看板没有可用于分组的单选字段。",
+            "no-group-field": "此看板没有可用于分组的字段。",
             "empty": "没有项目与此视图的筛选条件匹配。",
             "restricted": "受限条目",
             "no-value-column": "无 {{value0}}"

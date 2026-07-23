@@ -2282,7 +2282,8 @@
           },
           "ProjectGroupHeader": {
             "82a22d2079": "Current",
-            "244c9e7d06": "All"
+            "244c9e7d06": "All",
+            "no-value-group": "No {{value0}}"
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "Project row preview.",
@@ -2381,7 +2382,7 @@
             }
           },
           "ProjectBoardView": {
-            "no-group-field": "This board has no single-select field to group by.",
+            "no-group-field": "This board has no field to group by.",
             "empty": "No items match this view's filter.",
             "restricted": "Restricted item",
             "no-value-column": "No {{value0}}"

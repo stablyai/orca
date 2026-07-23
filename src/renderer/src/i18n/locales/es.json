@@ -2117,7 +2117,8 @@
           },
           "ProjectGroupHeader": {
             "82a22d2079": "Actual",
-            "244c9e7d06": "Todo"
+            "244c9e7d06": "Todo",
+            "no-value-group": "Sin {{value0}}"
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "Vista previa de la fila del proyecto.",
@@ -2216,7 +2217,7 @@
             }
           },
           "ProjectBoardView": {
-            "no-group-field": "Este tablero no tiene un campo de selección única para agrupar.",
+            "no-group-field": "Este tablero no tiene un campo por el que agrupar.",
             "empty": "Ningún elemento coincide con el filtro de esta vista.",
             "restricted": "Elemento restringido",
             "no-value-column": "Sin {{value0}}"
