@@ -5,6 +5,7 @@ import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
+import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
 import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
@@ -234,6 +235,9 @@ export async function runPreflightCheck(
   }
 
   if (force) {
+    if (!getPreflightWslTarget(context)) {
+      mergePersistedWindowsPath(process.env, { forceRefresh: true })
+    }
     // Why: the GitLab known-hosts cache (gl-utils) is populated lazily on the
     // first GitLab request and never invalidated within a session. A user who
     // runs `glab auth login` for a self-hosted host after Orca starts would

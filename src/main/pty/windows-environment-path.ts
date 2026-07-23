@@ -5,6 +5,7 @@ type ExecFileSync = typeof execFileSync
 type ReadWindowsPathOptions = {
   execFileSync?: ExecFileSync
   env?: NodeJS.ProcessEnv
+  forceRefresh?: boolean
   platform?: NodeJS.Platform
 }
 
@@ -64,6 +65,7 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
     options.platform === undefined
   const now = Date.now()
   if (
+    !options.forceRefresh &&
     useProductionCache &&
     persistedWindowsPathCache &&
     now - persistedWindowsPathCache.readAt < PERSISTED_WINDOWS_PATH_CACHE_TTL_MS

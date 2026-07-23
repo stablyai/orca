@@ -438,6 +438,61 @@ describe('preflight', () => {
     expect(execFileAsyncMock).toHaveBeenCalledTimes(10)
   })
 
+  it('refreshes the persisted Windows Path before a forced host CLI preflight', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
+      .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
+      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
+
+    await expect(runPreflightCheck(true)).resolves.toMatchObject({
+      gh: { installed: true, authenticated: true }
+    })
+
+    expect(mergePersistedWindowsPathMock).toHaveBeenNthCalledWith(1, process.env, {
+      forceRefresh: true
+    })
+  })
+
+  it('does not refresh host Windows Path for forced WSL preflight', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'wsl.exe') {
+        const script = String(args[5])
+        if (script.includes('git') && script.includes('--version')) {
+          return { stdout: 'git version 2.0.0\n' }
+        }
+        if (script.includes('gh') && script.includes('--version')) {
+          return { stdout: 'gh version 2.0.0\n' }
+        }
+        if (script.includes('glab') && script.includes('--version')) {
+          return { stdout: 'glab version 1.92.1\n' }
+        }
+        if (script.includes('gh') && script.includes('auth status')) {
+          return { stdout: 'github.com\n  - Active account: true\n' }
+        }
+        if (script.includes('glab') && script.includes('auth status')) {
+          return { stdout: 'Logged in to gitlab.com\n' }
+        }
+      }
+      throw new Error(`unexpected command ${String(command)}`)
+    })
+
+    await expect(runPreflightCheck(true, { wslDistro: 'Ubuntu' })).resolves.toMatchObject({
+      gh: { installed: true, authenticated: true }
+    })
+
+    expect(mergePersistedWindowsPathMock).not.toHaveBeenCalled()
+  })
+
   it('registers the preflight handler', async () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })

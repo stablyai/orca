@@ -66,6 +66,34 @@ describe('readPersistedWindowsPathSegments', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
+
+  it('force-refreshes the production registry cache', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    defaultExecFileSyncMock
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\User;C:\\Program Files\\GitHub CLI\r\n')
+    __resetPersistedWindowsPathCacheForTests()
+
+    try {
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
+      expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(2)
+
+      expect(readPersistedWindowsPathSegments({ forceRefresh: true })).toEqual([
+        'C:\\Machine',
+        'C:\\User',
+        'C:\\Program Files\\GitHub CLI'
+      ])
+      expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(4)
+    } finally {
+      __resetPersistedWindowsPathCacheForTests()
+      defaultExecFileSyncMock.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
 })
 
 describe('mergePersistedWindowsPath', () => {
