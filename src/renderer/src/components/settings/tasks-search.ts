@@ -23,9 +23,9 @@ export const getTasksPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.tasks.search.c3d4e5f6a7', 'Launch prompt template'),
+    title: translate('auto.components.settings.tasks.search.9580d17a8c', 'Launch prompt template'),
     description: translate(
-      'auto.components.settings.tasks.search.d4e5f6a7b8',
+      'auto.components.settings.tasks.search.4253030e8d',
       'Leave empty to use the default. The issue identifier and URL variables are shown in the field placeholder.'
     ),
     keywords: [

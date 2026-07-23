@@ -198,16 +198,16 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
 
       <section className="space-y-3">
         <SettingsSubsectionHeader
-          title={translate('auto.components.settings.TasksPane.a1b2c3d4e5', 'Linear')}
+          title={translate('auto.components.settings.TasksPane.09ae2d7c51', 'Linear')}
           description={translate(
-            'auto.components.settings.TasksPane.b2c3d4e5f6',
+            'auto.components.settings.TasksPane.cbcd4247a4',
             'Customize the first instruction Orca sends to the agent when you start a worktree from a Linear issue.'
           )}
         />
         <SearchableSetting
-          title={translate('auto.components.settings.TasksPane.c3d4e5f6a7', 'Launch prompt template')}
+          title={translate('auto.components.settings.TasksPane.8490b38b7e', 'Launch prompt template')}
           description={translate(
-            'auto.components.settings.TasksPane.d4e5f6a7b8',
+            'auto.components.settings.TasksPane.6a0d7e542a',
             'Leave empty to use the default. The issue identifier and URL variables are shown in the field placeholder.'
           )}
           keywords={['linear', 'prompt', 'template', 'launch', 'instruction', 'identifier', 'url']}
@@ -215,14 +215,14 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
         >
           <textarea
             aria-label={translate(
-              'auto.components.settings.TasksPane.c3d4e5f6a7',
+              'auto.components.settings.TasksPane.8490b38b7e',
               'Launch prompt template'
             )}
             value={linearTemplateDraft}
             rows={3}
             spellCheck={false}
             placeholder={translate(
-              'auto.components.settings.TasksPane.e5f6a7b8c9',
+              'auto.components.settings.TasksPane.f37954bf8a',
               'Linked Linear issue: {{identifier}}\n{{url}}',
               { identifier: '{{identifier}}', url: '{{url}}' }
             )}

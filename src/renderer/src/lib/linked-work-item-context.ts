@@ -250,7 +250,8 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
   template?: string
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
-  const linearBlock = isLinearWorkItemReference(linkedWorkItem)
+  const isLinear = isLinearWorkItemReference(linkedWorkItem)
+  const linearBlock = isLinear
     ? buildLinearLaunchContextBlock({
         provider: linkedWorkItem?.provider,
         identifier: linkedWorkItem?.linearIdentifier,
@@ -261,11 +262,15 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
     : null
   const linearDraft = linearBlock ? formatDraftContextBlock(linearBlock) : null
   const linkedUrl = linkedWorkItem?.url?.trim() || null
+  // Why: a non-blank Linear template that renders empty means "no context" — don't
+  // fall back to injecting the raw URL (keeps parity with the composer path).
   const draftPrompt = linearDraft
     ? [trimmedNote, linearDraft].filter(Boolean).join('\n\n')
-    : linkedUrl
-      ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
-      : null
+    : isLinear && template?.trim()
+      ? null
+      : linkedUrl
+        ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
+        : null
   const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
   return {
     prompt: isLinearTypedOnly ? trimmedNote : '',

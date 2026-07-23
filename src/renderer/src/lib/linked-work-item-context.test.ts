@@ -339,6 +339,13 @@ describe('buildLinearLaunchContextBlock with a custom template', () => {
       getLaunchableWorkItemDraftContent({ ...LINEAR_ITEM, pasteContent: '', template: 'Do {{identifier}}' })
     ).toBe('Do ENG-123\n')
   })
+
+  it('does not fall back to the URL when a Linear template renders empty', () => {
+    // Draft carries no URL; the typed note is still preserved as the prompt.
+    expect(
+      resolveQuickCreateLinkedWorkItemPrompt({ number: 0, ...LINEAR_ITEM }, 'note', '{{missing}}')
+    ).toEqual({ prompt: 'note', draftPrompt: null })
+  })
 })
 
 describe('buildAgentPromptWithContext', () => {
