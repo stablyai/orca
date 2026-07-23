@@ -601,7 +601,7 @@ final class Provider {
         windowIndex: Int?,
         restoreWindow: Bool
     ) throws -> Snapshot {
-        guard accessibilityTrusted() else {
+        guard accessibilityTrustedSettled() else {
             // Why: agents retry failed observations. Only the explicit setup flow
             // should open macOS privacy prompts/settings; runtime calls stay quiet.
             throw ProviderError.coded(
@@ -1034,6 +1034,15 @@ private func accessibilityTrusted() -> Bool {
     AXIsProcessTrusted()
 }
 
+/// One-shot `AXIsProcessTrusted()` lies to fresh processes: tccd answers a
+/// just-spawned helper with `preflight_unknown`/`do_not_cache` before settling
+/// on the real grant (#9458), and every CLI call spawns a fresh helper. Poll
+/// briefly so a real grant is never mistaken for a denial; already-trusted
+/// processes pass on the first probe with no added latency.
+private func accessibilityTrustedSettled() -> Bool {
+    AccessibilityTrustSettling.settle(probe: accessibilityTrusted).settled
+}
+
 private func screenCaptureTrusted() -> Bool {
     CGPreflightScreenCaptureAccess()
 }
@@ -1065,6 +1074,37 @@ private func enableManualAccessibilityIfNeeded(_ appElement: AXUIElement, app: A
 
 private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleWindowCount: Int, allowRecovery: Bool) throws -> AXUIElement {
     let systemWide = AXUIElementCreateSystemWide()
+    if let window = lookupUsableWindow(systemWide: systemWide, appElement: appElement, app: app) {
+        return window
+    }
+    if allowRecovery {
+        recoverWindow(app)
+        if let window = lookupUsableWindow(systemWide: systemWide, appElement: appElement, app: app) {
+            return window
+        }
+    }
+    if visibleWindowCount > 0 {
+        // Why: on a fresh helper process AX reads can be denied by tccd's
+        // uncached preflight answer for a moment even though trust is granted
+        // (#9458) — the "visible windows but no accessibility window" state.
+        // Give the AX session time to settle before declaring it broken.
+        var settledWindow: AXUIElement?
+        let outcome = AccessibilityTrustSettling.settle {
+            settledWindow = lookupUsableWindow(systemWide: systemWide, appElement: appElement, app: app)
+            return settledWindow != nil
+        }
+        if let window = settledWindow, outcome.settled {
+            return window
+        }
+        throw ProviderError.coded(
+            "permission_denied",
+            "app '\(app.name)' has visible windows but no accessibility window (AX reads stayed blocked for \(outcome.waitedMs)ms after retries). macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings."
+        )
+    }
+    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; make sure the app has a visible window, then retry with --restore-window.")
+}
+
+private func lookupUsableWindow(systemWide: AXUIElement, appElement: AXUIElement, app: AppDescriptor) -> AXUIElement? {
     if let window = focusedSystemWindow(systemWide: systemWide, app: app) {
         return window
     }
@@ -1076,27 +1116,7 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleW
             return window
         }
     }
-    if allowRecovery {
-        recoverWindow(app)
-        if let window = focusedSystemWindow(systemWide: systemWide, app: app) {
-            return window
-        }
-        if let window = copyElement(appElement, kAXFocusedWindowAttribute as String), usableWindow(window) {
-            return window
-        }
-        if let windows = copyArray(appElement, kAXWindowsAttribute as String) {
-            if let window = windows.first(where: usableWindow) {
-                return window
-            }
-        }
-    }
-    let permissionHint = visibleWindowCount > 0
-        ? " The app has visible windows, so macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings."
-        : ""
-    if visibleWindowCount > 0 {
-        throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but no accessibility window.\(permissionHint)")
-    }
-    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; make sure the app has a visible window, then retry with --restore-window.")
+    return nil
 }
 
 private func focusedSystemWindow(systemWide: AXUIElement, app: AppDescriptor) -> AXUIElement? {
@@ -4039,13 +4059,13 @@ private func runPermissionCheck(initialPermission: PermissionKind? = nil) {
 }
 
 private func printPermissionStatus() {
-    let accessibility = accessibilityTrusted() ? "granted" : "not-granted"
+    let accessibility = accessibilityTrustedSettled() ? "granted" : "not-granted"
     let screenshots = screenCaptureTrusted() ? "granted" : "not-granted"
     print(#"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#)
 }
 
 private func writePermissionStatus(to path: String) {
-    let accessibility = accessibilityTrusted() ? "granted" : "not-granted"
+    let accessibility = accessibilityTrustedSettled() ? "granted" : "not-granted"
     let screenshots = screenCaptureTrusted() ? "granted" : "not-granted"
     let text = #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#
     do {
