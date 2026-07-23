@@ -1,6 +1,9 @@
 import type { RateLimitBucket, RateLimitWindow } from '../../shared/rate-limit-types'
 
 const MODEL_ID_TO_BUCKET_NAME: Record<string, string> = {
+  'gemini-3.6-flash': '3.6 Flash',
+  'gemini-3.5-flash': '3.5 Flash',
+  'gemini-3.5-flash-lite': '3.5 Flash Lite',
   'gemini-3.1-pro': '3.1 Pro',
   'gemini-3.1-flash': '3.1 Flash',
   'gemini-3.1-flash-lite': '3.1 Flash Lite',
