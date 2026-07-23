@@ -16,6 +16,10 @@ import { readTerminalComposerTypedText } from '../../../../../shared/terminal/in
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { shouldSuppressNativeChatExitForPane } from '../../native-chat/session/terminal/delivery/native-chat-pending'
+import {
+  getNativeChatExitSuppressRemainingMs,
+  NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
+} from '../../native-chat/native-chat-exit-suppress'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {
@@ -126,6 +130,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       resolveTitleAgentForLeaf
     ]
   )
+  const pendingConfirmedExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const applyNativeChatLeafRoute = useCallback(
     (route: NativeChatLeafRoute): void => {
       const state = useAppStore.getState()
@@ -152,11 +157,10 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         }
       }
       if (route.exitChat && unifiedTabId) {
-        // Why: post-hoc triage for #10098 — ordinary send must not flip Chat UI
-        // without a recorded programmatic handoff reason.
+        // Why: exit routes null the leaf — record the pre-route owner for triage (#10098).
         recordRendererCrashBreadcrumb('native_chat_exit_to_terminal', {
           reason: 'leaf_route',
-          chatLeafId: route.chatLeafId
+          chatLeafId
         })
         setTabViewMode(unifiedTabId, 'terminal')
       }
@@ -186,6 +190,19 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
           reason: 'recent_chat_send',
           paneKey
         })
+        // Why: re-evaluate after grace so a genuine exit is not stuck forever.
+        if (pendingConfirmedExitTimerRef.current) {
+          clearTimeout(pendingConfirmedExitTimerRef.current)
+        }
+        // Why: pending sends have no fixed end — fall back to the full grace.
+        const remainingMs = Math.max(
+          1,
+          getNativeChatExitSuppressRemainingMs(paneKey) || NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
+        )
+        pendingConfirmedExitTimerRef.current = setTimeout(() => {
+          pendingConfirmedExitTimerRef.current = null
+          onAgentExitedRef.current(leafId)
+        }, remainingMs)
       }
       applyNativeChatLeafRoute(
         resolveNativeChatLeafRoute({
@@ -204,6 +221,14 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   useEffect(() => {
     onAgentExitedRef.current = handleConfirmedAgentExit
   }, [handleConfirmedAgentExit, onAgentExitedRef])
+  useEffect(() => {
+    return () => {
+      if (pendingConfirmedExitTimerRef.current) {
+        clearTimeout(pendingConfirmedExitTimerRef.current)
+        pendingConfirmedExitTimerRef.current = null
+      }
+    }
+  }, [])
   const canToggleChatForLeaf = useCallback(
     (leafId: string | null): boolean => {
       // Scope the "always allow toggling back" rule to the leaf showing chat; must not make an unsupported sibling look eligible.

@@ -98,6 +98,16 @@ export function resolveNativeChatLeafRoute(args: {
     // Missing reconnect evidence is not an agent exit; retain chat while its owning pane remains mounted.
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
+  // Why: run before eligible-sibling retarget so a false exit during the send
+  // grace window cannot steal Chat onto a sibling pane (#10098 / CodeRabbit).
+  if (
+    args.suppressExitChat &&
+    args.chatLeafId &&
+    args.chatLeafStillMounted &&
+    args.chatLeafHasConfirmedAgentExit
+  ) {
+    return { chatLeafId: args.chatLeafId, exitChat: false }
+  }
   // Hydration may temporarily lack an active pane; preserve mode until a concrete owner exists.
   if (!args.activeLeafId && !confirmedAgentExit) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
@@ -108,16 +118,6 @@ export function resolveNativeChatLeafRoute(args: {
   }
   if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
-  }
-  // Why: a transient shell-title OSC after a Chat UI send is not a real agent
-  // exit — keep the mounted chat leaf until the grace window ends (#10098).
-  if (
-    args.suppressExitChat &&
-    args.chatLeafId &&
-    args.chatLeafStillMounted &&
-    args.chatLeafHasConfirmedAgentExit
-  ) {
-    return { chatLeafId: args.chatLeafId, exitChat: false }
   }
   // Return to terminal after owner removal or confirmed agent exit so the composer cannot target a shell.
   return { chatLeafId: null, exitChat: true }
