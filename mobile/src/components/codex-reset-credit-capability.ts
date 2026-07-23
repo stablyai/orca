@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CODEX_RESET_CREDIT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
+import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
 
 // Why: source the capability string from the shared contract so a host bump can never
 // silently drift from the mobile probe.
@@ -24,7 +25,7 @@ export async function readCodexResetCreditCapability(
 }
 
 export function useCodexResetCreditCapability(
-  client: Pick<RpcClient, 'sendRequest'> | null,
+  client: RpcClient | null,
   connected: boolean
 ): boolean {
   const [supported, setSupported] = useState(false)
@@ -34,15 +35,9 @@ export function useCodexResetCreditCapability(
     if (!client || !connected) {
       return
     }
-    let stale = false
-    void readCodexResetCreditCapability(client).then((nextSupported) => {
-      if (!stale) {
-        setSupported(nextSupported)
-      }
+    return startRuntimeCapabilityProbe(client, (capabilities) => {
+      setSupported(capabilities.includes(MOBILE_CODEX_RESET_CREDIT_CAPABILITY))
     })
-    return () => {
-      stale = true
-    }
   }, [client, connected])
 
   return supported
