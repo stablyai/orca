@@ -8,6 +8,13 @@ import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
 
+// Why: production OOMs sit at the heap ceiling for a long time before dying, so
+// a census taken once the heap crosses this fraction of its limit still lands in
+// the bundle. Throttled so a pegged renderer emits it periodically, not every sample.
+const HEAP_CENSUS_HIGH_WATER_FRACTION = 0.85
+const HEAP_CENSUS_MIN_INTERVAL_MS = 5 * 60_000
+let lastHeapCensusAt = 0
+
 type BrowserPerformanceMemory = {
   usedJSHeapSize?: number
   totalJSHeapSize?: number
@@ -112,6 +119,47 @@ function recordRendererMemory(reason: string): void {
       registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
     })
   )
+
+  maybeRecordHeapCensus(memory, nowMs())
+}
+
+// Exposed for tests; real callers pass nowMs() (monotonic performance.now()).
+// lastCensusAt === 0 means "never censused this renderer" → fire immediately so a
+// fast leak (or a post-crash reload that re-inflates within 5 min) isn't missed.
+export function shouldRecordHeapCensus(
+  memory: BrowserPerformanceMemory,
+  now: number,
+  lastCensusAt: number
+): boolean {
+  const used = memory.usedJSHeapSize
+  const limit = memory.jsHeapSizeLimit
+  if (typeof used !== 'number' || typeof limit !== 'number' || limit <= 0) {
+    return false
+  }
+  if (used / limit < HEAP_CENSUS_HIGH_WATER_FRACTION) {
+    return false
+  }
+  return lastCensusAt === 0 || now - lastCensusAt >= HEAP_CENSUS_MIN_INTERVAL_MS
+}
+
+function maybeRecordHeapCensus(memory: BrowserPerformanceMemory, now: number): void {
+  if (!shouldRecordHeapCensus(memory, now, lastHeapCensusAt)) {
+    return
+  }
+  lastHeapCensusAt = now
+  // Why: dynamic import keeps the census's store dependency off this leaf
+  // module's hot import chain (terminal modules import this file — see below).
+  void import('./renderer-heap-census')
+    .then(({ collectRendererHeapCensus }) => {
+      recordRendererCrashBreadcrumb('renderer_heap_census', collectRendererHeapCensus())
+    })
+    .catch(() => {
+      // Census is best-effort diagnostics; never let it disrupt the sampler.
+    })
+}
+
+function nowMs(): number {
+  return typeof performance !== 'undefined' ? Math.round(performance.now()) : Date.now()
 }
 
 function getPerformanceMemory(): BrowserPerformanceMemory | undefined {

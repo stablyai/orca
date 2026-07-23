@@ -172,4 +172,42 @@ describe('renderer crash diagnostics', () => {
       diagnostics.recordRendererCrashBreadcrumb('renderer_bootstrap_started')
     ).not.toThrow()
   })
+
+  describe('shouldRecordHeapCensus', () => {
+    const mem = (used: number, limit: number) => ({
+      usedJSHeapSize: used,
+      jsHeapSizeLimit: limit
+    })
+
+    it('is false below the high-water fraction', () => {
+      expect(diagnostics.shouldRecordHeapCensus(mem(50, 100), 10_000_000, 0)).toBe(false)
+    })
+
+    it('fires the first census immediately at high-water (lastCensusAt === 0)', () => {
+      expect(diagnostics.shouldRecordHeapCensus(mem(90, 100), 10_000, 0)).toBe(true)
+    })
+
+    it('fires exactly at the high-water fraction', () => {
+      // 0.85 is not below 0.85, so it proceeds.
+      expect(diagnostics.shouldRecordHeapCensus(mem(85, 100), 10_000_000, 0)).toBe(true)
+    })
+
+    it('re-fires once the throttle interval has elapsed after a prior census', () => {
+      const now = 10_000_000
+      expect(diagnostics.shouldRecordHeapCensus(mem(90, 100), now, now - 5 * 60_000)).toBe(true)
+    })
+
+    it('throttles repeat censuses within the interval', () => {
+      const now = 10_000_000
+      expect(diagnostics.shouldRecordHeapCensus(mem(90, 100), now, now - 60_000)).toBe(false)
+    })
+
+    it('is false when heap fields are missing', () => {
+      expect(diagnostics.shouldRecordHeapCensus({}, 10_000_000, 0)).toBe(false)
+    })
+
+    it('is false when the limit is zero (no divide-by-zero)', () => {
+      expect(diagnostics.shouldRecordHeapCensus(mem(0, 0), 10_000_000, 0)).toBe(false)
+    })
+  })
 })
