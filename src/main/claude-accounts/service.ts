@@ -86,6 +86,10 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
+function windowsCmdQuote(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
@@ -925,7 +929,13 @@ export class ClaudeAccountService {
               shell: false
             }
           : {
-              command: resolveClaudeCommand(),
+              // Why: spawn with shell enabled concatenates the command unquoted, so a
+              // resolved path with spaces (e.g. C:\Users\First Last\AppData\Roaming\npm\claude.cmd)
+              // breaks at the first space in cmd.exe.
+              command:
+                process.platform === 'win32'
+                  ? windowsCmdQuote(resolveClaudeCommand())
+                  : resolveClaudeCommand(),
               args,
               env: {
                 ...process.env,

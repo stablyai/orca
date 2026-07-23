@@ -21,8 +21,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+const commandMocks = vi.hoisted(() => ({
+  resolveClaudeCommand: vi.fn(() => 'claude')
+}))
+
 vi.mock('../codex-cli/command', () => ({
-  resolveClaudeCommand: () => 'claude'
+  resolveClaudeCommand: commandMocks.resolveClaudeCommand
 }))
 
 vi.mock('./keychain', () => ({
@@ -1260,6 +1264,60 @@ describe('ClaudeAccountService credential capture', () => {
     }
   })
 
+  it('quotes the resolved Claude command for the Windows shell', async () => {
+    setPlatform('win32')
+    vi.resetModules()
+    commandMocks.resolveClaudeCommand.mockReturnValueOnce(
+      'C:\\Users\\First Last\\AppData\\Roaming\\npm\\claude.cmd'
+    )
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => {
+      child.stdout.write('{"email":"user@example.com"}\n')
+      queueMicrotask(() => child.emit('close', 0))
+      return child
+    })
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      const service = new ClaudeAccountService(
+        createService() as never,
+        createService() as never,
+        createService() as never
+      )
+      await (
+        service as unknown as {
+          runClaudeCommand(
+            args: string[],
+            configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
+            timeoutMs: number
+          ): Promise<string>
+        }
+      ).runClaudeCommand(
+        ['auth', 'status', '--json'],
+        { windowsPath: 'C:\\tmp\\claude-auth', linuxPath: null, wslDistro: null },
+        1000
+      )
+
+      // Why: with shell:true spawn concatenates the command unquoted, so an
+      // unquoted install path containing spaces breaks at the first space in cmd.exe.
+      expect(spawnMock).toHaveBeenCalledWith(
+        '"C:\\Users\\First Last\\AppData\\Roaming\\npm\\claude.cmd"',
+        ['auth', 'status', '--json'],
+        expect.objectContaining({ shell: true })
+      )
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
   it('pipes stdin only for the explicit Claude account login command', async () => {
     setPlatform('linux')
     vi.resetModules()
@@ -1585,7 +1643,7 @@ describe('ClaudeAccountService credential capture', () => {
       const addPromise = service.addAccount()
       await vi.waitFor(() => {
         expect(spawnMock).toHaveBeenCalledWith(
-          'claude',
+          '"claude"',
           ['auth', 'login', '--claudeai'],
           expect.objectContaining({ shell: true })
         )
