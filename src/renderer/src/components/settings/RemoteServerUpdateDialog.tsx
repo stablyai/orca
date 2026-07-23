@@ -73,7 +73,10 @@ function ServerUpdateRow({
           <Button type="button" variant="outline" size="xs" onClick={onUpdate} disabled={disabled}>
             {entry.phase === 'failed'
               ? translate('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
-              : translate('auto.components.settings.RemoteServerUpdateDialog.update', 'Update')}
+              : translate(
+                  'auto.components.settings.RemoteServerUpdateDialog.update',
+                  'Update this server'
+                )}
           </Button>
         ) : null}
       </div>
@@ -222,7 +225,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
           </p>
         ) : null}
 
-        {eligible.length > 0 || running ? (
+        {eligible.length > 1 ? (
           <DialogFooter>
             <Button
               type="button"
@@ -231,22 +234,11 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
               onClick={() => void start()}
               disabled={checking || running}
             >
-              {running ? <Loader2 className="animate-spin" /> : null}
-              {running
-                ? translate(
-                    'auto.components.settings.RemoteServerUpdateDialog.updating',
-                    'Updating servers…'
-                  )
-                : eligible.length === 1
-                  ? translate(
-                      'auto.components.settings.RemoteServerUpdateDialog.updateOne',
-                      'Update server'
-                    )
-                  : translate(
-                      'auto.components.settings.RemoteServerUpdateDialog.updateAll',
-                      'Update {{value0}} servers',
-                      { value0: eligible.length }
-                    )}
+              {translate(
+                'auto.components.settings.RemoteServerUpdateDialog.updateAll',
+                'Update all {{value0}} servers',
+                { value0: eligible.length }
+              )}
             </Button>
           </DialogFooter>
         ) : null}

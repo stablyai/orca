@@ -82,7 +82,33 @@ describe('RemoteServerUpdateDialog', () => {
     await act(async () => root.render(<RemoteServerUpdateDialog />))
 
     expect(container.textContent).not.toContain('Check for Server Updates')
-    expect(container.textContent).toContain('Update server')
+    expect(container.textContent).toContain('Update this server')
+    expect(container.textContent).not.toContain('Update all')
+
+    await act(async () => root.unmount())
+  })
+
+  it('offers an explicit batch action when multiple servers can update', async () => {
+    const secondEntry: RemoteServerUpdateEntry = {
+      ...currentEntry,
+      environmentId: 'server-b',
+      name: 'Test server B'
+    }
+    storeMock.state.remoteServerUpdates = new Map([
+      [
+        currentEntry.environmentId,
+        { ...currentEntry, phase: 'available', targetVersion: '1.4.151' }
+      ],
+      [secondEntry.environmentId, { ...secondEntry, phase: 'available', targetVersion: '1.4.151' }]
+    ])
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => root.render(<RemoteServerUpdateDialog />))
+
+    const labels = [...container.querySelectorAll('button')].map((button) => button.textContent)
+    expect(labels.filter((label) => label === 'Update this server')).toHaveLength(2)
+    expect(labels).toContain('Update all 2 servers')
 
     await act(async () => root.unmount())
   })
