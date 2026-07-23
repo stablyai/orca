@@ -1012,6 +1012,7 @@ export default function SessionScreen() {
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
   const subscribeSeqRef = useRef<Map<string, number>>(new Map())
+  const chatStreamRef = useRef<ReturnType<typeof useMobileNativeChatTerminalStream> | null>(null)
   // Why: post-RPC refresh timers capture this screen and must not survive route reuse or unmount.
   const delayedActionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
   // Why: highest applyLayout seq seen per handle; drop older scrollback/resized as stale, but a >20 gap resets (fresh subscription/server restart).
@@ -1299,6 +1300,7 @@ export default function SessionScreen() {
   unsubscribeTerminalRef.current = unsubscribeTerminal
 
   const clearTerminalCache = useCallback(() => {
+    chatStreamRef.current?.clearRetries()
     terminalUnsubsRef.current.forEach((unsub) => unsub())
     clearNativeChatInputLease()
     terminalUnsubsRef.current.clear()
@@ -1334,21 +1336,21 @@ export default function SessionScreen() {
   )
 
   const subscribeToTerminal = useCallback(
-    (handle: string) => {
+    (handle: string): boolean | void => {
       const diagnostics = terminalDiagnosticsRef.current
       const logSkippedGate = (reason: string) =>
         diagnostics.streamSkipped(handle, reason, handle === activeHandleRef.current)
       if (!client) {
         logSkippedGate('no-client')
-        return
+        return false
       }
       if (terminalUnsubsRef.current.has(handle)) {
         logSkippedGate('already-subscribed')
-        return
+        return false
       }
       if (subscribingHandlesRef.current.has(handle)) {
         logSkippedGate('subscribe-in-flight')
-        return
+        return false
       }
       const covered = nativeChatTerminalStream.isTerminalCoveredByNativeChat(
         showNativeChatRef.current,
@@ -1359,43 +1361,41 @@ export default function SessionScreen() {
       if (!covered) {
         if (!getTerminalRef(handle)) {
           logSkippedGate('no-webview-ref')
-          return
+          return false
         }
         if (!webReadyHandlesRef.current.has(handle)) {
           logSkippedGate('webview-not-ready')
-          return
+          return false
         }
       }
 
       subscribingHandlesRef.current.add(handle)
       const seq = (subscribeSeqRef.current.get(handle) ?? 0) + 1
       subscribeSeqRef.current.set(handle, seq)
-      diagnostics.streamArmed(handle, seq, viewportRef.current)
-
-      // Why: viewport is embedded in the subscribe params so the server auto-fits before serializing scrollback (no focus→safeFit race).
+      diagnostics.streamArmed(handle, seq, covered ? null : viewportRef.current, covered)
+      const terminateStream = () =>
+        chatStreamRef.current?.terminateStream(handle, unsubscribeTerminalRef.current)
       const unsub = subscribeMobileTerminalSafely(
         client,
-        {
+        nativeChatTerminalStream.buildMobileNativeChatTerminalSubscribeParams({
           terminal: handle,
-          client: { id: deviceTokenRef.current!, type: 'mobile' as const },
-          viewport: nativeChatTerminalStream.mobileNativeChatSubscribeViewport(
-            covered,
-            viewportRef.current
-          ),
-          capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered)
-        },
+          clientId: deviceTokenRef.current!,
+          covered,
+          viewport: viewportRef.current
+        }),
         (result) => {
           if (subscribeSeqRef.current.get(handle) !== seq) {
             return
           }
           const data = result as Record<string, unknown>
-          diagnostics.firstStreamEvent(handle, seq, data.type)
+          diagnostics.firstStreamEvent(handle, seq, data)
           if (data.type === 'end' || data.type === 'error') {
-            unsubscribeTerminalRef.current(handle)
+            terminateStream()
             return
           }
-          if (data.type === 'subscribed') {
+          if (nativeChatTerminalStream.isMobileNativeChatLeaseReady(covered, data)) {
             markNativeChatInputLeaseReady(handle)
+            chatStreamRef.current?.notifyStreamReady(handle)
             return
           }
           // Why: keep the subscription as the input-floor lease but don't mutate covered xterm state; return-to-terminal resubscribes.
@@ -1538,7 +1538,12 @@ export default function SessionScreen() {
             scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
           }
         },
-        () => unsubscribeTerminalRef.current(handle)
+        () => {
+          if (subscribeSeqRef.current.get(handle) !== seq) {
+            return
+          }
+          terminateStream()
+        }
       )
 
       if (subscribeSeqRef.current.get(handle) === seq) {
@@ -1551,7 +1556,7 @@ export default function SessionScreen() {
     [client, getTerminalRef, markNativeChatInputLeaseReady, scheduleDelayedAction]
   )
 
-  const notifyTerminalWebReady = useMobileNativeChatTerminalStream({
+  useMobileNativeChatTerminalStream({
     showNativeChat,
     activeHandle,
     activeTabType: activeSessionTab?.type ?? null,
@@ -1560,9 +1565,9 @@ export default function SessionScreen() {
     webReadyRef: webReadyHandlesRef,
     initializedRef: initializedHandlesRef,
     subscribe: subscribeToTerminal,
-    unsubscribe: unsubscribeTerminal
+    unsubscribe: unsubscribeTerminal,
+    controllerRef: chatStreamRef
   })
-
   // Why: server does the resize and emits 'resized' on the existing subscription — no client-side state tracking needed.
   const toggleInFlightRef = useRef<Set<string>>(new Set())
   const toggleDisplayMode = useCallback(
@@ -2918,7 +2923,7 @@ export default function SessionScreen() {
     (handle: string) => {
       const wasAlreadyReady = webReadyHandlesRef.current.has(handle)
       webReadyHandlesRef.current.add(handle)
-      notifyTerminalWebReady(handle, wasAlreadyReady)
+      chatStreamRef.current?.notifyWebReady(handle, wasAlreadyReady)
       terminalDiagnosticsRef.current.webViewReady(
         handle,
         wasAlreadyReady,
@@ -2946,7 +2951,7 @@ export default function SessionScreen() {
         })()
       }
     },
-    [measureViewportOnce, notifyTerminalWebReady, subscribeToTerminal, unsubscribeTerminal]
+    [measureViewportOnce, subscribeToTerminal, unsubscribeTerminal]
   )
 
   useEffect(() => {

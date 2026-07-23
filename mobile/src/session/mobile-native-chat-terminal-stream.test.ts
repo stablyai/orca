@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildMobileNativeChatTerminalSubscribeParams,
+  isMobileNativeChatLeaseReady,
   isTerminalCoveredByNativeChat,
   mobileNativeChatSubscribeViewport,
   mobileNativeChatTerminalCapabilities,
+  mobileNativeChatTerminalRetryDelay,
   resolveMobileNativeChatTerminalStreamAction
 } from './mobile-native-chat-terminal-stream'
 
@@ -33,6 +36,31 @@ describe('mobile native-chat terminal stream lifecycle', () => {
       mobileInputLeaseOnly: 1
     })
     expect(mobileNativeChatTerminalCapabilities(false)).toEqual({ terminalBinaryStream: 1 })
+    expect(
+      buildMobileNativeChatTerminalSubscribeParams({
+        terminal: 'pty-1',
+        clientId: 'phone-1',
+        covered: true,
+        viewport: { cols: 48, rows: 20 }
+      })
+    ).toEqual({
+      terminal: 'pty-1',
+      client: { id: 'phone-1', type: 'mobile' },
+      capabilities: { terminalBinaryStream: 1, mobileInputLeaseOnly: 1 }
+    })
+    expect(
+      buildMobileNativeChatTerminalSubscribeParams({
+        terminal: 'pty-1',
+        clientId: 'phone-1',
+        covered: false,
+        viewport: { cols: 48, rows: 20 }
+      })
+    ).toEqual({
+      terminal: 'pty-1',
+      client: { id: 'phone-1', type: 'mobile' },
+      viewport: { cols: 48, rows: 20 },
+      capabilities: { terminalBinaryStream: 1 }
+    })
   })
 
   it('omits the viewport from a covered lease subscribe so the host keeps desktop dims', () => {
@@ -95,6 +123,21 @@ describe('mobile native-chat terminal stream lifecycle', () => {
     )
     expect(resolveMobileNativeChatTerminalStreamAction({ ...base, activeHandle: null })).toBe(
       'none'
+    )
+  })
+
+  it('backs off covered-chat retries while keeping recovery bounded', () => {
+    expect([0, 1, 2, 3, 4, 5].map(mobileNativeChatTerminalRetryDelay)).toEqual([
+      250, 500, 1_000, 2_000, 4_000, 4_000
+    ])
+  })
+
+  it('accepts only real or legacy-compatible lease acknowledgements', () => {
+    expect(isMobileNativeChatLeaseReady(true, { type: 'subscribed', leaseReady: true })).toBe(true)
+    expect(isMobileNativeChatLeaseReady(true, { type: 'subscribed' })).toBe(true)
+    expect(isMobileNativeChatLeaseReady(true, { type: 'terminal-unavailable' })).toBe(false)
+    expect(isMobileNativeChatLeaseReady(true, { type: 'subscribed', leaseReady: false })).toBe(
+      false
     )
   })
 })

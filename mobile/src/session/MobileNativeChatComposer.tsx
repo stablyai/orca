@@ -44,7 +44,7 @@ type Props = {
   dictationMode?: 'toggle' | 'hold'
   onMicPressIn?: () => void
   onMicPressOut?: () => void
-  disabled?: boolean
+  sendDisabled?: boolean
   placeholder?: string
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
@@ -61,7 +61,7 @@ export function MobileNativeChatComposer({
   dictationMode = 'toggle',
   onMicPressIn,
   onMicPressOut,
-  disabled = false,
+  sendDisabled = false,
   placeholder = 'Message, @files, /commands',
   filePaths = NO_FILE_PATHS,
   onNeedFiles
@@ -76,7 +76,7 @@ export function MobileNativeChatComposer({
   const sendingRef = useRef(false)
   const [sending, setSending] = useState(false)
   const trimmed = value.trim()
-  const canSend = trimmed.length > 0 && !disabled && !sending && !isAttaching
+  const canSend = trimmed.length > 0 && !sendDisabled && !sending && !isAttaching
 
   const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
   const suggestions = useMemo(() => {
@@ -151,7 +151,7 @@ export function MobileNativeChatComposer({
             accessibilityLabel="Attach image"
             style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
             onPress={onAttachImage}
-            disabled={isAttaching || disabled}
+            disabled={isAttaching}
           >
             {isAttaching ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -174,7 +174,6 @@ export function MobileNativeChatComposer({
           placeholderTextColor={colors.textMuted}
           selectionColor={colors.accentBlue}
           multiline
-          editable={!disabled}
           textAlignVertical="top"
         />
         {onMicPress ? (
@@ -185,7 +184,6 @@ export function MobileNativeChatComposer({
             onPress={dictationMode === 'hold' ? undefined : onMicPress}
             onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
             onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
-            disabled={disabled}
           >
             {micActive ? (
               <Square

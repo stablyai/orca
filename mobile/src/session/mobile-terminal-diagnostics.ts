@@ -21,6 +21,14 @@ type DiagnosticTabsSnapshot = {
 
 type DiagnosticDimensions = { readonly cols: number; readonly rows: number } | null | undefined
 
+function diagnosticDuration(
+  source: Readonly<Record<string, unknown>> | undefined,
+  key: string
+): number | undefined {
+  const value = source?.[key]
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
 // Why: full runtime identifiers make shared logs unnecessarily sensitive; the
 // suffix is enough to correlate lifecycle events within one reproduction.
 export function shortenMobileTerminalDiagnosticId(value: string | null | undefined): string | null {
@@ -53,6 +61,10 @@ export function logMobileTerminalDiagnostic(
 export class MobileTerminalDiagnostics {
   private readonly streamGateByHandle = new Map<string, string>()
   private readonly firstStreamEventSeqByHandle = new Map<string, number>()
+  private readonly streamArmedAtByHandle = new Map<
+    string,
+    { seq: number; armedAt: number; leaseOnly: boolean }
+  >()
   private lastFetchedTabsSignature: string | null = null
   private lastAppliedTabsSignature: string | null = null
   private lastTabsFetchStartAt = 0
@@ -61,6 +73,7 @@ export class MobileTerminalDiagnostics {
   clearTerminalCache(): void {
     this.streamGateByHandle.clear()
     this.firstStreamEventSeqByHandle.clear()
+    this.streamArmedAtByHandle.clear()
   }
 
   resetRoute(): void {
@@ -74,6 +87,7 @@ export class MobileTerminalDiagnostics {
   terminalUnsubscribed(handle: string): void {
     this.streamGateByHandle.delete(handle)
     this.firstStreamEventSeqByHandle.delete(handle)
+    this.streamArmedAtByHandle.delete(handle)
   }
 
   viewportMeasured(handle: string, dims: DiagnosticDimensions, frameHeight: number): void {
@@ -98,26 +112,51 @@ export class MobileTerminalDiagnostics {
     })
   }
 
-  streamArmed(handle: string, seq: number, viewport: DiagnosticDimensions): void {
+  streamArmed(
+    handle: string,
+    seq: number,
+    viewport: DiagnosticDimensions,
+    leaseOnly = false
+  ): void {
     this.streamGateByHandle.delete(handle)
+    this.streamArmedAtByHandle.set(handle, { seq, armedAt: Date.now(), leaseOnly })
     logMobileTerminalDiagnostic('stream-armed', {
       handle: shortenMobileTerminalDiagnosticId(handle),
       seq,
+      leaseOnly,
       hasViewport: viewport != null,
       viewportCols: viewport?.cols,
       viewportRows: viewport?.rows
     })
   }
 
-  firstStreamEvent(handle: string, seq: number, type: unknown): void {
+  firstStreamEvent(handle: string, seq: number, event: unknown): void {
     if (this.firstStreamEventSeqByHandle.get(handle) === seq) {
       return
     }
     this.firstStreamEventSeqByHandle.set(handle, seq)
+    const armed = this.streamArmedAtByHandle.get(handle)
+    const data =
+      event && typeof event === 'object' ? (event as Readonly<Record<string, unknown>>) : undefined
+    const timing =
+      data?.readinessTiming && typeof data.readinessTiming === 'object'
+        ? (data.readinessTiming as Readonly<Record<string, unknown>>)
+        : undefined
+    const waitMs = armed?.seq === seq ? Math.max(0, Date.now() - armed.armedAt) : undefined
+    const serverTotalMs = diagnosticDuration(timing, 'serverTotalMs')
     logMobileTerminalDiagnostic('stream-first-event', {
       handle: shortenMobileTerminalDiagnosticId(handle),
       seq,
-      type: typeof type === 'string' ? type : 'unknown'
+      type: typeof data?.type === 'string' ? data.type : 'unknown',
+      leaseOnly: armed?.seq === seq ? armed.leaseOnly : undefined,
+      waitMs,
+      serverTotalMs,
+      serverPtyWaitMs: diagnosticDuration(timing, 'ptyWaitMs'),
+      serverLeaseRegisterMs: diagnosticDuration(timing, 'leaseRegisterMs'),
+      estimatedTransportMs:
+        waitMs !== undefined && serverTotalMs !== undefined
+          ? Math.max(0, waitMs - serverTotalMs)
+          : undefined
     })
   }
 

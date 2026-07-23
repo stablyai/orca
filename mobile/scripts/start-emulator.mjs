@@ -27,6 +27,7 @@ import {
   registerWorktreeForPairingRuntime,
   startHeadlessPairingRuntime
 } from './start-emulator-pairing-runtime.mjs'
+import { prepareEmulatorDesktopRuntime } from './start-emulator-desktop-runtime.mjs'
 import { ensureMobileExpoCli, getMobileExpoExecutablePath } from './mobile-expo-cli.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -78,7 +79,7 @@ Options:
   }
 }
 
-const ORCA_CLI = process.env.ORCA_CLI || 'orca'
+let orcaCli = process.env.ORCA_CLI?.trim() || 'orca'
 
 // Colors for output
 const colors = {
@@ -121,7 +122,7 @@ function assertIosSimulatorPlatform() {
 
 // Execute orca CLI command
 async function orca(args, options = {}) {
-  const { stdout, stderr } = await execFileAsync(ORCA_CLI, args, {
+  const { stdout, stderr } = await execFileAsync(orcaCli, args, {
     cwd: options.cwd || process.cwd(),
     env: options.env || process.env,
     encoding: 'utf8',
@@ -577,9 +578,19 @@ async function main() {
     logInfo(`Using worktree: ${worktree}`)
     await ensureMobileDependencies(worktree)
 
+    if (options.pair) {
+      orcaCli = await prepareEmulatorDesktopRuntime({
+        worktree,
+        cliOverride: process.env.ORCA_CLI,
+        runCommand: execFileAsync,
+        logStep,
+        logSuccess
+      })
+    }
+
     pairingRuntime = await startHeadlessPairingRuntime({
       enabled: options.pair,
-      orcaCli: ORCA_CLI,
+      orcaCli,
       cwd: process.cwd(),
       lanIpCandidates,
       logStep,

@@ -1859,6 +1859,8 @@ app.whenReady().then(async () => {
   agentAwakeService.setStatuses([])
   unsubscribeAgentAwakeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
     agentAwakeService?.setStatuses(statuses)
+    // Why: main-owned mobile tabs otherwise miss hook-only changes until an unrelated terminal mutation.
+    runtime?.notifyMobileAgentHookStatusChanged()
   })
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
@@ -2026,9 +2028,8 @@ app.whenReady().then(async () => {
       }
     },
     getDesktopWindowStatus: getDesktopWindowStatus,
-    // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
-    getAgentStatusSnapshot: () =>
-      agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    // Why: mobile status and transcript identity both come from the authoritative hook cache.
+    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot(),
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],

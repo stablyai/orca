@@ -2555,8 +2555,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
       emit
     ) => {
+      const readinessStartedAt = Date.now()
+      let ptyWaitMs = 0
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
+      const clientId = params.client?.id
+      const mobileInputLeaseOnly =
+        isMobile && params.capabilities?.mobileInputLeaseOnly === 1 && Boolean(clientId)
       const serializerGenerationBeforeAnyMount = isMobile
         ? (runtime.getRendererTerminalSerializerGenerationForHandle?.(params.terminal) ?? 0)
         : 0
@@ -2571,6 +2576,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!leaf?.ptyId && params.client) {
         // Why: a never-mounted tab has no graph leaf to await; mounting the exact tab attaches its PTY without activating the worktree.
         rendererMountRequestedBeforePty = runtime.requestRendererTerminalTabMount(params.terminal)
+        const ptyWaitStartedAt = Date.now()
         try {
           const ptyId = await runtime.waitForLeafPtyId(params.terminal, 10_000, signal)
           leaf = { ptyId }
@@ -2579,10 +2585,25 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return
           }
           // PTY wait timed out — fall through to scrollback-only path below
+        } finally {
+          ptyWaitMs = Math.max(0, Date.now() - ptyWaitStartedAt)
         }
       }
 
       if (!leaf?.ptyId) {
+        if (mobileInputLeaseOnly) {
+          emit({
+            type: 'terminal-unavailable',
+            reason: 'pty-not-ready',
+            retryable: true,
+            readinessTiming: {
+              serverTotalMs: Math.max(0, Date.now() - readinessStartedAt),
+              ptyWaitMs
+            }
+          })
+          emit({ type: 'end' })
+          return
+        }
         const read = await runtime.readTerminal(params.terminal)
         emit({
           type: 'subscribed',
@@ -2599,9 +2620,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
 
       const ptyId = leaf.ptyId
-      const clientId = params.client?.id
-      const mobileInputLeaseOnly =
-        isMobile && params.capabilities?.mobileInputLeaseOnly === 1 && Boolean(clientId)
       // Why: mount/PTY wait and phone-fit can each emit a redraw creating suffix-only state, so capture the pre-mount absence signal first.
       const missingHeadlessStateBeforeMobileFit =
         isMobile &&
@@ -2635,8 +2653,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           .then(() => runtime.cleanupSubscription(subscriptionId))
           .catch(() => runtime.cleanupSubscription(subscriptionId))
         try {
-          // Why: a lease-only subscriber has no terminal view, so its cached viewport must never phone-fit the PTY.
-          await runtime.handleMobileSubscribe(ptyId, clientId, undefined)
+          const leaseRegisterStartedAt = Date.now()
+          // Why: lease-only chat registers send authority without becoming a
+          // hidden output subscriber or awaiting terminal resize work.
+          await runtime.handleMobileLeaseSubscribe(ptyId, clientId)
+          const leaseRegisterMs = Math.max(0, Date.now() - leaseRegisterStartedAt)
           if (closed || signal?.aborted) {
             // Why: a disconnect can win the awaited subscribe and resurrect mobile presence after cleanup already released it.
             runtime.handleMobileUnsubscribe(ptyId, clientId)
@@ -2645,7 +2666,18 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             }
             return
           }
-          emit({ type: 'subscribed', streamId: null, lines: [], truncated: false })
+          emit({
+            type: 'subscribed',
+            streamId: null,
+            lines: [],
+            truncated: false,
+            leaseReady: true,
+            readinessTiming: {
+              serverTotalMs: Math.max(0, Date.now() - readinessStartedAt),
+              ptyWaitMs,
+              leaseRegisterMs
+            }
+          })
           await streamClosed
         } catch (error) {
           runtime.cleanupSubscription(subscriptionId)

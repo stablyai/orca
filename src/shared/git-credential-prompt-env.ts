@@ -70,11 +70,25 @@ export function appendGitConfigEnv(
     // scalar guards are safer than overwriting it with Orca-owned entries.
     return next
   }
-  entries.forEach(([key, value], index) => {
-    next[`GIT_CONFIG_KEY_${base + index}`] = key
-    next[`GIT_CONFIG_VALUE_${base + index}`] = value
-  })
-  next.GIT_CONFIG_COUNT = String(base + entries.length)
+  const effectiveValues = new Map<string, string>()
+  for (let index = 0; index < base; index++) {
+    effectiveValues.set(
+      env[`GIT_CONFIG_KEY_${index}`]!.toLowerCase(),
+      env[`GIT_CONFIG_VALUE_${index}`]!
+    )
+  }
+  let nextIndex = base
+  for (const [key, value] of entries) {
+    const normalizedKey = key.toLowerCase()
+    if (effectiveValues.get(normalizedKey) === value) {
+      continue
+    }
+    next[`GIT_CONFIG_KEY_${nextIndex}`] = key
+    next[`GIT_CONFIG_VALUE_${nextIndex}`] = value
+    effectiveValues.set(normalizedKey, value)
+    nextIndex += 1
+  }
+  next.GIT_CONFIG_COUNT = String(nextIndex)
   return next
 }
 

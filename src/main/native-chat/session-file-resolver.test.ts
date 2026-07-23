@@ -123,6 +123,31 @@ describe('resolveSessionFilePath', () => {
     }
   })
 
+  it('reads agent transcripts outside an isolated runtime home', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-transcript-home-')
+    const claudeProjectDir = join(root, '.claude', 'projects', '-repo')
+    const grokSessionDir = join(root, '.grok', 'sessions', 'repo', 'sess-grok-real-home')
+    await mkdir(claudeProjectDir, { recursive: true })
+    await mkdir(grokSessionDir, { recursive: true })
+    const claudeTarget = join(claudeProjectDir, 'sess-claude-real-home.jsonl')
+    const grokTarget = join(grokSessionDir, 'chat_history.jsonl')
+    await writeFile(claudeTarget, '{}\n')
+    await writeFile(grokTarget, '{}\n')
+    const previousTranscriptHome = process.env.ORCA_NATIVE_CHAT_TRANSCRIPT_HOME_DIR
+    const previousGrokHome = process.env.GROK_HOME
+    process.env.ORCA_NATIVE_CHAT_TRANSCRIPT_HOME_DIR = root
+    delete process.env.GROK_HOME
+    try {
+      await expect(resolveSessionFilePath('claude', 'sess-claude-real-home')).resolves.toBe(
+        claudeTarget
+      )
+      await expect(resolveSessionFilePath('grok', 'sess-grok-real-home')).resolves.toBe(grokTarget)
+    } finally {
+      restoreEnv('ORCA_NATIVE_CHAT_TRANSCRIPT_HOME_DIR', previousTranscriptHome)
+      restoreEnv('GROK_HOME', previousGrokHome)
+    }
+  })
+
   it('matches Codex rollout files by session id suffix', async () => {
     const root = await makeRoot('orca-native-chat-resolve-codex-')
     const codexSessionsDir = join(root, 'codex-sessions')

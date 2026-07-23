@@ -40,20 +40,28 @@ function suppressRendererWarning(): () => void {
 
 describe('MobileNativeChatComposer', () => {
   let renderer: ReactTestRenderer | null = null
+  let previousActEnvironment: boolean | undefined
 
   beforeEach(() => {
+    previousActEnvironment = globalThis.IS_REACT_ACT_ENVIRONMENT
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
   })
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    globalThis.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment
   })
 
   async function render(
     onSend: (text: string) => Promise<boolean>,
     onChangeText: () => void,
-    isAttaching = false
+    options: {
+      isAttaching?: boolean
+      sendDisabled?: boolean
+      onAttachImage?: () => void
+      onMicPress?: () => void
+    } = {}
   ) {
     const restore = suppressRendererWarning()
     try {
@@ -63,7 +71,7 @@ describe('MobileNativeChatComposer', () => {
             value: ' hello ',
             onChangeText,
             onSend,
-            isAttaching
+            ...options
           })
         )
       })
@@ -105,9 +113,34 @@ describe('MobileNativeChatComposer', () => {
 
   it('disables send while an attachment path is still being injected', async () => {
     const onSend = vi.fn().mockResolvedValue(true)
-    await render(onSend, vi.fn(), true)
+    await render(onSend, vi.fn(), { isAttaching: true })
 
     expect(sendButton().props).toMatchObject({ disabled: true })
+    await act(async () => sendButton().props.onPress())
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('disables only Send while the terminal lease is pending', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, vi.fn(), {
+      sendDisabled: true,
+      onAttachImage: vi.fn(),
+      onMicPress: vi.fn()
+    })
+
+    expect(sendButton().props).toMatchObject({ disabled: true })
+    expect(renderer!.root.findByType('TextInput').props.editable).toBeUndefined()
+    expect(
+      renderer!.root.find(
+        (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Attach image'
+      ).props.disabled
+    ).toBe(false)
+    expect(
+      renderer!.root.find(
+        (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Dictate'
+      ).props.disabled
+    ).toBeUndefined()
+
     await act(async () => sendButton().props.onPress())
     expect(onSend).not.toHaveBeenCalled()
   })

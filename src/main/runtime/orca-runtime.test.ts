@@ -20,7 +20,10 @@ import type {
   WorkspaceLineage,
   WorkspaceSessionState
 } from '../../shared/types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusIpcPayload
+} from '../../shared/agent-status-types'
 import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
 import {
   addWorktree,
@@ -25151,6 +25154,125 @@ describe('OrcaRuntimeService', () => {
         })
       })
     ])
+  })
+
+  it('publishes provider session identity from the main hook cache to headless mobile tabs', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-grok' })
+    let hookStatuses: AgentStatusIpcPayload[] = []
+    const runtime = new OrcaRuntimeService(
+      {
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {}
+        })
+      } as never,
+      undefined,
+      { getAgentStatusSnapshot: () => hookStatuses }
+    )
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      agent: 'grok'
+    })
+    const receivedAt = Date.now()
+    hookStatuses = [
+      {
+        paneKey: makePaneKey(created.tab.parentTabId, created.tab.leafId),
+        tabId: created.tab.parentTabId,
+        worktreeId: TEST_WORKTREE_ID,
+        connectionId: null,
+        state: 'done',
+        prompt: 'Reply with PONG',
+        agentType: 'grok',
+        receivedAt,
+        stateStartedAt: receivedAt,
+        providerSession: { key: 'session_id', id: 'grok-session-1' }
+      }
+    ]
+    runtime.onPtyData(
+      'pty-grok',
+      '\x1b]0;User Requests Simple PONG Reply - grok\x07',
+      receivedAt + 1
+    )
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs[0]).toMatchObject({
+      type: 'terminal',
+      launchAgent: 'grok',
+      agentStatus: {
+        state: 'done',
+        prompt: 'Reply with PONG',
+        agentType: 'grok',
+        providerSession: { key: 'session_id', id: 'grok-session-1' }
+      }
+    })
+  })
+
+  it('versions and republishes mobile tabs for hook-only provider session changes', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-grok' })
+    let hookStatuses: AgentStatusIpcPayload[] = []
+    const runtime = new OrcaRuntimeService(
+      {
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {}
+        })
+      } as never,
+      undefined,
+      { getAgentStatusSnapshot: () => hookStatuses }
+    )
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      agent: 'grok'
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+    const receivedAt = Date.now()
+    hookStatuses = [
+      {
+        paneKey: makePaneKey(created.tab.parentTabId, created.tab.leafId),
+        tabId: created.tab.parentTabId,
+        worktreeId: TEST_WORKTREE_ID,
+        connectionId: null,
+        state: 'done',
+        prompt: '',
+        agentType: 'grok',
+        receivedAt,
+        stateStartedAt: receivedAt,
+        providerSession: { key: 'session_id', id: 'grok-session-2' },
+        providerSessionOnly: true
+      }
+    ]
+
+    runtime.notifyMobileAgentHookStatusChanged()
+
+    await waitForMobileSessionTabsEvents(events, 1)
+    expect(events[0]?.snapshotVersion).toBeGreaterThan(created.snapshotVersion)
+    expect(events[0]?.tabs[0]).toMatchObject({
+      type: 'terminal',
+      agentStatus: {
+        providerSession: { key: 'session_id', id: 'grok-session-2' }
+      }
+    })
+    unsubscribe()
   })
 
   it('rejects disabled mobile session agent launches before spawning', async () => {

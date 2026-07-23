@@ -24,7 +24,7 @@ describe('terminal lease-only subscription', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      handleMobileSubscribe: vi.fn().mockResolvedValue(true),
+      handleMobileLeaseSubscribe: vi.fn().mockResolvedValue(undefined),
       handleMobileUnsubscribe: vi.fn(),
       subscribeToTerminalData: vi.fn(),
       registerRemoteTerminalViewSubscriber: vi.fn(),
@@ -58,7 +58,18 @@ describe('terminal lease-only subscription', () => {
         true
       )
     )
-    expect(runtime.handleMobileSubscribe).toHaveBeenCalledWith('pty-1', 'phone-1', undefined)
+    const subscribed = messages
+      .map((message) => JSON.parse(message).result)
+      .find((result) => result?.type === 'subscribed')
+    expect(subscribed).toMatchObject({
+      leaseReady: true,
+      readinessTiming: {
+        serverTotalMs: expect.any(Number),
+        ptyWaitMs: 0,
+        leaseRegisterMs: expect.any(Number)
+      }
+    })
+    expect(runtime.handleMobileLeaseSubscribe).toHaveBeenCalledWith('pty-1', 'phone-1')
     expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
     expect(runtime.registerRemoteTerminalViewSubscriber).not.toHaveBeenCalled()
     expect(runtime.readTerminal).not.toHaveBeenCalled()
@@ -69,5 +80,39 @@ describe('terminal lease-only subscription', () => {
     runtime.cleanupSubscription('terminal-1:phone-1')
     await dispatchPromise
     expect(runtime.handleMobileUnsubscribe).toHaveBeenCalledWith('pty-1', 'phone-1')
+  })
+
+  it('reports retryable terminal unavailability without a false lease acknowledgement', async () => {
+    const messages: string[] = []
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      resolveLeafForHandle: vi.fn().mockReturnValue(null),
+      requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
+      waitForLeafPtyId: vi.fn().mockRejectedValue(new Error('timeout')),
+      readTerminal: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    await dispatcher.dispatchStreaming(request, (message) => messages.push(message), {
+      connectionId: 'conn-phone',
+      sendBinary: vi.fn(),
+      registerBinaryStreamHandler: vi.fn(() => vi.fn())
+    })
+
+    const results = messages.map((message) => JSON.parse(message).result)
+    expect(results).toEqual([
+      expect.objectContaining({
+        type: 'terminal-unavailable',
+        reason: 'pty-not-ready',
+        retryable: true,
+        readinessTiming: expect.objectContaining({
+          serverTotalMs: expect.any(Number),
+          ptyWaitMs: expect.any(Number)
+        })
+      }),
+      { type: 'end' }
+    ])
+    expect(runtime.readTerminal).not.toHaveBeenCalled()
+    expect(results).not.toContainEqual(expect.objectContaining({ type: 'subscribed' }))
   })
 })

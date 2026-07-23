@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, extname, join } from 'node:path'
+import { basename, extname, isAbsolute, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
@@ -10,13 +10,15 @@ import {
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
 
-// Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
-// run in the main process against the runtime's own home directory; over SSH
-// the remote main resolves its local home, so we never hardcode an absolute
-// user path — homedir()/CODEX_HOME resolution stays runtime-relative and is
-// computed per call (not at module load) so it tracks the live home.
+// Why: emulator login shells can write outside the runtime's isolated HOME;
+// other hosts keep resolving against their own local home at call time.
+function nativeChatTranscriptHomeDir(): string {
+  const override = process.env.ORCA_NATIVE_CHAT_TRANSCRIPT_HOME_DIR?.trim()
+  return override && isAbsolute(override) ? override : homedir()
+}
+
 function claudeProjectsDir(): string {
-  return join(homedir(), '.claude', 'projects')
+  return join(nativeChatTranscriptHomeDir(), '.claude', 'projects')
 }
 
 // Why: Orca launches Codex with ORCA_CODEX_HOME pointing at its own managed
@@ -28,13 +30,16 @@ function claudeProjectsDir(): string {
 function codexSessionsDirs(): string[] {
   const candidates = [
     join(getOrcaManagedCodexHomePath(), 'sessions'),
-    join(process.env.CODEX_HOME?.trim() || join(homedir(), '.codex'), 'sessions')
+    join(
+      process.env.CODEX_HOME?.trim() || join(nativeChatTranscriptHomeDir(), '.codex'),
+      'sessions'
+    )
   ]
   return candidates.filter((dir, index) => candidates.indexOf(dir) === index)
 }
 
 function grokSessionsDir(): string {
-  return resolveGrokSessionsDir(process.env, homedir())
+  return resolveGrokSessionsDir(process.env, nativeChatTranscriptHomeDir())
 }
 
 export type ResolveSessionFileOptions = {

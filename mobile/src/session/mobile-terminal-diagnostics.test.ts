@@ -36,11 +36,42 @@ describe('mobile terminal diagnostics', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     const diagnostics = new MobileTerminalDiagnostics()
 
-    diagnostics.firstStreamEvent('terminal-1', 1, 'subscribed')
+    diagnostics.firstStreamEvent('terminal-1', 1, { type: 'subscribed' })
     diagnostics.terminalUnsubscribed('terminal-1')
-    diagnostics.firstStreamEvent('terminal-1', 1, 'subscribed')
+    diagnostics.firstStreamEvent('terminal-1', 1, { type: 'subscribed' })
 
     expect(log).toHaveBeenCalledTimes(2)
     log.mockRestore()
+  })
+
+  it('measures lease-only acknowledgement latency', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      const diagnostics = new MobileTerminalDiagnostics()
+
+      diagnostics.streamArmed('terminal-1', 3, null, true)
+      vi.setSystemTime(1_275)
+      diagnostics.firstStreamEvent('terminal-1', 3, {
+        type: 'subscribed',
+        readinessTiming: { serverTotalMs: 200, ptyWaitMs: 180, leaseRegisterMs: 5 }
+      })
+
+      expect(log).toHaveBeenLastCalledWith('[terminal-diagnostic]', 'stream-first-event', {
+        handle: 'rminal-1',
+        seq: 3,
+        type: 'subscribed',
+        leaseOnly: true,
+        waitMs: 275,
+        serverTotalMs: 200,
+        serverPtyWaitMs: 180,
+        serverLeaseRegisterMs: 5,
+        estimatedTransportMs: 75
+      })
+    } finally {
+      vi.useRealTimers()
+      log.mockRestore()
+    }
   })
 })

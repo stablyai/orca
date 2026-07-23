@@ -5621,18 +5621,19 @@ describe('connectPanePty', () => {
     getForegroundProcess.mockResolvedValue('droid')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const ptyId = 'pty-droid-confirmation-window'
+    const tabId = 'tab-droid-confirmation-window'
     const transport = createMockTransport(ptyId)
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       dataCallbackRef.current = callbacks.onData ?? null
       return { id: ptyId }
     })
     transportFactoryQueue.push(transport)
-    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const paneKey = makePaneKey(tabId, LEAF_1)
 
     connectPanePty(
       createPane(1) as never,
       createManager(1) as never,
-      createDeps({ isVisibleRef: { current: false } }) as never
+      createDeps({ tabId, isVisibleRef: { current: false } }) as never
     )
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()

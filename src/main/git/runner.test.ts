@@ -192,6 +192,40 @@ describe('appendGitConfigEnv', () => {
     expect(env.GIT_CONFIG_VALUE_1).toBe('false')
   })
 
+  it('does not duplicate an already-effective entry', () => {
+    const original = {
+      GIT_CONFIG_COUNT: '2',
+      GIT_CONFIG_KEY_0: 'credential.interactive',
+      GIT_CONFIG_VALUE_0: 'false',
+      GIT_CONFIG_KEY_1: 'credential.guiPrompt',
+      GIT_CONFIG_VALUE_1: 'false'
+    }
+
+    expect(
+      appendGitConfigEnv(original, [
+        ['credential.interactive', 'false'],
+        ['credential.guiPrompt', 'false']
+      ])
+    ).toEqual(original)
+  })
+
+  it('appends after a later conflicting value', () => {
+    const env = appendGitConfigEnv(
+      {
+        GIT_CONFIG_COUNT: '2',
+        GIT_CONFIG_KEY_0: 'credential.interactive',
+        GIT_CONFIG_VALUE_0: 'false',
+        GIT_CONFIG_KEY_1: 'CREDENTIAL.INTERACTIVE',
+        GIT_CONFIG_VALUE_1: 'true'
+      },
+      [['credential.interactive', 'false']]
+    )
+
+    expect(env.GIT_CONFIG_COUNT).toBe('3')
+    expect(env.GIT_CONFIG_KEY_2).toBe('credential.interactive')
+    expect(env.GIT_CONFIG_VALUE_2).toBe('false')
+  })
+
   it.each(['bogus', '-1', '0', String(Number.MAX_SAFE_INTEGER)])(
     'does not overwrite dangling caller config when count is %s',
     (count) => {

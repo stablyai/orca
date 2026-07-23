@@ -235,9 +235,8 @@ export function MobileNativeChatView({
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
-  // Composer-lock flicker guard: on a remote link, brief connState blips or lease
-  // hand-offs would otherwise toggle the lock placeholder on and off. Only surface
-  // a lock once it has held ~600ms; drop it instantly so unlocking stays snappy.
+  // Why: gate Send immediately, but keep draft editing available while the
+  // acknowledged lease catches up; delay only the placeholder swap.
   const rawLockReason = inputLockReason ?? null
   const [lockHeld, setLockHeld] = useState(false)
   useEffect(() => {
@@ -409,7 +408,7 @@ export function MobileNativeChatView({
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}
-        disabled={lockReason !== null}
+        sendDisabled={rawLockReason !== null}
         placeholder={
           lockReason === 'disconnected'
             ? 'Reconnecting…'
