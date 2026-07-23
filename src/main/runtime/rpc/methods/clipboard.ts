@@ -16,6 +16,7 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 type ClipboardImageUpload = {
   expectedBase64Length: number
   connectionId?: string | null
+  fileName?: string | null
   chunks: string[]
   receivedBase64Length: number
   expiresAt: number
@@ -93,12 +94,16 @@ function clipboardImageBase64Payload(maxChars: number, tooLargeMessage: string) 
   })
 }
 
+// Why: despite the "image" method names (kept for compatibility), these are the
+// generic blob-to-temp-file channel; fileName support is advertised via the
+// clipboard.file-upload.v1 capability, and the host sanitizes the name.
 const SaveImageAsTempFile = z.object({
   contentBase64: clipboardImageBase64Payload(
     MAX_CLIPBOARD_IMAGE_BASE64_CHARS,
     CLIPBOARD_IMAGE_TOO_LARGE_ERROR
   ),
-  connectionId: z.string().min(1).nullable().optional()
+  connectionId: z.string().min(1).nullable().optional(),
+  fileName: z.string().min(1).max(1024).nullable().optional()
 })
 
 const StartImageUpload = z.object({
@@ -107,7 +112,8 @@ const StartImageUpload = z.object({
     .int()
     .nonnegative()
     .max(MAX_CLIPBOARD_IMAGE_BASE64_CHARS, CLIPBOARD_IMAGE_TOO_LARGE_ERROR),
-  connectionId: z.string().min(1).nullable().optional()
+  connectionId: z.string().min(1).nullable().optional(),
+  fileName: z.string().min(1).max(1024).nullable().optional()
 })
 
 const AppendImageUploadChunk = z.object({
@@ -133,7 +139,8 @@ export const CLIPBOARD_METHODS: RpcMethod[] = [
     params: SaveImageAsTempFile,
     handler: async (params) =>
       saveClipboardImageBufferAsTempFile(Buffer.from(params.contentBase64, 'base64'), {
-        connectionId: params.connectionId
+        connectionId: params.connectionId,
+        fileName: params.fileName
       })
   }),
   defineMethod({
@@ -148,6 +155,7 @@ export const CLIPBOARD_METHODS: RpcMethod[] = [
       clipboardImageUploads.set(uploadId, {
         expectedBase64Length: params.expectedBase64Length,
         connectionId: params.connectionId,
+        fileName: params.fileName,
         chunks: [],
         receivedBase64Length: 0,
         expiresAt: Date.now() + CLIPBOARD_IMAGE_UPLOAD_TTL_MS,
@@ -186,7 +194,8 @@ export const CLIPBOARD_METHODS: RpcMethod[] = [
         const contentBase64 = upload.chunks.join('')
         assertValidBase64Content(contentBase64)
         return await saveClipboardImageBufferAsTempFile(Buffer.from(contentBase64, 'base64'), {
-          connectionId: upload.connectionId
+          connectionId: upload.connectionId,
+          fileName: upload.fileName
         })
       } finally {
         // Why: failed SSH or filesystem commits must not leave bounded upload

@@ -83,6 +83,10 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
+// Why: hosts without this strip fileName from the clipboard upload methods
+// (zod drops unknown keys) and would save a PDF as `….png`, so mobile keeps
+// the image-only picker unless the host advertises filename support.
+export const CLIPBOARD_FILE_UPLOAD_RUNTIME_CAPABILITY = 'clipboard.file-upload.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -116,7 +120,8 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
-  CODEX_RESET_CREDIT_RUNTIME_CAPABILITY
+  CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
+  CLIPBOARD_FILE_UPLOAD_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

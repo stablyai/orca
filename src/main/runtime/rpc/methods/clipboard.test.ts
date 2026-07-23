@@ -64,6 +64,52 @@ describe('clipboard RPC methods', () => {
     })
   })
 
+  it('forwards fileName on the single-frame save so named attachments keep their name', async () => {
+    saveClipboardImageBufferAsTempFile.mockResolvedValue('/tmp/orca-file-1-uuid-report.pdf')
+    const dispatcher = makeDispatcher()
+
+    const response = await dispatcher.dispatch(
+      makeRequest('clipboard.saveImageAsTempFile', {
+        contentBase64: Buffer.from('pdf-bytes').toString('base64'),
+        connectionId: null,
+        fileName: 'report.pdf'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('pdf-bytes'), {
+      connectionId: null,
+      fileName: 'report.pdf'
+    })
+  })
+
+  it('records fileName at upload start and forwards it on commit', async () => {
+    saveClipboardImageBufferAsTempFile.mockResolvedValue('/tmp/orca-file-1-uuid-notes.txt')
+    const dispatcher = makeDispatcher()
+    const contentBase64 = Buffer.from('txt-bytes').toString('base64')
+
+    const start = await dispatcher.dispatch(
+      makeRequest('clipboard.startImageUpload', {
+        expectedBase64Length: contentBase64.length,
+        connectionId: 'ssh-1',
+        fileName: 'notes.txt'
+      })
+    )
+    expect(start.ok).toBe(true)
+    const { uploadId } = (start.ok ? start.result : null) as { uploadId: string }
+    await dispatcher.dispatch(
+      makeRequest('clipboard.appendImageUploadChunk', { uploadId, offset: 0, contentBase64 })
+    )
+
+    await expect(
+      dispatcher.dispatch(makeRequest('clipboard.commitImageUpload', { uploadId }))
+    ).resolves.toMatchObject({ ok: true, result: '/tmp/orca-file-1-uuid-notes.txt' })
+    expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('txt-bytes'), {
+      connectionId: 'ssh-1',
+      fileName: 'notes.txt'
+    })
+  })
+
   it('rejects non-base64 clipboard image payloads', async () => {
     const dispatcher = makeDispatcher()
 
