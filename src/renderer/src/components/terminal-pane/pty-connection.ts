@@ -2128,10 +2128,59 @@ export function connectPanePty(
   const autosuggestLineTracker = createTerminalAutosuggestLineTracker(pane.terminal)
   const autosuggestSessionPool = createTerminalAutosuggestSessionPool()
   let autosuggestPersistedHistory: readonly string[] = []
+  // Why: getAll()/autosuggestPersistedHistory are only replaced (new array reference)
+  // when their contents actually change, so caching on those references avoids
+  // rebuilding the merged candidate list on every keystroke's cursor move.
+  let cachedAutosuggestCandidates: readonly string[] | null = null
+  let cachedSessionCommands: readonly string[] | null = null
+  let cachedPersistedHistory: readonly string[] | null = null
+  const getAutosuggestCandidates = (): readonly string[] => {
+    const sessionCommands = autosuggestSessionPool.getAll()
+    if (
+      cachedAutosuggestCandidates &&
+      cachedSessionCommands === sessionCommands &&
+      cachedPersistedHistory === autosuggestPersistedHistory
+    ) {
+      return cachedAutosuggestCandidates
+    }
+    cachedSessionCommands = sessionCommands
+    cachedPersistedHistory = autosuggestPersistedHistory
+    // Why: session-run commands rank ahead of persisted history (both already
+    // most-recent-first) so the freshest intent wins the prefix match.
+    cachedAutosuggestCandidates = [...sessionCommands, ...autosuggestPersistedHistory]
+    return cachedAutosuggestCandidates
+  }
+  // Why: returns the previous object when every field is unchanged, so a cursor-move
+  // that doesn't alter the suggestion doesn't force a React re-render via a new identity.
+  let previousAutosuggestState: ActiveAutosuggestState | null = null
+  const memoizeAutosuggestState = (
+    next: ActiveAutosuggestState | null
+  ): ActiveAutosuggestState | null => {
+    const prev = previousAutosuggestState
+    const same =
+      prev === next ||
+      (prev !== null &&
+        next !== null &&
+        prev.terminal === next.terminal &&
+        prev.row === next.row &&
+        prev.cursorCol === next.cursorCol &&
+        prev.remainder === next.remainder &&
+        prev.foregroundColor === next.foregroundColor)
+    if (same) {
+      return prev
+    }
+    previousAutosuggestState = next
+    return next
+  }
   const recordSubmittedAutosuggestCommand = (): void => {
     // Why: snapshot the typed line BEFORE resetting the tracker — command-start
     // resets the prompt boundary, after which getCurrentInputLine returns null.
-    const submitted = autosuggestLineTracker?.getCurrentInputLine()
+    // Falls back to the last line observed before this row-mismatch, since a
+    // main-authority command-started fact can race in after the cursor already
+    // advanced past the row captured at prompt-end.
+    const submitted =
+      autosuggestLineTracker?.getCurrentInputLine() ??
+      autosuggestLineTracker?.getLastObservedInputLine()
     autosuggestLineTracker?.onCommandStartedFact()
     if (submitted) {
       autosuggestSessionPool?.push(submitted)
@@ -8136,15 +8185,14 @@ export function connectPanePty(
       if (useAppStore.getState().settings?.terminalAutosuggestEnabled === false) {
         return null
       }
-      // Why: session-run commands rank ahead of persisted history (both already
-      // most-recent-first) so the freshest intent wins the prefix match.
-      const candidates = [...autosuggestSessionPool.getAll(), ...autosuggestPersistedHistory]
       const foreground = pane.terminal.options.theme?.foreground ?? '#ffffff'
-      return computeActiveAutosuggestState(
-        pane.terminal,
-        autosuggestLineTracker,
-        candidates,
-        foreground
+      return memoizeAutosuggestState(
+        computeActiveAutosuggestState(
+          pane.terminal,
+          autosuggestLineTracker,
+          getAutosuggestCandidates(),
+          foreground
+        )
       )
     },
     subscribeAutosuggest(listener) {

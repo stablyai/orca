@@ -119,6 +119,35 @@ describe('createTerminalAutosuggestLineTracker', () => {
     state.cursorY = 1
     expect(tracker.getCurrentInputLine()).toBeNull()
   })
+
+  it('getLastObservedInputLine survives a row mismatch, unlike getCurrentInputLine', () => {
+    const { terminal, state } = makeMutableFakeTerminal({ lineText: '$ ', cursorX: 2 })
+    const tracker = createTerminalAutosuggestLineTracker(terminal)
+    tracker.onPromptEndFact()
+
+    state.lineText = '$ git status'
+    state.cursorX = 12
+    expect(tracker.getCurrentInputLine()).toBe('git status')
+    expect(tracker.getLastObservedInputLine()).toBe('git status')
+
+    // A command-started fact can race in after the cursor already left the row
+    // (e.g. the shell's echoed newline advances it before the async fact arrives).
+    state.cursorY = 1
+    expect(tracker.getCurrentInputLine()).toBeNull()
+    expect(tracker.getLastObservedInputLine()).toBe('git status')
+  })
+
+  it('clears getLastObservedInputLine when a command starts', () => {
+    const { terminal, state } = makeMutableFakeTerminal({ lineText: '$ ', cursorX: 2 })
+    const tracker = createTerminalAutosuggestLineTracker(terminal)
+    tracker.onPromptEndFact()
+
+    state.lineText = '$ git status'
+    state.cursorX = 12
+    tracker.getCurrentInputLine()
+    tracker.onCommandStartedFact()
+    expect(tracker.getLastObservedInputLine()).toBeNull()
+  })
 })
 
 describe('isCursorAtEndOfInputLine', () => {

@@ -11,6 +11,9 @@ export type TerminalAutosuggestLineTracker = {
   onCommandStartedFact: () => void
   /** Current typed-but-unsubmitted input line, or null if not at a tracked prompt. */
   getCurrentInputLine: () => string | null
+  /** Last non-null getCurrentInputLine() result since the last prompt-end, surviving
+   *  a command-started fact that races ahead of the cursor leaving its captured row. */
+  getLastObservedInputLine: () => string | null
   /** True iff the cursor sits exactly at the end of the tracked input (not
    *  mid-edit, not navigated right into trailing whitespace/empty cells). */
   isCursorAtEndOfInputLine: () => boolean
@@ -25,6 +28,7 @@ export function createTerminalAutosuggestLineTracker(
 ): TerminalAutosuggestLineTracker {
   let promptEndColumn: number | null = null
   let promptRow: number | null = null
+  let lastObservedInputLine: string | null = null
   const changeListeners = new Set<() => void>()
 
   const emitChange = (): void => {
@@ -44,6 +48,7 @@ export function createTerminalAutosuggestLineTracker(
   const reset = (): void => {
     promptEndColumn = null
     promptRow = null
+    lastObservedInputLine = null
     emitChange()
   }
 
@@ -72,8 +77,11 @@ export function createTerminalAutosuggestLineTracker(
       if (!line) {
         return null
       }
-      return line.translateToString(true, promptEndColumn, buffer.cursorX)
+      const inputLine = line.translateToString(true, promptEndColumn, buffer.cursorX)
+      lastObservedInputLine = inputLine
+      return inputLine
     },
+    getLastObservedInputLine: () => lastObservedInputLine,
     isCursorAtEndOfInputLine: () => {
       if (promptEndColumn === null || promptRow === null) {
         return false

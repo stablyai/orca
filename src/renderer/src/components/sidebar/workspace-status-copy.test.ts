@@ -26,6 +26,17 @@ describe('workspace-status-copy', () => {
     expect(getLocalizedWorkspaceStatusLabel(custom)).toBe('Blocked')
   })
 
+  it('never translates a status flagged isCustomLabel, even if the text still matches a default', async () => {
+    const renamedBackToDefaultText = {
+      ...DEFAULT_WORKSPACE_STATUSES[0],
+      label: 'Todo',
+      isCustomLabel: true
+    }
+    await setRendererUiLanguage(UI_LANGUAGE_SPANISH)
+    expect(getLocalizedWorkspaceStatusLabel(renamedBackToDefaultText)).toBe('Todo')
+    await setRendererUiLanguage(UI_LANGUAGE_ENGLISH)
+  })
+
   it('translates the default label when switching the renderer UI language', async () => {
     await setRendererUiLanguage(UI_LANGUAGE_SPANISH)
     expect(getLocalizedWorkspaceStatusLabel(DEFAULT_WORKSPACE_STATUSES[0])).not.toBe('Todo')

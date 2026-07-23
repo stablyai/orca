@@ -519,7 +519,7 @@ export default function WorkspaceKanbanDrawer({
       }
       setWorkspaceStatuses(
         workspaceStatuses.map((status) =>
-          status.id === statusId ? { ...status, label: trimmed } : status
+          status.id === statusId ? { ...status, label: trimmed, isCustomLabel: true } : status
         )
       )
       useAppStore.getState().recordFeatureInteraction('workspace-board-actions')

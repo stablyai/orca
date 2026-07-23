@@ -460,6 +460,9 @@ export type WorkspaceStatusDefinition = {
   label: string
   color?: string
   icon?: string
+  // Why: explicit flag set on rename, so translation gating never depends on comparing
+  // against shipped default text (which can change and stop matching old persisted labels).
+  isCustomLabel?: boolean
 }
 
 export type Worktree = {
