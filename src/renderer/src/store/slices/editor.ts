@@ -4314,6 +4314,22 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       openHttpLink(target.url, { worktreeId: ctx.worktreeId, sourceOwner })
       return
     }
+    const openMarkdownLinkTarget = (
+      file: Omit<OpenFile, 'id' | 'isDirty'>,
+      line: number | undefined,
+      column: number | undefined
+    ): void => {
+      const options = {
+        preview: true,
+        targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+        recordReplacedPreview: true
+      }
+      if (line === undefined) {
+        get().openFile(file, options)
+      } else {
+        get().openFileAtLocation(file, { line, column }, options)
+      }
+    }
     if (target.kind === 'file') {
       const { line, column } = target
       if (target.relativePath === undefined) {
@@ -4354,16 +4370,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: detectLanguage(target.absolutePath),
         mode: 'edit' as const
       }
-      const options = {
-        preview: true,
-        targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
-        recordReplacedPreview: true
-      }
-      if (line === undefined) {
-        get().openFile(file, options)
-      } else {
-        get().openFileAtLocation(file, { line, column }, options)
-      }
+      openMarkdownLinkTarget(file, line, column)
       return
     }
 
@@ -4397,16 +4404,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       language: 'markdown',
       mode: 'edit' as const
     }
-    const options = {
-      preview: true,
-      targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
-      recordReplacedPreview: true
-    }
-    if (line === undefined) {
-      get().openFile(file, options)
-    } else {
-      get().openFileAtLocation(file, { line, column }, options)
-    }
+    openMarkdownLinkTarget(file, line, column)
   },
 
   // Why: only edit-mode files are restored — diffs/conflict views depend on transient git state that may be stale between sessions.
