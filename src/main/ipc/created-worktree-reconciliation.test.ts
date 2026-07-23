@@ -50,6 +50,26 @@ describe('findCreatedWorktree', () => {
   })
 
   it.each([
+    ['relative POSIX paths', 'worktrees/feature', './worktrees/feature', 'linux' as const],
+    [
+      'macOS /private/tmp alias',
+      '/private/tmp/worktrees/feature',
+      '/tmp/worktrees/feature',
+      'darwin' as const
+    ]
+  ])('keeps %s on the direct path', (_case, listed, requested, os) => {
+    const created = { path: listed, branch: 'refs/heads/other' }
+
+    expect(findCreatedWorktree([created], requested, 'feature', os)).toBe(created)
+  })
+
+  it('keeps non-Windows POSIX path comparison case-sensitive', () => {
+    const listed = { path: '/worktrees/Feature', branch: 'refs/heads/other' }
+
+    expect(findCreatedWorktree([listed], '/worktrees/feature', 'feature', 'linux')).toBeUndefined()
+  })
+
+  it.each([
     ['WSL', '/home/user/worktrees/feature', '/var/home/user/worktrees/feature', 'win32' as const],
     ['SSH', '/srv/link/feature', '/srv/canonical/feature', 'linux' as const]
   ])(

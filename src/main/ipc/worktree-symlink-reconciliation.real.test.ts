@@ -67,8 +67,11 @@ describe('native worktree symlink reconciliation (real Git)', () => {
     const createdIndex = listedRows.indexOf(listed)
     expect(staleIndex).toBeGreaterThanOrEqual(0)
     expect(createdIndex).toBeGreaterThan(staleIndex)
-    expect(listed.path).toBe(join(await realpath(canonicalRoot), 'feature'))
-    expect(areWorktreePathsEqual(listed.path, requestedPath)).toBe(false)
+    expect(await realpath(listed.path)).toBe(await realpath(requestedPath))
+    if (process.platform !== 'win32') {
+      expect(listed.path).toBe(join(await realpath(canonicalRoot), 'feature'))
+      expect(areWorktreePathsEqual(listed.path, requestedPath)).toBe(false)
+    }
     expect(findCreatedWorktree(listedRows, requestedPath, 'feature')).toBe(listed)
   })
 })
