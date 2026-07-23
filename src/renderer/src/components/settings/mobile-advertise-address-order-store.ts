@@ -89,7 +89,11 @@ export function saveMobileAdvertiseAddressOrder(
     customAddresses: capped.filter((address) => customSet.has(address)),
     relayPreferenceIndex: Math.max(0, Math.min(capped.length, relayPreferenceIndex))
   }
-  window.localStorage.setItem(MOBILE_ADVERTISE_ADDRESSES_STORAGE_KEY, JSON.stringify(stored))
+  try {
+    window.localStorage.setItem(MOBILE_ADVERTISE_ADDRESSES_STORAGE_KEY, JSON.stringify(stored))
+  } catch {
+    // Persistence is optional; the current pairing flow still honors the route order.
+  }
 }
 
 /** Derive which selected addresses are customs given the current discovery set. */

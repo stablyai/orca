@@ -600,6 +600,7 @@ export class OrcaRuntimeRpcServer {
     const current = this.deviceRegistry?.getDevice(deviceId)
     if (
       current?.scope !== 'mobile' ||
+      binding.relayDeviceId !== deviceId ||
       this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
     ) {
       return false

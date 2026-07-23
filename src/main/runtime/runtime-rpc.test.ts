@@ -1742,24 +1742,28 @@ describe('OrcaRuntimeRpcServer', () => {
       wsPort: 0
     })
     const onDeviceRevokeQueued = vi.fn()
+    const createPairingRelay = vi.fn(async (relayDeviceId: string) => ({
+      relay: {
+        v: 1 as const,
+        directorUrl: 'https://relay.example.com',
+        cellUrl: 'https://cell.example.com',
+        assignmentEpoch: 7,
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        inviteToken: 'A'.repeat(43),
+        inviteExpiresAt: Date.now() + 60_000,
+        e2eeFraming: 2 as const
+      },
+      binding: {
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        relayDeviceId,
+        ownerIdentityKey:
+          createPairingRelay.mock.calls.length >= 3
+            ? 'other-user\0profile\0org'
+            : 'user\0profile\0org'
+      }
+    }))
     server.setMobileRelayPairingProvider({
-      createPairingRelay: async (relayDeviceId) => ({
-        relay: {
-          v: 1,
-          directorUrl: 'https://relay.example.com',
-          cellUrl: 'https://cell.example.com',
-          assignmentEpoch: 7,
-          relayHostId: 'AbCdEf0123_-xyZ9',
-          inviteToken: 'A'.repeat(43),
-          inviteExpiresAt: Date.now() + 60_000,
-          e2eeFraming: 2
-        },
-        binding: {
-          relayHostId: 'AbCdEf0123_-xyZ9',
-          relayDeviceId,
-          ownerIdentityKey: 'user\0profile\0org'
-        }
-      }),
+      createPairingRelay,
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
       provisionRelay: vi.fn()
@@ -1781,6 +1785,20 @@ describe('OrcaRuntimeRpcServer', () => {
       }
       expect(second.deviceId).toBe(first.deviceId)
       expect(onDeviceRevokeQueued).not.toHaveBeenCalled()
+
+      const third = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(third.available).toBe(true)
+      if (!third.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(third.deviceId).toBe(first.deviceId)
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+      expect(onDeviceRevokeQueued).toHaveBeenCalledWith(
+        expect.objectContaining({ ownerIdentityKey: 'user\0profile\0org' })
+      )
+      expect(server.getDeviceRegistry()?.getDevice(third.deviceId)?.relayBinding).toEqual(
+        expect.objectContaining({ ownerIdentityKey: 'other-user\0profile\0org' })
+      )
     } finally {
       await server.stop()
     }

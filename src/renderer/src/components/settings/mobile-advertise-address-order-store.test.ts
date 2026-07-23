@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   loadMobileAdvertiseAddressOrder,
   MOBILE_ADVERTISE_ADDRESSES_STORAGE_KEY,
@@ -48,6 +48,15 @@ describe('mobile-advertise-address-order-store', () => {
   it('caps stored addresses at four', () => {
     saveMobileAdvertiseAddressOrder(['a', 'b', 'c', 'd', 'e'])
     expect(loadMobileAdvertiseAddressOrder()?.addresses).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('keeps storage failures from interrupting the active pairing flow', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage unavailable')
+    })
+
+    expect(() => saveMobileAdvertiseAddressOrder(['100.64.1.20'])).not.toThrow()
+    setItem.mockRestore()
   })
 
   it('derives customs from known set and non-discovered selections', () => {
