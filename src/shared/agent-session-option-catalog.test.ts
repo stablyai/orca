@@ -98,6 +98,20 @@ describe('agent session option catalog', () => {
     expect(mini?.options.map((option) => option.id)).toEqual(['effort'])
   })
 
+  it('preserves static Codex options when discovery returns no capabilities', () => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    const parsed = catalog.listModels!.parse(
+      JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5 live' }] })
+    )
+    const merged = mergeCatalogModels(catalog.models, parsed)
+
+    expect(merged.find((model) => model.id === 'gpt-5.5')).toMatchObject({
+      label: 'GPT-5.5 live',
+      optionsAuthoritative: false,
+      options: [expect.objectContaining({ id: 'effort' })]
+    })
+  })
+
   it('composes Cursor effort and fast mode into the supported slug form', () => {
     const resolved = resolveAgentSessionOptionLaunch('cursor', {
       model: 'gpt-5.3-codex',

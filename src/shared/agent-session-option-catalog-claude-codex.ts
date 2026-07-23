@@ -188,7 +188,7 @@ export function codexCatalogModelFromCapability(model: CommitMessageModelCapabil
   return {
     id: model.id,
     label: model.label,
-    optionsAuthoritative: true,
+    optionsAuthoritative: options.length > 0,
     options
   }
 }

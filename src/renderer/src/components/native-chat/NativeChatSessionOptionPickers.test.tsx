@@ -322,12 +322,12 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.getByText('Toggle fast mode')).not.toBeNull()
+    expect(screen.getByText('Toggle Fast mode')).not.toBeNull()
     expect(screen.getByText('1.5x speed, increased usage')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Fast mode' })).not.toBeNull()
     expect(screen.queryByText('On')).toBeNull()
     expect(screen.queryByText('Off')).toBeNull()
-    screen.getByText('Toggle fast mode').click()
+    screen.getByText('Toggle Fast mode').click()
     await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('fastMode'))
     expect(setOption).not.toHaveBeenCalled()
   })
@@ -350,7 +350,7 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.queryByText('Toggle fast mode')).toBeNull()
+    expect(screen.queryByText('Toggle Fast mode')).toBeNull()
     const onRadio = screen.getByRole('radio', { name: 'On' })
     expect(onRadio.getAttribute('data-state')).toBe('checked')
     expect(onRadio.getAttribute('aria-checked')).toBe('true')
