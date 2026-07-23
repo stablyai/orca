@@ -811,6 +811,8 @@ import {
   getDefaultVoiceSettings
 } from '../../shared/constants'
 import { listRepoWorktrees } from '../repo-worktrees'
+import { WorktreeScanSchedule } from './worktree-scan-schedule'
+import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
@@ -2315,7 +2317,6 @@ type RuntimeWorktreeScanCache = {
   generation: number
   runtimeKey: string
   result: Extract<RuntimeWorktreeScanResult, { ok: true }>
-  expiresAt: number
 }
 
 type RuntimeWorktreeScanInFlight = {
@@ -2578,6 +2579,12 @@ export class OrcaRuntimeService {
   private worktreeScanGenerations = new Map<string, number>()
   private worktreeScanCache = new Map<string, RuntimeWorktreeScanCache>()
   private worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
+  // Why: adaptive per-repo refresh cadence (hot repo 60s → cold 1h ±25% jitter)
+  // so the fleet's `git worktree list` scans never fire together (#7576).
+  private readonly worktreeScanSchedule = new WorktreeScanSchedule({
+    now: () => Date.now(),
+    random: () => Math.random()
+  })
   private cloneInFlightByPath = new Map<string, Promise<void>>()
   private agentDetector: AgentDetector | null = null
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
@@ -3019,6 +3026,10 @@ export class OrcaRuntimeService {
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
+    // Why: external `git worktree add/remove` (detected by the base-directory
+    // poller) must drop this repo's cached scan, or stale-while-revalidate could
+    // serve a list missing the change; Orca's own ops already invalidate directly.
+    registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeScanCacheForRepo(repoId))
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -25421,7 +25432,6 @@ export class OrcaRuntimeService {
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
-    const now = Date.now()
     const generation = this.worktreeScanGenerations.get(repo.id) ?? 0
     const projectRuntime = projectRuntimeByRepoId
       ? projectRuntimeByRepoId.get(repo.id)
@@ -25436,13 +25446,19 @@ export class OrcaRuntimeService {
         ? `ssh:${repo.connectionId}:${getSshGitProviderGeneration(repo.connectionId)}`
         : 'local:default'
     const cached = this.worktreeScanCache.get(repo.id)
-    if (
-      cached?.generation === generation &&
-      cached.runtimeKey === runtimeKey &&
-      cached.expiresAt > now
-    ) {
+    if (cached?.generation === generation && cached.runtimeKey === runtimeKey) {
+      // Stale-while-revalidate: a repo's worktree LIST is structurally stable and
+      // add/remove invalidates within ~2s via the base poller, so serve the
+      // last-known scan immediately and only re-scan in the background when the
+      // adaptive schedule says this repo is due. Kills the synchronized fleet
+      // fan-out that fired every repo's `git worktree list` at once (#7576).
+      if (this.worktreeScanSchedule.isDue(repo.id) && !this.worktreeScanInFlight.has(repo.id)) {
+        void this.refreshWorktreeScanInBackground(repo, projectRuntime, generation, runtimeKey)
+      }
       return cached.result
     }
+    // No valid cache (cold start, or invalidated by a structural / runtime-key
+    // change): resolve synchronously so the caller never sees a stale generation.
     const inFlight = this.worktreeScanInFlight.get(repo.id)
     if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
       return inFlight.promise
@@ -25451,24 +25467,64 @@ export class OrcaRuntimeService {
     this.worktreeScanInFlight.set(repo.id, { generation, runtimeKey, promise })
     try {
       const result = await promise
-      if (
-        result.ok &&
-        generation === (this.worktreeScanGenerations.get(repo.id) ?? 0) &&
-        this.worktreeScanInFlight.get(repo.id)?.promise === promise
-      ) {
-        this.worktreeScanCache.set(repo.id, {
-          generation,
-          runtimeKey,
-          result,
-          expiresAt: Date.now() + resolveWorktreeScanCacheTtlMs(repo)
-        })
-      }
+      this.commitWorktreeScanResult(repo.id, generation, runtimeKey, result, promise)
       return result
     } finally {
       if (this.worktreeScanInFlight.get(repo.id)?.promise === promise) {
         this.worktreeScanInFlight.delete(repo.id)
       }
     }
+  }
+
+  private commitWorktreeScanResult(
+    repoId: string,
+    generation: number,
+    runtimeKey: string,
+    result: RuntimeWorktreeScanResult,
+    promise: Promise<RuntimeWorktreeScanResult>
+  ): void {
+    // Only cache a successful, still-current result; always (re)schedule so a
+    // transient failure backs off on the curve instead of hot-looping.
+    if (
+      result.ok &&
+      generation === (this.worktreeScanGenerations.get(repoId) ?? 0) &&
+      this.worktreeScanInFlight.get(repoId)?.promise === promise
+    ) {
+      this.worktreeScanCache.set(repoId, { generation, runtimeKey, result })
+    }
+    this.worktreeScanSchedule.recordRefresh(repoId, this.isRepoHotForScan(repoId))
+  }
+
+  private async refreshWorktreeScanInBackground(
+    repo: Repo,
+    projectRuntime: ProjectExecutionRuntimeResolution | undefined,
+    generation: number,
+    runtimeKey: string
+  ): Promise<void> {
+    if (this.worktreeScanInFlight.has(repo.id)) {
+      return
+    }
+    const promise = this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
+    this.worktreeScanInFlight.set(repo.id, { generation, runtimeKey, promise })
+    try {
+      const result = await promise
+      this.commitWorktreeScanResult(repo.id, generation, runtimeKey, result, promise)
+    } catch {
+      // Best-effort: keep serving the prior cached result, but reschedule so a
+      // failing repo doesn't re-attempt on every access.
+      this.worktreeScanSchedule.recordRefresh(repo.id, this.isRepoHotForScan(repo.id))
+    } finally {
+      if (this.worktreeScanInFlight.get(repo.id)?.promise === promise) {
+        this.worktreeScanInFlight.delete(repo.id)
+      }
+    }
+  }
+
+  // A repo is "hot" (short refresh floor) when it owns the active worktree; cold
+  // repos back off toward the 1h cap. Live-pane repos could extend this later.
+  private isRepoHotForScan(repoId: string): boolean {
+    const activeWorktreeId = this.store?.getWorkspaceSession?.()?.activeWorktreeId
+    return Boolean(activeWorktreeId && splitWorktreeId(activeWorktreeId)?.repoId === repoId)
   }
 
   private async listRepoWorktreesForResolutionUncached(
@@ -25536,6 +25592,9 @@ export class OrcaRuntimeService {
     this.worktreeScanGenerations.set(repoId, (this.worktreeScanGenerations.get(repoId) ?? 0) + 1)
     this.worktreeScanCache.delete(repoId)
     this.worktreeScanInFlight.delete(repoId)
+    // Why: forget the schedule so the next access re-scans immediately (a real
+    // structural change must show right away, not wait out the backoff).
+    this.worktreeScanSchedule.forget(repoId)
   }
 
   private invalidateSshWorktreeScanCacheInternal(targetId: string): void {
@@ -31057,6 +31116,8 @@ const DEFAULT_WORKTREE_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 const DISCONNECTED_PTY_RECORD_MAX = 128
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
+// Superseded by the adaptive worktreeScanSchedule for cache lifetime; kept because
+// resolveWorktreeScanCacheTtlMs is still part of the exported surface (and its tests).
 const WORKTREE_SCAN_CACHE_TTL_MS = 30_000
 // Why: agent-scratch repos don't need 30s freshness — the steady-state scan
 // fan-out was measured at ~128 git execs/min on real installs, mostly against

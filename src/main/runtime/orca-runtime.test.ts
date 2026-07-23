@@ -31611,14 +31611,11 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
 
-  it('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
+  it('worktree scan cache: serves stale within the interval, refreshes in background after it', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.useFakeTimers({ now: 0 })
     try {
-      const repos = [
-        { ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' },
-        { ...store.getRepos()[0], id: 'repo-b', path: '/tmp/repo-b' }
-      ]
+      const repos = [{ ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' }]
       const runtime = new OrcaRuntimeService({
         ...store,
         getRepos: () => repos,
@@ -31626,15 +31623,23 @@ describe('OrcaRuntimeService', () => {
       } as never)
       vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [makeWorktreeInfo(repoPath)])
 
+      // Cold start scans synchronously.
       await runtime.listDetectedManagedWorktrees('id:repo-a')
-      await vi.advanceTimersByTimeAsync(10_000)
-      await runtime.listDetectedManagedWorktrees('id:repo-b')
-      await vi.advanceTimersByTimeAsync(20_000)
-      await runtime.listDetectedManagedWorktrees('id:repo-a')
-      await runtime.listDetectedManagedWorktrees('id:repo-b')
+      expect(listWorktrees).toHaveBeenCalledTimes(1)
 
-      expect(listWorktrees).toHaveBeenCalledTimes(3)
-      expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
+      // Within the adaptive interval: stale-while-revalidate serves cache, no rescan.
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      expect(listWorktrees).toHaveBeenCalledTimes(1)
+
+      // Past the cold cap (max jittered interval is 75min): the next access serves
+      // cache immediately and kicks a background refresh.
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      // Flush the fire-and-forget background scan.
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+      expect(listWorktrees).toHaveBeenCalledTimes(2)
+      expect(listWorktrees).toHaveBeenNthCalledWith(2, '/tmp/repo-a')
     } finally {
       vi.useRealTimers()
     }
