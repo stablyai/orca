@@ -962,6 +962,8 @@ const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
 })
 
+const TerminalSleep = TerminalStop
+
 const TerminalStopExact = TerminalStop.extend({
   expectedPtyIds: z.array(requiredString('Missing PTY ID')).min(1),
   keepHistory: z.boolean().optional(),
@@ -1413,6 +1415,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.stop',
     params: TerminalStop,
     handler: async (params, { runtime }) => runtime.stopTerminalsForWorktree(params.worktree)
+  }),
+  defineMethod({
+    name: 'terminal.sleep',
+    params: TerminalSleep,
+    handler: async (params, { runtime }) => runtime.sleepTerminalsForWorktree(params.worktree)
   }),
   defineMethod({
     name: 'terminal.stopExact',

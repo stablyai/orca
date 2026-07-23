@@ -55,8 +55,10 @@ export function classifyConnection(args: {
   const now = args.nowMs ?? Date.now()
   const hint = isTailscaleEndpoint(args.endpoint) ? TAILSCALE_HINT : undefined
 
+  // Why: auth-failed means the desktop no longer recognizes this pairing (e.g. it
+  // lost its device registry) — retrying can't fix it, only re-pairing can, so say so.
   if (state === 'auth-failed') {
-    return { kind: 'auth-failed', label: 'Auth failed' }
+    return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
   }
 
   // Connected / connecting / handshaking are normal.

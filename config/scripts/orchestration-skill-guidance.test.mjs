@@ -3,10 +3,14 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const skillPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
+// Why: orchestration now ships a hybrid discovery stub, so its version-sensitive command
+// guidance lives in the authoritative guide source — assert that content there. The
+// installable stub projection is checked separately below.
+const guidePath = join(projectDir, 'skill-guides', 'orchestration.md')
+const stubPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
 
 function readSkill() {
-  return readFileSync(skillPath, 'utf8')
+  return readFileSync(guidePath, 'utf8')
 }
 
 function getSection(markdown, heading) {
@@ -232,5 +236,52 @@ describe('orchestration skill guidance', () => {
     expect(messaging).toContain('continue with the replacement only')
     expect(messaging).toContain('it does not remotely wake another terminal')
     expect(messaging).toContain('Use `orchestration dispatch --inject` to deliver a tracked task')
+  })
+})
+
+describe('orchestration install stub', () => {
+  it('points at the version-matched guide and preserves the safe resolver', () => {
+    const stub = readFileSync(stubPath, 'utf8')
+
+    expect(stub).toContain('discovery stub')
+    expect(stub).toContain('ORCA skills get orchestration')
+    // The safe CLI-resolution contract must survive in the stub, never a bare `orca`.
+    expect(stub).toContain('ORCA_CLI_COMMAND')
+    expect(stub).toContain('orca-dev')
+    expect(stub).toContain('orca-ide')
+    expect(stub).toContain('GNOME Orca screen reader')
+    expect(stub).not.toMatch(/^orca /mu)
+  })
+
+  it('does not tell agents to mutate orchestration state before loading the guide', () => {
+    const preGuide = readFileSync(stubPath, 'utf8').split('## Load the full guide')[0]
+
+    expect(preGuide).not.toContain('orca orchestration task-create')
+    expect(preGuide).not.toContain('orca orchestration dispatch')
+  })
+
+  it('gives older binaries a bounded fallback instead of a dead end', () => {
+    const stub = readFileSync(stubPath, 'utf8').replace(/\s+/gu, ' ')
+
+    expect(stub).toContain('explicitly reports that `skills get` is an unknown command')
+    expect(stub).toContain('do not invent commands')
+    expect(stub).toContain('ask the user rather than guessing')
+  })
+
+  it('drops the changing command reference from the installable file', () => {
+    const stub = readFileSync(stubPath, 'utf8')
+
+    // Version-sensitive command detail lives in the binary-served guide now, not here.
+    expect(stub).not.toContain('check --wait')
+    expect(stub).not.toContain('dispatch-show')
+    expect(stub.length).toBeLessThan(readFileSync(guidePath, 'utf8').length)
+  })
+
+  it('keeps the routing frontmatter identical to the guide', () => {
+    const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
+
+    expect(frontmatter(readFileSync(stubPath, 'utf8'))).toBe(
+      frontmatter(readFileSync(guidePath, 'utf8'))
+    )
   })
 })

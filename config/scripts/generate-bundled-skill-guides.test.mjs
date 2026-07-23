@@ -69,6 +69,29 @@ describe('bundled skill guide generator', () => {
     }
   })
 
+  it('keeps pre-guide fallback useful and read-only for every converted domain', async () => {
+    const expectedFallbackCommands = {
+      'computer-use': ['ORCA computer capabilities --json', 'ORCA computer list-apps --json'],
+      'linear-tickets': ['ORCA linear --help', 'ORCA linear issue --current --full --json'],
+      'orca-emulator': ['ORCA emulator list --json'],
+      'orca-emulator-android': ['ORCA emulator devices --json'],
+      'orca-linear': ['ORCA linear --help', 'ORCA linear issue --current --full --json'],
+      'orca-per-workspace-env': ['ORCA vm recipe doctor <recipe-id> --repo-path <repo> --json'],
+      orchestration: ['ORCA orchestration task-list --json', 'ORCA terminal list --json']
+    }
+
+    for (const [name, commands] of Object.entries(expectedFallbackCommands)) {
+      const stub = await readFile(path.join(projectDir, 'skill-stubs', `${name}.md`), 'utf8')
+      const fallback = stub.split('## If an older Orca does not recognize `skills get`')[1]
+
+      expect(fallback, name).toBeDefined()
+      for (const command of commands) {
+        expect(fallback, name).toContain(command)
+      }
+      expect(fallback, name).not.toContain('ORCA worktree ps --json')
+    }
+  })
+
   it('embeds canonical names, discovery descriptions, Markdown, and append-only aliases', async () => {
     expect(BUNDLED_SKILL_GUIDES.map((guide) => guide.name)).toEqual(
       [...CANONICAL_GUIDE_NAMES].sort((left, right) => left.localeCompare(right, 'en'))

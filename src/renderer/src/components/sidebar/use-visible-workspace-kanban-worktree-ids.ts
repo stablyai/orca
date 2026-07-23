@@ -61,9 +61,10 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         workspaceHostScope,
         visibleWorkspaceHostIds,
         defaultHostId: getSettingsFocusedExecutionHostId(settings),
+        worktreeLineageById: {},
         // Why: the board has no nested lineage presentation. Ancestor injection
         // would make filtered-out parents appear as ordinary cards.
-        worktreeLineageById: {}
+        injectLineageAncestors: false
       })
     )
   }, [

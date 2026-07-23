@@ -273,6 +273,25 @@ describe('registerMobileHandlers', () => {
     expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'registered' })
   })
 
+  it('consumes a pending auth-failure notification only from a window renderer', () => {
+    const consumePendingUnpairedDeviceAuthFailure = vi.fn(() => true)
+    registerMobileHandlers({} as never, { consumePendingUnpairedDeviceAuthFailure })
+
+    expect(
+      handlers.get('mobile:consumePendingUnpairedDeviceAuthFailure')?.({
+        sender: { id: 42, isDestroyed: () => false, getType: () => 'window' }
+      })
+    ).toBe(true)
+    expect(consumePendingUnpairedDeviceAuthFailure).toHaveBeenCalledWith(42)
+
+    expect(
+      handlers.get('mobile:consumePendingUnpairedDeviceAuthFailure')?.({
+        sender: { id: 99, isDestroyed: () => false, getType: () => 'webview' }
+      })
+    ).toBe(false)
+    expect(consumePendingUnpairedDeviceAuthFailure).toHaveBeenCalledOnce()
+  })
+
   it('inspects and repairs the current packaged Windows websocket port', async () => {
     const runPowerShell = vi
       .fn()

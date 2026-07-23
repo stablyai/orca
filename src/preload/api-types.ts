@@ -336,7 +336,11 @@ import type {
 } from '../shared/commit-message-agent-spec'
 import type { ResolvedSourceControlAiGenerationParams } from '../shared/source-control-ai'
 import type { SourceControlAiSettings } from '../shared/source-control-ai-types'
-import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+import type {
+  ShellOpenExternalEditorRequest,
+  ShellOpenExternalEditorResult,
+  ShellOpenLocalPathResult
+} from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type { SkillFreshnessInventory } from '../shared/skill-freshness'
 import type {
@@ -349,7 +353,11 @@ import type {
   ReactErrorBoundaryReportResult
 } from '../shared/crash-reporting'
 
-export type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+export type {
+  ShellOpenExternalEditorRequest,
+  ShellOpenExternalEditorResult,
+  ShellOpenLocalPathResult
+} from '../shared/shell-open-types'
 
 type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -1442,7 +1450,9 @@ export type PreloadApi = {
     onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void) => () => void
     /** Title-only replay snapshot for (re)attach; attention facts never replay. */
     getSideEffectSnapshot: (id: string) => Promise<TerminalSideEffectBatch | null>
-    onExit: (callback: (data: { id: string; code: number }) => void) => () => void
+    onExit: (
+      callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
+    ) => () => void
     onSerializeBufferRequest: (
       callback: (data: {
         requestId: string
@@ -2270,7 +2280,9 @@ export type PreloadApi = {
   shell: {
     openPath: (path: string) => Promise<void>
     openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
-    openInExternalEditor: (path: string, command?: string) => Promise<ShellOpenLocalPathResult>
+    openInExternalEditor: (
+      request: ShellOpenExternalEditorRequest
+    ) => Promise<ShellOpenExternalEditorResult>
     openUrl: (url: string) => Promise<void>
     openFilePath: (path: string) => Promise<boolean>
     openFileUri: (uri: string) => Promise<void>
@@ -3277,6 +3289,10 @@ export type PreloadApi = {
     isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
     getRelayStatus: () => Promise<{ status: MobileRelayStatus }>
     onRelayStatusChanged: (callback: (status: MobileRelayStatus) => void) => () => void
+    /** Consumes an auth-failure notification that arrived before the renderer listener mounted. */
+    consumePendingUnpairedDeviceAuthFailure?: () => Promise<boolean>
+    /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
+    onUnpairedDeviceAuthFailure?: (callback: () => void) => () => void
   }
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>

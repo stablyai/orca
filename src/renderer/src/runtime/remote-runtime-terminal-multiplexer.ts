@@ -11,6 +11,7 @@ import {
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
 import { e2eConfig } from '@/lib/e2e-config'
+import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 
 type RuntimeEnvironmentSubscriptionHandle = {
@@ -472,7 +473,7 @@ class RemoteRuntimeTerminalMultiplexer {
             ? (span!.data as string)
             : ''
           : decodeTerminalStreamText(frame.payload)
-      try {
+      const deliverOutput = (): void => {
         if (!validSpan) {
           // Why: rendering malformed span JSON would expose protocol framing
           // as terminal text and lose its raw sequence accounting.
@@ -501,15 +502,18 @@ class RemoteRuntimeTerminalMultiplexer {
           rawLength,
           ...(frame.opcode === TerminalStreamOpcode.OutputSpan ? { transformed: true } : {})
         })
-      } finally {
-        if (stream.acknowledgeOutput) {
-          if (shouldHoldE2eRemoteTerminalAck(stream.terminal)) {
-            stream.heldAckBytes += frame.payload.byteLength
-          } else {
-            this.acknowledgeOutput(stream, frame.payload.byteLength)
-          }
-        }
       }
+      if (!stream.acknowledgeOutput) {
+        deliverOutput()
+        return
+      }
+      deliverTerminalDataWithDeferredCredit(() => {
+        if (shouldHoldE2eRemoteTerminalAck(stream.terminal)) {
+          stream.heldAckBytes += frame.payload.byteLength
+        } else {
+          this.acknowledgeOutput(stream, frame.payload.byteLength)
+        }
+      }, deliverOutput)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {

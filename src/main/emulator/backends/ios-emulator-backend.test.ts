@@ -83,7 +83,7 @@ describe('IosEmulatorBackend', () => {
     parseServeSimDetachedSessionMock.mockReset()
   })
 
-  it('declares ios kind, mjpeg codec, and no explicit-verb capabilities', () => {
+  it('declares ios kind, mjpeg codec, and only the ax explicit-verb capability', () => {
     const backend = new IosEmulatorBackend()
     expect(backend.kind).toBe('ios')
     expect(backend.streamCodec).toBe('mjpeg')
@@ -91,8 +91,20 @@ describe('IosEmulatorBackend', () => {
       install: false,
       launch: false,
       permissions: false,
-      accessibilityTree: false,
+      accessibilityTree: true,
       logcat: false
+    })
+  })
+
+  it('fetches the accessibility tree from the session ax endpoint and rejects without one', async () => {
+    const fetchAccessibilityTree = vi.fn(async () => ({ elements: [] }))
+    const backend = new IosEmulatorBackend({ fetchAccessibilityTree })
+    await expect(
+      backend.accessibilityTree('device-1', 'http://127.0.0.1:3100/ax')
+    ).resolves.toEqual({ elements: [] })
+    expect(fetchAccessibilityTree).toHaveBeenCalledWith('http://127.0.0.1:3100/ax')
+    await expect(backend.accessibilityTree('device-1', null)).rejects.toMatchObject({
+      code: 'emulator_no_active'
     })
   })
 

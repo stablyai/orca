@@ -656,7 +656,10 @@
         "2fe88c2e06": "원격 워크스페이스 동기화를 사용할 수 없습니다.",
         "2ec42e1c52": "아직 원격 워크스페이스가 없습니다.",
         "88214a785b": "워크스페이스 동기화가 로컬 세션 하이드레이션을 기다렸다가 시간 초과되었습니다.",
-        "4f78ba5885": "워크스페이스가 동기화되었습니다."
+        "4f78ba5885": "워크스페이스가 동기화되었습니다.",
+        "ef223fbb6b": "A device tried to connect but is not paired",
+        "11992d0337": "If this was your phone or another Orca client, re-pair it from Settings → Mobile.",
+        "6573cfe955": "Open Mobile Settings"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "아직 구체화되고 있는 새로운 기능입니다. 한번 시도해 보세요.",

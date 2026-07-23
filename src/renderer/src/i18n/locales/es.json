@@ -656,7 +656,10 @@
         "2fe88c2e06": "La sincronización del espacio de trabajo remoto no está disponible",
         "2ec42e1c52": "Aún no hay espacio de trabajo remoto",
         "88214a785b": "La sincronización del espacio de trabajo esperó a que la sesión local terminara de cargarse y agotó el tiempo de espera",
-        "4f78ba5885": "Espacio de trabajo sincronizado"
+        "4f78ba5885": "Espacio de trabajo sincronizado",
+        "ef223fbb6b": "A device tried to connect but is not paired",
+        "11992d0337": "If this was your phone or another Orca client, re-pair it from Settings → Mobile.",
+        "6573cfe955": "Open Mobile Settings"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "Nuevas funciones que aún están tomando forma. Pruébalas.",

@@ -33,6 +33,7 @@ const HAS_CSS_ANCHOR_POSITIONING =
   CSS.supports('width', 'anchor-size(--orca-terminal-overlay-probe width)')
 const MIN_OVERLAY_FIT_WIDTH_PX = 48
 const MIN_OVERLAY_FIT_HEIGHT_PX = 24
+const FALLBACK_RECT_MIN_CHANGE_PX = 1
 
 function shouldUseCssAnchorPositioning(): boolean {
   return (
@@ -64,7 +65,7 @@ type TerminalOverlaySlotProps = {
   leaveWorktreeIfEmpty: () => void
 }
 
-const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
+export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   terminalTabId,
   terminalGeneration,
   worktreeId,
@@ -116,12 +117,22 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       }
       const parentRect = parent.getBoundingClientRect()
       const bodyRect = body.getBoundingClientRect()
-      setMeasuredFallbackRect({
+      const next: MeasuredFallbackRect = {
         top: bodyRect.top - parentRect.top,
         left: bodyRect.left - parentRect.left,
         width: bodyRect.width,
         height: bodyRect.height
-      })
+      }
+      // Why: ResizeObserver and xterm fit can otherwise amplify sub-pixel jitter forever.
+      setMeasuredFallbackRect((prev) =>
+        prev &&
+        Math.abs(prev.top - next.top) < FALLBACK_RECT_MIN_CHANGE_PX &&
+        Math.abs(prev.left - next.left) < FALLBACK_RECT_MIN_CHANGE_PX &&
+        Math.abs(prev.width - next.width) < FALLBACK_RECT_MIN_CHANGE_PX &&
+        Math.abs(prev.height - next.height) < FALLBACK_RECT_MIN_CHANGE_PX
+          ? prev
+          : next
+      )
     }
 
     updateRect()

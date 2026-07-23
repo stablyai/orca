@@ -72,6 +72,13 @@ import {
   retireParkedTerminalTab
 } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
+  clearCommittedPtyShutdownSettlements,
+  hasCommittedPtyShutdownSettlement,
+  markCommittedPtyShutdowns,
+  noteCommittedPtyShutdownSettlements,
+  settleDeferredPtyShutdownExits
+} from '@/components/terminal-pane/pty-shutdown-exit-deferral'
+import {
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
 } from '@/components/terminal-pane/terminal-layout-leaf-ids'
@@ -79,6 +86,7 @@ import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buff
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { requestRemoteWorktreeSleep } from '@/runtime/remote-worktree-sleep'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
@@ -461,6 +469,8 @@ export type TerminalSlice = {
   unreadAgentCompletionPanes: Record<string, true>
   // Remote guard keys must use renderer-visible, environment-scoped PTY ids; raw runtime handles are only valid at the RPC boundary.
   suppressedPtyExitIds: Record<string, true>
+  /** Reference-counted so overlapping shutdowns retain renderer PTY bindings until every owner settles. */
+  pendingPtyShutdownIds: Record<string, number>
   pendingCodexPaneRestartIds: Record<string, true>
   codexRestartNoticeByPtyId: Record<
     string,
@@ -618,6 +628,7 @@ export type TerminalSlice = {
   ) => Promise<void>
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
+  isPtyShutdownPending: (ptyId: string) => boolean
   queueCodexPaneRestarts: (ptyIds: string[]) => void
   consumePendingCodexPaneRestart: (ptyId: string) => boolean
   markCodexRestartNotices: (
@@ -723,6 +734,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   unreadTerminalPanes: {},
   unreadAgentCompletionPanes: {},
   suppressedPtyExitIds: {},
+  pendingPtyShutdownIds: {},
   pendingCodexPaneRestartIds: {},
   codexRestartNoticeByPtyId: {},
   expandedPaneByTabId: {},
@@ -1969,6 +1981,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   clearTabPtyId: (tabId, ptyId) => {
+    if (ptyId && get().pendingPtyShutdownIds[ptyId]) {
+      // Why: an owner exit can arrive before its post-stop inventory; keep the renderer binding retryable until verification commits.
+      return
+    }
     let worktreeId: string | null = null
     let wasActivationSpawn = false
     let isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
@@ -2194,16 +2210,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         rollbackTargetShutdownState()
         throw new Error(stopResult.postStopFailure ?? 'exact_terminal_stop_unverified')
       }
-      unregisterPtyDataHandlers(rendererShutdownPtyIds)
+      for (const snapshot of unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []) {
+        snapshot.commit?.()
+      }
     } else if (!opts.ptyId.startsWith('remote:')) {
       // Why: pty.kill can flush final data before exit; unregister first so stale handlers can't fire phantom notifications during hibernation.
-      const handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds)
+      const handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
       try {
         await window.api.pty.kill(opts.ptyId, { keepHistory: true })
       } catch (err) {
         restorePtyDataHandlersAfterFailedShutdown(handlerSnapshots)
         rollbackTargetShutdownState()
         throw err
+      }
+      for (const snapshot of handlerSnapshots) {
+        snapshot.commit?.()
       }
     }
 
@@ -2308,12 +2329,119 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       shutdownReason === 'auto-hibernate-completed-agent'
         ? collectHibernatedCompletionEvidenceForWorktree(get(), worktreeId, opts?.sleepingPaneKeys)
         : []
-
-    // Why: main process flushes batched PTY data before exit; unregister handlers first so bell/agent-status can't fire "phantom alerts" for a tearing-down worktree.
-    if (expectedRuntimePtyIds.length === 0) {
-      unregisterPtyDataHandlers(rendererShutdownPtyIds)
-      // Why: parked-tab byte watchers observe the same flush via dispatcher sidecars (untouched above); dispose now or teardown bytes fire stray unread/notifications.
-      disposeParkedTerminalWatchersForPtyIds(rendererShutdownPtyIds)
+    let handlerSnapshots: ReturnType<typeof unregisterPtyDataHandlers> = []
+    let partialRendererStopSettled = false
+    const markShutdownPending = (): void => {
+      set((s) => {
+        const nextPending = { ...s.pendingPtyShutdownIds }
+        for (const ptyId of exitGuardPtyIds) {
+          nextPending[ptyId] = (nextPending[ptyId] ?? 0) + 1
+        }
+        return {
+          suppressedPtyExitIds: {
+            ...s.suppressedPtyExitIds,
+            ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
+          },
+          pendingPtyShutdownIds: nextPending
+        }
+      })
+    }
+    const rollbackShutdown = (): void => {
+      if (handlerSnapshots.length > 0) {
+        restorePtyDataHandlersAfterFailedShutdown(handlerSnapshots)
+      }
+      set((s) => {
+        const nextSuppressed = { ...s.suppressedPtyExitIds }
+        const nextPending = { ...s.pendingPtyShutdownIds }
+        for (const ptyId of exitGuardPtyIds) {
+          const remainingOwners = (nextPending[ptyId] ?? 0) - 1
+          if (remainingOwners > 0) {
+            nextPending[ptyId] = remainingOwners
+          } else {
+            delete nextPending[ptyId]
+            if (!hasCommittedPtyShutdownSettlement(ptyId)) {
+              delete nextSuppressed[ptyId]
+            }
+          }
+        }
+        return {
+          suppressedPtyExitIds: nextSuppressed,
+          pendingPtyShutdownIds: nextPending
+        }
+      })
+      const settledPtyIds = exitGuardPtyIds.filter((ptyId) => !get().isPtyShutdownPending(ptyId))
+      const committedPtyIds = settledPtyIds.filter(hasCommittedPtyShutdownSettlement)
+      const rolledBackPtyIds = settledPtyIds.filter(
+        (ptyId) => !hasCommittedPtyShutdownSettlement(ptyId)
+      )
+      markCommittedPtyShutdowns(committedPtyIds)
+      settleDeferredPtyShutdownExits(committedPtyIds, 'committed')
+      settleDeferredPtyShutdownExits(rolledBackPtyIds, 'rolled-back')
+      clearCommittedPtyShutdownSettlements(settledPtyIds)
+    }
+    const stopRendererPtys = async (): Promise<{
+      stoppedPtyIds: string[]
+      failure?: PromiseRejectedResult
+    }> => {
+      const localPtyIds = rendererShutdownPtyIds.filter((ptyId) => !ptyId.startsWith('remote:'))
+      const results = await Promise.allSettled(
+        localPtyIds.map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
+      )
+      const stoppedPtyIds = [
+        ...(runtimeEnvironmentId
+          ? rendererShutdownPtyIds.filter((ptyId) => ptyId.startsWith('remote:'))
+          : []),
+        ...localPtyIds.filter((_, index) => results[index]?.status === 'fulfilled')
+      ]
+      disposeParkedTerminalWatchersForPtyIds(stoppedPtyIds)
+      return {
+        stoppedPtyIds,
+        failure: results.find(
+          (result): result is PromiseRejectedResult => result.status === 'rejected'
+        )
+      }
+    }
+    const settlePartialRendererStop = (stoppedPtyIds: readonly string[]): void => {
+      partialRendererStopSettled = true
+      const stopped = new Set(stoppedPtyIds)
+      const stoppedSnapshots = handlerSnapshots.filter((snapshot) => stopped.has(snapshot.ptyId))
+      const failedSnapshots = handlerSnapshots.filter((snapshot) => !stopped.has(snapshot.ptyId))
+      for (const snapshot of stoppedSnapshots) {
+        snapshot.commit?.()
+      }
+      restorePtyDataHandlersAfterFailedShutdown(failedSnapshots)
+      noteCommittedPtyShutdownSettlements(stoppedPtyIds)
+      set((s) => {
+        const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
+        for (const tab of tabs) {
+          nextPtyIdsByTabId[tab.id] = (s.ptyIdsByTabId[tab.id] ?? []).filter(
+            (ptyId) => !stopped.has(ptyId)
+          )
+        }
+        const nextPending = { ...s.pendingPtyShutdownIds }
+        const nextSuppressed = { ...s.suppressedPtyExitIds }
+        for (const ptyId of exitGuardPtyIds) {
+          const remainingOwners = (nextPending[ptyId] ?? 0) - 1
+          if (remainingOwners > 0) {
+            nextPending[ptyId] = remainingOwners
+          } else {
+            delete nextPending[ptyId]
+            if (!stopped.has(ptyId)) {
+              delete nextSuppressed[ptyId]
+            }
+          }
+        }
+        return {
+          ptyIdsByTabId: nextPtyIdsByTabId,
+          pendingPtyShutdownIds: nextPending,
+          suppressedPtyExitIds: nextSuppressed
+        }
+      })
+      const failedPtyIds = exitGuardPtyIds.filter((ptyId) => !stopped.has(ptyId))
+      markCommittedPtyShutdowns(stoppedPtyIds)
+      settleDeferredPtyShutdownExits(stoppedPtyIds, 'committed')
+      settleDeferredPtyShutdownExits(failedPtyIds, 'rolled-back')
+      clearCommittedPtyShutdownSettlements(exitGuardPtyIds)
     }
 
     // Why (ordering invariant, DESIGN_DOC §3.3.c): capture serializer buffers before pty.kill (panes unmount on exit); SSH-critical since the relay drops remote history on kill.
@@ -2331,16 +2459,44 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     }
 
+    if (expectedRuntimePtyIds.length === 0) {
+      markShutdownPending()
+      handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
+      try {
+        if (runtimeEnvironmentId) {
+          await (shutdownReason === 'manual-sleep'
+            ? requestRemoteWorktreeSleep({
+                environmentId: runtimeEnvironmentId,
+                worktreeId
+              })
+            : callRuntimeRpc(
+                { kind: 'environment', environmentId: runtimeEnvironmentId },
+                'terminal.stop',
+                { worktree: toRuntimeWorktreeSelector(worktreeId) },
+                { timeoutMs: 15_000 }
+              ))
+        }
+
+        // Why: client-owned teardown waits for the owner RPC so a failure leaves renderer bindings retryable.
+        const rendererStop = await stopRendererPtys()
+        if (rendererStop.failure) {
+          settlePartialRendererStop(rendererStop.stoppedPtyIds)
+          throw rendererStop.failure.reason
+        }
+      } catch (err) {
+        if (!partialRendererStopSettled) {
+          rollbackShutdown()
+        }
+        throw err
+      }
+    }
+
     if (expectedRuntimePtyIds.length > 0) {
       if (!runtimeEnvironmentId) {
         throw new Error('missing_runtime_for_exact_terminal_stop')
       }
-      set((s) => ({
-        suppressedPtyExitIds: {
-          ...s.suppressedPtyExitIds,
-          ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
-        }
-      }))
+      markShutdownPending()
+      handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
       let stopResult: {
         stoppedPtyIds?: string[]
         livePtyIds?: string[]
@@ -2363,13 +2519,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           { timeoutMs: 15_000 }
         )
       } catch (err) {
-        set((s) => {
-          const next = { ...s.suppressedPtyExitIds }
-          for (const ptyId of exitGuardPtyIds) {
-            delete next[ptyId]
-          }
-          return { suppressedPtyExitIds: next }
-        })
+        rollbackShutdown()
         throw err
       }
       const stoppedPtyIds = sortedUniquePtyIds(stopResult.stoppedPtyIds)
@@ -2378,27 +2528,31 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         !equalStringSets(stoppedPtyIds, expectedRuntimePtyIds) ||
         !equalStringSets(livePtyIds, expectedRuntimePtyIds)
       ) {
-        set((s) => {
-          const next = { ...s.suppressedPtyExitIds }
-          for (const ptyId of exitGuardPtyIds) {
-            delete next[ptyId]
-          }
-          return { suppressedPtyExitIds: next }
-        })
+        rollbackShutdown()
         throw new Error('exact_terminal_stop_mismatch')
       }
       if (stopResult.postStopVerified !== true) {
-        set((s) => {
-          const next = { ...s.suppressedPtyExitIds }
-          for (const ptyId of exitGuardPtyIds) {
-            delete next[ptyId]
-          }
-          return { suppressedPtyExitIds: next }
-        })
+        rollbackShutdown()
         throw new Error(stopResult.postStopFailure ?? 'exact_terminal_stop_unverified')
       }
-      unregisterPtyDataHandlers(rendererShutdownPtyIds)
+      try {
+        const rendererStop = await stopRendererPtys()
+        if (rendererStop.failure) {
+          settlePartialRendererStop(rendererStop.stoppedPtyIds)
+          throw rendererStop.failure.reason
+        }
+      } catch (err) {
+        if (!partialRendererStopSettled) {
+          rollbackShutdown()
+        }
+        throw err
+      }
     }
+
+    for (const snapshot of handlerSnapshots) {
+      snapshot.commit?.()
+    }
+    noteCommittedPtyShutdownSettlements(exitGuardPtyIds)
 
     set((s) => {
       const nextTabsByWorktree = keepIdentifiers
@@ -2419,6 +2573,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextSuppressedPtyExitIds = {
         ...s.suppressedPtyExitIds,
         ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
+      }
+      const nextPendingPtyShutdownIds = { ...s.pendingPtyShutdownIds }
+      for (const ptyId of exitGuardPtyIds) {
+        const remainingOwners = (nextPendingPtyShutdownIds[ptyId] ?? 0) - 1
+        if (remainingOwners > 0) {
+          nextPendingPtyShutdownIds[ptyId] = remainingOwners
+        } else {
+          delete nextPendingPtyShutdownIds[ptyId]
+        }
       }
       // Why: keep pendingCodexPaneRestartIds (same ptyId survives sleep→wake), but clear codexRestartNoticeByPtyId since wake's post-spawn ptyId may differ.
       const nextPendingCodexPaneRestartIds = keepIdentifiers
@@ -2505,6 +2668,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
         runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
         suppressedPtyExitIds: nextSuppressedPtyExitIds,
+        pendingPtyShutdownIds: nextPendingPtyShutdownIds,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
         codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
@@ -2554,25 +2718,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       retainedCompletionEvidence
     })
     get().clearPaneForegroundAgentByWorktree(worktreeId)
-
-    if (rendererShutdownPtyIds.length === 0 && expectedRuntimePtyIds.length === 0) {
-      return
-    }
-
-    if (runtimeEnvironmentId && expectedRuntimePtyIds.length === 0) {
-      await callRuntimeRpc(
-        { kind: 'environment', environmentId: runtimeEnvironmentId },
-        'terminal.stop',
-        { worktree: toRuntimeWorktreeSelector(worktreeId) },
-        { timeoutMs: 15_000 }
-      ).catch(() => null)
-    }
-
-    await Promise.allSettled(
-      rendererShutdownPtyIds
-        .filter((ptyId) => !ptyId.startsWith('remote:'))
-        .map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
-    )
+    const settledPtyIds = exitGuardPtyIds.filter((ptyId) => !get().isPtyShutdownPending(ptyId))
+    markCommittedPtyShutdowns(settledPtyIds)
+    settleDeferredPtyShutdownExits(settledPtyIds, 'committed')
+    clearCommittedPtyShutdownSettlements(settledPtyIds)
   },
 
   consumeSuppressedPtyExit: (ptyId) => {
@@ -2588,6 +2737,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
     return wasSuppressed
   },
+
+  isPtyShutdownPending: (ptyId) => (get().pendingPtyShutdownIds[ptyId] ?? 0) > 0,
 
   suppressPtyExit: (ptyId) => {
     set((s) => ({

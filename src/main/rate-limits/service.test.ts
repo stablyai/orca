@@ -1381,6 +1381,11 @@ describe('RateLimitService', () => {
       sessionCookie: 'session=abc123',
       workspaceIdOverride: ''
     }))
+    const networkProxySettings = {
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyBypassRules: 'localhost'
+    }
+    service.setNetworkProxySettingsResolver(() => networkProxySettings)
     service.setGeminiCliOAuthEnabledResolver(() => true)
 
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
@@ -1405,7 +1410,11 @@ describe('RateLimitService', () => {
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
-    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith('session=abc123', undefined)
+    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith(
+      'session=abc123',
+      undefined,
+      networkProxySettings
+    )
     expect(fetchGrokRateLimits).toHaveBeenCalledWith({
       signal: expect.any(AbortSignal),
       authReadResult: { status: 'missing' }

@@ -257,6 +257,202 @@ describe('remote runtime request connection integration', () => {
   )
 
   it(
+    'delivers one host-authoritative sleep and ordered disposition to two remote clients',
+    { timeout: REMOTE_RUNTIME_TEST_TIMEOUT_MS },
+    async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-remote-sleep-'))
+      const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
+      const subscriptionCleanups = new Map<string, () => void>()
+      const worktreeId = 'repo-1::C:\\repo\\feature'
+      const ptyId = `${worktreeId}@@pty-1`
+      let sleepSnapshot: RuntimeClientEvent[] = []
+      const emit = (event: RuntimeClientEvent): void => {
+        for (const listener of clientEventListeners) {
+          listener(event)
+        }
+      }
+      const runtime = {
+        getRuntimeId: () => 'remote-sleep-runtime-test',
+        getStartedAt: () => 1,
+        cleanupSubscriptionsForConnection: (connectionId: string) => {
+          for (const [id, cleanup] of subscriptionCleanups) {
+            if (id.includes(connectionId)) {
+              cleanup()
+              subscriptionCleanups.delete(id)
+            }
+          }
+        },
+        registerSubscriptionCleanup: (id: string, cleanup: () => void) => {
+          subscriptionCleanups.set(id, cleanup)
+        },
+        cleanupSubscription: (id: string) => {
+          subscriptionCleanups.get(id)?.()
+          subscriptionCleanups.delete(id)
+        },
+        cancelMobileDictationForConnection: () => {},
+        onClientDisconnected: () => {},
+        onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
+          clientEventListeners.add(listener)
+          return () => clientEventListeners.delete(listener)
+        },
+        getTerminalSleepClientEventSnapshot: () => sleepSnapshot,
+        sleepTerminalsForWorktree: async () => {
+          emit({
+            type: 'worktreeTerminalSleepState',
+            worktreeId,
+            generation: 1,
+            phase: 'started',
+            ptyIds: [ptyId],
+            terminalHandles: ['terminal-handle-1']
+          })
+          emit({
+            type: 'worktreeTerminalSleepState',
+            worktreeId,
+            generation: 1,
+            phase: 'committed',
+            ptyIds: [ptyId],
+            terminalHandles: ['terminal-handle-1']
+          })
+          sleepSnapshot = [
+            {
+              type: 'worktreeTerminalSleepState',
+              worktreeId,
+              generation: 1,
+              phase: 'committed',
+              ptyIds: [ptyId],
+              terminalHandles: ['terminal-handle-1']
+            }
+          ]
+          return {
+            stopped: 1,
+            stoppedPtyIds: [ptyId],
+            livePtyIds: [ptyId],
+            postStopVerified: true
+          }
+        }
+      } as unknown as OrcaRuntimeService
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        enableWebSocket: true,
+        wsPort: 0
+      })
+
+      await server.start()
+      try {
+        const offer = server.createPairingOffer({ name: 'remote-sleep', scope: 'runtime' })
+        if (!offer.available) {
+          throw new Error('pairing unavailable')
+        }
+        const pairing = parsePairingCode(offer.pairingUrl)
+        if (!pairing) {
+          throw new Error('invalid pairing')
+        }
+        const clientEvents: RuntimeClientEventStreamMessage[][] = [[], []]
+        const subscriptions = await Promise.all(
+          clientEvents.map((events) =>
+            subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
+              pairing,
+              'runtime.clientEvents.subscribe',
+              undefined,
+              REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
+              {
+                onResponse: (response) => {
+                  if (response.ok) {
+                    events.push(response.result)
+                  }
+                },
+                onError: (error) => {
+                  throw error
+                }
+              }
+            )
+          )
+        )
+        const requester = new RemoteRuntimeRequestConnection(pairing)
+        try {
+          await waitFor(() =>
+            clientEvents.every((events) => events.some((e) => e.type === 'ready'))
+          )
+          await expect(
+            requester.request(
+              'terminal.sleep',
+              { worktree: `id:${worktreeId}` },
+              REMOTE_RUNTIME_REQUEST_TIMEOUT_MS
+            )
+          ).resolves.toMatchObject({
+            ok: true,
+            result: { stopped: 1, postStopVerified: true }
+          })
+          await waitFor(() =>
+            clientEvents.every(
+              (events) =>
+                events.filter((event) => event.type === 'worktreeTerminalSleepState').length === 2
+            )
+          )
+          for (const events of clientEvents) {
+            expect(
+              events
+                .filter((event) => event.type === 'worktreeTerminalSleepState')
+                .map((event) => event.phase)
+            ).toEqual(['started', 'committed'])
+          }
+          const reconnectedEvents: RuntimeClientEventStreamMessage[] = []
+          const reconnected = await subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
+            pairing,
+            'runtime.clientEvents.subscribe',
+            undefined,
+            REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
+            {
+              onResponse: (response) => {
+                if (response.ok) {
+                  reconnectedEvents.push(response.result)
+                }
+              },
+              onError: (error) => {
+                throw error
+              }
+            }
+          )
+          try {
+            await waitFor(() => reconnectedEvents.some((event) => event.type === 'ready'))
+            expect(
+              reconnectedEvents
+                .filter((event) => event.type === 'worktreeTerminalSleepState')
+                .map((event) => event.phase)
+            ).toEqual(['committed'])
+
+            sleepSnapshot = []
+            emit({
+              type: 'worktreeTerminalSleepState',
+              worktreeId,
+              generation: 1,
+              phase: 'woken',
+              ptyIds: [ptyId],
+              terminalHandles: ['terminal-handle-1']
+            })
+            await waitFor(() =>
+              reconnectedEvents.some(
+                (event) => event.type === 'worktreeTerminalSleepState' && event.phase === 'woken'
+              )
+            )
+          } finally {
+            reconnected.close()
+          }
+        } finally {
+          requester.close()
+          for (const subscription of subscriptions) {
+            subscription.close()
+          }
+        }
+      } finally {
+        await server.stop()
+        rmSync(userDataPath, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it(
     'multiplexes shared-control calls and passive subscriptions through the real runtime',
     { timeout: REMOTE_RUNTIME_TEST_TIMEOUT_MS },
     async () => {

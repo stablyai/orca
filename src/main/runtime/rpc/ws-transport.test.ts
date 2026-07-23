@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,6 +13,30 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 function makeTls() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'ws-transport-test-'))
   return loadOrCreateTlsCertificate(userDataPath)
+}
+
+function heartbeatLifecycle(transport: WebSocketTransport) {
+  return transport as unknown as {
+    heartbeat: {
+      timer: ReturnType<typeof setInterval> | null
+      alive: WeakSet<WebSocket>
+    }
+    heartbeatConnections: Set<WebSocket>
+    wss: { clients: Set<WebSocket> }
+    handleConnection(ws: WebSocket): void
+  }
+}
+
+async function waitForHeartbeatLifecycle(
+  transport: WebSocketTransport,
+  connectionCount: number,
+  armed: boolean
+): Promise<void> {
+  await vi.waitFor(() => {
+    const lifecycle = heartbeatLifecycle(transport)
+    expect(lifecycle.heartbeatConnections.size).toBe(connectionCount)
+    expect(lifecycle.heartbeat.timer !== null).toBe(armed)
+  })
 }
 
 describe('WebSocketTransport', () => {
@@ -68,6 +93,68 @@ describe('WebSocketTransport', () => {
 
     await transport.start()
     await transport.stop()
+  })
+
+  it('arms heartbeat only while accepted connections exist', async () => {
+    const { transport } = await createTransport()
+    await transport.start()
+
+    const lifecycle = heartbeatLifecycle(transport)
+    expect(lifecycle.heartbeat.timer).toBeNull()
+    expect(lifecycle.heartbeatConnections.size).toBe(0)
+
+    const firstClient = await connectWs(transport)
+    await waitForHeartbeatLifecycle(transport, 1, true)
+    const firstServerSocket = Array.from(lifecycle.wss.clients)[0]
+    expect(firstServerSocket).toBeDefined()
+    // Note: arming probes immediately, so `alive` membership is racy here (the client's protocol-level
+    // pong re-adds the socket right after the arm sweep clears it). Assert the arm/disarm lifecycle only.
+    const firstTimer = lifecycle.heartbeat.timer
+
+    const secondClient = await connectWs(transport)
+    await waitForHeartbeatLifecycle(transport, 2, true)
+    expect(lifecycle.heartbeat.timer).toBe(firstTimer)
+
+    firstClient.close()
+    await waitForHeartbeatLifecycle(transport, 1, true)
+    expect(lifecycle.heartbeat.timer).toBe(firstTimer)
+
+    secondClient.close()
+    await waitForHeartbeatLifecycle(transport, 0, false)
+
+    const thirdClient = await connectWs(transport)
+    await waitForHeartbeatLifecycle(transport, 1, true)
+    expect(lifecycle.heartbeat.timer).not.toBe(firstTimer)
+
+    thirdClient.close()
+    await waitForHeartbeatLifecycle(transport, 0, false)
+  })
+
+  it('finalizes heartbeat membership once when error and close race', () => {
+    const transport = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+    transports.push(transport)
+    const lifecycle = heartbeatLifecycle(transport)
+    const socket = Object.assign(new EventEmitter(), {
+      OPEN: WebSocket.OPEN,
+      readyState: WebSocket.OPEN,
+      close: vi.fn(),
+      ping: vi.fn(),
+      terminate: vi.fn()
+    }) as unknown as WebSocket
+    const closeHandler = vi.fn()
+    transport.onConnectionClose(closeHandler)
+
+    lifecycle.handleConnection(socket)
+    expect(lifecycle.heartbeatConnections.size).toBe(1)
+    expect(lifecycle.heartbeat.timer).not.toBeNull()
+
+    socket.emit('error', new Error('connection reset'))
+    socket.emit('close')
+
+    expect(closeHandler).toHaveBeenCalledTimes(1)
+    expect(socket.close).toHaveBeenCalledTimes(1)
+    expect(lifecycle.heartbeatConnections.size).toBe(0)
+    expect(lifecycle.heartbeat.timer).toBeNull()
   })
 
   it('handles request/response round-trip', async () => {

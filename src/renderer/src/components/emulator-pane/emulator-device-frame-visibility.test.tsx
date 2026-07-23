@@ -4,6 +4,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
+import { resetStaleDocumentVisibilityForTesting } from '../terminal-pane/stale-document-visibility'
+import { EMULATOR_STREAM_PARK_DELAY_MS } from './use-emulator-stream-window-visibility'
 
 // Why: a backgrounded but still-attached emulator must stop streaming frames.
 // The perf contract is that no frame stream is started (no per-frame IPC / MJPEG
@@ -56,8 +58,19 @@ afterEach(() => {
   delete (URL as Partial<typeof URL>).createObjectURL
   delete (URL as Partial<typeof URL>).revokeObjectURL
   delete (window as { api?: unknown }).api
+  setDocumentVisibility('visible')
+  resetStaleDocumentVisibilityForTesting()
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
+
+function setDocumentVisibility(state: 'visible' | 'hidden'): void {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => state
+  })
+  document.dispatchEvent(new Event('visibilitychange'))
+}
 
 async function renderFrame(isActive: boolean): Promise<void> {
   await act(async () => {
@@ -100,5 +113,73 @@ describe('EmulatorDeviceFrame visibility gating', () => {
     // Re-showing re-fires the stream; the session was never detached.
     await renderFrame(true)
     expect(startFrameStream).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('EmulatorDeviceFrame window-visibility gating', () => {
+  it('parks the stream after the window stays hidden past the park delay, and resumes when visible', async () => {
+    vi.useFakeTimers()
+    await renderFrame(true)
+    expect(startFrameStream).toHaveBeenCalledTimes(1)
+
+    // Hiding the window does not tear down immediately — a short grace covers a
+    // quick Cmd+Tab round-trip.
+    await act(async () => {
+      setDocumentVisibility('hidden')
+    })
+    expect(stopFrameStream).not.toHaveBeenCalled()
+
+    // Once the grace elapses, the stream parks at the source.
+    await act(async () => {
+      vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS)
+    })
+    expect(stopFrameStream).toHaveBeenCalledWith({ streamId: 'stream-1' })
+
+    // Returning to the window resumes immediately; the session was never detached.
+    await act(async () => {
+      setDocumentVisibility('visible')
+    })
+    expect(startFrameStream).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not tear down on a quick hide/show within the park delay', async () => {
+    vi.useFakeTimers()
+    await renderFrame(true)
+    expect(startFrameStream).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      setDocumentVisibility('hidden')
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS - 100)
+    })
+    await act(async () => {
+      setDocumentVisibility('visible')
+    })
+    // The park timer was cancelled by the return-to-visible, so the stream never
+    // stopped and no reconnect was needed.
+    await act(async () => {
+      vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS)
+    })
+    expect(stopFrameStream).not.toHaveBeenCalled()
+    expect(startFrameStream).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps streaming while hidden when occlusion state is proven stale (display-sleep wedge)', async () => {
+    vi.useFakeTimers()
+    await renderFrame(true)
+    expect(startFrameStream).toHaveBeenCalledTimes(1)
+
+    // Window reports hidden, but real user input proves the occlusion tracker is
+    // wedged; the stream must keep running instead of freezing on a black frame.
+    await act(async () => {
+      setDocumentVisibility('hidden')
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS * 2)
+    })
+    expect(stopFrameStream).not.toHaveBeenCalled()
+    expect(startFrameStream).toHaveBeenCalledTimes(1)
   })
 })

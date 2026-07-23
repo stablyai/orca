@@ -9703,6 +9703,110 @@ describe('Store', () => {
 
   // ── Live Claude PTY session ids (STA-1246) ─────────────────────────
 
+  describe('mobileClientTabSelectionsByDeviceId', () => {
+    it('persists device tab selections across reloads and drops malformed payloads', async () => {
+      const store = await createStore()
+      store.setMobileClientTabSelections({
+        'device-a': {
+          'repo-1::/tmp/wt': { activeTabId: 'tab-1', activeGroupId: 'g1', activeTabIdByGroupId: {} }
+        }
+      })
+      store.flush()
+
+      const reloaded = await createStore()
+      expect(reloaded.getMobileClientTabSelections()['device-a']?.['repo-1::/tmp/wt']).toEqual({
+        activeTabId: 'tab-1',
+        activeGroupId: 'g1',
+        activeTabIdByGroupId: {}
+      })
+
+      writeDataFile({ mobileClientTabSelectionsByDeviceId: { 'device-a': 'corrupt' } })
+      const corrupted = await createStore()
+      expect(corrupted.getMobileClientTabSelections()).toEqual({})
+    })
+
+    it('prunes selections for a removed repo worktree', async () => {
+      const store = await createStore()
+      store.addRepo(makeRepo())
+      store.setMobileClientTabSelections({
+        'device-a': {
+          'r1::/tmp/wt': {
+            activeTabId: 'tab-1',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          },
+          'other-repo::/tmp/wt': {
+            activeTabId: 'tab-2',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          }
+        }
+      })
+
+      store.removeProject('r1')
+      store.flush()
+
+      expect(store.getMobileClientTabSelections()['device-a']).toEqual({
+        'other-repo::/tmp/wt': {
+          activeTabId: 'tab-2',
+          activeGroupId: null,
+          activeTabIdByGroupId: {}
+        }
+      })
+      const reloaded = await createStore()
+      expect(reloaded.getMobileClientTabSelections()['device-a']).toEqual({
+        'other-repo::/tmp/wt': {
+          activeTabId: 'tab-2',
+          activeGroupId: null,
+          activeTabIdByGroupId: {}
+        }
+      })
+    })
+
+    it('prunes selections when a folder workspace is removed directly or with its group', async () => {
+      const store = await createStore()
+      const directGroup = store.createProjectGroup({
+        name: 'Direct',
+        parentPath: '/tmp/direct',
+        createdFrom: 'manual'
+      })
+      const directWorkspace = store.createFolderWorkspace({
+        projectGroupId: directGroup.id,
+        name: 'Direct workspace'
+      })
+      const cascadeGroup = store.createProjectGroup({
+        name: 'Cascade',
+        parentPath: '/tmp/cascade',
+        createdFrom: 'manual'
+      })
+      const cascadeWorkspace = store.createFolderWorkspace({
+        projectGroupId: cascadeGroup.id,
+        name: 'Cascade workspace'
+      })
+      store.setMobileClientTabSelections({
+        'device-a': {
+          [folderWorkspaceKey(directWorkspace.id)]: {
+            activeTabId: 'tab-direct',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          },
+          [folderWorkspaceKey(cascadeWorkspace.id)]: {
+            activeTabId: 'tab-cascade',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          }
+        }
+      })
+
+      store.removeFolderWorkspace(directWorkspace.id)
+      store.deleteProjectGroup(cascadeGroup.id)
+      store.flush()
+
+      const reloaded = await createStore()
+      expect(reloaded.getMobileClientTabSelections()).toEqual({})
+    })
+  })
+
   describe('claudeLivePtySessionIds', () => {
     it('persists added ids across reloads and removes them durably', async () => {
       const store = await createStore()
@@ -10358,6 +10462,22 @@ describe('Store.migrateWorktreeIdentity', () => {
     store.migrateWorktreeIdentity(OLD, NEW)
 
     expect(store.getWorktreeLineage(CHILD)?.parentWorktreeId).toBe(NEW)
+  })
+
+  it('moves persisted mobile selections across reloads', async () => {
+    const store = await createStore()
+    store.setMobileClientTabSelections({
+      'device-a': {
+        [OLD]: { activeTabId: 'tab-1', activeGroupId: null, activeTabIdByGroupId: {} }
+      }
+    })
+
+    store.migrateWorktreeIdentity(OLD, NEW)
+    store.flush()
+
+    expect(store.getMobileClientTabSelections()['device-a']?.[OLD]).toBeUndefined()
+    const reloaded = await createStore()
+    expect(reloaded.getMobileClientTabSelections()['device-a']?.[NEW]?.activeTabId).toBe('tab-1')
   })
 
   it('accumulates prior ids across chained renames', async () => {

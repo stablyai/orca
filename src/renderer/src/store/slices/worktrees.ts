@@ -1062,6 +1062,51 @@ async function setWorktreeLineageForRuntime(
   }
 }
 
+function projectLocalWorktreeLineageUpdate(
+  worktreesByRepo: Record<string, Worktree[]>,
+  worktreeId: string,
+  lineage: WorktreeLineage | null
+): Record<string, Worktree[]> {
+  let nextByRepo = worktreesByRepo
+  for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
+    let repoChanged = false
+    const projected = worktrees.map((worktree) => {
+      const current = worktree as WorktreeWithLineage
+      const hadChild = current.childWorktreeIds?.includes(worktreeId) ?? false
+      const isParent =
+        lineage?.parentWorktreeId === worktree.id &&
+        lineage.parentWorktreeInstanceId === worktree.instanceId
+      let childWorktreeIds = current.childWorktreeIds
+      if (hadChild) {
+        childWorktreeIds = childWorktreeIds?.filter((id) => id !== worktreeId)
+      }
+      if (isParent && !childWorktreeIds?.includes(worktreeId)) {
+        childWorktreeIds = [...(childWorktreeIds ?? []), worktreeId]
+      }
+      if (worktree.id === worktreeId) {
+        repoChanged = true
+        return {
+          ...worktree,
+          parentWorktreeId: lineage?.parentWorktreeId ?? null,
+          lineage
+        }
+      }
+      if (hadChild || isParent) {
+        repoChanged = true
+        return { ...worktree, childWorktreeIds }
+      }
+      return worktree
+    })
+    if (repoChanged) {
+      if (nextByRepo === worktreesByRepo) {
+        nextByRepo = { ...worktreesByRepo }
+      }
+      nextByRepo[repoId] = projected
+    }
+  }
+  return nextByRepo
+}
+
 function applyWorktreeLineageUpdate(
   set: Parameters<StateCreator<AppState>>[0],
   worktreeId: string,
@@ -1074,6 +1119,18 @@ function applyWorktreeLineageUpdate(
     } else {
       delete next[worktreeId]
     }
+    const worktreesByRepo =
+      result.target.kind === 'local'
+        ? projectLocalWorktreeLineageUpdate(s.worktreesByRepo, worktreeId, result.lineage)
+        : result.updatedRemoteWorktree
+          ? replaceWorktreeInRepoLists(
+              s.worktreesByRepo,
+              withRepoHostOwnership(
+                result.updatedRemoteWorktree,
+                repoHostId(s, getRepoIdFromWorktreeId(result.updatedRemoteWorktree.id))
+              )
+            )
+          : s.worktreesByRepo
     return {
       worktreeLineageById: next,
       workspaceLineageByChildKey: projectWorktreeLineageToWorkspaceLineage(
@@ -1081,16 +1138,7 @@ function applyWorktreeLineageUpdate(
         result.lineage,
         s.workspaceLineageByChildKey
       ),
-      worktreesByRepo:
-        result.target.kind === 'local' || !result.updatedRemoteWorktree
-          ? s.worktreesByRepo
-          : replaceWorktreeInRepoLists(
-              s.worktreesByRepo,
-              withRepoHostOwnership(
-                result.updatedRemoteWorktree,
-                repoHostId(s, getRepoIdFromWorktreeId(result.updatedRemoteWorktree.id))
-              )
-            ),
+      worktreesByRepo,
       sortEpoch: s.sortEpoch + 1
     }
   })
@@ -2282,10 +2330,22 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       const ownerState = get()
       const requestStartedWorktrees = ownerState.worktreesByRepo[repoId]
-      const hostId = repoHostId(ownerState, repoId)
-      const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
+      const repoOwners = ownerState.repos.filter((repo) => repo.id === repoId)
+      const hasLocalOwner = repoOwners.some(
+        (repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      )
+      // Why: a local event may share its repo id with the focused runtime; prefer
+      // the local owner without redirecting runtime/SSH-only repos.
+      const useLocalOwner =
+        options?.forceLocalOwner === true && (hasLocalOwner || repoOwners.length === 0)
+      const hostId = useLocalOwner ? LOCAL_EXECUTION_HOST_ID : repoHostId(ownerState, repoId)
+      const ownerWasMissingAtStart = repoOwners.length === 0
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
-      const settings = settingsForRepoOwner(ownerState, repoId, hostId)
+      const ownerSettings = settingsForRepoOwner(ownerState, repoId, hostId)
+      const settings =
+        useLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
+          ? { ...ownerSettings, activeRuntimeEnvironmentId: null }
+          : ownerSettings
       const detected = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
         executionHostId: hostId,
         requireAuthoritative: options?.requireAuthoritative
@@ -2645,10 +2705,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set({ hasHydratedWorktreePurge: true })
   },
 
-  fetchWorktreeLineage: async () => {
+  fetchWorktreeLineage: async (options) => {
     try {
       // Why: lineage is a focused-host refresh; host-merge so other hosts' fetched lineage is preserved.
-      await refreshWorktreeLineageForSettings(get().settings, set, {
+      const ownerSettings = get().settings
+      // Why: local worktree-change events while a runtime is focused are paired
+      // with a forced-local list refresh; lineage must follow the same owner.
+      const settings =
+        options?.forceLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
+          ? { ...ownerSettings, activeRuntimeEnvironmentId: null }
+          : ownerSettings
+      await refreshWorktreeLineageForSettings(settings, set, {
         reuseRecentCompatibilityFailure: true
       })
     } catch (err) {

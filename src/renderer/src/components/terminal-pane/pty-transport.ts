@@ -14,10 +14,13 @@ import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import {
   ptyDataHandlers,
   ptyReplayHandlers,
+  drainRolledBackPtyShutdownData,
   ptyExitHandlers,
   ptyTeardownHandlers,
+  ptyShutdownLifecycleHandlers,
   ensurePtyDispatcher,
-  getEagerPtyBufferHandle
+  getEagerPtyBufferHandle,
+  isPtyDataHandlerShutdownPending
 } from './pty-dispatcher'
 import {
   clearConsumedPreHandlerPtyExit,
@@ -137,6 +140,7 @@ export function createPtyOutputProcessor({
     meta?: PtyDataMeta
   ) => void
   clearAccumulatedState: () => void
+  pausePendingSideEffects: () => void
   clearStaleTitleTimer: () => void
   flushPendingSideEffects: () => void
   resetBellDetector: () => void
@@ -448,9 +452,15 @@ export function createPtyOutputProcessor({
     bellDetector.reset()
   }
 
+  function pausePendingSideEffects(): void {
+    clearSideEffectDrainTimer()
+    clearStaleTitleTimer()
+  }
+
   return {
     processData,
     clearAccumulatedState,
+    pausePendingSideEffects,
     clearStaleTitleTimer,
     flushPendingSideEffects,
     resetBellDetector: () => bellDetector.reset(),
@@ -529,6 +539,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     if (ptyTeardownHandlers.get(id) === clearAccumulatedState) {
       ptyTeardownHandlers.delete(id)
     }
+    if (ptyShutdownLifecycleHandlers.get(id) === shutdownLifecycle) {
+      ptyShutdownLifecycleHandlers.delete(id)
+    }
   }
 
   function unregisterPtyDataAndStatusHandlers(id: string): void {
@@ -572,11 +585,20 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     }
     ptyDataHandlers.set(id, dataHandler)
     ownedDataAndReplayHandlers.set(id, { data: dataHandler, replay: replayHandler })
-    drainPreHandlerPtyData(id, dataHandler)
+    if (!isPtyDataHandlerShutdownPending(id)) {
+      drainPreHandlerPtyData(id, dataHandler)
+      drainRolledBackPtyShutdownData(id)
+    }
   }
 
   function clearAccumulatedState(): void {
     outputProcessor.clearAccumulatedState()
+  }
+
+  const shutdownLifecycle = {
+    pause: outputProcessor.pausePendingSideEffects,
+    rollback: outputProcessor.flushPendingSideEffects,
+    commit: clearAccumulatedState
   }
 
   function yieldToInputWriteDrain(): Promise<void> {
@@ -630,6 +652,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     ownedExitHandlers.set(id, exitHandler)
     // Why: shutdownWorktreeTerminals kills PTYs directly, bypassing disconnect/destroy; this cancels timers/tracker state that would fire stale notifications.
     ptyTeardownHandlers.set(id, clearAccumulatedState)
+    ptyShutdownLifecycleHandlers.set(id, shutdownLifecycle)
     try {
       drainPreHandlerPtyExit(id, exitHandler)
     } catch (error) {

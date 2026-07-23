@@ -6,6 +6,7 @@ import {
   type DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import { cn } from '@/lib/utils'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { AgentKanbanCard } from './AgentKanbanCard'
 import { AgentTerminalDialog } from './AgentTerminalDialog'
 import './agent-board-transitions.css'
@@ -89,12 +90,21 @@ function KanbanColumn({
 /** The pop-out agent board: status columns fed by the relayed snapshot. */
 export function AgentKanbanBoard({ snapshot }: { snapshot: DashboardSnapshot }): React.JSX.Element {
   const grouped = useMemo(() => groupByBucket(snapshot.cards), [snapshot.cards])
+  const hasRelativeTimestamps = useMemo(
+    () => snapshot.cards.some((card) => (card.finishedAt ?? card.startedAt) > 0),
+    [snapshot.cards]
+  )
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000)
-    return () => clearInterval(timer)
-  }, [])
+    if (!hasRelativeTimestamps) {
+      return
+    }
+    return installWindowVisibilityInterval({
+      run: () => setNow(Date.now()),
+      intervalMs: 30_000
+    })
+  }, [hasRelativeTimestamps])
 
   // The open terminal dialog survives bucket moves: only the paneKey is
   // remembered, and the card data is re-resolved from each fresh snapshot.

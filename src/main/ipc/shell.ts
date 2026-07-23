@@ -1,15 +1,23 @@
 import { ipcMain, shell, dialog } from 'electron'
 import { spawn } from 'node:child_process'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
-import { basename, extname, isAbsolute, normalize } from 'node:path'
+import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { ShellOpenLocalPathResult } from '../../shared/shell-open-types'
+import type {
+  ShellOpenExternalEditorRequest,
+  ShellOpenExternalEditorResult,
+  ShellOpenLocalPathResult
+} from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
+import type { Store } from '../persistence'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
-  resolveExternalEditorLaunchSpec
+  resolveExternalEditorLaunchSpec,
+  resolveVsCodeRemoteSshLaunchSpec,
+  type ExternalEditorLaunchSpec
 } from '../external-editor-launch'
+import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -39,7 +47,17 @@ async function validateLocalPathTarget(
   return { ok: true, path: normalizedPath }
 }
 
-async function openInFileManager(pathValue: string): Promise<ShellOpenLocalPathResult> {
+function hasActiveRuntime(store: Store): boolean {
+  return Boolean(store.getSettings().activeRuntimeEnvironmentId?.trim())
+}
+
+async function openInFileManager(
+  store: Store,
+  pathValue: string
+): Promise<ShellOpenLocalPathResult> {
+  if (hasActiveRuntime(store)) {
+    return { ok: false, reason: 'remote-runtime-unsupported' }
+  }
   const target = await validateLocalPathTarget(pathValue)
   if (!target.ok) {
     return target
@@ -54,8 +72,7 @@ async function openInFileManager(pathValue: string): Promise<ShellOpenLocalPathR
   }
 }
 
-async function launchExternalEditor(pathValue: string, command?: string): Promise<void> {
-  const launchSpec = resolveExternalEditorLaunchSpec(command, pathValue)
+async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {
   const { spawnCmd, spawnArgs } =
     launchSpec.kind === 'executable'
       ? getSpawnArgsForWindows(launchSpec.spawnCmd, launchSpec.spawnArgs)
@@ -99,15 +116,51 @@ async function launchExternalEditor(pathValue: string, command?: string): Promis
 }
 
 async function openInExternalEditor(
-  pathValue: string,
-  command?: string
-): Promise<ShellOpenLocalPathResult> {
-  const target = await validateLocalPathTarget(pathValue)
+  store: Store,
+  request: ShellOpenExternalEditorRequest
+): Promise<ShellOpenExternalEditorResult> {
+  if (hasActiveRuntime(store)) {
+    return { ok: false, reason: 'remote-runtime-unsupported' }
+  }
+
+  const connectionId = request.connectionId?.trim()
+  if (connectionId) {
+    const sshTarget = store.getSshTarget(connectionId)
+    if (!sshTarget) {
+      return { ok: false, reason: 'ssh-target-not-found' }
+    }
+    if (sshTarget.owner?.type === 'on-demand-runtime') {
+      return { ok: false, reason: 'remote-runtime-unsupported' }
+    }
+    if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
+      return { ok: false, reason: 'not-absolute' }
+    }
+    const authority = resolveVsCodeSshAuthority(sshTarget)
+    if (!authority.ok) {
+      return authority
+    }
+    const launchSpec = resolveVsCodeRemoteSshLaunchSpec(
+      request.command,
+      request.path,
+      authority.authority
+    )
+    if (!launchSpec) {
+      return { ok: false, reason: 'remote-editor-unsupported' }
+    }
+    try {
+      await launchExternalEditor(launchSpec)
+      return { ok: true }
+    } catch {
+      return { ok: false, reason: 'launch-failed' }
+    }
+  }
+
+  const target = await validateLocalPathTarget(request.path)
   if (!target.ok) {
     return target
   }
   try {
-    await launchExternalEditor(target.path, command)
+    await launchExternalEditor(resolveExternalEditorLaunchSpec(request.command, target.path))
     return { ok: true }
   } catch {
     return { ok: false, reason: 'launch-failed' }
@@ -127,22 +180,22 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
   }
 }
 
-export function registerShellHandlers(): void {
+export function registerShellHandlers(store: Store): void {
   ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
     // Why: keep the legacy fire-and-forget renderer contract while reusing the
     // same absolute/existing path validation as the explicit file-manager API.
-    void (await openInFileManager(path))
+    void (await openInFileManager(store, path))
   })
 
   ipcMain.handle(
     'shell:openInFileManager',
-    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInFileManager(path)
+    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInFileManager(store, path)
   )
 
   ipcMain.handle(
     'shell:openInExternalEditor',
-    (_event, path: string, command?: string): Promise<ShellOpenLocalPathResult> =>
-      openInExternalEditor(path, command)
+    (_event, request: ShellOpenExternalEditorRequest): Promise<ShellOpenExternalEditorResult> =>
+      openInExternalEditor(store, request)
   )
 
   ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {

@@ -8,6 +8,15 @@ function streamUrlFromServeSimUrl(url: string): string {
   return url.endsWith('/stream.mjpeg') ? url : `${url.replace(/\/$/, '')}/stream.mjpeg`
 }
 
+// Why: serve-sim serves /ax on the helper but omits it from --detach output.
+// Guarded on the mjpeg suffix so a foreign stream URL never masquerades as an
+// AX endpoint. Also used by the bridge to heal sessions registered without axUrl.
+export function deriveServeSimAxUrl(streamUrl: string | undefined): string | undefined {
+  return streamUrl?.endsWith('/stream.mjpeg')
+    ? streamUrl.replace(/\/stream\.mjpeg$/, '/ax')
+    : undefined
+}
+
 export function parseServeSimDetachedSession(raw: unknown, udid: string): EmulatorSessionInfo {
   if (!raw || typeof raw !== 'object') {
     throw new EmulatorError('emulator_helper_failed', 'serve-sim did not return stream endpoints.')
@@ -24,7 +33,7 @@ export function parseServeSimDetachedSession(raw: unknown, udid: string): Emulat
     deviceUdid: typeof json.device === 'string' ? json.device : udid,
     wsUrl: wsUrl ?? '',
     streamUrl: streamUrl ?? '',
-    axUrl: typeof json.axUrl === 'string' ? json.axUrl : undefined
+    axUrl: typeof json.axUrl === 'string' ? json.axUrl : deriveServeSimAxUrl(streamUrl)
   }
   if (!info.streamUrl || !info.wsUrl) {
     throw new EmulatorError('emulator_helper_failed', 'serve-sim did not return stream endpoints.')

@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { AndroidEmulatorBackend } from './android-emulator-backend'
 import type { AndroidCommandResult, AndroidCommandRunner } from '../android/android-command-runner'
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
+import type { EmulatorBackend } from './emulator-backend'
 
 // The AVD boot spawns the emulator detached (not via the command runner).
 vi.mock('node:child_process', async (importOriginal) => {
@@ -214,6 +215,26 @@ describe('AndroidEmulatorBackend', () => {
       return ok('')
     })
     const tree = (await backend(runner).accessibilityTree('emulator-5554')) as {
+      children: { text?: string }[]
+    }
+    expect(tree.children[0]).toMatchObject({ text: 'Hi' })
+  })
+
+  it('ignores the ios ax endpoint argument and still dumps via adb', async () => {
+    runner.mockImplementation(async (binary: string, args: readonly string[]) => {
+      const a = args.join(' ')
+      if (binary === SDK.adb && a === 'devices -l') {
+        return ok(RUNNING_ADB)
+      }
+      if (binary === SDK.adb && a === '-s emulator-5554 shell cat /sdcard/window_dump.xml') {
+        return ok('<hierarchy><node text="Hi"/></hierarchy>')
+      }
+      return ok('')
+    })
+    // The widened EmulatorBackend.accessibilityTree(deviceId, axUrl) hands Android an
+    // iOS-only ax URL through the interface; Android must drop it and dump via adb.
+    const iface: EmulatorBackend = backend(runner)
+    const tree = (await iface.accessibilityTree!('emulator-5554', 'http://127.0.0.1:3100/ax')) as {
       children: { text?: string }[]
     }
     expect(tree.children[0]).toMatchObject({ text: 'Hi' })

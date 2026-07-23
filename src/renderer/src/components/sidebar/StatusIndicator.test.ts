@@ -32,11 +32,13 @@ describe('StatusIndicator', () => {
     expect(markup).not.toContain('animation:spin')
   })
 
-  it('renders permission as an amber attention dot', () => {
-    const classNames = renderDotClassNames('permission')
+  it('renders permission as an amber question glyph', () => {
+    const markup = renderMarkup('permission')
 
-    expect(classNames).toContain('bg-amber-500')
-    expect(classNames).not.toContain('bg-red-500')
+    expect(markup).toContain('lucide-message-circle-question-mark')
+    expect(markup).toContain('text-amber-500')
+    expect(markup).not.toContain('bg-amber-500')
+    expect(markup).not.toContain('data-agent-spinner')
   })
 
   it('renders active as full emerald dot', () => {

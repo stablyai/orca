@@ -27,6 +27,7 @@ export class TerminalHost {
   private sessionTeardown = new TerminalSessionTeardown(this.sessions)
   private killedTombstones: TerminalHostTombstones
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
+  private onSessionReaped: TerminalHostOptions['onSessionReaped']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
   private maxTombstones: number
   private creationFenced = false
@@ -36,6 +37,7 @@ export class TerminalHost {
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
+    this.onSessionReaped = opts.onSessionReaped
     this.onFinalCheckpoint = opts.onFinalCheckpoint
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
     this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
@@ -119,6 +121,7 @@ export class TerminalHost {
     }
     session.dispose()
     this.sessions.delete(sessionId)
+    this.onSessionReaped?.(sessionId)
   }
 
   signal(sessionId: string, sig: string): void {

@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 
@@ -11,15 +11,18 @@ import { AgentKanbanBoard } from './AgentKanbanBoard'
 vi.mock('./AgentKanbanCard', () => ({
   AgentKanbanCard: ({
     card,
+    now,
     onOpenTerminal
   }: {
     card: DashboardCard
+    now: number
     onOpenTerminal: (card: DashboardCard) => void
   }) => (
     <div
       data-testid="card"
       data-bucket={card.bucket}
       data-unseen={card.unseen}
+      data-now={now}
       onClick={() => onOpenTerminal(card)}
     >
       {card.worktreeName}
@@ -81,7 +84,9 @@ describe('AgentKanbanBoard', () => {
   })
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('renders the three fixed columns in order', () => {
@@ -117,6 +122,47 @@ describe('AgentKanbanBoard', () => {
     ])
     const names = screen.getAllByTestId('card').map((c) => c.textContent)
     expect(names).toEqual(['new-move', 'mid-move', 'old-move'])
+  })
+
+  it('does not start the clock when no card renders a relative timestamp', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(100_000)
+
+    const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [] }} />)
+    expect(vi.getTimerCount()).toBe(0)
+
+    rerender(
+      <AgentKanbanBoard
+        snapshot={{ generatedAt: 2, cards: [card({ startedAt: 0, finishedAt: null })] }}
+      />
+    )
+    const initialNow = screen.getByTestId('card').dataset.now
+
+    expect(vi.getTimerCount()).toBe(0)
+    act(() => vi.advanceTimersByTime(30_000))
+    expect(screen.getByTestId('card').dataset.now).toBe(initialNow)
+  })
+
+  it('parks the clock while hidden, catches up on reveal, and ticks while visible', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(100_000)
+    let visibilityState: DocumentVisibilityState = 'hidden'
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibilityState)
+
+    renderBoard([card({ startedAt: 1 })])
+    expect(screen.getByTestId('card').dataset.now).toBe('100000')
+    expect(vi.getTimerCount()).toBe(0)
+
+    act(() => vi.advanceTimersByTime(60_000))
+    expect(screen.getByTestId('card').dataset.now).toBe('100000')
+
+    visibilityState = 'visible'
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    expect(screen.getByTestId('card').dataset.now).toBe('160000')
+    expect(vi.getTimerCount()).toBe(1)
+
+    act(() => vi.advanceTimersByTime(30_000))
+    expect(screen.getByTestId('card').dataset.now).toBe('190000')
   })
 
   it('keeps the terminal dialog open across bucket moves and card removal', () => {

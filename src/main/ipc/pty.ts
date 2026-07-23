@@ -2458,6 +2458,7 @@ export function registerPtyHandlers(
   }
 
   const syntheticKillExitPtyIds = new Map<string, NodeJS.Timeout>()
+  const reversibleStopOwnersByPtyId = new Map<string, number>()
 
   function rememberSyntheticKillExit(id: string): void {
     const existing = syntheticKillExitPtyIds.get(id)
@@ -2523,7 +2524,10 @@ export function registerPtyHandlers(
     // Why: the renderer also drops its cumulative total on pty:exit, so a reused id restarts aligned at zero on both sides.
     rendererDeliveryAccountingByPty.delete(payload.id)
     recordPtyRendererDeliveryPressure()
-    mainWindow.webContents.send('pty:exit', payload)
+    mainWindow.webContents.send('pty:exit', {
+      ...payload,
+      ...(reversibleStopOwnersByPtyId.has(payload.id) ? { preserveRendererBinding: true } : {})
+    })
   }
 
   async function shutdownProviderAndDetectExit(
@@ -3201,7 +3205,9 @@ export function registerPtyHandlers(
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
+      let releaseWorktreeSpawn: (() => void) | undefined
       try {
+        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
         try {
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
@@ -3551,6 +3557,7 @@ export function registerPtyHandlers(
         rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, err)
         throw err
       } finally {
+        releaseWorktreeSpawn?.()
         finishTerminalInstall()
       }
     },
@@ -3623,6 +3630,26 @@ export function registerPtyHandlers(
         return true
       }
       return killWithCurrentProvider()
+    },
+    markReversibleStops: (ptyIds) => {
+      for (const ptyId of ptyIds) {
+        reversibleStopOwnersByPtyId.set(ptyId, (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) + 1)
+      }
+      let released = false
+      return () => {
+        if (released) {
+          return
+        }
+        released = true
+        for (const ptyId of ptyIds) {
+          const owners = (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) - 1
+          if (owners > 0) {
+            reversibleStopOwnersByPtyId.set(ptyId, owners)
+          } else {
+            reversibleStopOwnersByPtyId.delete(ptyId)
+          }
+        }
+      }
     },
     stopAndWait: async (ptyId, opts) => {
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
@@ -4305,7 +4332,9 @@ export function registerPtyHandlers(
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
+      let releaseWorktreeSpawn: (() => void) | undefined
       try {
+        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
         try {
           if (preAllocatedHandle) {
             trustedTerminalHandleEnv.add(preAllocatedHandle)
@@ -4683,6 +4712,7 @@ export function registerPtyHandlers(
         rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
         throw err
       } finally {
+        releaseWorktreeSpawn?.()
         finishTerminalInstall()
       }
     }
