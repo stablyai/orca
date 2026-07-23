@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshina.local/schemas/orca-session-voice-m0.json",
+  "title": "Orca M0 session voice contract",
+  "description": "FAB session picker + VoiceAttach inject. See mobile/src/voice/session-voice-contract.ts",
+  "oneOf": [
+    { "$ref": "#/$defs/VoiceAttach" },
+    { "$ref": "#/$defs/VoiceNarratorAsk" },
+    { "$ref": "#/$defs/VoiceSpeakBack" }
+  ],
+  "$defs": {
+    "VoiceBrainLane": { "enum": ["fast", "agent"] },
+    "VoiceMicMode": { "enum": ["hold-to-talk", "toggle"] },
+    "VoiceSttBackend": { "enum": ["on-device", "mesh"] },
+    "VoiceTtsBackend": { "enum": ["mesh", "on-device", "off"] },
+    "VoiceAttach": {
+      "type": "object",
+      "required": [
+        "type",
+        "requestId",
+        "sessionId",
+        "hostId",
+        "mode",
+        "transcript",
+        "sttFinalizedAt",
+        "micMode",
+        "sttBackend"
+      ],
+      "properties": {
+        "type": { "const": "voice.attach" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "hostId": { "type": "string", "minLength": 1 },
+        "worktreeId": { "type": "string" },
+        "mode": { "$ref": "#/$defs/VoiceBrainLane" },
+        "transcript": { "type": "string", "minLength": 1 },
+        "sttFinalizedAt": { "type": "string", "minLength": 1 },
+        "micMode": { "$ref": "#/$defs/VoiceMicMode" },
+        "sttBackend": { "$ref": "#/$defs/VoiceSttBackend" }
+      },
+      "additionalProperties": false
+    },
+    "VoiceNarratorAsk": {
+      "type": "object",
+      "required": [
+        "type",
+        "requestId",
+        "hostId",
+        "aboutSessionId",
+        "transcript",
+        "sttFinalizedAt"
+      ],
+      "properties": {
+        "type": { "const": "voice.narrator_ask" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "hostId": { "type": "string", "minLength": 1 },
+        "aboutSessionId": { "type": "string", "minLength": 1 },
+        "transcript": { "type": "string", "minLength": 1 },
+        "sttFinalizedAt": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "VoiceSpeakBack": {
+      "type": "object",
+      "required": [
+        "type",
+        "requestId",
+        "sessionId",
+        "hostId",
+        "text",
+        "ttsBackend"
+      ],
+      "properties": {
+        "type": { "const": "voice.speak_back" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "hostId": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 },
+        "ttsBackend": { "$ref": "#/$defs/VoiceTtsBackend" },
+        "voiceId": { "type": "string" },
+        "isAck": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "VoiceSessionCapability": {
+      "type": "object",
+      "required": [
+        "sessionId",
+        "hostId",
+        "label",
+        "acceptsInject",
+        "acceptsTtsBack",
+        "defaultLane",
+        "kind"
+      ],
+      "properties": {
+        "sessionId": { "type": "string" },
+        "hostId": { "type": "string" },
+        "worktreeId": { "type": "string" },
+        "label": { "type": "string" },
+        "acceptsInject": { "type": "boolean" },
+        "acceptsTtsBack": { "type": "boolean" },
+        "defaultLane": { "$ref": "#/$defs/VoiceBrainLane" },
+        "voiceId": { "type": "string" },
+        "kind": {
+          "enum": ["orca-mother-session", "herm-narrator", "workspace"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
