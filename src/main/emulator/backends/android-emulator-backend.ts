@@ -225,7 +225,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     )
   }
 
-  async type(deviceId: string, text: string): Promise<void> {
+  async type(deviceId: string, text: string, _wsUrl: string | null): Promise<void> {
     await androidTypeText(
       this.runner,
       this.requireSdk(),

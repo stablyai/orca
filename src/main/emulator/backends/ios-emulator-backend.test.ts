@@ -11,6 +11,7 @@ const {
   listServeSimHelperProcessesForDeviceMock,
   shutdownSimulatorDeviceMock,
   sendEmulatorGestureSequenceMock,
+  insertServeSimPasteboardTextMock,
   parseServeSimDetachedSessionMock,
   netFetchMock
 } = vi.hoisted(() => ({
@@ -22,6 +23,7 @@ const {
   listServeSimHelperProcessesForDeviceMock: vi.fn(async (): Promise<ServeSimHelperProcess[]> => []),
   shutdownSimulatorDeviceMock: vi.fn(async () => {}),
   sendEmulatorGestureSequenceMock: vi.fn(async () => {}),
+  insertServeSimPasteboardTextMock: vi.fn(async () => {}),
   parseServeSimDetachedSessionMock: vi.fn(),
   netFetchMock: vi.fn()
 }))
@@ -55,6 +57,10 @@ vi.mock('../emulator-gesture-sender', () => ({
   sendEmulatorGestureSequence: sendEmulatorGestureSequenceMock
 }))
 
+vi.mock('../serve-sim-text-insertion', () => ({
+  insertServeSimPasteboardText: insertServeSimPasteboardTextMock
+}))
+
 vi.mock('../serve-sim-detached-session', () => ({
   parseServeSimDetachedSession: parseServeSimDetachedSessionMock
 }))
@@ -84,6 +90,8 @@ describe('IosEmulatorBackend', () => {
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
     sendEmulatorGestureSequenceMock.mockReset()
     sendEmulatorGestureSequenceMock.mockImplementation(async () => {})
+    insertServeSimPasteboardTextMock.mockReset()
+    insertServeSimPasteboardTextMock.mockImplementation(async () => {})
     parseServeSimDetachedSessionMock.mockReset()
     netFetchMock.mockReset()
   })
@@ -178,7 +186,7 @@ describe('IosEmulatorBackend', () => {
 
   it('types and presses hardware buttons via serve-sim', async () => {
     const backend = new IosEmulatorBackend()
-    await backend.type('device-1', 'hi')
+    await backend.type('device-1', 'hi', null)
     await backend.button('device-1', 'home')
     await backend.rotate('device-1', 'landscape_left')
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
@@ -196,6 +204,34 @@ describe('IosEmulatorBackend', () => {
       ['rotate', 'landscape_left', '-d', 'device-1'],
       undefined
     )
+  })
+
+  it('routes non-HID-typable text through pasteboard insertion', async () => {
+    const backend = new IosEmulatorBackend()
+    await backend.type('device-1', '안녕하세요 🙂', 'ws://127.0.0.1:3100/ws')
+
+    expect(insertServeSimPasteboardTextMock).toHaveBeenCalledWith({
+      udid: 'device-1',
+      text: '안녕하세요 🙂',
+      wsUrl: 'ws://127.0.0.1:3100/ws'
+    })
+    expect(execServeSimCommandMock).not.toHaveBeenCalledWith(
+      EXECUTABLE,
+      expect.arrayContaining(['type']),
+      undefined
+    )
+  })
+
+  it('keeps ASCII typing on the serve-sim keystroke path', async () => {
+    const backend = new IosEmulatorBackend()
+    await backend.type('device-1', 'plain ascii', 'ws://127.0.0.1:3100/ws')
+
+    expect(execServeSimCommandMock).toHaveBeenCalledWith(
+      EXECUTABLE,
+      ['type', 'plain ascii', '-d', 'device-1'],
+      undefined
+    )
+    expect(insertServeSimPasteboardTextMock).not.toHaveBeenCalled()
   })
 
   it('execs a raw command with the device appended as json', async () => {

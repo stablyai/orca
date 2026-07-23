@@ -75,7 +75,8 @@ export type EmulatorBackend = {
   // wsUrl is the iOS gesture stream from the registry; Android backends ignore it
   // and drive their own control socket keyed by deviceId.
   gesture(deviceId: string, points: EmulatorGesturePoint[], wsUrl: string | null): Promise<void>
-  type(deviceId: string, text: string): Promise<void>
+  // wsUrl serves iOS pasteboard insertion of non-HID-typable text; Android ignores it.
+  type(deviceId: string, text: string, wsUrl: string | null): Promise<void>
   button(deviceId: string, name: string): Promise<void>
   rotate(deviceId: string, orientation: string): Promise<void>
   exec(deviceId: string, command: string): Promise<unknown>

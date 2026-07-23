@@ -10,6 +10,7 @@ const {
   listSimulatorDevicesMock,
   listServeSimHelperProcessesForDeviceMock,
   shutdownSimulatorDeviceMock,
+  insertServeSimPasteboardTextMock,
   netFetchMock
 } = vi.hoisted(() => ({
   execServeSimCommandMock: vi.fn(async () => ({})),
@@ -18,6 +19,7 @@ const {
   listSimulatorDevicesMock: vi.fn(async (): Promise<SimulatorDevice[]> => []),
   listServeSimHelperProcessesForDeviceMock: vi.fn(async (): Promise<ServeSimHelperProcess[]> => []),
   shutdownSimulatorDeviceMock: vi.fn(async () => {}),
+  insertServeSimPasteboardTextMock: vi.fn(async () => {}),
   netFetchMock: vi.fn()
 }))
 
@@ -44,6 +46,10 @@ vi.mock('./serve-sim-helper-processes', () => ({
 
 vi.mock('./simulator-app-visibility', () => ({
   hideNativeSimulatorApp: hideNativeSimulatorAppMock
+}))
+
+vi.mock('./serve-sim-text-insertion', () => ({
+  insertServeSimPasteboardText: insertServeSimPasteboardTextMock
 }))
 
 // Keep the Android backend inert in these iOS-focused tests (no host SDK, no adb I/O).
@@ -194,6 +200,48 @@ describe('EmulatorBridge helper ownership', () => {
     await expect(
       bridge.runCapability('install', { device: 'device-1' }, async () => 'unused')
     ).rejects.toMatchObject({ code: 'emulator_unsupported' })
+  })
+
+  it('passes the active session ws to the backend for non-ASCII type', async () => {
+    insertServeSimPasteboardTextMock.mockReset()
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+
+    await bridge.type('안녕하세요', { worktreeId: 'wt-1' })
+
+    expect(insertServeSimPasteboardTextMock).toHaveBeenCalledWith({
+      udid: 'device-1',
+      text: '안녕하세요',
+      wsUrl: 'ws://127.0.0.1:3100/device-1'
+    })
+  })
+
+  it('resolves a null ws for explicit-device type without a registered session', async () => {
+    insertServeSimPasteboardTextMock.mockReset()
+    const bridge = new EmulatorBridge()
+
+    await bridge.type('안녕하세요', { device: 'device-9' })
+
+    expect(insertServeSimPasteboardTextMock).toHaveBeenCalledWith({
+      udid: 'device-9',
+      text: '안녕하세요',
+      wsUrl: null
+    })
+  })
+
+  it('keeps ASCII type on the serve-sim keystroke path', async () => {
+    insertServeSimPasteboardTextMock.mockReset()
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+
+    await bridge.type('hello', { worktreeId: 'wt-1' })
+
+    expect(execServeSimCommandMock).toHaveBeenCalledWith(
+      { command: '/serve-sim', env: {} },
+      ['type', 'hello', '-d', 'device-1'],
+      undefined
+    )
+    expect(insertServeSimPasteboardTextMock).not.toHaveBeenCalled()
   })
 
   it('kills the helper and shuts down the selected simulator', async () => {

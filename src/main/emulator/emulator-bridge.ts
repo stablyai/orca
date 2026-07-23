@@ -160,15 +160,13 @@ export class EmulatorBridge {
     if (points.length === 0) {
       return
     }
-    const { backend, device } = await this.resolveTarget(opts)
-    const udid = await backend.resolveDeviceId(device)
-    const wsUrl = this.sessionRegistry.getSession(udid)?.wsUrl ?? null
+    const { backend, udid, wsUrl } = await this.resolveHidTarget(opts)
     await backend.gesture(udid, points, wsUrl)
   }
 
   async type(text: string, opts?: EmulatorTargetOpts): Promise<void> {
-    const { backend, device } = await this.resolveTarget(opts)
-    await backend.type(device, text)
+    const { backend, udid, wsUrl } = await this.resolveHidTarget(opts)
+    await backend.type(udid, text, wsUrl)
   }
 
   async button(name: string, opts?: EmulatorTargetOpts): Promise<void> {
@@ -270,6 +268,17 @@ export class EmulatorBridge {
       'emulator_no_active',
       'No active emulator for this worktree — use orca emulator attach or open the pane'
     )
+  }
+
+  // Resolves a target plus the session's serve-sim control socket for verbs that
+  // stream HID frames (gestures, pasteboard-insert typing).
+  private async resolveHidTarget(
+    opts?: EmulatorTargetOpts
+  ): Promise<{ backend: EmulatorBackend; udid: string; wsUrl: string | null }> {
+    const { backend, device } = await this.resolveTarget(opts)
+    const udid = await backend.resolveDeviceId(device)
+    const wsUrl = this.sessionRegistry.getSession(udid)?.wsUrl ?? null
+    return { backend, udid, wsUrl }
   }
 
   private async resolveStopTarget(
