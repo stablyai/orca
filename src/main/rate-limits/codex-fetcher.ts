@@ -71,8 +71,8 @@ type RateLimitResetCredits = {
 }
 
 type RpcRateLimitsResult = {
-  primary?: RpcRateWindow
-  secondary?: RpcRateWindow
+  primary?: RpcRateWindow | null
+  secondary?: RpcRateWindow | null
 }
 
 // Why: the Codex app-server wraps rate limit data as { rateLimits: { primary, secondary, ... } }.
@@ -447,8 +447,12 @@ export async function consumeCodexRateLimitResetCredit(options: {
   return mapBackendConsumeOutcome(payload.code)
 }
 
+const CODEX_SESSION_WINDOW_MINUTES = 300
+const CODEX_WEEKLY_WINDOW_MINUTES = 10080
+const CODEX_WINDOW_DURATION_TOLERANCE_MINUTES = 1
+
 function mapRpcWindow(
-  raw: RpcRateWindow | undefined,
+  raw: RpcRateWindow | null | undefined,
   expectedWindowMinutes: number
 ): RateLimitWindow | null {
   if (!raw || typeof raw.usedPercent !== 'number' || !Number.isFinite(raw.usedPercent)) {
@@ -476,10 +480,57 @@ function mapRpcWindow(
 
   return {
     usedPercent: Math.min(100, Math.max(0, raw.usedPercent)),
-    // Why: windowDurationMins reports remaining minutes, but the UI needs the fixed bucket duration for "5h"/"wk" labels.
+    // Why: older app-server builds can report canonical bucket lengths off by one minute.
     windowMinutes: expectedWindowMinutes,
     resetsAt,
     resetDescription
+  }
+}
+
+function hasRpcWindowDuration(
+  raw: RpcRateWindow | null | undefined,
+  expectedWindowMinutes: number
+): boolean {
+  return (
+    typeof raw?.windowDurationMins === 'number' &&
+    Number.isFinite(raw.windowDurationMins) &&
+    Math.abs(raw.windowDurationMins - expectedWindowMinutes) <=
+      CODEX_WINDOW_DURATION_TOLERANCE_MINUTES
+  )
+}
+
+function hasMappableRpcWindow(raw: RpcRateWindow | null | undefined): raw is RpcRateWindow {
+  return typeof raw?.usedPercent === 'number' && Number.isFinite(raw.usedPercent)
+}
+
+function mapRpcRateLimitWindows(result: RpcRateLimitsResult | undefined): {
+  session: RateLimitWindow | null
+  weekly: RateLimitWindow | null
+} {
+  const windows = [result?.primary, result?.secondary].filter(hasMappableRpcWindow)
+  const sessionRaw = windows.find((window) =>
+    hasRpcWindowDuration(window, CODEX_SESSION_WINDOW_MINUTES)
+  )
+  const weeklyRaw = windows.find((window) =>
+    hasRpcWindowDuration(window, CODEX_WEEKLY_WINDOW_MINUTES)
+  )
+
+  // Why: preserve legacy ordering for unknown bucket lengths, but never let it override an explicit opposite-slot duration.
+  const sessionFallback =
+    !sessionRaw && hasMappableRpcWindow(result?.primary) && result.primary !== weeklyRaw
+      ? result.primary
+      : undefined
+  const weeklyFallback =
+    !weeklyRaw &&
+    hasMappableRpcWindow(result?.secondary) &&
+    result.secondary !== sessionRaw &&
+    result.secondary !== sessionFallback
+      ? result.secondary
+      : undefined
+
+  return {
+    session: mapRpcWindow(sessionRaw ?? sessionFallback, CODEX_SESSION_WINDOW_MINUTES),
+    weekly: mapRpcWindow(weeklyRaw ?? weeklyFallback, CODEX_WEEKLY_WINDOW_MINUTES)
   }
 }
 
@@ -701,8 +752,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
             const wrapper = msg.result as RpcRateLimitsResponse | undefined
             const result = wrapper?.rateLimits
-            const session = mapRpcWindow(result?.primary, 300)
-            const weekly = mapRpcWindow(result?.secondary, 10080)
+            const { session, weekly } = mapRpcRateLimitWindows(result)
             const rateLimitResetCredits = mapRpcRateLimitResetCredits(
               wrapper?.rateLimitResetCredits
             )
