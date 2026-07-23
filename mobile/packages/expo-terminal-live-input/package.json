@@ -1,0 +1,35 @@
+{
+  "name": "@orca/expo-terminal-live-input",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Composition-aware native TextInput view for mobile live terminal input",
+  "keywords": [
+    "expo",
+    "ime",
+    "react-native",
+    "terminal"
+  ],
+  "homepage": "https://github.com/stablyai/orca/tree/main/mobile/packages/expo-terminal-live-input",
+  "license": "MIT",
+  "author": "Orca contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stablyai/orca.git",
+    "directory": "mobile/packages/expo-terminal-live-input"
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "expo-modules-core": "~55.0.25",
+    "typescript": "6.0.3"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

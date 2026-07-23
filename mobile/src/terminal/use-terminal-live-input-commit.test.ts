@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
-import { TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS } from './terminal-live-hangul-mirror'
+import { TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS } from './terminal-live-composition-mirror'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
 type TerminalLiveInputCommitHarness = {
@@ -266,7 +266,7 @@ describe('terminal live input commit hook', () => {
     expect(sent).toEqual(['한'])
   })
 
-  it('Given non-Hangul IME text When changes arrive Then mirrors immediately without a settle window', async () => {
+  it('Given a committed non-Hangul snapshot When it arrives Then mirrors without a settle window', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
 
@@ -275,6 +275,44 @@ describe('terminal live input commit hook', () => {
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['你好']))
+  })
+
+  it.each([
+    ['romaji conversion', ['さ'], 'さ'],
+    ['small-kana modifier', ['つ', 'っ'], 'っ'],
+    ['dakuten modifier', ['か', 'が'], 'が'],
+    ['handakuten modifier', ['は', 'ぱ'], 'ぱ']
+  ])(
+    'Given native Japanese %s snapshots When the trailing kana settles Then sends only the final text',
+    async (_scenario, fieldStates, committedText) => {
+      // Given
+      vi.useFakeTimers()
+      const { handlers, sent } = createTerminalLiveInputCommitHarness()
+
+      // When: kana modifiers can rewrite an already committed trailing character.
+      for (const fieldText of fieldStates) {
+        handlers.handleLiveInputChange(fieldText)
+      }
+      await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+
+      // Then
+      await vi.waitFor(() => expect(sent).toEqual([committedText]))
+    }
+  )
+
+  it('Given a settled base kana When a late modifier arrives Then corrects the PTY buffer', async () => {
+    // Given
+    vi.useFakeTimers()
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('つ')
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+
+    // When
+    handlers.handleLiveInputChange('っ')
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+
+    // Then: DEL repairs the already-echoed base if the modifier comes after the settle window.
+    await vi.waitFor(() => expect(sent).toEqual(['つ', '\x7f', 'っ']))
   })
 
   it('Given a held syllable When the hook unmounts Then cancels the settle timer', async () => {

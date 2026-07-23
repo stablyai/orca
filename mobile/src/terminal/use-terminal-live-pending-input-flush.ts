@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TerminalLiveInputCaptureHandle } from './terminal-live-input-capture-handle'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import {
   buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep,
   TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS
-} from './terminal-live-hangul-mirror'
+} from './terminal-live-composition-mirror'
 import {
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
@@ -14,7 +14,7 @@ import {
 type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly activeHandleRef: RefObject<string | null>
   readonly activeSessionTabTypeRef: RefObject<TTabType | null>
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TerminalLiveInputCaptureHandle | null>
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void

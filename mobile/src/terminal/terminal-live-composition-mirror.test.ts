@@ -3,8 +3,9 @@ import {
   buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep,
   isTerminalLiveHangulCodePoint,
+  isTerminalLiveJapaneseKanaCodePoint,
   type TerminalLiveMirrorStep
-} from './terminal-live-hangul-mirror'
+} from './terminal-live-composition-mirror'
 
 type MirrorRun = {
   readonly payloads: readonly string[]
@@ -41,7 +42,7 @@ function runMirrorSequence(
   return { payloads, sentText, heldText }
 }
 
-describe('terminal live hangul mirror', () => {
+describe('terminal live composition mirror', () => {
   it('Given single-syllable composition When steps run Then leaks no jamo and commits only the final syllable', () => {
     // Given / When
     const run = runMirrorSequence(['ㅎ', '하', '한'], { commitAtEnd: true })
@@ -88,6 +89,38 @@ describe('terminal live hangul mirror', () => {
 
     const recommit = computeTerminalLiveMirrorStep('', '한', { commitHeld: true })
     expect(buildTerminalLiveMirrorPayload(recommit)).toBe('한')
+  })
+
+  it.each([
+    ['small-kana modifier', ['つ', 'っ'], 'っ'],
+    ['dakuten modifier', ['か', 'が'], 'が'],
+    ['handakuten modifier', ['は', 'ぱ'], 'ぱ']
+  ])(
+    'Given a Japanese %s When the trailing kana changes Then sends only the final kana',
+    (_scenario, fieldStates, committedText) => {
+      // Given / When
+      const run = runMirrorSequence(fieldStates, { commitAtEnd: true })
+
+      // Then
+      expect(run.payloads).toEqual([committedText])
+      expect(run.sentText).toBe(committedText)
+      expect(run.heldText).toBe('')
+    }
+  )
+
+  it('Given a timer-committed base kana When a late modifier arrives Then repairs it with DEL', () => {
+    const baseCommit = computeTerminalLiveMirrorStep('', 'つ', { commitHeld: true })
+    expect(buildTerminalLiveMirrorPayload(baseCommit)).toBe('つ')
+
+    const correction = computeTerminalLiveMirrorStep(baseCommit.nextSentText, 'っ', {
+      commitHeld: false
+    })
+    expect(buildTerminalLiveMirrorPayload(correction)).toBe('\x7f')
+    expect(correction.nextSentText).toBe('')
+    expect(correction.heldText).toBe('っ')
+
+    const finalCommit = computeTerminalLiveMirrorStep('', 'っ', { commitHeld: true })
+    expect(buildTerminalLiveMirrorPayload(finalCommit)).toBe('っ')
   })
 
   it('Given pure ASCII typing When steps run Then mirrors immediately with no held text', () => {
@@ -157,7 +190,7 @@ describe('terminal live hangul mirror', () => {
     })
   })
 
-  it('Given non-Hangul IME text When the step runs Then it mirrors immediately without holding', () => {
+  it('Given non-syllabic IME text When the step runs Then it mirrors immediately without holding', () => {
     // Given / When
     const chinese = computeTerminalLiveMirrorStep('', '你好', { commitHeld: false })
     const vietnamese = computeTerminalLiveMirrorStep('', 'tiếng', { commitHeld: false })
@@ -174,5 +207,20 @@ describe('terminal live hangul mirror', () => {
     expect(isTerminalLiveHangulCodePoint('한'.codePointAt(0) ?? 0)).toBe(true)
     expect(isTerminalLiveHangulCodePoint('a'.codePointAt(0) ?? 0)).toBe(false)
     expect(isTerminalLiveHangulCodePoint('あ'.codePointAt(0) ?? 0)).toBe(false)
+  })
+
+  it('Given Japanese kana ranges When checked Then full-width and half-width kana match', () => {
+    expect(isTerminalLiveJapaneseKanaCodePoint('あ'.codePointAt(0) ?? 0)).toBe(true)
+    expect(isTerminalLiveJapaneseKanaCodePoint('ッ'.codePointAt(0) ?? 0)).toBe(true)
+    expect(isTerminalLiveJapaneseKanaCodePoint('ｶ'.codePointAt(0) ?? 0)).toBe(true)
+    expect(isTerminalLiveJapaneseKanaCodePoint('a'.codePointAt(0) ?? 0)).toBe(false)
+  })
+
+  it('Given decomposed dakuten When the trailing suffix settles Then holds the base and modifier together', () => {
+    const step = computeTerminalLiveMirrorStep('', 'か\u3099', { commitHeld: false })
+
+    expect(buildTerminalLiveMirrorPayload(step)).toBe('')
+    expect(step.nextSentText).toBe('')
+    expect(step.heldText).toBe('か\u3099')
   })
 })

@@ -1,11 +1,11 @@
 import { useCallback, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
 import {
   getTerminalLiveAccessoryBytesDecision,
   getTerminalLiveAccessoryLocalEditText
 } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
+import type { TerminalLiveInputCaptureHandle } from './terminal-live-input-capture-handle'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 
 export type TerminalLiveAccessoryInputCommitResult =
@@ -25,7 +25,7 @@ type TerminalLiveAccessoryInputCommitOptions = {
   readonly clearPendingLiveInputCommit: () => void
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TerminalLiveInputCaptureHandle | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
   readonly sentLiveInputTextRef: RefObject<string>
