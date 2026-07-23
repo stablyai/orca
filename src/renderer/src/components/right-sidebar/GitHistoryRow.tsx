@@ -68,6 +68,8 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     const visibleRefs = refs.slice(0, 2)
     const hiddenRefs = refs.slice(2)
     const rowTooltip = item.message || item.subject
+    const changeDisplay = item.displayChangeId ?? item.changeId
+    const commitDisplay = item.displayId ?? item.commitId
     const rowClassName = cn(
       'grid min-h-[26px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 px-3 py-0.5 text-left text-xs transition-colors',
       isInteractive && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
@@ -98,6 +100,14 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
               {rowTooltip}
             </TooltipContent>
           </Tooltip>
+          {item.provider === 'jj' && (
+            <span className="flex shrink-0 items-center gap-1 font-mono text-[10px] text-muted-foreground">
+              {changeDisplay && <span title={`Change ID ${item.changeId}`}>{changeDisplay}</span>}
+              {commitDisplay && (
+                <span title={`Commit ID ${item.commitId ?? item.id}`}>{commitDisplay}</span>
+              )}
+            </span>
+          )}
         </div>
         {refs.length > 0 && (
           <div className="flex shrink-0 items-center gap-1 overflow-hidden">

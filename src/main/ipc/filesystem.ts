@@ -1215,7 +1215,11 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => {
-      const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
+      const options: GitHistoryOptions = {
+        limit: args.limit,
+        baseRef: args.baseRef,
+        provider: args.provider
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {

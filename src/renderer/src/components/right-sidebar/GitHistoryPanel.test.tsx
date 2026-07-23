@@ -51,6 +51,8 @@ describe('GitHistoryPanel', () => {
           state={{ status: 'ready', result }}
           collapsed={false}
           onToggle={vi.fn()}
+          historyProvider="git"
+          onProviderChange={vi.fn()}
           onRefresh={vi.fn()}
           onOpenCommit={vi.fn()}
         />
@@ -68,6 +70,8 @@ describe('GitHistoryPanel', () => {
         state={{ status: 'ready', result: makeHistoryResult() }}
         collapsed={false}
         onToggle={vi.fn()}
+        historyProvider="git"
+        onProviderChange={vi.fn()}
         onRefresh={vi.fn()}
         onOpenCommit={vi.fn()}
       />

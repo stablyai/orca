@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import type { GitHistoryItem, GitHistoryResult } from '../../../../shared/git-history'
+import type {
+  GitHistoryItem,
+  GitHistoryProvider,
+  GitHistoryResult
+} from '../../../../shared/git-history'
 import type { GitBranchChangeEntry } from '../../../../shared/types'
 import {
   buildDefaultGitHistoryColorMap,
@@ -18,6 +22,7 @@ import {
 } from './GitHistoryCommitContextMenu'
 import type { SourceControlRowOpenEvent } from './source-control-split-open'
 import { translate } from '@/i18n/i18n'
+import { GitHistoryProviderSelector } from './GitHistoryProviderSelector'
 
 export type GitHistoryPanelState =
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
@@ -44,6 +49,8 @@ export function GitHistoryPanel({
   state,
   collapsed,
   onToggle,
+  historyProvider,
+  onProviderChange,
   onRefresh,
   onOpenCommit,
   onLoadCommitFiles,
@@ -53,6 +60,8 @@ export function GitHistoryPanel({
   state: GitHistoryPanelState
   collapsed: boolean
   onToggle: () => void
+  historyProvider: GitHistoryProvider
+  onProviderChange: (provider: GitHistoryProvider) => void
   onRefresh: () => void
   onOpenCommit?: (item: GitHistoryItem) => void
   onLoadCommitFiles?: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
@@ -82,6 +91,8 @@ export function GitHistoryPanel({
 
   const loading = state.status === 'loading' || state.status === 'refreshing'
   const count = result?.items.length ?? 0
+  const effectiveProvider =
+    result?.provider ?? (historyProvider === 'auto' ? 'git' : historyProvider)
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
 
@@ -274,6 +285,7 @@ export function GitHistoryPanel({
               )}
             </TooltipContent>
           </Tooltip>
+          <GitHistoryProviderSelector value={historyProvider} onChange={onProviderChange} />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -346,7 +358,9 @@ export function GitHistoryPanel({
             const isBoundaryNode =
               viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
             const canExpand =
-              !isBoundaryNode && Boolean(onLoadCommitFiles) && Boolean(onOpenCommitFile)
+              !isBoundaryNode &&
+              Boolean(onLoadCommitFiles) &&
+              (Boolean(onOpenCommitFile) || effectiveProvider === 'jj')
             const isExpanded = canExpand && expanded.has(item.id)
             const row = (
               <GitHistoryRow
@@ -372,8 +386,16 @@ export function GitHistoryPanel({
                     state={filesByCommit[item.id] ?? { status: 'loading' }}
                     author={item.author}
                     timestamp={item.timestamp}
-                    onOpenFile={(entry, event) => onOpenCommitFile?.(item, entry, event)}
-                    onOpenAll={onOpenCommit ? () => onOpenCommit(item) : undefined}
+                    onOpenFile={
+                      effectiveProvider === 'jj'
+                        ? undefined
+                        : (entry, event) => onOpenCommitFile?.(item, entry, event)
+                    }
+                    onOpenAll={
+                      effectiveProvider !== 'jj' && onOpenCommit
+                        ? () => onOpenCommit(item)
+                        : undefined
+                    }
                   />
                 )}
               </React.Fragment>
