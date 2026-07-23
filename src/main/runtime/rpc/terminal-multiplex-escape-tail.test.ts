@@ -8,6 +8,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
+  decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
 } from '../../../shared/terminal-stream-protocol'
@@ -250,6 +251,22 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
         alternateScreen: true,
         scrollbackAnsiLength: 'history\r\n'.length
       })
+      const requestedSnapshotStartIndex = binaryFrames.findIndex((frame) => {
+        const decoded = decodeTerminalStreamFrame(frame)
+        if (decoded?.opcode !== TerminalStreamOpcode.SnapshotStart) {
+          return false
+        }
+        const payload = decodeTerminalStreamJson<{ requestId?: unknown }>(decoded.payload)
+        return payload?.requestId === 99
+      })
+      const requestedSnapshotChunk = binaryFrames
+        .slice(requestedSnapshotStartIndex + 1)
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
+      expect(requestedSnapshotChunk).toBeTruthy()
+      expect(decodeTerminalStreamText(requestedSnapshotChunk!.payload)).toBe(
+        'history\r\nalternate frame'
+      )
 
       runtime.cleanupSubscription('terminal-multiplex:conn-1')
       await dispatchPromise

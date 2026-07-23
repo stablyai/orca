@@ -11527,6 +11527,11 @@ describe('connectPanePty', () => {
     expect(getMainBufferSnapshot).not.toHaveBeenCalled()
     expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
     expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden)
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      '\x1b[0m\x1b[?1049h\x1b[2J\x1b[H',
+      expect.any(Function)
+    )
     expect(pane.terminal.write).toHaveBeenCalledWith(
       expect.stringContaining('remote snapshot with hidden remote output'),
       expect.any(Function)

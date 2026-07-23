@@ -533,7 +533,10 @@ describe('remote terminal frame-drop resync', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    await expect(manualSnapshot).resolves.toMatchObject({ data: 'MANUAL' })
+    const snapshot = await manualSnapshot
+    expect(snapshot).toMatchObject({ data: 'MANUAL' })
+    expect(snapshot?.alternateScreen).toBeUndefined()
+    expect(snapshot?.scrollbackAnsi).toBeUndefined()
     expect(server.snapshotRequests).toHaveLength(2)
     expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
 
