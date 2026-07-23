@@ -11,14 +11,26 @@ function request(id: string, method: string, params?: unknown): RpcRequest {
 }
 
 function runtimeStub(): OrcaRuntimeService {
+  const created = {
+    handle: 'created-terminal',
+    tabId: 'created-tab',
+    worktreeId: 'wt-1',
+    title: null
+  }
   return {
     getRuntimeId: () => 'runtime-test',
-    createTerminal: vi.fn().mockResolvedValue({
-      handle: 'created-terminal',
-      tabId: 'created-tab',
-      worktreeId: 'wt-1',
-      title: null
-    }),
+    // Why: main routes create through dedupeTerminalCreate; the factory still
+    // needs a createTerminal implementation for other paths.
+    createTerminal: vi.fn().mockResolvedValue(created),
+    dedupeTerminalCreate: vi.fn(
+      async (
+        _clientKey: string,
+        _worktree: string | undefined,
+        _clientMutationId: string | undefined,
+        _reconcileExisting: boolean,
+        create: (canonicalWorktreeSelector?: string, preAllocatedHandle?: string) => Promise<unknown>
+      ) => create(undefined, undefined)
+    ),
     closeTerminal: vi.fn().mockResolvedValue({
       handle: 'terminal-1',
       tabId: 'tab-1',

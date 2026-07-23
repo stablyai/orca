@@ -63,7 +63,9 @@ describe('session.tabs.close attribution', () => {
       }
     )
 
-    expect(runtime.closeMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1')
+    expect(runtime.closeMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', {
+      reason: 'user'
+    })
     expect(JSON.parse(replies[0]!)).toMatchObject({ ok: true })
     expect(sink.records).toEqual([
       expect.objectContaining({
@@ -152,7 +154,9 @@ describe('session.tabs.close attribution', () => {
       { connectionId: 'conn-runtime', deviceId: 'runtime-device', clientKind: 'runtime' }
     )
 
-    expect(runtime.closeMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'host-tab-1')
+    expect(runtime.closeMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'host-tab-1', {
+      reason: 'user'
+    })
     expect(JSON.parse(replies[0]!)).toMatchObject({ ok: true, result: { closed: true } })
     expect(sink.records).toEqual([
       expect.objectContaining({
@@ -189,8 +193,18 @@ describe('session.tabs.close attribution', () => {
     ])
   })
 
-  it('falls back to in-process sentinels for local callers without a device identity', async () => {
-    const runtime = makeRuntime()
+  it('refuses unattributed in-process closes without destructive runtime authority', async () => {
+    const refuse = vi.fn().mockResolvedValue({
+      closed: true,
+      refused: true,
+      refusalReason: 'missing-intent',
+      snapshotRepublished: true
+    })
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      closeMobileSessionTab: vi.fn(),
+      refuseUnattributedMobileSessionTabClose: refuse
+    } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -199,15 +213,14 @@ describe('session.tabs.close attribution', () => {
       {}
     )
 
+    expect(refuse).toHaveBeenCalledWith('id:wt-2', 'tab-2')
+    expect(runtime.closeMobileSessionTab).not.toHaveBeenCalled()
     expect(sink.records).toEqual([
       expect.objectContaining({
-        name: 'session.tabs.close',
+        name: 'runtime.session-tabs.close',
         attributes: expect.objectContaining({
-          clientKind: 'in-process',
-          deviceId: 'in-process',
-          connectionId: 'in-process',
-          worktreeId: 'id:wt-2',
-          tabId: 'tab-2'
+          attribution: 'session-tab-close',
+          origin: 'in-process'
         })
       })
     ])

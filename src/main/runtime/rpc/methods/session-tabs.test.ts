@@ -129,10 +129,22 @@ describe('session tab RPC methods', () => {
       makeRequest('session.tabs.close', {
         worktree: 'id:wt-1',
         tabId: 'tab-1',
-        reason: 'user'
+        reason: 'user',
+        closeIntent: {
+          source: 'user-tab-close',
+          userInitiated: true,
+          requestId: 'close-request-explicit',
+          occurredAt: Date.now(),
+          worktreeId: 'wt-1',
+          hostTabId: 'tab-1'
+        }
       }),
       (response) => replies.push(response),
-      { clientKind: 'runtime', pairedDeviceId: 'current-runtime' }
+      {
+        clientKind: 'runtime',
+        pairedDeviceId: 'current-runtime',
+        clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+      }
     )
 
     expect(replies).toHaveLength(1)
@@ -164,7 +176,9 @@ describe('session tab RPC methods', () => {
     expect(runtime.refuseUnattributedMobileSessionTabClose).not.toHaveBeenCalled()
   })
 
-  it('preserves reasonless closes from authenticated legacy runtime clients', async () => {
+  it('soft-denies reasonless closes from authenticated runtime clients without closeIntent', async () => {
+    // Why: #8888 requires explicit closeIntent for runtime/shared-control clients;
+    // mobile/legacy clients still keep reasonless user-close compatibility.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       refuseUnattributedMobileSessionTabClose: vi.fn(),
@@ -180,21 +194,18 @@ describe('session tab RPC methods', () => {
     )
 
     expect(replies).toHaveLength(1)
-    expect(runtime.closeMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', {
-      reason: 'user'
+    expect(JSON.parse(replies[0]!)).toMatchObject({
+      ok: true,
+      result: { closed: false, blockedReason: 'close_intent_required' }
     })
+    expect(runtime.closeMobileSessionTab).not.toHaveBeenCalled()
     expect(runtime.refuseUnattributedMobileSessionTabClose).not.toHaveBeenCalled()
   })
 
-  it('refuses reasonless closes from runtime clients that negotiated explicit intent', async () => {
+  it('soft-denies reasonless closes from runtime clients that negotiated explicit intent', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      refuseUnattributedMobileSessionTabClose: vi.fn().mockResolvedValue({
-        closed: true,
-        refused: true,
-        refusalReason: 'missing-intent',
-        snapshotRepublished: true
-      }),
+      refuseUnattributedMobileSessionTabClose: vi.fn(),
       closeMobileSessionTab: vi.fn()
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -211,7 +222,11 @@ describe('session tab RPC methods', () => {
     )
 
     expect(replies).toHaveLength(1)
-    expect(runtime.refuseUnattributedMobileSessionTabClose).toHaveBeenCalledWith('id:wt-1', 'tab-1')
+    expect(JSON.parse(replies[0]!)).toMatchObject({
+      ok: true,
+      result: { closed: false, blockedReason: 'close_intent_required' }
+    })
+    expect(runtime.refuseUnattributedMobileSessionTabClose).not.toHaveBeenCalled()
     expect(runtime.closeMobileSessionTab).not.toHaveBeenCalled()
   })
 
