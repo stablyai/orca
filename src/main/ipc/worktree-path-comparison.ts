@@ -103,8 +103,8 @@ function looksLikePosixAbsolutePath(pathValue: string): boolean {
 export type FindListedWorktreeByPathOptions = {
   platform?: NodeJS.Platform
   /**
-   * When true (default), fall back to filesystem realpath if string comparison
-   * fails. Disable for WSL/SSH listings where host realpath is not authoritative.
+   * Opt in only when the listed paths belong to this process's native host.
+   * Host realpath is not authoritative for WSL or SSH paths.
    */
   resolveSymlinks?: boolean
   resolveRealPath?: (pathValue: string) => Promise<string>
@@ -126,7 +126,7 @@ export async function findListedWorktreeByPath<T extends { path: string }>(
   if (direct) {
     return direct
   }
-  if (options.resolveSymlinks === false) {
+  if (options.resolveSymlinks !== true) {
     return undefined
   }
 
