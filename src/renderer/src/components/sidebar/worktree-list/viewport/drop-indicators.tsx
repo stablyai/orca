@@ -9,10 +9,17 @@ export function renderWorktreeSidebarDropIndicators(args: {
   const { headerDrag, worktreeDragState } = args
   return (
     <>
-      {headerDrag.canReorderRepoHeaders &&
-      headerDrag.repoDrag.state.draggingRepoId !== null &&
-      headerDrag.repoDrag.state.dropIndicatorY !== null ? (
-        <WorktreeSidebarDropIndicator y={headerDrag.repoDrag.state.dropIndicatorY} />
+      {headerDrag.repoDrag.state.dropPlaceholderY !== null &&
+      headerDrag.repoDrag.state.dropPlaceholderHeight > 0 ? (
+        <div
+          role="presentation"
+          data-repo-drop-placeholder
+          className="pointer-events-none absolute left-2 right-2 z-10 rounded-md border border-dashed border-worktree-sidebar-ring/70 bg-worktree-sidebar-accent/35 transition-[top,height] duration-150 ease-out motion-reduce:transition-none"
+          style={{
+            top: `${headerDrag.repoDrag.state.dropPlaceholderY}px`,
+            height: `${headerDrag.repoDrag.state.dropPlaceholderHeight}px`
+          }}
+        />
       ) : null}
       {headerDrag.canReorderProjectGroupHeaders &&
       headerDrag.projectGroupDrag.state.draggingGroupId !== null &&
