@@ -45,6 +45,7 @@ type EmulatorDeviceFrameProps = {
   isActive: boolean
   onTap: (x: number, y: number) => void
   onGesture: (points: EmulatorGesturePoint[]) => void
+  onInsertText?: (text: string) => Promise<void>
 }
 
 const MAX_GESTURE_SAMPLES = 32,
@@ -71,7 +72,8 @@ export function EmulatorDeviceFrame({
   visualOrientation,
   isActive,
   onTap,
-  onGesture
+  onGesture,
+  onInsertText
 }: EmulatorDeviceFrameProps) {
   const { paneRef, paneSize } = useEmulatorPaneSize()
   const pointerSamplesRef = useRef<PointerSample[] | null>(null)
@@ -95,6 +97,7 @@ export function EmulatorDeviceFrame({
     useEmulatorScreenKeyboard({
       cancelKeyboardFrames,
       canInteract,
+      insertText: onInsertText,
       sendKeyboardFrames
     })
 

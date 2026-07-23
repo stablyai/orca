@@ -10,8 +10,11 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   buildServeSimKeyboardFramesForKey,
+  buildServeSimKeyboardFramesForText,
+  SERVE_SIM_TEXT_INSERT_MAX_BYTES,
   type ServeSimKeyboardFrame
 } from '../../../../shared/emulator-keyboard-frame'
+import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
 import {
   pasteTextIntoEmulatorKeyboard,
   type EmulatorKeyboardPasteResult
@@ -20,12 +23,16 @@ import {
 type UseEmulatorScreenKeyboardArgs = {
   cancelKeyboardFrames: () => void
   canInteract: boolean
+  // Unicode fallback for text HID frames cannot type; absent on backends
+  // without pasteboard insertion (Android panes register no serve-sim ws).
+  insertText?: (text: string) => Promise<void>
   sendKeyboardFrames: (frames: ServeSimKeyboardFrame[]) => boolean
 }
 
 export function useEmulatorScreenKeyboard({
   cancelKeyboardFrames,
   canInteract,
+  insertText,
   sendKeyboardFrames
 }: UseEmulatorScreenKeyboardArgs) {
   const captureActiveRef = useRef(false)
@@ -121,6 +128,21 @@ export function useEmulatorScreenKeyboard({
 
       cancelActivePaste()
       const pasteRequestId = pasteRequestIdRef.current
+
+      if (insertText && !buildServeSimKeyboardFramesForText(text)) {
+        const { byteLength } = measureClipboardTextByteLength(text)
+        if (byteLength > SERVE_SIM_TEXT_INSERT_MAX_BYTES) {
+          showEmulatorKeyboardPasteResult({ byteLength, reason: 'too-large', status: 'rejected' })
+          return
+        }
+        void insertText(text).catch(() => {
+          if (pasteRequestIdRef.current === pasteRequestId) {
+            showEmulatorTextInsertError()
+          }
+        })
+        return
+      }
+
       void pasteTextIntoEmulatorKeyboard({
         isCancelled: () =>
           pasteRequestIdRef.current !== pasteRequestId ||
@@ -135,7 +157,7 @@ export function useEmulatorScreenKeyboard({
         showEmulatorKeyboardPasteResult(result)
       })
     },
-    [canInteract, cancelActivePaste, sendKeyboardFrames]
+    [canInteract, cancelActivePaste, insertText, sendKeyboardFrames]
   )
 
   return {
@@ -145,6 +167,15 @@ export function useEmulatorScreenKeyboard({
     handlePaste,
     keyboardCaptureActive
   }
+}
+
+function showEmulatorTextInsertError(): void {
+  toast.error(
+    translate(
+      'auto.components.emulator.pane.useEmulatorScreenKeyboard.textInsertFailed',
+      'Failed to send text to the emulator.'
+    )
+  )
 }
 
 function showEmulatorKeyboardPasteResult(result: EmulatorKeyboardPasteResult): void {

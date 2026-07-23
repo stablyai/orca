@@ -12580,7 +12580,8 @@
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Paste is too large for emulator keyboard input.",
             "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
-            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
+            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready.",
+            "textInsertFailed": "エミュレーターへのテキスト送信に失敗しました。"
           }
         }
       },
