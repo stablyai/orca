@@ -21,6 +21,10 @@ export type SectionHeaderRowContext = {
   dragOverStatus: WorkspaceStatus | null
   pinDragOver: boolean
   headerDrag: WorktreeSidebarHeaderDrag
+  repoSectionRepoIdByRowIndex?: readonly (string | undefined)[]
+  draggedHeaderAnchorTopRef?: React.MutableRefObject<number | null>
+  scrollOffset?: number
+  readScrollTop?: () => number
   getCachedFolderWorkspacePathStatus: (request: {
     scope: 'project-group'
     projectGroupId: string

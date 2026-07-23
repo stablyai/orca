@@ -2,6 +2,8 @@ import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
+import { cn } from '@/lib/utils'
+import { PROJECT_HEADER_DRAG_TRANSITION_CLASS } from '../viewport/worktree-list-header-row-position'
 import { PendingWorktreeRow } from './PendingWorktreeRow'
 import ImportedWorktreesVisibilityLine from '../listing/ImportedWorktreesVisibilityLine'
 import NewExternalWorktreesInboxLine from '../listing/NewExternalWorktreesInboxLine'
@@ -12,6 +14,8 @@ type NoticeRowFrameProps = {
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   className?: string
+  offsetY?: number
+  animate?: boolean
   children: React.ReactNode
 }
 
@@ -20,6 +24,8 @@ function NoticeRowFrame({
   vItem,
   measureVirtualRowElement,
   className = 'absolute left-0 right-0 top-0',
+  offsetY = 0,
+  animate = false,
   children
 }: NoticeRowFrameProps): React.JSX.Element {
   return (
@@ -30,8 +36,8 @@ function NoticeRowFrame({
       data-worktree-virtual-row-start={vItem.start}
       data-index={vItem.index}
       ref={measureVirtualRowElement}
-      className={className}
-      style={{ transform: getVirtualRowTransform(vItem.start) }}
+      className={cn(className, animate && PROJECT_HEADER_DRAG_TRANSITION_CLASS)}
+      style={{ transform: getVirtualRowTransform(vItem.start + offsetY) }}
     >
       {children}
     </div>
@@ -45,6 +51,8 @@ export function renderImportedWorktreesVirtualRow(args: {
   actionStateByProjectId: ReadonlyMap<string, ImportedWorktreeCardActionState>
   onShow: (projectId: string) => void
   onKeepHidden: (projectId: string) => void
+  offsetY?: number
+  animate?: boolean
 }): React.JSX.Element {
   const { row, actionStateByProjectId } = args
   const frame = (line: React.JSX.Element): React.JSX.Element => (
@@ -52,6 +60,8 @@ export function renderImportedWorktreesVirtualRow(args: {
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
+      offsetY={args.offsetY}
+      animate={args.animate}
     >
       {line}
     </NoticeRowFrame>
@@ -93,6 +103,8 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
   actionState: NewExternalWorktreesInboxActionState | undefined
   onReview: (repo: Extract<Row, { type: 'new-external-worktrees-inbox' }>['repo']) => void
   onSuppress: (projectId: string) => void
+  offsetY?: number
+  animate?: boolean
 }): React.JSX.Element {
   const { row, actionState } = args
   return (
@@ -100,6 +112,8 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
+      offsetY={args.offsetY}
+      animate={args.animate}
     >
       <NewExternalWorktreesInboxLine
         repoDisplayName={row.repo.displayName}
@@ -119,6 +133,8 @@ export function renderPendingCreationVirtualRow(args: {
   row: Extract<Row, { type: 'pending-creation' }>
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  offsetY?: number
+  animate?: boolean
 }): React.JSX.Element {
   return (
     <NoticeRowFrame
@@ -126,6 +142,8 @@ export function renderPendingCreationVirtualRow(args: {
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
       className="absolute left-0 right-0 top-0 px-2 pb-1.5"
+      offsetY={args.offsetY}
+      animate={args.animate}
     >
       <PendingWorktreeRow
         creationId={args.row.creationId}
