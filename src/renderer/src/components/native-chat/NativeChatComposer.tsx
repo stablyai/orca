@@ -15,7 +15,7 @@ import {
   EMPTY_HISTORY,
   pushHistory,
   type HistoryState
-} from './native-chat-composer-state'
+} from '../../../../shared/native-chat/native-chat-composer-state'
 import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { NativeChatComposerField } from './NativeChatComposerField'

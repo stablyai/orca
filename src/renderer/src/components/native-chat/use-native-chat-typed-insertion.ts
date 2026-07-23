@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import type { HistoryState } from './native-chat-composer-state'
+import type { HistoryState } from '../../../../shared/native-chat/native-chat-composer-state'
 
 /** Imperative text insertion and focus for the composer textarea, used by the
  *  paste pipeline and the composer's imperative handle. */

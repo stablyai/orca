@@ -31,6 +31,7 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { MobileNativeChatSkillDiscovery } from './use-mobile-native-chat-skills'
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -67,6 +68,8 @@ type Props = {
   inputLockReason?: MobileNativeChatInputLockReason | null
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
+  skillDiscovery?: MobileNativeChatSkillDiscovery
+  onPickerTextChange?: (text: string) => void
   /** A pending agent question/permission detected from live status, shown as a
    *  native card above the composer; answering sends text to the agent. */
   /** Structured AskUserQuestion prompt parsed from the transcript (preferred over
@@ -112,6 +115,8 @@ export function MobileNativeChatView({
   inputLockReason,
   filePaths,
   onNeedFiles,
+  skillDiscovery,
+  onPickerTextChange,
   ask,
   onAnswerAsk,
   onCancelAsk,
@@ -125,6 +130,11 @@ export function MobileNativeChatView({
   const insets = useSafeAreaInsets()
   const listRef = useRef<FlatList<NativeChatMessage>>(null)
   const [toolsExpanded, setToolsExpanded] = useState(false)
+  const [dismissAutocompleteSignal, setDismissAutocompleteSignal] = useState(0)
+  const dismissAutocomplete = useCallback(
+    () => setDismissAutocompleteSignal((signal) => signal + 1),
+    []
+  )
   // Dismiss the question card as soon as it's answered; the live status lingers
   // briefly (the agent emits a post-tool event with the same prompt), so hide it
   // until a genuinely different question arrives.
@@ -266,6 +276,7 @@ export function MobileNativeChatView({
               renderItem={renderItem}
               contentContainerStyle={styles.listContent}
               onScroll={onScroll}
+              onTouchStart={dismissAutocomplete}
               scrollEventThrottle={32}
               onContentSizeChange={() => {
                 if (data.length > 0 && atBottom) {
@@ -415,10 +426,16 @@ export function MobileNativeChatView({
             ? 'Reconnecting…'
             : lockReason === 'waiting'
               ? 'Waiting for terminal…'
-              : 'Message, @files, /commands'
+              : agent === 'codex'
+                ? 'Message, @files, $skills'
+                : 'Message, @files, /commands'
         }
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}
+        agent={agent}
+        skillDiscovery={skillDiscovery}
+        onPickerTextChange={onPickerTextChange}
+        dismissAutocompleteSignal={dismissAutocompleteSignal}
       />
     </View>
   )

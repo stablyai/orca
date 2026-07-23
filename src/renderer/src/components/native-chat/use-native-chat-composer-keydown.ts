@@ -5,7 +5,7 @@ import {
   type ComposerAutocomplete,
   type HistoryState,
   type NativeChatPickerItem
-} from './native-chat-composer-state'
+} from '../../../../shared/native-chat/native-chat-composer-state'
 
 export type UseNativeChatComposerKeyDownArgs = {
   autocomplete: ComposerAutocomplete

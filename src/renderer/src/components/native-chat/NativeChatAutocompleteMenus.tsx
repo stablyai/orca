@@ -3,7 +3,10 @@ import { Loader2, Package, RotateCcw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
-import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import type {
+  ComposerAutocomplete,
+  NativeChatPickerItem
+} from '../../../../shared/native-chat/native-chat-composer-state'
 
 export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   autocomplete,

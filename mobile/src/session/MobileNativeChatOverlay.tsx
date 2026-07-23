@@ -68,6 +68,8 @@ export function MobileNativeChatOverlay({
         inputLockReason={inputLockReason}
         filePaths={controller.nativeChatFilePaths}
         onNeedFiles={controller.loadNativeChatFiles}
+        skillDiscovery={controller.nativeChatSkillDiscovery}
+        onPickerTextChange={controller.handleNativeChatPickerTextChange}
         keyboardInset={keyboardInset}
       />
     </View>

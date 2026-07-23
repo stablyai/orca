@@ -14,7 +14,7 @@ import {
   pushHistory,
   type HistoryState,
   type NativeChatPickerItem
-} from './native-chat-composer-state'
+} from '../../../../shared/native-chat/native-chat-composer-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
 

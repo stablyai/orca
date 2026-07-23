@@ -1,12 +1,12 @@
-import type { DiscoveredSkill } from '../../../../shared/skills'
-import type { NativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import type { DiscoveredSkill } from '../skills'
+import type { NativeChatAgentProfile } from '../native-chat-agent-profiles'
 import {
   filterSlashCommands,
   isSlashCommandDraft,
   applySlashSuggestion,
   slashCommandDispatchText,
   type SlashCommandSuggestion
-} from '../../../../shared/native-chat-slash-commands'
+} from '../native-chat-slash-commands'
 import {
   buildNativeChatPickerItems,
   type NativeChatPickerItem,

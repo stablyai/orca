@@ -20,7 +20,7 @@ import {
   type ComposerAutocomplete,
   type NativeChatPickerItem,
   type NativeChatSendClassification
-} from './native-chat-composer-state'
+} from '../../../../shared/native-chat/native-chat-composer-state'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import {
   emitNativeChatPickerItemAccepted,

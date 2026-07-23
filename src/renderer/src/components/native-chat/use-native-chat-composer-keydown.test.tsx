@@ -2,7 +2,10 @@
 
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_HISTORY, type ComposerAutocomplete } from './native-chat-composer-state'
+import {
+  EMPTY_HISTORY,
+  type ComposerAutocomplete
+} from '../../../../shared/native-chat/native-chat-composer-state'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 
 const COMMAND = {

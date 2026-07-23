@@ -24,6 +24,8 @@ vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   ImagePlus: 'ImagePlus',
   Mic: 'Mic',
+  Package: 'Package',
+  RotateCcw: 'RotateCcw',
   Square: 'Square'
 }))
 
@@ -120,7 +122,9 @@ describe('MobileNativeChatComposer', () => {
           createElement(MobileNativeChatComposer, {
             value: '/c',
             onChangeText: vi.fn(),
-            onSend: vi.fn().mockResolvedValue(true)
+            onSend: vi.fn().mockResolvedValue(true),
+            agent: 'claude',
+            skillDiscovery: { status: 'ready', skills: [], retry: vi.fn() }
           })
         )
       })
@@ -140,9 +144,12 @@ describe('MobileNativeChatComposer', () => {
     await act(async () =>
       input().props.onSelectionChange({ nativeEvent: { selection: { end: 2 } } })
     )
-    const firstSuggestion = renderer!.root.findAll(
-      (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
-    )[0] as { props: { onPress: () => void } }
+    const firstSuggestion = renderer!.root.find(
+      (node) =>
+        node.type === 'Pressable' &&
+        typeof node.props.accessibilityLabel === 'string' &&
+        node.props.accessibilityLabel.startsWith('/clear')
+    ) as { props: { onPress: () => void } }
     await act(async () => firstSuggestion.props.onPress())
     // `/clear ` is 7 chars — the caret jumps just past the inserted command + space.
     expect(input().props.selection).toEqual({ start: 7, end: 7 })
@@ -151,6 +158,54 @@ describe('MobileNativeChatComposer', () => {
       input().props.onSelectionChange({ nativeEvent: { selection: { end: 7 } } })
     )
     expect(input().props.selection).toBeUndefined()
+  })
+
+  it('dismisses the picker on a transcript touch without changing the typed prefix', async () => {
+    const onChangeText = vi.fn()
+    const props = {
+      value: '/',
+      onChangeText,
+      onSend: vi.fn().mockResolvedValue(true),
+      agent: 'claude' as const,
+      skillDiscovery: { status: 'ready' as const, skills: [], retry: vi.fn() }
+    }
+    const restore = suppressRendererWarning()
+    try {
+      await act(async () => {
+        renderer = create(createElement(MobileNativeChatComposer, props))
+      })
+    } finally {
+      restore()
+    }
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: {
+        onSelectionChange: (event: { nativeEvent: { selection: { end: number } } }) => void
+      }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
+    expect(
+      renderer!.root.findAll(
+        (node) =>
+          node.type === 'Pressable' &&
+          typeof node.props.accessibilityLabel === 'string' &&
+          node.props.accessibilityLabel.startsWith('/clear')
+      )
+    ).toHaveLength(1)
+
+    await act(async () => {
+      renderer!.update(
+        createElement(MobileNativeChatComposer, { ...props, dismissAutocompleteSignal: 1 })
+      )
+    })
+    expect(
+      renderer!.root.findAll(
+        (node) =>
+          node.type === 'Pressable' &&
+          typeof node.props.accessibilityLabel === 'string' &&
+          node.props.accessibilityLabel.startsWith('/clear')
+      )
+    ).toHaveLength(0)
+    expect(onChangeText).not.toHaveBeenCalled()
   })
 
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {

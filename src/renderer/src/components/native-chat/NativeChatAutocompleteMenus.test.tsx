@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
-import type { ComposerAutocomplete } from './native-chat-composer-state'
+import type { ComposerAutocomplete } from '../../../../shared/native-chat/native-chat-composer-state'
 
 function autocomplete(
   overrides: Partial<Extract<ComposerAutocomplete, { mode: 'slash' }>> = {}

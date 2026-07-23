@@ -1,75 +1,43 @@
-// Why: the composer offers two kinds of autocomplete — `@file` mentions and
-// `/slash` commands. Detection is pure (text + cursor → active trigger) so it's
-// unit-testable and the composer stays a thin view over it.
+import type { AgentType } from '../../../src/shared/agent-status-types'
+import {
+  deriveComposerAutocomplete,
+  type ComposerAutocomplete,
+  type NativeChatSkillDiscoverySnapshot
+} from '../../../src/shared/native-chat/native-chat-composer-state'
+import {
+  getNativeChatAgentProfile,
+  getVerifiedNativeChatCommands
+} from '../../../src/shared/native-chat-agent-profiles'
 
-export type AutocompleteKind = 'file' | 'slash'
+const EMPTY_DISCOVERY: NativeChatSkillDiscoverySnapshot = { status: 'idle', skills: [] }
 
-export type AutocompleteTrigger = {
-  kind: AutocompleteKind
-  /** The query typed after the trigger char (may be empty). */
-  query: string
-  /** Index of the trigger char in the text (inclusive). */
-  start: number
-  /** Index just past the cursor / token end (exclusive) — the replace span end. */
-  end: number
-}
-
-const TOKEN_CHAR = /[^\s]/
-
-/** Detect an active autocomplete trigger at the cursor. A `@` mention triggers
- *  anywhere it follows whitespace/start; a `/` command only at the very start of
- *  the input (slash commands are line-leading). Returns null when the cursor is
- *  not inside such a token. */
-export function detectAutocompleteTrigger(
+/** Adapts mobile agent identity and discovery state to the shared picker engine.
+ * Unsupported agents retain @file mentions but never open a command/skill picker. */
+export function deriveMobileNativeChatAutocomplete(
   text: string,
-  cursor: number
-): AutocompleteTrigger | null {
-  const pos = Math.max(0, Math.min(cursor, text.length))
-  // Walk left from the cursor over non-whitespace token chars to find the trigger.
-  let i = pos - 1
-  while (i >= 0 && TOKEN_CHAR.test(text[i]!)) {
-    i--
+  cursor: number,
+  agent: AgentType | null,
+  discovery: NativeChatSkillDiscoverySnapshot = EMPTY_DISCOVERY,
+  dismissedTriggerKey: string | null = null
+): ComposerAutocomplete {
+  const profile = getNativeChatAgentProfile(agent)
+  if (!profile || !agent) {
+    const mentionOnly = deriveComposerAutocomplete(text, cursor, [], [], null, EMPTY_DISCOVERY)
+    return mentionOnly.mode === 'mention' ? mentionOnly : { mode: 'none' }
   }
-  const triggerIndex = i + 1
-  const triggerChar = text[triggerIndex]
-  if (triggerChar !== '@' && triggerChar !== '/') {
-    return null
-  }
-  const before = triggerIndex === 0 ? '' : text[triggerIndex - 1]!
-  if (triggerChar === '/' && triggerIndex !== 0) {
-    // Slash commands are only offered at the very start of the message.
-    return null
-  }
-  if (triggerChar === '@' && triggerIndex !== 0 && !/\s/.test(before)) {
-    return null
-  }
-  const query = text.slice(triggerIndex + 1, pos)
-  // A space in the query means the token already closed.
-  if (/\s/.test(query)) {
-    return null
-  }
-  return {
-    kind: triggerChar === '@' ? 'file' : 'slash',
-    query,
-    start: triggerIndex,
-    end: pos
-  }
+  return deriveComposerAutocomplete(
+    text,
+    cursor,
+    getVerifiedNativeChatCommands(agent),
+    discovery.skills,
+    profile,
+    discovery,
+    dismissedTriggerKey
+  )
 }
 
-/** Replace the trigger span with `value`, leaving a trailing space and the
- *  cursor after it. Returns the new text and the new cursor position. */
-export function applyAutocomplete(
-  text: string,
-  trigger: AutocompleteTrigger,
-  value: string
-): { text: string; cursor: number } {
-  const inserted = `${value} `
-  const next = text.slice(0, trigger.start) + inserted + text.slice(trigger.end)
-  return { text: next, cursor: trigger.start + inserted.length }
-}
-
-/** Rank suggestions for a query: case-insensitive, prefix matches first, then
- *  substring matches, capped. Used for both file paths and command names. */
+/** Rank file paths for @mention autocomplete: basename prefixes first, then
+ * substring matches, capped so the touch strip stays bounded. */
 export function rankSuggestions(candidates: readonly string[], query: string, limit = 8): string[] {
   const q = query.toLowerCase()
   if (q.length === 0) {

@@ -5,7 +5,10 @@ import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
-import { pushHistory, type HistoryState } from './native-chat-composer-state'
+import {
+  pushHistory,
+  type HistoryState
+} from '../../../../shared/native-chat/native-chat-composer-state'
 import { sendNativeChatMessageVerified } from './native-chat-runtime-send'
 import { cancelNativeChatPtySends, waitForNativeChatPtyIdle } from './native-chat-pty-send-queue'
 import {

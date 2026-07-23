@@ -16,8 +16,8 @@ import {
   slashCommandDispatchText,
   type SlashCommandSuggestion
 } from './native-chat-composer-state'
-import type { DiscoveredSkill } from '../../../../shared/skills'
-import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import type { DiscoveredSkill } from '../skills'
+import { getNativeChatAgentProfile } from '../native-chat-agent-profiles'
 
 const COMMANDS: SlashCommandSuggestion[] = [
   { name: 'clear' },

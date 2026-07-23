@@ -9,27 +9,27 @@ import {
   View
 } from 'react-native'
 import { ArrowUp, ImagePlus, Mic, Square } from 'lucide-react-native'
+import type { AgentType } from '../../../src/shared/agent-status-types'
+import {
+  applyMentionSuggestion,
+  editReplacesTriggerToken,
+  type NativeChatPickerItem
+} from '../../../src/shared/native-chat/native-chat-composer-state'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
-  applyAutocomplete,
-  detectAutocompleteTrigger,
+  deriveMobileNativeChatAutocomplete,
   rankSuggestions
 } from './mobile-native-chat-autocomplete'
-
-// Common agent slash commands offered as autocomplete; sending them is just text
-// to the agent's terminal, so the set is intentionally provider-agnostic.
-const SLASH_COMMANDS = [
-  '/clear',
-  '/compact',
-  '/review',
-  '/model',
-  '/help',
-  '/init',
-  '/cost',
-  '/diff'
-]
+import { MobileNativeChatPickerStrip } from './MobileNativeChatPickerStrip'
+import { insertMobileNativeChatPickerItem } from './mobile-native-chat-strip'
+import type { MobileNativeChatSkillDiscovery } from './use-mobile-native-chat-skills'
 
 const NO_FILE_PATHS: string[] = []
+const EMPTY_SKILL_DISCOVERY: MobileNativeChatSkillDiscovery = {
+  status: 'idle',
+  skills: [],
+  retry: () => {}
+}
 
 type Props = {
   /** Controlled composer text — owned by the parent so dictation can write to it. */
@@ -48,6 +48,10 @@ type Props = {
   placeholder?: string
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
+  agent?: AgentType | null
+  skillDiscovery?: MobileNativeChatSkillDiscovery
+  onPickerTextChange?: (text: string) => void
+  dismissAutocompleteSignal?: number
 }
 
 export function MobileNativeChatComposer({
@@ -64,9 +68,15 @@ export function MobileNativeChatComposer({
   disabled = false,
   placeholder = 'Message, @files, /commands',
   filePaths = NO_FILE_PATHS,
-  onNeedFiles
+  onNeedFiles,
+  agent = null,
+  skillDiscovery = EMPTY_SKILL_DISCOVERY,
+  onPickerTextChange,
+  dismissAutocompleteSignal = 0
 }: Props): React.JSX.Element {
   const [cursor, setCursor] = useState(0)
+  const [dismissedTriggerKey, setDismissedTriggerKey] = useState<string | null>(null)
+  const dismissalSignalRef = useRef(dismissAutocompleteSignal)
   // Transiently drives the native caret after a mid-text autocomplete insert,
   // then released on the next selection change so manual caret placement still
   // works (a permanently controlled `selection` breaks it in React Native).
@@ -78,35 +88,95 @@ export function MobileNativeChatComposer({
   const trimmed = value.trim()
   const canSend = trimmed.length > 0 && !disabled && !sending && !isAttaching
 
-  const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
-  const suggestions = useMemo(() => {
-    if (!trigger) {
-      return []
-    }
-    if (trigger.kind === 'slash') {
-      return rankSuggestions(SLASH_COMMANDS, trigger.query)
-    }
-    return rankSuggestions(filePaths, trigger.query).map((p) => `@${p}`)
-  }, [trigger, filePaths])
+  const rawAutocomplete = useMemo(
+    () => deriveMobileNativeChatAutocomplete(value, cursor, agent, skillDiscovery),
+    [agent, cursor, skillDiscovery, value]
+  )
+  const autocomplete = useMemo(
+    () =>
+      dismissedTriggerKey
+        ? deriveMobileNativeChatAutocomplete(
+            value,
+            cursor,
+            agent,
+            skillDiscovery,
+            dismissedTriggerKey
+          )
+        : rawAutocomplete,
+    [agent, cursor, dismissedTriggerKey, rawAutocomplete, skillDiscovery, value]
+  )
+  const fileSuggestions = useMemo(
+    () =>
+      autocomplete.mode === 'mention'
+        ? rankSuggestions(filePaths, autocomplete.query)
+        : NO_FILE_PATHS,
+    [autocomplete, filePaths]
+  )
 
   useEffect(() => {
-    if (trigger?.kind === 'file') {
-      onNeedFiles?.(trigger.query)
+    if (
+      dismissedTriggerKey &&
+      (rawAutocomplete.mode === 'none' ||
+        rawAutocomplete.mode === 'mention' ||
+        rawAutocomplete.triggerKey !== dismissedTriggerKey)
+    ) {
+      setDismissedTriggerKey(null)
     }
-  }, [onNeedFiles, trigger?.kind, trigger?.query])
+  }, [dismissedTriggerKey, rawAutocomplete])
+
+  useEffect(() => {
+    if (dismissalSignalRef.current === dismissAutocompleteSignal) {
+      return
+    }
+    dismissalSignalRef.current = dismissAutocompleteSignal
+    if (rawAutocomplete.mode === 'slash' || rawAutocomplete.mode === 'skill') {
+      setDismissedTriggerKey(rawAutocomplete.triggerKey)
+    }
+  }, [dismissAutocompleteSignal, rawAutocomplete])
+
+  useEffect(() => {
+    if (autocomplete.mode === 'mention') {
+      onNeedFiles?.(autocomplete.query)
+    }
+  }, [autocomplete, onNeedFiles])
 
   const handleChange = (next: string): void => {
+    if (dismissedTriggerKey && editReplacesTriggerToken(value, next, dismissedTriggerKey)) {
+      setDismissedTriggerKey(null)
+    }
     onChangeText(next)
   }
 
-  const pickSuggestion = (suggestion: string): void => {
-    if (!trigger) {
-      return
-    }
-    const { text: nextText, cursor: nextCursor } = applyAutocomplete(value, trigger, suggestion)
-    onChangeText(nextText)
+  const writePickerText = (text: string, nextCursor: number): void => {
+    const writeText = onPickerTextChange ?? onChangeText
+    writeText(text)
     setCursor(nextCursor)
     setPendingSelection({ start: nextCursor, end: nextCursor })
+    setDismissedTriggerKey(null)
+  }
+
+  const pickFileSuggestion = (path: string): void => {
+    if (autocomplete.mode !== 'mention') {
+      return
+    }
+    const result = applyMentionSuggestion(value, cursor, path)
+    writePickerText(result.draft, result.caret)
+  }
+
+  const pickPickerItem = (item: NativeChatPickerItem): void => {
+    if (autocomplete.mode !== 'slash' && autocomplete.mode !== 'skill') {
+      return
+    }
+    const result = insertMobileNativeChatPickerItem(value, cursor, autocomplete, item)
+    if (result.insertedToken) {
+      writePickerText(result.text, result.cursor)
+    }
+  }
+
+  const dismissPicker = (): void => {
+    if (rawAutocomplete.mode === 'slash' || rawAutocomplete.mode === 'skill') {
+      setDismissedTriggerKey(rawAutocomplete.triggerKey)
+    }
   }
 
   const handleSend = async (): Promise<void> => {
@@ -128,17 +198,24 @@ export function MobileNativeChatComposer({
 
   return (
     <View>
-      {suggestions.length > 0 ? (
+      {autocomplete.mode === 'slash' || autocomplete.mode === 'skill' ? (
+        <MobileNativeChatPickerStrip
+          autocomplete={autocomplete}
+          onChoose={pickPickerItem}
+          onRetry={skillDiscovery.retry}
+        />
+      ) : null}
+      {fileSuggestions.length > 0 ? (
         <View style={styles.suggestions}>
           <ScrollView keyboardShouldPersistTaps="always" style={styles.suggestionScroll}>
-            {suggestions.map((s) => (
+            {fileSuggestions.map((path) => (
               <Pressable
-                key={s}
+                key={path}
                 style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
-                onPress={() => pickSuggestion(s)}
+                onPress={() => pickFileSuggestion(path)}
               >
                 <Text style={styles.suggestionText} numberOfLines={1}>
-                  {s}
+                  @{path}
                 </Text>
               </Pressable>
             ))}
@@ -170,6 +247,7 @@ export function MobileNativeChatComposer({
             setCursor(e.nativeEvent.selection.end)
             setPendingSelection(null)
           }}
+          onPressIn={dismissPicker}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           selectionColor={colors.accentBlue}
