@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import { Platform } from 'react-native'
 import { SecureStoreLatestValueCoordinator } from './secure-store-latest-value-coordinator'
+import { MOBILE_HOST_ID_MAX_CHARACTERS, PAIRING_DEVICE_TOKEN_MAX_CHARACTERS } from './types'
 
 // Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
 const TOKEN_KEY_PREFIX = 'orca.host-token.'
@@ -38,16 +39,20 @@ const tokenWrites = new SecureStoreLatestValueCoordinator(async (hostId, desired
 })
 
 export async function readHostDeviceToken(hostId: string): Promise<string | null> {
+  if (!isValidHostId(hostId)) {
+    return null
+  }
   const pending = tokenWrites.pending(hostId)
   if (pending.present) {
     return pending.value
   }
   // Why: Expo SecureStore has no working web backend; keep this fallback
   // web-only so native builds still keep pairing tokens in the keychain.
-  if (Platform.OS === 'web') {
-    return AsyncStorage.getItem(webTokenKey(hostId))
-  }
-  return SecureStore.getItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
+  const token =
+    Platform.OS === 'web'
+      ? await AsyncStorage.getItem(webTokenKey(hostId))
+      : await SecureStore.getItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
+  return token !== null && token.length <= PAIRING_DEVICE_TOKEN_MAX_CHARACTERS ? token : null
 }
 
 export function writeHostDeviceToken(
@@ -55,10 +60,16 @@ export function writeHostDeviceToken(
   token: string,
   replace: boolean
 ): Promise<void> {
+  if (!isValidHostId(hostId) || token.length > PAIRING_DEVICE_TOKEN_MAX_CHARACTERS) {
+    return Promise.reject(new Error('invalid mobile host credential'))
+  }
   return replace ? tokenWrites.replace(hostId, token) : tokenWrites.write(hostId, token)
 }
 
 export function deleteHostDeviceToken(hostId: string): Promise<void> {
+  if (!isValidHostId(hostId)) {
+    return Promise.resolve()
+  }
   return tokenWrites.delete(hostId)
 }
 
@@ -69,4 +80,8 @@ export function isHostDeviceTokenTombstoned(hostId: string): boolean {
 /** Test-only: clear pending generations between cases. */
 export function resetHostDeviceTokenStoreForTests(): void {
   tokenWrites.resetForTests()
+}
+
+function isValidHostId(hostId: string): boolean {
+  return hostId.length > 0 && hostId.length <= MOBILE_HOST_ID_MAX_CHARACTERS
 }

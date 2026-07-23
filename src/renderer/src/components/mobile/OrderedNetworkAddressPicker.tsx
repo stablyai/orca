@@ -66,7 +66,7 @@ function buildRows(
         address,
         label: translate(
           'auto.components.mobile.OrderedNetworkAddressPicker.relay-option',
-          'Orca Cloud Relay'
+          'Orca Relay'
         ),
         selected: true,
         priorityIndex: index + 1,

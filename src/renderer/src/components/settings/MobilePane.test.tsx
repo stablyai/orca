@@ -83,6 +83,8 @@ vi.mock('./MobilePairingSetupSection', () => ({
     refreshingNetworkInterfaces: boolean
     onRefreshNetworkInterfaces: () => void
     onGenerateQr: () => void
+    onAdvancedConnectionOrderEnabledChange?: (enabled: boolean) => void
+    onRouteOrderChange?: (addresses: string[], relayIndex: number) => void
   }) => (
     <div>
       <span data-testid="mode">{props.connectionMode}</span>
@@ -117,6 +119,15 @@ vi.mock('./MobilePairingSetupSection', () => ({
       </button>
       <button type="button" onClick={props.onRefreshNetworkInterfaces}>
         refresh-addresses
+      </button>
+      <button type="button" onClick={() => props.onAdvancedConnectionOrderEnabledChange?.(true)}>
+        enable-advanced-order
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onRouteOrderChange?.(['100.64.1.20', '192.168.1.24'], 1)}
+      >
+        set-route-order
       </button>
     </div>
   )
@@ -165,6 +176,7 @@ describe('MobilePane pairing connection mode', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     _resetPairedMobileDevicesCacheForTests()
     mocks.latestPairedDevicesProps = null
     getPairingQR.mockReset().mockResolvedValue({
@@ -426,6 +438,31 @@ describe('MobilePane pairing connection mode', () => {
       expect(getPairingQR).toHaveBeenCalledWith({
         address: '100.126.117.25:6768',
         connectionMode: 'automatic'
+      })
+    )
+  })
+
+  it('mints an authoritative ordered offer only after Advanced is enabled', async () => {
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [
+        { name: 'tailscale0', address: '100.64.1.20' },
+        { name: 'en0', address: '192.168.1.24' }
+      ]
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await waitFor(() => expect(mocks.listNetworkInterfaces).toHaveBeenCalledOnce())
+
+    await user.click(screen.getByRole('button', { name: 'enable-advanced-order' }))
+    await user.click(screen.getByRole('button', { name: 'set-route-order' }))
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+
+    await waitFor(() =>
+      expect(getPairingQR).toHaveBeenCalledWith({
+        addresses: ['100.64.1.20', '192.168.1.24'],
+        connectionMode: 'automatic',
+        orderedRoutes: true,
+        relayPreferenceIndex: 1
       })
     )
   })
@@ -763,6 +800,7 @@ async function unmountMobilePaneRoots(): Promise<void> {
 describe('MobilePane', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     _resetPairedMobileDevicesCacheForTests()
     mocks.latestPairedDevicesProps = null
     mocks.getPairingQR.mockReset().mockResolvedValue({

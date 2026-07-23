@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { NetworkInterfacePicker } from '../mobile/NetworkInterfacePicker'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import { MobileAdvancedConnectionOrderSection } from './MobileAdvancedConnectionOrderSection'
 
 type MobilePairingSetupSectionProps = {
   connectionMode: MobilePairingConnectionMode
@@ -19,6 +20,12 @@ type MobilePairingSetupSectionProps = {
   onSelectedAddressChange: (address: string) => void
   onCustomAddressSelect: (address: string) => void
   onCustomAddressRemove: (address: string) => void
+  selectedAddresses?: readonly string[]
+  onSelectedAddressesChange?: (addresses: string[]) => void
+  relayPreferenceIndex?: number
+  onRouteOrderChange?: (addresses: string[], relayIndex: number) => void
+  advancedConnectionOrderEnabled?: boolean
+  onAdvancedConnectionOrderEnabledChange?: (enabled: boolean) => void
   refreshingNetworkInterfaces: boolean
   onRefreshNetworkInterfaces: () => void
   loading: boolean
@@ -26,6 +33,10 @@ type MobilePairingSetupSectionProps = {
   showGenerateAction?: boolean
   onGenerateQr: () => void
 }
+
+const NOOP_ADDRESSES_CHANGE = (_addresses: string[]): void => {}
+const NOOP_ROUTE_ORDER_CHANGE = (_addresses: string[], _relayIndex: number): void => {}
+const NOOP_ADVANCED_CHANGE = (_enabled: boolean): void => {}
 
 export function MobilePairingSetupSection({
   connectionMode,
@@ -38,6 +49,12 @@ export function MobilePairingSetupSection({
   onSelectedAddressChange,
   onCustomAddressSelect,
   onCustomAddressRemove,
+  selectedAddresses = selectedAddress ? [selectedAddress] : [],
+  onSelectedAddressesChange = NOOP_ADDRESSES_CHANGE,
+  relayPreferenceIndex = selectedAddresses.length,
+  onRouteOrderChange = NOOP_ROUTE_ORDER_CHANGE,
+  advancedConnectionOrderEnabled = false,
+  onAdvancedConnectionOrderEnabledChange = NOOP_ADVANCED_CHANGE,
   refreshingNetworkInterfaces,
   onRefreshNetworkInterfaces,
   loading,
@@ -46,7 +63,10 @@ export function MobilePairingSetupSection({
   onGenerateQr
 }: MobilePairingSetupSectionProps): React.JSX.Element {
   const usingRelay = connectionMode === 'automatic'
-  const generateDisabled = loading || !selectedAddress || !canGenerate
+  const hasSelectedAddress = advancedConnectionOrderEnabled
+    ? selectedAddresses.length > 0
+    : selectedAddress !== undefined
+  const generateDisabled = loading || !hasSelectedAddress || !canGenerate
 
   return (
     <section className="space-y-5">
@@ -76,42 +96,44 @@ export function MobilePairingSetupSection({
             'This computer’s address'
           )}
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <NetworkInterfacePicker
-            networkInterfaces={networkInterfaces}
-            customAddresses={customAddresses}
-            selectedAddress={selectedAddress}
-            selectedAddressIsCustom={selectedAddressIsCustom}
-            onSelectedAddressChange={onSelectedAddressChange}
-            onCustomAddressSelect={onCustomAddressSelect}
-            onCustomAddressRemove={onCustomAddressRemove}
-            className="min-w-[220px] justify-between font-normal"
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={onRefreshNetworkInterfaces}
-                disabled={refreshingNetworkInterfaces}
-                aria-label={translate(
+        {!advancedConnectionOrderEnabled ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <NetworkInterfacePicker
+              networkInterfaces={networkInterfaces}
+              customAddresses={customAddresses}
+              selectedAddress={selectedAddress}
+              selectedAddressIsCustom={selectedAddressIsCustom}
+              onSelectedAddressChange={onSelectedAddressChange}
+              onCustomAddressSelect={onCustomAddressSelect}
+              onCustomAddressRemove={onCustomAddressRemove}
+              className="min-w-[220px] justify-between font-normal"
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onRefreshNetworkInterfaces}
+                  disabled={refreshingNetworkInterfaces}
+                  aria-label={translate(
+                    'auto.components.settings.MobilePairingSetupSection.refresh',
+                    'Refresh network interfaces'
+                  )}
+                  className="text-muted-foreground"
+                >
+                  <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {translate(
                   'auto.components.settings.MobilePairingSetupSection.refresh',
                   'Refresh network interfaces'
                 )}
-                className="text-muted-foreground"
-              >
-                <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate(
-                'auto.components.settings.MobilePairingSetupSection.refresh',
-                'Refresh network interfaces'
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </div>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           {usingRelay
             ? translate(
@@ -123,6 +145,18 @@ export function MobilePairingSetupSection({
                 'The phone must be able to reach this address on Tailscale or Wi‑Fi.'
               )}
         </p>
+        <MobileAdvancedConnectionOrderSection
+          enabled={advancedConnectionOrderEnabled}
+          onEnabledChange={onAdvancedConnectionOrderEnabledChange}
+          connectionMode={connectionMode}
+          networkInterfaces={networkInterfaces}
+          selectedAddresses={selectedAddresses}
+          onSelectedAddressesChange={onSelectedAddressesChange}
+          relayPreferenceIndex={relayPreferenceIndex}
+          onRouteOrderChange={onRouteOrderChange}
+          refreshingNetworkInterfaces={refreshingNetworkInterfaces}
+          onRefreshNetworkInterfaces={onRefreshNetworkInterfaces}
+        />
       </div>
 
       {showGenerateAction ? (

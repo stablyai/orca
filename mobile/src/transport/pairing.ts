@@ -1,8 +1,12 @@
 import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS,
   PairingOfferSchema,
   normalizePairingEndpoints,
   type PairingOffer
 } from './types'
+import { MAX_PAIRING_OFFER_JSON_BYTES } from '../../../src/shared/mobile-relay-pairing-offer'
+import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
 
 export { normalizePairingEndpoints }
 
@@ -12,6 +16,9 @@ export { normalizePairingEndpoints }
 // the other.
 
 export function decodePairingUrl(url: string): PairingOffer | null {
+  if (url.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   try {
     const code = extractPairingCodeFromUrl(url)
     if (!code) {
@@ -27,6 +34,9 @@ export function decodePairingUrl(url: string): PairingOffer | null {
 // extraction here makes QR scan, paste, and external deep-link flows
 // accept the same URL shapes.
 export function extractPairingCodeFromUrl(url: string): string | null {
+  if (url.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const trimmed = url.trim()
   const match = /^orca:\/\/([^/?#]*)([^?#]*)?/i.exec(trimmed)
   if (!match) {
@@ -59,6 +69,9 @@ export function extractPairingCodeFromUrl(url: string): string | null {
 // string so the paste-pair flow can take whichever the user actually
 // copied from desktop.
 export function parsePairingCode(input: string): PairingOffer | null {
+  if (input.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const trimmed = input.trim()
   if (!trimmed) {
     return null
@@ -74,11 +87,22 @@ export function parsePairingCode(input: string): PairingOffer | null {
 }
 
 function decodePairingBase64(base64url: string): PairingOffer {
+  if (
+    base64url.length === 0 ||
+    base64url.length >
+      Math.min(PAIRING_CODE_MAX_CHARACTERS, Math.ceil((MAX_PAIRING_OFFER_JSON_BYTES * 4) / 3)) ||
+    !/^[A-Za-z0-9+/_-]+={0,2}$/.test(base64url)
+  ) {
+    throw new Error('Pairing offer exceeds the safe QR payload limit')
+  }
   // Why: desktop intentionally strips base64 padding from QR payloads. Some
   // mobile JS runtimes reject unpadded atob input, so restore it before decode.
   const base64 = padBase64(base64url.replace(/-/g, '+').replace(/_/g, '/'))
   const json = atob(base64)
-  return PairingOfferSchema.parse(JSON.parse(json))
+  if (new TextEncoder().encode(json).length > MAX_PAIRING_OFFER_JSON_BYTES) {
+    throw new Error('Pairing offer exceeds the safe QR payload limit')
+  }
+  return PairingOfferSchema.parse(parseMobileJsonTextWithinLimits(json))
 }
 
 function padBase64(base64: string): string {

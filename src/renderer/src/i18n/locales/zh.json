@@ -9664,6 +9664,15 @@
           "unpackedHelp": "开发版本必须从其源代码检出进行更新。",
           "legacyHelp": "手动更新此服务器一次以启用远程更新。"
         },
+        "MobileAdvancedConnectionOrderSection": {
+          "enable": "Use custom connection order",
+          "advanced": "Advanced",
+          "enabledDescription": "Enabled — the phone follows the route priority below.",
+          "enableDescription": "Try selected routes from top to bottom instead of using the standard connection behavior.",
+          "versionNote": "Requires the latest Orca Mobile:",
+          "testflight": "TestFlight",
+          "androidApk": "latest Android APK"
+        },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",
           "titleOrca": "Hold Shift to open in Orca",
@@ -11852,6 +11861,14 @@
           "blocked-title": "Windows 可能正在阻止 Orca Mobile",
           "blocked-description": "现有的入站阻止规则可能会覆盖配对例外。修复将移除此 Orca 应用的冲突 TCP 规则，然后在专用网络上允许端口 {{port}}。",
           "repair": "修复防火墙访问权限"
+        },
+        "OrderedNetworkAddressPicker": {
+          "relay-option": "Orca Relay",
+          "priority-hint": "Priority is top to bottom — drag selected routes to change the order your phone tries them.",
+          "list-label": "Connection routes",
+          "refresh-addresses": "Refresh addresses",
+          "custom-option": "{{address}} (custom)",
+          "drag-handle": "Drag to reorder {{address}}"
         }
       },
       "gitlab": {

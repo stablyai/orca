@@ -602,16 +602,26 @@ describe('OrcaRuntimeRpcServer', () => {
         server.createPairingOffer({
           addresses: Array.from({ length: 5 }, (_, index) => `192.168.1.${index + 1}`)
         })
-      ).toEqual({ available: false })
-      expect(server.createPairingOffer({ address: 'a'.repeat(321) })).toEqual({
-        available: false
+      ).toMatchObject({
+        available: false,
+        reason: 'invalid_advertised_endpoint',
+        guidance: expect.any(String)
+      })
+      expect(server.createPairingOffer({ address: 'a'.repeat(321) })).toMatchObject({
+        available: false,
+        reason: 'invalid_advertised_endpoint',
+        guidance: expect.any(String)
       })
       await expect(
         server.createMobilePairingOffer({
           addresses: Array.from({ length: 5 }, (_, index) => `10.0.0.${index + 1}`),
           rotate: true
         })
-      ).resolves.toEqual({ available: false })
+      ).resolves.toMatchObject({
+        available: false,
+        reason: 'invalid_advertised_endpoint',
+        guidance: expect.any(String)
+      })
       expect(server.getDeviceRegistry()?.listDevices()).toEqual([])
     } finally {
       await server.stop()

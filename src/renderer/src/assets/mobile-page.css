@@ -863,17 +863,11 @@
 
 .mobile-page-root .mp-network-row {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  margin: 0 0 18px;
-  font-size: 13px;
-}
-
-.mobile-page-root .mp-network-row-header {
-  display: flex;
   align-items: center;
   gap: 10px;
+  margin: 0 0 18px;
+  flex-wrap: wrap;
+  font-size: 13px;
 }
 
 .mobile-page-root .mp-network-label {
@@ -882,9 +876,9 @@
 }
 
 .mobile-page-root .mp-network-select {
-  width: 100%;
+  flex: 1 1 180px;
   min-width: 0;
-  max-width: 360px;
+  max-width: 240px;
 }
 
 .mobile-page-root .mp-network-refresh {

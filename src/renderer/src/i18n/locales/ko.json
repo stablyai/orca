@@ -9664,6 +9664,15 @@
           "unpackedHelp": "개발 빌드는 소스 체크아웃에서 업데이트해야 합니다.",
           "legacyHelp": "원격 업데이트를 활성화하려면 이 서버를 수동으로 한 번 업데이트하세요."
         },
+        "MobileAdvancedConnectionOrderSection": {
+          "enable": "Use custom connection order",
+          "advanced": "Advanced",
+          "enabledDescription": "Enabled — the phone follows the route priority below.",
+          "enableDescription": "Try selected routes from top to bottom instead of using the standard connection behavior.",
+          "versionNote": "Requires the latest Orca Mobile:",
+          "testflight": "TestFlight",
+          "androidApk": "latest Android APK"
+        },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",
           "titleOrca": "Hold Shift to open in Orca",
@@ -11852,6 +11861,14 @@
           "blocked-title": "Windows가 Orca Mobile을 차단하고 있을 수 있습니다",
           "blocked-description": "기존 인바운드 차단 규칙이 페어링 예외보다 우선할 수 있습니다. 복구를 실행하면 이 Orca 앱의 충돌하는 TCP 규칙을 제거한 다음 개인 네트워크에서 포트 {{port}}을(를) 허용합니다.",
           "repair": "방화벽 액세스 복구"
+        },
+        "OrderedNetworkAddressPicker": {
+          "relay-option": "Orca Relay",
+          "priority-hint": "Priority is top to bottom — drag selected routes to change the order your phone tries them.",
+          "list-label": "Connection routes",
+          "refresh-addresses": "Refresh addresses",
+          "custom-option": "{{address}} (custom)",
+          "drag-handle": "Drag to reorder {{address}}"
         }
       },
       "gitlab": {

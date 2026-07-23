@@ -123,10 +123,8 @@ export function parsePairingCode(input: string): PairingOffer | null {
 function decodePairingBase64(base64url: string): PairingOffer {
   if (
     base64url.length === 0 ||
-    base64url.length > Math.min(
-      PAIRING_CODE_MAX_CHARACTERS,
-      Math.ceil((MAX_PAIRING_OFFER_JSON_BYTES * 4) / 3)
-    ) ||
+    base64url.length >
+      Math.min(PAIRING_CODE_MAX_CHARACTERS, Math.ceil((MAX_PAIRING_OFFER_JSON_BYTES * 4) / 3)) ||
     !/^[A-Za-z0-9+/_-]+={0,2}$/.test(base64url)
   ) {
     throw new Error('Pairing offer exceeds the safe QR payload limit')

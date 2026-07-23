@@ -155,14 +155,12 @@ export function createStableLogicalRpcClient(
       closed = true
       activeStateUnsubscribe?.()
       activeStateUnsubscribe = null
-      for (const pending of pendingRequests) {
-        pending.reject(new Error('Client closed'))
-      }
-      pendingRequests.clear()
       for (const record of subscriptions.values()) {
         record.disposePhysical?.()
       }
       subscriptions.clear()
+      // Why: the physical client preserves whether an in-flight frame was
+      // written, so let its close carry the correct delivery-ambiguity mark.
       activeSession.close()
       publishState('disconnected')
     },
@@ -174,14 +172,12 @@ export function createStableLogicalRpcClient(
       suspended = true
       activeStateUnsubscribe?.()
       activeStateUnsubscribe = null
-      for (const pending of pendingRequests) {
-        pending.reject(new Error('Client suspended'))
-      }
-      pendingRequests.clear()
       for (const record of subscriptions.values()) {
         record.disposePhysical?.()
         record.disposePhysical = null
       }
+      // Why: suspend can cut over a written Relay send; only the physical
+      // client knows whether the failure must remain delivery-unknown.
       activeSession.close()
       publishState('disconnected')
     },

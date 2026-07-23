@@ -4,11 +4,14 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
-import { NetworkInterfacePicker } from '../mobile/NetworkInterfacePicker'
+import { OrderedNetworkAddressPicker } from '../mobile/OrderedNetworkAddressPicker'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
-import { MobileRelayBetaAvailability } from './MobileRelayBetaAvailability'
 import { SettingsRow, SettingsSwitch } from './SettingsFormControls'
+
+const TESTFLIGHT_URL = 'https://testflight.apple.com/join/YjeGMQBA'
+const ANDROID_APK_URL =
+  'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.31/app-release.apk'
 
 type MobileAdvancedConnectionOrderSectionProps = {
   enabled: boolean
@@ -85,7 +88,33 @@ export function MobileAdvancedConnectionOrderSection({
                         'Try selected routes from top to bottom instead of using the standard connection behavior.'
                       )}
                 </span>
-                <MobileRelayBetaAvailability includeIosAppStore={false} />
+                <span className="block">
+                  {translate(
+                    'auto.components.settings.MobileAdvancedConnectionOrderSection.versionNote',
+                    'Requires the latest Orca Mobile:'
+                  )}{' '}
+                  <button
+                    type="button"
+                    onClick={() => void window.api.shell.openUrl(TESTFLIGHT_URL)}
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    {translate(
+                      'auto.components.settings.MobileAdvancedConnectionOrderSection.testflight',
+                      'TestFlight'
+                    )}
+                  </button>
+                  {' · '}
+                  <button
+                    type="button"
+                    onClick={() => void window.api.shell.openUrl(ANDROID_APK_URL)}
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    {translate(
+                      'auto.components.settings.MobileAdvancedConnectionOrderSection.androidApk',
+                      'latest Android APK'
+                    )}
+                  </button>
+                </span>
               </span>
             }
             control={
@@ -98,7 +127,7 @@ export function MobileAdvancedConnectionOrderSection({
             alignTop
           />
           {enabled ? (
-            <NetworkInterfacePicker
+            <OrderedNetworkAddressPicker
               networkInterfaces={networkInterfaces}
               selectedAddresses={selectedAddresses}
               onSelectedAddressesChange={onSelectedAddressesChange}

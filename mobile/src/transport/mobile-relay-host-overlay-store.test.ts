@@ -11,6 +11,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStor
 
 import {
   loadMobileRelayHostOverlays,
+  MOBILE_RELAY_HOST_OVERLAY_MAX_ENTRIES,
+  MOBILE_RELAY_HOST_OVERLAY_MAX_STORAGE_CHARACTERS,
   removeMobileRelayHostOverlays,
   resetMobileRelayHostOverlayStoreForTests,
   saveMobileRelayHostOverlay
@@ -199,5 +201,34 @@ describe('mobile relay host overlay store', () => {
     expect(stored.get(`${V3_KEY_PREFIX}host-2`)).toBe(JSON.stringify(second))
     finishFirst()
     await savingFirst
+  })
+
+  it('accepts the exact legacy count and isolates v3 writes from one over', async () => {
+    const exact = Array.from({ length: MOBILE_RELAY_HOST_OVERLAY_MAX_ENTRIES }, (_, index) => ({
+      ...OVERLAY,
+      hostId: `host-${index}`
+    }))
+    stored.set(STORAGE_KEY, JSON.stringify(exact))
+    const hostIds = new Set(exact.map(({ hostId }) => hostId))
+    expect((await loadMobileRelayHostOverlays(hostIds)).size).toBe(
+      MOBILE_RELAY_HOST_OVERLAY_MAX_ENTRIES
+    )
+
+    stored.set(STORAGE_KEY, JSON.stringify([...exact, { ...OVERLAY, hostId: 'one-over' }]))
+    await expect(loadMobileRelayHostOverlays(hostIds)).resolves.toEqual(new Map())
+    // V3 is per-host, so unreadable legacy state cannot block a bounded write.
+    await expect(saveMobileRelayHostOverlay(OVERLAY)).resolves.toBeUndefined()
+    expect(stored.get(STORAGE_KEY)).toBe(
+      JSON.stringify([...exact, { ...OVERLAY, hostId: 'one-over' }])
+    )
+  })
+
+  it('ignores an oversized legacy payload without rewriting it', async () => {
+    const oversized = 'x'.repeat(MOBILE_RELAY_HOST_OVERLAY_MAX_STORAGE_CHARACTERS + 1)
+    stored.set(STORAGE_KEY, oversized)
+
+    await expect(loadMobileRelayHostOverlays(new Set(['host-1']))).resolves.toEqual(new Map())
+    await expect(saveMobileRelayHostOverlay(OVERLAY)).resolves.toBeUndefined()
+    expect(stored.get(STORAGE_KEY)).toBe(oversized)
   })
 })
