@@ -52,6 +52,16 @@ function createEditorStore(): StoreApi<AppState> {
       editorAutoSave: true,
       editorAutoSaveDelayMs: 1000
     },
+    repos: [],
+    worktreesByRepo: {
+      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+    },
+    detectedWorktreesByRepo: {},
+    runtimeEnvironments: [],
+    runtimeEnvironmentCatalogHydrated: true,
+    removedRuntimeEnvironmentIds: new Set(),
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
 }
@@ -177,7 +187,9 @@ describe('attachEditorAutosaveController', () => {
 
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/repo/file.ts',
-        content: 'edited'
+        content: 'edited',
+        connectionId: undefined,
+        expectedExecutionHostId: 'local'
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
       expect(store.getState().editorDrafts).toEqual({})
@@ -204,7 +216,30 @@ describe('attachEditorAutosaveController', () => {
 
     const store = createEditorStore()
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
+    store.setState({
+      worktreesByRepo: {
+        'folder-workspace-1': [
+          {
+            id: workspaceKey,
+            repoId: 'folder-workspace-1',
+            path: '/home/neil/platform',
+            hostId: 'ssh:ssh-1'
+          }
+        ] as never
+      },
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 4
+          }
+        ]
+      ])
+    })
     store.getState().openFile({
       filePath: '/home/neil/platform/api/src/file.ts',
       relativePath: 'api/src/file.ts',
@@ -219,14 +254,13 @@ describe('attachEditorAutosaveController', () => {
     try {
       await requestDirtyFileSave()
 
-      expect(mocks.getConnectionIdForFile).toHaveBeenCalledWith(
-        workspaceKey,
-        '/home/neil/platform/api/src/file.ts'
-      )
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/home/neil/platform/api/src/file.ts',
         content: 'edited',
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        expectedExecutionHostId: 'ssh:ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 4
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
     } finally {
@@ -289,7 +323,13 @@ describe('attachEditorAutosaveController', () => {
       expect(runtimeCall).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.write',
-        params: { worktree: 'id:wt-1', relativePath: 'file.ts', content: 'edited' },
+        expectedEnvironmentPairingRevision: undefined,
+        params: {
+          worktree: 'id:wt-1',
+          relativePath: 'file.ts',
+          content: 'edited',
+          expectedExecutionHostId: 'local'
+        },
         timeoutMs: 15_000
       })
       expect(writeFile).not.toHaveBeenCalled()
@@ -333,7 +373,9 @@ describe('attachEditorAutosaveController', () => {
 
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/repo/file.md',
-        content: 'pending rich edit'
+        content: 'pending rich edit',
+        connectionId: undefined,
+        expectedExecutionHostId: 'local'
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
       expect(store.getState().editorDrafts).toEqual({})
@@ -568,7 +610,9 @@ describe('attachEditorAutosaveController', () => {
       await requestEditorFileSave({ fileId: '/repo/file.md' })
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/repo/file.md',
-        content: 'after save'
+        content: 'after save',
+        connectionId: undefined,
+        expectedExecutionHostId: 'local'
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
     } finally {

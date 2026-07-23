@@ -5910,17 +5910,24 @@ export class Store {
   }
 
   // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
-  persistPtyBinding(args: {
-    worktreeId: string
-    tabId: string
-    leafId: string
-    ptyId: string
-    incarnationId?: string
-    startupCwd?: string
-  }): void {
-    const session = this.state.workspaceSession
-    if (!session) {
-      return
+  persistPtyBinding(
+    args: {
+      worktreeId: string
+      tabId: string
+      leafId: string
+      ptyId: string
+      incarnationId?: string
+      startupCwd?: string
+    },
+    hostId?: string | null
+  ): void {
+    const resolvedHostId = this.resolveHostId(hostId)
+    const session = this.getWorkspaceSession(resolvedHostId)
+    if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolvedHostId]: session
+      }
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
     const paneKey = `${args.tabId}:${args.leafId}`
@@ -5935,6 +5942,16 @@ export class Store {
       session.terminalTopologyRevisionByRepoId = {
         ...session.terminalTopologyRevisionByRepoId,
         [repoId]: currentRevision + 1
+      }
+    }
+    const restoreSession = (): void => {
+      if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+        this.state.workspaceSession = sessionBeforeBinding
+      } else {
+        this.state.workspaceSessionsByHostId = {
+          ...this.state.workspaceSessionsByHostId,
+          [resolvedHostId]: sessionBeforeBinding
+        }
       }
     }
     if (args.incarnationId) {
@@ -5980,7 +5997,7 @@ export class Store {
       try {
         this.flushOrThrow()
       } catch (err) {
-        this.state.workspaceSession = sessionBeforeBinding
+        restoreSession()
         throw err
       }
       return
@@ -6028,7 +6045,7 @@ export class Store {
     try {
       this.flushOrThrow()
     } catch (err) {
-      this.state.workspaceSession = sessionBeforeBinding
+      restoreSession()
       throw err
     }
   }
@@ -6393,54 +6410,61 @@ export class Store {
     targetId: string,
     leases: SshRemotePtyLease[]
   ): boolean {
-    const session = this.state.workspaceSession
-    if (!leases?.length || !session) {
+    if (!leases?.length) {
       return false
     }
     let changed = false
-    for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-      for (const tab of tabs) {
-        if (
-          tab.ptyId &&
-          leases.some((lease) =>
-            this.sshRemotePtyLeaseMayReferenceBinding(lease, {
-              ptyId: tab.ptyId!,
-              worktreeId,
-              targetId,
-              tabId: tab.id
-            })
-          )
-        ) {
-          tab.ptyId = null
-          changed = true
-        }
-      }
-    }
-    for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
-      const bindings = layout.ptyIdsByLeafId
-      if (!bindings) {
-        continue
-      }
-      const worktreeId = Object.entries(session.tabsByWorktree ?? {}).find(([, tabs]) =>
-        tabs.some((tab) => tab.id === tabId)
-      )?.[0]
-      const nextBindings = Object.fromEntries(
-        Object.entries(bindings).filter(
-          ([leafId, ptyId]) =>
-            !leases.some((lease) =>
+    const sessions = new Set(
+      [
+        this.state.workspaceSession,
+        this.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)]
+      ].filter((session): session is WorkspaceSessionState => Boolean(session))
+    )
+    for (const session of sessions) {
+      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+        for (const tab of tabs) {
+          if (
+            tab.ptyId &&
+            leases.some((lease) =>
               this.sshRemotePtyLeaseMayReferenceBinding(lease, {
-                ptyId,
-                targetId,
+                ptyId: tab.ptyId!,
                 worktreeId,
-                tabId,
-                leafId
+                targetId,
+                tabId: tab.id
               })
             )
+          ) {
+            tab.ptyId = null
+            changed = true
+          }
+        }
+      }
+      for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
+        const bindings = layout.ptyIdsByLeafId
+        if (!bindings) {
+          continue
+        }
+        const worktreeId = Object.entries(session.tabsByWorktree ?? {}).find(([, tabs]) =>
+          tabs.some((tab) => tab.id === tabId)
+        )?.[0]
+        const nextBindings = Object.fromEntries(
+          Object.entries(bindings).filter(
+            ([leafId, ptyId]) =>
+              !leases.some((lease) =>
+                this.sshRemotePtyLeaseMayReferenceBinding(lease, {
+                  ptyId,
+                  targetId,
+                  worktreeId,
+                  tabId,
+                  leafId
+                })
+              )
+          )
         )
-      )
-      if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
-        layout.ptyIdsByLeafId = nextBindings
-        changed = true
+        if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
+          layout.ptyIdsByLeafId = nextBindings
+          changed = true
+        }
       }
     }
     if (changed) {

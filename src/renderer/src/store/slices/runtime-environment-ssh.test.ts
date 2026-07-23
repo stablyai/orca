@@ -80,6 +80,24 @@ describe('runtime-environment-ssh slice', () => {
     expect(store.getState().sshStateByEnvironment.get(ENV_A)).toBe(bucketBefore)
   })
 
+  it('publishes an authoritative connection generation change in the owning bucket', () => {
+    const store = createTestStore()
+    store.getState().setEnvironmentSshConnectionState(ENV_A, 'ssh-a', {
+      ...connState('ssh-a'),
+      connectionGeneration: 1
+    })
+    const bucketBefore = store.getState().sshStateByEnvironment.get(ENV_A)
+
+    store.getState().setEnvironmentSshConnectionState(ENV_A, 'ssh-a', {
+      ...connState('ssh-a'),
+      connectionGeneration: 2
+    })
+
+    const bucketAfter = store.getState().sshStateByEnvironment.get(ENV_A)
+    expect(bucketAfter).not.toBe(bucketBefore)
+    expect(bucketAfter?.connectionStates.get('ssh-a')?.connectionGeneration).toBe(2)
+  })
+
   it('flips the hydrated flag on the first fetch of an empty target list', () => {
     const store = createTestStore()
     store.getState().setEnvironmentSshTargetsMetadata(ENV_A, [])

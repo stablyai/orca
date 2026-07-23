@@ -97,7 +97,8 @@ export async function refreshFileExplorerExpandedDirs({
               worktreePath,
               listing.operationOwner
             ),
-            loading: false
+            loading: false,
+            operationOwner: listing.operationOwner
           }
         }
       } catch {
@@ -184,7 +185,10 @@ export function useFileExplorerTree(
           worktreePath,
           listing.operationOwner
         )
-        setDirCache((prev) => ({ ...prev, [dirPath]: { children, loading: false } }))
+        setDirCache((prev) => ({
+          ...prev,
+          [dirPath]: { children, loading: false, operationOwner: listing.operationOwner }
+        }))
         return true
       } catch (error) {
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {

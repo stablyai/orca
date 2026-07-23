@@ -109,7 +109,7 @@ export function seedStore(
   // so the test files can stay under the enforced max-lines limit without
   // disabling the lint rule and hiding further growth.
   store.setState({
-    repos: [TEST_REPO],
+    repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     ...state
   })
 }
@@ -137,6 +137,17 @@ export function makeWorktree(
     lastActivityAt: 0,
     ...overrides
   }
+}
+
+export function makeRuntimeOwnedWorktree(
+  overrides: Partial<Worktree> & { id: string; repoId: string },
+  runtimeEnvironmentId = 'runtime-1'
+): Worktree {
+  return makeWorktree({
+    ...overrides,
+    hostId: overrides.hostId ?? 'local',
+    runtimeOwnerEnvironmentId: runtimeEnvironmentId
+  })
 }
 
 export function makeTab(

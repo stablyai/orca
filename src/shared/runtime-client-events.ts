@@ -39,9 +39,8 @@ export type RuntimeClientEvent =
 export type RuntimeClientEventStreamMessage =
   | ({ type: 'ready'; subscriptionId: string } & {
       snapshot?: {
-        // Reserved for future hydration. Current clients refresh through the
-        // existing repo/worktree RPCs after receiving server events.
         repos?: unknown[]
+        sshStates?: { targetId: string; state: SshConnectionState }[]
       }
     })
   | RuntimeClientEvent

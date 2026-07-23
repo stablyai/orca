@@ -190,6 +190,10 @@ function activeTabId(response: Record<string, unknown>): string | null {
   return (response.result as RuntimeMobileSessionTabsResult | undefined)?.activeTabId ?? null
 }
 
+function snapshotVersion(response: Record<string, unknown>): number {
+  return (response.result as RuntimeMobileSessionTabsResult | undefined)?.snapshotVersion ?? -1
+}
+
 function seedSessionTabs(runtime: OrcaRuntimeService): void {
   const tabs = ['host-tab', 'client-a-tab', 'client-a2-tab', 'client-b-tab'].map((id, index) => ({
     type: 'terminal' as const,
@@ -410,11 +414,17 @@ describe('paired runtime navigation isolation', () => {
         notifyClients: false
       }
     })
-    expect(activeTabId(await harness.readerA.next('select-a2'))).toBe('client-a2-tab')
+    const selectA2 = await harness.readerA.next('select-a2')
+    expect(activeTabId(selectA2)).toBe('client-a2-tab')
 
     harness.runtime.notifyMobileSessionTabsChanged(SESSION_WORKTREE_ID)
     const [updateA, updateB] = await Promise.all([
-      harness.readerA.next('tabs-a', (response) => resultType(response) === 'updated'),
+      harness.readerA.next(
+        'tabs-a',
+        (response) =>
+          resultType(response) === 'updated' &&
+          snapshotVersion(response) >= snapshotVersion(selectA2)
+      ),
       harness.readerB.next('tabs-b', (response) => resultType(response) === 'updated')
     ])
     expect(activeTabId(updateA)).toBe('client-a2-tab')

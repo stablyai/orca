@@ -13,6 +13,7 @@ import {
 import { e2eConfig } from '@/lib/e2e-config'
 import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 
 type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -209,11 +210,20 @@ class RemoteRuntimeTerminalMultiplexer {
 
   constructor(
     private readonly environmentId: string,
+    private readonly environmentRevision: number | undefined,
     private readonly releaseIfCurrent: (
       environmentId: string,
       multiplexer: RemoteRuntimeTerminalMultiplexer
     ) => void
   ) {}
+
+  matchesCurrentEnvironmentRevision(): boolean {
+    return getRuntimeEnvironmentRevision(this.environmentId) === this.environmentRevision
+  }
+
+  closeForEnvironmentReplacement(): void {
+    this.handleClose('Runtime environment pairing changed.')
+  }
 
   async subscribeTerminal(args: {
     terminal: string
@@ -340,7 +350,8 @@ class RemoteRuntimeTerminalMultiplexer {
             selector: this.environmentId,
             method: 'terminal.multiplex',
             params: {},
-            timeoutMs: 15_000
+            timeoutMs: 15_000,
+            expectedEnvironmentPairingRevision: this.environmentRevision
           },
           {
             onResponse: (response) => this.handleResponse(response),
@@ -380,6 +391,10 @@ class RemoteRuntimeTerminalMultiplexer {
   }
 
   private handleResponse(response: RuntimeRpcResponse<unknown>): void {
+    if (!this.matchesCurrentEnvironmentRevision()) {
+      this.closeForEnvironmentReplacement()
+      return
+    }
     let event: TerminalMultiplexEvent
     try {
       event = unwrapRuntimeRpcResult(response) as TerminalMultiplexEvent
@@ -440,6 +455,10 @@ class RemoteRuntimeTerminalMultiplexer {
   }
 
   private handleBinary(bytes: Uint8Array<ArrayBufferLike>): void {
+    if (!this.matchesCurrentEnvironmentRevision()) {
+      this.closeForEnvironmentReplacement()
+      return
+    }
     const frame = decodeTerminalStreamFrame(bytes)
     if (!frame) {
       return
@@ -757,7 +776,7 @@ class RemoteRuntimeTerminalMultiplexer {
     opcode: TerminalStreamOpcode,
     payload: Uint8Array<ArrayBufferLike> = new Uint8Array()
   ): boolean {
-    if (!this.ready || !this.subscription) {
+    if (!this.matchesCurrentEnvironmentRevision() || !this.ready || !this.subscription) {
       return false
     }
     this.subscription.sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: 0, payload }))
@@ -838,9 +857,14 @@ export function getRemoteRuntimeTerminalMultiplexer(
 ): RemoteRuntimeTerminalMultiplexer {
   exposeE2eRemoteTerminalMultiplexAckGate()
   let multiplexer = multiplexers.get(environmentId)
+  if (multiplexer && !multiplexer.matchesCurrentEnvironmentRevision()) {
+    multiplexer.closeForEnvironmentReplacement()
+    multiplexer = undefined
+  }
   if (!multiplexer) {
     multiplexer = new RemoteRuntimeTerminalMultiplexer(
       environmentId,
+      getRuntimeEnvironmentRevision(environmentId),
       releaseRemoteRuntimeTerminalMultiplexer
     )
     multiplexers.set(environmentId, multiplexer)

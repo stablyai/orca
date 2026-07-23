@@ -639,7 +639,8 @@
         "nativeDropTooManyPathsDescription": "Suelta {{value0}} archivos o menos a la vez.",
         "nativeDropTooManyPaths": "Has soltado demasiados archivos.",
         "nativeDropPathsTooLargeDescription": "Suelta menos archivos o usa una lista de rutas más corta.",
-        "nativeDropPathsTooLarge": "La lista de rutas soltadas es demasiado grande."
+        "nativeDropPathsTooLarge": "La lista de rutas soltadas es demasiado grande.",
+        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects."
       },
       "useIpcEvents": {
         "0e3cf53060": "Pestaña del navegador {{value0}} no encontrada",
@@ -6289,7 +6290,10 @@
           "addPlannedHostToHost": "Agregar {{host}}",
           "addPlannedHostConfirm": "Esto solo registra que el proyecto debería estar disponible en este host. Puedes agregar la carpeta o clonar más tarde.",
           "projectRuntime": "Runtime del proyecto",
-          "projectRuntimeDescription": "Elige si este proyecto se ejecuta en Windows o WSL."
+          "projectRuntimeDescription": "Elige si este proyecto se ejecuta en Windows o WSL.",
+          "hostStateDisconnected": "Disconnected",
+          "hostStateUnknown": "Unknown",
+          "nestedHostLabel": "{{value0}} via {{value1}}"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Plantilla de comando",

@@ -639,7 +639,8 @@
         "nativeDropTooManyPathsDescription": "一度にドロップできるファイルは {{value0}} 個以下です。",
         "nativeDropTooManyPaths": "ドロップに含まれるファイルが多すぎます。",
         "nativeDropPathsTooLargeDescription": "ファイルを減らすか、より短いパス一覧を使用してください。",
-        "nativeDropPathsTooLarge": "ドロップされたパス一覧が大きすぎます。"
+        "nativeDropPathsTooLarge": "ドロップされたパス一覧が大きすぎます。",
+        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects."
       },
       "useIpcEvents": {
         "0e3cf53060": "ブラウザタブ {{value0}} が見つかりません",
@@ -6311,7 +6312,10 @@
           "addPlannedHostToHost": "Add {{host}}",
           "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later.",
           "projectRuntime": "Project Runtime",
-          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
+          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+          "hostStateDisconnected": "Disconnected",
+          "hostStateUnknown": "Unknown",
+          "nestedHostLabel": "{{value0}} via {{value1}}"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "コマンドテンプレート",

@@ -639,7 +639,8 @@
         "nativeDropTooManyPathsDescription": "每次最多拖放 {{value0}} 个文件。",
         "nativeDropTooManyPaths": "拖放包含过多文件。",
         "nativeDropPathsTooLargeDescription": "请减少文件数量或使用更短的路径列表。",
-        "nativeDropPathsTooLarge": "拖放的路径列表过大。"
+        "nativeDropPathsTooLarge": "拖放的路径列表过大。",
+        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects."
       },
       "useIpcEvents": {
         "0e3cf53060": "未找到浏览器选项卡 {{value0}}",
@@ -6274,7 +6275,10 @@
           "addPlannedHostToHost": "添加 {{host}}",
           "addPlannedHostConfirm": "这仅记录项目应在此主机上可用。你可以稍后添加文件夹或克隆。",
           "projectRuntime": "项目运行时",
-          "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。"
+          "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。",
+          "hostStateDisconnected": "Disconnected",
+          "hostStateUnknown": "Unknown",
+          "nestedHostLabel": "{{value0}} via {{value1}}"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "提示词模板",

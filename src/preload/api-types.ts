@@ -32,6 +32,7 @@ import type {
 } from '../shared/terminal-render-desync-evidence'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
+import type { SshMutationExpectation } from '../shared/ssh-types'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -2503,20 +2504,32 @@ export type PreloadApi = {
       rootPath: string
       connectionId?: string
     }) => Promise<MarkdownDocument[]>
-    writeFile: (args: { filePath: string; content: string; connectionId?: string }) => Promise<void>
-    createFile: (args: { filePath: string; connectionId?: string }) => Promise<void>
-    createDir: (args: { dirPath: string; connectionId?: string }) => Promise<void>
-    rename: (args: { oldPath: string; newPath: string; connectionId?: string }) => Promise<void>
-    copy: (args: {
-      sourcePath: string
-      destinationPath: string
-      connectionId?: string
-    }) => Promise<void>
-    deletePath: (args: {
-      targetPath: string
-      connectionId?: string
-      recursive?: boolean
-    }) => Promise<void>
+    writeFile: (
+      args: { filePath: string; content: string; connectionId?: string } & SshMutationExpectation
+    ) => Promise<void>
+    createFile: (
+      args: { filePath: string; connectionId?: string } & SshMutationExpectation
+    ) => Promise<void>
+    createDir: (
+      args: { dirPath: string; connectionId?: string } & SshMutationExpectation
+    ) => Promise<void>
+    rename: (
+      args: { oldPath: string; newPath: string; connectionId?: string } & SshMutationExpectation
+    ) => Promise<void>
+    copy: (
+      args: {
+        sourcePath: string
+        destinationPath: string
+        connectionId?: string
+      } & SshMutationExpectation
+    ) => Promise<void>
+    deletePath: (
+      args: {
+        targetPath: string
+        connectionId?: string
+        recursive?: boolean
+      } & SshMutationExpectation
+    ) => Promise<void>
     authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
     stat: (args: {
       filePath: string
@@ -2531,12 +2544,14 @@ export type PreloadApi = {
     }) => Promise<string[]>
     cancelListFiles: (args: { requestToken: string }) => Promise<void>
     search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>
-    importExternalPaths: (args: {
-      sourcePaths: string[]
-      destDir: string
-      connectionId?: string
-      ensureDir?: boolean
-    }) => Promise<{
+    importExternalPaths: (
+      args: {
+        sourcePaths: string[]
+        destDir: string
+        connectionId?: string
+        ensureDir?: boolean
+      } & SshMutationExpectation
+    ) => Promise<{
       results: (
         | {
             sourcePath: string
@@ -2581,11 +2596,13 @@ export type PreloadApi = {
           }
       )[]
     }>
-    resolveDroppedPathsForAgent: (args: {
-      paths: string[]
-      worktreePath: string
-      connectionId?: string
-    }) => Promise<{
+    resolveDroppedPathsForAgent: (
+      args: {
+        paths: string[]
+        worktreePath: string
+        connectionId?: string
+      } & SshMutationExpectation
+    ) => Promise<{
       resolvedPaths: string[]
       skipped: {
         sourcePath: string
@@ -3077,6 +3094,7 @@ export type PreloadApi = {
       method: string
       params?: unknown
       timeoutMs?: number
+      expectedEnvironmentPairingRevision?: number
     }) => Promise<RuntimeRpcResponse<unknown>>
     subscribe: (
       args: {
@@ -3084,6 +3102,7 @@ export type PreloadApi = {
         method: string
         params?: unknown
         timeoutMs?: number
+        expectedEnvironmentPairingRevision?: number
       },
       callbacks: {
         onResponse: (response: RuntimeRpcResponse<unknown>) => void

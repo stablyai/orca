@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { subscribeRuntimeClientEvents } from './runtime-client-events'
+import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 
 describe('subscribeRuntimeClientEvents', () => {
   it('subscribes to runtime client events and forwards event frames', async () => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
     const unsubscribe = vi.fn()
     let capturedOnResponse: ((response: unknown) => void) | undefined
     const subscribe = vi.fn(async (_args, nextCallbacks) => {
@@ -24,7 +26,8 @@ describe('subscribeRuntimeClientEvents', () => {
       {
         selector: 'env-1',
         method: 'runtime.clientEvents.subscribe',
-        timeoutMs: 15_000
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: 7
       },
       expect.objectContaining({
         onResponse: expect.any(Function),
@@ -132,5 +135,50 @@ describe('subscribeRuntimeClientEvents', () => {
       'cancelled',
       'woken'
     ])
+  })
+
+  it('applies the redacted SSH snapshot from the ready frame', async () => {
+    let capturedOnResponse: ((response: unknown) => void) | undefined
+    const subscribe = vi.fn(async (_args, nextCallbacks) => {
+      capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { subscriptionId: 'sub-1', unsubscribe: vi.fn() }
+    })
+    const onEvent = vi.fn()
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
+    await subscribeRuntimeClientEvents('env-1', onEvent)
+    if (!capturedOnResponse) {
+      throw new Error('Expected subscription callbacks')
+    }
+    capturedOnResponse({
+      ok: true,
+      result: {
+        type: 'ready',
+        subscriptionId: 'sub-1',
+        snapshot: {
+          sshStates: [
+            {
+              targetId: 'ssh-1',
+              state: {
+                targetId: 'ssh-1',
+                status: 'disconnected',
+                error: null,
+                reconnectAttempt: 0
+              }
+            }
+          ]
+        }
+      }
+    })
+
+    expect(onEvent).toHaveBeenCalledWith({
+      type: 'sshStateChanged',
+      targetId: 'ssh-1',
+      state: {
+        targetId: 'ssh-1',
+        status: 'disconnected',
+        error: null,
+        reconnectAttempt: 0
+      }
+    })
   })
 })

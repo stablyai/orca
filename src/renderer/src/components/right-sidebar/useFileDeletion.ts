@@ -7,7 +7,12 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
 import { runBatchDeletion, selectDeletionRoots } from './file-explorer-batch-deletion'
 import type { TreeNode } from './file-explorer-types'
-import { getFileExplorerOperationRoute } from './file-explorer-operation-owner'
+import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
+import {
+  getFileDeleteErrorMessage,
+  isLocalDeleteNode,
+  needsRemoteDeleteConfirmation
+} from './file-explorer-delete-classification'
 import {
   requestEditorFileSave,
   requestEditorSaveQuiesce
@@ -39,21 +44,6 @@ type UseFileDeletionResult = {
   requestDeleteAll: (nodes: TreeNode[]) => void
 }
 
-// Why: gate the batch prompt on the same condition runDelete uses to actually
-// show its per-node confirm — a non-local owner with a resolvable route.
-// Unresolved owners throw before prompting, so a batch of them must not pop a
-// destructive dialog for deletes that provably cannot proceed.
-function needsRemoteDeleteConfirmation(node: TreeNode): boolean {
-  const operationOwner = node.operationOwner ?? { kind: 'unresolved' as const }
-  return operationOwner.kind !== 'local' && getFileExplorerOperationRoute(operationOwner) !== null
-}
-
-// Why: local deletes go to the OS Trash/Recycle Bin and stay recoverable, so a
-// mixed batch must not describe every item as a permanent remote delete.
-function isLocalDeleteNode(node: TreeNode): boolean {
-  return (node.operationOwner ?? { kind: 'unresolved' as const }).kind === 'local'
-}
-
 export function useFileDeletion({
   activeWorktreeId,
   openFiles,
@@ -64,10 +54,6 @@ export function useFileDeletion({
 }: UseFileDeletionParams): UseFileDeletionResult {
   const confirm = useConfirmationDialog()
   const deleteShortcutLabel = useShortcutLabel('fileExplorer.delete')
-  const unresolvedDeleteOwnerError = translate(
-    'auto.components.right.sidebar.useFileDeletion.8b8ee9d22f',
-    "Couldn't determine which host owns this file. Check the workspace connection and try again."
-  )
   // Why: track in-flight deletes per-path so repeated Del presses on the same
   // node don't issue duplicate IPC calls; the map is a ref to avoid re-renders.
   const inFlightRef = useRef<Set<string>>(new Set())
@@ -80,27 +66,16 @@ export function useFileDeletion({
       inFlightRef.current.add(node.path)
 
       const operationOwner = node.operationOwner ?? { kind: 'unresolved' as const }
-      const operationRoute = getFileExplorerOperationRoute(operationOwner)
       // Why: treat every non-local owner (ssh, runtime, unresolved) as remote
       // for confirm/error copy, then fail closed below when the route is null
       // so an unresolved owner never reaches local filesystem authorization.
       const isRemote = operationOwner.kind !== 'local'
 
       try {
-        if (!operationRoute) {
-          throw new Error(unresolvedDeleteOwnerError)
-        }
-        // Why: cached nodes can outlive host hydration changes; preserve the
-        // listing-time owner so deletion cannot jump to a same-path file elsewhere.
-        const state = useAppStore.getState()
-        const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
-        const connectionId = operationRoute.connectionId
-        const fileContext = {
-          settings: operationRoute.settings,
-          worktreeId: activeWorktreeId,
-          worktreePath: worktree?.path ?? null,
-          connectionId
-        }
+        const operationGuard = captureFileExplorerOperationGuard(
+          activeWorktreeId,
+          node.operationOwner
+        )
         // Why: remote deletes bypass OS Trash, and undo cannot recover
         // directories or unreadable files. Batch deletes confirm once up
         // front instead, so they skip the per-node prompt.
@@ -146,6 +121,20 @@ export function useFileDeletion({
         // writes cannot recreate the file after it's been trashed.
         await Promise.all(filesToClose.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
 
+        // Why: confirmation and autosave can outlive a reconnect or graph replacement; mutations require the owner generation that produced the row.
+        const operationRoute = operationGuard.assertCurrent()
+        const state = useAppStore.getState()
+        const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
+        const fileContext = {
+          settings: operationRoute.settings,
+          worktreeId: activeWorktreeId,
+          worktreePath: worktree?.path ?? null,
+          connectionId: operationRoute.connectionId,
+          expectedExecutionHostId: operationRoute.expectedExecutionHostId,
+          expectedSshTargetId: operationRoute.expectedSshTargetId,
+          expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
+        }
+
         const parentDir = dirname(node.path)
         // Why: read file content before deleting so undo can restore it.
         // We capture content first but only commit the undo entry after the
@@ -158,7 +147,7 @@ export function useFileDeletion({
               filePath: node.path,
               relativePath: node.relativePath,
               worktreeId: activeWorktreeId ?? undefined,
-              connectionId
+              connectionId: operationRoute.connectionId
             })
             if (!rf.isBinary) {
               undoContent = rf.content
@@ -169,16 +158,35 @@ export function useFileDeletion({
           }
         }
 
+        operationGuard.assertCurrent()
         await deleteRuntimePath(fileContext, node.path, node.isDirectory)
 
         if (undoContent !== undefined) {
           commitFileExplorerOp({
             undo: async () => {
-              await writeRuntimeFile(fileContext, node.path, undoContent)
+              const currentRoute = operationGuard.assertCurrent()
+              await writeRuntimeFile(
+                {
+                  ...fileContext,
+                  settings: currentRoute.settings,
+                  connectionId: currentRoute.connectionId
+                },
+                node.path,
+                undoContent
+              )
               await refreshDir(parentDir)
             },
             redo: async () => {
-              await deleteRuntimePath(fileContext, node.path, node.isDirectory)
+              const currentRoute = operationGuard.assertCurrent()
+              await deleteRuntimePath(
+                {
+                  ...fileContext,
+                  settings: currentRoute.settings,
+                  connectionId: currentRoute.connectionId
+                },
+                node.path,
+                node.isDirectory
+              )
               await refreshDir(parentDir)
             }
           })
@@ -218,9 +226,10 @@ export function useFileDeletion({
         return true
       } catch (error) {
         const action = isRemote ? 'delete' : isWindows ? 'move to Recycle Bin' : 'move to Trash'
+        const errorMessage = getFileDeleteErrorMessage(error)
         toast.error(
-          error instanceof Error
-            ? error.message
+          errorMessage
+            ? errorMessage
             : translate(
                 'auto.components.right.sidebar.useFileDeletion.72691dfebc',
                 "Failed to {{value0}} '{{value1}}'.",
@@ -232,15 +241,7 @@ export function useFileDeletion({
         inFlightRef.current.delete(node.path)
       }
     },
-    [
-      activeWorktreeId,
-      closeFile,
-      confirm,
-      isWindows,
-      openFiles,
-      refreshDir,
-      unresolvedDeleteOwnerError
-    ]
+    [activeWorktreeId, closeFile, confirm, isWindows, openFiles, refreshDir]
   )
 
   const requestDelete = useCallback(

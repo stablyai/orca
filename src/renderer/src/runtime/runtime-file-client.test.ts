@@ -20,15 +20,23 @@ import {
   searchRuntimeFiles,
   statRuntimePath,
   subscribeRuntimeFileChanges,
+  writeRuntimeFile,
   type RuntimeReadableFileContent
 } from './runtime-file-client'
-import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import {
+  clearRuntimeCompatibilityCacheForTests,
+  markRuntimeEnvironmentCompatible
+} from './runtime-rpc-client'
+import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import {
+  FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
+  FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 
 const fsReadFile = vi.fn()
+const fsWriteFile = vi.fn()
 const fsOnChanged = vi.fn()
 const fsCopy = vi.fn()
 const fsCreateDir = vi.fn()
@@ -56,7 +64,9 @@ const runtimeCall = vi.fn()
 beforeEach(() => {
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   clearRuntimeCompatibilityCacheForTests()
+  replaceRuntimeEnvironmentRevisions([])
   fsReadFile.mockReset()
+  fsWriteFile.mockReset()
   fsOnChanged.mockReset()
   fsCopy.mockReset()
   fsCreateDir.mockReset()
@@ -88,7 +98,8 @@ beforeEach(() => {
         ok: true,
         result: {
           runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+          capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY]
         },
         _meta: { runtimeId: 'remote-runtime' }
       })
@@ -99,6 +110,7 @@ beforeEach(() => {
     api: {
       fs: {
         readFile: fsReadFile,
+        writeFile: fsWriteFile,
         onFsChanged: fsOnChanged,
         copy: fsCopy,
         createDir: fsCreateDir,
@@ -145,6 +157,47 @@ describe('runtime file client', () => {
 
     expect(fsReadFile).toHaveBeenCalledWith({ filePath: '/repo/readme.md', connectionId: 'ssh-1' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('binds direct SSH mutations to the captured target and generation', async () => {
+    const context = {
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      connectionId: 'ssh-1',
+      expectedExecutionHostId: 'ssh:ssh-1' as const,
+      expectedSshTargetId: 'ssh-1',
+      expectedSshConnectionGeneration: 5
+    }
+
+    await writeRuntimeFile(context, '/repo/a.ts', 'a')
+    await renameRuntimePath(context, '/repo/a.ts', '/repo/b.ts')
+    await deleteRuntimePath(context, '/repo/b.ts')
+
+    expect(fsWriteFile).toHaveBeenCalledWith({
+      filePath: '/repo/a.ts',
+      content: 'a',
+      connectionId: 'ssh-1',
+      expectedExecutionHostId: 'ssh:ssh-1',
+      expectedSshTargetId: 'ssh-1',
+      expectedSshConnectionGeneration: 5
+    })
+    expect(fsRename).toHaveBeenCalledWith({
+      oldPath: '/repo/a.ts',
+      newPath: '/repo/b.ts',
+      connectionId: 'ssh-1',
+      expectedExecutionHostId: 'ssh:ssh-1',
+      expectedSshTargetId: 'ssh-1',
+      expectedSshConnectionGeneration: 5
+    })
+    expect(fsDeletePath).toHaveBeenCalledWith({
+      targetPath: '/repo/b.ts',
+      connectionId: 'ssh-1',
+      expectedExecutionHostId: 'ssh:ssh-1',
+      recursive: undefined,
+      expectedSshTargetId: 'ssh-1',
+      expectedSshConnectionGeneration: 5
+    })
   })
 
   it('routes worktree-relative text reads through the selected runtime environment', async () => {
@@ -825,7 +878,9 @@ describe('runtime file client', () => {
     const context = {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreeId: 'wt-1',
-      worktreePath: '/remote/repo'
+      worktreePath: '/remote/repo',
+      expectedSshTargetId: 'ssh-1',
+      expectedSshConnectionGeneration: 7
     }
 
     await createRuntimePath(context, '/remote/repo/src/new.ts', 'file')
@@ -840,7 +895,13 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
       method: 'files.createFile',
-      params: { worktree: 'id:wt-1', relativePath: 'src/new.ts' },
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'src/new.ts',
+        expectedExecutionHostId: 'ssh:ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 7
+      },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
@@ -849,7 +910,10 @@ describe('runtime file client', () => {
       params: {
         worktree: 'id:wt-1',
         oldRelativePath: 'src/new.ts',
-        newRelativePath: 'src/renamed.ts'
+        newRelativePath: 'src/renamed.ts',
+        expectedExecutionHostId: 'ssh:ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 7
       },
       timeoutMs: 15_000
     })
@@ -859,16 +923,308 @@ describe('runtime file client', () => {
       params: {
         worktree: 'id:wt-1',
         sourceRelativePath: 'src/renamed.ts',
-        destinationRelativePath: 'src/renamed copy.ts'
+        destinationRelativePath: 'src/renamed copy.ts',
+        expectedExecutionHostId: 'ssh:ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 7
       },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
       selector: 'env-1',
       method: 'files.delete',
-      params: { worktree: 'id:wt-1', relativePath: 'src/renamed.ts', recursive: false },
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'src/renamed.ts',
+        recursive: false,
+        expectedExecutionHostId: 'ssh:ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 7
+      },
       timeoutMs: 15_000
     })
+  })
+
+  it('refuses HUB-local mutations before RPC when the HUB lacks ownership support', async () => {
+    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'status.get') {
+        return Promise.resolve({
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+            capabilities: []
+          },
+          _meta: { runtimeId: 'old-hub-runtime' }
+        })
+      }
+      return runtimeEnvironmentCall(args)
+    })
+
+    await expect(
+      writeRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
+          worktreeId: 'wt-hub-local',
+          worktreePath: '/hub/repo',
+          expectedExecutionHostId: 'local'
+        },
+        '/hub/repo/readme.md',
+        'changed'
+      )
+    ).rejects.toThrow(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
+
+    expect(runtimeEnvironmentTransportCall).toHaveBeenCalledWith({
+      selector: 'env-old-hub',
+      method: 'status.get',
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(fsWriteFile).not.toHaveBeenCalled()
+  })
+
+  it('refuses nested SSH mutations before RPC when the HUB lacks ownership support', async () => {
+    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'status.get') {
+        return Promise.resolve({
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+            capabilities: []
+          },
+          _meta: { runtimeId: 'old-hub-runtime' }
+        })
+      }
+      return runtimeEnvironmentCall(args)
+    })
+
+    await expect(
+      renameRuntimePath(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
+          worktreeId: 'wt-nested-ssh',
+          worktreePath: '/ssh/repo',
+          connectionId: 'hub-ssh-1',
+          expectedExecutionHostId: 'ssh:hub-ssh-1',
+          expectedSshTargetId: 'hub-ssh-1',
+          expectedSshConnectionGeneration: 7
+        },
+        '/ssh/repo/old.md',
+        '/ssh/repo/new.md'
+      )
+    ).rejects.toThrow(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
+
+    expect(runtimeEnvironmentTransportCall).toHaveBeenCalledWith({
+      selector: 'env-old-hub',
+      method: 'status.get',
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(fsRename).not.toHaveBeenCalled()
+  })
+
+  it('keeps reads compatible with HUBs that lack mutation ownership support', async () => {
+    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'status.get') {
+        return Promise.resolve({
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+            capabilities: []
+          },
+          _meta: { runtimeId: 'old-hub-runtime' }
+        })
+      }
+      return runtimeEnvironmentCall(args)
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'read-dir',
+      ok: true,
+      result: [],
+      _meta: { runtimeId: 'old-hub-runtime' }
+    })
+
+    await expect(
+      readRuntimeDirectory(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
+          worktreeId: 'wt-nested-ssh',
+          worktreePath: '/ssh/repo',
+          connectionId: 'hub-ssh-1'
+        },
+        '/ssh/repo'
+      )
+    ).resolves.toEqual([])
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-old-hub',
+      method: 'files.readDir',
+      params: { worktree: 'id:wt-nested-ssh', relativePath: '' },
+      timeoutMs: 15_000
+    })
+    expect(fsReadFile).not.toHaveBeenCalled()
+  })
+
+  it('refuses old-HUB imports before staging client-local files', async () => {
+    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'status.get') {
+        return Promise.resolve({
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+            capabilities: []
+          },
+          _meta: { runtimeId: 'old-hub-runtime' }
+        })
+      }
+      return runtimeEnvironmentCall(args)
+    })
+
+    await expect(
+      importExternalPathsToRuntime(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
+          worktreeId: 'wt-nested-ssh',
+          worktreePath: '/ssh/repo',
+          expectedExecutionHostId: 'ssh:hub-ssh-1',
+          expectedSshTargetId: 'hub-ssh-1',
+          expectedSshConnectionGeneration: 7
+        },
+        ['/client/secret.txt'],
+        '/ssh/repo/uploads'
+      )
+    ).rejects.toThrow(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
+
+    expect(fsStageExternalPathsForRuntimeUpload).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(fsImportExternalPaths).not.toHaveBeenCalled()
+  })
+
+  it('re-probes mutation support so a HUB downgrade cannot reuse a cached capability', async () => {
+    let statusCalls = 0
+    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'status.get') {
+        statusCalls += 1
+        return Promise.resolve({
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+            capabilities: statusCalls === 1 ? [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY] : []
+          },
+          _meta: { runtimeId: statusCalls === 1 ? 'new-hub-runtime' : 'old-hub-runtime' }
+        })
+      }
+      return runtimeEnvironmentCall(args)
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'write',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'new-hub-runtime' }
+    })
+    const context = {
+      settings: { activeRuntimeEnvironmentId: 'env-downgraded' },
+      worktreeId: 'wt-hub-local',
+      worktreePath: '/hub/repo',
+      expectedExecutionHostId: 'local' as const
+    }
+
+    await writeRuntimeFile(context, '/hub/repo/readme.md', 'first')
+    await expect(deleteRuntimePath(context, '/hub/repo/readme.md')).rejects.toThrow(
+      FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE
+    )
+
+    expect(statusCalls).toBe(3)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.delete' })
+    )
+    expect(fsDeletePath).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when a same-id re-pair occurs after the capability probe', async () => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-repaired', createdAt: 1, pairingRevision: 41 }])
+    markRuntimeEnvironmentCompatible('env-repaired')
+    let currentRevision = 41
+    runtimeEnvironmentTransportCall.mockImplementation(
+      (args: { method: string; expectedEnvironmentPairingRevision?: number }) => {
+        if (args.expectedEnvironmentPairingRevision !== currentRevision) {
+          return Promise.resolve({
+            id: args.method,
+            ok: false,
+            error: {
+              code: 'runtime_environment_repaired',
+              message: 'Runtime environment was re-paired before the mutation.'
+            },
+            _meta: { runtimeId: 'old-hub-runtime' }
+          })
+        }
+        if (args.method === 'status.get') {
+          currentRevision = 42
+          replaceRuntimeEnvironmentRevisions([
+            { id: 'env-repaired', createdAt: 1, pairingRevision: currentRevision }
+          ])
+          return Promise.resolve({
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+              capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY]
+            },
+            _meta: { runtimeId: 'new-hub-runtime' }
+          })
+        }
+        return runtimeEnvironmentCall(args)
+      }
+    )
+
+    await expect(
+      deleteRuntimePath(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-repaired' },
+          worktreeId: 'wt-nested-ssh',
+          worktreePath: '/ssh/repo',
+          expectedExecutionHostId: 'ssh:hub-ssh-1',
+          expectedSshTargetId: 'hub-ssh-1',
+          expectedSshConnectionGeneration: 7
+        },
+        '/ssh/repo/readme.md'
+      )
+    ).rejects.toThrow('re-paired before the mutation')
+
+    expect(runtimeEnvironmentTransportCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-repaired',
+      method: 'status.get',
+      params: undefined,
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision: 41
+    })
+    expect(runtimeEnvironmentTransportCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-repaired',
+      method: 'files.delete',
+      params: {
+        worktree: 'id:wt-nested-ssh',
+        relativePath: 'readme.md',
+        recursive: undefined,
+        expectedExecutionHostId: 'ssh:hub-ssh-1',
+        expectedSshTargetId: 'hub-ssh-1',
+        expectedSshConnectionGeneration: 7
+      },
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision: 41
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(fsDeletePath).not.toHaveBeenCalled()
   })
 
   it('does not fall back to client-local mutations for remote-owned paths outside the worktree', async () => {
@@ -930,7 +1286,8 @@ describe('runtime file client', () => {
     expect(fsCopy).toHaveBeenCalledWith({
       sourcePath: '/repo/a.md',
       destinationPath: '/repo/a copy.md',
-      connectionId: undefined
+      connectionId: undefined,
+      expectedExecutionHostId: 'local'
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
@@ -941,7 +1298,9 @@ describe('runtime file client', () => {
         settings: { activeRuntimeEnvironmentId: null },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 5
       },
       '/repo/a.md',
       '/repo/a copy.md'
@@ -950,7 +1309,10 @@ describe('runtime file client', () => {
     expect(fsCopy).toHaveBeenCalledWith({
       sourcePath: '/repo/a.md',
       destinationPath: '/repo/a copy.md',
-      connectionId: 'ssh-1'
+      connectionId: 'ssh-1',
+      expectedExecutionHostId: 'ssh:ssh-1',
+      expectedSshTargetId: 'ssh-1',
+      expectedSshConnectionGeneration: 5
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
@@ -1042,25 +1404,39 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
       method: 'files.stat',
-      params: { worktree: 'id:wt-1', relativePath: 'uploads' },
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'uploads'
+      },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
       method: 'files.createDir',
-      params: { worktree: 'id:wt-1', relativePath: 'uploads' },
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'uploads',
+        expectedExecutionHostId: 'local'
+      },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
       selector: 'env-1',
       method: 'files.stat',
-      params: { worktree: 'id:wt-1', relativePath: 'uploads/assets' },
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'uploads/assets'
+      },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
       selector: 'env-1',
       method: 'files.createDirNoClobber',
-      params: { worktree: 'id:wt-1', relativePath: 'uploads/assets' },
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'uploads/assets',
+        expectedExecutionHostId: 'local'
+      },
       timeoutMs: 15_000
     })
     const smallWriteCall = runtimeEnvironmentCall.mock.calls[4]?.[0] as {
@@ -1075,7 +1451,10 @@ describe('runtime file client', () => {
       params: {
         worktree: 'id:wt-1',
         relativePath: smallWriteCall.params.relativePath,
-        contentBase64: 'cG5n'
+        contentBase64: 'cG5n',
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       timeoutMs: 30_000
     })
@@ -1085,7 +1464,10 @@ describe('runtime file client', () => {
       params: {
         worktree: 'id:wt-1',
         tempRelativePath: smallWriteCall.params.relativePath,
-        finalRelativePath: 'uploads/assets/logo.png'
+        finalRelativePath: 'uploads/assets/logo.png',
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       timeoutMs: 30_000
     })
@@ -1095,7 +1477,10 @@ describe('runtime file client', () => {
       params: {
         worktree: 'id:wt-1',
         relativePath: smallWriteCall.params.relativePath,
-        recursive: false
+        recursive: false,
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       timeoutMs: 15_000
     })
@@ -1195,7 +1580,10 @@ describe('runtime file client', () => {
         worktree: 'id:wt-1',
         relativePath: chunkWriteCall.params.relativePath,
         contentBase64: firstChunk,
-        append: false
+        append: false,
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       timeoutMs: 30_000
     })
@@ -1206,7 +1594,10 @@ describe('runtime file client', () => {
         worktree: 'id:wt-1',
         relativePath: chunkWriteCall.params.relativePath,
         contentBase64: secondChunk,
-        append: true
+        append: true,
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       timeoutMs: 30_000
     })
@@ -1216,22 +1607,99 @@ describe('runtime file client', () => {
       params: {
         worktree: 'id:wt-1',
         tempRelativePath: chunkWriteCall.params.relativePath,
-        finalRelativePath: 'uploads/large.bin'
+        finalRelativePath: 'uploads/large.bin',
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       timeoutMs: 30_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(7, {
       selector: 'env-1',
       method: 'files.delete',
+      expectedEnvironmentPairingRevision: undefined,
       params: {
         worktree: 'id:wt-1',
         relativePath: chunkWriteCall.params.relativePath,
-        recursive: false
+        recursive: false,
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
       },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.writeBase64' })
+    )
+  })
+
+  it('stops a chunked upload when its owner generation changes between writes', async () => {
+    const firstChunk = 'A'.repeat(512 * 1024)
+    fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
+      sources: [
+        {
+          sourcePath: '/Users/me/large.bin',
+          status: 'staged',
+          name: 'large.bin',
+          kind: 'file',
+          entries: [{ relativePath: '', kind: 'file', contentBase64: `${firstChunk}BBBBBBBB` }]
+        }
+      ]
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'stat-destination',
+        ok: true,
+        result: { size: 0, isDirectory: true, mtime: 1 },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'stat-file-miss',
+        ok: false,
+        error: { code: 'not_found', message: 'not found' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockImplementationOnce(async () => {
+        ownerChanged = true
+        return {
+          id: 'write-chunk-1',
+          ok: true,
+          result: { ok: true },
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      })
+    let ownerChanged = false
+    const assertCurrent = vi.fn(() => {
+      if (ownerChanged) {
+        throw new Error('runtime owner generation changed')
+      }
+    })
+
+    await expect(
+      importExternalPathsToRuntime(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        ['/Users/me/large.bin'],
+        '/remote/repo/uploads',
+        { assertCurrent }
+      )
+    ).resolves.toMatchObject({
+      results: [{ status: 'failed', reason: 'runtime owner generation changed' }]
+    })
+
+    expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
+      'files.stat',
+      'files.stat',
+      'files.writeBase64Chunk'
+    ])
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.commitUpload' })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.delete' })
     )
   })
 
@@ -1316,7 +1784,14 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
       selector: 'env-1',
       method: 'files.delete',
-      params: { worktree: 'id:wt-1', relativePath: tempRelativePath, recursive: false },
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: tempRelativePath,
+        recursive: false,
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
+      },
       timeoutMs: 15_000
     })
   })
@@ -1398,7 +1873,12 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
       selector: 'env-1',
       method: 'files.delete',
-      params: { worktree: 'id:wt-1', relativePath: 'uploads/assets', recursive: true },
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'uploads/assets',
+        recursive: true,
+        expectedExecutionHostId: 'local'
+      },
       timeoutMs: 15_000
     })
   })
@@ -1421,7 +1901,9 @@ describe('runtime file client', () => {
         settings: { activeRuntimeEnvironmentId: null },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 5
       },
       ['/Users/me/readme.md'],
       '/repo',
@@ -1432,7 +1914,10 @@ describe('runtime file client', () => {
       sourcePaths: ['/Users/me/readme.md'],
       destDir: '/repo',
       connectionId: 'ssh-1',
-      ensureDir: true
+      expectedExecutionHostId: 'ssh:ssh-1',
+      ensureDir: true,
+      expectedSshTargetId: 'ssh-1',
+      expectedSshConnectionGeneration: 5
     })
     expect(fsStageExternalPathsForRuntimeUpload).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()

@@ -639,7 +639,8 @@
         "nativeDropTooManyPathsDescription": "한 번에 {{value0}}개 이하의 파일을 드롭하세요.",
         "nativeDropTooManyPaths": "드롭에 파일이 너무 많습니다.",
         "nativeDropPathsTooLargeDescription": "파일 수를 줄이거나 더 짧은 경로 목록을 사용하세요.",
-        "nativeDropPathsTooLarge": "드롭 경로 목록이 너무 큽니다."
+        "nativeDropPathsTooLarge": "드롭 경로 목록이 너무 큽니다.",
+        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects."
       },
       "useIpcEvents": {
         "0e3cf53060": "브라우저 탭 {{value0}}을(를) 찾을 수 없습니다",
@@ -6274,7 +6275,10 @@
           "addPlannedHostToHost": "{{host}} 추가",
           "addPlannedHostConfirm": "이 프로젝트를 이 호스트에서 사용할 예정이라는 사실만 기록합니다. 폴더 추가나 클론은 나중에 할 수 있습니다.",
           "projectRuntime": "프로젝트 런타임",
-          "projectRuntimeDescription": "이 프로젝트를 Windows에서 실행할지 WSL에서 실행할지 선택합니다."
+          "projectRuntimeDescription": "이 프로젝트를 Windows에서 실행할지 WSL에서 실행할지 선택합니다.",
+          "hostStateDisconnected": "Disconnected",
+          "hostStateUnknown": "Unknown",
+          "nestedHostLabel": "{{value0}} via {{value1}}"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "명령 템플릿",

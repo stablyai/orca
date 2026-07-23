@@ -83,6 +83,12 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  selectRuntimeAwareSshStatus,
+  selectRuntimeAwareSshTargetLabel
+} from '@/store/slices/runtime-environment-ssh'
+import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 
 type WorktreeRenameRequest = {
   worktreeId: string
@@ -331,14 +337,21 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   // SSH disconnected state
+  const sshOwnerEnvironmentId = useAppStore((s) =>
+    repo?.connectionId ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id) : null
+  )
   const sshStatus = useAppStore((s) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
     if (!repo?.connectionId || isRuntimeOwnedSshTargetId(repo.connectionId)) {
       return null
     }
-    const state = s.sshConnectionStates.get(repo.connectionId)
-    return state?.status ?? 'disconnected'
+    return selectRuntimeAwareSshStatus(s, sshOwnerEnvironmentId, repo.connectionId)
   })
+  useEffect(() => {
+    if (sshOwnerEnvironmentId) {
+      void hydrateRuntimeEnvironmentSshState(sshOwnerEnvironmentId).catch(() => {})
+    }
+  }, [sshOwnerEnvironmentId])
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   // Why: terminal views have their own reconnect overlay; reserve the blocking dialog for non-terminal views (default to terminal when ambiguous).
   const activeViewIsTerminal = useAppStore(
@@ -357,9 +370,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
-  // Why: read the target label from the store (hydrated in useIpcEvents.ts) instead of a listTargets IPC per card.
+  // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
   const sshTargetLabel = useAppStore((s) =>
-    repo?.connectionId ? (s.sshTargetLabels.get(repo.connectionId) ?? '') : ''
+    repo?.connectionId
+      ? selectRuntimeAwareSshTargetLabel(s, sshOwnerEnvironmentId, repo.connectionId)
+      : ''
   )
 
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)

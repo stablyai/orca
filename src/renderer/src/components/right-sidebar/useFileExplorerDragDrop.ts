@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
 import {
   getWorkspaceFileDragRejectionMessage,
   readWorkspaceFileDragPaths,
@@ -14,7 +13,8 @@ import {
 } from '@/lib/workspace-file-drag'
 import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import type { FileExplorerOperationOwner } from './file-explorer-types'
+import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -32,6 +32,7 @@ type UseFileExplorerDragDropParams = {
   refreshDir: (dirPath: string) => Promise<void>
   // Explorer scroll viewport used to auto-scroll while dragging near top/bottom edges
   scrollRef: RefObject<HTMLDivElement | null>
+  getOperationOwnerForPath: (path: string) => FileExplorerOperationOwner | undefined
 }
 
 type UseFileExplorerDragDropResult = {
@@ -101,7 +102,8 @@ export function useFileExplorerDragDrop({
   expanded,
   toggleDir,
   refreshDir,
-  scrollRef
+  scrollRef,
+  getOperationOwnerForPath
 }: UseFileExplorerDragDropParams): UseFileExplorerDragDropResult {
   const [isRootDragOver, setIsRootDragOver] = useState(false)
   const rootDragCounterRef = useRef(0)
@@ -207,18 +209,22 @@ export function useFileExplorerDragDrop({
       }
 
       const newPath = joinPath(destDir, fileName)
+      const operationOwner = getOperationOwnerForPath(sourcePath)
 
       const run = async (): Promise<void> => {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        const fileContext = {
-          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        }
-        // The coordinator quiesces saves, retargets the open sessions in place,
-        // and settles the move as one transaction (was: quiesce + rename + remap).
         try {
+          const operationGuard = captureFileExplorerOperationGuard(activeWorktreeId, operationOwner)
+          const operationRoute = operationGuard.route
+          const fileContext = {
+            settings: operationRoute.settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId: operationRoute.connectionId,
+            expectedExecutionHostId: operationRoute.expectedExecutionHostId,
+            expectedSshTargetId: operationRoute.expectedSshTargetId,
+            expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
+          }
+          operationGuard.assertCurrent()
           await executeOpenEditorPathMove({
             context: fileContext,
             fromPath: sourcePath,
@@ -228,6 +234,7 @@ export function useFileExplorerDragDrop({
           })
           commitFileExplorerOp({
             undo: async () => {
+              operationGuard.assertCurrent()
               await executeOpenEditorPathMove({
                 context: fileContext,
                 fromPath: newPath,
@@ -238,6 +245,7 @@ export function useFileExplorerDragDrop({
               await Promise.all([refreshDir(destDir), refreshDir(sourceDir)])
             },
             redo: async () => {
+              operationGuard.assertCurrent()
               await executeOpenEditorPathMove({
                 context: fileContext,
                 fromPath: sourcePath,
@@ -256,7 +264,7 @@ export function useFileExplorerDragDrop({
       }
       void run()
     },
-    [worktreePath, activeWorktreeId, refreshDir]
+    [worktreePath, activeWorktreeId, refreshDir, getOperationOwnerForPath]
   )
 
   const clearNativeDragState = useCallback(() => {

@@ -258,7 +258,10 @@ describe('useGitStatusPolling rerender stability', () => {
 
     await act(async () => {
       useAppStore.setState({
-        settings: { activeRuntimeEnvironmentId: 'env-2' } as AppState['settings']
+        worktreesByRepo: {
+          [REPO_ID]: [{ ...worktree, hostId: 'runtime:env-2' }],
+          [REPO_ID2]: [worktree2]
+        }
       })
     })
     await flushMicrotasks()

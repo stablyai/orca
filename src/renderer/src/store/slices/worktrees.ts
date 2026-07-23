@@ -76,6 +76,13 @@ import {
 } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
+  resolveWorktreeOperationRoute,
+  settingsForWorktreeOperationRoute
+} from '@/lib/worktree-operation-route'
+import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
+import { getEnvironmentSshStateGeneration } from './runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
+import {
   folderWorkspaceKey,
   getActiveSidebarWorkspaceId,
   isWorkspaceKey,
@@ -331,16 +338,30 @@ function toVisibleWorktree(worktree: DetectedWorktreeListResult['worktrees'][num
   return base
 }
 
-// Why: runtime worktree payloads report hostId "local" (owning host's own perspective) even for remote checkouts; re-stamp with the repo's execution host so remote terminals don't route locally.
-// Local-owned repos stay untouched, so an explicit local worktree still overrides a runtime repo owner.
+// Why: runtime payloads describe execution from the HUB's perspective; project that location without losing the paired transport owner.
 function withRepoHostOwnership<
-  T extends { hostId?: ExecutionHostId; projectId?: string; projectHostSetupId?: string }
+  T extends {
+    hostId?: ExecutionHostId
+    runtimeOwnerEnvironmentId?: string
+    projectId?: string
+    projectHostSetupId?: string
+  }
 >(worktree: T, hostId: ExecutionHostId, setup?: ProjectHostSetup): T {
-  const nextHostId = hostId === LOCAL_EXECUTION_HOST_ID ? worktree.hostId : hostId
+  const parsedOwner = parseExecutionHostId(hostId)
+  const runtimeOwnerEnvironmentId =
+    parsedOwner?.kind === 'runtime' ? parsedOwner.environmentId : undefined
+  const worktreeHost = parseExecutionHostId(worktree.hostId)
+  // Why: an SSH worktree reached through a paired HUB has two owners; retain the SSH execution host and stamp the HUB transport separately.
+  const nextHostId =
+    hostId === LOCAL_EXECUTION_HOST_ID ||
+    (runtimeOwnerEnvironmentId !== undefined && worktreeHost?.kind === 'ssh')
+      ? worktree.hostId
+      : hostId
   const projectId = worktree.projectId ?? setup?.projectId
   const projectHostSetupId = worktree.projectHostSetupId ?? setup?.id
   if (
     nextHostId === worktree.hostId &&
+    runtimeOwnerEnvironmentId === worktree.runtimeOwnerEnvironmentId &&
     projectId === worktree.projectId &&
     projectHostSetupId === worktree.projectHostSetupId
   ) {
@@ -349,9 +370,10 @@ function withRepoHostOwnership<
   return {
     ...worktree,
     ...(nextHostId ? { hostId: nextHostId } : {}),
+    runtimeOwnerEnvironmentId,
     ...(projectId ? { projectId } : {}),
     ...(projectHostSetupId ? { projectHostSetupId } : {})
-  }
+  } as T
 }
 
 function repoHostId(
@@ -457,17 +479,32 @@ function worktreeHostMatchOptions(
 }
 
 function worktreeMatchesHost(
-  worktree: { hostId?: ExecutionHostId },
+  worktree: { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string },
   hostId: ExecutionHostId,
   options: WorktreeHostMatchOptions = {}
 ): boolean {
+  const parsedRefreshHost = parseExecutionHostId(hostId)
+  if (parsedRefreshHost?.kind === 'runtime') {
+    if (worktree.runtimeOwnerEnvironmentId) {
+      return worktree.runtimeOwnerEnvironmentId === parsedRefreshHost.environmentId
+    }
+    if (worktree.hostId) {
+      return worktree.hostId === hostId
+    }
+    return options.unhostedWorktreesMatchHost ?? false
+  }
+  if (worktree.runtimeOwnerEnvironmentId) {
+    return false
+  }
   if (worktree.hostId) {
     return worktree.hostId === hostId
   }
   return options.unhostedWorktreesMatchHost ?? hostId === LOCAL_EXECUTION_HOST_ID
 }
 
-function mergeWorktreesForHost<T extends { hostId?: ExecutionHostId }>(
+function mergeWorktreesForHost<
+  T extends { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
+>(
   current: readonly T[] | undefined,
   refreshed: readonly T[],
   hostId: ExecutionHostId,
@@ -828,40 +865,15 @@ function settingsForKnownRepoOwner(
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
 }
 
-function settingsForExecutionHostOwner(
-  settings: AppState['settings'],
-  executionHostId: string | null | undefined
-) {
-  const parsed = parseExecutionHostId(executionHostId)
-  if (parsed?.kind === 'runtime') {
-    return settings
-      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
-  }
-  if (parsed?.kind === 'local' || parsed?.kind === 'ssh') {
-    return settings
-      ? { ...settings, activeRuntimeEnvironmentId: null }
-      : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
-  }
-  return settings
-}
-
 function settingsForWorktreeOwner(
   state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
   worktreeId: string
 ) {
-  const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
-  if (worktree?.hostId) {
-    return settingsForExecutionHostOwner(state.settings, worktree.hostId)
+  const route = resolveWorktreeOperationRoute(state, worktreeId)
+  if (!route) {
+    throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
   }
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const detected = state.detectedWorktreesByRepo[repoId]?.worktrees.find(
-    (entry) => entry.id === worktreeId
-  )
-  if (detected?.hostId) {
-    return settingsForExecutionHostOwner(state.settings, detected.hostId)
-  }
-  return settingsForRepoOwner(state, repoId)
+  return settingsForWorktreeOperationRoute(state.settings, route)
 }
 
 async function listDetectedWorktreesForRepo(
@@ -926,6 +938,8 @@ function detectedWorktreeRefreshKey(
   ]
   // Why: only remote targets run a compat preflight, so a foreground (reuse:false) refresh must re-probe not coalesce onto a stale-failure background scan; local targets have no preflight and stay coalesced.
   if (target.kind === 'environment') {
+    parts.push(`connection:${getEnvironmentSshStateGeneration(target.environmentId)}`)
+    parts.push(`runtime:${getRuntimeEnvironmentConnectionGeneration(target.environmentId)}`)
     parts.push(options.reuseRecentCompatibilityFailure === true ? 'reuse-failure' : 'reprobe')
   }
   return parts.join('\n')
@@ -941,6 +955,13 @@ async function listDetectedWorktreesForRepoCoalesced(
   }
 ): Promise<DetectedWorktreeListResult> {
   const key = detectedWorktreeRefreshKey(settings, repoId, options)
+  const target = getActiveRuntimeTarget(settings)
+  const connectionGeneration =
+    target.kind === 'environment' ? getEnvironmentSshStateGeneration(target.environmentId) : null
+  const runtimeConnectionGeneration =
+    target.kind === 'environment'
+      ? getRuntimeEnvironmentConnectionGeneration(target.environmentId)
+      : null
   const existing = detectedWorktreeRefreshesInFlight.get(key)
   if (existing) {
     return existing
@@ -951,7 +972,16 @@ async function listDetectedWorktreesForRepoCoalesced(
   })
   detectedWorktreeRefreshesInFlight.set(key, refresh)
   try {
-    return await refresh
+    const result = await refresh
+    if (
+      target.kind === 'environment' &&
+      (getEnvironmentSshStateGeneration(target.environmentId) !== connectionGeneration ||
+        getRuntimeEnvironmentConnectionGeneration(target.environmentId) !==
+          runtimeConnectionGeneration)
+    ) {
+      throw new Error('runtime_environment_generation_changed')
+    }
+    return result
   } finally {
     if (detectedWorktreeRefreshesInFlight.get(key) === refresh) {
       detectedWorktreeRefreshesInFlight.delete(key)
@@ -1204,41 +1234,6 @@ function getWorktreeHostId(
   }
   const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
   return repo ? getRepoExecutionHostId(repo) : null
-}
-
-function resolveWorktreeRemovalHost(
-  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
-  worktreeId: string
-): { hostId: ExecutionHostId | null; ambiguous: boolean } {
-  const hostIds = new Set<ExecutionHostId>()
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    for (const worktree of worktrees) {
-      if (worktree.id === worktreeId && worktree.hostId) {
-        hostIds.add(worktree.hostId)
-      }
-    }
-  }
-  for (const result of Object.values(state.detectedWorktreesByRepo)) {
-    for (const worktree of result.worktrees) {
-      if (worktree.id === worktreeId && worktree.hostId) {
-        hostIds.add(worktree.hostId)
-      }
-    }
-  }
-  if (hostIds.size > 1) {
-    return { hostId: null, ambiguous: true }
-  }
-  if (hostIds.size === 1) {
-    return { hostId: hostIds.values().next().value ?? null, ambiguous: false }
-  }
-
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const repoHostIds = new Set(
-    state.repos.filter((repo) => repo.id === repoId).map(getRepoExecutionHostId)
-  )
-  return repoHostIds.size > 1
-    ? { hostId: null, ambiguous: true }
-    : { hostId: repoHostIds.values().next().value ?? null, ambiguous: false }
 }
 
 function mergeLineageForHost(
@@ -3239,12 +3234,20 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   removeWorktree: async (worktreeId, force, options) => {
-    const removalOwner = resolveWorktreeRemovalHost(get(), worktreeId)
-    if (removalOwner.ambiguous) {
+    const forgetLocalOnly = options?.mode === 'forget-local'
+    const removalRoute = resolveWorktreeOperationRoute(get(), worktreeId)
+    if (!forgetLocalOnly && !removalRoute) {
       return { ok: false, error: WORKTREE_REMOVAL_AMBIGUOUS_ERROR }
     }
-    const hostId = removalOwner.hostId ?? undefined
-    const forgetLocalOnly = options?.mode === 'forget-local'
+    const hostId = removalRoute?.executionHostId ?? undefined
+    const removalGenerationGuard = removalRoute
+      ? captureWorktreeOperationGenerationGuard(
+          get,
+          worktreeId,
+          removalRoute,
+          () => new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+        )
+      : null
     set((s) => ({
       deleteStateByWorktreeId: {
         ...s.deleteStateByWorktreeId,
@@ -3266,7 +3269,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             get(),
             getRepoIdFromWorktreeId(worktreeId),
             'archive',
-            hostId
+            hostId,
+            removalRoute?.runtimeEnvironmentId
           )) === 'skip'
 
       const worktreeBeforeRemoval = get()
@@ -3275,24 +3279,24 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const terminalPtyIdsBeforeRemoval = (get().tabsByWorktree[worktreeId] ?? []).flatMap(
         (tab) => get().ptyIdsByTabId[tab.id] ?? []
       )
-      const currentOwner = resolveWorktreeRemovalHost(get(), worktreeId)
-      if (
-        currentOwner.ambiguous ||
-        (hostId && currentOwner.hostId && currentOwner.hostId !== hostId)
-      ) {
-        throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+      if (!forgetLocalOnly) {
+        removalGenerationGuard?.assertCurrent()
       }
       // Why: forget-local clears Orca's records via local IPC regardless of host — the remote is gone or unreachable.
       const target = getActiveRuntimeTarget(
-        hostId
-          ? settingsForExecutionHostOwner(get().settings, hostId)
-          : settingsForWorktreeOwner(get(), worktreeId)
+        removalRoute
+          ? settingsForWorktreeOperationRoute(get().settings, removalRoute)
+          : get().settings
+            ? { ...get().settings, activeRuntimeEnvironmentId: null }
+            : { activeRuntimeEnvironmentId: null }
       )
       const removalResult = await (forgetLocalOnly
         ? window.api.worktrees.forgetLocal({ worktreeId, hostId })
         : target.kind === 'local'
-          ? window.api.worktrees.remove({ worktreeId, hostId, force, skipArchive })
-          : callRuntimeRpc<RemoveWorktreeResult>(
+          ? (removalGenerationGuard?.assertCurrent(),
+            window.api.worktrees.remove({ worktreeId, hostId, force, skipArchive }))
+          : (removalGenerationGuard?.assertCurrent(),
+            callRuntimeRpc<RemoveWorktreeResult>(
               target,
               'worktree.rm',
               {
@@ -3301,7 +3305,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 runHooks: !skipArchive
               },
               { timeoutMs: 60_000 }
-            ))
+            )))
 
       // Why: invalidate stale probes once deletion is authoritative, so an old toast can't mutate a same-path replacement.
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
@@ -4830,16 +4834,20 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         )
       // Why: repo/setup catalogs can lag session hydration, so hosted worktree rows are ownership evidence during that gap.
       const recordWorktreeOwners = (
-        rowsByRepo: Record<string, readonly { hostId?: ExecutionHostId }[]>
+        rowsByRepo: Record<
+          string,
+          readonly { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }[]
+        >
       ): void => {
         for (const [repoId, rows] of Object.entries(rowsByRepo)) {
           for (const row of rows) {
-            if (!row.hostId) {
+            if (!row.hostId && !row.runtimeOwnerEnvironmentId) {
               continue
             }
-            const ownerSet = isRemovedRuntimeHostId(row.hostId, removed)
-              ? repoIdsWithRemovedOwners
-              : repoIdsWithSurvivingOwners
+            const ownerWasRemoved = row.runtimeOwnerEnvironmentId
+              ? removed.has(row.runtimeOwnerEnvironmentId)
+              : isRemovedRuntimeHostId(row.hostId, removed)
+            const ownerSet = ownerWasRemoved ? repoIdsWithRemovedOwners : repoIdsWithSurvivingOwners
             ownerSet.add(repoId)
           }
         }

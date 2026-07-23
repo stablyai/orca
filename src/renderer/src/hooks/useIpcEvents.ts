@@ -72,6 +72,9 @@ import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-even
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
+import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
 import {
@@ -92,7 +95,6 @@ import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState
 } from '@/runtime/runtime-environment-ssh-state'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
@@ -759,7 +761,13 @@ function getReachableRuntimeEnvironmentIds(): string[] {
 }
 
 export function buildRuntimeClientEventEnvironmentKey(environmentIds: string[]): string {
-  return [...new Set(environmentIds)].sort().join('\u0000')
+  return [...new Set(environmentIds)]
+    .sort()
+    .map(
+      (environmentId) =>
+        `${environmentId}:${getRuntimeEnvironmentConnectionGeneration(environmentId)}:${getEnvironmentSshStateGeneration(environmentId)}:${getRuntimeEnvironmentRevision(environmentId) ?? 'unknown'}`
+    )
+    .join('\u0000')
 }
 
 /** Ids in `next` not in `previous` — environments that just became connected (exported to unit-test on-connect discovery). */
@@ -967,10 +975,8 @@ export function useIpcEvents(): void {
 
     const runtimeProjectRefreshScheduler = createRuntimeProjectRefreshScheduler({
       refresh: async (environmentId) => {
-        if (!isPairedWebClientWindow()) {
-          // Why: refresh the env's SSH bucket on (re)connect so a pre-drop snapshot can't keep a reconnect overlay stale.
-          void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
-        }
+        // Why: refresh the env's SSH bucket on (re)connect so a pre-drop snapshot can't keep a reconnect overlay stale.
+        void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
         const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
         await refreshRuntimeProjectWorktrees(repos)
         await useAppStore.getState().fetchWorktreeLineage()
@@ -984,7 +990,11 @@ export function useIpcEvents(): void {
     let handleSshStateChangedEvent: ((data: { targetId: string; state: unknown }) => void) | null =
       null
 
-    const handleRuntimeClientEvent = (environmentId: string, event: RuntimeClientEvent): void => {
+    const handleRuntimeClientEvent = (
+      environmentId: string,
+      event: RuntimeClientEvent,
+      generation = getEnvironmentSshStateGeneration(environmentId)
+    ): void => {
       if (event.type === 'worktreeTerminalSleepState') {
         applyHostWorktreeTerminalSleepState(environmentId, event)
         return
@@ -994,12 +1004,12 @@ export function useIpcEvents(): void {
         return
       }
       if (event.type === 'sshStateChanged') {
-        // Why: a paired web client mirrors host SSH state globally (STA-1468); desktop routes it to the env's own bucket.
-        if (isPairedWebClientWindow()) {
-          handleSshStateChangedEvent?.({ targetId: event.targetId, state: event.state })
-        } else {
-          applyRuntimeEnvironmentSshStateChanged(environmentId, event.targetId, event.state)
-        }
+        applyRuntimeEnvironmentSshStateChanged(
+          environmentId,
+          event.targetId,
+          event.state,
+          generation
+        )
         return
       }
       if (event.type === 'worktreesChanged') {
@@ -1026,17 +1036,32 @@ export function useIpcEvents(): void {
 
     const runtimeClientEventsSync = createRuntimeClientEventsSync({
       getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
-      subscribe: (environmentId, onEvent, onError) =>
-        subscribeRuntimeClientEvents(environmentId, onEvent, onError, () => {
-          // Why: events during a transport gap are lost; a quick reconnect won't flip unreachable, so refetch (#7970).
-          runtimeProjectRefreshScheduler.request(environmentId)
-          if (isPairedWebClientWindow()) {
-            return
+      getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
+      subscribe: (environmentId, onEvent, onError) => {
+        const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
+        const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+        const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
+        return subscribeRuntimeClientEvents(
+          environmentId,
+          (event) => {
+            if (
+              sshGeneration === getEnvironmentSshStateGeneration(environmentId) &&
+              runtimeGeneration === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
+              runtimeRevision === getRuntimeEnvironmentRevision(environmentId)
+            ) {
+              onEvent(event)
+            }
+          },
+          onError,
+          () => {
+            // Why: events during a transport gap are lost; a quick reconnect won't flip unreachable, so refetch (#7970).
+            runtimeProjectRefreshScheduler.request(environmentId)
+            // Why: sshStateChanged events during the transport gap are lost, so downgrade the possibly-stale bucket, then refetch.
+            useAppStore.getState().markEnvironmentSshStateStale(environmentId)
+            void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
           }
-          // Why: sshStateChanged events during the transport gap are lost, so downgrade the possibly-stale bucket, then refetch.
-          useAppStore.getState().markEnvironmentSshStateStale(environmentId)
-          void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
-        }),
+        )
+      },
       onEvent: handleRuntimeClientEvent
     })
 

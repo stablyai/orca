@@ -15,6 +15,7 @@ import {
 } from './markdown-document-templates'
 import { requestMarkdownTemplateSelection } from './markdown-template-picker-request'
 import { joinPath } from './path'
+import type { EditorFileOperationProvenance } from './editor-file-operation-owner'
 
 export type UntitledMarkdownFileInfo = {
   filePath: string
@@ -24,11 +25,17 @@ export type UntitledMarkdownFileInfo = {
   isUntitled: true
   deleteUntouchedOnClose?: boolean
   mode: 'edit'
+  operationProvenance?: EditorFileOperationProvenance
 }
 
 type CreateUntitledMarkdownOptions = {
   template?: MarkdownDocumentTemplate
   now?: Date
+  operationProvenance?: EditorFileOperationProvenance
+  expectedSshTargetId?: string
+  expectedSshConnectionGeneration?: number
+  expectedExecutionHostId?: 'local' | `ssh:${string}`
+  assertOperationCurrent?: () => void
 }
 
 /**
@@ -48,7 +55,20 @@ export async function createUntitledMarkdownFile(
   const baseName = 'untitled'
   const ext = '.md'
   const MAX_ATTEMPTS = 100
-  const context = { settings, worktreeId, worktreePath, connectionId }
+  const context = {
+    settings,
+    worktreeId,
+    worktreePath,
+    connectionId,
+    expectedExecutionHostId: options.expectedExecutionHostId,
+    expectedSshTargetId: options.expectedSshTargetId,
+    expectedSshConnectionGeneration: options.expectedSshConnectionGeneration
+  }
+  const assertCurrent = (): void => {
+    if (options.operationProvenance) {
+      requireOperationAssertion(options.assertOperationCurrent)()
+    }
+  }
   const templateContent = options.template
     ? await readMarkdownDocumentTemplateContent(context, options.template)
     : null
@@ -65,14 +85,17 @@ export async function createUntitledMarkdownFile(
     const fileName = attempt === 1 ? `${baseName}${ext}` : `${baseName}-${attempt}${ext}`
     const filePath = joinPath(worktreePath, fileName)
 
+    assertCurrent()
     if (await runtimePathExists(context, filePath)) {
       continue
     }
 
     try {
+      assertCurrent()
       await createRuntimePath(context, filePath, 'file')
       if (templateContent !== null) {
         try {
+          assertCurrent()
           await writeRuntimeFile(
             context,
             filePath,
@@ -83,6 +106,7 @@ export async function createUntitledMarkdownFile(
             })
           )
         } catch (error) {
+          assertCurrent()
           await deleteRuntimePath(context, filePath).catch(() => undefined)
           throw error
         }
@@ -95,6 +119,7 @@ export async function createUntitledMarkdownFile(
         language: detectLanguage(fileName),
         isUntitled: true,
         deleteUntouchedOnClose: templateContent === null ? undefined : false,
+        operationProvenance: options.operationProvenance,
         mode: 'edit'
       }
     } catch (err) {
@@ -114,9 +139,25 @@ export async function createUntitledMarkdownFileWithTemplateSelection(
   worktreePath: string,
   worktreeId: string,
   connectionId?: string,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  operationProvenance?: EditorFileOperationProvenance,
+  expectedSshConnectionGeneration?: number,
+  expectedSshTargetId?: string,
+  expectedExecutionHostId?: 'local' | `ssh:${string}`,
+  assertOperationCurrent?: () => void
 ): Promise<UntitledMarkdownFileInfo | null> {
-  const context = { settings, worktreeId, worktreePath, connectionId }
+  if (operationProvenance) {
+    requireOperationAssertion(assertOperationCurrent)()
+  }
+  const context = {
+    settings,
+    worktreeId,
+    worktreePath,
+    connectionId,
+    expectedExecutionHostId,
+    expectedSshTargetId,
+    expectedSshConnectionGeneration
+  }
   const templates = await listMarkdownDocumentTemplates(context, worktreePath)
   const selection = await requestMarkdownTemplateSelection(templates)
 
@@ -125,6 +166,18 @@ export async function createUntitledMarkdownFileWithTemplateSelection(
   }
 
   return createUntitledMarkdownFile(worktreePath, worktreeId, connectionId, settings, {
-    template: selection.type === 'template' ? selection.template : undefined
+    template: selection.type === 'template' ? selection.template : undefined,
+    operationProvenance,
+    expectedSshTargetId,
+    expectedSshConnectionGeneration,
+    expectedExecutionHostId,
+    assertOperationCurrent
   })
+}
+
+function requireOperationAssertion(assertCurrent: (() => void) | undefined): () => void {
+  if (!assertCurrent) {
+    throw new Error("Couldn't verify which host owns this file. Reopen the file and try again.")
+  }
+  return assertCurrent
 }

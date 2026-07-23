@@ -189,7 +189,7 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
       localTerminal('host-tab-1', 0, true),
       localTerminal('host-tab-2', 1, false)
     ])
-    recordWebSessionFocusIntent(WT, `host-tab-3::${LEAF_C}`)
+    recordWebSessionFocusIntent({ environmentId: ENV }, WT, `host-tab-3::${LEAF_C}`)
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([
@@ -216,7 +216,7 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
       localTerminal('host-tab-1', 0, false),
       localTerminal('host-tab-2', 1, true)
     ])
-    recordWebSessionFocusIntent(WT, `host-tab-3::${LEAF_C}`)
+    recordWebSessionFocusIntent({ environmentId: ENV }, WT, `host-tab-3::${LEAF_C}`)
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([
@@ -241,7 +241,7 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
 describe('parity §4: remote create focuses new tab; echoes never steal focus', () => {
   it('a client-initiated create focuses the new terminal (intent honored)', () => {
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
-    recordWebSessionFocusIntent(WT, `host-tab-2::${LEAF_B}`)
+    recordWebSessionFocusIntent({ environmentId: ENV }, WT, `host-tab-2::${LEAF_B}`)
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([
@@ -304,7 +304,7 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
   it('honors focus intent for a newly created browser session tab', () => {
     const pageId = 'browser-page-1'
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
-    recordWebSessionFocusIntent(WT, pageId)
+    recordWebSessionFocusIntent({ environmentId: ENV }, WT, pageId)
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([{ parentTab: 'host-tab-1', leaf: LEAF_A, active: false }], {

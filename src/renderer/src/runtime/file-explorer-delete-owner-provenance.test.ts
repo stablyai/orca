@@ -12,6 +12,7 @@ import type {
   TreeNode
 } from '@/components/right-sidebar/file-explorer-types'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
+import { renameFileOnDisk } from '@/lib/rename-file'
 
 const { confirm, toastError } = vi.hoisted(() => ({
   confirm: vi.fn(),
@@ -19,6 +20,7 @@ const { confirm, toastError } = vi.hoisted(() => ({
 }))
 const fsReadFile = vi.fn()
 const fsDeletePath = vi.fn()
+const fsRenamePath = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 
 vi.mock('@/components/confirmation-dialog', () => ({ useConfirmationDialog: () => confirm }))
@@ -51,12 +53,13 @@ function makeRepo(overrides: Partial<Repo> & { id: string; path: string }): Repo
   return { displayName: overrides.id, badgeColor: '#000', addedAt: 0, ...overrides }
 }
 
-function makeWorktree(hostId: Worktree['hostId']): Worktree {
+function makeWorktree(hostId: Worktree['hostId'], runtimeOwnerEnvironmentId?: string): Worktree {
   return {
     id: LOCAL_WORKTREE_ID,
     repoId: LOCAL_REPO_ID,
     path: '/tmp/project',
-    hostId
+    hostId,
+    runtimeOwnerEnvironmentId
   } as Worktree
 }
 
@@ -123,6 +126,7 @@ beforeEach(() => {
   toastError.mockReset()
   fsReadFile.mockReset().mockResolvedValue({ content: 'content', isBinary: false })
   fsDeletePath.mockReset().mockResolvedValue(undefined)
+  fsRenamePath.mockReset().mockResolvedValue(undefined)
   runtimeEnvironmentCall
     .mockReset()
     .mockImplementation((args: { selector?: string; method: string }) => {
@@ -138,7 +142,7 @@ beforeEach(() => {
     })
   vi.stubGlobal('window', {
     api: {
-      fs: { readFile: fsReadFile, deletePath: fsDeletePath },
+      fs: { readFile: fsReadFile, deletePath: fsDeletePath, renamePath: fsRenamePath },
       runtime: { call: vi.fn() },
       runtimeEnvironments: { call: runtimeEnvironmentCall, subscribe: vi.fn() }
     }
@@ -151,18 +155,202 @@ afterEach(() => {
 })
 
 describe('file explorer deletion owner provenance', () => {
-  it('keeps a cached runtime node on its listing host after SSH hydration', async () => {
+  it('routes a HUB-owned SSH delete through the HUB and never local SSH', async () => {
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'different-hub' } as never,
+      repos: [
+        makeRepo({
+          id: LOCAL_REPO_ID,
+          path: '/tmp/project',
+          connectionId: SSH_ID,
+          executionHostId: 'runtime:owner-hub'
+        })
+      ],
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [makeWorktree(`ssh:${SSH_ID}`, 'owner-hub')]
+      },
+      sshStateByEnvironment: new Map([
+        [
+          'owner-hub',
+          { connectionStates: new Map([[SSH_ID, { connectionGeneration: 1 }]]) } as never
+        ]
+      ])
+    })
+    const owner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
+    expect(owner).toEqual({
+      kind: 'runtime',
+      environmentId: 'owner-hub',
+      executionHostId: 'ssh:ssh-target-1'
+    })
+
+    const { result } = renderDelete(LOCAL_WORKTREE_ID)
+    await requestDelete(result, localNode, owner)
+
+    await vi.waitFor(() =>
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({ selector: 'owner-hub', method: 'files.delete' })
+      )
+    )
+    expect(fsDeletePath).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the same SSH worktree is projected by two HUBs', () => {
+    useAppStore.setState({
+      repos: [],
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [
+          makeWorktree(`ssh:${SSH_ID}`, 'hub-a'),
+          makeWorktree(`ssh:${SSH_ID}`, 'hub-b')
+        ]
+      }
+    })
+
+    expect(getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)).toEqual({ kind: 'unresolved' })
+  })
+
+  it('routes a HUB-owned SSH rename through the HUB and never local SSH', async () => {
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'different-hub' } as never,
+      repos: [
+        makeRepo({
+          id: LOCAL_REPO_ID,
+          path: '/tmp/project',
+          connectionId: SSH_ID,
+          executionHostId: 'runtime:owner-hub'
+        })
+      ],
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [makeWorktree(`ssh:${SSH_ID}`, 'owner-hub')]
+      },
+      sshStateByEnvironment: new Map([
+        [
+          'owner-hub',
+          { connectionStates: new Map([[SSH_ID, { connectionGeneration: 1 }]]) } as never
+        ]
+      ])
+    })
+
+    await renameFileOnDisk({
+      oldPath: '/tmp/project/src/old.ts',
+      newName: 'new.ts',
+      worktreeId: LOCAL_WORKTREE_ID,
+      worktreePath: '/tmp/project'
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'owner-hub', method: 'files.rename' })
+    )
+    expect(fsRenamePath).not.toHaveBeenCalled()
+  })
+
+  it('fails a rename closed when the same SSH worktree is projected by two HUBs', async () => {
+    useAppStore.setState({
+      repos: [],
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [
+          makeWorktree(`ssh:${SSH_ID}`, 'hub-a'),
+          makeWorktree(`ssh:${SSH_ID}`, 'hub-b')
+        ]
+      }
+    })
+
+    await expect(
+      renameFileOnDisk({
+        oldPath: '/tmp/project/src/old.ts',
+        newName: 'new.ts',
+        worktreeId: LOCAL_WORKTREE_ID,
+        worktreePath: '/tmp/project'
+      })
+    ).rejects.toThrow("Couldn't determine which host owns this workspace")
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(fsRenamePath).not.toHaveBeenCalled()
+  })
+
+  it('fails a cached rename closed when ownership changed after listing', async () => {
+    useAppStore.setState({
+      repos: [
+        makeRepo({
+          id: LOCAL_REPO_ID,
+          path: '/tmp/project',
+          executionHostId: 'runtime:hub-a'
+        })
+      ],
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [makeWorktree('ssh:hub-private-target', 'hub-a')]
+      }
+    })
+    const listingOwner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
+    expect(listingOwner).toEqual({
+      kind: 'runtime',
+      environmentId: 'hub-a',
+      executionHostId: 'ssh:hub-private-target'
+    })
+    useAppStore.setState({
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [makeWorktree('ssh:hub-private-target', 'hub-b')]
+      }
+    })
+
+    await expect(
+      renameFileOnDisk({
+        oldPath: '/tmp/project/src/old.ts',
+        newName: 'new.ts',
+        worktreeId: LOCAL_WORKTREE_ID,
+        worktreePath: '/tmp/project',
+        operationOwner: listingOwner
+      })
+    ).rejects.toThrow("Couldn't determine which host owns this workspace")
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(fsRenamePath).not.toHaveBeenCalled()
+  })
+
+  it('fails a cached rename closed when the HUB switches its nested SSH target', async () => {
+    useAppStore.setState({
+      repos: [],
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [makeWorktree('ssh:direct-target', 'hub-a')]
+      }
+    })
+    const listingOwner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
+    useAppStore.setState({
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [makeWorktree('ssh:jump-target', 'hub-a')]
+      }
+    })
+
+    await expect(
+      renameFileOnDisk({
+        oldPath: '/tmp/project/src/old.ts',
+        newName: 'new.ts',
+        worktreeId: LOCAL_WORKTREE_ID,
+        worktreePath: '/tmp/project',
+        operationOwner: listingOwner
+      })
+    ).rejects.toThrow("Couldn't determine which host owns this workspace")
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(fsRenamePath).not.toHaveBeenCalled()
+  })
+
+  it('fails a cached runtime node closed after SSH ownership hydration changes', async () => {
     const workspaceId = folderWorkspaceKey(FOLDER_ID)
     useAppStore.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
       folderWorkspaces: [folderWorkspace()],
-      projectGroups: [projectGroup()],
+      projectGroups: [{ ...projectGroup(), executionHostId: 'runtime:focused-env' }],
+      runtimeEnvironments: [{ id: 'focused-env' } as never],
       repos: [],
       worktreesByRepo: {}
     })
     const listingOwner = getFileExplorerOperationOwner(workspaceId)
-    expect(listingOwner).toEqual({ kind: 'runtime', environmentId: 'focused-env' })
+    expect(listingOwner).toEqual({
+      kind: 'runtime',
+      environmentId: 'focused-env',
+      executionHostId: 'runtime:focused-env'
+    })
     useAppStore.setState({
+      projectGroups: [
+        { ...projectGroup(), connectionId: SSH_ID, executionHostId: `ssh:${SSH_ID}` }
+      ],
       repos: [
         makeRepo({
           id: 'repo-ssh',
@@ -184,10 +372,9 @@ describe('file explorer deletion owner provenance', () => {
       listingOwner
     )
 
-    await vi.waitFor(() =>
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-        expect.objectContaining({ selector: 'focused-env', method: 'files.delete' })
-      )
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'focused-env', method: 'files.delete' })
     )
     expect(fsDeletePath).not.toHaveBeenCalled()
   })
@@ -264,6 +451,7 @@ describe('file explorer deletion owner provenance', () => {
       expect(fsDeletePath).toHaveBeenCalledWith({
         targetPath: localNode.path,
         connectionId: undefined,
+        expectedExecutionHostId: 'local',
         recursive: false
       })
     )
@@ -285,7 +473,11 @@ describe('file explorer deletion owner provenance', () => {
       }
     })
     const owner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
-    expect(owner).toEqual({ kind: 'runtime', environmentId: 'web-server-a' })
+    expect(owner).toEqual({
+      kind: 'runtime',
+      environmentId: 'web-server-a',
+      executionHostId: 'runtime:web-server-a'
+    })
 
     const { result } = renderDelete(LOCAL_WORKTREE_ID)
     await requestDelete(result, localNode, owner)

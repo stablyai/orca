@@ -32,6 +32,10 @@ import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
+import {
+  resetSshConnectionGenerations,
+  setSshConnectionGeneration
+} from '../ssh/ssh-connection-generation'
 
 // Why: paths are resolved via path.resolve() in production code, so test
 // data must use resolved paths to avoid Unix-vs-Windows mismatches.
@@ -72,6 +76,7 @@ describe('registerFilesystemMutationHandlers', () => {
     renameMock.mockReset()
     writeFileMock.mockReset()
     realpathMock.mockReset()
+    resetSshConnectionGenerations()
 
     handleMock.mockImplementation((channel: string, handler: never) => {
       handlers.set(channel, handler)
@@ -281,7 +286,9 @@ describe('registerFilesystemMutationHandlers', () => {
       await handlers.get('fs:rename')!(null, {
         oldPath: '/home/me/repo/old.ts',
         newPath: '/home/me/repo/new.ts',
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 0
       })
     } finally {
       unregisterSshFilesystemProvider('ssh-1')
@@ -300,7 +307,9 @@ describe('registerFilesystemMutationHandlers', () => {
         handlers.get('fs:rename')!(null, {
           oldPath: '/home/me/repo/old.ts',
           newPath: '/home/me/repo/new.ts',
-          connectionId: 'ssh-1'
+          connectionId: 'ssh-1',
+          expectedSshTargetId: 'ssh-1',
+          expectedSshConnectionGeneration: 0
         })
       ).rejects.toThrow('destination exists')
     } finally {
@@ -309,6 +318,120 @@ describe('registerFilesystemMutationHandlers', () => {
 
     expect(renameMock).not.toHaveBeenCalled()
   })
+
+  it('rejects direct SSH rename without target-bound generation provenance', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-1', { renameNoClobber } as never)
+
+    try {
+      await expect(
+        handlers.get('fs:rename')!(null, {
+          oldPath: '/home/me/repo/old.ts',
+          newPath: '/home/me/repo/new.ts',
+          connectionId: 'ssh-1'
+        })
+      ).rejects.toThrow('SSH connection changed')
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(renameNoClobber).not.toHaveBeenCalled()
+  })
+
+  it('rejects equal-generation provenance for another direct SSH target', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-b', { renameNoClobber } as never)
+
+    try {
+      await expect(
+        handlers.get('fs:rename')!(null, {
+          oldPath: '/home/me/repo/old.ts',
+          newPath: '/home/me/repo/new.ts',
+          connectionId: 'ssh-b',
+          expectedSshTargetId: 'ssh-a',
+          expectedSshConnectionGeneration: 0
+        })
+      ).rejects.toThrow('SSH connection changed')
+    } finally {
+      unregisterSshFilesystemProvider('ssh-b')
+    }
+
+    expect(renameNoClobber).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale generation provenance for a direct SSH target', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-1', { renameNoClobber } as never)
+    setSshConnectionGeneration('ssh-1', 8)
+
+    try {
+      await expect(
+        handlers.get('fs:rename')!(null, {
+          oldPath: '/home/me/repo/old.ts',
+          newPath: '/home/me/repo/new.ts',
+          connectionId: 'ssh-1',
+          expectedSshTargetId: 'ssh-1',
+          expectedSshConnectionGeneration: 7
+        })
+      ).rejects.toThrow('SSH connection changed')
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(renameNoClobber).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale SSH provenance when a direct mutation resolves local', async () => {
+    await expect(
+      handlers.get('fs:rename')!(null, {
+        oldPath: path.resolve('/workspace/repo/old.ts'),
+        newPath: path.resolve('/workspace/repo/new.ts'),
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 0
+      })
+    ).rejects.toThrow('SSH connection changed')
+
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['fs:createFile', { filePath: path.resolve('/workspace/repo/new.ts') }],
+    ['fs:createDir', { dirPath: path.resolve('/workspace/repo/new-dir') }],
+    [
+      'fs:rename',
+      {
+        oldPath: path.resolve('/workspace/repo/old.ts'),
+        newPath: path.resolve('/workspace/repo/new.ts')
+      }
+    ],
+    [
+      'fs:copy',
+      {
+        sourcePath: path.resolve('/workspace/repo/source.ts'),
+        destinationPath: path.resolve('/workspace/repo/copy.ts')
+      }
+    ],
+    [
+      'fs:importExternalPaths',
+      { sourcePaths: [path.resolve('/tmp/source.ts')], destDir: path.resolve('/workspace/repo') }
+    ],
+    [
+      'fs:resolveDroppedPathsForAgent',
+      { paths: [path.resolve('/tmp/source.ts')], worktreePath: path.resolve('/workspace/repo') }
+    ]
+  ])(
+    'rejects %s before local fallback when the expected execution host is SSH',
+    async (channel, args) => {
+      await expect(
+        handlers.get(channel)!(null, { ...args, expectedExecutionHostId: 'ssh:ssh-1' })
+      ).rejects.toThrow('Workspace host changed; refresh and try again')
+
+      expect(writeFileMock).not.toHaveBeenCalled()
+      expect(mkdirMock).not.toHaveBeenCalled()
+      expect(renameMock).not.toHaveBeenCalled()
+      expect(copyFileMock).not.toHaveBeenCalled()
+    }
+  )
 
   // ── fs:copy ────────────────────────────────────────────────────
 
@@ -330,7 +453,9 @@ describe('registerFilesystemMutationHandlers', () => {
       await handlers.get('fs:copy')!(null, {
         sourcePath: '/home/me/repo/source.ts',
         destinationPath: '/home/me/repo/source copy.ts',
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 0
       })
     } finally {
       unregisterSshFilesystemProvider('ssh-1')

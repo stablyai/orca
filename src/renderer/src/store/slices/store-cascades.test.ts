@@ -75,6 +75,7 @@ import {
   createTestStore,
   makeLayout,
   makeOpenFile,
+  makeRuntimeOwnedWorktree,
   makeTab,
   makeTabGroup,
   makeUnifiedTab,
@@ -3326,7 +3327,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -3541,7 +3542,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -3644,7 +3645,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         }
       ],
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1', hostId: 'ssh:ssh-1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'ssh:ssh-1@@pty-1' })]
@@ -3670,7 +3671,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
@@ -3694,7 +3695,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
       ptyIdsByTabId: { 'tab-1': [] }
@@ -3728,7 +3729,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
       ptyIdsByTabId: { 'tab-1': ['remote:runtime-1@@pty-1'] }
@@ -3775,7 +3776,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
       ptyIdsByTabId: { 'tab-1': [] }
@@ -3808,7 +3809,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
       ptyIdsByTabId: { 'tab-1': [] }
@@ -3856,7 +3857,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId })] },
       ptyIdsByTabId: { 'tab-1': [ptyId] }
@@ -3898,7 +3899,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId })] },
       ptyIdsByTabId: { 'tab-1': [ptyId] }
@@ -3960,7 +3961,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
       ptyIdsByTabId: { 'tab-1': [] }
@@ -4031,7 +4032,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
       ptyIdsByTabId: { 'tab-1': [] }
@@ -4091,7 +4092,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       seedStore(store, {
         settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
         worktreesByRepo: {
-          repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+          repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
         },
         tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
         ptyIdsByTabId: { 'tab-1': [] }
@@ -4160,7 +4161,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       seedStore(store, {
         settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
         worktreesByRepo: {
-          repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+          repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
         },
         tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
         ptyIdsByTabId: { 'tab-1': [] }
@@ -4198,7 +4199,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
       ptyIdsByTabId: { 'tab-1': [] }
@@ -4299,7 +4300,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         }
       ],
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [
+          makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' }, 'owner-runtime')
+        ]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
@@ -4344,7 +4347,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -4410,7 +4413,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -4464,7 +4467,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -4518,7 +4521,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -4588,7 +4591,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -4644,7 +4647,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })]
@@ -4758,7 +4761,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -4816,7 +4819,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -4892,7 +4895,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -4946,7 +4949,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
@@ -5004,7 +5007,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
         [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]

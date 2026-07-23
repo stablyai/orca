@@ -121,7 +121,10 @@ function imagePasteEvent(): {
 const sshOwner: NativeChatAttachmentOwner = {
   kind: 'ssh',
   connectionId: 'conn-1',
-  worktreePath: '/remote/wt'
+  worktreePath: '/remote/wt',
+  expectedExecutionHostId: 'ssh:conn-1',
+  expectedSshTargetId: 'conn-1',
+  expectedSshConnectionGeneration: 4
 }
 
 afterEach(() => {

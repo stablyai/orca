@@ -744,7 +744,12 @@ export type UISlice = {
   clearSettingsTarget: () => void
   /** Which host the Projects Settings pane shows per project (keyed by projectId). Ephemeral on purpose — never persisted, so reload reopens on the effective host. */
   settingsProjectHostSelection: Record<string, ExecutionHostId>
-  setSettingsProjectHostSelection: (projectId: string, hostId: ExecutionHostId) => void
+  settingsProjectSetupSelection: Record<string, string>
+  setSettingsProjectHostSelection: (
+    projectId: string,
+    hostId: ExecutionHostId,
+    setupId?: string
+  ) => void
   /** One-shot Appearance accordion to expand for nested Settings deep links (e.g. Usage percentages under Window & Sidebar). Cleared when Appearance consumes it. */
   appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
   setAppearanceAccordionDeepLink: (
@@ -1459,18 +1464,30 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
   settingsProjectHostSelection: {},
+  settingsProjectSetupSelection: {},
   // Why: renderer-only, never persisted — no window.api.ui.set, and absent from the debounced UI writer in App.tsx.
-  setSettingsProjectHostSelection: (projectId, hostId) =>
-    set((s) =>
-      s.settingsProjectHostSelection[projectId] === hostId
-        ? s
-        : {
-            settingsProjectHostSelection: {
-              ...s.settingsProjectHostSelection,
-              [projectId]: hostId
-            }
-          }
-    ),
+  setSettingsProjectHostSelection: (projectId, hostId, setupId) =>
+    set((s) => {
+      const nextSetupSelections = { ...s.settingsProjectSetupSelection }
+      if (setupId) {
+        nextSetupSelections[projectId] = setupId
+      } else {
+        delete nextSetupSelections[projectId]
+      }
+      if (
+        s.settingsProjectHostSelection[projectId] === hostId &&
+        s.settingsProjectSetupSelection[projectId] === setupId
+      ) {
+        return s
+      }
+      return {
+        settingsProjectHostSelection: {
+          ...s.settingsProjectHostSelection,
+          [projectId]: hostId
+        },
+        settingsProjectSetupSelection: nextSetupSelections
+      }
+    }),
   appearanceAccordionDeepLink: null,
   setAppearanceAccordionDeepLink: (section) => set({ appearanceAccordionDeepLink: section }),
   clearAppearanceAccordionDeepLink: () => set({ appearanceAccordionDeepLink: null }),
