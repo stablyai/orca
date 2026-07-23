@@ -323,7 +323,7 @@ export function RepositoryHostSetupsSection({
                   size="sm"
                   onClick={async () => {
                     setDeletingSetupId(setup.id)
-                    await deleteProjectHostSetup({ setupId: setup.id })
+                    await deleteProjectHostSetup({ setupId: setup.id, hostId: setup.hostId })
                     setDeletingSetupId(null)
                   }}
                 >

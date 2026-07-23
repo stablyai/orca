@@ -44,6 +44,13 @@ const runtimeSetup: ProjectHostSetup = {
   updatedAt: 1
 }
 
+const localSetup: ProjectHostSetup = {
+  ...runtimeSetup,
+  hostId: 'local',
+  path: '/Users/alice/project',
+  displayName: 'Local project'
+}
+
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   projectsCreateHostSetup.mockReset()
@@ -115,13 +122,14 @@ describe('repo slice project host setup lifecycle', () => {
     })
     const store = createTestStore()
     store.setState({
-      projectHostSetups: [runtimeSetup],
+      projectHostSetups: [localSetup, runtimeSetup],
       settings: { activeRuntimeEnvironmentId: null } as never
     })
 
     await expect(
       store.getState().updateProjectHostSetup({
         setupId: runtimeSetup.id,
+        hostId: runtimeSetup.hostId,
         updates: { displayName: 'GPU VM renamed' }
       })
     ).resolves.toEqual({
@@ -145,6 +153,16 @@ describe('repo slice project host setup lifecycle', () => {
       },
       timeoutMs: 15_000
     })
+    expect(store.getState().projectHostSetups).toEqual([
+      localSetup,
+      {
+        ...runtimeSetup,
+        displayName: 'GPU VM renamed',
+        executionHostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        connectionId: null
+      }
+    ])
   })
 
   it('deletes runtime-owned project host setups through their owning runtime', async () => {
@@ -157,12 +175,15 @@ describe('repo slice project host setup lifecycle', () => {
     const store = createTestStore()
     store.setState({
       projects: [project],
-      projectHostSetups: [runtimeSetup],
+      projectHostSetups: [localSetup, runtimeSetup],
       settings: { activeRuntimeEnvironmentId: null } as never
     })
 
     await expect(
-      store.getState().deleteProjectHostSetup({ setupId: runtimeSetup.id })
+      store.getState().deleteProjectHostSetup({
+        setupId: runtimeSetup.id,
+        hostId: runtimeSetup.hostId
+      })
     ).resolves.toEqual({
       project,
       setup: runtimeSetup,
@@ -170,13 +191,43 @@ describe('repo slice project host setup lifecycle', () => {
     })
 
     expect(store.getState().projects).toEqual([project])
-    expect(store.getState().projectHostSetups).toEqual([])
+    expect(store.getState().projectHostSetups).toEqual([localSetup])
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'projectHostSetup.delete',
       params: { setupId: runtimeSetup.id },
       timeoutMs: 15_000
     })
+  })
+
+  it('keeps unique local project host setup mutations on local IPC', async () => {
+    const localOnlySetup = { ...localSetup, id: 'local-only-setup' }
+    projectsUpdateHostSetup.mockResolvedValue({
+      project,
+      setup: { ...localOnlySetup, displayName: 'Local renamed' }
+    })
+    projectsDeleteHostSetup.mockResolvedValue({ project, setup: localOnlySetup })
+    const store = createTestStore()
+    store.setState({ projectHostSetups: [localOnlySetup] })
+
+    await store.getState().updateProjectHostSetup({
+      setupId: localOnlySetup.id,
+      hostId: localOnlySetup.hostId,
+      updates: { displayName: 'Local renamed' }
+    })
+    await store.getState().deleteProjectHostSetup({
+      setupId: localOnlySetup.id,
+      hostId: localOnlySetup.hostId
+    })
+
+    expect(projectsUpdateHostSetup).toHaveBeenCalledWith({
+      setupId: localOnlySetup.id,
+      updates: { displayName: 'Local renamed' }
+    })
+    expect(projectsDeleteHostSetup).toHaveBeenCalledWith({ setupId: localOnlySetup.id })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: expect.stringMatching(/^projectHostSetup\./) })
+    )
   })
 
   it('preserves runtime-fetched setup-only states during repo hydration', async () => {

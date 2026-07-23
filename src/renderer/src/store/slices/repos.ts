@@ -92,6 +92,14 @@ import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
 import { SafeAutoForkSyncAttempts } from './safe-auto-fork-sync-attempts'
 import { RuntimeRepoFetchTracker } from './runtime-repo-fetch-tracker'
 
+type RendererProjectHostSetupUpdateArgs = ProjectHostSetupUpdateArgs & {
+  hostId: ProjectHostSetup['hostId']
+}
+
+type RendererProjectHostSetupDeleteArgs = ProjectHostSetupDeleteArgs & {
+  hostId: ProjectHostSetup['hostId']
+}
+
 const ERROR_TOAST_DURATION = 60_000
 const RUNTIME_CATALOG_FETCH_CONCURRENCY = 4
 const safeAutoForkSyncAttempts = new SafeAutoForkSyncAttempts()
@@ -1399,10 +1407,10 @@ export type RepoSlice = {
     args: ProjectHostSetupCreateArgs
   ) => Promise<ProjectHostSetupCreateResult | null>
   updateProjectHostSetup: (
-    args: ProjectHostSetupUpdateArgs
+    args: RendererProjectHostSetupUpdateArgs
   ) => Promise<ProjectHostSetupUpdateResult | null>
   deleteProjectHostSetup: (
-    args: ProjectHostSetupDeleteArgs
+    args: RendererProjectHostSetupDeleteArgs
   ) => Promise<ProjectHostSetupDeleteResult | null>
   setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
   addNonGitFolder: (path: string, options?: AddRepoPathRouteOptions) => Promise<Repo | null>
@@ -2541,19 +2549,17 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   updateProjectHostSetup: async (args) => {
     try {
-      const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
-      const target = currentSetup
-        ? getProjectSetupRuntimeTarget(currentSetup.hostId)
-        : { kind: 'local' as const }
+      const { hostId, ...request } = args
+      const target = getProjectSetupRuntimeTarget(hostId)
       await assertProjectHostSetupMutationRuntimeCapabilities(target)
       const result =
         target.kind === 'local'
-          ? await window.api.projects.updateHostSetup(args)
+          ? await window.api.projects.updateHostSetup(request)
           : (
               await callRuntimeRpc<{ result: ProjectHostSetupUpdateResult }>(
                 target,
                 'projectHostSetup.update',
-                args,
+                request,
                 { timeoutMs: 15_000 }
               )
             ).result
@@ -2571,8 +2577,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         projects: s.projects.some((entry) => entry.id === result.project.id)
           ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
           : [...s.projects, result.project],
-        projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
-          ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
+        projectHostSetups: s.projectHostSetups.some(
+          (entry) => entry.hostId === setup.hostId && entry.id === setup.id
+        )
+          ? s.projectHostSetups.map((entry) =>
+              entry.hostId === setup.hostId && entry.id === setup.id ? setup : entry
+            )
           : [...s.projectHostSetups, setup]
       }))
       return { ...result, repo, setup }
@@ -2589,19 +2599,17 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   deleteProjectHostSetup: async (args) => {
     try {
-      const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
-      const target = currentSetup
-        ? getProjectSetupRuntimeTarget(currentSetup.hostId)
-        : { kind: 'local' as const }
+      const { hostId, ...request } = args
+      const target = getProjectSetupRuntimeTarget(hostId)
       await assertProjectHostSetupMutationRuntimeCapabilities(target)
       const result =
         target.kind === 'local'
-          ? await window.api.projects.deleteHostSetup(args)
+          ? await window.api.projects.deleteHostSetup(request)
           : (
               await callRuntimeRpc<{ result: ProjectHostSetupDeleteResult }>(
                 target,
                 'projectHostSetup.delete',
-                args,
+                request,
                 { timeoutMs: 15_000 }
               )
             ).result
@@ -2609,7 +2617,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const repoHostId = repo ? getRepoExecutionHostId(repo) : null
       set((s) => {
         const projectHostSetups = s.projectHostSetups.filter(
-          (setup) => setup.id !== result.setup.id
+          (setup) => setup.hostId !== result.setup.hostId || setup.id !== result.setup.id
         )
         const repos =
           repo && repoHostId
