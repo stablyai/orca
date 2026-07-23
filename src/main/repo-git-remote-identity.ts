@@ -1,5 +1,5 @@
 import { deriveGitRemoteIdentity, type GitRemoteIdentity } from '../shared/git-remote-identity'
-import { gitExecFileAsync } from './git/runner'
+import { getRemoteVerboseRaw } from './git/git-remote-metadata'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 
 /** `no-remote` means git answered and the repo has no usable remote;
@@ -15,13 +15,13 @@ export async function probeGitRemoteIdentity(
   connectionId?: string | null
 ): Promise<GitRemoteIdentityProbe> {
   try {
-    const result = connectionId
-      ? await getSshGitProvider(connectionId)?.exec(['remote', '-v'], repoPath)
-      : await gitExecFileAsync(['remote', '-v'], { cwd: repoPath })
-    if (!result) {
+    const stdout = connectionId
+      ? (await getSshGitProvider(connectionId)?.exec(['remote', '-v'], repoPath))?.stdout
+      : await getRemoteVerboseRaw(repoPath)
+    if (stdout === undefined) {
       return { status: 'unavailable' }
     }
-    const identity = deriveGitRemoteIdentity(result.stdout)
+    const identity = deriveGitRemoteIdentity(stdout)
     return identity ? { status: 'resolved', identity } : { status: 'no-remote' }
   } catch {
     // Repo creation must not fail because a best-effort remote probe failed.
