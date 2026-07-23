@@ -241,7 +241,6 @@ describe('registerHostedReviewHandlers', () => {
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1' as const
     }
-    store.getRepo.mockReturnValue(localRepo)
     store.getRepos.mockReturnValue([localRepo, sshRepo])
     getHostedReviewForBranchMock.mockResolvedValueOnce(null)
 
@@ -314,7 +313,6 @@ describe('registerHostedReviewHandlers', () => {
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1' as const
     }
-    store.getRepo.mockReturnValue(localRepo)
     store.getRepos.mockReturnValue([localRepo, sshRepo])
     listRepoWorktreesMock.mockResolvedValue([{ path: worktreePath }])
     getHostedReviewCreationEligibilityMock.mockResolvedValueOnce({

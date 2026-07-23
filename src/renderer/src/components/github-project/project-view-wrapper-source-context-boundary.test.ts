@@ -70,8 +70,13 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
   it('passes the exact project repository host through both direct launch paths', () => {
     const source = componentSource('ProjectViewWrapper.tsx')
     const rowLaunch = sourceBetween(source, 'const handleStartWork', 'const handleEditAssignees')
+    const dialogLaunch = sourceBetween(
+      source,
+      'onUse={(item) => {',
+      'onClose={() => setDialogRepoItem(null)}'
+    )
 
     expect(rowLaunch).toContain('repoExecutionHostId: getRepoExecutionHostId(resolution.repo)')
-    expect(source).toContain('repoExecutionHostId: current.workItem.repoExecutionHostId')
+    expect(dialogLaunch).toContain('repoExecutionHostId: current.workItem.repoExecutionHostId')
   })
 })
