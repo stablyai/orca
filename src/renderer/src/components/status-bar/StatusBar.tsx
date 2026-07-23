@@ -63,7 +63,7 @@ import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from 
 import { AgentIcon } from '@/lib/agent-catalog'
 import { UsageRosterPanel, getTightestUsageSection } from './UsageRosterPanel'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
-import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
+import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
@@ -1238,13 +1238,13 @@ function VerboseProviderUsage({
     return window !== null
   })
 
-  // Why: weekly-only plans have no session window; the mini meter follows the first visible window instead of vanishing.
-  const primaryVisibleWindow = visibleWindows[0]?.window
+  // Why: weekly-only plans have no session window; the mini meter follows the weekly quota instead of vanishing.
+  const meterWindow = p.session ?? p.weekly
 
   return (
     <>
-      {primaryVisibleWindow && !compact ? (
-        <MiniBar usedPct={clampUsedPercent(primaryVisibleWindow.usedPercent)} display={display} />
+      {meterWindow && !compact ? (
+        <MiniBar usedPct={clampUsedPercent(meterWindow.usedPercent)} display={display} />
       ) : null}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
