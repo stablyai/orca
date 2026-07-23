@@ -173,7 +173,7 @@ describe('buildAgentStartupPlan', () => {
     ).toBe("prime-agent -- 'help me name this config'")
   })
 
-  it('uses cursor-agent as the actual launch binary', () => {
+  it('uses cursor agent as the actual launch command', () => {
     expect(
       buildAgentStartupPlan({
         agent: 'cursor',
@@ -183,10 +183,10 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'cursor',
-      launchCommand: "cursor-agent 'Review this file'",
+      launchCommand: "cursor agent 'Review this file'",
       expectedProcess: 'cursor-agent',
       followupPrompt: null,
-      launchConfig: emptyLaunchConfig('cursor-agent')
+      launchConfig: emptyLaunchConfig('cursor agent')
     })
   })
 
