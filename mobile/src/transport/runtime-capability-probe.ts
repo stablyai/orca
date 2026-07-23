@@ -27,8 +27,9 @@ export function startRuntimeCapabilityProbe(
           scheduleRetry(false)
           return
         }
-        const status = (response as RpcSuccess).result as { capabilities?: string[] }
-        onCapabilities(status.capabilities ?? [])
+        const status = (response as RpcSuccess).result as { capabilities?: unknown }
+        const capabilities = Array.isArray(status.capabilities) ? status.capabilities : []
+        onCapabilities(capabilities)
       },
       (error: unknown) => {
         if (cancelled) {
