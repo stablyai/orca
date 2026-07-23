@@ -213,7 +213,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   },
   cursor: {
     detectCmd: 'cursor-agent',
+    detectCmdAliases: ['cursor'],
     launchCmd: 'cursor-agent',
+    // Why: the detectCmdAlias 'cursor' ensures the agent is detected when the
+    // standard Cursor IDE CLI is installed (which only has `cursor` in $PATH).
+    // The launchCmd stays as 'cursor-agent' to preserve standalone installations.
+    // Users with only the standard Cursor CLI can set cmdOverrides.cursor to
+    // 'cursor agent' to use the subcommand form.
     expectedProcess: 'cursor-agent',
     promptInjectionMode: 'argv',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
