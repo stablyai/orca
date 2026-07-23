@@ -1,4 +1,4 @@
-// Single-sources the desktop marker logic (pure functions over shared types):
+// Single-sources the marker logic (pure functions over shared types):
 // Claude records an attached image as `[Image: source: /path]` (+ `[Image #N]`
 // prefix on the caption turn), and both render and echo reconciliation must
 // agree with desktop on how those marker turns are interpreted.
@@ -6,8 +6,8 @@ export {
   imageSourcePathFromText,
   normalizeImageTranscriptMessages,
   stripImagePromptMarker
-} from '../../../src/renderer/src/components/native-chat/native-chat-image-transcript-markers'
-import { imageSourcePathFromText } from '../../../src/renderer/src/components/native-chat/native-chat-image-transcript-markers'
+} from '../../../src/shared/native-chat-image-transcript-markers'
+import { imageSourcePathFromText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 /** A raw (un-normalized) transcript user turn that is an image-source marker —

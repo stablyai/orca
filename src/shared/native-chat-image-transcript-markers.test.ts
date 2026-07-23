@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from './native-chat-types'
 import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
 
 function userText(id: string, text: string): NativeChatMessage {
