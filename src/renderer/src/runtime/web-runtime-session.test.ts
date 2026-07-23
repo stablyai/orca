@@ -631,9 +631,10 @@ describe('createWebRuntimeSessionTerminal', () => {
         method: authorityMethod,
         params: { presentation: 'background' }
       })
-      expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toBe(
-        activate ? hostTabId : null
+      expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toEqual(
+        activate ? { hostTabId, leafId: 'leaf-1' } : null
       )
+      expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledTimes(activate ? 1 : 0)
     }
   )
 

@@ -73,6 +73,52 @@ describe('agent session RPC methods', () => {
     )
   })
 
+  it.each([
+    {
+      method: 'terminal.createAgentSession',
+      params: {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        presentation: 'focused'
+      },
+      runtimeMethod: 'createAgentSession' as const
+    },
+    {
+      method: 'terminal.ensureAgentSession',
+      params: {
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' },
+        presentation: 'focused'
+      },
+      runtimeMethod: 'ensureAgentSession' as const
+    }
+  ])('keeps $method presentation viewer-local for paired clients', async (testCase) => {
+    for (const clientKind of ['runtime', 'mobile'] as const) {
+      const runtime = runtimeStub()
+      const dispatcher = new RpcDispatcher({
+        runtime: runtime as unknown as OrcaRuntimeService,
+        methods: AGENT_SESSION_METHODS
+      })
+      const replies: RpcResponse[] = []
+
+      await dispatcher.dispatchStreaming(
+        request(testCase.method, testCase.params),
+        (response) => replies.push(JSON.parse(response) as RpcResponse),
+        { pairedDeviceId: `paired-${clientKind}`, clientKind }
+      )
+
+      expect(replies).toHaveLength(1)
+      expect(replies[0]).toMatchObject({ ok: true })
+      expect(runtime[testCase.runtimeMethod]).toHaveBeenCalledWith(
+        { ...testCase.params, presentation: 'background' },
+        { clientId: `paired-${clientKind}`, clientKind }
+      )
+    }
+  })
+
   it('keeps automatic authority checkpoint-only', async () => {
     const runtime = runtimeStub()
     const dispatcher = new RpcDispatcher({

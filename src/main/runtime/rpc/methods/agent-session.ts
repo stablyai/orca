@@ -196,6 +196,16 @@ function callerContext(
   }
 }
 
+function withExecutionHostAgentPresentation<T extends { presentation?: 'background' | 'focused' }>(
+  params: T,
+  clientKind: 'mobile' | 'runtime' | undefined
+): T {
+  // Why: paired viewers focus their own mirror; the execution host may have no renderer.
+  return clientKind && params.presentation === 'focused'
+    ? { ...params, presentation: 'background' }
+    : params
+}
+
 function assertOperationTimestampWithinFutureSkew(clientOperationId: string): void {
   const timestamp = parseAgentSessionOperationTimestamp(clientOperationId)
   if (timestamp === null || timestamp > Date.now() + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS) {
@@ -210,7 +220,7 @@ export const AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     params: EnsureAgentSessionParams,
     handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) =>
       (runtime as AgentSessionRuntime).ensureAgentSession(
-        params,
+        withExecutionHostAgentPresentation(params, clientKind),
         callerContext(pairedDeviceId ?? clientId, clientKind, signal)
       )
   }),
@@ -220,7 +230,7 @@ export const AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)
       return (runtime as AgentSessionRuntime).createAgentSession(
-        params,
+        withExecutionHostAgentPresentation(params, clientKind),
         callerContext(pairedDeviceId ?? clientId, clientKind, signal)
       )
     }

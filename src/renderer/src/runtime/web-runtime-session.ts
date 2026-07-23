@@ -194,6 +194,7 @@ async function createWebRuntimeSessionTerminalResult(
   }
   let hostCreated = false
   let createdTabId: string | undefined
+  let createdLeafId: string | undefined
   try {
     const agent = args.launchAgent ?? args.agent
     const agentArgsOverride =
@@ -252,7 +253,9 @@ async function createWebRuntimeSessionTerminalResult(
                   })) as RuntimeRpcResponse<RuntimeCreateAgentSessionResult>
                 )
               )
-      const created = await runRemoteAgentSessionLaunch<{ terminal: { tabId?: string } }>({
+      const created = await runRemoteAgentSessionLaunch<{
+        terminal: { tabId?: string; leafId?: string }
+      }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
         legacy: async () => {
@@ -283,11 +286,17 @@ async function createWebRuntimeSessionTerminalResult(
             response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
           )
           legacyAlreadyPlacedInGroup = true
-          return { terminal: { tabId: legacyCreated.tab.id } }
+          return {
+            terminal: {
+              tabId: legacyCreated.tab.id,
+              leafId: legacyCreated.tab.leafId
+            }
+          }
         }
       })
       hostCreated = true
       createdTabId = created.terminal.tabId
+      createdLeafId = created.terminal.leafId
       if (args.targetGroupId && createdTabId && !legacyAlreadyPlacedInGroup) {
         await callEnvironment({
           method: 'session.tabs.move',
@@ -327,14 +336,17 @@ async function createWebRuntimeSessionTerminalResult(
       )
       hostCreated = true
       createdTabId = created.tab.id
+      createdLeafId = created.tab.leafId
     }
     if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
       // Why: record focus intent so the reconcile follows the snapshot's active
       // tab to THIS new terminal, instead of sticky-keeping the prior tab.
-      recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId)
+      recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId, createdLeafId)
     }
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
-      expectedEnvironmentPairingRevision: intentOwner.pairingRevision
+      expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
+      // Why: the publication can beat the RPC response; replay it once after caller focus intent exists.
+      acceptCurrentSnapshot: args.activate !== false && Boolean(createdTabId)
     })
     return {
       outcome: { status: 'created' },
