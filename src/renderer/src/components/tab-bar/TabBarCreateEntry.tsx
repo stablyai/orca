@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
 import {
-  getTabEntryAllowAbsolutePaths,
+  createTabEntryAllowAbsolutePathsSelector,
   getTabEntryOptions,
+  isTabEntryAbsolutePathLike,
   type TabCreateEntryArgs
 } from './tab-create-entry-action'
 import {
@@ -27,6 +28,7 @@ import {
 } from './TabBarCreateEntryRow'
 import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
 
 const EMPTY_AGENT_OPTIONS: readonly TabAgentLaunchOption[] = []
@@ -67,9 +69,16 @@ export default function TabBarCreateEntry({
   const [lastMenuOpen, setLastMenuOpen] = useState(menuOpen)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileList = useRuntimeFileListForWorktree({ enabled: menuOpen, worktreeId })
-  const allowAbsolutePaths = useAppStore((state) =>
-    getTabEntryAllowAbsolutePaths(state, worktreeId)
+  const shouldResolveAbsolutePaths = menuOpen && isTabEntryAbsolutePathLike(query.trim())
+  const allowAbsolutePathsSelector = useMemo(
+    () =>
+      createTabEntryAllowAbsolutePathsSelector(worktreeId, {
+        skip: !shouldResolveAbsolutePaths
+      }),
+    [shouldResolveAbsolutePaths, worktreeId]
   )
+  const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
+  const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
 
   // Why: once ArrowDown moves focus into the static menu list, ArrowUp on the
   // first item should return to the search box so the keyboard trip isn't
@@ -113,13 +122,16 @@ export default function TabBarCreateEntry({
     [menuOptions, query]
   )
   const options = useMemo(() => {
-    const entryOptions = getTabEntryOptions(query, fileList, 4, { allowAbsolutePaths })
+    const entryOptions = getTabEntryOptions(query, fileList, 4, {
+      allowAbsolutePaths,
+      localPlatform
+    })
     if (matchingMenuOptions.length === 0) {
       return entryOptions
     }
     // Why: a matched create-menu action should win over a generic new-file fallback.
     return entryOptions.filter((option) => option.classification.kind !== 'new-file')
-  }, [allowAbsolutePaths, fileList, matchingMenuOptions.length, query])
+  }, [allowAbsolutePaths, fileList, localPlatform, matchingMenuOptions.length, query])
   const matchingAgentOptions = useMemo(
     () => findMatchingTabAgentLaunchOptions(query, agentOptions),
     [agentOptions, query]

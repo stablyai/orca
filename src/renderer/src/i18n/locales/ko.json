@@ -2904,7 +2904,8 @@
                   "5a9c83c04b": "모든 파일, URL, agent를 엽니다...",
                   "90eb94dc48": "http:// 또는 https:// URL을 입력하세요.",
                   "5553b283ce": "URL 또는 파일 경로를 입력하세요.",
-                  "queryTooLarge": "검색 텍스트가 너무 큽니다."
+                  "queryTooLarge": "검색 텍스트가 너무 큽니다.",
+                  "absolutePathRemoteBlocked": "절대 경로에는 로컬 워크스페이스가 필요합니다."
                 }
               },
               "menu": {

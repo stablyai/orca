@@ -185,26 +185,59 @@ describe('tab create entry classification', () => {
     ])
   })
 
-  it('classifies absolute paths for local workspaces', () => {
+  it('classifies POSIX absolute paths only for POSIX clients', () => {
     expect(
-      classifyTabEntryQuery('/tmp/notes.md', readyFiles([]), { allowAbsolutePaths: true })
-    ).toEqual({
-      kind: 'absolute-file',
-      filePath: '/tmp/notes.md'
-    })
+      classifyTabEntryQuery('/tmp/notes.md', readyFiles([]), {
+        allowAbsolutePaths: true,
+        localPlatform: 'posix'
+      })
+    ).toEqual({ kind: 'absolute-file', filePath: '/tmp/notes.md' })
     expect(
-      classifyTabEntryQuery('C:\\tmp\\notes.md', readyFiles([]), { allowAbsolutePaths: true })
-    ).toEqual({
-      kind: 'absolute-file',
-      filePath: 'C:/tmp/notes.md'
-    })
+      classifyTabEntryQuery('C:\\tmp\\notes.md', readyFiles([]), {
+        allowAbsolutePaths: true,
+        localPlatform: 'posix'
+      })
+    ).toMatchObject({ kind: 'blocked', message: 'Enter an absolute path for this computer.' })
+  })
+
+  it('classifies drive and UNC paths only for Windows clients', () => {
+    for (const [query, filePath] of [
+      ['C:\\tmp\\notes.md', 'C:/tmp/notes.md'],
+      ['C:/tmp/notes.md', 'C:/tmp/notes.md'],
+      ['\\\\server\\share\\notes.md', '//server/share/notes.md'],
+      ['//server/share/notes.md', '//server/share/notes.md']
+    ]) {
+      expect(
+        classifyTabEntryQuery(query, readyFiles([]), {
+          allowAbsolutePaths: true,
+          localPlatform: 'windows'
+        })
+      ).toEqual({
+        kind: 'absolute-file',
+        filePath
+      })
+    }
+    expect(
+      classifyTabEntryQuery('/tmp/notes.md', readyFiles([]), {
+        allowAbsolutePaths: true,
+        localPlatform: 'windows'
+      })
+    ).toMatchObject({ kind: 'blocked', message: 'Enter an absolute path for this computer.' })
   })
 
   it('blocks absolute paths for remote workspaces', () => {
-    expect(classifyTabEntryQuery('/tmp/notes.md', readyFiles([]))).toMatchObject({
-      kind: 'blocked',
-      message: TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
-    })
+    for (const query of [
+      '/tmp/notes.md',
+      'C:\\tmp\\notes.md',
+      'C:/tmp/notes.md',
+      '\\\\server\\share\\notes.md',
+      '//server/share/notes.md'
+    ]) {
+      expect(classifyTabEntryQuery(query, readyFiles([]))).toMatchObject({
+        kind: 'blocked',
+        message: TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
+      })
+    }
   })
 })
 
@@ -235,9 +268,26 @@ describe('tab create entry path validation', () => {
   })
 
   it('normalizes absolute paths for local open', () => {
-    expect(validateNewTabEntryAbsolutePath('/tmp/notes.md')).toBe('/tmp/notes.md')
-    expect(validateNewTabEntryAbsolutePath('C:\\tmp\\notes.md')).toBe('C:/tmp/notes.md')
-    expect(validateNewTabEntryAbsolutePath('/repo/../repo/src/file.ts')).toBe('/repo/src/file.ts')
+    expect(validateNewTabEntryAbsolutePath('/tmp/notes.md', 'posix')).toBe('/tmp/notes.md')
+    expect(validateNewTabEntryAbsolutePath('C:\\tmp\\notes.md', 'windows')).toBe('C:/tmp/notes.md')
+    expect(validateNewTabEntryAbsolutePath('\\\\server\\share\\notes.md', 'windows')).toBe(
+      '//server/share/notes.md'
+    )
+    expect(validateNewTabEntryAbsolutePath('/repo/../repo/src/file.ts', 'posix')).toBe(
+      '/repo/src/file.ts'
+    )
+  })
+
+  it('rejects path families that are not native to the client', () => {
+    expect(() => validateNewTabEntryAbsolutePath('C:\\tmp\\notes.md', 'posix')).toThrow(
+      'this computer'
+    )
+    expect(() => validateNewTabEntryAbsolutePath('\\\\server\\share\\notes.md', 'posix')).toThrow(
+      'this computer'
+    )
+    expect(() => validateNewTabEntryAbsolutePath('/tmp/notes.md', 'windows')).toThrow(
+      'this computer'
+    )
   })
 
   it('rejects invalid absolute paths', () => {

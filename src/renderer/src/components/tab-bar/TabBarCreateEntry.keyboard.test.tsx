@@ -11,7 +11,8 @@ import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
 vi.mock('./tab-create-entry-action', () => ({
   getTabEntryOptions: () => entryOptionsMock.options,
-  getTabEntryAllowAbsolutePaths: () => true
+  createTabEntryAllowAbsolutePathsSelector: () => () => true,
+  isTabEntryAbsolutePathLike: () => false
 }))
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })

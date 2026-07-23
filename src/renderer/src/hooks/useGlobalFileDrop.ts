@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { detectLanguage } from '@/lib/language-detect'
-import { toWorktreeRelativePathOrAbsolute } from '@/lib/worktree-relative-path'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
@@ -119,11 +119,12 @@ export function useGlobalFileDrop(): void {
               if (result.kind === 'directory') {
                 continue
               }
+              const maybeRelative = toWorktreeRelativePath(result.destPath, worktreePath)
               store.setActiveTabType('editor')
               store.openFile(
                 {
                   filePath: result.destPath,
-                  relativePath: toWorktreeRelativePathOrAbsolute(result.destPath, worktreePath),
+                  relativePath: maybeRelative ?? result.destPath,
                   worktreeId: activeWorktreeId,
                   runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
                   language: detectLanguage(result.destPath),
@@ -168,6 +169,14 @@ export function useGlobalFileDrop(): void {
               return
             }
 
+            let relativePath = filePath
+            if (worktreePath && isPathInsideWorktree(filePath, worktreePath)) {
+              const maybeRelative = toWorktreeRelativePath(filePath, worktreePath)
+              if (maybeRelative !== null && maybeRelative.length > 0) {
+                relativePath = maybeRelative
+              }
+            }
+
             // Why: the preload bridge already proved this OS drop landed on the
             // tab-strip editor target. Keeping the editor-open path centralized
             // here avoids the regression where CLI drops were all coerced into
@@ -175,7 +184,7 @@ export function useGlobalFileDrop(): void {
             store.setActiveTabType('editor')
             store.openFile({
               filePath,
-              relativePath: toWorktreeRelativePathOrAbsolute(filePath, worktreePath),
+              relativePath,
               worktreeId: activeWorktreeId,
               language: detectLanguage(filePath),
               mode: 'edit'

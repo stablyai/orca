@@ -2904,7 +2904,8 @@
                   "5a9c83c04b": "打开任何文件、URL、智能体...",
                   "90eb94dc48": "输入 http:// 或 https:// URL。",
                   "5553b283ce": "输入 URL 或文件路径。",
-                  "queryTooLarge": "搜索文本过长。"
+                  "queryTooLarge": "搜索文本过长。",
+                  "absolutePathRemoteBlocked": "绝对路径需要本地工作区。"
                 }
               },
               "menu": {

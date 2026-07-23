@@ -2927,7 +2927,8 @@
                   "5a9c83c04b": "Open any file, URL, agent, ...",
                   "90eb94dc48": "Enter an http:// or https:// URL.",
                   "5553b283ce": "Enter a URL or file path.",
-                  "queryTooLarge": "Search text is too large."
+                  "queryTooLarge": "Search text is too large.",
+                  "absolutePathRemoteBlocked": "Absolute paths require a local workspace."
                 }
               },
               "menu": {

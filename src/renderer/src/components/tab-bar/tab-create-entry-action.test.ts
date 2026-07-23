@@ -17,6 +17,7 @@ describe('openTabEntryWithOperations', () => {
       openFile: vi.fn(),
       statRuntimePath: vi.fn().mockResolvedValue({ size: 1, isDirectory: false, mtime: 1 }),
       authorizeExternalPath: vi.fn().mockResolvedValue(undefined),
+      assertAbsolutePathAllowed: vi.fn(),
       ...overrides
     }
   }
@@ -32,7 +33,8 @@ describe('openTabEntryWithOperations', () => {
       worktreePath: '/repo'
     },
     activeRuntimeEnvironmentId: null,
-    allowAbsolutePaths: true
+    allowAbsolutePaths: true,
+    localPlatform: 'posix' as const
   }
 
   it('stats existing files before opening and rejects directories', async () => {
@@ -286,6 +288,79 @@ describe('openTabEntryWithOperations', () => {
     ).rejects.toThrow(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
 
     expect(operations.authorizeExternalPath).not.toHaveBeenCalled()
+    expect(operations.statRuntimePath).not.toHaveBeenCalled()
+    expect(operations.createRuntimePath).not.toHaveBeenCalled()
+    expect(operations.openFile).not.toHaveBeenCalled()
+  })
+
+  it('rejects Windows path syntax before native POSIX authorization', async () => {
+    const operations = makeOperations()
+
+    await expect(
+      openTabEntryWithOperations({
+        ...baseArgs,
+        classification: { kind: 'absolute-file', filePath: 'C:\\tmp\\notes.md' },
+        query: 'C:\\tmp\\notes.md',
+        operations
+      })
+    ).rejects.toThrow('Enter an absolute path for this computer.')
+
+    expect(operations.authorizeExternalPath).not.toHaveBeenCalled()
+    expect(operations.statRuntimePath).not.toHaveBeenCalled()
+    expect(operations.openFile).not.toHaveBeenCalled()
+  })
+
+  it('normalizes and opens Windows drive paths on Windows', async () => {
+    const operations = makeOperations()
+
+    await openTabEntryWithOperations({
+      ...baseArgs,
+      localPlatform: 'windows',
+      worktreePath: 'C:/repo',
+      classification: { kind: 'absolute-file', filePath: 'C:\\tmp\\notes.md' },
+      query: 'C:\\tmp\\notes.md',
+      operations
+    })
+
+    expect(operations.authorizeExternalPath).toHaveBeenCalledWith({
+      targetPath: 'C:/tmp/notes.md'
+    })
+    expect(operations.statRuntimePath).toHaveBeenCalledWith(
+      baseArgs.runtimeContext,
+      'C:/tmp/notes.md'
+    )
+  })
+
+  it('stops after authorization when ownership becomes remote or ambiguous', async () => {
+    let releaseAuthorization: (() => void) | undefined
+    const authorization = new Promise<void>((resolve) => {
+      releaseAuthorization = resolve
+    })
+    let allowed = true
+    const operations = makeOperations({
+      authorizeExternalPath: vi.fn(() => authorization),
+      assertAbsolutePathAllowed: vi.fn(() => {
+        if (!allowed) {
+          throw new Error(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+        }
+      })
+    })
+
+    const opening = openTabEntryWithOperations({
+      ...baseArgs,
+      classification: { kind: 'absolute-file', filePath: '/tmp/notes.md' },
+      query: '/tmp/notes.md',
+      operations
+    })
+    await vi.waitFor(() => expect(operations.authorizeExternalPath).toHaveBeenCalledTimes(1))
+    const rejection = expect(opening).rejects.toThrow(
+      TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
+    )
+    allowed = false
+    releaseAuthorization?.()
+    await rejection
+
+    expect(operations.statRuntimePath).not.toHaveBeenCalled()
     expect(operations.openFile).not.toHaveBeenCalled()
   })
 })

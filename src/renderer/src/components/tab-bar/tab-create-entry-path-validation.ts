@@ -1,6 +1,8 @@
 import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
 import { isAbsolutePathLike } from '../editor/editor-panel-file-mode'
 
+export type TabEntryLocalPlatform = 'posix' | 'windows'
+
 function hasPathSeparator(query: string): boolean {
   return /[\\/]/.test(query)
 }
@@ -23,7 +25,10 @@ function assertTabEntryPathHasNoControlCharacters(trimmed: string): void {
   }
 }
 
-export function validateNewTabEntryAbsolutePath(query: string): string {
+export function validateNewTabEntryAbsolutePath(
+  query: string,
+  localPlatform?: TabEntryLocalPlatform
+): string {
   const trimmed = query.trim()
   if (!trimmed) {
     throw new Error('Enter a URL or file path.')
@@ -41,6 +46,14 @@ export function validateNewTabEntryAbsolutePath(query: string): string {
   const normalized = normalizeAbsolutePath(trimmed)
   if (!normalized) {
     throw new Error('Enter an absolute file path.')
+  }
+  const rootMatchesLocalPlatform =
+    localPlatform === undefined ||
+    (localPlatform === 'posix' && normalized.rootKind === 'posix') ||
+    (localPlatform === 'windows' &&
+      (normalized.rootKind === 'windows' || normalized.rootKind === 'unc'))
+  if (!rootMatchesLocalPlatform) {
+    throw new Error('Enter an absolute path for this computer.')
   }
   return normalized.normalized
 }

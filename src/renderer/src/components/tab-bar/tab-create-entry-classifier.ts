@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { findExistingFileMatches, isLikelyNewFileIntent } from './tab-create-entry-file-matches'
 import {
   isTabEntryAbsolutePathLike,
+  type TabEntryLocalPlatform,
   validateNewTabEntryAbsolutePath,
   validateNewTabEntryRelativePath
 } from './tab-create-entry-path-validation'
@@ -17,10 +18,11 @@ export {
 
 export type TabEntryOptionsContext = {
   allowAbsolutePaths?: boolean
+  localPlatform?: TabEntryLocalPlatform
 }
 
 export const TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE =
-  'Absolute file paths are not supported for remote workspaces.'
+  'Absolute paths require a local workspace.'
 
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
@@ -52,7 +54,8 @@ function tabEntryActionOptionId(classification: TabEntryActionClassification): s
       return `${classification.kind}:${classification.relativePath}`
     case 'absolute-file':
       return `${classification.kind}:${classification.filePath}`
-    default:
+    case 'explicit-url':
+    case 'host-url':
       return `${classification.kind}:${classification.url}`
   }
 }
@@ -119,14 +122,14 @@ export function getTabEntryOptions(
             kind: 'blocked',
             message: translate(
               'auto.components.tab.bar.tab.create.entry.classifier.absolutePathRemoteBlocked',
-              TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
+              'Absolute paths require a local workspace.'
             )
           }
         }
       ]
     }
     try {
-      const filePath = validateNewTabEntryAbsolutePath(trimmed)
+      const filePath = validateNewTabEntryAbsolutePath(trimmed, context.localPlatform)
       return [
         {
           id: `absolute-file:${filePath}`,

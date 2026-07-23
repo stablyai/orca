@@ -2904,7 +2904,8 @@
                   "5a9c83c04b": "Abrir cualquier archivo, URL, agente, ...",
                   "90eb94dc48": "Introduce una URL http:// o https://.",
                   "5553b283ce": "Introduce una URL o ruta de archivo.",
-                  "queryTooLarge": "El texto de búsqueda es demasiado grande."
+                  "queryTooLarge": "El texto de búsqueda es demasiado grande.",
+                  "absolutePathRemoteBlocked": "Las rutas absolutas requieren un espacio de trabajo local."
                 }
               },
               "menu": {
