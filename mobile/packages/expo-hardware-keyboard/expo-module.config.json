@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["ExpoHardwareKeyboardModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.hardwarekeyboard.ExpoHardwareKeyboardModule"]
+  }
+}

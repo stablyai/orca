@@ -328,6 +328,129 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent).toEqual(['한', '\t']))
   })
 
+  it('Given hardware ArrowLeft When the event arrives Then sends CSI left without field text', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputHardwareKey({
+      key: 'ArrowLeft',
+      modifiers: { ctrl: false, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['\x1b[D']))
+  })
+
+  it('Given hardware ArrowLeft after field text When it arrives Then clears the mirror baseline first', async () => {
+    const { handlers, sent, captures } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('ab')
+    await vi.waitFor(() => expect(sent).toEqual(['ab']))
+
+    handlers.handleLiveInputHardwareKey({
+      key: 'ArrowLeft',
+      modifiers: { ctrl: false, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+
+    await vi.waitFor(() => {
+      expect(captures.at(-1)).toBe('')
+      expect(sent).toEqual(['ab', '\x1b[D'])
+    })
+  })
+
+  it('Given hardware Ctrl+C When the event arrives Then sends interrupt byte', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputHardwareKey({
+      key: 'c',
+      modifiers: { ctrl: true, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['\x03']))
+  })
+
+  it('Given hardware Meta+C When the event arrives Then ignores system shortcut', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputHardwareKey({
+      key: 'c',
+      modifiers: { ctrl: false, alt: false, shift: false, meta: true },
+      repeat: false
+    })
+    await Promise.resolve()
+    expect(sent).toEqual([])
+  })
+
+  it('Given hardware Backspace with field text When the event arrives Then mirrors local edit without raw DEL', async () => {
+    const { handlers, sent, captures } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('ab')
+    await vi.waitFor(() => expect(sent).toEqual(['ab']))
+
+    handlers.handleLiveInputHardwareKey({
+      key: 'Backspace',
+      modifiers: { ctrl: false, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+
+    await vi.waitFor(() => {
+      expect(captures.at(-1)).toBe('a')
+      expect(sent).toEqual(['ab', '\x7f'])
+    })
+  })
+
+  it('Given rapid hardware Backspace When events arrive Then serializes both mirror erases', async () => {
+    const { handlers, sent, captures } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('ab')
+    await vi.waitFor(() => expect(sent).toEqual(['ab']))
+
+    const backspace = {
+      key: 'Backspace',
+      modifiers: { ctrl: false, alt: false, shift: false, meta: false },
+      repeat: true
+    }
+    handlers.handleLiveInputHardwareKey(backspace)
+    handlers.handleLiveInputHardwareKey(backspace)
+
+    await vi.waitFor(() => {
+      expect(captures.at(-1)).toBe('')
+      expect(sent).toEqual(['ab', '\x7f', '\x7f'])
+    })
+  })
+
+  it('Given hardware Backspace with empty field When the event arrives Then sends DEL', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputHardwareKey({
+      key: 'Backspace',
+      modifiers: { ctrl: false, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['\x7f']))
+  })
+
+  it('Given hardware Delete with field text When the event arrives Then follows accessory no-op local edit', async () => {
+    const { handlers, sent, captures } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('ab')
+    await vi.waitFor(() => expect(sent).toEqual(['ab']))
+
+    handlers.handleLiveInputHardwareKey({
+      key: 'Delete',
+      modifiers: { ctrl: false, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+    // Accessory forward-delete keeps field text; no terminal bytes when field is non-empty.
+    expect(captures.at(-1)).toBe('ab')
+    expect(sent).toEqual(['ab'])
+  })
+
+  it('Given hardware Ctrl+Space When the event arrives Then ignores for IME switching', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputHardwareKey({
+      key: ' ',
+      modifiers: { ctrl: true, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+    await Promise.resolve()
+    expect(sent).toEqual([])
+  })
+
   it('Given Hangul pending When the tab type lags to undefined Then keeps the composition state', async () => {
     // Given: '한' held while the active tab is still a terminal
     const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()

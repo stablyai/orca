@@ -4,6 +4,10 @@ import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import {
+  mapTerminalLiveHardwareKeyEvent,
+  type TerminalLiveHardwareKeyEvent
+} from './terminal-live-hardware-key-mapping'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
 import {
@@ -37,6 +41,7 @@ type TerminalLiveInputCommitHandlers = {
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly handleLiveInputChange: (text: string) => void
+  readonly handleLiveInputHardwareKey: (event: TerminalLiveHardwareKeyEvent) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => void
 }
@@ -191,6 +196,56 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     waitForPendingLiveInputFlush
   })
 
+  const handleLiveInputHardwareKey = useCallback(
+    (event: TerminalLiveHardwareKeyEvent) => {
+      if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
+        return
+      }
+      const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
+      if (pendingLiveInputHandleRef.current && !ownsPendingState) {
+        clearPendingLiveInputCommit()
+      }
+      const decision = mapTerminalLiveHardwareKeyEvent(event, {
+        heldText: ownsPendingState ? heldLiveInputTextRef.current : '',
+        sentText: ownsPendingState ? sentLiveInputTextRef.current : ''
+      })
+      switch (decision.kind) {
+        case 'ignore':
+          return
+        case 'local-edit':
+          // Why: native already consumed the key; mirror accessory local-edit so the
+          // hidden field and PTY stay in sync (same path as accessory ⌫/Del).
+          void handleLiveInputAccessoryBytes({
+            bytes: decision.localEdit === 'backspace' ? '\x7f' : '\x1b[3~',
+            localEdit: decision.localEdit
+          })
+          return
+        case 'send-bytes':
+          void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
+            sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+          )
+          return
+        case 'flush-field-then-send':
+          void sendTerminalLiveControlAfterPendingFlush(
+            () => flushPendingLiveInputText(activeHandle),
+            () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+          )
+          return
+        default:
+          decision satisfies never
+      }
+    },
+    [
+      activeHandle,
+      clearPendingLiveInputCommit,
+      flushPendingLiveInputText,
+      handleLiveInputAccessoryBytes,
+      liveInputTerminalHandles,
+      sendLiveTerminalInputRef,
+      waitForPendingLiveInputFlush
+    ]
+  )
+
   const handleLiveInputSubmit = useCallback(() => {
     if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
       return
@@ -206,6 +261,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     flushPendingLiveInputBeforeExternalSend,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputHardwareKey,
     handleLiveInputKeyPress,
     handleLiveInputSubmit
   }
