@@ -212,8 +212,9 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   cursor: {
+    // Why: Cursor IDE installs `cursor` (agent subcommand: `cursor agent`); standalone installer installs `cursor-agent`.
     detectCmd: 'cursor',
-    detectCmdAliases: ['cursor-agent', 'agent'],
+    detectCmdAliases: ['cursor-agent'],
     launchCmd: 'cursor agent',
     expectedProcess: 'cursor-agent',
     promptInjectionMode: 'argv',
