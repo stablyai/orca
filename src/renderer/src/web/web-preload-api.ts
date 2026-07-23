@@ -1323,6 +1323,7 @@ function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
     syncWindowGraph: async (_graph: RuntimeSyncWindowGraph) => getRemoteRuntimeStatus(),
     getStatus: () => getRemoteRuntimeStatus(),
     call: ({ method, params }) => callRuntimeEnvelope(method, params),
+    onDecisionGatesChanged: () => noopUnsubscribe,
     getTerminalFitOverrides: () => Promise.resolve([]),
     getTerminalDrivers: () => Promise.resolve([]),
     getBrowserDrivers: () => Promise.resolve([]),

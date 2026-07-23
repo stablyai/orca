@@ -36,6 +36,7 @@ export type CoordinatorRuntime = {
   getTerminalPaneKey?(handle: string): string | null
   // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
+  notifyDecisionGatesChanged?(event?: { gateId?: string; question?: string }): void
 }
 
 // Why (§3.1): 20 lets normal monorepo day-velocity pass but trips the 168-commit harm from ORCHESTRATOR_FEEDBACK.md (chosen in msg_eff3a646110d).
@@ -357,12 +358,21 @@ export class Coordinator {
       this.opts.onLog(`Warning: decision_gate missing taskId or question`)
       return
     }
+    if (
+      payload.options !== undefined &&
+      (!Array.isArray(payload.options) ||
+        !payload.options.every((option) => typeof option === 'string'))
+    ) {
+      this.opts.onLog(`Warning: decision_gate options must be an array of strings`)
+      return
+    }
 
-    this.db.createGate({
+    const gate = this.db.createGate({
       taskId: payload.taskId,
       question: payload.question,
       options: payload.options
     })
+    this.runtime.notifyDecisionGatesChanged?.({ gateId: gate.id, question: gate.question })
 
     this.opts.onLog(`Task ${payload.taskId} blocked on decision gate`)
   }

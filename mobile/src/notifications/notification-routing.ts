@@ -1,4 +1,8 @@
-export type DesktopNotificationSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+export type DesktopNotificationSource =
+  | 'agent-task-complete'
+  | 'terminal-bell'
+  | 'orchestration-attention'
+  | 'test'
 
 export type DesktopNotificationEvent = {
   source: DesktopNotificationSource

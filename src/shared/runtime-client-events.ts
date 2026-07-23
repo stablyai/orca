@@ -9,6 +9,12 @@ import type { SshConnectionState } from './ssh-types'
 export type RuntimeClientEvent =
   | { type: 'reposChanged' }
   | { type: 'worktreesChanged'; repoId: string }
+  | {
+      type: 'decisionGatesChanged'
+      gateId?: string
+      question?: string
+      resolvedGateId?: string
+    }
   // Why: SSH connections live on the runtime host; paired clients have no IPC
   // channel for ssh:state-changed, so without this event their reconnect
   // overlays never learn the host connected (STA-1468).
@@ -41,6 +47,7 @@ export type RuntimeClientEventStreamMessage =
       snapshot?: {
         repos?: unknown[]
         sshStates?: { targetId: string; state: SshConnectionState }[]
+        pendingDecisionGates?: boolean
       }
     })
   | RuntimeClientEvent

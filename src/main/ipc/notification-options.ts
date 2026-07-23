@@ -40,6 +40,15 @@ export function buildNotificationOptions(args: NotificationDispatchRequest): {
     }
   }
 
+  if (args.source === 'orchestration-attention') {
+    return {
+      title: 'Agent needs a decision',
+      body:
+        normalizeNotificationText(args.question, NOTIFICATION_BODY_PREVIEW_MAX_LENGTH) ||
+        'Open Orca to review the pending decision.'
+    }
+  }
+
   const richOptions = buildAgentTaskCompleteNotificationOptions(args)
   if (richOptions) {
     return richOptions

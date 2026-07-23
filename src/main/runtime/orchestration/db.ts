@@ -1121,42 +1121,69 @@ export class OrchestrationDb {
     assertOrchestrationWriteFits('Decision gate', [gate.taskId, gate.question, ...options])
     const optionsJson = JSON.stringify(options)
     assertOrchestrationWriteFits('Decision gate', [gate.taskId, gate.question, optionsJson])
-    this.db
-      .prepare('INSERT INTO decision_gates (id, task_id, question, options) VALUES (?, ?, ?, ?)')
-      .run(id, gate.taskId, gate.question, optionsJson)
-
-    this.completeActiveDispatchForTask(gate.taskId)
-    this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.taskId)
-
-    return this.getGate(id)!
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const task = this.getTask(gate.taskId)
+      if (!task) {
+        throw new Error(`Task not found: ${gate.taskId}`)
+      }
+      if (task.status === 'completed' || task.status === 'failed') {
+        throw new Error(`Cannot create gate for ${task.status} task: ${gate.taskId}`)
+      }
+      this.db
+        .prepare('INSERT INTO decision_gates (id, task_id, question, options) VALUES (?, ?, ?, ?)')
+        .run(id, gate.taskId, gate.question, optionsJson)
+      this.completeActiveDispatchForTask(gate.taskId)
+      this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.taskId)
+      this.db.exec('COMMIT')
+      return this.getGate(id)!
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   resolveGate(gateId: string, resolution: string): DecisionGateRow | undefined {
     assertOrchestrationWriteFits('Decision gate resolution', [gateId, resolution])
-    const gate = this.getGate(gateId)
-    if (!gate) {
-      return undefined
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const update = this.db
+        .prepare(
+          "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ? AND status = 'pending'"
+        )
+        .run(resolution, gateId)
+      if (update.changes === 0) {
+        this.db.exec('ROLLBACK')
+        return undefined
+      }
+
+      const gate = this.getGate(gateId)!
+      // Why: another pending gate still owns the block, and stale task transitions must never be revived.
+      this.db
+        .prepare(
+          `UPDATE tasks SET status = 'ready'
+           WHERE id = ? AND status = 'blocked'
+             AND NOT EXISTS (
+               SELECT 1 FROM decision_gates
+               WHERE task_id = ? AND status = 'pending'
+             )`
+        )
+        .run(gate.task_id, gate.task_id)
+      this.db.exec('COMMIT')
+      return gate
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
     }
-
-    this.db
-      .prepare(
-        "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ?"
-      )
-      .run(resolution, gateId)
-
-    // Why: set to 'ready' (not the previous status) so the coordinator re-dispatches the worker with the resolution context.
-    this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(gate.task_id)
-
-    return this.getGate(gateId)
   }
 
   timeoutGate(gateId: string): DecisionGateRow | undefined {
-    this.db
+    const update = this.db
       .prepare(
-        "UPDATE decision_gates SET status = 'timeout', resolved_at = datetime('now') WHERE id = ?"
+        "UPDATE decision_gates SET status = 'timeout', resolved_at = datetime('now') WHERE id = ? AND status = 'pending'"
       )
       .run(gateId)
-    return this.getGate(gateId)
+    return update.changes > 0 ? this.getGate(gateId) : undefined
   }
 
   listGates(filter?: { taskId?: string; status?: GateStatus }): DecisionGateRow[] {

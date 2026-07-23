@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
 import { SidebarTaskNavButton } from './SidebarTaskNavButton'
+import { DecisionGateAttention } from '../orchestration/DecisionGateAttention'
 import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
 
@@ -156,6 +157,7 @@ const SidebarNav = React.memo(function SidebarNav() {
       data-contextual-tour-target="sidebar-navigation"
     >
       <SetupGuideSidebarEntry />
+      <DecisionGateAttention />
       <SidebarTaskNavButton />
       {showAutomationsButton ? (
         <ContextMenu>

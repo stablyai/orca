@@ -100,6 +100,7 @@ import {
 } from '@/runtime/runtime-environment-ssh-state'
 import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
+import { routeDecisionGateChange } from './decision-gate-event-routing'
 import { detectLanguage } from '@/lib/language-detect'
 import { makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
@@ -1001,6 +1002,12 @@ export function useIpcEvents(): void {
         runtimeProjectRefreshScheduler.request(environmentId)
         return
       }
+      if (event.type === 'decisionGatesChanged') {
+        routeDecisionGateChange(event, window.api.notifications, (detail) => {
+          window.dispatchEvent(new CustomEvent('orca:decision-gates-changed', { detail }))
+        })
+        return
+      }
       if (event.type === 'sshStateChanged') {
         applyRuntimeEnvironmentSshStateChanged(
           environmentId,
@@ -1112,6 +1119,17 @@ export function useIpcEvents(): void {
     )
     unsubs.push(runtimeClientEventsSync.stop)
     unsubs.push(runtimeProjectRefreshScheduler.stop)
+
+    const onDecisionGatesChanged = window.api.runtime.onDecisionGatesChanged
+    if (onDecisionGatesChanged) {
+      unsubs.push(
+        onDecisionGatesChanged((event) => {
+          routeDecisionGateChange(event, window.api.notifications, (detail) => {
+            window.dispatchEvent(new CustomEvent('orca:decision-gates-changed', { detail }))
+          })
+        })
+      )
+    }
 
     unsubs.push(
       window.api.repos.onChanged(() => {

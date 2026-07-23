@@ -42,8 +42,14 @@ export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
           const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)
           return state ? [{ targetId: target.id, state }] : []
         })
+        const pendingDecisionGates =
+          (runtime.getOrchestrationDb?.().countGates({ status: 'pending' }) ?? 0) > 0
         // Why: attaching the listener before snapshotting closes the reload gap without exposing HUB-private target configuration.
-        emit({ type: 'ready', subscriptionId, snapshot: { sshStates } })
+        emit({
+          type: 'ready',
+          subscriptionId,
+          snapshot: { sshStates, pendingDecisionGates }
+        })
       })
     }
   }),

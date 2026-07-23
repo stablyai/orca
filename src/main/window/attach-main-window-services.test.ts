@@ -582,6 +582,7 @@ describe('attachMainWindowServices', () => {
     const notifier = runtime.setNotifier.mock.calls[0][0] as {
       worktreesChanged: (repoId: string) => void
       reposChanged: () => void
+      decisionGatesChanged: (event: { gateId?: string; question?: string }) => void
       activateWorktree: (
         repoId: string,
         worktreeId: string,
@@ -591,6 +592,7 @@ describe('attachMainWindowServices', () => {
 
     notifier.worktreesChanged('repo-1')
     notifier.reposChanged()
+    notifier.decisionGatesChanged({ gateId: 'gate-1', question: 'Proceed?' })
     notifier.activateWorktree('repo-1', 'wt-1', {
       runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
       envVars: {
@@ -602,6 +604,7 @@ describe('attachMainWindowServices', () => {
     expect(sendMock.mock.calls).toEqual([
       ['worktrees:changed', { repoId: 'repo-1' }],
       ['repos:changed'],
+      ['orchestration:decisionGatesChanged', { gateId: 'gate-1', question: 'Proceed?' }],
       [
         'ui:activateWorktree',
         {

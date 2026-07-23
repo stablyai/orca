@@ -102,6 +102,52 @@ describe('subscribeRuntimeClientEvents', () => {
     expect(onEvent).toHaveBeenCalledWith({ type: 'worktreesChanged', repoId: 'repo-1' })
   })
 
+  it('refreshes pending gates from a ready snapshot after reconnect', async () => {
+    let capturedOnResponse: ((response: unknown) => void) | undefined
+    const subscribe = vi.fn(async (_args, nextCallbacks) => {
+      capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+    const onEvent = vi.fn()
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
+
+    await subscribeRuntimeClientEvents('env-1', onEvent)
+    capturedOnResponse?.({
+      ok: true,
+      result: {
+        type: 'ready',
+        subscriptionId: 'sub-1',
+        snapshot: { pendingDecisionGates: true }
+      },
+      _replayedAfterReconnect: true
+    })
+
+    expect(onEvent).toHaveBeenCalledWith({ type: 'decisionGatesChanged' })
+  })
+
+  it('refreshes cleared gates from a ready snapshot after reconnect', async () => {
+    let capturedOnResponse: ((response: unknown) => void) | undefined
+    const subscribe = vi.fn(async (_args, nextCallbacks) => {
+      capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+    const onEvent = vi.fn()
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
+
+    await subscribeRuntimeClientEvents('env-1', onEvent)
+    capturedOnResponse?.({
+      ok: true,
+      result: {
+        type: 'ready',
+        subscriptionId: 'sub-1',
+        snapshot: { pendingDecisionGates: false }
+      },
+      _replayedAfterReconnect: true
+    })
+
+    expect(onEvent).toHaveBeenCalledWith({ type: 'decisionGatesChanged' })
+  })
+
   it('forwards every host terminal sleep disposition through the response decoder', async () => {
     let capturedOnResponse: ((response: unknown) => void) | undefined
     const subscribe = vi.fn(async (_args, nextCallbacks) => {

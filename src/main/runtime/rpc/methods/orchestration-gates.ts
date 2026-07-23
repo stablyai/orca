@@ -128,6 +128,7 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
         question: params.question,
         options
       })
+      runtime.notifyDecisionGatesChanged({ gateId: gate.id, question: gate.question })
       return { gate }
     }
   }),
@@ -139,8 +140,12 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
       const db = runtime.getOrchestrationDb()
       const gate = db.resolveGate(params.id, params.resolution)
       if (!gate) {
+        if (db.getGate(params.id)) {
+          throw new Error(`Gate already resolved: ${params.id}`)
+        }
         throw new Error(`Gate not found: ${params.id}`)
       }
+      runtime.notifyDecisionGatesChanged({ resolvedGateId: gate.id })
       return { gate }
     }
   }),
