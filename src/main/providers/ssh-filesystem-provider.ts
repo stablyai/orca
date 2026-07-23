@@ -302,7 +302,12 @@ export class SshFilesystemProvider implements IFilesystemProvider {
 
   async listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
+    options?: {
+      excludePaths?: string[]
+      signal?: AbortSignal
+      maxResults?: number
+      followSymlinks?: boolean
+    }
   ): Promise<string[]> {
     const params: Record<string, unknown> = { rootPath }
     if (options?.excludePaths && options.excludePaths.length > 0) {
@@ -310,6 +315,9 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     }
     if (options?.maxResults !== undefined) {
       params.maxResults = options.maxResults
+    }
+    if (options?.followSymlinks) {
+      params.followSymlinks = true
     }
     // Why #7721: the signal lets a workspace switch send rpc.cancel so the
     // relay aborts the full-tree scan instead of stacking abandoned scans

@@ -5527,7 +5527,9 @@
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。",
           "7ddd66fede": "编辑器自动换行",
-          "9b18de6eea": "在文件编辑器中自动换行长行，而无需水平滚动。"
+          "9b18de6eea": "在文件编辑器中自动换行长行，而无需水平滚动。",
+          "quickOpenFollowSymlinksTitle": "Quick Open Follows Symlinks",
+          "quickOpenFollowSymlinksDescription": "Include files inside symlinked directories in Quick Open (Cmd/Ctrl+P). Off by default because following symlinks can reach content outside the workspace."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",

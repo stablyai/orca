@@ -18,6 +18,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
+import { QuickOpenFollowSymlinksSetting } from './QuickOpenFollowSymlinksSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import {
   createAutoSaveDelayDraftState,
@@ -231,6 +232,8 @@ export function GeneralEditorSettingsSection({
       />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
+
+      <QuickOpenFollowSymlinksSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

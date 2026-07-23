@@ -24,12 +24,13 @@ import {
 export async function listFilesWithReaddir(
   rootPath: string,
   excludePathPrefixes: readonly string[] = [],
-  options: { signal?: AbortSignal; maxResults?: number } = {}
+  options: { signal?: AbortSignal; maxResults?: number; followSymlinks?: boolean } = {}
 ): Promise<string[]> {
   return listQuickOpenFilesWithReaddir(rootPath, {
     excludePathPrefixes,
     budget: createQuickOpenReaddirBudget(),
     maxResults: options.maxResults,
-    signal: options.signal
+    signal: options.signal,
+    followSymlinks: options.followSymlinks
   })
 }

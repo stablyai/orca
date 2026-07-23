@@ -173,6 +173,33 @@ describe('buildRgArgsForQuickOpen', () => {
     // Glob metacharacters in a literal name must be escaped.
     expect(primary).toContain('!feature\\[1\\]')
   })
+
+  it('followSymlinks adds --follow to both passes', () => {
+    const { primary, ignoredPass } = buildRgArgsForQuickOpen({
+      searchRoot: '/root',
+      excludePathPrefixes: [],
+      forceSlashSeparator: false,
+      followSymlinks: true
+    })
+    expect(primary).toContain('--follow')
+    expect(ignoredPass).toContain('--follow')
+  })
+
+  it('followSymlinks omitted or false keeps --follow off (secure default)', () => {
+    for (const opts of [
+      { searchRoot: '/root', excludePathPrefixes: [], forceSlashSeparator: false },
+      {
+        searchRoot: '/root',
+        excludePathPrefixes: [],
+        forceSlashSeparator: false,
+        followSymlinks: false
+      }
+    ]) {
+      const { primary, ignoredPass } = buildRgArgsForQuickOpen(opts)
+      expect(primary).not.toContain('--follow')
+      expect(ignoredPass).not.toContain('--follow')
+    }
+  })
 })
 
 describe('normalizeQuickOpenRgLine', () => {

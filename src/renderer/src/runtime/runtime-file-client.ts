@@ -740,7 +740,12 @@ export async function searchRuntimeFiles(
 
 export async function listRuntimeFiles(
   context: RuntimeFileOperationArgs,
-  args: { rootPath: string; excludePaths?: string[]; requestToken?: string }
+  args: {
+    rootPath: string
+    excludePaths?: string[]
+    requestToken?: string
+    followSymlinks?: boolean
+  }
 ): Promise<string[]> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment' || !context.worktreeId) {
@@ -748,7 +753,8 @@ export async function listRuntimeFiles(
       rootPath: args.rootPath,
       connectionId: context.connectionId,
       excludePaths: args.excludePaths,
-      requestToken: args.requestToken
+      requestToken: args.requestToken,
+      followSymlinks: args.followSymlinks
     })
   }
   return callRuntimeRpc<string[]>(
@@ -756,7 +762,8 @@ export async function listRuntimeFiles(
     'files.listAll',
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
-      excludePaths: args.excludePaths
+      excludePaths: args.excludePaths,
+      followSymlinks: args.followSymlinks
     },
     { timeoutMs: 15_000 }
   )

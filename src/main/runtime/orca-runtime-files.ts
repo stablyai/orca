@@ -1604,7 +1604,7 @@ export class RuntimeFileCommands {
 
   async listRuntimeFiles(
     worktreeSelector: string,
-    options: { excludePaths?: string[] } = {}
+    options: { excludePaths?: string[]; followSymlinks?: boolean } = {}
   ): Promise<string[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
@@ -1612,9 +1612,19 @@ export class RuntimeFileCommands {
       if (!provider) {
         return []
       }
-      return provider.listFiles(target.worktree.path, { excludePaths: options.excludePaths })
+      return provider.listFiles(target.worktree.path, {
+        excludePaths: options.excludePaths,
+        followSymlinks: options.followSymlinks
+      })
     }
-    return listQuickOpenFiles(target.worktree.path, this.host.requireStore(), options.excludePaths)
+    return listQuickOpenFiles(
+      target.worktree.path,
+      this.host.requireStore(),
+      options.excludePaths,
+      undefined,
+      undefined,
+      options.followSymlinks
+    )
   }
 
   async listRuntimeMarkdownDocuments(worktreeSelector: string): Promise<MarkdownDocument[]> {

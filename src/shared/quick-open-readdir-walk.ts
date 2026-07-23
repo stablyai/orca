@@ -1,5 +1,6 @@
-import { lstat, readdir } from 'node:fs/promises'
+import { lstat, readdir, realpath, stat } from 'node:fs/promises'
 import { join, relative } from 'node:path'
+import { classifyQuickOpenGitEntry, joinRootRel, normalizeGitEntry } from './quick-open-git-entry'
 import { throwIfFileListingCancelled } from './file-listing-cancellation'
 import { isQuickOpenReadableDirectory } from './quick-open-directory-validation'
 import { collapseQuickOpenExpansionPaths } from './quick-open-expansion-paths'
@@ -21,51 +22,43 @@ export {
   QUICK_OPEN_READDIR_MAX_FILES,
   QUICK_OPEN_READDIR_TIMEOUT_MS
 } from './quick-open-readdir-budget'
+// Re-exported so existing importers/tests keep the './quick-open-readdir-walk' path
+// after the git-entry parsers moved to their own module (max-lines split).
+export {
+  classifyQuickOpenGitEntry,
+  parseQuickOpenGitLsFilesEntry,
+  type QuickOpenGitEntryKind,
+  type QuickOpenGitLsFilesEntry
+} from './quick-open-git-entry'
 
 const QUICK_OPEN_READDIR_CONCURRENCY = 32
 
-export type QuickOpenGitEntryKind = 'keep' | 'fill-nested-repo' | 'drop-placeholder'
-
-export type QuickOpenGitLsFilesEntry = {
-  path: string
-  isGitlink: boolean
-  isUntrackedDir: boolean
-}
-
-const GIT_LS_FILES_STAGE_ENTRY = /^([0-7]{6}) [0-9a-f]{40,64} [0-3]\t/
-
-export function parseQuickOpenGitLsFilesEntry(entry: string): QuickOpenGitLsFilesEntry {
-  const match = GIT_LS_FILES_STAGE_ENTRY.exec(entry)
-  if (match) {
-    return {
-      path: entry.slice(match[0].length),
-      isGitlink: match[1] === '160000',
-      isUntrackedDir: false
-    }
-  }
-  return {
-    path: entry,
-    isGitlink: false,
-    isUntrackedDir: entry.endsWith('/')
-  }
-}
-
 function shouldDescend(name: string): boolean {
   return name !== 'node_modules' && !HIDDEN_DIR_BLOCKLIST.has(name)
+}
+
+/**
+ * Resolve a symlink entry: returns its realpath when it points to a directory,
+ * else null. The realpath is what the cycle guard dedupes on, so a link and its
+ * target (or two links to the same target) are followed only once.
+ */
+async function resolveSymlinkedDirectory(absPath: string): Promise<string | null> {
+  try {
+    const target = await stat(absPath)
+    if (!target.isDirectory()) {
+      return null
+    }
+    return await realpath(absPath)
+  } catch {
+    // Broken link, permission denied, or a race — treat as non-followable.
+    return null
+  }
 }
 
 function toRelPath(rootPath: string, absPath: string): string {
   // Why: path.relative returns backslashes on Windows, while Quick Open paths
   // are always stored and matched with POSIX separators.
   return relative(rootPath, absPath).replace(/\\/g, '/')
-}
-
-function joinRootRel(rootPath: string, relPath: string): string {
-  return join(rootPath, ...relPath.split('/').filter(Boolean))
-}
-
-function normalizeGitEntry(entry: string): string {
-  return entry.replace(/\/+$/, '')
 }
 
 // Translate workspace-root-relative exclude prefixes into prefixes relative to
@@ -85,47 +78,6 @@ function rebaseExcludePrefixesForSubtree(
   return rebased
 }
 
-async function hasGitEntry(absPath: string): Promise<boolean> {
-  try {
-    const stat = await lstat(join(absPath, '.git'))
-    return stat.isDirectory() || stat.isFile()
-  } catch {
-    return false
-  }
-}
-
-export async function classifyQuickOpenGitEntry(
-  rootPath: string,
-  entry: string
-): Promise<{ kind: QuickOpenGitEntryKind; relPath: string }> {
-  const parsed = parseQuickOpenGitLsFilesEntry(entry)
-  const relPath = normalizeGitEntry(parsed.path)
-  if (!relPath) {
-    return { kind: 'drop-placeholder', relPath }
-  }
-
-  if (!parsed.isGitlink && !parsed.isUntrackedDir) {
-    return { kind: 'keep', relPath }
-  }
-
-  let stat
-  try {
-    stat = await lstat(joinRootRel(rootPath, relPath))
-  } catch {
-    return { kind: 'drop-placeholder', relPath }
-  }
-
-  if (!stat.isDirectory()) {
-    return { kind: 'drop-placeholder', relPath }
-  }
-
-  if (await hasGitEntry(joinRootRel(rootPath, relPath))) {
-    return { kind: 'fill-nested-repo', relPath }
-  }
-
-  return { kind: 'drop-placeholder', relPath }
-}
-
 export async function listQuickOpenFilesWithReaddir(
   rootPath: string,
   opts: {
@@ -134,6 +86,7 @@ export async function listQuickOpenFilesWithReaddir(
     budget?: QuickOpenReaddirBudget
     maxResults?: number
     signal?: AbortSignal
+    followSymlinks?: boolean
   } = {}
 ): Promise<string[]> {
   return listQuickOpenFilesFromRoots(
@@ -142,7 +95,8 @@ export async function listQuickOpenFilesWithReaddir(
         rootPath,
         excludePathPrefixes: opts.excludePathPrefixes ?? [],
         workspaceRelPathPrefix: opts.workspaceRelPathPrefix,
-        allowRootSymlink: true
+        allowRootSymlink: true,
+        followSymlinks: opts.followSymlinks
       }
     ],
     opts.budget ?? createQuickOpenReaddirBudget(),
@@ -158,6 +112,12 @@ type QuickOpenReaddirRoot = {
   outputPathPrefix?: string
   includeSymlinks?: boolean
   allowRootSymlink?: boolean
+  /**
+   * Opt-in: descend into symlinked directories (default off keeps traversal
+   * inside the authorized root). Cycles are broken by a shared realpath
+   * visited-set seeded with each followed directory's resolved path.
+   */
+  followSymlinks?: boolean
 }
 
 async function listQuickOpenFilesFromRoots(
@@ -170,7 +130,17 @@ async function listQuickOpenFilesFromRoots(
   if (maxResults !== undefined && maxResults <= 0) {
     return files
   }
-  let pendingDirectories = roots.map((root) => ({
+  // Cycle guard for followSymlinks: resolved paths of directories already
+  // entered through a symlink. Only populated when a root opts in, so ordinary
+  // walks pay no realpath cost. Seeded lazily as symlinked dirs are followed.
+  const followedRealPaths = new Set<string>()
+  let pendingDirectories: {
+    root: QuickOpenReaddirRoot
+    absPath: string
+    isRoot: boolean
+    /** Entered via a followed symlink — the lstat guard must accept the link. */
+    viaSymlink?: boolean
+  }[] = roots.map((root) => ({
     root,
     absPath: root.rootPath,
     isRoot: true
@@ -195,15 +165,18 @@ async function listQuickOpenFilesFromRoots(
             // Why: Git's placeholder may have been replaced with a symlink
             // before expansion. Never let readdir follow it outside the root.
             const stat = await lstat(pending.absPath)
-            const allowSymlinkedRoot = pending.isRoot && pending.root.allowRootSymlink
-            if (!isQuickOpenReadableDirectory(stat, allowSymlinkedRoot)) {
+            // A followed symlinked dir (viaSymlink) is accepted like a symlinked
+            // root — readdir resolves the link and reads the target's entries.
+            const allowSymlinkedDir =
+              (pending.isRoot && pending.root.allowRootSymlink) || pending.viaSymlink === true
+            if (!isQuickOpenReadableDirectory(stat, allowSymlinkedDir)) {
               return { pending, entries: [] }
             }
             const entries = await readdir(pending.absPath, { withFileTypes: true })
             // Why: close the ordinary check/use race. If the directory became
             // a symlink while readdir was pending, discard everything read.
             const statAfterRead = await lstat(pending.absPath)
-            if (!isQuickOpenReadableDirectory(statAfterRead, allowSymlinkedRoot)) {
+            if (!isQuickOpenReadableDirectory(statAfterRead, allowSymlinkedDir)) {
               return { pending, entries: [] }
             }
             return { pending, entries }
@@ -235,6 +208,23 @@ async function listQuickOpenFilesFromRoots(
           if (entry.isDirectory()) {
             if (shouldDescend(name) && shouldIncludeQuickOpenPath(workspaceRelPath)) {
               nextDirectories.push({ root: pending.root, absPath, isRoot: false })
+            }
+            continue
+          }
+          // Opt-in: a symlink that resolves to a directory is descended into, so
+          // files behind an in-root link surface. Guarded by shouldDescend/blocklist
+          // and a realpath visited-set that breaks cycles (link back to an ancestor
+          // or a mutual A↔B pair).
+          if (
+            pending.root.followSymlinks &&
+            entry.isSymbolicLink() &&
+            shouldDescend(name) &&
+            shouldIncludeQuickOpenPath(workspaceRelPath)
+          ) {
+            const resolved = await resolveSymlinkedDirectory(absPath)
+            if (resolved && !followedRealPaths.has(resolved)) {
+              followedRealPaths.add(resolved)
+              nextDirectories.push({ root: pending.root, absPath, isRoot: false, viaSymlink: true })
             }
             continue
           }

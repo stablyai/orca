@@ -1035,6 +1035,7 @@ export function registerFilesystemHandlers(
         connectionId?: string
         excludePaths?: string[]
         requestToken?: string
+        followSymlinks?: boolean
       }
     ): Promise<string[]> => {
       const controller = listFilesCancellations.begin(event, args.requestToken)
@@ -1048,10 +1049,18 @@ export function registerFilesystemHandlers(
           // Why: forward excludePaths or nested linked worktrees get double-scanned over SSH, causing timeout-induced partial results.
           return await provider.listFiles(args.rootPath, {
             excludePaths: args.excludePaths,
-            signal: controller?.signal
+            signal: controller?.signal,
+            followSymlinks: args.followSymlinks
           })
         }
-        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths, controller?.signal)
+        return await listQuickOpenFiles(
+          args.rootPath,
+          store,
+          args.excludePaths,
+          controller?.signal,
+          undefined,
+          args.followSymlinks
+        )
       } finally {
         listFilesCancellations.finish(event, args.requestToken, controller)
       }

@@ -2630,6 +2630,10 @@ export type GlobalSettings = {
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
+  /** Opt-in: Quick Open follows in-root symlinked directories so files behind a
+   *  link (e.g. a linked notes vault) are searchable. Off by default because
+   *  `--follow` lets a symlink reach content outside the authorized workspace. */
+  quickOpenFollowSymlinks?: boolean
   /** Why: mirrors terminal selection-paste muscle memory without mutating the
    *  normal system clipboard; Linux and macOS enable it by default, Windows
    *  leaves middle-click semantics unchanged unless the user opts in. */

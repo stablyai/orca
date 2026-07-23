@@ -152,10 +152,12 @@ export function useRuntimeFileListForWorktree({
     activeTargetStatus === 'connecting' ||
     activeTargetStatus === 'deploying-relay' ||
     activeTargetStatus === 'reconnecting'
+  // Opt-in (default off): include files reachable through in-root symlinked dirs.
+  const followSymlinks = useAppStore((state) => state.settings?.quickOpenFollowSymlinks ?? false)
   const requestKey = useMemo(
     () =>
-      `${worktreePath ?? ''}\n${operationOwnerKey}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}`,
-    [activeTargetStatus, excludeRequest.key, operationOwnerKey, worktreePath]
+      `${worktreePath ?? ''}\n${operationOwnerKey}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}\n${followSymlinks}`,
+    [activeTargetStatus, excludeRequest.key, followSymlinks, operationOwnerKey, worktreePath]
   )
 
   useEffect(() => {
@@ -195,6 +197,7 @@ export function useRuntimeFileListForWorktree({
     void listRuntimeFiles(requestContext, {
       rootPath: worktreePath,
       excludePaths,
+      followSymlinks,
       requestToken
     })
       .then((result) => {
@@ -227,6 +230,7 @@ export function useRuntimeFileListForWorktree({
     enabled,
     excludeRequest,
     connectionId,
+    followSymlinks,
     operationOwnerKey,
     operationRouteAvailable,
     requestKey,

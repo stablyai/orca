@@ -2518,6 +2518,7 @@ export type PreloadApi = {
       connectionId?: string
       excludePaths?: string[]
       requestToken?: string
+      followSymlinks?: boolean
     }) => Promise<string[]>
     cancelListFiles: (args: { requestToken: string }) => Promise<void>
     search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>

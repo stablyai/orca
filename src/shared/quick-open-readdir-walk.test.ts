@@ -466,6 +466,46 @@ describe('quick-open readdir walk', () => {
     expect(files).not.toContain('linked-dir/file.ts')
   })
 
+  it('followSymlinks surfaces files inside a symlinked directory', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'src/index.ts')
+    await writeRel(root, 'target/file.ts')
+
+    try {
+      await symlink(join(root, 'target'), join(root, 'linked-dir'), 'dir')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+        return
+      }
+      throw err
+    }
+
+    const files = await listQuickOpenFilesWithReaddir(root, { followSymlinks: true })
+    expect(files).toEqual(
+      expect.arrayContaining(['src/index.ts', 'target/file.ts', 'linked-dir/file.ts'])
+    )
+  })
+
+  it('followSymlinks does not loop when a symlink points back to an ancestor', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'src/index.ts')
+
+    try {
+      // Cycle: root/src/loop -> root. Without the realpath visited-set the walk
+      // would descend root → src → loop → root → … forever.
+      await symlink(root, join(root, 'src', 'loop'), 'dir')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+        return
+      }
+      throw err
+    }
+
+    const files = await listQuickOpenFilesWithReaddir(root, { followSymlinks: true })
+    // Terminates and still lists the real file; the cycle is entered at most once.
+    expect(files).toContain('src/index.ts')
+  })
+
   it('walks an explicitly selected symlinked workspace root', async () => {
     const targetRoot = await makeTempRoot()
     const linkContainer = await makeTempRoot()

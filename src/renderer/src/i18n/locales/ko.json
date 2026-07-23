@@ -5527,7 +5527,9 @@
           "b82f86d7d2": "리치 Markdown 맞춤법 검사",
           "5195f0b9ef": "리치 Markdown을 편집하는 동안 브라우저 맞춤법 밑줄과 제안을 표시합니다.",
           "7ddd66fede": "편집기 자동 줄 바꿈",
-          "9b18de6eea": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
+          "9b18de6eea": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다.",
+          "quickOpenFollowSymlinksTitle": "Quick Open Follows Symlinks",
+          "quickOpenFollowSymlinksDescription": "Include files inside symlinked directories in Quick Open (Cmd/Ctrl+P). Off by default because following symlinks can reach content outside the workspace."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
