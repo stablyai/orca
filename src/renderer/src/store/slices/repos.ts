@@ -2613,11 +2613,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                 { timeoutMs: 15_000 }
               )
             ).result
+      const setup = setupWithFetchedOwner(result.setup, target)
       const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
       const repoHostId = repo ? getRepoExecutionHostId(repo) : null
       set((s) => {
         const projectHostSetups = s.projectHostSetups.filter(
-          (setup) => setup.hostId !== result.setup.hostId || setup.id !== result.setup.id
+          (entry) => entry.hostId !== setup.hostId || entry.id !== setup.id
         )
         const repos =
           repo && repoHostId
@@ -2636,7 +2637,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           ...omitSparsePresetsForRepos(s, removedRepoIds)
         }
       })
-      return { ...result, repo }
+      return { ...result, repo, setup }
     } catch (err) {
       console.error('Failed to delete project host setup:', err)
       const message = err instanceof Error ? err.message : String(err)

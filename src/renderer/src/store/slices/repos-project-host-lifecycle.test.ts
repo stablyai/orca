@@ -166,10 +166,11 @@ describe('repo slice project host setup lifecycle', () => {
   })
 
   it('deletes runtime-owned project host setups through their owning runtime', async () => {
+    const runtimeDeleteResponse = { ...runtimeSetup, hostId: 'local' }
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-delete-setup',
       ok: true,
-      result: { result: { project, setup: runtimeSetup } },
+      result: { result: { project, setup: runtimeDeleteResponse } },
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
@@ -186,7 +187,12 @@ describe('repo slice project host setup lifecycle', () => {
       })
     ).resolves.toEqual({
       project,
-      setup: runtimeSetup,
+      setup: {
+        ...runtimeSetup,
+        executionHostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        connectionId: null
+      },
       repo: undefined
     })
 
