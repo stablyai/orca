@@ -2218,7 +2218,8 @@
           "ProjectBoardView": {
             "no-group-field": "Este tablero no tiene un campo de selección única para agrupar.",
             "empty": "Ningún elemento coincide con el filtro de esta vista.",
-            "restricted": "Elemento restringido"
+            "restricted": "Elemento restringido",
+            "no-value-column": "Sin {{value0}}"
           }
         },
         "GitHubMarkdownComposer": {

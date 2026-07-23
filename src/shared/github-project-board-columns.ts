@@ -16,7 +16,9 @@ export type ProjectBoardColumn = {
   rows: GitHubProjectRow[]
 }
 
-const NO_VALUE_KEY = '__none__'
+/** Exported so the renderer can swap the built-in English label for a
+ *  translated one — translate() lives renderer-side, not in shared code. */
+export const NO_VALUE_COLUMN_KEY = '__none__'
 
 type SingleSelectField = Extract<GitHubProjectField, { kind: 'single-select' }>
 
@@ -51,7 +53,7 @@ export function buildBoardColumns(
   }))
   const byKey = new Map(columns.map((c) => [c.key, c]))
   const noValue: ProjectBoardColumn = {
-    key: NO_VALUE_KEY,
+    key: NO_VALUE_COLUMN_KEY,
     label: `No ${field.name}`,
     color: '',
     rows: []

@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { chipStyle, singleSelectChipColors } from './ProjectCell'
+import { chipStyle, singleSelectChipColors } from './single-select-chip-colors'
 import { sortRows } from '../../../../shared/github-project-group-sort'
 import {
   buildBoardColumns,
+  NO_VALUE_COLUMN_KEY,
   resolveBoardGroupField,
   type ProjectBoardColumn
 } from '../../../../shared/github-project-board-columns'
@@ -47,7 +48,22 @@ export default function ProjectBoardView({ table, onOpenDialog }: Props): React.
   return (
     <div className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto p-3 scrollbar-sleek">
       {columns.map((column) => (
-        <BoardColumn key={column.key} column={column} onOpenDialog={onOpenDialog} />
+        <BoardColumn
+          key={column.key}
+          column={column}
+          // Why: the shared column builder can't reach translate(); swap its
+          // English no-value label for the localized one here.
+          label={
+            column.key === NO_VALUE_COLUMN_KEY
+              ? translate(
+                  'auto.components.github.project.ProjectBoardView.no-value-column',
+                  'No {{value0}}',
+                  { value0: groupField.name }
+                )
+              : column.label
+          }
+          onOpenDialog={onOpenDialog}
+        />
       ))}
     </div>
   )
@@ -55,9 +71,11 @@ export default function ProjectBoardView({ table, onOpenDialog }: Props): React.
 
 function BoardColumn({
   column,
+  label,
   onOpenDialog
 }: {
   column: ProjectBoardColumn
+  label: string
   onOpenDialog?: (row: GitHubProjectRow) => void
 }): React.JSX.Element {
   return (
@@ -68,10 +86,10 @@ function BoardColumn({
             className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
             style={chipStyle(singleSelectChipColors(column.color))}
           >
-            {column.label}
+            {label}
           </span>
         ) : (
-          <span className="text-xs font-medium text-muted-foreground">{column.label}</span>
+          <span className="text-xs font-medium text-muted-foreground">{label}</span>
         )}
         <span className="ml-auto rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
           {column.rows.length}

@@ -2383,7 +2383,8 @@
           "ProjectBoardView": {
             "no-group-field": "This board has no single-select field to group by.",
             "empty": "No items match this view's filter.",
-            "restricted": "Restricted item"
+            "restricted": "Restricted item",
+            "no-value-column": "No {{value0}}"
           }
         },
         "GitHubMarkdownComposer": {

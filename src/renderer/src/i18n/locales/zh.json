@@ -2218,7 +2218,8 @@
           "ProjectBoardView": {
             "no-group-field": "此看板没有可用于分组的单选字段。",
             "empty": "没有项目与此视图的筛选条件匹配。",
-            "restricted": "受限条目"
+            "restricted": "受限条目",
+            "no-value-column": "无 {{value0}}"
           }
         },
         "GitHubMarkdownComposer": {

@@ -2218,7 +2218,8 @@
           "ProjectBoardView": {
             "no-group-field": "このボードにはグループ化に使える単一選択フィールドがありません。",
             "empty": "このビューのフィルターに一致する項目はありません。",
-            "restricted": "制限事項"
+            "restricted": "制限事項",
+            "no-value-column": "{{value0}} なし"
           }
         },
         "GitHubMarkdownComposer": {
