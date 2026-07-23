@@ -648,12 +648,30 @@ export class CodexAccountService {
   // attempt can never validate or be replayed; drop it so a target-scoped default reset
   // is not wedged forever by hasPendingResetForTarget matching the orphan.
   private discardResetAttemptsForRemovedAccount(accountId: string): void {
-    const staleKeys: string[] = []
+    const staleAttempts: [string, CodexResetCreditAttempt][] = []
     for (const [idempotencyKey, attempt] of this.resetAttemptsByKey) {
-      if (attempt.expectedScope.accountId !== accountId) {
-        continue
+      if (attempt.expectedScope.accountId === accountId) {
+        staleAttempts.push([idempotencyKey, attempt])
       }
-      staleKeys.push(idempotencyKey)
+    }
+    if (staleAttempts.length === 0) {
+      return
+    }
+    const staleKeySet = new Set(staleAttempts.map(([idempotencyKey]) => idempotencyKey))
+    if (this.durableResetLedger) {
+      const attempts = this.durableResetLedger.attempts.filter(
+        (attempt) => !staleKeySet.has(attempt.idempotencyKey)
+      )
+      if (attempts.length !== this.durableResetLedger.attempts.length) {
+        const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
+        // Persist first so a failed durability barrier leaves the in-memory
+        // fail-closed guards aligned with the ledger that will reload.
+        this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
+        this.durableResetLedger = structuredClone(nextLedger)
+      }
+    }
+    for (const [idempotencyKey, attempt] of staleAttempts) {
+      this.resetAttemptsByKey.delete(idempotencyKey)
       if (this.resetAttemptKeyByOffer.get(attempt.scopeKey) === idempotencyKey) {
         this.resetAttemptKeyByOffer.delete(attempt.scopeKey)
       }
@@ -661,25 +679,6 @@ export class CodexAccountService {
         this.unresolvedResetKeyByAccountScope.delete(attempt.accountScopeKey)
       }
     }
-    if (staleKeys.length === 0) {
-      return
-    }
-    for (const idempotencyKey of staleKeys) {
-      this.resetAttemptsByKey.delete(idempotencyKey)
-    }
-    if (!this.durableResetLedger) {
-      return
-    }
-    const staleKeySet = new Set(staleKeys)
-    const attempts = this.durableResetLedger.attempts.filter(
-      (attempt) => !staleKeySet.has(attempt.idempotencyKey)
-    )
-    if (attempts.length === this.durableResetLedger.attempts.length) {
-      return
-    }
-    const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
-    this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
-    this.durableResetLedger = structuredClone(nextLedger)
   }
 
   private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {

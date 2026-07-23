@@ -3091,6 +3091,60 @@ describe('CodexAccountService config sync', () => {
     expect(store.getCodexResetCreditAttemptLedger().attempts).toEqual([])
   })
 
+  it('keeps reset attempts fail-closed when removal cannot persist their purge', async () => {
+    const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+    const account = {
+      id: 'account-1',
+      email: 'user@example.com',
+      managedHomePath,
+      managedHomeRuntime: 'host' as const,
+      wslDistro: null,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1
+    }
+    const settings = createSettings({
+      codexManagedAccounts: [account],
+      activeCodexManagedAccountId: null
+    })
+    const limits = createResetCreditLimits()
+    const state = createResetRateLimitState(limits)
+    const expectedScope = buildCodexResetCreditExpectedScope({
+      target: state.codexTarget,
+      account,
+      limits
+    })!
+    const store = createStore(settings)
+    store.replaceCodexResetCreditAttemptLedgerAndFlush({
+      version: 1,
+      attempts: [
+        {
+          idempotencyKey: '13131313-1313-4313-8313-131313131313',
+          expectedScope,
+          state: 'providerPending'
+        }
+      ]
+    })
+    const consume = vi.fn().mockResolvedValue({ outcome: 'reset', state })
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      {
+        ...createRateLimits(),
+        getState: vi.fn(() => state),
+        consumeCodexRateLimitResetCredit: consume
+      } as never,
+      createRuntimeHome() as never
+    )
+    vi.spyOn(store, 'replaceCodexResetCreditAttemptLedgerAndFlush').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    await expect(service.removeAccount('account-1')).rejects.toThrow('disk full')
+    await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')
+    expect(consume).not.toHaveBeenCalled()
+  })
+
   it('does not reset a different system-default target after waiting in the mutation queue', async () => {
     const settings = createSettings()
     const state = createResetRateLimitState(createResetCreditLimits())

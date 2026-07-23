@@ -90,6 +90,19 @@ describe('decodeAccountsSnapshot', () => {
     expect(snapshot.rateLimits.codex?.extensionField).toBe('provider-extra')
   })
 
+  it('defaults missing runtime targets for older host-only snapshots', () => {
+    const raw = makeSnapshot() as {
+      rateLimits: { claudeTarget?: unknown; codexTarget?: unknown }
+    }
+    delete raw.rateLimits.claudeTarget
+    delete raw.rateLimits.codexTarget
+
+    const snapshot = decodeAccountsSnapshot(raw)
+
+    expect(snapshot.rateLimits.claudeTarget).toEqual({ runtime: 'host', wslDistro: null })
+    expect(snapshot.rateLimits.codexTarget).toEqual({ runtime: 'host', wslDistro: null })
+  })
+
   it.each([
     ['account arrays', ['codex', 'accounts'], {}],
     ['active account IDs', ['codex', 'activeAccountId'], 42],
