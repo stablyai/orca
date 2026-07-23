@@ -4,7 +4,10 @@ import {
   getCheckDetailsPromptKey
 } from '@/components/pr-checks-fix-prompt'
 import { gitHubPRToChecksPanelReview } from '@/components/right-sidebar/checks-panel-review'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import {
+  getWorktreeGitIdentityDisplay,
+  getWorktreeIdentityBranchName
+} from '@/lib/worktree-git-identity-display'
 import { useAppStore } from '@/store'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
@@ -46,8 +49,7 @@ export function resolveHostedReviewForCheckRunDetailsFix(
   if (!repo) {
     return null
   }
-  const identity = getWorktreeGitIdentityDisplay(worktree)
-  const branch = identity?.kind === 'branch' ? identity.branchName : null
+  const branch = getWorktreeIdentityBranchName(getWorktreeGitIdentityDisplay(worktree))
   if (!branch) {
     return null
   }

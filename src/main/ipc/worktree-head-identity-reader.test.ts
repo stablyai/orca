@@ -87,6 +87,65 @@ describe('readGitCommonHeadIdentities', () => {
     expect(identities).toEqual([{ worktreePath: dirname(commonDir), head: OID_B, branch: null }])
   })
 
+  it('carries the recovered rebase state on a detached primary checkout', async () => {
+    const commonDir = await makeCommonDir()
+    await writeFile(join(commonDir, 'HEAD'), `${OID_B}\n`)
+    await mkdir(join(commonDir, 'rebase-merge'), { recursive: true })
+    await writeFile(join(commonDir, 'rebase-merge', 'head-name'), 'refs/heads/feature/x\n')
+
+    const identities = await readGitCommonHeadIdentities(commonDir)
+
+    expect(identities).toEqual([
+      {
+        worktreePath: dirname(commonDir),
+        head: OID_B,
+        branch: null,
+        rebasing: true,
+        rebaseBranch: 'feature/x'
+      }
+    ])
+  })
+
+  it('carries the recovered rebase state on a detached linked worktree', async () => {
+    const commonDir = await makeCommonDir()
+    await writeFile(join(commonDir, 'HEAD'), `${OID_A}\n`)
+    const linkedPath = join(dirname(commonDir), '..', 'linked-wt')
+    await addLinkedWorktree(commonDir, 'linked-wt', linkedPath, OID_B)
+    const entry = join(commonDir, 'worktrees', 'linked-wt')
+    // Rebase state lives in the worktree's private metadata dir, not the common dir.
+    await mkdir(join(entry, 'rebase-merge'), { recursive: true })
+    await writeFile(join(entry, 'rebase-merge', 'head-name'), 'refs/heads/topic\n')
+
+    const identities = await readGitCommonHeadIdentities(commonDir)
+
+    expect(identities).toContainEqual({
+      worktreePath: linkedPath,
+      head: OID_B,
+      branch: null,
+      rebasing: true,
+      rebaseBranch: 'topic'
+    })
+    // The primary checkout is detached but NOT rebasing — no cross-contamination.
+    expect(identities).toContainEqual({
+      worktreePath: dirname(commonDir),
+      head: OID_A,
+      branch: null
+    })
+  })
+
+  it('does not flag rebasing for a live branch even if stale rebase files linger', async () => {
+    const commonDir = await makeCommonDir()
+    await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
+    await writeLooseRef(commonDir, 'refs/heads/main', OID_A)
+    await mkdir(join(commonDir, 'rebase-merge'), { recursive: true })
+
+    const identities = await readGitCommonHeadIdentities(commonDir)
+
+    expect(identities).toEqual([
+      { worktreePath: dirname(commonDir), head: OID_A, branch: 'refs/heads/main' }
+    ])
+  })
+
   it('skips unborn branches instead of emitting partial identities', async () => {
     const commonDir = await makeCommonDir()
     await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/unborn\n')

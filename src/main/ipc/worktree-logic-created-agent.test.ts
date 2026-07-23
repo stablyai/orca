@@ -29,4 +29,40 @@ describe('mergeWorktree creation agent metadata', () => {
 
     expect(result.createdWithAgent).toBe('codex')
   })
+
+  it('forwards the rebase-recovery fields so the rebasing badge renders end-to-end', () => {
+    const result = mergeWorktree(
+      'repo1',
+      {
+        path: '/workspaces/feature',
+        head: 'abc123',
+        branch: '',
+        isBare: false,
+        isMainWorktree: false,
+        rebasing: true,
+        rebaseBranch: 'feature-x'
+      },
+      undefined
+    )
+
+    expect(result.rebasing).toBe(true)
+    expect(result.rebaseBranch).toBe('feature-x')
+  })
+
+  it('omits the rebase fields for a normal branch worktree', () => {
+    const result = mergeWorktree(
+      'repo1',
+      {
+        path: '/workspaces/feature',
+        head: 'abc123',
+        branch: 'refs/heads/feature-x',
+        isBare: false,
+        isMainWorktree: false
+      },
+      undefined
+    )
+
+    expect(result.rebasing).toBeUndefined()
+    expect(result.rebaseBranch).toBeUndefined()
+  })
 })

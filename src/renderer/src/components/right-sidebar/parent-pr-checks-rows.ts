@@ -3,7 +3,10 @@ import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getWorktreeCardPrDisplay } from '@/components/sidebar/worktree-card-pr-display'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import {
+  getWorktreeGitIdentityDisplay,
+  getWorktreeIdentityBranchName
+} from '@/lib/worktree-git-identity-display'
 import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from '@/store/slices/hosted-review'
 import { prChecksCacheSuffix } from '@/store/slices/github'
@@ -289,8 +292,7 @@ function getHostedReviewKey(
 }
 
 function getBranchName(worktree: Worktree): string | null {
-  const identity = getWorktreeGitIdentityDisplay(worktree)
-  return identity?.kind === 'branch' ? identity.branchName : null
+  return getWorktreeIdentityBranchName(getWorktreeGitIdentityDisplay(worktree))
 }
 
 function hasLinkedReview(worktree: Worktree): boolean {

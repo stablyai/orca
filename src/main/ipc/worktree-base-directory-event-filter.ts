@@ -110,6 +110,15 @@ function isHeadLogParts(parts: string[], offset: number): boolean {
   return parts.length === offset + 2 && parts[offset] === 'logs' && parts[offset + 1] === 'HEAD'
 }
 
+// Why: `git rebase --quit` deletes this dir without rewriting HEAD or logs/HEAD, so it is
+// the only signal that a rebase ended; route it to the head-identity re-read (which now
+// carries rebase state) instead of leaving the "(rebasing)" badge stale until a poll.
+const GIT_REBASE_STATE_DIRS = new Set(['rebase-merge', 'rebase-apply'])
+
+function isRebaseStateParts(parts: string[], offset: number): boolean {
+  return parts.length > offset && GIT_REBASE_STATE_DIRS.has(parts[offset])
+}
+
 function allRepoIds(target: WorktreeBaseWatchTarget): string[] {
   return [...target.repos.keys()]
 }
@@ -155,6 +164,9 @@ function classifyGitCommonEvent(
     return NO_CHANGE
   }
   const repoIds = allRepoIds(target)
+  if (isRebaseStateParts(parts, 0)) {
+    return headIdentityChange(repoIds)
+  }
   if (parts.length === 1) {
     if (parts[0] === 'worktrees') {
       return structuralChange(repoIds)
@@ -175,6 +187,9 @@ function classifyGitCommonEvent(
   }
   if (parts.length === 2) {
     return event.type === 'update' ? NO_CHANGE : structuralChange(repoIds)
+  }
+  if (isRebaseStateParts(parts, 2)) {
+    return headIdentityChange(repoIds)
   }
   if (parts.length === 3) {
     if (GIT_COMMON_LINKED_STRUCTURAL_FILES.has(parts[2])) {

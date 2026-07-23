@@ -144,6 +144,41 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
     })
   })
 
+  it('classifies rebase-state dir events as head-identity triggers for primary and linked checkouts', () => {
+    const target = makeGitCommonTarget()
+    const headIdentityOnly = {
+      structureRepoIds: [],
+      gitStatusRepoIds: [],
+      headIdentityRepoIds: ['repo-1']
+    }
+    // `git rebase --quit` deletes the dir without rewriting HEAD or logs/HEAD — this
+    // event is the only signal that the rebase ended.
+    expect(
+      classifyWorktreeBaseChange(target, {
+        type: 'delete',
+        path: join(COMMON_DIR, 'rebase-merge')
+      })
+    ).toEqual(headIdentityOnly)
+    expect(
+      classifyWorktreeBaseChange(target, {
+        type: 'create',
+        path: join(COMMON_DIR, 'rebase-apply', 'rebasing')
+      })
+    ).toEqual(headIdentityOnly)
+    expect(
+      classifyWorktreeBaseChange(target, {
+        type: 'delete',
+        path: join(COMMON_DIR, 'worktrees', 'wt-a', 'rebase-merge')
+      })
+    ).toEqual(headIdentityOnly)
+    expect(
+      classifyWorktreeBaseChange(target, {
+        type: 'create',
+        path: join(COMMON_DIR, 'worktrees', 'wt-a', 'rebase-merge', 'head-name')
+      })
+    ).toEqual(headIdentityOnly)
+  })
+
   it('classifies worktree-scoped config as structural for sparse-flag freshness', () => {
     const target = makeGitCommonTarget()
     expect(

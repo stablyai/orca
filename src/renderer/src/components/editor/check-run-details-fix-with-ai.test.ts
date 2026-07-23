@@ -102,7 +102,9 @@ const storeState = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/worktree-git-identity-display', () => ({
-  getWorktreeGitIdentityDisplay: () => ({ kind: 'branch', branchName: 'feature' })
+  getWorktreeGitIdentityDisplay: () => ({ kind: 'branch', branchName: 'feature' }),
+  getWorktreeIdentityBranchName: (identity: { kind: string; branchName: string | null } | null) =>
+    identity?.kind === 'branch' || identity?.kind === 'rebasing' ? identity.branchName : null
 }))
 
 vi.mock('@/store', () => ({

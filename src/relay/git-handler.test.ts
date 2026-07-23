@@ -2023,6 +2023,38 @@ describe('GitHandler', () => {
         }
       }
     )
+
+    it('recovers the rebasing branch for a detached worktree mid-rebase', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+      gitCommit(tmpDir, 'initial')
+      const branchRef = currentBranchFullRef(tmpDir)
+      const branchName = currentBranch(tmpDir)
+      // Detach HEAD so `worktree list` emits `detached`, then fabricate the rebase state
+      // git writes on disk — deterministic without driving a real, flaky rebase.
+      execFileSync('git', ['checkout', '--detach'], { cwd: tmpDir, stdio: 'pipe' })
+      mkdirSync(path.join(tmpDir, '.git', 'rebase-merge'), { recursive: true })
+      writeFileSync(path.join(tmpDir, '.git', 'rebase-merge', 'head-name'), `${branchRef}\n`)
+
+      const result = (await dispatcher.callRequest('git.listWorktrees', {
+        repoPath: tmpDir
+      })) as Record<string, unknown>[]
+
+      expect(result[0]).toMatchObject({ detached: true, rebasing: true, rebaseBranch: branchName })
+    })
+
+    it('does not probe rebase state for a worktree on a branch', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+      gitCommit(tmpDir, 'initial')
+
+      const result = (await dispatcher.callRequest('git.listWorktrees', {
+        repoPath: tmpDir
+      })) as Record<string, unknown>[]
+
+      expect(result[0].rebasing).toBeUndefined()
+      expect(result[0].detached).toBeUndefined()
+    })
   })
 
   describe('worktreeIsClean', () => {

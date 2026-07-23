@@ -1,6 +1,10 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../shared/types'
+import {
+  readRebaseStateFromGitDir,
+  reprobeDetachedHeadRebaseState
+} from '../../shared/git-rebase-worktree-state'
 
 // Why: the whole point of this reader is replacing `git worktree list` fanout
 // with bounded metadata-file reads, so head freshness never re-creates the
@@ -84,6 +88,14 @@ async function readHeadIdentity(
   worktreePath: string,
   packedRefs: () => Promise<Map<string, string>>
 ): Promise<WorktreeHeadIdentity | null> {
+  // Why: probe rebase state BEFORE reading HEAD (a couple of existsSync calls, still
+  // spawn-free) so a `rebase --abort` torn read errs toward {reattached branch, rebasing}.
+  // The mirror-image race at rebase start is covered by the detached-path re-probe below.
+  const gitDir = dirname(headFilePath)
+  let rebaseState = await readRebaseStateFromGitDir(gitDir).catch(() => ({
+    rebasing: false,
+    rebaseBranch: null
+  }))
   const head = await readTrimmedFile(headFilePath)
   if (!head) {
     return null
@@ -98,7 +110,25 @@ async function readHeadIdentity(
     return { worktreePath, head: oid, branch: ref }
   }
   const detachedOid = asObjectId(head)
-  return detachedOid ? { worktreePath, head: detachedOid, branch: null } : null
+  if (!detachedOid) {
+    return null
+  }
+  // Why: a rebase starting between the early probe and the HEAD read would otherwise
+  // report {detached, not rebasing} — misread by the consumer as a plain branch switch.
+  rebaseState = await reprobeDetachedHeadRebaseState(rebaseState, () =>
+    readRebaseStateFromGitDir(gitDir)
+  )
+  return {
+    worktreePath,
+    head: detachedOid,
+    branch: null,
+    ...(rebaseState.rebasing
+      ? {
+          rebasing: true,
+          ...(rebaseState.rebaseBranch ? { rebaseBranch: rebaseState.rebaseBranch } : {})
+        }
+      : {})
+  }
 }
 
 /** Reads head/branch for the primary checkout and every linked worktree of a

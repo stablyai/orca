@@ -1,4 +1,5 @@
 import type { Worktree } from '../../../../shared/types'
+import type { WorktreeGitIdentityUpdate } from './worktree-helpers'
 
 function indexUnambiguousWorktrees(
   worktrees: readonly Worktree[],
@@ -49,10 +50,7 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
   incoming: Worktree[]
   matchesRefreshHost: (worktree: Worktree) => boolean
   hasBranchScopedReviewContext: (worktree: Worktree) => boolean
-  updateWorktreeGitIdentity: (
-    worktreeId: string,
-    identity: { head?: string; branch?: string | null }
-  ) => void
+  updateWorktreeGitIdentity: (worktreeId: string, identity: WorktreeGitIdentityUpdate) => void
 }): Worktree[] {
   const {
     requestStarted,
@@ -79,6 +77,10 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
       existing &&
       (existing.branch !== requestStartedWorktree.branch ||
         existing.head !== requestStartedWorktree.head ||
+        // Why: `rebase --quit` flips only these; without them an in-flight listing that
+        // predates the quit could roll a fresher "not rebasing" row back to rebasing.
+        existing.rebasing !== requestStartedWorktree.rebasing ||
+        existing.rebaseBranch !== requestStartedWorktree.rebaseBranch ||
         !branchScopedReviewContextMatches(existing, requestStartedWorktree))
     ) {
       // Why: rejecting the clear alone is insufficient; preserve the newer row
@@ -87,11 +89,18 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
       reconciled[index] = existing
       continue
     }
+    // Why: `rebase --quit` ends a rebase while HEAD stays detached — the branch string is
+    // unchanged ('' both sides) but the rebase identity drops. Route that through the
+    // identity update too; a plain merge would silently strip the fields and the next
+    // status refresh would early-return as already-matching, skipping the review-link clear.
+    const rebaseIdentityUnchanged =
+      (existing?.rebasing === true) === (worktree.rebasing === true) &&
+      (existing?.rebaseBranch ?? null) === (worktree.rebaseBranch ?? null)
     if (
       isAmbiguousAcrossHosts ||
       !requestStartedWorktree ||
       !existing ||
-      existing.branch === worktree.branch ||
+      (existing.branch === worktree.branch && rebaseIdentityUnchanged) ||
       !hasBranchScopedReviewContext(existing)
     ) {
       continue
@@ -100,7 +109,11 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
       head: worktree.head,
       // Empty branch means detached HEAD in listing results; null is the
       // explicit detached signal expected by updateWorktreeGitIdentity.
-      branch: worktree.branch === '' ? null : worktree.branch
+      branch: worktree.branch === '' ? null : worktree.branch,
+      // Why: forward the listing's rebase recovery with the detach it explains — routing
+      // the branch clear without it would misread a mid-rebase detach as a branch switch.
+      rebasing: worktree.rebasing === true,
+      rebaseBranch: worktree.rebaseBranch ?? null
     })
   }
   return reconciled ?? incoming

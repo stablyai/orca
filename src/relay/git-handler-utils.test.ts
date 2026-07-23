@@ -75,6 +75,25 @@ describe('parseWorktreeList', () => {
       prunableReason: 'gitdir file points to non-existent location'
     })
   })
+
+  it('flags a detached worktree (no branch line) so the handler can recover the rebase branch', () => {
+    expect(
+      parseWorktreeList(
+        'worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /wt\nHEAD def\ndetached\n'
+      )[1]
+    ).toMatchObject({
+      path: '/wt',
+      head: 'def',
+      branch: '',
+      detached: true
+    })
+  })
+
+  it('does not flag a branch worktree as detached', () => {
+    expect(
+      parseWorktreeList('worktree /repo\nHEAD abc\nbranch refs/heads/main\n')[0].detached
+    ).toBeUndefined()
+  })
 })
 
 describe('isUnsupportedWorktreeListZError', () => {

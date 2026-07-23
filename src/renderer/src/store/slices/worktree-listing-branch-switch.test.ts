@@ -52,7 +52,9 @@ describe('routeListingBranchSwitchesThroughGitIdentity', () => {
     expect(updateWorktreeGitIdentity).toHaveBeenCalledTimes(1)
     expect(updateWorktreeGitIdentity).toHaveBeenCalledWith('repo1::/path/wt1', {
       head: 'def456',
-      branch: 'refs/heads/feature-two'
+      branch: 'refs/heads/feature-two',
+      rebasing: false,
+      rebaseBranch: null
     })
   })
 
@@ -158,8 +160,106 @@ describe('routeListingBranchSwitchesThroughGitIdentity', () => {
 
     expect(updateWorktreeGitIdentity).toHaveBeenCalledWith('repo1::/path/wt1', {
       head: 'def456',
-      branch: null
+      branch: null,
+      rebasing: false,
+      rebaseBranch: null
     })
+  })
+
+  it('forwards the listing rebase recovery with the detach it explains', () => {
+    const updateWorktreeGitIdentity = vi.fn()
+    const current = [makeWorktree({ id: 'repo1::/path/wt1', linkedPR: 101 })]
+
+    routeListingBranchSwitchesThroughGitIdentity({
+      requestStarted: current,
+      current,
+      incoming: [
+        makeWorktree({
+          id: 'repo1::/path/wt1',
+          branch: '',
+          head: 'def456',
+          rebasing: true,
+          rebaseBranch: 'feature-one'
+        })
+      ],
+      matchesRefreshHost: matchesAnyHost,
+      hasBranchScopedReviewContext: hasLinkedPR,
+      updateWorktreeGitIdentity
+    })
+
+    // Without the rebase fields the identity update would misread this
+    // mid-rebase detach as a branch switch and clear the linked review.
+    expect(updateWorktreeGitIdentity).toHaveBeenCalledWith('repo1::/path/wt1', {
+      head: 'def456',
+      branch: null,
+      rebasing: true,
+      rebaseBranch: 'feature-one'
+    })
+  })
+
+  it('routes a rebase quit that leaves HEAD detached (branch unchanged, rebase identity dropped)', () => {
+    const updateWorktreeGitIdentity = vi.fn()
+    const current = [
+      makeWorktree({
+        id: 'repo1::/path/wt1',
+        branch: '',
+        rebasing: true,
+        rebaseBranch: 'feature-one',
+        linkedPR: 101
+      })
+    ]
+
+    routeListingBranchSwitchesThroughGitIdentity({
+      requestStarted: current,
+      current,
+      // `git rebase --quit` while detached: branch stays '' and HEAD stays put — only the
+      // rebase identity drops. A plain merge would strip the fields without running the
+      // review-link clear, and the later status refresh would early-return as already-matching.
+      incoming: [makeWorktree({ id: 'repo1::/path/wt1', branch: '', head: 'abc123' })],
+      matchesRefreshHost: matchesAnyHost,
+      hasBranchScopedReviewContext: hasLinkedPR,
+      updateWorktreeGitIdentity
+    })
+
+    expect(updateWorktreeGitIdentity).toHaveBeenCalledWith('repo1::/path/wt1', {
+      head: 'abc123',
+      branch: null,
+      rebasing: false,
+      rebaseBranch: null
+    })
+  })
+
+  it('rejects a listing response when the rebase state changed after the request started', () => {
+    const updateWorktreeGitIdentity = vi.fn()
+    // `git rebase --quit`: branch and head are unchanged, only the rebase flags moved.
+    const current = [makeWorktree({ id: 'repo1::/path/wt1', branch: '', linkedPR: 101 })]
+
+    const reconciled = routeListingBranchSwitchesThroughGitIdentity({
+      requestStarted: [
+        makeWorktree({
+          id: 'repo1::/path/wt1',
+          branch: '',
+          rebasing: true,
+          rebaseBranch: 'feature-one',
+          linkedPR: 101
+        })
+      ],
+      current,
+      incoming: [
+        makeWorktree({
+          id: 'repo1::/path/wt1',
+          branch: '',
+          rebasing: true,
+          rebaseBranch: 'feature-one'
+        })
+      ],
+      matchesRefreshHost: matchesAnyHost,
+      hasBranchScopedReviewContext: hasLinkedPR,
+      updateWorktreeGitIdentity
+    })
+
+    expect(updateWorktreeGitIdentity).not.toHaveBeenCalled()
+    expect(reconciled).toEqual(current)
   })
 
   it('rejects a listing response when the branch changed again after the request started', () => {

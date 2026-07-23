@@ -20,15 +20,22 @@ export function isWslUncPath(path: string): boolean {
   return parseWslUncPath(path) !== null
 }
 
+/** Windows drive form of a drvfs `/mnt/<drive>` Linux path (distro-independent), or null. */
+export function windowsPathFromWslMntPath(linuxPath: string): string | null {
+  const mntMatch = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
+  if (!mntMatch) {
+    return null
+  }
+  const rest = (mntMatch[2] || '').replace(/\//g, '\\')
+  return `${mntMatch[1].toUpperCase()}:${rest || '\\'}`
+}
+
 /** Convert an absolute Linux path in a known WSL distro to its Windows form. */
 export function toWindowsWslPath(linuxPath: string, distro: string): string {
-  const mntMatch = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
-  if (mntMatch) {
-    const rest = (mntMatch[2] || '').replace(/\//g, '\\')
-    return `${mntMatch[1].toUpperCase()}:${rest || '\\'}`
-  }
-
-  return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
+  return (
+    windowsPathFromWslMntPath(linuxPath) ??
+    `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
+  )
 }
 
 // Why: Windows folds the share (\\wsl$ aliases \\wsl.localhost), the distro, and

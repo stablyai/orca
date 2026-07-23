@@ -231,8 +231,28 @@ describe('readChecksPanelRefreshGitIdentitySnapshot', () => {
     ).toEqual({
       kind: 'changed',
       head: 'def456',
-      branch: 'refs/heads/feature/next'
+      branch: 'refs/heads/feature/next',
+      rebasing: false,
+      rebaseBranch: null
     })
+  })
+
+  it('reports same when a mid-rebase snapshot resolves to the current review branch', () => {
+    expect(
+      readChecksPanelRefreshGitIdentitySnapshot({
+        snapshot: {
+          ...SNAPSHOT,
+          gitIdentity: {
+            head: 'def456',
+            branch: null,
+            rebasing: true,
+            rebaseBranch: 'feature/checks'
+          }
+        },
+        contextKey: SNAPSHOT.contextKey,
+        currentBranch: 'feature/checks'
+      })
+    ).toEqual({ kind: 'same' })
   })
 
   it('reports missing when the snapshot lacks branch/head identity', () => {
@@ -264,6 +284,41 @@ describe('hasChecksPanelGitStatusBranchChanged', () => {
     expect(
       hasChecksPanelGitStatusBranchChanged({
         observedBranch: null,
+        currentBranch: 'feature/checks'
+      })
+    ).toBe(true)
+  })
+
+  it('does not treat a mid-rebase detach of the same branch as a branch change', () => {
+    // Why: without the rebase context every Refresh click during a rebase aborted
+    // as a phantom 'branch-changed' before any PR/checks fetch ran.
+    expect(
+      hasChecksPanelGitStatusBranchChanged({
+        observedBranch: null,
+        observedRebasing: true,
+        observedRebaseBranch: 'feature/checks',
+        currentBranch: 'feature/checks'
+      })
+    ).toBe(false)
+  })
+
+  it('still reports a change when the rebase recovers a different branch', () => {
+    expect(
+      hasChecksPanelGitStatusBranchChanged({
+        observedBranch: null,
+        observedRebasing: true,
+        observedRebaseBranch: 'other',
+        currentBranch: 'feature/checks'
+      })
+    ).toBe(true)
+  })
+
+  it('ignores a stale rebaseBranch when the observation is not rebasing', () => {
+    expect(
+      hasChecksPanelGitStatusBranchChanged({
+        observedBranch: null,
+        observedRebasing: false,
+        observedRebaseBranch: 'feature/checks',
         currentBranch: 'feature/checks'
       })
     ).toBe(true)

@@ -57,6 +57,13 @@ export type GitStatusResult = {
   conflictOperation: GitConflictOperation
   head?: string
   branch?: string
+  // Rebase identity read from git's on-disk state (sentinel-gated, so a conflicted
+  // `git am` is NOT rebasing even though conflictOperation reports 'rebase').
+  // `rebaseBranch` is the recovered original branch (short name), when recoverable.
+  // Why: status is an identity producer; a boolean inferred from conflictOperation
+  // cannot carry the branch and false-positives on `git am`.
+  rebasing?: boolean
+  rebaseBranch?: string
   // Why: porcelain v2 status already includes upstream/ahead/behind metadata.
   // Folding it in lets refresh polling avoid a second pair of git subprocesses.
   upstreamStatus?: GitUpstreamStatus

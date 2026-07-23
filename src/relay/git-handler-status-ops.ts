@@ -4,12 +4,17 @@
  */
 import * as path from 'node:path'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
 import type { GitExec } from './git-handler-ops'
 import type { RelayGitStreamExec } from './git-stdout-stream'
 import type { GitUpstreamStatus } from '../shared/types'
 import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
+import {
+  readWorktreeRebaseState,
+  reprobeDetachedHeadRebaseState,
+  type WorktreeRebaseState
+} from '../shared/git-rebase-worktree-state'
+import { resolveWorktreeGitDir } from '../shared/git-worktree-dir'
 import { splitRemoteBranchName } from '../shared/git-effective-upstream'
 import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
 import {
@@ -25,18 +30,9 @@ import {
   reuseOrRecomputeGitStatusLineStats
 } from '../shared/git-status-line-stats-cache'
 
+// Why: delegate to the shared resolver so relay and main state probes cannot drift.
 export async function resolveGitDir(worktreePath: string): Promise<string> {
-  const dotGitPath = path.join(worktreePath, '.git')
-  try {
-    const contents = await readFile(dotGitPath, 'utf-8')
-    const match = contents.match(/^gitdir:\s*(.+)\s*$/m)
-    if (match) {
-      return path.resolve(worktreePath, match[1])
-    }
-  } catch {
-    // .git is a directory, not a file
-  }
-  return dotGitPath
+  return resolveWorktreeGitDir(worktreePath)
 }
 
 export async function detectConflictOperation(worktreePath: string): Promise<string> {
@@ -70,6 +66,8 @@ export async function getStatusOp(
   conflictOperation: string
   head?: string
   branch?: string
+  rebasing?: boolean
+  rebaseBranch?: string
   upstreamStatus?: GitUpstreamStatus
   ignoredPaths?: string[]
   didHitLimit?: boolean
@@ -81,6 +79,12 @@ export async function getStatusOp(
   const includeIgnored = params.includeIgnored === true
   // Why: reject NaN/negative limits — NaN would silently disable capping, negatives would over-truncate.
   const limit = resolveGitStatusLimit(params.limit)
+  // Why: probe rebase state BEFORE `git status` reads HEAD so a `rebase --abort` torn read
+  // errs toward {reattached branch, rebasing} (harmless). The mirror-image race at rebase
+  // *start* is covered by the post-status re-probe below.
+  const rebaseStatePromise: Promise<WorktreeRebaseState> = readWorktreeRebaseState(
+    worktreePath
+  ).catch(() => ({ rebasing: false, rebaseBranch: null }))
   const conflictOperation = await detectConflictOperation(worktreePath)
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
@@ -193,11 +197,26 @@ export async function getStatusOp(
     throw error
   }
 
+  let rebaseState = await rebaseStatePromise
+  if (head && !branch) {
+    // Why: a rebase starting between the early probe and status reading HEAD would
+    // otherwise report {detached, not rebasing} — misread downstream as a branch switch.
+    rebaseState = await reprobeDetachedHeadRebaseState(rebaseState, () =>
+      readWorktreeRebaseState(worktreePath)
+    )
+  }
+
   return {
     entries,
     conflictOperation,
     head,
     branch,
+    ...(rebaseState.rebasing
+      ? {
+          rebasing: true,
+          ...(rebaseState.rebaseBranch ? { rebaseBranch: rebaseState.rebaseBranch } : {})
+        }
+      : {}),
     upstreamStatus,
     ...(includeIgnored ? { ignoredPaths } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength } : {})

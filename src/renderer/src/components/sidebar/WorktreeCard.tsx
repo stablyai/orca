@@ -72,8 +72,11 @@ import {
   canShowWorkspaceDeleteQuickAction,
   useWorkspaceDeleteModifierPressed
 } from './workspace-delete-quick-action'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { WorktreeIdentityBadge } from '@/components/WorktreeIdentityBadge'
+import {
+  getWorktreeGitIdentityDisplay,
+  getWorktreeIdentityBranchName
+} from '@/lib/worktree-git-identity-display'
 import {
   getFlushWorktreeCardPaddingLeft,
   getNewCardStyleParentContentMarginLeft
@@ -363,8 +366,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
-  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
+  const identityBadgeDisplay =
+    gitIdentityDisplay?.kind === 'detached' || gitIdentityDisplay?.kind === 'rebasing'
+      ? gitIdentityDisplay
+      : null
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
+  // Why: mid-rebase the PR still lives on the original branch, so resolve/display it against the
+  // recovered rebase branch even though `branch` (the actively checked-out branch) is empty. This
+  // is read-only — PR creation/compare stay gated on `branch` so they can't fire on a detached HEAD.
+  const reviewBranch = getWorktreeIdentityBranchName(gitIdentityDisplay) ?? ''
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
@@ -381,10 +391,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
     : isFolder
   const hostedReviewCacheKey =
-    repo && branch
+    repo && reviewBranch
       ? getHostedReviewCacheKey(
           repo.path,
-          branch,
+          reviewBranch,
           settings,
           repo.id,
           repo.connectionId,
@@ -393,11 +403,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
         )
       : ''
   const prCacheKey =
-    repo && branch
+    repo && reviewBranch
       ? getGitHubPRCacheKey(
           repo.path,
           repo.id,
-          branch,
+          reviewBranch,
           settings,
           repo.connectionId,
           repo.executionHostId,
@@ -626,7 +636,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     }
     const refreshHostedReview = (): void => {
       // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR number from explicit metadata when we have one.
-      void fetchHostedReviewForBranch(repo.path, branch, {
+      void fetchHostedReviewForBranch(repo.path, reviewBranch, {
         repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
         ...(cachedBranchFallbackGitHubPRNumber !== null
@@ -657,7 +667,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linkedAzureDevOpsPR,
     linkedGiteaPR,
     fetchHostedReviewForBranch,
-    branch,
+    reviewBranch,
     hostedReviewCacheKey,
     shouldRefreshHostedReview
   ])
@@ -677,7 +687,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       return
     }
     // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
-    void fetchHostedReviewForBranch(repo.path, branch, {
+    void fetchHostedReviewForBranch(repo.path, reviewBranch, {
       repoId: repo.id,
       linkedGitHubPR: worktree.linkedPR ?? null,
       ...(cachedBranchFallbackGitHubPRNumber !== null
@@ -705,7 +715,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linkedAzureDevOpsPR,
     linkedGiteaPR,
     fetchHostedReviewForBranch,
-    branch,
+    reviewBranch,
     hostedReviewCacheKey
   ])
 
@@ -1134,7 +1144,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showRepoBadgeInMetaRow =
     !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
   const showHostContextBadge = !compactCards && !!hostContextLabel
-  const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
+  const showIdentityBadgeInMetaRow = !compactCards && !isFolder && identityBadgeDisplay !== null
   const showBranch =
     !isFolder &&
     branch.length > 0 &&
@@ -1157,7 +1167,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     folderMetaRowContent ||
     showBranch ||
     showIdentityInNewCard ||
-    showDetachedHeadInMetaRow ||
+    showIdentityBadgeInMetaRow ||
     showConflictOperationBadge ||
     cacheStartedAt != null ||
     showMetaRowDetails
@@ -1625,9 +1635,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   // Why: whole-card details hover already shows full identity; a nested tooltip would compete for it.
                   tooltipEnabled={!hasHoverDetails}
                 />
-              ) : showDetachedHeadInMetaRow && detachedHeadDisplay ? (
-                <DetachedHeadBadge
-                  display={detachedHeadDisplay}
+              ) : showIdentityBadgeInMetaRow && identityBadgeDisplay ? (
+                <WorktreeIdentityBadge
+                  display={identityBadgeDisplay}
                   label="sidebar"
                   side="right"
                   className="h-[16px]"

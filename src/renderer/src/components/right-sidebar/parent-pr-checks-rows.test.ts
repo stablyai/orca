@@ -178,6 +178,33 @@ describe('buildParentPrChecksProjection', () => {
     ).toMatchObject({ status: 'conflict', group: 'needsAttention', checkTone: 'failure' })
   })
 
+  it('resolves a worktree detached mid-rebase against its recovered branch', () => {
+    const repo = makeRepo()
+    // branch '' + rebasing recovers 'feature', so the row must resolve the same review a live
+    // 'feature' branch would — the misleading "no PR" state during a rebase is the bug fixed here.
+    const worktree = makeWorktree({
+      id: 'repo-1::/feature',
+      branch: '',
+      rebasing: true,
+      rebaseBranch: 'refs/heads/feature'
+    })
+    const cacheKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+
+    expect(
+      makeProjection({
+        worktree,
+        repo,
+        hostedReviewCache: {
+          [cacheKey]: {
+            data: makeReview({ status: 'failure' }),
+            fetchedAt: 1,
+            linkedReviewHintKey: ''
+          }
+        }
+      }).rows[0]
+    ).toMatchObject({ branch: 'feature', status: 'failing', reviewLabel: '#12' })
+  })
+
   it('only counts a visible successful unlinked no-review outcome as No PR', () => {
     const repo = makeRepo()
     const worktree = makeWorktree({ id: 'repo-1::/feature' })

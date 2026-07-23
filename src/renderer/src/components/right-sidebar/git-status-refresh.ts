@@ -11,6 +11,7 @@ import type {
   GitUpstreamStatus,
   GlobalSettings
 } from '../../../../shared/types'
+import type { WorktreeGitIdentityUpdate } from '@/store/slices/worktree-helpers'
 import {
   beginAutomaticUpstreamRefresh,
   beginStrictUpstreamRefresh,
@@ -23,10 +24,7 @@ import {
 
 export type GitStatusRefreshDeps = {
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void
-  updateWorktreeGitIdentity: (
-    worktreeId: string,
-    identity: { head?: string; branch?: string | null }
-  ) => void
+  updateWorktreeGitIdentity: (worktreeId: string, identity: WorktreeGitIdentityUpdate) => void
   setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
   fetchUpstreamStatus: (
     worktreeId: string,
@@ -147,7 +145,11 @@ export async function refreshGitStatusForWorktree({
       head: status.head,
       // Why: detached HEAD reports a head oid and no branch. Pass null as an
       // explicit clear signal so stale branch names don't linger in the UI.
-      branch: status.branch ?? (status.head ? null : undefined)
+      branch: status.branch ?? (status.head ? null : undefined),
+      // Why: forward the disk-read rebase state (sentinel-gated — a conflicted `git am`
+      // is NOT rebasing) with the detach it explains, so the store never has to guess.
+      rebasing: status.rebasing === true,
+      rebaseBranch: status.rebaseBranch ?? null
     })
     if (pushTarget) {
       // Why: porcelain status reports Git's configured upstream. Source Control
@@ -266,7 +268,9 @@ export async function refreshGitStatusForWorktreeStrict({
     head: status.head,
     // Why: detached HEAD reports a head oid and no branch. Pass null as an
     // explicit clear signal so stale branch names don't linger in the UI.
-    branch: status.branch ?? (status.head ? null : undefined)
+    branch: status.branch ?? (status.head ? null : undefined),
+    rebasing: status.rebasing === true,
+    rebaseBranch: status.rebaseBranch ?? null
   })
   if (pushTarget) {
     // Why: porcelain status reports Git's configured upstream. Source Control

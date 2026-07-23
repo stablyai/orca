@@ -1,12 +1,10 @@
 import type { Worktree, WorktreeHeadIdentity } from '../../../shared/types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import type { WorktreeGitIdentityUpdate } from '@/store/slices/worktree-helpers'
 
 export type WorktreeHeadIdentityApplyDeps = {
   getWorktreesForRepo: (repoId: string) => Worktree[] | undefined
-  updateWorktreeGitIdentity: (
-    worktreeId: string,
-    identity: { head?: string; branch?: string | null }
-  ) => void
+  updateWorktreeGitIdentity: (worktreeId: string, identity: WorktreeGitIdentityUpdate) => void
 }
 
 function findWorktreeByPath(worktrees: Worktree[], worktreePath: string): Worktree | undefined {
@@ -40,7 +38,9 @@ export function applyWorktreeHeadIdentities(
     }
     deps.updateWorktreeGitIdentity(worktree.id, {
       head: identity.head,
-      branch: identity.branch
+      branch: identity.branch,
+      rebasing: identity.rebasing === true,
+      rebaseBranch: identity.rebaseBranch ?? null
     })
   }
 }

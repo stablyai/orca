@@ -1086,6 +1086,85 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
   })
 
+  it('carries sentinel-gated rebase identity in the local status result', async () => {
+    readFileMock.mockImplementation((target: unknown) => {
+      const filePath = String(target)
+      if (filePath.endsWith('head-name')) {
+        return Promise.resolve('refs/heads/feature/x\n')
+      }
+      if (filePath.endsWith('.git')) {
+        return Promise.resolve('gitdir: /repo/.git/worktrees/feature\n')
+      }
+      return Promise.reject(new Error('ENOENT'))
+    })
+    existsSyncMock.mockImplementation((target: unknown) => String(target).endsWith('rebase-merge'))
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+
+    const result = await getStatus('/repo')
+
+    expect(result.conflictOperation).toBe('rebase')
+    expect(result.rebasing).toBe(true)
+    expect(result.rebaseBranch).toBe('feature/x')
+  })
+
+  it('does NOT report a rebase identity for a conflicted git am on the local path', async () => {
+    readFileMock.mockImplementation((target: unknown) => {
+      const filePath = String(target)
+      if (filePath.endsWith('head-name')) {
+        return Promise.resolve('refs/heads/ignored\n')
+      }
+      if (filePath.endsWith('.git')) {
+        return Promise.resolve('gitdir: /repo/.git/worktrees/feature\n')
+      }
+      return Promise.reject(new Error('ENOENT'))
+    })
+    // rebase-apply exists but the `rebasing` sentinel does not — this is `git am`.
+    existsSyncMock.mockImplementation(
+      (target: unknown) =>
+        String(target).endsWith('rebase-apply') && !String(target).endsWith('rebasing')
+    )
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+
+    const result = await getStatus('/repo')
+
+    expect(result.conflictOperation).toBe('rebase')
+    expect(result.rebasing).toBeUndefined()
+    expect(result.rebaseBranch).toBeUndefined()
+  })
+
+  it('re-probes when a rebase starts between the early probe and status reading HEAD', async () => {
+    // Why: the early probe protects `rebase --abort` torn reads; this covers the mirror
+    // race — rebase state lands on disk while `git status` runs, so the detached HEAD
+    // must not be reported as {detached, not rebasing} (a fake branch switch).
+    let rebaseStateOnDisk = false
+    readFileMock.mockImplementation((target: unknown) => {
+      const filePath = String(target)
+      if (rebaseStateOnDisk && filePath.endsWith('head-name')) {
+        return Promise.resolve('refs/heads/feature/x\n')
+      }
+      return Promise.reject(new Error('ENOENT'))
+    })
+    existsSyncMock.mockImplementation(
+      (target: unknown) => rebaseStateOnDisk && String(target).endsWith('rebase-merge')
+    )
+    gitExecFileAsyncMock.mockImplementation((args: unknown) => {
+      if (Array.isArray(args) && args.includes('status')) {
+        rebaseStateOnDisk = true
+        return Promise.resolve({
+          stdout: '# branch.oid abc123456789\n# branch.head (detached)\n'
+        })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result.head).toBe('abc123456789')
+    expect(result.branch).toBeUndefined()
+    expect(result.rebasing).toBe(true)
+    expect(result.rebaseBranch).toBe('feature/x')
+  })
+
   it('benchmarks concurrent status burst subprocess pressure', async () => {
     const benchPath = process.env.ORCA_GIT_STATUS_COALESCING_BENCH_JSON
     if (!benchPath) {

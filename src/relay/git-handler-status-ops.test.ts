@@ -403,3 +403,80 @@ describe('getStatusOp', () => {
     ).toHaveLength(2)
   })
 })
+
+describe('getStatusOp rebase identity', () => {
+  const tmpDirs: string[] = []
+
+  function makeWorktree(): { worktreePath: string; gitDir: string } {
+    const worktreePath = mkdtempSync(path.join(tmpdir(), 'orca-rebase-'))
+    tmpDirs.push(worktreePath)
+    return { worktreePath, gitDir: path.join(worktreePath, '.git') }
+  }
+
+  function detachedStatusGit(): GitExec {
+    return vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        return { stdout: buildBranchStatusOutput('a'.repeat(40), '(detached)'), stderr: '' }
+      }
+      throw new Error(`Unexpected git command: ${args.join(' ')}`)
+    })
+  }
+
+  afterEach(async () => {
+    while (tmpDirs.length > 0) {
+      const dir = tmpDirs.pop()
+      if (dir) {
+        await fs.rm(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  it('carries the disk-read rebase state alongside the detached status identity', async () => {
+    const { worktreePath, gitDir } = makeWorktree()
+    await fs.mkdir(path.join(gitDir, 'rebase-merge'), { recursive: true })
+    await fs.writeFile(path.join(gitDir, 'rebase-merge', 'head-name'), 'refs/heads/feature/x\n')
+    const git = detachedStatusGit()
+
+    const result = await getStatusOp(git, streamGitFromCapture(git), { worktreePath })
+
+    expect(result.conflictOperation).toBe('rebase')
+    expect(result.rebasing).toBe(true)
+    expect(result.rebaseBranch).toBe('feature/x')
+  })
+
+  it('does NOT report rebasing for a conflicted git am, even though conflictOperation does', async () => {
+    const { worktreePath, gitDir } = makeWorktree()
+    await fs.mkdir(path.join(gitDir, 'rebase-apply'), { recursive: true })
+    await fs.writeFile(path.join(gitDir, 'rebase-apply', 'applying'), '')
+    await fs.writeFile(path.join(gitDir, 'rebase-apply', 'head-name'), 'refs/heads/ignored\n')
+    const git = detachedStatusGit()
+
+    const result = await getStatusOp(git, streamGitFromCapture(git), { worktreePath })
+
+    // conflictOperation keeps its coarse historical meaning for the conflict banner...
+    expect(result.conflictOperation).toBe('rebase')
+    // ...but the identity fields are sentinel-gated so the badge never shows a false rebase.
+    expect(result.rebasing).toBeUndefined()
+    expect(result.rebaseBranch).toBeUndefined()
+  })
+
+  it('re-probes when a rebase starts between the early probe and status reading HEAD', async () => {
+    const { worktreePath, gitDir } = makeWorktree()
+    // Why: the early probe protects `rebase --abort` torn reads; this covers the mirror
+    // race — rebase state lands on disk while `git status` runs, so the detached HEAD
+    // must not be reported as {detached, not rebasing} (a fake branch switch).
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        await fs.mkdir(path.join(gitDir, 'rebase-merge'), { recursive: true })
+        await fs.writeFile(path.join(gitDir, 'rebase-merge', 'head-name'), 'refs/heads/feature/x\n')
+        return { stdout: buildBranchStatusOutput('a'.repeat(40), '(detached)'), stderr: '' }
+      }
+      throw new Error(`Unexpected git command: ${args.join(' ')}`)
+    })
+
+    const result = await getStatusOp(git, streamGitFromCapture(git), { worktreePath })
+
+    expect(result.rebasing).toBe(true)
+    expect(result.rebaseBranch).toBe('feature/x')
+  })
+})

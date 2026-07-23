@@ -10,7 +10,7 @@ type HeadIdentityWatchHost = {
 }
 
 export type WorktreeHeadIdentityRefreshState = {
-  /** worktreePath → `${head} ${branch}` from the last metadata-file read. */
+  /** worktreePath → `${head} ${branch} ${rebase-state}` from the last metadata-file read. */
   baseline: Map<string, string> | null
   inFlight: boolean
   queued: boolean
@@ -21,8 +21,15 @@ export function createWorktreeHeadIdentityRefreshState(): WorktreeHeadIdentityRe
   return { baseline: null, inFlight: false, queued: false, queuedEmit: false }
 }
 
-function headIdentitySignature(identity: { head: string; branch: string | null }): string {
-  return `${identity.head} ${identity.branch ?? ''}`
+function headIdentitySignature(identity: {
+  head: string
+  branch: string | null
+  rebasing?: boolean
+  rebaseBranch?: string
+}): string {
+  // Why: `git rebase --quit` flips only the rebase fields (HEAD stays put); omitting them
+  // would swallow the change and leave a stale "(rebasing)" badge until the next poll.
+  return `${identity.head} ${identity.branch ?? ''} ${identity.rebasing ? `rebasing:${identity.rebaseBranch ?? ''}` : ''}`
 }
 
 /** Diffs metadata-file head reads against the previous baseline and notifies

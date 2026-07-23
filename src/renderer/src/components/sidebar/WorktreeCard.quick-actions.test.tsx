@@ -329,6 +329,28 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('tabindex="0"')
   })
 
+  it('renders the recovered branch as a rebasing badge during a rebase', () => {
+    worktreeCardProperties = []
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'orca',
+          branch: '',
+          rebasing: true,
+          rebaseBranch: 'feature/x'
+        })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('feature/x (rebasing)')
+    expect(markup).toContain('Rebasing feature/x.')
+    expect(markup).not.toContain('Detached HEAD @ abc123')
+  })
+
   it('omits the repeated branch metadata row when compact cards are enabled', () => {
     worktreeCardProperties = []
     settings = { compactWorktreeCards: true }

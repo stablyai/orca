@@ -8,15 +8,23 @@ import type {
 // Shared with the darwin primary-metadata poll so the platforms cannot drift
 // on which shallow leaves count as watchable metadata. `logs/HEAD` catches
 // head moves that rewrite no other watched leaf (commit --amend, reset
-// --soft); `config.worktree` carries the sparse flag.
+// --soft); `config.worktree` carries the sparse flag. The rebase sentinels
+// catch `git rebase --quit`, which deletes the state dir without rewriting
+// HEAD or logs/HEAD (`rebase-apply/rebasing` — not the dir — so `git am`
+// stays invisible, matching the sentinel-gated identity probe).
 export const PRIMARY_CHECKOUT_METADATA_FILES = [
   'HEAD',
   'packed-refs',
   'index',
   'config.worktree',
-  'logs/HEAD'
+  'logs/HEAD',
+  'rebase-merge/head-name',
+  'rebase-apply/rebasing'
 ]
 const LINKED_WORKTREE_STRUCTURAL_METADATA_FILES = ['HEAD', 'gitdir', 'locked', 'config.worktree']
+// Why: same rebase sentinels for linked worktrees (their state lives in the
+// private metadata dir); the event filter routes these to head-identity reads.
+const LINKED_WORKTREE_REBASE_STATE_FILES = ['rebase-merge/head-name', 'rebase-apply/rebasing']
 const LINKED_WORKTREE_INDEX_FILE = 'index'
 const LINKED_WORKTREE_HEAD_LOG_FILE = join('logs', 'HEAD')
 // Why: the entry-dir signature gate can miss same-granule index rewrites on
@@ -71,12 +79,14 @@ async function snapshotGitCommonEntry(
   const dirSignature = await pathSignature(entryPath)
   const structuralSignatures = new Map<string, string>()
   await Promise.all(
-    LINKED_WORKTREE_STRUCTURAL_METADATA_FILES.map(async (name) => {
-      const signature = await fileSignature(join(entryPath, name))
-      if (signature !== null) {
-        structuralSignatures.set(name, signature)
+    [...LINKED_WORKTREE_STRUCTURAL_METADATA_FILES, ...LINKED_WORKTREE_REBASE_STATE_FILES].map(
+      async (name) => {
+        const signature = await fileSignature(join(entryPath, name))
+        if (signature !== null) {
+          structuralSignatures.set(name, signature)
+        }
       }
-    })
+    )
   )
   // `logs/HEAD` lives in a subdirectory, so appends never bump the entry-dir
   // mtime — it must be stat'd every tick rather than gated like `index`.

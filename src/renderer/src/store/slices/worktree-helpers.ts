@@ -51,6 +51,21 @@ export type WorktreeRenameRequest = {
   rowKey?: string
 }
 
+/**
+ * A complete git-identity observation for one worktree. `rebasing` is required — every
+ * publisher must state rebase context with the detach it reports. Why: a detach observed
+ * without that context is indistinguishable from a branch switch, and misclassifying a
+ * mid-rebase detach is what used to clear the branch-scoped review link.
+ */
+export type WorktreeGitIdentityUpdate = {
+  head?: string
+  /** New branch ref, or null as the explicit detached signal; omit to keep the current one. */
+  branch?: string | null
+  rebasing: boolean
+  /** Recovered original branch (short name or full ref), when the producer read one. */
+  rebaseBranch?: string | null
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
@@ -282,10 +297,7 @@ export type WorktreeSlice = {
    * keeps its tabs, terminals, and selections. No-op when the ids match.
    */
   migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => void
-  updateWorktreeGitIdentity: (
-    worktreeId: string,
-    identity: { head?: string; branch?: string | null }
-  ) => void
+  updateWorktreeGitIdentity: (worktreeId: string, identity: WorktreeGitIdentityUpdate) => void
   updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
   updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void
 }

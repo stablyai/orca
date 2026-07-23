@@ -3,16 +3,16 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/select
 import type { CheckStatus } from '../../../../shared/types'
 import { getGitHubPRCacheKey } from '../../store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
+import {
+  getWorktreeGitIdentityDisplay,
+  getWorktreeIdentityBranchName
+} from '../../lib/worktree-git-identity-display'
 
 type ActiveChecksStatusState = Pick<
   AppState,
   'activeWorktreeId' | 'worktreesByRepo' | 'repos' | 'prCache'
 > &
   Partial<Pick<AppState, 'settings' | 'hostedReviewCache'>>
-
-function branchDisplayName(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
 
 export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus | null {
   const activeWorktree = state.activeWorktreeId
@@ -27,7 +27,9 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
     return null
   }
 
-  const branch = branchDisplayName(activeWorktree.branch)
+  // Why: mid-rebase the review still lives on the recovered branch; keying off the live
+  // branch alone would blank the activity indicator while other surfaces still show the PR.
+  const branch = getWorktreeIdentityBranchName(getWorktreeGitIdentityDisplay(activeWorktree))
   if (!branch) {
     return null
   }

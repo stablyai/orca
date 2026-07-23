@@ -6,7 +6,10 @@ import type {
 } from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import {
+  getWorktreeGitIdentityDisplay,
+  getWorktreeIdentityBranchName
+} from '@/lib/worktree-git-identity-display'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import {
   getParentPrChecksRefreshIdentity,
@@ -185,8 +188,7 @@ function getRefreshPriority(candidate: ParentPrChecksRefreshCandidate): number {
 }
 
 function getBranchName(worktree: Worktree): string | null {
-  const identity = getWorktreeGitIdentityDisplay(worktree)
-  return identity?.kind === 'branch' ? identity.branchName : null
+  return getWorktreeIdentityBranchName(getWorktreeGitIdentityDisplay(worktree))
 }
 
 function hasLinkedReview(worktree: Worktree): boolean {

@@ -1,4 +1,7 @@
-import { branchName } from '@/lib/git-utils'
+import {
+  getWorktreeGitIdentityDisplay,
+  getWorktreeIdentityBranchName
+} from '@/lib/worktree-git-identity-display'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
@@ -35,7 +38,9 @@ export function buildWorktreeChecksReviewIndex({
     if (!repo) {
       continue
     }
-    const branch = branchName(worktree.branch)
+    // Why: mid-rebase the review still lives on the recovered branch; keying off the live
+    // branch alone would drop the PR from Cmd+J while the card/Checks panel still show it.
+    const branch = getWorktreeIdentityBranchName(getWorktreeGitIdentityDisplay(worktree)) ?? ''
     const prKey = getGitHubPRCacheKey(
       repo.path,
       repo.id,

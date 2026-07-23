@@ -150,6 +150,7 @@ export function parseWorktreeList(
     let head = ''
     let branch = ''
     let isBare = false
+    let detached = false
     let locked = false
     let lockReason = ''
     let prunable = false
@@ -162,6 +163,10 @@ export function parseWorktreeList(
         head = line.slice('HEAD '.length)
       } else if (line.startsWith('branch ')) {
         branch = line.slice('branch '.length)
+      } else if (line === 'detached') {
+        // Why: Git emits `detached` (and no `branch` line) mid-rebase; flag it so the
+        // handler can recover the rebasing branch instead of falling back to a bare SHA.
+        detached = true
       } else if (line === 'bare') {
         isBare = true
       } else if (line === 'locked' || line.startsWith('locked ')) {
@@ -183,6 +188,7 @@ export function parseWorktreeList(
         head,
         branch,
         isBare,
+        ...(detached ? { detached: true } : {}),
         ...(locked ? { locked: true } : {}),
         ...(lockReason ? { lockReason } : {}),
         ...(prunable ? { prunable: true } : {}),

@@ -45,7 +45,7 @@ import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { WorktreeIdentityBadge } from '@/components/WorktreeIdentityBadge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -223,7 +223,10 @@ import type {
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import {
+  getWorktreeGitIdentityDisplay,
+  getWorktreeIdentityBranchName
+} from '@/lib/worktree-git-identity-display'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -809,8 +812,15 @@ function SourceControlInner(): React.JSX.Element {
   const activeRepoConnectionId = activeRepo?.connectionId ?? null
   const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
-  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
-  const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
+  const identityBadgeDisplay =
+    gitIdentityDisplay?.kind === 'detached' || gitIdentityDisplay?.kind === 'rebasing'
+      ? gitIdentityDisplay
+      : null
+  // Why: mid-rebase the PR still lives on the recovered branch, so resolve/display it against
+  // that branch (read-only). `isOnLiveBranch` stays false while detached/rebasing so PR *creation*
+  // eligibility can't resolve on a HEAD that isn't on a branch.
+  const branchName = getWorktreeIdentityBranchName(gitIdentityDisplay) ?? ''
+  const isOnLiveBranch = gitIdentityDisplay?.kind === 'branch'
   const entries = useAppStore((s) =>
     activeWorktreeId
       ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
@@ -1475,10 +1485,13 @@ function SourceControlInner(): React.JSX.Element {
       repoId: activeRepo?.id ?? null,
       worktreeId: activeWorktreeId ?? null,
       worktreePath,
-      branch: branchName,
+      // Why: mid-rebase branchName is the recovered review label, which equals the run
+      // token's branch — record '' instead so a rebase starting during an in-flight
+      // create-PR intent still trips the target-drift abort before the remote push step.
+      branch: isOnLiveBranch ? branchName : '',
       baseRef: effectiveBaseRef ?? null
     }
-  }, [activeRepo?.id, activeWorktreeId, branchName, effectiveBaseRef, worktreePath])
+  }, [activeRepo?.id, activeWorktreeId, branchName, effectiveBaseRef, isOnLiveBranch, worktreePath])
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const fallbackGitHubPRNumber = linkedGitHubPR == null ? (activePrFromQueue?.number ?? null) : null
@@ -1525,6 +1538,9 @@ function SourceControlInner(): React.JSX.Element {
     isBranchVisible &&
     Boolean(activeRepo) &&
     !isFolder &&
+    // Why: read-only during rebase — resolve/show the PR but don't let creation eligibility arm
+    // while HEAD is detached (branchName is the recovered rebase branch, not a checked-out one).
+    isOnLiveBranch &&
     Boolean(branchName) &&
     branchName !== 'HEAD' &&
     Boolean(activeWorktreeId)
@@ -2822,7 +2838,15 @@ function SourceControlInner(): React.JSX.Element {
       fieldRevisions: PullRequestFieldRevisions,
       overrides?: RuntimeGeneratePullRequestFieldsOverrides
     ): Promise<void> => {
-      if (!activeRepo || !activePullRequestGenerationKey || !worktreePath || !branchName) {
+      // Why: mid-rebase branchName is only the recovered review label; PR-field generation
+      // must not fire against a HEAD that isn't on a branch (mirrors the ChecksPanel twin).
+      if (
+        !activeRepo ||
+        !activePullRequestGenerationKey ||
+        !worktreePath ||
+        !branchName ||
+        !isOnLiveBranch
+      ) {
         return
       }
       const generationKey = activePullRequestGenerationKey
@@ -2915,6 +2939,7 @@ function SourceControlInner(): React.JSX.Element {
       allocatePullRequestGenerationRequestId,
       branchName,
       hostedReviewCreateProvider,
+      isOnLiveBranch,
       refreshGitStatusAfterPullRequestGeneration,
       resolvedPrCreationDefaults.useTemplate,
       setPullRequestGenerationRecord,
@@ -3129,6 +3154,9 @@ function SourceControlInner(): React.JSX.Element {
       !activeRepoId ||
       !activeRepoPath ||
       isFolder ||
+      // Why: mid-rebase branchName is the recovered branch (read-only for PR display);
+      // creation eligibility must not compute against a HEAD that isn't on a branch.
+      !isOnLiveBranch ||
       !branchName ||
       !activeWorktreeId
     ) {
@@ -3231,6 +3259,7 @@ function SourceControlInner(): React.JSX.Element {
     isCreatingPr,
     isCreatePrIntentInFlight,
     isFolder,
+    isOnLiveBranch,
     linkedGitHubPR,
     fallbackGitHubPRNumber,
     linkedGitLabMR,
@@ -3251,6 +3280,8 @@ function SourceControlInner(): React.JSX.Element {
       !activeWorktreeId ||
       !worktreePath ||
       !hostedReviewCreation ||
+      // Why: no PR creation while detached/rebasing — branchName is only a recovered label then.
+      !isOnLiveBranch ||
       prGenerating ||
       createPrInFlightRef.current[activeWorktreeId]
     ) {
@@ -3392,6 +3423,7 @@ function SourceControlInner(): React.JSX.Element {
     hostedReviewCreateCopy.reviewLabel,
     hostedReviewCreateCopy.titleLabel,
     hostedReviewCreateProvider,
+    isOnLiveBranch,
     prBase,
     prBody,
     prDraft,
@@ -3722,6 +3754,8 @@ function SourceControlInner(): React.JSX.Element {
       !activeWorktreeId ||
       !worktreePath ||
       !branchName ||
+      // Why: no PR creation while detached/rebasing — branchName is only a recovered label then.
+      !isOnLiveBranch ||
       isExecutingBulk ||
       isCommitting ||
       isGenerating ||
@@ -4100,6 +4134,7 @@ function SourceControlInner(): React.JSX.Element {
     isCreatingPr,
     isExecutingBulk,
     isGenerating,
+    isOnLiveBranch,
     isRemoteOperationActive,
     prGenerating,
     readHostedReviewCreationEligibilityForIntent,
@@ -4144,7 +4179,9 @@ function SourceControlInner(): React.JSX.Element {
       hostedReviewCreation,
       branchCommitsAhead:
         branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
-      hasCurrentBranch: Boolean(branchName),
+      // Why: mid-rebase branchName is only the recovered review label; remote actions
+      // (push/PR) need a checked-out branch.
+      hasCurrentBranch: isOnLiveBranch,
       canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
       isPrIntentInFlight: isCreatePrIntentInFlight
     })
@@ -4165,7 +4202,7 @@ function SourceControlInner(): React.JSX.Element {
     isCreatePrIntentInFlight,
     branchSummary?.commitsAhead,
     branchSummary?.status,
-    branchName,
+    isOnLiveBranch,
     remoteStatusForActions,
     unresolvedConflicts.length
   ])
@@ -4189,7 +4226,9 @@ function SourceControlInner(): React.JSX.Element {
         isHostedReviewCreationLoading && hostedReviewCreationForHeader !== null,
       branchCommitsAhead:
         branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
-      hasCurrentBranch: Boolean(branchName),
+      // Why: mid-rebase branchName is only the recovered review label; remote actions
+      // (push/PR) need a checked-out branch.
+      hasCurrentBranch: isOnLiveBranch,
       isPrIntentInFlight: isCreatePrIntentInFlight
     })
     if ((prGenerating || isCreatingPr) && action?.kind === 'create_pr') {
@@ -4210,7 +4249,7 @@ function SourceControlInner(): React.JSX.Element {
     }
     return action
   }, [
-    branchName,
+    isOnLiveBranch,
     branchSummary?.commitsAhead,
     branchSummary?.status,
     commitMessage,
@@ -4263,7 +4302,9 @@ function SourceControlInner(): React.JSX.Element {
         isPullRequestOperationActive: prGenerating || isCreatingPr || isCreatePrIntentInFlight,
         branchCommitsAhead:
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
-        hasCurrentBranch: Boolean(branchName),
+        // Why: mid-rebase branchName is only the recovered review label; remote actions
+        // (push/PR) need a checked-out branch.
+        hasCurrentBranch: isOnLiveBranch,
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
         rebaseBaseRef: effectiveBaseRef
       }),
@@ -4287,7 +4328,7 @@ function SourceControlInner(): React.JSX.Element {
       canUseHostedReviewPushTarget,
       branchSummary?.commitsAhead,
       branchSummary?.status,
-      branchName,
+      isOnLiveBranch,
       effectiveBaseRef,
       remoteStatusForActions,
       unresolvedConflicts.length
@@ -5476,9 +5517,9 @@ function SourceControlInner(): React.JSX.Element {
           manualReviewUrl={manualReviewUrl}
         />
 
-        {detachedHeadDisplay && (
+        {identityBadgeDisplay && (
           <div className="border-b border-border px-3 py-2">
-            <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />
+            <WorktreeIdentityBadge display={identityBadgeDisplay} side="bottom" />
           </div>
         )}
 

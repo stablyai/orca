@@ -32,7 +32,37 @@ describe('applyWorktreeHeadIdentities', () => {
     expect(updateWorktreeGitIdentity).toHaveBeenCalledTimes(1)
     expect(updateWorktreeGitIdentity).toHaveBeenCalledWith('repo-1::/repos/project/wt-a', {
       head: 'bbb222',
-      branch: 'refs/heads/feature'
+      branch: 'refs/heads/feature',
+      rebasing: false,
+      rebaseBranch: null
+    })
+  })
+
+  it('forwards the watcher rebase recovery with a detached identity', () => {
+    const updateWorktreeGitIdentity = vi.fn()
+    applyWorktreeHeadIdentities(
+      {
+        repoId: 'repo-1',
+        identities: [
+          {
+            worktreePath: '/repos/project/wt-a',
+            head: 'bbb222',
+            branch: null,
+            rebasing: true,
+            rebaseBranch: 'feature'
+          }
+        ]
+      },
+      {
+        getWorktreesForRepo: () => [makeWorktree({})],
+        updateWorktreeGitIdentity
+      }
+    )
+    expect(updateWorktreeGitIdentity).toHaveBeenCalledWith('repo-1::/repos/project/wt-a', {
+      head: 'bbb222',
+      branch: null,
+      rebasing: true,
+      rebaseBranch: 'feature'
     })
   })
 
@@ -52,7 +82,9 @@ describe('applyWorktreeHeadIdentities', () => {
     )
     expect(updateWorktreeGitIdentity).toHaveBeenCalledWith('repo-1::C:/repos/project/wt-a', {
       head: 'bbb222',
-      branch: null
+      branch: null,
+      rebasing: false,
+      rebaseBranch: null
     })
   })
 

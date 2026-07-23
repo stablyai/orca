@@ -3,7 +3,8 @@ import {
   foldWslUncPathCaseInsensitiveParts,
   isWslUncPath,
   parseWslUncPath,
-  toWindowsWslPath
+  toWindowsWslPath,
+  windowsPathFromWslMntPath
 } from './wsl-paths'
 
 describe('wsl path helpers', () => {
@@ -31,6 +32,13 @@ describe('wsl path helpers', () => {
     ['/mnt/C/Repo', '\\\\wsl.localhost\\Ubuntu\\mnt\\C\\Repo']
   ])('converts %s without folding case-sensitive Linux paths', (linuxPath, expected) => {
     expect(toWindowsWslPath(linuxPath, 'Ubuntu')).toBe(expected)
+  })
+
+  it('maps drvfs /mnt paths to drives distro-independently and rejects the rest', () => {
+    expect(windowsPathFromWslMntPath('/mnt/c/Users/jin')).toBe('C:\\Users\\jin')
+    expect(windowsPathFromWslMntPath('/mnt/d')).toBe('D:\\')
+    expect(windowsPathFromWslMntPath('/home/jin/repo')).toBeNull()
+    expect(windowsPathFromWslMntPath('/mnt/cd/x')).toBeNull()
   })
 })
 

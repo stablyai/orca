@@ -27,6 +27,10 @@ export function mergeWorktree(
     branch: git.branch,
     isBare: git.isBare,
     ...(git.isSparse === true ? { isSparse: true } : {}),
+    // Why: forward the relay/host rebase-recovery fields; this is the sole GitWorktreeInfo ->
+    // Worktree normalizer, so dropping them leaves the badge stuck on "Detached HEAD" mid-rebase.
+    ...(git.rebasing === true ? { rebasing: true } : {}),
+    ...(git.rebaseBranch !== undefined ? { rebaseBranch: git.rebaseBranch } : {}),
     isMainWorktree: git.isMainWorktree,
     displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
     comment: meta?.comment || '',

@@ -16,6 +16,7 @@ import type {
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree-submodule-removal'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
+import { readWorktreeRebaseState } from '../../shared/git-rebase-worktree-state'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -647,14 +648,40 @@ async function annotatePrunableByExistence(
   return annotated
 }
 
+// Why: mirror the relay's detached-worktree rebase recovery on the local path so the badge
+// recovers `<branch> (rebasing)` for local repos too. Gates the fs probe to detached, non-bare
+// worktrees (bare also has an empty branch), and isolates failures to a single entry.
+async function enrichLocalWorktreeWithRebaseState(
+  worktree: GitWorktreeInfo
+): Promise<GitWorktreeInfo> {
+  if (worktree.isBare || worktree.branch) {
+    return worktree
+  }
+  try {
+    const { rebasing, rebaseBranch } = await readWorktreeRebaseState(worktree.path)
+    return {
+      ...worktree,
+      ...(rebasing ? { rebasing: true } : {}),
+      ...(rebaseBranch ? { rebaseBranch } : {})
+    }
+  } catch {
+    return worktree
+  }
+}
+
 async function readTranslatedWorktreeGraph(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
-  return (await readWorktreeList(repoPath, options)).map((worktree) => {
-    const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
-    return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
-  })
+  const worktrees = await readWorktreeList(repoPath, options)
+  return Promise.all(
+    worktrees.map((worktree) => {
+      const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
+      const translated =
+        translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
+      return enrichLocalWorktreeWithRebaseState(translated)
+    })
+  )
 }
 
 export async function listWorktreeGraph(

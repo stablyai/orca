@@ -1,26 +1,29 @@
 import React from 'react'
-import { GitCommitHorizontal } from 'lucide-react'
+import { GitCommitHorizontal, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 
-type DetachedHeadDisplay = Extract<WorktreeGitIdentityDisplay, { kind: 'detached' }>
+// Both non-branch identity states share one badge; they differ by label + icon only
+// (same git-decoration color — the STYLEGUIDE reserves those tokens for git status).
+type IdentityBadgeDisplay = Extract<WorktreeGitIdentityDisplay, { kind: 'detached' | 'rebasing' }>
 
-type DetachedHeadBadgeProps = {
-  display: DetachedHeadDisplay
+type WorktreeIdentityBadgeProps = {
+  display: IdentityBadgeDisplay
   label?: 'sidebar' | 'source-control'
   side?: React.ComponentProps<typeof TooltipContent>['side']
   className?: string
 }
 
-export function DetachedHeadBadge({
+export function WorktreeIdentityBadge({
   display,
   label = 'source-control',
   side = 'right',
   className
-}: DetachedHeadBadgeProps): React.JSX.Element {
+}: WorktreeIdentityBadgeProps): React.JSX.Element {
   const visibleLabel = label === 'sidebar' ? display.sidebarLabel : display.sourceControlLabel
+  const Icon = display.kind === 'rebasing' ? RefreshCw : GitCommitHorizontal
 
   return (
     <Tooltip>
@@ -33,7 +36,7 @@ export function DetachedHeadBadge({
             className
           )}
         >
-          <GitCommitHorizontal className="size-2.5" />
+          <Icon className="size-2.5" />
           {visibleLabel}
         </Badge>
       </TooltipTrigger>

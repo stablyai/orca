@@ -259,6 +259,47 @@ describe('worktree base directory poller', () => {
     )
   })
 
+  it('reports rebase sentinel appearance and removal for primary and linked checkouts', async () => {
+    const commonDir = await makeRoot()
+    const entry = join(commonDir, 'worktrees', 'external-rebase')
+    await mkdir(entry, { recursive: true })
+    await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/main')
+
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('git-common', commonDir)
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      { pollIntervalMs: POLL_MS, platform: 'linux' }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    // `git rebase --quit` deletes the state dir without touching HEAD or logs/HEAD,
+    // so the sentinel files are the only observable transition at both boundaries.
+    const primarySentinel = join(commonDir, 'rebase-merge', 'head-name')
+    await mkdir(join(commonDir, 'rebase-merge'), { recursive: true })
+    await writeFile(primarySentinel, 'refs/heads/feature/x\n')
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === primarySentinel)
+    )
+    await rm(join(commonDir, 'rebase-merge'), { recursive: true })
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'delete' && event.path === primarySentinel)
+    )
+
+    const linkedSentinel = join(entry, 'rebase-apply', 'rebasing')
+    await mkdir(join(entry, 'rebase-apply'), { recursive: true })
+    await writeFile(linkedSentinel, '')
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === linkedSentinel)
+    )
+    await rm(join(entry, 'rebase-apply'), { recursive: true })
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'delete' && event.path === linkedSentinel)
+    )
+  })
+
   it('surfaces in-place index rewrites through the backstop re-stat', async () => {
     const commonDir = await makeRoot()
     const entry = join(commonDir, 'worktrees', 'external-inplace')

@@ -13,7 +13,10 @@ import type {
   WorktreeLineage,
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
-import { branchName } from '../../lib/git-utils'
+import {
+  getWorktreeGitIdentityDisplay,
+  getWorktreeIdentityBranchName
+} from '../../lib/worktree-git-identity-display'
 import {
   getWorkspaceStatus,
   getWorkspaceStatusFromGroupKey,
@@ -50,7 +53,7 @@ import {
 
 export { getLineageRenderInfo } from './worktree-lineage-projection'
 
-export { branchName }
+export { branchName } from '../../lib/git-utils'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
@@ -386,7 +389,9 @@ export function getPRGroupKey(
   settings?: AppState['settings']
 ): PRGroupKey {
   const repo = repoMap.get(worktree.repoId)
-  const branch = branchName(worktree.branch)
+  // Why: mid-rebase the review still lives on the recovered branch; keying off the live
+  // branch alone would regroup the worktree as PR-less while its card still shows the PR.
+  const branch = getWorktreeIdentityBranchName(getWorktreeGitIdentityDisplay(worktree)) ?? ''
   const repoScopedCacheKey =
     repo && branch
       ? getGitHubPRCacheKey(

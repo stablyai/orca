@@ -38,6 +38,12 @@ import {
   gitStreamStdout
 } from './runner'
 import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
+import { resolveWorktreeGitDir } from '../../shared/git-worktree-dir'
+import {
+  readWorktreeRebaseState,
+  reprobeDetachedHeadRebaseState,
+  type WorktreeRebaseState
+} from '../../shared/git-rebase-worktree-state'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
@@ -255,6 +261,12 @@ async function runGetStatus(
 
   // Why: detectConflictOperation and git status are independent, so run them concurrently to save I/O latency.
   const conflictPromise = detectConflictOperation(worktreePath)
+  // Why: start the rebase probe BEFORE `git status` reads HEAD so a `rebase --abort` torn
+  // read errs toward {reattached branch, rebasing} (harmless). The mirror-image race at
+  // rebase *start* is covered by the post-status re-probe below.
+  const rebaseStatePromise: Promise<WorktreeRebaseState> = readWorktreeRebaseState(
+    worktreePath
+  ).catch(() => ({ rebasing: false, rebaseBranch: null }))
   // Why: core.quotePath=false keeps non-ASCII paths as raw UTF-8, not octal escapes, so entry.path is readable and lookups match.
   const statusArgs = [
     '-c',
@@ -361,11 +373,26 @@ async function runGetStatus(
     throw error
   }
 
+  let rebaseState = await rebaseStatePromise
+  if (head && !branch) {
+    // Why: a rebase starting between the early probe and status reading HEAD would
+    // otherwise report {detached, not rebasing} — misread downstream as a branch switch.
+    rebaseState = await reprobeDetachedHeadRebaseState(rebaseState, () =>
+      readWorktreeRebaseState(worktreePath)
+    )
+  }
+
   return {
     entries,
     conflictOperation,
     head,
     branch,
+    ...(rebaseState.rebasing
+      ? {
+          rebasing: true,
+          ...(rebaseState.rebaseBranch ? { rebaseBranch: rebaseState.rebaseBranch } : {})
+        }
+      : {}),
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
     ...(statusSucceeded
@@ -969,20 +996,10 @@ export async function abortRebase(
   )
 }
 
+// Why: delegate to the shared WSL-aware resolver so conflict/rebase probes work on
+// linked WSL worktrees, whose `.git` pointer holds a Linux path.
 export async function resolveGitDir(worktreePath: string): Promise<string> {
-  const dotGitPath = path.join(worktreePath, '.git')
-
-  try {
-    const dotGitContents = await readFile(dotGitPath, 'utf-8')
-    const match = dotGitContents.match(/^gitdir:\s*(.+)\s*$/m)
-    if (match) {
-      return path.resolve(worktreePath, match[1])
-    }
-  } catch {
-    // `.git` is likely a directory in a non-worktree checkout.
-  }
-
-  return dotGitPath
+  return resolveWorktreeGitDir(worktreePath)
 }
 
 /**

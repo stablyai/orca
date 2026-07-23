@@ -68,7 +68,9 @@ describe('refreshGitStatusForWorktree', () => {
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-1', status)
     expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-1', {
       head: 'abc123',
-      branch: 'refs/heads/feature'
+      branch: 'refs/heads/feature',
+      rebasing: false,
+      rebaseBranch: null
     })
     expect(deps.setUpstreamStatus).toHaveBeenCalledWith('wt-1', status.upstreamStatus)
     expect(deps.fetchUpstreamStatus).not.toHaveBeenCalled()
@@ -123,7 +125,9 @@ describe('refreshGitStatusForWorktree', () => {
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-2', status)
     expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-2', {
       head: 'def456',
-      branch: 'refs/heads/main'
+      branch: 'refs/heads/main',
+      rebasing: false,
+      rebaseBranch: null
     })
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
     expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-2', '/repo', 'ssh-2', undefined, {
@@ -388,7 +392,91 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-detached', {
       head: 'abc123456789',
-      branch: null
+      branch: null,
+      rebasing: false,
+      rebaseBranch: null
+    })
+  })
+
+  it('forwards the disk-read rebase identity from the status payload', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'rebase',
+      head: 'abc123456789',
+      rebasing: true,
+      rebaseBranch: 'feature/x'
+    }
+    const gitStatus = vi.fn().mockResolvedValue(status)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-rebasing',
+      worktreePath: '/repo',
+      deps
+    })
+
+    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-rebasing', {
+      head: 'abc123456789',
+      branch: null,
+      rebasing: true,
+      rebaseBranch: 'feature/x'
+    })
+  })
+
+  it('does NOT flag rebasing for a conflicted git am (conflictOperation rebase, no rebase state)', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      // Why: detectConflictOperation treats any rebase-apply dir as 'rebase', but the
+      // sentinel-gated identity fields are absent for `git am` — identity must follow them.
+      conflictOperation: 'rebase',
+      head: 'abc123456789'
+    }
+    const gitStatus = vi.fn().mockResolvedValue(status)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-am',
+      worktreePath: '/repo',
+      deps
+    })
+
+    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-am', {
+      head: 'abc123456789',
+      branch: null,
+      rebasing: false,
+      rebaseBranch: null
+    })
+  })
+
+  it('forwards rebase identity on strict refreshes too', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'rebase',
+      head: 'abc123456789',
+      rebasing: true,
+      rebaseBranch: 'feature/x',
+      upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+    }
+    const gitStatus = vi.fn().mockResolvedValue(status)
+    const gitUpstreamStatus = vi.fn()
+    vi.stubGlobal('window', {
+      api: { git: { status: gitStatus, upstreamStatus: gitUpstreamStatus } }
+    })
+    const deps = makeDeps()
+
+    await refreshGitStatusForWorktreeStrict({
+      worktreeId: 'wt-rebasing-strict',
+      worktreePath: '/repo',
+      deps
+    })
+
+    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-rebasing-strict', {
+      head: 'abc123456789',
+      branch: null,
+      rebasing: true,
+      rebaseBranch: 'feature/x'
     })
   })
 })
