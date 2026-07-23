@@ -71,11 +71,12 @@ describe('startRuntimeCapabilityProbe', () => {
       result: { capabilities: ['a.v1', 42] },
       _meta: { runtimeId: 'r1' }
     }
-    const { client } = makeClient([response])
+    const { client, calls } = makeClient([response])
     const seen: (readonly string[])[] = []
     const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
     await flushMicrotasks()
     expect(seen).toEqual([[]])
+    expect(calls()).toBe(1)
     cancel()
   })
 
@@ -86,11 +87,12 @@ describe('startRuntimeCapabilityProbe', () => {
       result: null,
       _meta: { runtimeId: 'r1' }
     }
-    const { client } = makeClient([response])
+    const { client, calls } = makeClient([response])
     const seen: (readonly string[])[] = []
     const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
     await flushMicrotasks()
     expect(seen).toEqual([[]])
+    expect(calls()).toBe(1)
     cancel()
   })
 
