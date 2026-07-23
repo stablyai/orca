@@ -621,6 +621,7 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.clearBuffer', (p) => this.clearBuffer(p))
     this.dispatcher.onRequest('pty.hasChildProcesses', (p) => this.hasChildProcesses(p))
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
+    this.dispatcher.onRequest('pty.inspectProcess', (p) => this.inspectProcess(p))
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
@@ -1384,6 +1385,25 @@ export class PtyHandler {
       return null
     }
     return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
+  }
+
+  private async inspectProcess(params: Record<string, unknown>): Promise<{
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+  }> {
+    const id = params.id as string
+    const managed = this.ptys.get(id)
+    if (!managed || managed.disposed) {
+      throw new Error('terminal_gone')
+    }
+    const foregroundProcess = await getForegroundProcessName(
+      managed.pty.pid,
+      managed.pty.process || null
+    )
+    return {
+      foregroundProcess,
+      hasChildProcesses: await processHasChildren(managed.pty.pid)
+    }
   }
 
   private async listProcesses(): Promise<PtyProcessSummary[]> {

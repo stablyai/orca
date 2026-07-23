@@ -58,6 +58,7 @@ import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -1586,6 +1587,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
+  ipcMain.removeHandler('pty:inspectProcess')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
@@ -3752,6 +3754,7 @@ export function registerPtyHandlers(
         return null
       }
     },
+    inspectProcess: async (ptyId) => inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId),
     confirmForegroundProcess: async (ptyId) => {
       try {
         const provider = getProviderForPty(ptyId)
@@ -5335,6 +5338,10 @@ export function registerPtyHandlers(
       }
       return getProviderForPty(args.id).getForegroundProcess(args.id)
     }
+  )
+
+  ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) =>
+    inspectPtyProviderProcess(getProviderForPty(args.id), args.id)
   )
 
   ipcMain.handle(

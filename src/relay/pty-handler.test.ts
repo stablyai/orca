@@ -151,6 +151,7 @@ describe('PtyHandler', () => {
     expect(methods).toContain('pty.clearBuffer')
     expect(methods).toContain('pty.hasChildProcesses')
     expect(methods).toContain('pty.getForegroundProcess')
+    expect(methods).toContain('pty.inspectProcess')
     expect(methods).toContain('pty.listProcesses')
     expect(methods).toContain('pty.getDefaultShell')
 
@@ -158,6 +159,12 @@ describe('PtyHandler', () => {
     expect(notifMethods).toContain('pty.data')
     expect(notifMethods).toContain('pty.resize')
     expect(notifMethods).toContain('pty.ackData')
+  })
+
+  it('rejects strict process inspection for a missing relay PTY', async () => {
+    await expect(dispatcher.callRequest('pty.inspectProcess', { id: 'missing' })).rejects.toThrow(
+      'terminal_gone'
+    )
   })
 
   it('allows callers to shorten a grace timer for empty startup relays', () => {

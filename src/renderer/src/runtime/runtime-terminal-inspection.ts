@@ -12,9 +12,7 @@ import {
 export type RuntimeTerminalProcessInspection = {
   foregroundProcess: string | null
   hasChildProcesses: boolean
-  // Why: a stale/gone remote handle is unknown liveness, not a confirmed
-  // empty-process inspection. Callers that infer agent exit must be able to
-  // tell the two apart (#9151).
+  // Why: callers must not treat a stale remote handle as authoritative idle evidence.
   unavailable?: true
 }
 
@@ -38,6 +36,7 @@ function isTerminalGoneError(error: unknown): boolean {
         ? String((error as { code?: unknown }).code)
         : ''
   return (
+    code === 'no_connected_pty' ||
     code === 'terminal_handle_stale' ||
     code === 'terminal_exited' ||
     code === 'terminal_gone' ||
@@ -78,11 +77,7 @@ export async function inspectRuntimeTerminalProcess(
     : getActiveRuntimeTarget(settings)
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   if (target.kind !== 'environment' || !terminal) {
-    const [foregroundProcess, hasChildProcesses] = await Promise.all([
-      window.api.pty.getForegroundProcess(ptyId),
-      window.api.pty.hasChildProcesses(ptyId)
-    ])
-    return { foregroundProcess, hasChildProcesses }
+    return window.api.pty.inspectProcess(ptyId)
   }
 
   try {

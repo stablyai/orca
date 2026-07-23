@@ -1373,6 +1373,9 @@ export type PreloadApi = {
     publishTerminalViewAttributes: (attributes: TerminalViewAttributes) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
+    inspectProcess: (
+      id: string
+    ) => Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }>
     confirmForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     getSize: (id: string) => Promise<{ cols: number; rows: number } | null>

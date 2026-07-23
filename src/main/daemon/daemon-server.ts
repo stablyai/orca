@@ -909,6 +909,9 @@ export class DaemonServer {
       case 'getForegroundProcess':
         return { foregroundProcess: this.host.getForegroundProcess(request.payload.sessionId) }
 
+      case 'inspectProcess':
+        return this.host.inspectProcess(request.payload.sessionId)
+
       case 'confirmForegroundProcess':
         return {
           foregroundProcess: await this.host.confirmForegroundProcess(request.payload.sessionId)
