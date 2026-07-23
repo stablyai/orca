@@ -17,6 +17,9 @@ import {
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
 import { readTerminalCursorLineContext } from '../../../../shared/terminal-cursor-line-context'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal-composer-draft'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { shouldSuppressNativeChatExitForPane } from '../native-chat/native-chat-pending'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {
@@ -168,6 +171,12 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         }
       }
       if (route.exitChat && unifiedTabId) {
+        // Why: post-hoc triage for #10098 — ordinary send must not flip Chat UI
+        // without a recorded programmatic handoff reason.
+        recordRendererCrashBreadcrumb('native_chat_exit_to_terminal', {
+          reason: 'leaf_route',
+          chatLeafId: route.chatLeafId
+        })
         setTabViewMode(unifiedTabId, 'terminal')
       }
     },
@@ -189,6 +198,14 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       }
       const panes = managerRef.current?.getPanes() ?? []
       const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
+      const paneKey = makePaneKey(tabId, leafId)
+      const suppressExitChat = shouldSuppressNativeChatExitForPane(paneKey)
+      if (suppressExitChat) {
+        recordRendererCrashBreadcrumb('native_chat_agent_exit_suppressed', {
+          reason: 'recent_chat_send',
+          paneKey
+        })
+      }
       applyNativeChatLeafRoute(
         resolveNativeChatLeafRoute({
           isChatViewMode,
@@ -196,11 +213,12 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
           activeLeafId,
           chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
           activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
-          chatLeafHasConfirmedAgentExit: true
+          chatLeafHasConfirmedAgentExit: true,
+          suppressExitChat
         })
       )
     },
-    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode, managerRef]
+    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode, managerRef, tabId]
   )
   useEffect(() => {
     onAgentExitedRef.current = handleConfirmedAgentExit
