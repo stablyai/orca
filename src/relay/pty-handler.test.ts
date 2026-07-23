@@ -323,6 +323,49 @@ describe('PtyHandler', () => {
     expect(spawnOptions.env.NODE_ENV).toBe('production')
   })
 
+  it("does not forward Orca's own Claude Code child-session marker into the spawned shell", async () => {
+    // Why: a relay host launched from inside a Claude Code session inherits
+    // its marker; leaking it makes `claude` in the spawned shell falsely
+    // detect a child session and disable transcript saving.
+    const previous = process.env.CLAUDE_CODE_CHILD_SESSION
+    process.env.CLAUDE_CODE_CHILD_SESSION = '1'
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.CLAUDE_CODE_CHILD_SESSION
+      } else {
+        process.env.CLAUDE_CODE_CHILD_SESSION = previous
+      }
+    }
+
+    const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnOptions.env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
+    expect(spawnOptions.env.PATH).toBe(process.env.PATH)
+  })
+
+  it('keeps a renderer-supplied CLAUDE_CODE_CHILD_SESSION for the spawned shell', async () => {
+    // Why: only the ambient value is stripped; an explicit request still wins.
+    const previous = process.env.CLAUDE_CODE_CHILD_SESSION
+    process.env.CLAUDE_CODE_CHILD_SESSION = '1'
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { CLAUDE_CODE_CHILD_SESSION: 'explicit' }
+      })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.CLAUDE_CODE_CHILD_SESSION
+      } else {
+        process.env.CLAUDE_CODE_CHILD_SESSION = previous
+      }
+    }
+
+    const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnOptions.env.CLAUDE_CODE_CHILD_SESSION).toBe('explicit')
+  })
+
   it('replays an operation-owned spawn after its first response becomes stale', async () => {
     const operationId = 'a'.repeat(43)
 

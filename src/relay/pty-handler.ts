@@ -42,6 +42,7 @@ import { isTuiAgent } from '../shared/tui-agent-config'
 import type { TuiAgent } from '../shared/types'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
+import { stripInheritedClaudeSessionEnv } from '../main/pty/claude-session-env'
 import {
   PTY_STARTUP_INGRESS_VERSION,
   PtyStartupIngress,
@@ -579,7 +580,7 @@ export class PtyHandler {
   ): Record<string, string> {
     const baseEnv = mergeGitConfigEnvProtocol(
       {
-        ...stripInheritedBuildModeEnv(process.env),
+        ...stripInheritedClaudeSessionEnv(stripInheritedBuildModeEnv(process.env)),
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         TERM_PROGRAM: 'Orca',

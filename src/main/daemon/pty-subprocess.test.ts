@@ -1295,6 +1295,56 @@ describe('createPtySubprocess', () => {
     expect(env.NODE_ENV).toBe('production')
   })
 
+  it('does not inherit the Claude Code child-session marker from the daemon process env', () => {
+    // Why: a daemon forked from inside a Claude Code session inherits its
+    // marker; leaking it makes `claude` in the PTY falsely detect a child
+    // session and disable transcript saving.
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previous = process.env.CLAUDE_CODE_CHILD_SESSION
+    process.env.CLAUDE_CODE_CHILD_SESSION = '1'
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.CLAUDE_CODE_CHILD_SESSION
+      } else {
+        process.env.CLAUDE_CODE_CHILD_SESSION = previous
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
+    expect(env.PATH).toBe(process.env.PATH)
+  })
+
+  it('keeps an explicitly requested CLAUDE_CODE_CHILD_SESSION for daemon PTY shells', () => {
+    // Why: only the ambient value is stripped; a caller-supplied value still wins.
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previous = process.env.CLAUDE_CODE_CHILD_SESSION
+    process.env.CLAUDE_CODE_CHILD_SESSION = '1'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { CLAUDE_CODE_CHILD_SESSION: 'explicit' }
+      })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.CLAUDE_CODE_CHILD_SESSION
+      } else {
+        process.env.CLAUDE_CODE_CHILD_SESSION = previous
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.CLAUDE_CODE_CHILD_SESSION).toBe('explicit')
+  })
+
   it('does not inherit AppImage runtime env into daemon PTY shells', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
