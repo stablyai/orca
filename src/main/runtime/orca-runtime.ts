@@ -742,6 +742,7 @@ import {
   searchBaseRefDetails,
   getRemoteCount,
   normalizeRefSearchQuery,
+  normalizeGitRepoRootForInputPath,
   parseAndFilterSearchRefDetails,
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
@@ -15498,6 +15499,54 @@ export class OrcaRuntimeService {
     }
   }
 
+  private async isClonePathReady(
+    clonePath: string,
+    clonePathKey: string,
+    deadlineAt: number
+  ): Promise<boolean> {
+    const runBeforeDeadline = async <T>(work: (remainingMs: number) => Promise<T>): Promise<T> => {
+      const remainingMs = deadlineAt - Date.now()
+      if (remainingMs <= 0) {
+        throw new Error('clone_readiness_timeout')
+      }
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error('clone_readiness_timeout')), remainingMs)
+        timeoutHandle.unref?.()
+      })
+      try {
+        return await Promise.race([work(remainingMs), timeoutPromise])
+      } finally {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle)
+        }
+      }
+    }
+    try {
+      if (
+        !(await runBeforeDeadline(async () => {
+          const stats = await stat(clonePath)
+          return stats.isDirectory()
+        }))
+      ) {
+        return false
+      }
+      const { stdout } = await runBeforeDeadline((remainingMs) =>
+        gitExecFileAsync(['rev-parse', '--show-toplevel'], {
+          cwd: clonePath,
+          timeout: remainingMs
+        })
+      )
+      // Why: an empty nested dir under a parent worktree still reports "inside work tree"; readiness needs the clone root itself.
+      return (
+        getClonePathComparisonKey(normalizeGitRepoRootForInputPath(clonePath, stdout.trim())) ===
+        clonePathKey
+      )
+    } catch {
+      return false
+    }
+  }
+
   private async cloneRepoAfterPathLock(
     trimmedUrl: string,
     trimmedDestination: string,
@@ -15577,6 +15626,23 @@ export class OrcaRuntimeService {
         void finishClone(code, signal)
       })
     })
+
+    const cloneReadinessAttempts = 20
+    const cloneReadinessDelayMs = 50
+    const cloneReadinessDeadlineAt = Date.now() + cloneReadinessAttempts * cloneReadinessDelayMs
+    for (let attempt = 0; attempt < cloneReadinessAttempts; attempt += 1) {
+      if (await this.isClonePathReady(clonePath, clonePathKey, cloneReadinessDeadlineAt)) {
+        break
+      }
+      const remainingMs = cloneReadinessDeadlineAt - Date.now()
+      if (attempt === cloneReadinessAttempts - 1 || remainingMs <= 0) {
+        await cleanupClaimedCloneTarget(clonePath, claimedTarget)
+        throw new Error(`Clone completed but repository path was not ready: ${clonePath}`)
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(cloneReadinessDelayMs, remainingMs))
+      )
+    }
 
     const existing = this.store
       .getRepos()
