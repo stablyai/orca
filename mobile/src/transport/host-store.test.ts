@@ -34,6 +34,8 @@ vi.mock('./host-credential-cleanup', () => ({
 }))
 
 import {
+  HOST_TOKEN_CACHE_MAX_ENTRIES,
+  HOST_TOKEN_CACHE_MAX_ENTRY_CODE_UNITS,
   loadHosts,
   MobileRelayUpgradeHostRemovedError,
   removeHost,
@@ -44,7 +46,18 @@ import {
   updateHostNameAndEndpoint,
   updateLastConnected
 } from './host-store'
+import {
+  STORED_HOSTS_MAX_ENTRIES,
+  STORED_HOSTS_MAX_STORAGE_CHARACTERS
+} from './mobile-host-list-storage'
 import { resetMobileRelayHostOverlayStoreForTests } from './mobile-relay-host-overlay-store'
+import {
+  MOBILE_HOST_ID_MAX_CHARACTERS,
+  MOBILE_HOST_NAME_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_PUBLIC_KEY_MAX_CHARACTERS
+} from './types'
 
 const HOSTS_STORAGE_KEY = 'orca:hosts'
 const OVERLAY_STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
@@ -220,6 +233,101 @@ describe('host-store list mutations', () => {
       relay: overlay.relay
     })
     expect(hosts.some(({ id }) => id === 'removed-by-old-build')).toBe(false)
+  })
+
+  it('bounds cached keychain tokens without changing loaded hosts', async () => {
+    const storedHosts = Array.from({ length: HOST_TOKEN_CACHE_MAX_ENTRIES + 1 }, (_, index) => ({
+      ...HOST_ONE,
+      id: `host-${index}`,
+      publicKeyB64: `key-${index}`
+    }))
+    storedHostsRaw = JSON.stringify(storedHosts)
+    secureStoreMock.getItemAsync.mockImplementation(async (key: string) => `token-${key}`)
+
+    await expect(loadHosts()).resolves.toHaveLength(storedHosts.length)
+    expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(storedHosts.length)
+
+    await expect(loadHosts()).resolves.toHaveLength(storedHosts.length)
+    expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(storedHosts.length + 1)
+  })
+
+  it('does not retain an oversized token in the in-memory cache', async () => {
+    storedHostsRaw = JSON.stringify([HOST_ONE])
+    secureStoreMock.getItemAsync.mockResolvedValue(
+      'x'.repeat(HOST_TOKEN_CACHE_MAX_ENTRY_CODE_UNITS)
+    )
+
+    await expect(loadHosts()).resolves.toHaveLength(1)
+    await expect(loadHosts()).resolves.toHaveLength(1)
+
+    expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(2)
+  })
+
+  it('accepts the exact host count in order and rejects one more', async () => {
+    const exact = Array.from({ length: STORED_HOSTS_MAX_ENTRIES }, (_, index) => ({
+      ...HOST_ONE,
+      id: `host-${index}`,
+      publicKeyB64: `key-${index}`
+    }))
+    storedHostsRaw = JSON.stringify(exact)
+    secureStoreMock.getItemAsync.mockImplementation(async (key: string) => `token-${key}`)
+
+    await expect(loadHosts()).resolves.toMatchObject(
+      exact.map((host) => ({ id: host.id, publicKeyB64: host.publicKeyB64 }))
+    )
+
+    storedHostsRaw = JSON.stringify([
+      ...exact,
+      { ...HOST_ONE, id: 'host-overflow', publicKeyB64: 'key-overflow' }
+    ])
+    await expect(loadHosts()).resolves.toEqual([])
+  })
+
+  it('does not parse an oversized host-list payload', async () => {
+    storedHostsRaw = {
+      length: STORED_HOSTS_MAX_STORAGE_CHARACTERS + 1
+    } as unknown as string
+    const parse = vi.spyOn(JSON, 'parse')
+
+    await expect(loadHosts()).resolves.toEqual([])
+    expect(parse).not.toHaveBeenCalled()
+    expect(secureStoreMock.getItemAsync).not.toHaveBeenCalled()
+    parse.mockRestore()
+  })
+
+  it('accepts exact host field limits and rejects one character more', async () => {
+    const exact = {
+      id: 'i'.repeat(MOBILE_HOST_ID_MAX_CHARACTERS),
+      name: 'n'.repeat(MOBILE_HOST_NAME_MAX_CHARACTERS),
+      endpoint: 'e'.repeat(PAIRING_ENDPOINT_MAX_CHARACTERS),
+      deviceToken: 't'.repeat(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS),
+      publicKeyB64: 'p'.repeat(PAIRING_PUBLIC_KEY_MAX_CHARACTERS),
+      lastConnected: 1
+    }
+
+    await expect(saveHost(exact)).resolves.toBeUndefined()
+    await expect(saveHost({ ...exact, name: `${exact.name}n` })).rejects.toThrow()
+  })
+
+  it('refuses a write that would exceed the stored host count', async () => {
+    storedHostsRaw = JSON.stringify(
+      Array.from({ length: STORED_HOSTS_MAX_ENTRIES }, (_, index) => ({
+        ...HOST_ONE,
+        id: `host-${index}`,
+        publicKeyB64: `key-${index}`
+      }))
+    )
+
+    await expect(
+      saveHost({
+        ...HOST_ONE,
+        id: 'host-overflow',
+        publicKeyB64: 'key-overflow',
+        deviceToken: 'token'
+      })
+    ).rejects.toThrow(/storage limit/)
+    expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith(HOSTS_STORAGE_KEY, expect.any(String))
+    expect(secureStoreMock.setItemAsync).not.toHaveBeenCalled()
   })
 
   it('refuses to resurrect a removed host during relay upgrade publication', async () => {

@@ -20,7 +20,11 @@ vi.mock('expo-secure-store', () => ({
 vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn() }))
 vi.mock('react-native', () => ({ Platform: platform }))
 
-import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import {
+  MOBILE_RELAY_PAIRING_METADATA_MAX_STORAGE_CHARACTERS,
+  MOBILE_RELAY_PAIRING_SECRETS_MAX_STORAGE_CHARACTERS,
+  createMobileRelayPairingJournal
+} from './mobile-relay-pairing-journal'
 import {
   clearMobileRelayPairingJournal,
   loadMobileRelayPairingJournal,
@@ -28,7 +32,14 @@ import {
   saveMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
 } from './mobile-relay-pairing-journal-store'
-import type { PairingOffer } from './types'
+import {
+  MOBILE_HOST_ID_MAX_CHARACTERS,
+  MOBILE_HOST_NAME_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_PUBLIC_KEY_MAX_CHARACTERS,
+  type PairingOffer
+} from './types'
 
 const now = Date.UTC(2026, 6, 13)
 const offer = {
@@ -92,6 +103,75 @@ describe('mobile relay pairing journal store', () => {
     expect(metadataRaw).not.toContain(offer.relay.inviteToken)
     expect(metadataRaw).not.toContain(journal.secrets.pendingResumeToken)
     await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
+  })
+
+  it('round-trips exact persisted field limits and rejects one character more', async () => {
+    const base = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      now,
+      randomBytes: (length) => new Uint8Array(length).fill(length)
+    })
+    const exact = {
+      metadata: {
+        ...base.metadata,
+        host: {
+          ...base.metadata.host,
+          id: 'i'.repeat(MOBILE_HOST_ID_MAX_CHARACTERS),
+          name: 'n'.repeat(MOBILE_HOST_NAME_MAX_CHARACTERS),
+          endpoint: 'e'.repeat(PAIRING_ENDPOINT_MAX_CHARACTERS),
+          publicKeyB64: 'p'.repeat(PAIRING_PUBLIC_KEY_MAX_CHARACTERS)
+        }
+      },
+      secrets: {
+        ...base.secrets,
+        deviceToken: 't'.repeat(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS)
+      }
+    }
+
+    await expect(saveMobileRelayPairingJournal(exact)).resolves.toBeUndefined()
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(exact)
+    await expect(
+      saveMobileRelayPairingJournal({
+        ...exact,
+        secrets: { ...exact.secrets, deviceToken: `${exact.secrets.deviceToken}t` }
+      })
+    ).rejects.toThrow()
+  })
+
+  it('repairs oversized metadata without parsing it', async () => {
+    metadataRaw = {
+      length: MOBILE_RELAY_PAIRING_METADATA_MAX_STORAGE_CHARACTERS + 1
+    } as unknown as string
+    secretRaw = 'orphan'
+    const parse = vi.spyOn(JSON, 'parse')
+
+    await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
+    expect(parse).not.toHaveBeenCalled()
+    expect(metadataRaw).toBeNull()
+    expect(secretRaw).toBeNull()
+    parse.mockRestore()
+  })
+
+  it('repairs oversized secrets without parsing them', async () => {
+    const journal = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(9)
+    })
+    metadataRaw = JSON.stringify(journal.metadata)
+    secretRaw = {
+      length: MOBILE_RELAY_PAIRING_SECRETS_MAX_STORAGE_CHARACTERS + 1
+    } as unknown as string
+    const parse = vi.spyOn(JSON, 'parse')
+
+    await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
+    expect(parse).toHaveBeenCalledTimes(1)
+    expect(metadataRaw).toBeNull()
+    expect(secretRaw).toBeNull()
+    parse.mockRestore()
   })
 
   it('records a provisional winner only for the active journal identity', async () => {

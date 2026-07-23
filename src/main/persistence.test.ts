@@ -9,7 +9,8 @@ import {
   existsSync,
   realpathSync,
   statSync,
-  symlinkSync
+  symlinkSync,
+  truncateSync
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -38,6 +39,7 @@ import {
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
 import { SshConnectionStore } from './ssh/ssh-connection-store'
+import { ORCA_PERSISTED_STATE_MAX_BYTES } from '../shared/persisted-state-file-bounds'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
@@ -5489,6 +5491,16 @@ describe('Store', () => {
 
     const restarted = await createStore()
     expect(restarted.getGitHubCache().pr['o/r#7']).toEqual({ fetchedAt: 7 })
+  })
+
+  it('ignores an oversized sparse GitHub cache sidecar', async () => {
+    const cacheFile = join(testState.dir, 'orca-github-cache.json')
+    writeFileSync(cacheFile, '')
+    truncateSync(cacheFile, ORCA_PERSISTED_STATE_MAX_BYTES + 1)
+
+    const store = await createStore()
+
+    expect(store.getGitHubCache()).toEqual({ pr: {}, issue: {} })
   })
 
   it('keeps GitHub cache sidecars scoped to explicit profile data files', async () => {

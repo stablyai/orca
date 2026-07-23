@@ -7,6 +7,10 @@ import {
 } from './ssh-port-scanner'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import type { DetectedPort } from '../../shared/ssh-types'
+import {
+  SSH_DETECTED_PORTS_MAX_ENTRIES,
+  SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES
+} from '../../shared/ssh-retained-payload-admission'
 
 type VisibilityHarness = {
   visibility: PortScannerWindowVisibility
@@ -213,6 +217,26 @@ describe('PortScanner', () => {
     await vi.advanceTimersByTimeAsync(BASE)
     expect(request).toHaveBeenCalledTimes(2)
 
+    scanner.dispose()
+  })
+
+  it('bounds remote rows before retaining or publishing a scan', async () => {
+    const harness = createVisibilityHarness(true)
+    const remoteRows = Array.from({ length: SSH_DETECTED_PORTS_MAX_ENTRIES + 20 }, (_, index) => ({
+      ...port(3000 + index),
+      processName: 'x'.repeat(SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES + 100)
+    }))
+    const { mux } = createMux(() => remoteRows)
+    const onChanged = vi.fn()
+    const scanner = new PortScanner(harness.visibility)
+
+    scanner.startScanning('t1', mux, onChanged)
+    await vi.advanceTimersByTimeAsync(0)
+
+    const retained = scanner.getDetectedPorts('t1')
+    expect(retained).toHaveLength(SSH_DETECTED_PORTS_MAX_ENTRIES)
+    expect(retained[0].processName).toHaveLength(SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES)
+    expect(onChanged).toHaveBeenCalledWith('t1', retained, 'linux')
     scanner.dispose()
   })
 

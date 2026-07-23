@@ -1,17 +1,25 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'node:fs'
+import { writeFileSync, mkdirSync, existsSync, renameSync } from 'node:fs'
 import { writeFile, mkdir, rm } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import type { StatsSummary } from '../../shared/types'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
+import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
 import type { StatsEvent, StatsAggregates, StatsFile } from './types'
+import { StatsAggregateTracker } from './stats-aggregate-tracker'
+import {
+  createDefaultStatsFile,
+  parseLoadedStatsFile,
+  STATS_FILE_MAX_BYTES,
+  STATS_LIVE_AGENT_ID_MAX_BYTES,
+  STATS_LIVE_AGENT_MAX_ENTRIES,
+  STATS_LIVE_AGENT_MAX_RETAINED_ID_BYTES,
+  STATS_SCHEMA_VERSION,
+  StatsEventLog
+} from './stats-retention'
 
-const STATS_SCHEMA_VERSION = 1
-const MAX_EVENTS = 10_000
-// Why: countedPRs is a deduplication registry that grows with every PR created
-// through Orca. Without a cap, a heavily-used instance accumulates thousands of
-// URL strings across months. 2000 entries is about 6-12 months of active use
-// for a power user, and at ~50 chars per URL the overhead is ~100KB max.
-const MAX_COUNTED_PRS = 2_000
+export * from './stats-retention'
 // Why 5s instead of the main store's 300ms: stat events are infrequent
 // (a few per session) and not latency-sensitive for the UI.
 const DEBOUNCE_MS = 5_000
@@ -33,28 +41,11 @@ function getStatsFile(): string {
   return _statsFile
 }
 
-function getDefaultAggregates(): StatsAggregates {
-  return {
-    totalAgentsSpawned: 0,
-    totalPRsCreated: 0,
-    totalAgentTimeMs: 0,
-    countedPRs: [],
-    firstEventAt: null
-  }
-}
-
-function getDefaultStatsFile(): StatsFile {
-  return {
-    schemaVersion: STATS_SCHEMA_VERSION,
-    events: [],
-    aggregates: getDefaultAggregates()
-  }
-}
-
 export class StatsCollector {
-  private events: StatsEvent[]
-  private aggregates: StatsAggregates
+  private eventLog: StatsEventLog
+  private aggregateTracker: StatsAggregateTracker
   private liveAgents = new Map<string, number>() // ptyId → startTimestamp
+  private liveAgentIdBytes = 0
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   // Monotonic id stamped on each prepared payload; the highest committed one
   // wins so a slow in-flight async write can't clobber a newer sync flush.
@@ -67,8 +58,16 @@ export class StatsCollector {
 
   constructor() {
     const data = this.load()
-    this.events = data.events
-    this.aggregates = data.aggregates
+    this.eventLog = new StatsEventLog(data.events)
+    this.aggregateTracker = new StatsAggregateTracker(data.aggregates)
+  }
+
+  private get aggregates(): StatsAggregates {
+    return this.aggregateTracker.aggregates
+  }
+
+  private get events(): StatsEvent[] {
+    return this.eventLog.events
   }
 
   onAgentStarted(listener: (totalAgentsSpawned: number) => void): () => void {
@@ -85,15 +84,36 @@ export class StatsCollector {
   // ── Recording ──────────────────────────────────────────────────────
 
   record(event: StatsEvent): void {
-    this.events.push(event)
-    this.updateAggregates(event)
+    this.eventLog.retain(event)
+    this.aggregateTracker.record(event, this.agentStartListeners)
     this.scheduleSave()
   }
 
   // ── Agent lifecycle (called by AgentDetector) ─────────────────────
 
   onAgentStart(ptyId: string, at: number, repoId?: string, worktreeId?: string): void {
-    this.liveAgents.set(ptyId, at)
+    const idMeasurement = measureUtf8ByteLength(ptyId, {
+      stopAfterBytes: STATS_LIVE_AGENT_ID_MAX_BYTES
+    })
+    if (!idMeasurement.exceededLimit) {
+      if (!this.liveAgents.has(ptyId)) {
+        while (
+          this.liveAgents.size >= STATS_LIVE_AGENT_MAX_ENTRIES ||
+          this.liveAgentIdBytes + idMeasurement.byteLength > STATS_LIVE_AGENT_MAX_RETAINED_ID_BYTES
+        ) {
+          const oldest = this.liveAgents.entries().next()
+          if (oldest.done) {
+            break
+          }
+          const [oldestPtyId, oldestStartAt] = oldest.value
+          this.liveAgents.delete(oldestPtyId)
+          this.liveAgentIdBytes -= measureUtf8ByteLength(oldestPtyId).byteLength
+          this.recordAgentStop(oldestPtyId, oldestStartAt, at)
+        }
+        this.liveAgentIdBytes += idMeasurement.byteLength
+      }
+      this.liveAgents.set(ptyId, at)
+    }
     this.record({
       type: 'agent_start',
       at,
@@ -109,6 +129,11 @@ export class StatsCollector {
       return
     }
     this.liveAgents.delete(ptyId)
+    this.liveAgentIdBytes -= measureUtf8ByteLength(ptyId).byteLength
+    this.recordAgentStop(ptyId, startAt, at)
+  }
+
+  private recordAgentStop(ptyId: string, startAt: number, at: number): void {
     const durationMs = Math.max(0, at - startAt)
     this.aggregates.totalAgentTimeMs += durationMs
     this.record({
@@ -127,12 +152,7 @@ export class StatsCollector {
   // ── Query ─────────────────────────────────────────────────────────
 
   getSummary(): StatsSummary {
-    return {
-      totalAgentsSpawned: this.aggregates.totalAgentsSpawned,
-      totalPRsCreated: this.aggregates.totalPRsCreated,
-      totalAgentTimeMs: this.aggregates.totalAgentTimeMs,
-      firstEventAt: this.aggregates.firstEventAt
-    }
+    return this.aggregateTracker.getSummary()
   }
 
   // ── Shutdown flush ────────────────────────────────────────────────
@@ -163,17 +183,10 @@ export class StatsCollector {
     try {
       const statsFile = getStatsFile()
       if (existsSync(statsFile)) {
-        const raw = readFileSync(statsFile, 'utf-8')
-        const parsed = JSON.parse(raw) as StatsFile
-        // Merge with defaults for forward compatibility
-        return {
-          ...getDefaultStatsFile(),
-          ...parsed,
-          aggregates: {
-            ...getDefaultAggregates(),
-            ...parsed.aggregates
-          }
-        }
+        const raw = readNodeFileSyncWithinLimit(statsFile, STATS_FILE_MAX_BYTES).buffer.toString(
+          'utf8'
+        )
+        return parseLoadedStatsFile(raw)
       }
     } catch (err) {
       // Why "start fresh" instead of crashing: lifetime aggregates are lost
@@ -182,47 +195,7 @@ export class StatsCollector {
       // disk so it can be inspected for debugging.
       console.error('[stats] Failed to load stats, starting fresh:', err)
     }
-    return getDefaultStatsFile()
-  }
-
-  private updateAggregates(event: StatsEvent): void {
-    if (this.aggregates.firstEventAt === null) {
-      this.aggregates.firstEventAt = event.at
-    }
-
-    switch (event.type) {
-      case 'agent_start':
-        this.aggregates.totalAgentsSpawned++
-        // Why: notify listeners synchronously AFTER increment so observers
-        // see the post-increment count. Listener errors are swallowed to
-        // keep stat recording robust — a buggy listener must not lose the
-        // event from the on-disk log.
-        for (const listener of this.agentStartListeners) {
-          try {
-            listener(this.aggregates.totalAgentsSpawned)
-          } catch (err) {
-            console.error('[stats] agent-start listener threw:', err)
-          }
-        }
-        break
-      case 'pr_created':
-        this.aggregates.totalPRsCreated++
-        if (event.meta?.prUrl) {
-          this.aggregates.countedPRs.push(String(event.meta.prUrl))
-          // Why: trim oldest entries so the dedup array does not grow without
-          // bound. The aggregate totalPRsCreated counter remains accurate; only
-          // the dedup lookup for very old PRs is lost, which is acceptable
-          // since PRs that old would never be re-counted in practice.
-          if (this.aggregates.countedPRs.length > MAX_COUNTED_PRS) {
-            this.aggregates.countedPRs = this.aggregates.countedPRs.slice(-MAX_COUNTED_PRS)
-          }
-        }
-        break
-      // agent_stop duration is handled directly in onAgentStop() to avoid
-      // double-counting — the duration is added to totalAgentTimeMs there.
-      case 'agent_stop':
-        break
-    }
+    return createDefaultStatsFile()
   }
 
   private scheduleSave(): void {
@@ -250,9 +223,9 @@ export class StatsCollector {
     }
   }
 
-  // Serialize the current state and pick a unique temp path. Trimming mutates
-  // in-memory state and JSON.stringify must see a consistent snapshot, so both
-  // writers call this synchronously before any await to avoid a torn snapshot.
+  // Serialize the current state and pick a unique temp path. JSON.stringify
+  // must see a consistent snapshot, so both writers call this synchronously
+  // before any await to avoid a torn snapshot.
   // The monotonic generation lets a later write veto an earlier, still-in-flight
   // one so a stale rename can never win (see writeToDiskAsync).
   private prepareWritePayload(): {
@@ -262,11 +235,6 @@ export class StatsCollector {
     generation: number
   } {
     const statsFile = getStatsFile()
-
-    // Trim events to bounded size before writing
-    if (this.events.length > MAX_EVENTS) {
-      this.events = this.events.slice(-MAX_EVENTS)
-    }
 
     const data: StatsFile = {
       schemaVersion: STATS_SCHEMA_VERSION,
@@ -278,7 +246,8 @@ export class StatsCollector {
     // Unique temp file so the async debounced writer and the sync shutdown
     // flush never write the same temp path (same pattern as persistence.ts).
     const tmpFile = `${statsFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    return { statsFile, tmpFile, json: JSON.stringify(data), generation }
+    const json = stringifyJsonWithinByteLimit(data, STATS_FILE_MAX_BYTES).serialized
+    return { statsFile, tmpFile, json, generation }
   }
 
   private writeToDiskSync(): void {

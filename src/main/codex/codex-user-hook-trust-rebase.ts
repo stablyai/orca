@@ -7,6 +7,7 @@ import {
 import { runCodexUserHookTrustRebaseSessionSync } from './codex-app-server-grant-bridge'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
 import { CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS } from './codex-hook-trust-grant'
+import { CodexHostRetryDeadlines } from './codex-host-retry-deadlines'
 import { createCodexHookTrustEntry } from './codex-hook-identity'
 import { resolveCodexTrustGrantHost } from './codex-trust-grant-host'
 import {
@@ -32,7 +33,7 @@ let runSessionSync: RebaseSessionRunnerSync = runCodexUserHookTrustRebaseSession
 // Why: launch prep re-runs the callers on every pane spawn. A host stuck
 // without a usable rebase lane (old CLI, unmatched keys) must not pay a codex
 // session each time — bound retries like the grant lane does.
-const rebaseRetryAfterByHost = new Map<CodexAppServerHostKey, number>()
+const rebaseRetryAfterByHost = new CodexHostRetryDeadlines()
 
 function rememberRebaseSessionFailure(hostKey: CodexAppServerHostKey, error: unknown): void {
   if (isCodexAppServerUnsupportedError(error)) {

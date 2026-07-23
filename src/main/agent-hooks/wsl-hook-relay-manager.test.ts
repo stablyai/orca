@@ -2,15 +2,18 @@
 // bridge (including a full run of the unchanged remote hook installers), and
 // the per-distro relay manager state machine with fault injection.
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { SFTPWrapper } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RelayDispatcher } from '../../relay/dispatcher'
 import { registerWslHookFsHandlers } from '../../relay/wsl-hook-fs-bridge'
+import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
+import { readTextFileRemote } from './installer-utils-remote'
 import { createWslHookSftpAdapter } from './wsl-hook-fs-adapter'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
@@ -111,6 +114,39 @@ describe.skipIf(process.platform === 'win32')(
         adapter.readFile('/etc/passwd', 'utf8', ((e: Error) => resolve(e)) as never)
       })
       expect(outside).toBeInstanceOf(Error)
+    })
+
+    it('preserves the bounded-read error across the guest bridge and host adapter', async () => {
+      const adapter = createWslHookSftpAdapter(harness.mux)
+      const path = `${home}/oversized.json`
+      writeFileSync(path, 'x'.repeat(1025))
+
+      await expect(readTextFileRemote(adapter, path, 1024)).rejects.toBeInstanceOf(
+        NodeFileReadTooLargeError
+      )
+      expect(readFileSync(path, 'utf8')).toHaveLength(1025)
+    })
+
+    it('threads requested directory limits through the host adapter', async () => {
+      const adapter = createWslHookSftpAdapter(harness.mux) as SFTPWrapper & {
+        orcaReaddirWithinLimit: (
+          path: string,
+          limits: { maxEntries: number; maxRetainedBytes: number },
+          callback: (error: Error | null, entries?: { filename: string }[]) => void
+        ) => void
+      }
+      writeFileSync(`${home}/one`, '')
+      writeFileSync(`${home}/two`, '')
+
+      const error = await new Promise<Error>((resolve, reject) => {
+        adapter.orcaReaddirWithinLimit(
+          home,
+          { maxEntries: 1, maxRetainedBytes: 4096 },
+          (readError) =>
+            readError ? resolve(readError) : reject(new Error('expected limit error'))
+        )
+      })
+      expect(error).toBeInstanceOf(Error)
     })
 
     it('runs the unchanged remote managed hook installers against a WSL guest home', async () => {

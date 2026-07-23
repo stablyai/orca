@@ -16,6 +16,20 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn()
 }))
 
+vi.mock('../shared/node-bounded-file-reader', async () => {
+  const fs = await import('node:fs')
+  return {
+    readNodeFileSyncWithinLimit: (path: string, maxBytes: number) => {
+      const value = fs.readFileSync(path)
+      const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
+      if (buffer.length > maxBytes) {
+        throw new Error('File too large')
+      }
+      return { buffer, stats: { size: buffer.length } }
+    }
+  }
+})
+
 const { execMock, execFileMock, gitExecFileSyncMock } = vi.hoisted(() => ({
   execMock: vi.fn(),
   execFileMock: vi.fn(),

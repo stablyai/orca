@@ -1,16 +1,26 @@
-import { readdir, readFile } from 'node:fs/promises'
+import { opendir } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../shared/types'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 
 // Why: the whole point of this reader is replacing `git worktree list` fanout
 // with bounded metadata-file reads, so head freshness never re-creates the
 // spawn pressure that stalled terminal input. Keep it spawn-free.
 
 const MAX_SYMREF_DEPTH = 5
+export const MAX_GIT_HEAD_METADATA_BYTES = 64 * 1024
+export const MAX_PACKED_REFS_BYTES = 16 * 1024 * 1024
+export const MAX_PACKED_REFS_ENTRIES = 100_000
+export const MAX_LINKED_WORKTREE_ENTRIES = 1_024
+const MAX_PACKED_REFS_RETAINED_BYTES = 16 * 1024 * 1024
+const MAX_IDENTITY_RETAINED_BYTES = 4 * 1024 * 1024
 
-async function readTrimmedFile(path: string): Promise<string | null> {
+async function readTrimmedFile(
+  path: string,
+  maxBytes = MAX_GIT_HEAD_METADATA_BYTES
+): Promise<string | null> {
   try {
-    return (await readFile(path, 'utf8')).trim()
+    return (await readNodeFileWithinLimit(path, maxBytes)).buffer.toString('utf8').trim()
   } catch {
     return null
   }
@@ -19,19 +29,39 @@ async function readTrimmedFile(path: string): Promise<string | null> {
 // packed-refs lines are `<oid> <ref>`; `#` headers and `^` peel lines skipped.
 async function readPackedRefs(commonDirPath: string): Promise<Map<string, string>> {
   const refs = new Map<string, string>()
-  const content = await readTrimmedFile(join(commonDirPath, 'packed-refs'))
+  const content = await readTrimmedFile(join(commonDirPath, 'packed-refs'), MAX_PACKED_REFS_BYTES)
   if (content === null) {
     return refs
   }
-  for (const line of content.split('\n')) {
+  let retainedBytes = 0
+  for (let start = 0; start <= content.length; ) {
+    const newline = content.indexOf('\n', start)
+    const end = newline === -1 ? content.length : newline
+    if (end - start > MAX_GIT_HEAD_METADATA_BYTES) {
+      return new Map()
+    }
+    const line = content.slice(start, end)
     if (!line || line.startsWith('#') || line.startsWith('^')) {
-      continue
+      // Headers and peeled-object lines never resolve a branch head.
+    } else {
+      const separator = line.indexOf(' ')
+      if (separator > 0) {
+        const ref = line.slice(separator + 1).trim()
+        const oid = line.slice(0, separator)
+        retainedBytes += (ref.length + oid.length) * 2
+        if (
+          refs.size >= MAX_PACKED_REFS_ENTRIES ||
+          retainedBytes > MAX_PACKED_REFS_RETAINED_BYTES
+        ) {
+          return new Map()
+        }
+        refs.set(ref, oid)
+      }
     }
-    const separator = line.indexOf(' ')
-    if (separator <= 0) {
-      continue
+    if (newline === -1) {
+      break
     }
-    refs.set(line.slice(separator + 1).trim(), line.slice(0, separator))
+    start = newline + 1
   }
   return refs
 }
@@ -113,6 +143,16 @@ export async function readGitCommonHeadIdentities(
     (packedRefsPromise ??= readPackedRefs(commonDirPath))
 
   const identities: WorktreeHeadIdentity[] = []
+  let retainedIdentityBytes = 0
+  const retainIdentity = (identity: WorktreeHeadIdentity): boolean => {
+    retainedIdentityBytes +=
+      (identity.worktreePath.length + (identity.branch?.length ?? 0) + identity.head.length) * 2
+    if (retainedIdentityBytes > MAX_IDENTITY_RETAINED_BYTES) {
+      return false
+    }
+    identities.push(identity)
+    return true
+  }
   // Only the standard `<checkout>/.git` layout maps a common dir back to its
   // primary checkout path; bare/custom GIT_DIR layouts have no primary row.
   if (basename(commonDirPath) === '.git') {
@@ -122,40 +162,51 @@ export async function readGitCommonHeadIdentities(
       dirname(commonDirPath),
       packedRefs
     )
-    if (primary) {
-      identities.push(primary)
+    if (primary && !retainIdentity(primary)) {
+      return []
     }
   }
 
-  let entries
+  let directory: Awaited<ReturnType<typeof opendir>>
   try {
-    entries = await readdir(join(commonDirPath, 'worktrees'), { withFileTypes: true })
+    directory = await opendir(join(commonDirPath, 'worktrees'))
   } catch {
     return identities
   }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue
+  let entriesSeen = 0
+  try {
+    for await (const entry of directory) {
+      entriesSeen += 1
+      if (entriesSeen > MAX_LINKED_WORKTREE_ENTRIES) {
+        return []
+      }
+      if (!entry.isDirectory()) {
+        continue
+      }
+      const entryPath = join(commonDirPath, 'worktrees', entry.name)
+      const gitdirContent = await readTrimmedFile(join(entryPath, 'gitdir'))
+      if (!gitdirContent) {
+        continue
+      }
+      // `gitdir` holds `<worktree>/.git`, absolute or (with relative-path
+      // worktrees) relative to the entry dir.
+      const gitdirAbsolute = isAbsolute(gitdirContent)
+        ? gitdirContent
+        : join(entryPath, gitdirContent)
+      const identity = await readHeadIdentity(
+        commonDirPath,
+        join(entryPath, 'HEAD'),
+        dirname(gitdirAbsolute),
+        packedRefs
+      )
+      if (identity && !retainIdentity(identity)) {
+        return []
+      }
     }
-    const entryPath = join(commonDirPath, 'worktrees', entry.name)
-    const gitdirContent = await readTrimmedFile(join(entryPath, 'gitdir'))
-    if (!gitdirContent) {
-      continue
-    }
-    // `gitdir` holds `<worktree>/.git`, absolute or (with relative-path
-    // worktrees) relative to the entry dir.
-    const gitdirAbsolute = isAbsolute(gitdirContent)
-      ? gitdirContent
-      : join(entryPath, gitdirContent)
-    const identity = await readHeadIdentity(
-      commonDirPath,
-      join(entryPath, 'HEAD'),
-      dirname(gitdirAbsolute),
-      packedRefs
-    )
-    if (identity) {
-      identities.push(identity)
-    }
+  } catch {
+    return identities
+  } finally {
+    await directory.close().catch(() => undefined)
   }
   return identities
 }

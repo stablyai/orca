@@ -1,10 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
+  MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES,
+  MAX_SERVE_UPDATE_HANDOFF_JSON_STRUCTURAL_TOKENS,
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
@@ -79,6 +81,38 @@ describe('serve update handoff', () => {
 
     expect(hasServeUpdateSupervisor()).toBe(false)
     expect(requestServeUpdateHandoff('1.0.61')).toBe(false)
+  })
+
+  it('ignores oversized sparse handoff state', async () => {
+    const handoffPath = getServeUpdateHandoffPath(root)
+    writeFileSync(handoffPath, '{"schemaVersion":1}')
+    truncateSync(handoffPath, MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES + 1)
+    const { getServeUpdateHandoffFailure } = await import('./serve-update-handoff')
+
+    expect(getServeUpdateHandoffFailure()).toBeNull()
+  })
+
+  it('rejects structurally amplified handoff state before parsing', async () => {
+    const handoffPath = getServeUpdateHandoffPath(root)
+    writeFileSync(
+      handoffPath,
+      `{"padding":[${'0,'.repeat(MAX_SERVE_UPDATE_HANDOFF_JSON_STRUCTURAL_TOKENS)}0]}`
+    )
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const { getServeUpdateHandoffFailure } = await import('./serve-update-handoff')
+
+    expect(getServeUpdateHandoffFailure()).toBeNull()
+    expect(parseSpy).not.toHaveBeenCalled()
+  })
+
+  it('preserves prior handoff state when the replacement exceeds its read ceiling', async () => {
+    const { requestServeUpdateHandoff } = await import('./serve-update-handoff')
+    expect(requestServeUpdateHandoff('1.0.61')).toBe(true)
+    const handoffPath = getServeUpdateHandoffPath(root)
+    const before = readFileSync(handoffPath, 'utf8')
+
+    expect(requestServeUpdateHandoff('x'.repeat(MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES))).toBe(false)
+    expect(readFileSync(handoffPath, 'utf8')).toBe(before)
   })
 
   it.runIf(process.platform === 'darwin')(

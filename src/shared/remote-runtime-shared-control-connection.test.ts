@@ -11,6 +11,12 @@ import {
   publicKeyToBase64
 } from './e2ee-crypto'
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
+import {
+  REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
+  retainedRemoteRuntimeJsonStringBytes,
+  serializeRemoteRuntimeRpcRequest
+} from './remote-runtime-memory-limits'
+import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepared-request-admission'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import { isRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
@@ -61,6 +67,40 @@ describe('RemoteRuntimeSharedControlConnection', () => {
 
   it('does not expose a binary sender on the shared control protocol surface', () => {
     expect('sendSharedControlEncryptedBinary' in sharedControlProtocol).toBe(false)
+  })
+
+  it('releases a pending request when the socket send throws', async () => {
+    const connection = new RemoteRuntimeSharedControlConnection({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:1',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+    })
+    const unsafe = connection as unknown as {
+      state: string
+      ws: { readyState: number; send: () => void; close: () => void } | null
+      sharedKey: Uint8Array | null
+      pendingRequests: Map<string, unknown>
+    }
+    unsafe.state = 'ready'
+    unsafe.ws = {
+      readyState: 1,
+      send: () => {
+        throw new Error('send failed')
+      },
+      close: vi.fn()
+    }
+    unsafe.sharedKey = new Uint8Array(32).fill(2)
+
+    await expect(connection.request('worktree.ps', undefined, 1000)).rejects.toMatchObject({
+      code: 'remote_runtime_unavailable'
+    })
+    expect(unsafe.pendingRequests.size).toBe(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
+    connection.close()
   })
 
   it('replaces a stuck pre-ready socket when a one-shot probe proves reachability', () => {
@@ -492,6 +532,15 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       delayedMethods: ['worktree.ps']
     })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const unsafe = connection as unknown as {
+      pendingRequests: Map<
+        string,
+        {
+          method: string
+          preparedRequest?: { retainedBytes: number; serializedRequest: string | null } | null
+        }
+      >
+    }
 
     const timedOut = connection.request('worktree.hang', undefined, 250)
     void timedOut.catch(() => undefined)
@@ -505,20 +554,80 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     await vi.waitFor(() =>
       expect(server.requests.map(({ method }) => method)).toContain('worktree.ps')
     )
+    expect(
+      Array.from(unsafe.pendingRequests.values()).every(
+        (pending) =>
+          pending.preparedRequest?.serializedRequest === null &&
+          pending.preparedRequest.retainedBytes > 0
+      )
+    ).toBe(true)
+    expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(2)
 
     await expect(timedOut).rejects.toThrow('Timed out')
     // Why: a single slow method is not evidence that a shared socket is dead;
     // liveness monitoring owns connection-wide failure detection.
     expect(connection.getDiagnostics()).toMatchObject({ state: 'ready', pendingRequestCount: 1 })
+    expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(1)
 
     server.flushDelayedResponses()
     await expect(survivor).resolves.toMatchObject({
       ok: true,
       response: { ok: true, result: { method: 'worktree.ps' } }
     })
+    expect(unsafe.pendingRequests.size).toBe(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
     expect(server.connectionCount()).toBe(1)
 
     connection.close()
+  })
+
+  it('keeps sent request bytes admitted while a ready socket stops responding', async () => {
+    const server = await createServer({ silentMethods: ['worktree.large'] })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const params = { value: 'x'.repeat(3 * 1024 * 1024) }
+    const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
+      serializeRemoteRuntimeRpcRequest({
+        requestId: '00000000-0000-4000-8000-000000000000',
+        deviceToken: server.pairing.deviceToken,
+        method: 'worktree.large',
+        params
+      })
+    )
+    const admittedCount = Math.floor(REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES / retainedBytes)
+    const pendingRequests = (
+      connection as unknown as {
+        pendingRequests: Map<
+          string,
+          { preparedRequest?: { serializedRequest: string | null } | null }
+        >
+      }
+    ).pendingRequests
+    const requests = Array.from({ length: admittedCount }, () =>
+      connection.request('worktree.large', params, 60_000).catch(() => undefined)
+    )
+    await vi.waitFor(() => expect(server.requests).toHaveLength(admittedCount))
+
+    expect(
+      Array.from(pendingRequests.values()).every(
+        (pending) => pending.preparedRequest?.serializedRequest === null
+      )
+    ).toBe(true)
+    await expect(connection.request('worktree.large', params, 60_000)).rejects.toMatchObject({
+      code: 'remote_runtime_busy'
+    })
+    expect(getRemoteRuntimeRequestAdmissionEvidence().retainedBytes).toBeLessThanOrEqual(
+      REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES
+    )
+
+    connection.close()
+    await Promise.all(requests)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
   })
 
   it('rejects pending requests and records close diagnostics when the socket closes', async () => {

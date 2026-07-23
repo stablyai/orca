@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -7,6 +6,11 @@ import type {
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
+import {
+  boundAiVaultListResult,
+  retainAiVaultSession,
+  retainAiVaultSessionsWithinAggregate
+} from './session-list-retention'
 import {
   codexRolloutHardlinkIdentity,
   dedupeCodexRolloutFileAliases,
@@ -39,6 +43,7 @@ import type {
   SessionParseResult
 } from './session-scanner-types'
 import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
 
 const DEFAULT_LIMIT = 1000
 const DEFAULT_SCAN_LIMIT_PER_AGENT = 1000
@@ -138,11 +143,11 @@ export async function scanAiVaultSessions(
 
     scheduleSessionParseCachePersist(parseStats)
 
-    return {
+    return boundAiVaultListResult({
       sessions: mergeSessions(cappedSessions, scopeSessions),
       issues: issues.map((issue) => ({ executionHostId, ...issue })),
       scannedAt: new Date().toISOString()
-    }
+    })
   })
 }
 
@@ -250,7 +255,17 @@ async function parseSessionCandidates(args: {
     // Why: cross-volume backfill copies have no shared inode, so collapse
     // parsed aliases before they can crowd the unique-session parse budget.
     const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
-    sessions.splice(0, sessions.length, ...uniqueSessions)
+    const retained = retainAiVaultSessionsWithinAggregate(uniqueSessions)
+    sessions.splice(0, sessions.length, ...retained.sessions)
+    if (retained.omitted > 0) {
+      args.issues.push({
+        executionHostId: args.executionHostId,
+        agent: 'codex',
+        path: 'AI Vault session list',
+        message: `AI Vault stopped after omitting ${retained.omitted} sessions at its memory limit.`
+      })
+      break
+    }
 
     index += batchSize
   }
@@ -270,8 +285,9 @@ async function parseSessionCandidate(
     if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
       session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
     }
+    const stamped = session ? withSessionExecutionHost(session, executionHostId) : null
     return {
-      session: session ? withSessionExecutionHost(session, executionHostId) : null,
+      session: stamped ? retainAiVaultSession(stamped) : null,
       issue: null
     }
   } catch (err) {
@@ -289,7 +305,7 @@ async function parseSessionCandidate(
 
 async function readOptionalTextFile(path: string): Promise<string | null> {
   try {
-    return await readFile(path, 'utf-8')
+    return await withAiVaultWholeJsonFile(path, (content) => content)
   } catch {
     return null
   }

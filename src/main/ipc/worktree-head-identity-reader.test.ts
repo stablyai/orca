@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { readGitCommonHeadIdentities } from './worktree-head-identity-reader'
+import {
+  MAX_GIT_HEAD_METADATA_BYTES,
+  MAX_LINKED_WORKTREE_ENTRIES,
+  MAX_PACKED_REFS_BYTES,
+  readGitCommonHeadIdentities
+} from './worktree-head-identity-reader'
 
 const OID_A = 'a'.repeat(40)
 const OID_B = 'b'.repeat(40)
@@ -146,6 +151,34 @@ describe('readGitCommonHeadIdentities', () => {
     await mkdir(commonDir, { recursive: true })
     await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
     await writeLooseRef(commonDir, 'refs/heads/main', OID_A)
+
+    expect(await readGitCommonHeadIdentities(commonDir)).toEqual([])
+  })
+
+  it('rejects metadata that grows beyond the exact file limits', async () => {
+    const commonDir = await makeCommonDir()
+    const headPath = join(commonDir, 'HEAD')
+    await writeFile(headPath, 'x')
+    await truncate(headPath, MAX_GIT_HEAD_METADATA_BYTES + 1)
+    expect(await readGitCommonHeadIdentities(commonDir)).toEqual([])
+
+    await writeFile(headPath, 'ref: refs/heads/main\n')
+    const packedRefsPath = join(commonDir, 'packed-refs')
+    await writeFile(packedRefsPath, 'x')
+    await truncate(packedRefsPath, MAX_PACKED_REFS_BYTES + 1)
+    expect(await readGitCommonHeadIdentities(commonDir)).toEqual([])
+  })
+
+  it('fails closed instead of retaining a partial oversized worktree listing', async () => {
+    const commonDir = await makeCommonDir()
+    await writeFile(join(commonDir, 'HEAD'), `${OID_A}\n`)
+    const worktreesDir = join(commonDir, 'worktrees')
+    await mkdir(worktreesDir)
+    await Promise.all(
+      Array.from({ length: MAX_LINKED_WORKTREE_ENTRIES + 1 }, (_, index) =>
+        writeFile(join(worktreesDir, `entry-${index}`), '')
+      )
+    )
 
     expect(await readGitCommonHeadIdentities(commonDir)).toEqual([])
   })

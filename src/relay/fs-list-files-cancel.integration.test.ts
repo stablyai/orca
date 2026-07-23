@@ -27,7 +27,7 @@ const { fakeListFiles } = vi.hoisted(() => {
       (
         rootPath: string,
         _excludes: readonly string[] = [],
-        options: { signal?: AbortSignal } = {}
+        options: { signal?: AbortSignal; maxResults?: number } = {}
       ) =>
         new Promise<string[]>((resolve, reject) => {
           scans.push({ rootPath, signal: options.signal, resolve })
@@ -67,6 +67,7 @@ import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
 import { LIST_FILES_SUPERSEDED_MESSAGE } from './fs-list-files-scan-coordinator'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../shared/quick-open-listing-limits'
 
 async function flushPipe(): Promise<void> {
   // The in-memory pipe defers each hop with setImmediate; a few macrotask
@@ -123,6 +124,7 @@ describe('Integration: cancellable fs.listFiles (#7721)', () => {
     const scanPromise = mux.request('fs.listFiles', { rootPath: '/big/workspace' })
     await flushPipe()
     expect(fakeListFiles.scans).toHaveLength(1)
+    expect(fakeListFiles.mock.calls[0][2]?.maxResults).toBe(QUICK_OPEN_LISTING_MAX_RESULTS)
 
     // The interactive request must complete while the scan is still pending.
     const entries = (await mux.request('fs.readDir', { dirPath: tmpDir })) as { name: string }[]

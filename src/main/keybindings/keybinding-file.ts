@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: parsing, sanitizing, migrating, and writing the keybindings file must stay together so file-format edge cases share one validation path. */
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
   findKeybindingConflicts,
@@ -15,12 +15,18 @@ import {
   type KeybindingOverrides,
   type KeybindingPlatform
 } from '../../shared/keybindings'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
+import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 
 type JsonObject = Record<string, unknown>
 
 const FILE_VERSION = 1
 const PLATFORM_KEYS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
 const ROOT_KEYS = new Set(['$schema', 'version', 'keybindings', 'platforms'])
+export const MAX_KEYBINDING_FILE_BYTES = 1024 * 1024
+export const MAX_KEYBINDING_JSON_STRUCTURAL_TOKENS = 256 * 1024
+export const MAX_KEYBINDING_JSON_NESTING_DEPTH = 64
 
 export function getUserKeybindingsPath(homePath: string): string {
   return join(homePath, '.orca', 'keybindings.json')
@@ -51,7 +57,14 @@ function readJsonDocument(path: string): {
     return { exists: false, document: createEmptyDocument() }
   }
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown
+    const serialized = readNodeFileSyncWithinLimit(path, MAX_KEYBINDING_FILE_BYTES).buffer.toString(
+      'utf8'
+    )
+    assertJsonTextStructureWithinLimits(serialized, {
+      structuralTokens: MAX_KEYBINDING_JSON_STRUCTURAL_TOKENS,
+      nestingDepth: MAX_KEYBINDING_JSON_NESTING_DEPTH
+    })
+    const parsed = JSON.parse(serialized) as unknown
     if (!isJsonObject(parsed)) {
       return { exists: true, document: null, error: 'Keybindings file must contain a JSON object.' }
     }
@@ -69,7 +82,8 @@ function writeJsonDocument(path: string, document: JsonObject): void {
   mkdirSync(dirname(path), { recursive: true })
   const tempPath = `${path}.tmp`
   try {
-    writeFileSync(tempPath, `${JSON.stringify(document, null, 2)}\n`, 'utf8')
+    const { serialized } = stringifyJsonWithinByteLimit(document, MAX_KEYBINDING_FILE_BYTES - 1, 2)
+    writeFileSync(tempPath, `${serialized}\n`, 'utf8')
     renameSync(tempPath, path)
   } catch (error) {
     try {

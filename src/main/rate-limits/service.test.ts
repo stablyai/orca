@@ -5,7 +5,12 @@ Keeping them in one file makes the ordering contract reviewable as a unit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
-import { RateLimitService } from './service'
+import {
+  MAX_ACTIVE_RATE_LIMIT_FETCH_CYCLES,
+  MAX_INACTIVE_RATE_LIMIT_ACCOUNTS,
+  RateLimitFetchCycleCapacityError,
+  RateLimitService
+} from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
@@ -1220,6 +1225,60 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
   })
 
+  it('shares one idle promise across a burst of queued refresh waiters and recovers', async () => {
+    const service = new RateLimitService()
+    const internals = service as unknown as {
+      fetchIdlePromise: Promise<void> | null
+      isFetching: boolean
+      resolveFetchIdleWaiters: () => void
+      waitForFetchIdle: () => Promise<void>
+    }
+    internals.isFetching = true
+    const shared = internals.waitForFetchIdle()
+
+    for (let index = 0; index < 10_000; index += 1) {
+      expect(internals.waitForFetchIdle()).toBe(shared)
+    }
+    expect(internals.fetchIdlePromise).toBe(shared)
+
+    internals.isFetching = false
+    internals.resolveFetchIdleWaiters()
+    await expect(shared).resolves.toBeUndefined()
+    expect(internals.fetchIdlePromise).toBeNull()
+
+    internals.isFetching = true
+    const recovered = internals.waitForFetchIdle()
+    expect(recovered).not.toBe(shared)
+    internals.isFetching = false
+    internals.resolveFetchIdleWaiters()
+    await expect(recovered).resolves.toBeUndefined()
+  })
+
+  it('caps active fetch controllers and recovers when a cycle finishes', () => {
+    const service = new RateLimitService()
+    const internals = service as unknown as {
+      activeFetchAbortControllers: Set<AbortController>
+      beginFetchCycle: () => AbortController
+      finishFetchCycle: (controller: AbortController) => void
+    }
+    const controllers = Array.from({ length: MAX_ACTIVE_RATE_LIMIT_FETCH_CYCLES }, () =>
+      internals.beginFetchCycle()
+    )
+
+    expect(internals.activeFetchAbortControllers.size).toBe(MAX_ACTIVE_RATE_LIMIT_FETCH_CYCLES)
+    expect(() => internals.beginFetchCycle()).toThrow(RateLimitFetchCycleCapacityError)
+
+    internals.finishFetchCycle(controllers[0]!)
+    const recovered = internals.beginFetchCycle()
+    expect(internals.activeFetchAbortControllers.size).toBe(MAX_ACTIVE_RATE_LIMIT_FETCH_CYCLES)
+
+    for (const controller of controllers.slice(1)) {
+      internals.finishFetchCycle(controller)
+    }
+    internals.finishFetchCycle(recovered)
+    expect(internals.activeFetchAbortControllers.size).toBe(0)
+  })
+
   it('publishes non-Grok provider results before a slow Grok fetch completes', async () => {
     const service = new RateLimitService()
     const grok = deferred<ProviderRateLimits>()
@@ -1745,6 +1804,24 @@ describe('RateLimitService', () => {
 
     accountFetch.resolve(okProvider('codex', 50, Date.now()))
     await firstFetch
+  })
+
+  it('caps inactive Codex preview state at the account admission limit', async () => {
+    const service = new RateLimitService()
+    const accounts = Array.from({ length: MAX_INACTIVE_RATE_LIMIT_ACCOUNTS + 1 }, (_, index) => ({
+      id: `account-${index}`,
+      managedHomePath: `/tmp/account-${index}/home`
+    }))
+    service.setInactiveCodexAccountsResolver(() => accounts)
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 50, Date.now()))
+
+    await service.fetchInactiveCodexAccountsOnOpen()
+
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(MAX_INACTIVE_RATE_LIMIT_ACCOUNTS)
+    expect(service.getState().inactiveCodexAccounts).toHaveLength(MAX_INACTIVE_RATE_LIMIT_ACCOUNTS)
+    expect(service.getState().inactiveCodexAccounts.at(-1)?.accountId).toBe(
+      `account-${MAX_INACTIVE_RATE_LIMIT_ACCOUNTS - 1}`
+    )
   })
 
   it('keeps sibling inactive Codex preview fetches alive when one account is evicted', async () => {

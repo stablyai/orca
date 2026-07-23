@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,7 @@ const fakeDbRows = vi.hoisted(() => ({
   messages: [] as Record<string, unknown>[]
 }))
 const fakePrepareSqls = vi.hoisted(() => [] as string[])
+const fakeIteratedSqls = vi.hoisted(() => [] as string[])
 const fakeDatabase = vi.hoisted(() =>
   vi.fn(function FakeDatabase() {
     return {
@@ -26,7 +27,14 @@ const fakeDatabase = vi.hoisted(() =>
             sql.includes('FROM sessions')
               ? fakeDbRows.sessions
               : fakeDbRows.messages.filter((message) => message.session_id === param)
-          )
+          ),
+          iterate: vi.fn(function* (param: string) {
+            fakeIteratedSqls.push(sql)
+            const rows = sql.includes('FROM sessions')
+              ? fakeDbRows.sessions
+              : fakeDbRows.messages.filter((message) => message.session_id === param)
+            yield* rows
+          })
         }
       }),
       close: vi.fn()
@@ -53,6 +61,7 @@ beforeEach(() => {
   fakeDbRows.sessions = []
   fakeDbRows.messages = []
   fakePrepareSqls.length = 0
+  fakeIteratedSqls.length = 0
   fakeDatabase.mockClear()
 })
 
@@ -141,6 +150,26 @@ Run summary: monitor automation completed successfully.
     expect((page.runs[0] as { output_content?: string }).output_content).toContain(
       'full command output line'
     )
+    const transcriptSql = fakeIteratedSqls.find((sql) => sql.includes('FROM messages'))
+    expect(transcriptSql).toContain('substr(CAST(content AS BLOB)')
+    expect(transcriptSql).toContain('LIMIT 10001')
+  })
+
+  it('omits an oversized sparse markdown output without reading it wholesale', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-1')
+    const outputPath = join(outputDir, '2026-05-15_09-02-00.md')
+    await mkdir(outputDir, { recursive: true })
+    await writeFile(outputPath, '', 'utf-8')
+    await truncate(outputPath, 64 * 1024 * 1024)
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 25 })
+
+    expect(page.runs[0]).toMatchObject({
+      output_content: null,
+      error: expect.stringContaining('File too large')
+    })
   })
 
   it('builds large response previews without broad regex captures', async () => {
@@ -275,6 +304,47 @@ Run summary: monitor automation completed successfully.
 
     expect(page).toEqual({ total: 1, runs: [] })
     expect(fakePrepareSqls.some((sql) => sql.includes('FROM messages'))).toBe(false)
+  })
+
+  it('caps one hydrated history page at 100 runs', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-1')
+    await mkdir(outputDir, { recursive: true })
+    await Promise.all(
+      Array.from({ length: 101 }, async (_, index) => {
+        const minute = String(Math.floor(index / 60)).padStart(2, '0')
+        const second = String(index % 60).padStart(2, '0')
+        await writeFile(
+          join(outputDir, `2026-05-15_09-${minute}-${second}.md`),
+          `run ${index}`,
+          'utf-8'
+        )
+      })
+    )
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    const page = await readHermesCronOutputRunsPage('job-1', {
+      page: 1,
+      pageSize: Number.MAX_SAFE_INTEGER
+    })
+
+    expect(page.total).toBe(101)
+    expect(page.runs).toHaveLength(100)
+  })
+
+  it('bounds session run refs and reports a saturated total', async () => {
+    const home = await createHermesHome()
+    await writeFile(join(home, 'state.db'), '', 'utf-8')
+    fakeDbRows.sessions = Array.from({ length: 10_001 }, (_, index) => ({
+      id: `cron_job-1_20260515_${String(index).padStart(6, '0')}`,
+      started_at: Date.UTC(2026, 4, 15, 9, 0, 0) / 1000 - index
+    }))
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 0 })
+
+    expect(page).toEqual({ total: 10_000, totalSaturated: true, runs: [] })
+    expect(fakeIteratedSqls.find((sql) => sql.includes('FROM sessions'))).toContain('LIMIT 10001')
   })
 
   it('caches count-only reads until the cache is cleared', async () => {

@@ -117,6 +117,7 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm build:electron-vite
+      - run: pnpm verify:cli-runtime
       # Why: boot the BUILT daemon-entry under plain Node the way production
       # forks it. v1.4.129-rc.1 shipped a daemon that exited at module load
       # (leaked electron require) while every other check passed; this fails
@@ -158,6 +159,7 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm build:electron-vite
+      - run: pnpm verify:cli-runtime
       - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-mac.e2e.ts tests/e2e/computer-mac-safari.e2e.ts
 
   linux:
@@ -185,6 +187,7 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm build:electron-vite
+      - run: pnpm verify:cli-runtime
       - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts
 
   windows:
@@ -204,4 +207,5 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm build:electron-vite
+      - run: pnpm verify:cli-runtime
       - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts

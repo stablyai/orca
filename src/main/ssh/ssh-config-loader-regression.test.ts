@@ -8,6 +8,7 @@ afterEach(() => {
   vi.resetModules()
   vi.doUnmock('fs')
   vi.doUnmock('os')
+  vi.doUnmock('../../shared/node-bounded-file-reader')
 })
 
 function normalizeWin(value: string): string {
@@ -22,6 +23,24 @@ function platformSshPath(home: string, relativePath: string): string {
   return process.platform === 'win32'
     ? normalizeWin(`${home}/${relativePath}`)
     : `${home}/${relativePath}`
+}
+
+function mockDirectory(names: string[]) {
+  let index = 0
+  return {
+    readSync: () => {
+      const name = names[index]
+      index += 1
+      return name === undefined
+        ? null
+        : {
+            name,
+            isDirectory: () => false,
+            isSymbolicLink: () => false
+          }
+    },
+    closeSync: () => {}
+  }
 }
 
 async function mockOs(
@@ -42,6 +61,18 @@ async function mockOs(
 }
 
 async function loadUserSshConfig() {
+  vi.doMock('../../shared/node-bounded-file-reader', async () => {
+    const fs = await import('node:fs')
+    return {
+      readNodeFileSyncWithinLimit: (filePath: string, maxBytes: number) => {
+        const buffer = Buffer.from(fs.readFileSync(filePath, 'utf8'))
+        if (buffer.byteLength > maxBytes) {
+          throw new Error('File too large')
+        }
+        return { buffer, stats: fs.statSync(filePath) }
+      }
+    }
+  })
   const mod = await import('./ssh-config-parser')
   return mod.loadUserSshConfig()
 }
@@ -77,13 +108,12 @@ describe('loadUserSshConfig regressions', () => {
       return {
         ...actual,
         existsSync: (filePath: string) => files.has(normalizeWin(filePath)),
-        globSync: (pattern: string) =>
-          normalizeWin(pattern) === normalizeWin('C:/Users/Test User/.ssh/conf.d/*.conf')
-            ? [
-                normalizeWin('C:/Users/Test User/.ssh/conf.d/alpha.conf'),
-                normalizeWin('C:/Users/Test User/.ssh/conf.d/zeta.conf')
-              ]
-            : [],
+        opendirSync: (directoryPath: string) => {
+          if (normalizeWin(directoryPath) !== normalizeWin('C:/Users/Test User/.ssh/conf.d')) {
+            throw new Error(`ENOENT: ${directoryPath}`)
+          }
+          return mockDirectory(['zeta.conf', 'alpha.conf'])
+        },
         readFileSync: (filePath: string) => {
           const content = files.get(normalizeWin(filePath))
           if (content === undefined) {
@@ -205,7 +235,8 @@ describe('loadUserSshConfig regressions', () => {
         ...actual,
         existsSync: (filePath: string) =>
           filePath === configPath || includePaths.includes(filePath),
-        globSync: () => [...includePaths].toReversed(),
+        opendirSync: () =>
+          mockDirectory(includePaths.map((filePath) => filePath.split(/[\\/]/).at(-1)!)),
         readFileSync: (filePath: string) => {
           if (filePath === configPath) {
             return 'Include conf.d/*.conf\n'

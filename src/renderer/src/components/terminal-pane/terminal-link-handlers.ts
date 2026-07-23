@@ -1,4 +1,5 @@
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import {
   extractTerminalFileLinkCandidates,
   extractTerminalFileLinks,
@@ -56,10 +57,9 @@ export type LinkHandlerDeps = {
   getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
 }
 
-type ProvidedFileLink = {
-  link: ILink
-  logicalLine: WrappedLogicalLine
-}
+type ProvidedFileLink = { link: ILink; logicalLine: WrappedLogicalLine }
+
+export const TERMINAL_FILE_LINK_PROBE_CONCURRENCY = 8
 
 function rangesOverlap(left: ILink['range'], right: ILink['range']): boolean {
   const leftStartsAfterRightEnds =
@@ -121,99 +121,99 @@ export function createFilePathLinkProvider(
         return
       }
 
-      void Promise.all(
-        logicalLines.flatMap((logicalLine) =>
-          extractTerminalFileLinkCandidates(logicalLine.text).map(
-            async (parsed): Promise<ProvidedFileLink | null> => {
-              const paneLinkCwd = deps.getPaneLinkCwd?.(paneId) ?? startupCwd
-              const resolved = paneLinkCwd
-                ? resolveTerminalFileLink(parsed, paneLinkCwd, deps.terminalHomePath)
-                : null
-              if (!resolved) {
-                return null
-              }
-              const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
-              if (!range) {
-                return null
-              }
+      const candidates = logicalLines.flatMap((logicalLine) =>
+        extractTerminalFileLinkCandidates(logicalLine.text).map((parsed) => ({
+          logicalLine,
+          parsed
+        }))
+      )
+      void mapWithConcurrency(
+        candidates,
+        TERMINAL_FILE_LINK_PROBE_CONCURRENCY,
+        async ({ logicalLine, parsed }): Promise<ProvidedFileLink | null> => {
+          const paneLinkCwd = deps.getPaneLinkCwd?.(paneId) ?? startupCwd
+          const resolved = paneLinkCwd
+            ? resolveTerminalFileLink(parsed, paneLinkCwd, deps.terminalHomePath)
+            : null
+          if (!resolved) {
+            return null
+          }
+          const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+          if (!range) {
+            return null
+          }
 
-              const runtimeEnvironmentId =
-                deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
-              const fileContext = getTerminalFileContext(
-                worktreeId,
-                worktreePath,
-                runtimeEnvironmentId
-              )
-              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(
-                fileContext,
-                resolved.absolutePath
-              )
-              const cacheKey = getTerminalPathExistsCacheKey({
-                absolutePath: resolved.absolutePath,
-                connectionId: fileContext.connectionId,
-                isRemoteRuntimePath,
-                runtimeEnvironmentId
-              })
-              const worktreeRootLink = resolveKnownWorktreeRootPathLink(resolved.absolutePath)
-              if (/[\\/]$/.test(parsed.pathText) && !worktreeRootLink) {
-                return null
-              }
-              // Why: exact known workspace roots must stay clickable for SSH or
-              // stale local paths even when filesystem probing says "missing".
-              if (!worktreeRootLink) {
-                const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
-                const exists =
-                  cachedExists ??
-                  (fileContext.connectionId || isRemoteRuntimePath
-                    ? await runtimePathExists(fileContext, resolved.absolutePath)
-                    : await window.api.shell.pathExists(resolved.absolutePath))
-                writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
-                if (!exists) {
-                  return null
-                }
-              }
+          const runtimeEnvironmentId =
+            deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+          const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+          const isRemoteRuntimePath = isRemoteRuntimeFileOperation(
+            fileContext,
+            resolved.absolutePath
+          )
+          const cacheKey = getTerminalPathExistsCacheKey({
+            absolutePath: resolved.absolutePath,
+            connectionId: fileContext.connectionId,
+            isRemoteRuntimePath,
+            runtimeEnvironmentId
+          })
+          const worktreeRootLink = resolveKnownWorktreeRootPathLink(resolved.absolutePath)
+          if (/[\\/]$/.test(parsed.pathText) && !worktreeRootLink) {
+            return null
+          }
+          // Why: exact known workspace roots must stay clickable for SSH or
+          // stale local paths even when filesystem probing says "missing".
+          if (!worktreeRootLink) {
+            const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
+            const exists =
+              cachedExists ??
+              (fileContext.connectionId || isRemoteRuntimePath
+                ? await runtimePathExists(fileContext, resolved.absolutePath)
+                : await window.api.shell.pathExists(resolved.absolutePath))
+            writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
+            if (!exists) {
+              return null
+            }
+          }
 
-              return {
-                logicalLine,
-                link: {
-                  range,
-                  text: parsed.displayText,
-                  activate: (event) => {
-                    if (!isTerminalLinkActivation(event)) {
-                      return
-                    }
-                    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
-                      worktreeId,
-                      worktreePath,
-                      runtimeEnvironmentId,
-                      openWithSystemDefault: Boolean(event.shiftKey)
-                    })
-                  },
-                  hover: () => {
-                    // Why: only local paths can offer the Shift+modifier system
-                    // default escape hatch; remote paths may not exist locally.
-                    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
-                      fileContext,
-                      resolved.absolutePath
-                    )
-                    const hint = worktreeRootLink
-                      ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault)
-                      : canOpenWithSystemDefault
-                        ? isHtmlFilePath(resolved.absolutePath)
-                          ? getTerminalHtmlFileOpenHint()
-                          : openLinkHint
-                        : getTerminalOrcaFileOpenHint()
-                    linkTooltip.textContent = `${resolved.absolutePath} (${hint})`
-                    linkTooltip.style.display = ''
-                  },
-                  leave: () => {
-                    linkTooltip.style.display = 'none'
-                  }
+          return {
+            logicalLine,
+            link: {
+              range,
+              text: parsed.displayText,
+              activate: (event) => {
+                if (!isTerminalLinkActivation(event)) {
+                  return
                 }
+                openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+                  worktreeId,
+                  worktreePath,
+                  runtimeEnvironmentId,
+                  openWithSystemDefault: Boolean(event.shiftKey)
+                })
+              },
+              hover: () => {
+                // Why: only local paths can offer the Shift+modifier system
+                // default escape hatch; remote paths may not exist locally.
+                const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
+                  fileContext,
+                  resolved.absolutePath
+                )
+                const hint = worktreeRootLink
+                  ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault)
+                  : canOpenWithSystemDefault
+                    ? isHtmlFilePath(resolved.absolutePath)
+                      ? getTerminalHtmlFileOpenHint()
+                      : openLinkHint
+                    : getTerminalOrcaFileOpenHint()
+                linkTooltip.textContent = `${resolved.absolutePath} (${hint})`
+                linkTooltip.style.display = ''
+              },
+              leave: () => {
+                linkTooltip.style.display = 'none'
               }
             }
-          )
-        )
+          }
+        }
       )
         .then(
           (resolvedLinks) => {

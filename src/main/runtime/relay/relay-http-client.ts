@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
+import { readFetchResponseJsonWithinLimit } from '../../lib/fetch-response-body'
 
 const RelayTokenResponseSchema = z
   .object({
@@ -73,7 +74,9 @@ export async function exchangeRelayAuthorization(input: {
     await cancelUnreadResponseBody(response)
     throw new RelayHttpError('token-exchange', response.status)
   }
-  const parsed = RelayTokenResponseSchema.safeParse(await response.json())
+  const parsed = RelayTokenResponseSchema.safeParse(
+    await readFetchResponseJsonWithinLimit<unknown>(response)
+  )
   if (!parsed.success) {
     throw new RelayHttpError('token-exchange', 502)
   }
@@ -101,7 +104,9 @@ export async function requestRelayAssignment(input: {
     await cancelUnreadResponseBody(response)
     throw new RelayHttpError('assignment', response.status)
   }
-  const parsed = AssignmentResponseSchema.safeParse(await response.json())
+  const parsed = AssignmentResponseSchema.safeParse(
+    await readFetchResponseJsonWithinLimit<unknown>(response)
+  )
   if (!parsed.success || !isAllowedRelayOrigin(parsed.data.cellUrl)) {
     throw new RelayHttpError('assignment', 502)
   }

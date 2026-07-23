@@ -868,6 +868,60 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('listProcesses', () => {
+    it('strips unknown daemon owner payloads before publication', () => {
+      const normalize = (
+        adapter as unknown as {
+          validatedAgentSessionOwners(owners: unknown): {
+            agentSessionOwners?: unknown[]
+          }
+        }
+      ).validatedAgentSessionOwners.bind(adapter)
+      const owner = {
+        claim: {
+          digestVersion: 1,
+          keyId: 'key',
+          identityDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          agent: 'codex',
+          unknownPayload: 'claim payload'
+        },
+        generation: 'generation-1',
+        phase: 'live',
+        ptyId: 'pty-1',
+        surface: {
+          worktreeId: 'worktree',
+          tabId: 'tab',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          terminalHandle: 'term_claimed',
+          unknownPayload: 'surface payload'
+        },
+        unknownPayload: 'owner payload'
+      }
+
+      expect(normalize([owner])).toEqual({
+        agentSessionOwners: [
+          {
+            claim: {
+              digestVersion: 1,
+              keyId: 'key',
+              identityDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+              agent: 'codex'
+            },
+            generation: 'generation-1',
+            phase: 'live',
+            ptyId: 'pty-1',
+            surface: {
+              worktreeId: 'worktree',
+              tabId: 'tab',
+              leafId: '11111111-1111-4111-8111-111111111111',
+              terminalHandle: 'term_claimed'
+            }
+          }
+        ]
+      })
+    })
+
     it('returns active sessions', async () => {
       await adapter.spawn({
         cols: 80,
@@ -1312,7 +1366,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('does not schedule a checkpoint timer until a session is dirty', async () => {
       const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
       const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
-      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
       adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
 
       try {
@@ -1323,14 +1376,16 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           cwd: '/home/user',
           sessionId: 'idle-checkpoint'
         })
+        const internals = historyAdapter as unknown as {
+          checkpointTimer: ReturnType<typeof setTimeout> | null
+        }
 
-        expect(setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000)).toBe(false)
+        expect(internals.checkpointTimer).toBeNull()
 
         lastSubprocess._simulateData('dirty after idle\r\n')
-        await waitFor(() => setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000))
+        await waitFor(() => internals.checkpointTimer !== null)
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
-        setTimeoutSpy.mockRestore()
       }
     })
 

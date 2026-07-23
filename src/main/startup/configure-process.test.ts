@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCA_PERSISTED_STATE_MAX_BYTES } from '../../shared/persisted-state-file-bounds'
 
 vi.mock('electron', () => {
   const paths = new Map<string, string>([['appData', '/tmp/app-data']])
@@ -298,6 +299,14 @@ describe('configureElectronNetworkCompatibility', () => {
   it('leaves HTTP/2 enabled by default', async () => {
     const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
     const userDataPath = createUserDataDir({})
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
+  })
+
+  it('ignores an oversized persisted state file before early startup parsing', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = createUserDataDir({ electronHttp1CompatibilityMode: true })
+    truncateSync(join(userDataPath, 'orca-data.json'), ORCA_PERSISTED_STATE_MAX_BYTES + 1)
 
     expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
   })

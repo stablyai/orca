@@ -95,4 +95,21 @@ describe('RuntimeMobileFilePathSearchCache', () => {
       vi.useRealTimers()
     }
   })
+
+  it('rejects distinct scans beyond the in-flight cache bound', async () => {
+    const cache = new RuntimeMobileFilePathSearchCache(2, 100)
+    const loads: ((value: RuntimeMobileFilePathInventory) => void)[] = []
+    const load = () =>
+      new Promise<RuntimeMobileFilePathInventory>((resolve) => {
+        loads.push(resolve)
+      })
+    const first = cache.get('a', load)
+    const second = cache.get('b', load)
+
+    await expect(cache.get('c', load)).rejects.toThrow('search is busy')
+
+    const inventory = { paths: [], totalCount: 0, truncated: false }
+    loads.forEach((resolve) => resolve(inventory))
+    await expect(Promise.all([first, second])).resolves.toEqual([inventory, inventory])
+  })
 })

@@ -202,17 +202,15 @@ describe('attachMainWindowServices', () => {
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {
     const onBeforeRendererReload = vi.fn()
     const mainWindow = createMainWindow()
+    const store = createStore()
+    const runtime = createRuntime()
 
-    attachMainWindowServices(
-      mainWindow as never,
-      createStore(),
-      createRuntime() as never,
-      undefined,
-      undefined,
-      { onBeforeRendererReload }
-    )
+    attachMainWindowServices(mainWindow as never, store, runtime as never, undefined, undefined, {
+      onBeforeRendererReload
+    })
 
     expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
+    expect(registerRepoHandlersMock).toHaveBeenCalledWith(mainWindow, store, runtime)
     const reloadHandler = handleMock.mock.calls.find(([channel]) => channel === 'app:reload')?.[1]
     expect(reloadHandler).toBeTypeOf('function')
 

@@ -83,6 +83,7 @@ import {
   resolveWebAgentSessionHandoff
 } from './web-agent-session-handoff'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { mapWebSessionSnapshotRecoveries } from './web-session-snapshot-recovery-pool'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -347,6 +348,7 @@ function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeI
   replayableSessionTabsSnapshotByWorktree.delete(key)
   lastHostTerminalTabCountByWorktree.delete(key)
   clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
+  clearWebSessionFocusIntent({ environmentId }, worktreeId)
   clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
   clearWebSessionCloseIntentsForWorktree({ environmentId }, worktreeId)
   clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
@@ -2701,16 +2703,17 @@ export function useWebSessionTabsSync(): void {
             console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
             return
           }
-          const recovered = await Promise.all(
-            result.snapshots.map((snapshot) =>
-              recoverWebSessionTerminalOrphansBeforeApply(
-                useAppStore.getState(),
-                snapshot,
-                environmentId
-              )
+          const recovered = await mapWebSessionSnapshotRecoveries(result.snapshots, (snapshot) =>
+            recoverWebSessionTerminalOrphansBeforeApply(
+              useAppStore.getState(),
+              snapshot,
+              environmentId
             )
           )
-          if (disposed) {
+          if (
+            disposed ||
+            getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+          ) {
             return
           }
           const applicable = recovered.filter(
@@ -2756,17 +2759,19 @@ export function useWebSessionTabsSync(): void {
               const event = response.result as SessionTabsStreamEvent
               const replayed = isRuntimeSubscriptionReplayResponse(response)
               if (event.type === 'snapshots') {
-                void Promise.all(
-                  event.snapshots.map((snapshot) =>
-                    recoverWebSessionTerminalOrphansBeforeApply(
-                      useAppStore.getState(),
-                      snapshot,
-                      environmentId
-                    )
+                void mapWebSessionSnapshotRecoveries(event.snapshots, (snapshot) =>
+                  recoverWebSessionTerminalOrphansBeforeApply(
+                    useAppStore.getState(),
+                    snapshot,
+                    environmentId
                   )
                 )
                   .then((recovered) => {
-                    if (!disposed) {
+                    if (
+                      !disposed &&
+                      getRuntimeEnvironmentRevision(environmentId) ===
+                        expectedEnvironmentPairingRevision
+                    ) {
                       const applicable = recovered.filter(
                         (snapshot): snapshot is RuntimeMobileSessionTabsResult => snapshot !== null
                       )
@@ -2796,7 +2801,12 @@ export function useWebSessionTabsSync(): void {
                 environmentId
               )
                 .then((recovered) => {
-                  if (!disposed && recovered) {
+                  if (
+                    !disposed &&
+                    recovered &&
+                    getRuntimeEnvironmentRevision(environmentId) ===
+                      expectedEnvironmentPairingRevision
+                  ) {
                     if (replayed) {
                       acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
                     }
@@ -2882,7 +2892,11 @@ export function useWebSessionTabsSync(): void {
         event,
         environmentId
       )
-      if (disposed || !recovered) {
+      if (
+        disposed ||
+        !recovered ||
+        getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+      ) {
         return
       }
       if (isRuntimeSubscriptionReplayResponse(response)) {

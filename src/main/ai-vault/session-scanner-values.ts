@@ -1,6 +1,22 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { readFile } from 'node:fs/promises'
+import {
+  assertJsonTextStructureWithinLimits,
+  type JsonTextStructureLimits
+} from '../../shared/json-text-structure-limit'
+
+export const AI_VAULT_JSON_STRUCTURE_LIMITS: JsonTextStructureLimits = {
+  structuralTokens: 1_000_000,
+  nestingDepth: 256
+}
+
+export function parseAiVaultJsonText(
+  content: string,
+  limits: JsonTextStructureLimits = AI_VAULT_JSON_STRUCTURE_LIMITS
+): unknown {
+  assertJsonTextStructureWithinLimits(content, limits)
+  return JSON.parse(content) as unknown
+}
 
 export function timestampMs(value: unknown): number {
   if (typeof value === 'string') {
@@ -18,7 +34,7 @@ export function parseJsonObject(line: string): Record<string, unknown> | null {
     return null
   }
   try {
-    const parsed = JSON.parse(line) as unknown
+    const parsed = parseAiVaultJsonText(line)
     return asRecord(parsed)
   } catch {
     return null
@@ -67,16 +83,6 @@ export function extractGitBranch(value: unknown): string | null {
     return null
   }
   return extractString(git.branch) || extractString(git.current_branch)
-}
-
-export async function readJsonObjectIfExists(
-  filePath: string
-): Promise<Record<string, unknown> | null> {
-  try {
-    return asRecord(JSON.parse(await readFile(filePath, 'utf-8')) as unknown)
-  } catch {
-    return null
-  }
 }
 
 export function arrayValue(value: unknown): unknown[] {

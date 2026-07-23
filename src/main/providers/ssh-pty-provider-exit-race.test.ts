@@ -76,3 +76,34 @@ it('rejects an SSH reattach whose matching exit shares the attach reply batch', 
     isReattach: true
   })
 })
+
+it('does not treat a malformed exit incarnation as a wildcard spawn race', async () => {
+  const mux = {
+    request: vi.fn(),
+    notify: vi.fn(),
+    onNotification: vi.fn(),
+    dispose: vi.fn(),
+    isDisposed: vi.fn().mockReturnValue(false)
+  }
+  const provider = new SshPtyProvider('conn-1', mux as never)
+  const exitListener = vi.fn()
+  provider.onExit(exitListener)
+  mux.request.mockImplementation(async (method: string) => {
+    if (method === 'pty.spawn') {
+      const notify = mux.onNotification.mock.calls[0]?.[0]
+      notify?.('pty.exit', {
+        id: 'pty-raced',
+        code: 0,
+        incarnationId: 'x'.repeat(129)
+      })
+      return { id: 'pty-raced', incarnationId: 'incarnation-current' }
+    }
+    return undefined
+  })
+
+  await expect(provider.spawn({ cols: 80, rows: 24 })).resolves.toMatchObject({
+    id: 'ssh:conn-1@@pty-raced',
+    incarnationId: 'incarnation-current'
+  })
+  expect(exitListener).not.toHaveBeenCalled()
+})

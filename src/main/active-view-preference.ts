@@ -1,11 +1,13 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
 import type { TopLevelView } from '../shared/types'
 import { isTopLevelView } from '../shared/top-level-view'
 
 const ACTIVE_VIEW_FILE_NAME = 'active-view.json'
 const SAVE_DEBOUNCE_MS = 100
+export const MAX_ACTIVE_VIEW_PREFERENCE_FILE_BYTES = 4 * 1024
 
 type ActiveViewFile = {
   activeView: TopLevelView
@@ -17,7 +19,11 @@ export function getActiveViewPreferenceFile(dataFile: string): string {
 
 function readActiveView(file: string): TopLevelView | null {
   try {
-    const parsed = JSON.parse(readFileSync(file, 'utf-8')) as Partial<ActiveViewFile>
+    const parsed = JSON.parse(
+      readNodeFileSyncWithinLimit(file, MAX_ACTIVE_VIEW_PREFERENCE_FILE_BYTES).buffer.toString(
+        'utf8'
+      )
+    ) as Partial<ActiveViewFile>
     return isTopLevelView(parsed.activeView) ? parsed.activeView : null
   } catch {
     return null

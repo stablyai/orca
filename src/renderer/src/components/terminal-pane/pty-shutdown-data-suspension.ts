@@ -40,6 +40,7 @@ type PtyShutdownOutputEvent =
 
 const rolledBackShutdownEvents = new Map<string, PtyShutdownOutputEvent[]>()
 const ROLLED_BACK_SHUTDOWN_REPLAY_MAX_PTYS = 64
+export const PTY_SHUTDOWN_OUTPUT_MAX_EVENTS = 4_096
 const shutdownBufferTextEncoder = new TextEncoder()
 
 /** Suspend delivery until every overlapping shutdown owner commits or rolls back. */
@@ -117,7 +118,8 @@ function bufferPtyShutdownOutput(ptyId: string, event: PtyShutdownOutputEvent): 
   pending.events.push({ ...event, data: clamped.data })
   pending.bufferedBytes += clamped.bytes
   while (
-    pending.bufferedBytes > TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT &&
+    (pending.bufferedBytes > TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT ||
+      pending.events.length > PTY_SHUTDOWN_OUTPUT_MAX_EVENTS) &&
     pending.events.length > 1
   ) {
     pending.bufferedBytes -= shutdownBufferTextEncoder.encode(

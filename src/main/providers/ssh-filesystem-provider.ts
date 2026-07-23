@@ -25,6 +25,8 @@ import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../..
 import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import { SshFilesystemDirectoryReader } from './ssh-filesystem-directory-reader'
+import { requestSshMarkdownDocumentPaths } from './ssh-markdown-document-listing'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 
 export class SshFilesystemProvider implements IFilesystemProvider {
@@ -35,6 +37,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   private tempDirPromise: Promise<string> | null = null
   private disposed = false
   private loggedStreamFallback = false
+  private readonly directoryReader: SshFilesystemDirectoryReader
   readonly downloadFolder?: IFilesystemProvider['downloadFolder']
 
   constructor(
@@ -46,6 +49,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   ) {
     this.connectionId = connectionId
     this.mux = mux
+    this.directoryReader = new SshFilesystemDirectoryReader(mux)
 
     if (createSftp) {
       // Why: system SSH has raw single-file transfer but no ssh2 SFTP channel;
@@ -83,8 +87,11 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return this.connectionId
   }
 
-  async readDir(dirPath: string): Promise<DirEntry[]> {
-    return (await this.mux.request('fs.readDir', { dirPath })) as DirEntry[]
+  async readDir(
+    dirPath: string,
+    options?: { maxEntries?: number; maxRetainedBytes?: number }
+  ): Promise<DirEntry[]> {
+    return this.directoryReader.readDir(dirPath, options)
   }
 
   async readFile(filePath: string): Promise<FileReadResult> {
@@ -318,6 +325,8 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       signal: options?.signal
     })) as string[]
   }
+
+  listMarkdownDocuments = (rootPath: string) => requestSshMarkdownDocumentPaths(this.mux, rootPath)
 
   async watch(
     rootPath: string,

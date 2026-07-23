@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, statSync, truncateSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +8,14 @@ vi.mock('electron', () => ({
   app: { isPackaged: true }
 }))
 
-import { ensureLinuxTerminalOrcaCliShimDir } from './linux-terminal-orca-cli-shim'
+import {
+  _getLinuxTerminalShimCacheSizeForTests,
+  _isLinuxTerminalShimCacheKeyRetainableForTests,
+  _resetLinuxTerminalShimCacheForTests,
+  ensureLinuxTerminalOrcaCliShimDir,
+  LINUX_TERMINAL_SHIM_CACHE_KEY_MAX_BYTES,
+  LINUX_TERMINAL_SHIM_CACHE_MAX_ENTRIES
+} from './linux-terminal-orca-cli-shim'
 
 const created: string[] = []
 
@@ -23,6 +30,7 @@ async function makeFixture(): Promise<{ userDataPath: string; resourcesPath: str
 }
 
 afterEach(async () => {
+  _resetLinuxTerminalShimCacheForTests()
   await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
@@ -91,6 +99,25 @@ describe('ensureLinuxTerminalOrcaCliShimDir', () => {
     expect(content).not.toContain(resourcesPath)
   })
 
+  it('replaces a large sparse file at the owned shim path without loading it whole', async () => {
+    const { userDataPath, resourcesPath } = await makeFixture()
+    const shimDir = join(userDataPath, 'linux-orca-cli-shim')
+    const shimPath = join(shimDir, 'orca')
+    mkdirSync(shimDir, { recursive: true })
+    writeFileSync(shimPath, 'stale')
+    truncateSync(shimPath, 256 * 1024 * 1024)
+
+    expect(
+      ensureLinuxTerminalOrcaCliShimDir({
+        userDataPath,
+        resourcesPath,
+        appImagePath: null
+      })
+    ).toBe(shimDir)
+    expect(statSync(shimPath).size).toBeLessThan(64 * 1024)
+    expect(readFileSync(shimPath, 'utf8')).toContain('orca-ide')
+  })
+
   it('returns null (and does not memoize) when the bundled launcher is missing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-terminal-cli-shim-missing-'))
     created.push(root)
@@ -114,5 +141,32 @@ describe('ensureLinuxTerminalOrcaCliShimDir', () => {
       appImagePath: null
     })
     expect(recovered).toBe(join(userDataPath, 'linux-orca-cli-shim'))
+  })
+
+  it('bounds successful user-data path memoization', async () => {
+    const { userDataPath, resourcesPath } = await makeFixture()
+    for (let index = 0; index <= LINUX_TERMINAL_SHIM_CACHE_MAX_ENTRIES; index += 1) {
+      expect(
+        ensureLinuxTerminalOrcaCliShimDir({
+          userDataPath: join(userDataPath, String(index)),
+          resourcesPath,
+          appImagePath: null
+        })
+      ).not.toBeNull()
+    }
+    expect(_getLinuxTerminalShimCacheSizeForTests()).toBe(LINUX_TERMINAL_SHIM_CACHE_MAX_ENTRIES)
+  })
+
+  it('measures memoized paths by UTF-8 bytes', () => {
+    expect(
+      _isLinuxTerminalShimCacheKeyRetainableForTests(
+        'x'.repeat(LINUX_TERMINAL_SHIM_CACHE_KEY_MAX_BYTES)
+      )
+    ).toBe(true)
+    expect(
+      _isLinuxTerminalShimCacheKeyRetainableForTests(
+        '😀'.repeat(LINUX_TERMINAL_SHIM_CACHE_KEY_MAX_BYTES / 4 + 1)
+      )
+    ).toBe(false)
   })
 })

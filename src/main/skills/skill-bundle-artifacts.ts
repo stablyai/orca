@@ -1,13 +1,20 @@
 import { app } from 'electron'
-import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { z, type ZodType } from 'zod'
+import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import type {
   SkillBundleManifest,
   SkillKnownSnapshot,
   SkillReleaseMapping,
   SkillSnapshotRegistry
 } from '../../shared/skill-freshness'
+
+export const SKILL_BUNDLE_CURRENT_MANIFEST_MAX_BYTES = 2 * 1024 * 1024
+export const SKILL_BUNDLE_SNAPSHOT_REGISTRY_MAX_BYTES = 16 * 1024 * 1024
+export const SKILL_BUNDLE_RELEASE_MAPPING_MAX_BYTES = 2 * 1024 * 1024
+export const SKILL_BUNDLE_JSON_MAX_STRUCTURAL_TOKENS = 1_000_000
+export const SKILL_BUNDLE_JSON_MAX_NESTING_DEPTH = 128
 
 export type SkillBundleArtifacts = {
   manifest: SkillBundleManifest
@@ -103,9 +110,18 @@ export function loadSkillBundleArtifacts(
 async function readSkillBundleArtifacts(resourceRoot: string): Promise<SkillBundleArtifacts> {
   const bundleRoot = join(resourceRoot, 'skills')
   const [manifestValue, registryValue, releaseMappingValue] = await Promise.all([
-    readFile(join(bundleRoot, 'current-manifest.json'), 'utf8').then(JSON.parse),
-    readFile(join(bundleRoot, 'snapshot-registry.json'), 'utf8').then(JSON.parse),
-    readFile(join(bundleRoot, 'release-mapping.json'), 'utf8').then(JSON.parse)
+    readSkillBundleArtifactJson(
+      join(bundleRoot, 'current-manifest.json'),
+      SKILL_BUNDLE_CURRENT_MANIFEST_MAX_BYTES
+    ),
+    readSkillBundleArtifactJson(
+      join(bundleRoot, 'snapshot-registry.json'),
+      SKILL_BUNDLE_SNAPSHOT_REGISTRY_MAX_BYTES
+    ),
+    readSkillBundleArtifactJson(
+      join(bundleRoot, 'release-mapping.json'),
+      SKILL_BUNDLE_RELEASE_MAPPING_MAX_BYTES
+    )
   ])
   const manifest: SkillBundleManifest = parseArtifact(
     manifestSchema,
@@ -156,4 +172,17 @@ async function readSkillBundleArtifacts(resourceRoot: string): Promise<SkillBund
     knownSnapshots: registry.skills,
     releasedAppVersions
   }
+}
+
+export async function readSkillBundleArtifactJson(
+  path: string,
+  maxBytes: number
+): Promise<unknown> {
+  const { buffer } = await readNodeFileWithinLimit(path, maxBytes)
+  const content = buffer.toString('utf8')
+  assertJsonTextStructureWithinLimits(content, {
+    structuralTokens: SKILL_BUNDLE_JSON_MAX_STRUCTURAL_TOKENS,
+    nestingDepth: SKILL_BUNDLE_JSON_MAX_NESTING_DEPTH
+  })
+  return JSON.parse(content) as unknown
 }

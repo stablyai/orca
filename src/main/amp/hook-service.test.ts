@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { GENERATED_NODE_MANAGED_FILE_MAX_BYTES } from '../generated-node-bounded-file-reader'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -59,6 +60,11 @@ describe('AmpHookService', () => {
     expect(source).not.toContain('postQueue = postQueue.then')
     expect(source).toContain('process.env.ORCA_PANE_KEY')
     expect(source).toContain('process.env.ORCA_AGENT_HOOK_ENDPOINT')
+    expect(source).toContain(
+      `function readOrcaManagedFileWithinLimit(fs: any, path: string, maxBytes = ${GENERATED_NODE_MANAGED_FILE_MAX_BYTES})`
+    )
+    expect(source).toContain('readOrcaManagedFileWithinLimit(fs, endpointPath)')
+    expect(source).not.toContain('readFileSync')
   })
 
   it('does not overwrite an existing user-authored Amp plugin file', () => {

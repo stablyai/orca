@@ -5,9 +5,10 @@ import type {
   RateLimitWindow
 } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
+import { readIntegrationCredentialFileText } from '../integration-credential-file'
 import { join } from 'node:path'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { resolveCodexCommand } from '../codex-cli/command'
@@ -25,9 +26,12 @@ import {
   resolveHiddenRateLimitPtyCwd
 } from './hidden-rate-limit-pty-cwd'
 import {
-  createAuthFilesystemOperation,
+  AuthFilesystemOperationLimitError,
+  AuthFilesystemOperationRegistry,
   type SharedAuthFilesystemOperation
 } from './auth-filesystem-operation'
+import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
+import { appendRateLimitPtyOutputTail } from './rate-limit-pty-output-tail'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -36,6 +40,7 @@ const BACKEND_TIMEOUT_MS = 10_000
 // Why: redeeming a reset credit is an explicit user action, not a poll — allow more time for a slow backend.
 const REDEEM_BACKEND_TIMEOUT_MS = 30_000
 const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
+export const MAX_RPC_RESPONSE_LINE_BYTES = 4 * 1024 * 1024
 
 export type FetchCodexRateLimitsOptions = {
   codexHomePath?: string | null
@@ -134,10 +139,7 @@ type BackendAuthReadResult =
   | { content: string; error?: never }
   | { content?: never; error: unknown }
 
-const backendAuthReadByPath = new Map<
-  string,
-  SharedAuthFilesystemOperation<BackendAuthReadResult>
->()
+const backendAuthReads = new AuthFilesystemOperationRegistry<BackendAuthReadResult>()
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
@@ -296,30 +298,22 @@ function createBackendRequestSignal(
 
 function getBackendAuthRead(
   authPath: string
-): SharedAuthFilesystemOperation<BackendAuthReadResult> {
-  const existing = backendAuthReadByPath.get(authPath)
-  if (existing) {
-    return existing
-  }
+): SharedAuthFilesystemOperation<BackendAuthReadResult> | null {
   // Why: Node can't cancel an in-flight UNC read; keep one read per auth path so repeated refreshes don't stack them.
-  const read = createAuthFilesystemOperation(authPath, () =>
-    readFile(authPath, 'utf8').then(
+  return backendAuthReads.getOrCreate(authPath, () =>
+    readIntegrationCredentialFileText(authPath).then(
       (content) => ({ content }),
       (error: unknown) => ({ error })
     )
   )
-  backendAuthReadByPath.set(authPath, read)
-  const clearRead = (): void => {
-    if (backendAuthReadByPath.get(authPath) === read) {
-      backendAuthReadByPath.delete(authPath)
-    }
-  }
-  void read.result.then(clearRead, clearRead)
-  return read
 }
 
 async function readBackendAuth(authPath: string, signal: AbortSignal): Promise<string> {
-  const result = await getBackendAuthRead(authPath).wait(signal)
+  const read = getBackendAuthRead(authPath)
+  if (!read) {
+    throw new AuthFilesystemOperationLimitError('Codex backend auth read capacity exceeded')
+  }
+  const result = await read.wait(signal)
   if ('error' in result) {
     throw result.error
   }
@@ -375,7 +369,8 @@ async function fetchBackendRateLimitResetCredits(
     await cancelUnreadResponseBody(response)
     return null
   }
-  const payload = (await response.json()) as BackendRateLimitResetCreditsResponse
+  const payload =
+    await readFetchResponseJsonWithinLimit<BackendRateLimitResetCreditsResponse>(response)
   return mapBackendRateLimitResetCredits(payload) ?? null
 }
 
@@ -443,7 +438,8 @@ export async function consumeCodexRateLimitResetCredit(options: {
     await cancelUnreadResponseBody(response)
     throw new Error(`Codex reset failed: HTTP ${response.status}`)
   }
-  const payload = (await response.json()) as BackendConsumeRateLimitResetCreditResponse
+  const payload =
+    await readFetchResponseJsonWithinLimit<BackendConsumeRateLimitResetCreditResponse>(response)
   return mapBackendConsumeOutcome(payload.code)
 }
 
@@ -523,7 +519,7 @@ async function fetchViaBackend(
     await cancelUnreadResponseBody(response)
     return null
   }
-  const payload = (await response.json()) as BackendUsageResponse
+  const payload = await readFetchResponseJsonWithinLimit<BackendUsageResponse>(response)
   // Why: plan_type is required by Codex's RateLimitStatusPayload; reject malformed JSON so the app-server fallback still runs.
   if (typeof payload.plan_type !== 'string') {
     return null
@@ -555,8 +551,8 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     return abortedCodexRateLimitResult()
   }
   return new Promise<ProviderRateLimits>((resolve) => {
-    let buffer = ''
-    let stderr = ''
+    const buffer = new GrowingByteBuffer()
+    const stderr = new GrowingByteBuffer()
     let resolved = false
     let rpcId = 0
 
@@ -603,6 +599,8 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
       resolved = true
       cleanupListeners()
+      buffer.clear()
+      stderr.clear()
       if (options?.kill) {
         child.kill()
       }
@@ -653,13 +651,34 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     }
 
     function onStdoutData(chunk: Buffer): void {
-      buffer += chunk.toString()
-
-      // JSON-RPC messages are newline-delimited
-      let newlineIdx: number
-      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, newlineIdx).trim()
-        buffer = buffer.slice(newlineIdx + 1)
+      if (resolved) {
+        return
+      }
+      let offset = 0
+      while (offset <= chunk.byteLength) {
+        const newlineIdx = chunk.indexOf(0x0a, offset)
+        const hasNewline = newlineIdx !== -1
+        const segment = chunk.subarray(offset, hasNewline ? newlineIdx : chunk.byteLength)
+        if (segment.byteLength > MAX_RPC_RESPONSE_LINE_BYTES - buffer.byteLength) {
+          settle(
+            {
+              provider: 'codex',
+              session: null,
+              weekly: null,
+              updatedAt: Date.now(),
+              error: `RPC response exceeded ${MAX_RPC_RESPONSE_LINE_BYTES} byte line limit`,
+              status: 'error'
+            },
+            { kill: true }
+          )
+          return
+        }
+        buffer.append(segment)
+        if (!hasNewline) {
+          return
+        }
+        offset = newlineIdx + 1
+        const line = buffer.takeString('utf8').trim()
         if (!line) {
           continue
         }
@@ -691,7 +710,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
                   session: null,
                   weekly: null,
                   updatedAt: Date.now(),
-                  error: withMacTailscaleDnsHint(msg.error.message, stderr),
+                  error: withMacTailscaleDnsHint(msg.error.message, stderr.toString()),
                   status: 'error'
                 },
                 { kill: true }
@@ -727,11 +746,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     }
 
     function onStderrData(chunk: Buffer): void {
-      stderr += chunk.toString()
-      // Why: this background poll only needs recent failure context for hints.
-      if (stderr.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
-        stderr = stderr.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
-      }
+      stderr.appendRetainedSuffix(chunk, MAX_DIAGNOSTIC_OUTPUT_LENGTH)
     }
 
     function onError(err: Error): void {
@@ -746,7 +761,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
           ? isBareCommand
             ? 'Codex CLI not found'
             : 'Codex CLI found but could not run — Node.js may not be in your PATH'
-          : withMacTailscaleDnsHint(err.message, stderr),
+          : withMacTailscaleDnsHint(err.message, stderr.toString()),
         status: isEnoent && isBareCommand ? 'unavailable' : 'error'
       })
     }
@@ -757,7 +772,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
         session: null,
         weekly: null,
         updatedAt: Date.now(),
-        error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr),
+        error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr.toString()),
         status: 'error'
       })
     }
@@ -896,14 +911,11 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     }, PTY_TIMEOUT_MS)
 
     const onDataDisposable = term.onData((data) => {
-      output += data
-      // Why: only recent status output is needed; cap noisy TUI output like the Claude fallback.
-      if (output.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
-        output = output.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
-      }
+      const appended = appendRateLimitPtyOutputTail(output, data, MAX_DIAGNOSTIC_OUTPUT_LENGTH)
+      output = appended.output
 
       // Wait for prompt, then send /status
-      if (!sentStatus && />\s*$/.test(data)) {
+      if (!sentStatus && />\s*$/.test(appended.scannedChunk)) {
         sentStatus = true
         term.write('/status\r')
         return

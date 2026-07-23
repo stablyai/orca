@@ -1,15 +1,20 @@
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/types'
+import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { statMock, readFileMock } = vi.hoisted(() => ({
+const { statMock, readNodeFileWithinLimitMock } = vi.hoisted(() => ({
   statMock: vi.fn(),
-  readFileMock: vi.fn()
+  readNodeFileWithinLimitMock: vi.fn()
 }))
 
 vi.mock('fs/promises', () => ({
-  stat: statMock,
-  readFile: readFileMock
+  stat: statMock
+}))
+
+vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => ({
+  ...(await importOriginal<typeof BoundedFileReader>()),
+  readNodeFileWithinLimit: readNodeFileWithinLimitMock
 }))
 
 vi.mock('os', () => ({
@@ -47,6 +52,13 @@ function createStore(settings: Record<string, unknown> = {}): Store {
   } as Store
 }
 
+function fileRead(content: string) {
+  return {
+    buffer: Buffer.from(content),
+    stats: { isFile: () => true, size: Buffer.byteLength(content) }
+  }
+}
+
 describe('previewGhosttyImport theme references', () => {
   it('resolves a theme reference into color overrides', async () => {
     const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
@@ -57,11 +69,11 @@ describe('previewGhosttyImport theme references', () => {
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readFileMock.mockImplementation(async (p: string) => {
+    readNodeFileWithinLimitMock.mockImplementation(async (p: string) => {
       if (p === themePath) {
-        return 'palette = 1=#d54e53\nbackground = #000000\nforeground = #eaeaea\n'
+        return fileRead('palette = 1=#d54e53\nbackground = #000000\nforeground = #eaeaea\n')
       }
-      return 'theme = Tomorrow Night Bright\nfont-size = 14\n'
+      return fileRead('theme = Tomorrow Night Bright\nfont-size = 14\n')
     })
 
     const result = await previewGhosttyImport(createStore())
@@ -86,11 +98,11 @@ describe('previewGhosttyImport theme references', () => {
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readFileMock.mockImplementation(async (p: string) => {
+    readNodeFileWithinLimitMock.mockImplementation(async (p: string) => {
       if (p === themePath) {
-        return 'palette = 1=#d54e53\npalette = 2=#b9ca4a\nbackground = #000000\n'
+        return fileRead('palette = 1=#d54e53\npalette = 2=#b9ca4a\nbackground = #000000\n')
       }
-      return 'theme = night\nbackground = #101010\npalette = 1=#ff0000\n'
+      return fileRead('theme = night\nbackground = #101010\npalette = 1=#ff0000\n')
     })
 
     const result = await previewGhosttyImport(createStore())
@@ -115,11 +127,11 @@ describe('previewGhosttyImport theme references', () => {
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readFileMock.mockImplementation(async (p: string) => {
+    readNodeFileWithinLimitMock.mockImplementation(async (p: string) => {
       if (p === themePath) {
-        return 'background = #202020\nforeground = #f0f0f0\n'
+        return fileRead('background = #202020\nforeground = #f0f0f0\n')
       }
-      return `theme = ${themePath}\n`
+      return fileRead(`theme = ${themePath}\n`)
     })
 
     const result = await previewGhosttyImport(createStore())
@@ -145,7 +157,7 @@ describe('previewGhosttyImport theme references', () => {
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readFileMock.mockResolvedValue('theme = Missing Theme\n')
+    readNodeFileWithinLimitMock.mockResolvedValue(fileRead('theme = Missing Theme\n'))
 
     const result = await previewGhosttyImport(createStore())
 
@@ -161,7 +173,9 @@ describe('previewGhosttyImport theme references', () => {
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readFileMock.mockResolvedValue('theme = light:Tomorrow,dark:Tomorrow Night\n')
+    readNodeFileWithinLimitMock.mockResolvedValue(
+      fileRead('theme = light:Tomorrow,dark:Tomorrow Night\n')
+    )
 
     const result = await previewGhosttyImport(createStore())
 

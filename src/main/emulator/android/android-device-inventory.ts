@@ -3,6 +3,9 @@ import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { adbDevicesArgs, parseAdbDevices, type AndroidAdbDevice } from './adb-devices'
 import { listAvdsArgs, parseAvdList } from './avd-manager'
 import type { EmulatorDevice } from '../backends/emulator-backend'
+import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+
+export const ANDROID_AVD_NAME_LOOKUP_CONCURRENCY = 4
 
 // Android device discovery: turns raw `adb`/`emulator` output into the
 // cross-backend EmulatorDevice list and resolves AVD names to running serials.
@@ -23,17 +26,19 @@ export async function resolveRunningAvdNames(
   running: AndroidAdbDevice[]
 ): Promise<Map<string, string>> {
   const names = new Map<string, string>()
-  await Promise.all(
-    running
-      .filter((device) => device.isEmulator)
-      .map(async (device) => {
-        const out = await runner(sdk.adb, ['-s', device.serial, 'emu', 'avd', 'name'])
-        const name = firstNonStatusLine(out.stdout)
-        if (name) {
-          names.set(device.serial, name)
-        }
-      })
+  const resolved = await mapWithConcurrency(
+    running.filter((device) => device.isEmulator),
+    ANDROID_AVD_NAME_LOOKUP_CONCURRENCY,
+    async (device) => {
+      const out = await runner(sdk.adb, ['-s', device.serial, 'emu', 'avd', 'name'])
+      return { serial: device.serial, name: firstNonStatusLine(out.stdout) }
+    }
   )
+  for (const { serial, name } of resolved) {
+    if (name) {
+      names.set(serial, name)
+    }
+  }
   return names
 }
 

@@ -1,8 +1,7 @@
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
+import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import {
   addPreviewMessage,
@@ -27,24 +26,29 @@ export async function parseGrokSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
-  if (!record) {
+  const accumulator = await withAiVaultWholeJsonFile(file.path, (content) => {
+    const record = parseJsonObject(content)
+    if (!record) {
+      return null
+    }
+    const info = asRecord(record.info)
+    const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
+    const next = createAccumulator({ agent: 'grok', file, sessionId })
+    next.cwd = extractString(info?.cwd)
+    next.title =
+      normalizeTitleText(extractString(record.generated_title) ?? '') ??
+      normalizeTitleText(extractString(record.session_summary) ?? '')
+    next.model = extractString(record.current_model_id)
+    next.branch = extractString(record.head_branch)
+    next.messageCount = numberValue(record.num_chat_messages) || numberValue(record.num_messages)
+    updateTimeline(next, extractString(record.created_at))
+    updateTimeline(next, extractString(record.updated_at))
+    updateTimeline(next, extractString(record.last_active_at))
+    return next
+  })
+  if (!accumulator) {
     return null
   }
-  const info = asRecord(record.info)
-  const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
-  const accumulator = createAccumulator({ agent: 'grok', file, sessionId })
-  accumulator.cwd = extractString(info?.cwd)
-  accumulator.title =
-    normalizeTitleText(extractString(record.generated_title) ?? '') ??
-    normalizeTitleText(extractString(record.session_summary) ?? '')
-  accumulator.model = extractString(record.current_model_id)
-  accumulator.branch = extractString(record.head_branch)
-  accumulator.messageCount =
-    numberValue(record.num_chat_messages) || numberValue(record.num_messages)
-  updateTimeline(accumulator, extractString(record.created_at))
-  updateTimeline(accumulator, extractString(record.updated_at))
-  updateTimeline(accumulator, extractString(record.last_active_at))
   await consumeGrokChatHistory(accumulator, dirname(file.path))
   return finalizeSession(accumulator, platform)
 }
@@ -54,10 +58,7 @@ async function consumeGrokChatHistory(
   sessionDir: string
 ): Promise<void> {
   try {
-    const lines = createInterface({
-      input: createReadStream(join(sessionDir, 'chat_history.jsonl'), { encoding: 'utf-8' }),
-      crlfDelay: Infinity
-    })
+    const lines = iterateAiVaultJsonlLines(join(sessionDir, 'chat_history.jsonl'))
 
     for await (const line of lines) {
       const record = parseJsonObject(line)

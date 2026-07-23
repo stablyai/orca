@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import {
   classifyMacSystemResolverHealth,
+  MAC_RESOLVER_OUTPUT_MAX_BYTES,
   readCurrentProcessMacSystemResolverHealth
 } from './macos-system-resolver-health'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
@@ -108,6 +109,44 @@ resolver #1
 
     await expect(healthPromise).resolves.toBe('unknown')
     expect(child.kill).toHaveBeenCalledTimes(1)
+  })
+
+  it('kills scutil and fails open before decoding oversized output', async () => {
+    mockPlatform('darwin')
+    const child = createMockScutilProcess()
+    vi.mocked(spawn).mockReturnValue(child)
+
+    const healthPromise = readCurrentProcessMacSystemResolverHealth()
+    child.stdout.emit('data', 'x'.repeat(MAC_RESOLVER_OUTPUT_MAX_BYTES + 1))
+
+    await expect(healthPromise).resolves.toBe('unknown')
+    expect(child.kill).toHaveBeenCalledTimes(1)
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('accepts the exact combined output cap across many tiny chunks', async () => {
+    mockPlatform('darwin')
+    const child = createMockScutilProcess()
+    vi.mocked(spawn).mockReturnValue(child)
+
+    const healthPromise = readCurrentProcessMacSystemResolverHealth()
+    const resolverOutput = Buffer.from(
+      'DNS configuration\nresolver #1\n  nameserver[0] : 1.1.1.1\n'
+    )
+    child.stdout.emit('data', resolverOutput)
+    const tinyChunk = Buffer.alloc(16, 0x20)
+    let remainingBytes = MAC_RESOLVER_OUTPUT_MAX_BYTES - resolverOutput.byteLength
+    while (remainingBytes > 0) {
+      const chunk =
+        remainingBytes >= tinyChunk.byteLength ? tinyChunk : tinyChunk.subarray(0, remainingBytes)
+      child.stderr.emit('data', chunk)
+      remainingBytes -= chunk.byteLength
+    }
+    child.emit('close', 0)
+
+    await expect(healthPromise).resolves.toBe('healthy')
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
   it('removes scutil listeners when the timeout settles before child close', async () => {

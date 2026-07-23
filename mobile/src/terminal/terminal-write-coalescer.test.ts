@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createTerminalWriteCoalescer,
   TERMINAL_WRITE_FLUSH_WINDOW_MS,
+  TERMINAL_WRITE_MAX_PENDING_CHUNKS,
   TERMINAL_WRITE_MAX_PENDING_UNITS
 } from './terminal-write-coalescer'
 
@@ -126,6 +127,20 @@ describe('terminal write coalescer', () => {
     expect(vi.getTimerCount()).toBe(0)
     vi.runOnlyPendingTimers()
     expect(sink.delivered).toHaveLength(2)
+  })
+
+  it('flushes tiny chunks before their object count can grow unbounded', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+
+    coalescer.write('leading')
+    for (let index = 0; index < TERMINAL_WRITE_MAX_PENDING_CHUNKS; index += 1) {
+      coalescer.write('x')
+    }
+
+    expect(sink.delivered).toEqual(['leading', 'x'.repeat(TERMINAL_WRITE_MAX_PENDING_CHUNKS)])
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('treats write("") as a no-op: no delivery, no buffer append, no timer', () => {

@@ -2,6 +2,11 @@
 in one module makes nbformat preservation easier to audit while the notebook
 editor model is still small. */
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  assertIpynbJsonWithinMemoryLimits,
+  assertIpynbShapeWithinMemoryLimits,
+  IPYNB_MEMORY_LIMITS
+} from './ipynb-json-admission'
 
 export type IpynbCellKind = 'code' | 'markdown' | 'raw'
 
@@ -65,12 +70,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function concatIpynbMultilineString(value: unknown): string {
   if (Array.isArray(value)) {
-    let result = ''
+    const parts: string[] = []
     for (let i = 0; i < value.length; i += 1) {
       const item = String(value[i] ?? '')
-      result += i < value.length - 1 && !item.endsWith('\n') ? `${item}\n` : item
+      parts.push(i < value.length - 1 && !item.endsWith('\n') ? `${item}\n` : item)
     }
-    return result.replace(/\r\n/g, '\n')
+    return parts.join('').replace(/\r\n/g, '\n')
   }
   return String(value ?? '').replace(/\r\n/g, '\n')
 }
@@ -183,16 +188,10 @@ function parseCell(rawCell: unknown, fallbackLanguage: string): IpynbCell | null
 }
 
 export function parseIpynb(content: string): ParsedIpynb {
-  const parsed = JSON.parse(content) as unknown
-  if (!isRecord(parsed)) {
-    throw new Error('Notebook root must be a JSON object')
-  }
-  if (!Array.isArray(parsed.cells)) {
-    throw new Error('Notebook is missing a cells array')
-  }
+  const parsed = parseNotebookRoot(content)
 
   const language = getPreferredLanguage(parsed)
-  const cells = parsed.cells
+  const cells = (parsed.cells as unknown[])
     .map((cell) => parseCell(cell, language))
     .filter((cell): cell is IpynbCell => cell !== null)
 
@@ -208,6 +207,9 @@ export function parseIpynb(content: string): ParsedIpynb {
 }
 
 function splitIpynbSource(source: string): string[] {
+  if (source.length > IPYNB_MEMORY_LIMITS.sourceCodeUnits) {
+    throw new Error('Notebook cell source exceeds the safe size limit')
+  }
   if (!source) {
     return []
   }
@@ -218,15 +220,22 @@ function splitIpynbSource(source: string): string[] {
       continue
     }
     lines.push(source.slice(lineStart, index + 1))
+    if (lines.length > IPYNB_MEMORY_LIMITS.multilineParts) {
+      throw new Error('Notebook cell source exceeds the safe line limit')
+    }
     lineStart = index + 1
   }
   if (lineStart < source.length) {
     lines.push(source.slice(lineStart))
+    if (lines.length > IPYNB_MEMORY_LIMITS.multilineParts) {
+      throw new Error('Notebook cell source exceeds the safe line limit')
+    }
   }
   return lines
 }
 
 function parseNotebookRoot(content: string): Record<string, unknown> {
+  assertIpynbJsonWithinMemoryLimits(content)
   const parsed = JSON.parse(content) as unknown
   if (!isRecord(parsed)) {
     throw new Error('Notebook root must be a JSON object')
@@ -234,6 +243,7 @@ function parseNotebookRoot(content: string): Record<string, unknown> {
   if (!Array.isArray(parsed.cells)) {
     throw new Error('Notebook is missing a cells array')
   }
+  assertIpynbShapeWithinMemoryLimits(parsed.cells)
   return parsed
 }
 
@@ -246,7 +256,9 @@ function ensureCell(root: Record<string, unknown>, index: number): Record<string
 }
 
 function serializeNotebook(root: Record<string, unknown>): string {
-  return `${JSON.stringify(root, null, 1)}\n`
+  const serialized = `${JSON.stringify(root, null, 1)}\n`
+  assertIpynbJsonWithinMemoryLimits(serialized)
+  return serialized
 }
 
 export function updateIpynbCellSource(content: string, index: number, source: string): string {
@@ -300,6 +312,9 @@ export function insertIpynbCell(
 ): string {
   const root = parseNotebookRoot(content)
   const cells = root.cells as unknown[]
+  if (cells.length >= IPYNB_MEMORY_LIMITS.cells) {
+    throw new Error('Notebook exceeds the safe cell limit')
+  }
   const nextCell: Record<string, unknown> = {
     cell_type: kind,
     id: createBrowserUuid(),

@@ -29,6 +29,7 @@ import {
   type AgentHookRelayEnvelope,
   type AgentHookSource
 } from '../shared/agent-hook-relay'
+import { upsertBoundedAgentHookStatus } from '../shared/agent-hook-status-cache'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -40,9 +41,8 @@ const ASSISTANT_MESSAGE_RETRY_MS = 50
 
 // Why: cap env/version at 64 chars so a misbehaving agent CLI can't grow the meta cache unboundedly; canonical values are short.
 const MAX_HOOK_META_LEN = 64
-
-// Why: WSL relay has no per-pane teardown (PTYs live on the Windows host), so the replay cache would grow forever without a recency cap.
-const MAX_CACHED_PANES = 256
+// Why: preserve the relay's existing replay-memory ceiling while main uses the renderer-aligned 500-pane cap.
+export const MAX_RELAY_AGENT_HOOK_STATUS_CACHE_PANES = 256
 
 function defaultEndpointDir(): string {
   return join(homedir(), RELAY_HOOKS_DIR_NAME, RELAY_HOOKS_SUBDIR)
@@ -326,17 +326,14 @@ export class RelayAgentHookServer {
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.clearAssistantMessageRetry(event.paneKey)
     }
-    // Why: delete-then-set makes Map insertion order = recency, so the cap below evicts the longest-idle pane.
-    this.state.lastStatusByPaneKey.delete(event.paneKey)
-    this.state.lastStatusByPaneKey.set(event.paneKey, event)
+    const evicted = upsertBoundedAgentHookStatus(this.state, event, {
+      maxPanes: MAX_RELAY_AGENT_HOOK_STATUS_CACHE_PANES
+    })
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
-    while (this.state.lastStatusByPaneKey.size > MAX_CACHED_PANES) {
-      const oldest = this.state.lastStatusByPaneKey.keys().next().value
-      if (oldest === undefined) {
-        break
-      }
-      this.clearPaneState(oldest)
+    for (const { paneKey } of evicted) {
+      this.clearAssistantMessageRetry(paneKey)
+      this.lastEnvelopeMetaByPaneKey.delete(paneKey)
     }
     this.forwardEvent(event, source, env, version)
   }

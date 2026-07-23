@@ -4,10 +4,17 @@
 // ChildProcess instead of a ClientChannel.
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
-import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/relay-protocol'
+import {
+  HEADER_LENGTH,
+  MAX_BUFFERED_FRAME_CHUNKS,
+  MAX_MESSAGE_SIZE,
+  RELAY_SENTINEL,
+  RELAY_SENTINEL_TIMEOUT_MS
+} from '../ssh/relay-protocol'
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 
 export const MAX_STARTUP_BUFFER_BYTES = 64 * 1024
+const MAX_PENDING_RELAY_BYTES = (MAX_MESSAGE_SIZE + HEADER_LENGTH) * 2
 
 // Why: without WSL_UTF8, wsl.exe's own messages arrive UTF-16LE; NUL bytes
 // in breadcrumbs and the catastrophic-failure matcher must not depend on the
@@ -45,6 +52,7 @@ export function waitForWslRelaySentinel(
     // decoder never sees chunks out of order. A setImmediate handoff would
     // NOT preserve that: it is a macrotask the next 'data' event can beat.
     const pendingChunks: Buffer[] = []
+    let pendingChunkBytes = 0
     let closedNotified = false
 
     const fail = (failure: WslRelayStartupFailure): void => {
@@ -71,8 +79,22 @@ export function waitForWslRelaySentinel(
     }
 
     const dispatch = (chunk: Buffer): void => {
+      if (closedNotified) {
+        return
+      }
       if (dataCallbacks.length === 0) {
+        if (
+          chunk.length > MAX_PENDING_RELAY_BYTES - pendingChunkBytes ||
+          pendingChunks.length >= MAX_BUFFERED_FRAME_CHUNKS
+        ) {
+          pendingChunks.length = 0
+          pendingChunkBytes = 0
+          notifyClosed()
+          child.kill()
+          return
+        }
         pendingChunks.push(chunk)
+        pendingChunkBytes += chunk.length
         return
       }
       for (const cb of dataCallbacks) {
@@ -104,23 +126,32 @@ export function waitForWslRelaySentinel(
         dispatch(chunk)
         return
       }
-      stdoutBuffer = Buffer.concat([stdoutBuffer, chunk])
-      const idx = stdoutBuffer.indexOf(sentinel)
+      const searchableLength = Math.max(
+        0,
+        MAX_STARTUP_BUFFER_BYTES - stdoutBuffer.length + sentinel.length
+      )
+      const searchableChunk = chunk.subarray(0, searchableLength)
+      const startupOutput =
+        stdoutBuffer.length === 0 ? searchableChunk : Buffer.concat([stdoutBuffer, searchableChunk])
+      const idx = startupOutput.indexOf(sentinel)
       if (idx === -1) {
         // Why: pre-sentinel stdout is untrusted startup noise; cap it so a
         // broken guest cannot grow memory until the timeout fires.
-        if (stdoutBuffer.length > MAX_STARTUP_BUFFER_BYTES) {
+        if (startupOutput.length > MAX_STARTUP_BUFFER_BYTES) {
           child.kill()
           fail({ kind: 'exit', code: null, stderr: 'startup output exceeded 64 KiB' })
+        } else {
+          stdoutBuffer = startupOutput
         }
         return
       }
       sentinelSeen = true
       settled = true
       clearTimeout(timeout)
-      const trailing = stdoutBuffer.subarray(idx + sentinel.length)
+      const trailingOffset = idx + sentinel.length - stdoutBuffer.length
+      const trailing = chunk.subarray(Math.max(0, trailingOffset))
       if (trailing.length > 0) {
-        pendingChunks.push(trailing)
+        dispatch(trailing)
       }
       const transport: MultiplexerTransport = {
         write: (data) => {
@@ -135,6 +166,7 @@ export function waitForWslRelaySentinel(
           if (dataCallbacks.length === 1 && pendingChunks.length > 0) {
             queueMicrotask(() => {
               for (const pending of pendingChunks.splice(0)) {
+                pendingChunkBytes -= pending.length
                 for (const dataCb of dataCallbacks) {
                   dataCb(pending)
                 }
@@ -142,7 +174,13 @@ export function waitForWslRelaySentinel(
             })
           }
         },
-        onClose: (cb) => closeCallbacks.push(cb),
+        onClose: (cb) => {
+          if (closedNotified) {
+            queueMicrotask(cb)
+          } else {
+            closeCallbacks.push(cb)
+          }
+        },
         close: () => child.kill()
       }
       resolve(transport)

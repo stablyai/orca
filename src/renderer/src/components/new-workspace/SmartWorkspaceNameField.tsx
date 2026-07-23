@@ -83,6 +83,7 @@ import {
 } from '../../../../shared/task-source-context'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getGitHubRuntimeRepoId,
@@ -127,6 +128,7 @@ export type SmartWorkspaceNameSelection = {
 
 const SEARCH_DEBOUNCE_MS = 200
 const RESULT_LIMIT = 12
+export const PROJECT_GROUP_LOOKUP_CONCURRENCY = 4
 
 export function canUseGitLabSmartSource({
   localGitlabAvailable,
@@ -670,8 +672,10 @@ export default function SmartWorkspaceNameField({
               type: directLink.type
             }
           : { kind: 'hash-number' as const, number: directNumber }
-      const request = Promise.all(
-        repoBackedSearchTargets.map((target) =>
+      const request = mapWithConcurrency(
+        repoBackedSearchTargets,
+        PROJECT_GROUP_LOOKUP_CONCURRENCY,
+        (target) =>
           lookupSmartGitHubSubmitItem({
             repoPath: target.repo.path,
             repoId: target.repo.id,
@@ -680,7 +684,6 @@ export default function SmartWorkspaceNameField({
             workItem: lookupGitHubWorkItemForSource,
             workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
           }).catch(() => null)
-        )
       ).then((items) =>
         items
           .filter((item): item is GitHubWorkItem => item !== null)
@@ -924,19 +927,17 @@ export default function SmartWorkspaceNameField({
     }
     let stale = false
     setGitlabLoading(true)
-    void Promise.all(
-      repoBackedSearchTargets.map((target) =>
-        lookupGitLabWorkItemByPathForSource({
-          repoPath: target.repo.path,
-          repoId: target.repo.id,
-          sourceContext: target.gitlabSourceContext,
-          // Why: self-hosted GitLab URLs must resolve against their pasted hostname, not gitlab.com.
-          host: parsedGlLink.slug.host,
-          path: parsedGlLink.slug.path,
-          iid: parsedGlLink.number,
-          type: parsedGlLink.type
-        }).catch(() => null)
-      )
+    void mapWithConcurrency(repoBackedSearchTargets, PROJECT_GROUP_LOOKUP_CONCURRENCY, (target) =>
+      lookupGitLabWorkItemByPathForSource({
+        repoPath: target.repo.path,
+        repoId: target.repo.id,
+        sourceContext: target.gitlabSourceContext,
+        // Why: self-hosted GitLab URLs must resolve against their pasted hostname, not gitlab.com.
+        host: parsedGlLink.slug.host,
+        path: parsedGlLink.slug.path,
+        iid: parsedGlLink.number,
+        type: parsedGlLink.type
+      }).catch(() => null)
     )
       .then((items) => {
         if (stale) {
@@ -981,18 +982,16 @@ export default function SmartWorkspaceNameField({
     setGitlabLoading(true)
     // Why: thread the typed query so the GitLab API filters MRs by name/number (shouldQueryGitlab already gates oversized queries).
     const trimmedQuery = debouncedQuery.trim() || undefined
-    void Promise.all(
-      repoBackedSearchTargets.map((target) =>
-        listGitLabMRsForSource({
-          repoPath: target.repo.path,
-          repoId: target.repo.id,
-          sourceContext: target.gitlabSourceContext,
-          state: mrStateFilter,
-          page: 1,
-          perPage: RESULT_LIMIT,
-          query: trimmedQuery
-        }).catch(() => ({ items: [], hasMore: false }))
-      )
+    void mapWithConcurrency(repoBackedSearchTargets, PROJECT_GROUP_LOOKUP_CONCURRENCY, (target) =>
+      listGitLabMRsForSource({
+        repoPath: target.repo.path,
+        repoId: target.repo.id,
+        sourceContext: target.gitlabSourceContext,
+        state: mrStateFilter,
+        page: 1,
+        perPage: RESULT_LIMIT,
+        query: trimmedQuery
+      }).catch(() => ({ items: [], hasMore: false }))
     )
       .then((results) => {
         if (stale) {

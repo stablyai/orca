@@ -1,11 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
+import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
+import { readAgentStateJsonFileSync } from './agent-state-file-reader'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 
 export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
+export const MAX_AGENT_TRUST_GIT_POINTER_BYTES = 64 * 1024
 
 /**
  * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
@@ -73,8 +76,7 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
   let config: Record<string, unknown> = {}
   try {
     if (existsSync(configPath)) {
-      const raw = readFileSync(configPath, 'utf-8')
-      const parsed = JSON.parse(raw)
+      const parsed = readAgentStateJsonFileSync(configPath)
       if (parsed && typeof parsed === 'object') {
         config = parsed as Record<string, unknown>
       }
@@ -120,7 +122,7 @@ export function markCodexProjectTrusted(workspacePath: string): void {
 function resolveCodexProjectTrustRoot(workspacePath: string): string {
   const absPath = canonicalize(workspacePath)
   try {
-    const gitDirReference = readFileSync(join(absPath, '.git'), 'utf-8').trim()
+    const gitDirReference = readGitPointerFile(join(absPath, '.git'))
     if (!gitDirReference.startsWith('gitdir:')) {
       return absPath
     }
@@ -134,7 +136,7 @@ function resolveCodexProjectTrustRoot(workspacePath: string): string {
       return absPath
     }
     // Why: workspace-controlled .git metadata must not broaden trust without Git's reciprocal link.
-    const gitDirBacklink = readFileSync(join(gitDir, 'gitdir'), 'utf-8').trim()
+    const gitDirBacklink = readGitPointerFile(join(gitDir, 'gitdir'))
     if (!gitDirBacklink) {
       return absPath
     }
@@ -151,6 +153,12 @@ function resolveCodexProjectTrustRoot(workspacePath: string): string {
   } catch {
     return absPath
   }
+}
+
+function readGitPointerFile(filePath: string): string {
+  return readNodeFileSyncWithinLimit(filePath, MAX_AGENT_TRUST_GIT_POINTER_BYTES)
+    .buffer.toString('utf8')
+    .trim()
 }
 
 function canonicalize(p: string): string {

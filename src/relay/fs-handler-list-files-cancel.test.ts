@@ -43,7 +43,7 @@ describe('relay list-files cancellation', () => {
     vi.useRealTimers()
   })
 
-  it('listFilesWithRg kills both rg passes and rejects when aborted mid-flight', async () => {
+  it('listFilesWithRg kills the active rg pass and rejects when aborted mid-flight', async () => {
     const primaryProc = createMockProcess()
     const ignoredProc = createMockProcess()
     spawnMock.mockImplementation((_cmd: string, args: string[]) =>
@@ -59,7 +59,8 @@ describe('relay list-files cancellation', () => {
 
     await expect(promise).rejects.toSatisfy(isFileListingCancellation)
     expect(primaryProc.kill).toHaveBeenCalled()
-    expect(ignoredProc.kill).toHaveBeenCalled()
+    expect(ignoredProc.kill).not.toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
 
     // Late close events after cancellation must not fire anything.
     primaryProc.emit('close', null, 'SIGTERM')
@@ -89,14 +90,16 @@ describe('relay list-files cancellation', () => {
     setTimeout(() => {
       ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
       primaryProc.emit('close', 0, null)
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/out.js\n')
-      ignoredProc.emit('close', 0, null)
+      queueMicrotask(() => {
+        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/out.js\n')
+        ignoredProc.emit('close', 0, null)
+      })
     }, 5)
 
     await expect(promise).resolves.toEqual(['src/index.ts', 'dist/out.js'])
   })
 
-  it('listFilesWithGit kills both git passes and rejects when aborted mid-flight', async () => {
+  it('listFilesWithGit kills the active git pass and rejects when aborted mid-flight', async () => {
     const procs: ChildProcess[] = []
     spawnMock.mockImplementation(() => {
       const proc = createMockProcess()
@@ -107,12 +110,11 @@ describe('relay list-files cancellation', () => {
     const controller = new AbortController()
     const promise = listFilesWithGit('/remote/root', [], { signal: controller.signal })
 
-    expect(procs).toHaveLength(2)
+    expect(procs).toHaveLength(1)
     controller.abort()
 
     await expect(promise).rejects.toSatisfy(isFileListingCancellation)
     expect(procs[0].kill).toHaveBeenCalled()
-    expect(procs[1].kill).toHaveBeenCalled()
   })
 
   it('listFilesWithGit rejects without spawning when the signal is already aborted', async () => {

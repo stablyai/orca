@@ -1,7 +1,7 @@
-// xterm.js WebView document + default Tokyonight theme; extracted from TerminalWebView.tsx for the max-lines budget.
-import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+// xterm.js WebView document; extracted from TerminalWebView.tsx for the max-lines budget.
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
+import { DEFAULT_TERMINAL_WEBVIEW_THEME } from './terminal-webview-default-theme'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
@@ -12,30 +12,9 @@ import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
 
-const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
-  background: colors.terminalBg,
-  foreground: '#c0caf5',
-  cursor: '#c0caf5',
-  cursorAccent: colors.terminalBg,
-  selectionBackground: '#33467c',
-  selectionForeground: '#c0caf5',
-  black: '#15161e',
-  red: '#f7768e',
-  green: '#9ece6a',
-  yellow: '#e0af68',
-  blue: '#7aa2f7',
-  magenta: '#bb9af7',
-  cyan: '#7dcfff',
-  white: '#a9b1d6',
-  brightBlack: '#414868',
-  brightRed: '#f7768e',
-  brightGreen: '#9ece6a',
-  brightYellow: '#e0af68',
-  brightBlue: '#7aa2f7',
-  brightMagenta: '#bb9af7',
-  brightCyan: '#7dcfff',
-  brightWhite: '#c0caf5'
-}
+export const TERMINAL_WEBVIEW_WRITE_QUEUE_MAX_UNITS = 1_000_000
+export const TERMINAL_WEBVIEW_WRITE_QUEUE_MAX_ENTRIES = 4_096
+export const TERMINAL_WEBVIEW_AFTER_DRAIN_MAX_CALLBACKS = 256
 
 // Why: TUI escape codes assume the desktop's cols/rows, so init xterm at those dims and fit the phone via a measured CSS scale() instead of resizing.
 export const XTERM_HTML = `<!DOCTYPE html>
@@ -213,10 +192,11 @@ window.onerror = function(msg) {
   var scrollIndicator = document.getElementById('scroll-indicator');
   var scrollThumb = document.getElementById('scroll-thumb');
   var scrollIndicatorHideTimer = null;
-  var writeQueue = [];
+  var writeQueue = [], writeQueueUnits = 0;
   var writeQueueHead = 0;
-  var writesDraining = false;
-  var afterDrainCallbacks = [];
+  var writesDraining = false, writeBacklogFailed = false, afterDrainCallbacks = [];
+  var WRITE_QUEUE_MAX_UNITS = ${TERMINAL_WEBVIEW_WRITE_QUEUE_MAX_UNITS}, WRITE_QUEUE_MAX_ENTRIES = ${TERMINAL_WEBVIEW_WRITE_QUEUE_MAX_ENTRIES};
+  var AFTER_DRAIN_MAX_CALLBACKS = ${TERMINAL_WEBVIEW_AFTER_DRAIN_MAX_CALLBACKS};
   var termObserverDisposables = [];
   var ready = false;
   // Why: init() flips ready false on every re-init (live width reflow included)
@@ -287,7 +267,7 @@ window.onerror = function(msg) {
   var normalScrollFrameId = null;
   var initRows = 24;
   var terminalGeneration = 0;
-  var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
+  var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_WEBVIEW_THEME)};
   var terminalThemeInput = null;
   var terminalTheme = defaultTheme;
   var terminalMinimumContrastRatio = 3;
@@ -557,9 +537,22 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     }
   }
 
-  function resetWriteQueue() {
-    writeQueue = [];
-    writeQueueHead = 0;
+  function resetWriteQueue() { writeQueue = []; writeQueueHead = 0; writeQueueUnits = 0; }
+
+  function failWriteBacklog() {
+    if (writeBacklogFailed) return;
+    writeBacklogFailed = true; terminalGeneration++; ready = false; writesDraining = false;
+    resetWriteQueue(); afterDrainCallbacks = [];
+    reportEngineError('terminal write backlog exceeded safe limit', null, true);
+  }
+
+  function reserveWriteQueueEntry(units) {
+    if (writeBacklogFailed) return false;
+    var pendingEntries = writeQueue.length - writeQueueHead;
+    if (pendingEntries >= WRITE_QUEUE_MAX_ENTRIES || writeQueueUnits + units > WRITE_QUEUE_MAX_UNITS) {
+      failWriteBacklog(); return false;
+    }
+    writeQueueUnits += units; return true;
   }
 
   function isStatusDotPresentationSelector(value) {
@@ -590,13 +583,12 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     return normalized;
   }
 
-  function enqueueWrite(data) {
-    writeQueue.push(normalizeStatusDotPresentation(data));
+  function enqueueWrite(data) { var normalized = normalizeStatusDotPresentation(data);
+    if (!reserveWriteQueueEntry(normalized.length)) return false;
+    writeQueue.push(normalized); return true;
   }
 
-  function enqueueWriteBoundary(callback) {
-    writeQueue.push(callback);
-  }
+  function enqueueWriteBoundary(callback) { if (!reserveWriteQueueEntry(0)) return false; writeQueue.push(callback); return true; }
 
   function nextQueuedWrite() {
     if (writeQueueHead >= writeQueue.length) {
@@ -605,6 +597,7 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     }
     var next = writeQueue[writeQueueHead];
     writeQueueHead++;
+    if (typeof next === 'string') writeQueueUnits = Math.max(0, writeQueueUnits - next.length);
     // Why: high-throughput terminals can enqueue faster than xterm parses;
     // compact consumed slots so drain work stays O(1) without retaining old chunks.
     if (writeQueueHead > 128 && writeQueueHead * 2 > writeQueue.length) {
@@ -660,8 +653,8 @@ ${TERMINAL_WEBVIEW_THEME_JS}
   }
 
   function afterWritesDrained(callback) {
-    afterDrainCallbacks.push(callback);
-    pumpWrites(terminalGeneration);
+    if (afterDrainCallbacks.length >= AFTER_DRAIN_MAX_CALLBACKS) { failWriteBacklog(); return; }
+    afterDrainCallbacks.push(callback); pumpWrites(terminalGeneration);
   }
 
 ${TERMINAL_WEBGL_RECOVERY_JS}
@@ -682,6 +675,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     webglAddon = null;
     ready = false;
     resetWriteQueue();
+    writeBacklogFailed = false;
     statusDotPendingSelector = false;
     writesDraining = false;
     afterDrainCallbacks = [];
@@ -768,7 +762,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
 
   function write(data) {
     updateMouseModeFromData(data);
-    enqueueWrite(data);
+    if (!enqueueWrite(data)) return;
     pumpWrites(terminalGeneration);
     // Why: first live data chunk after init may widen the buffer past
     // what the post-replay applyFitScale measured. Re-fit once after this
@@ -932,6 +926,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     } else if (msg.type === 'clear') {
       terminalGeneration++;
       resetWriteQueue(); resumeTerminalDataReplyAuthority(); // Why: clear drops the replay boundary.
+      writeBacklogFailed = false;
       statusDotPendingSelector = false;
       afterDrainCallbacks = [];
       writesDraining = false;

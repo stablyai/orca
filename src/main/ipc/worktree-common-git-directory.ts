@@ -1,5 +1,5 @@
 import type { Stats } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import type { Repo } from '../../shared/types'
 import {
   getRuntimePathBasename,
@@ -7,6 +7,9 @@ import {
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
 import type { FileStat } from '../providers/types'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+
+export const MAX_GIT_DIRECTORY_POINTER_BYTES = 64 * 1024
 
 type GitDirectoryStat = Stats | FileStat
 
@@ -41,7 +44,12 @@ export async function resolveWorktreeCommonGitDirectory(
 ): Promise<string | null> {
   const dotGitPath = resolveRuntimePath(repo.path, '.git')
   const statPath = access.stat ?? stat
-  const readText = access.readFile ?? ((path: string) => readFile(path, 'utf8'))
+  const readText =
+    access.readFile ??
+    (async (path: string) =>
+      (await readNodeFileWithinLimit(path, MAX_GIT_DIRECTORY_POINTER_BYTES)).buffer.toString(
+        'utf8'
+      ))
   try {
     const dotGitStat = await statPath(dotGitPath)
     if (isDirectoryStat(dotGitStat)) {
@@ -51,6 +59,9 @@ export async function resolveWorktreeCommonGitDirectory(
       return null
     }
     const content = await readText(dotGitPath)
+    if (Buffer.byteLength(content, 'utf8') > MAX_GIT_DIRECTORY_POINTER_BYTES) {
+      return null
+    }
     const gitDir = content.match(/^gitdir:\s*(.+)\s*$/m)?.[1]?.trim()
     if (!gitDir) {
       return null

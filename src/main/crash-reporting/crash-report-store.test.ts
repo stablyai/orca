@@ -12,8 +12,13 @@ vi.mock('../win32-utils', async (importOriginal) => {
   return { ...actual, grantDirAclAsync: grantDirAclAsyncMock }
 })
 
-import { CrashReportStore } from './crash-report-store'
+import {
+  CrashReportStore,
+  MAX_CRASH_REPORT_FILE_BYTES,
+  MAX_CRASH_REPORT_JSON_STRUCTURAL_TOKENS
+} from './crash-report-store'
 import type { CrashReportCreateInput } from '../../shared/crash-reporting'
+import * as boundedFileReader from '../../shared/node-bounded-file-reader'
 
 const tempDirs: string[] = []
 
@@ -90,6 +95,46 @@ describe('CrashReportStore', () => {
     await fs.writeFile(filePath, '{ nope', 'utf8')
 
     await expect(store.listRecent()).resolves.toEqual([])
+  })
+
+  it('rejects an oversized sparse report file and recovers with the next report', async () => {
+    const { store, filePath } = await createStore()
+    await fs.writeFile(filePath, 'x')
+    await fs.truncate(filePath, MAX_CRASH_REPORT_FILE_BYTES + 1)
+
+    await expect(store.listRecent()).resolves.toEqual([])
+    await expect(store.record(input('after-oversize'))).resolves.toMatchObject({
+      reason: 'after-oversize'
+    })
+    await expect(store.listRecent()).resolves.toHaveLength(1)
+  })
+
+  it('rejects structurally amplified report JSON before parsing', async () => {
+    const { store, filePath } = await createStore()
+    await fs.writeFile(
+      filePath,
+      `{"reports":[${'0,'.repeat(MAX_CRASH_REPORT_JSON_STRUCTURAL_TOKENS)}0]}`,
+      'utf8'
+    )
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parseSpy = vi.spyOn(JSON, 'parse')
+
+    await expect(store.listRecent()).resolves.toEqual([])
+    expect(parseSpy).not.toHaveBeenCalled()
+  })
+
+  it('preserves prior reports when the next report exceeds the write ceiling', async () => {
+    const { store, filePath } = await createStore()
+    await store.record(input('preserved'))
+    const before = await fs.readFile(filePath, 'utf8')
+    const writeSpy = vi.spyOn(fs, 'writeFile')
+
+    await expect(store.record(input('x'.repeat(MAX_CRASH_REPORT_FILE_BYTES)))).rejects.toThrow(
+      'JSON output exceeds'
+    )
+
+    expect(writeSpy).not.toHaveBeenCalled()
+    await expect(fs.readFile(filePath, 'utf8')).resolves.toBe(before)
   })
 
   it('allows a pending report to reach one terminal status only', async () => {
@@ -179,11 +224,13 @@ describe('CrashReportStore', () => {
       const reloaded = new CrashReportStore(filePath)
       vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
       const readError = Object.assign(new Error('temporary read failure'), { code })
-      const readFileSpy = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(readError)
+      const readSpy = vi
+        .spyOn(boundedFileReader, 'readNodeFileWithinLimit')
+        .mockRejectedValueOnce(readError)
 
       await expect(reloaded.getLatestPending()).resolves.toMatchObject({ id: report.id })
 
-      expect(readFileSpy).toHaveBeenCalledTimes(2)
+      expect(readSpy).toHaveBeenCalledTimes(2)
       if (code === 'EBUSY') {
         expect(grantDirAclAsyncMock).not.toHaveBeenCalled()
       } else {

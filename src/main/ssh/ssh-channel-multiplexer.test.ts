@@ -471,6 +471,25 @@ describe('SshChannelMultiplexer', () => {
       expect(internals.disposeHandlers).toHaveLength(0)
     })
 
+    it('invokes every dispose handler when handlers unsubscribe themselves', () => {
+      const called: string[] = []
+      let unsubscribeFirst = (): void => {}
+      let unsubscribeSecond = (): void => {}
+      unsubscribeFirst = mux.onDispose(() => {
+        called.push('first')
+        unsubscribeFirst()
+      })
+      unsubscribeSecond = mux.onDispose(() => {
+        called.push('second')
+        unsubscribeSecond()
+      })
+
+      mux.dispose('connection_lost')
+
+      expect(called).toEqual(['first', 'second'])
+      expect(getMuxInternals(mux).disposeHandlers).toHaveLength(0)
+    })
+
     it('does not retain handlers registered after dispose', () => {
       mux.dispose()
 

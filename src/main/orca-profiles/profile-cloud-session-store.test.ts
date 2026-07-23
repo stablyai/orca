@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  truncateSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
@@ -167,6 +175,104 @@ describe('Orca cloud session store', () => {
       status: 'decrypt-failed',
       persistence: 'none',
       error: 'Unsafe session format.'
+    })
+  })
+
+  it('rejects an oversized sparse encrypted-session wrapper before decrypting', async () => {
+    writePlaintextSessionFile('profile-1', makeSession())
+    const store = await loadSessionStore()
+    truncateSync(
+      store.getOrcaCloudSessionPath('profile-1', userDataPath),
+      store.MAX_ORCA_CLOUD_SESSION_FILE_BYTES + 1
+    )
+
+    expect(store.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
+      status: 'decrypt-failed',
+      persistence: 'none',
+      error: 'Could not decrypt saved Orca account session.'
+    })
+    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+  })
+
+  it('rejects an oversized session without replacing the prior durable or cached session', async () => {
+    const store = await loadSessionStore()
+    const session = makeSession()
+    store.saveOrcaCloudSession('profile-1', userDataPath, session)
+    const path = store.getOrcaCloudSessionPath('profile-1', userDataPath)
+    const durableBefore = readFileSync(path, 'utf-8')
+
+    expect(() =>
+      store.saveOrcaCloudSession('profile-1', userDataPath, {
+        ...session,
+        accessToken: 'x'.repeat(store.MAX_ORCA_CLOUD_SESSION_PAYLOAD_BYTES)
+      })
+    ).toThrow(`JSON output exceeds ${store.MAX_ORCA_CLOUD_SESSION_PAYLOAD_BYTES} bytes`)
+    expect(readFileSync(path, 'utf-8')).toBe(durableBefore)
+    expect(store.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
+      status: 'found',
+      session,
+      persistence: 'encrypted'
+    })
+  })
+
+  it('removes stale durable credentials when encryption expansion exceeds the file limit', async () => {
+    const store = await loadSessionStore()
+    const prior = makeSession()
+    store.saveOrcaCloudSession('profile-1', userDataPath, prior)
+    const session = {
+      ...prior,
+      accessToken: 'x'.repeat(Math.floor(store.MAX_ORCA_CLOUD_SESSION_FILE_BYTES * 0.8))
+    }
+
+    expect(store.saveOrcaCloudSession('profile-1', userDataPath, session)).toBe('memory-only')
+    expect(existsSync(store.getOrcaCloudSessionPath('profile-1', userDataPath))).toBe(false)
+    expect(store.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
+      status: 'found',
+      session,
+      persistence: 'memory-only'
+    })
+  })
+
+  it('evicts the least-recently-used memory-only session at the entry limit', async () => {
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    const store = await loadSessionStore()
+    const session = makeSession()
+
+    for (let index = 0; index <= store.MAX_ORCA_CLOUD_MEMORY_SESSIONS; index += 1) {
+      store.saveOrcaCloudSession(`profile-${index}`, userDataPath, session)
+    }
+
+    expect(store.readOrcaCloudSession('profile-0', userDataPath)).toEqual({
+      status: 'missing',
+      persistence: 'none'
+    })
+    expect(
+      store.readOrcaCloudSession(`profile-${store.MAX_ORCA_CLOUD_MEMORY_SESSIONS}`, userDataPath)
+    ).toMatchObject({ status: 'found', session })
+  })
+
+  it('evicts memory-only sessions before exceeding the aggregate byte limit', async () => {
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    const store = await loadSessionStore()
+    const session = {
+      ...makeSession(),
+      accessToken: 'x'.repeat(store.MAX_ORCA_CLOUD_SESSION_PAYLOAD_BYTES - 1024)
+    }
+    const writesNeeded =
+      Math.floor(
+        store.MAX_ORCA_CLOUD_MEMORY_SESSION_BYTES / store.MAX_ORCA_CLOUD_SESSION_PAYLOAD_BYTES
+      ) + 2
+
+    for (let index = 0; index < writesNeeded; index += 1) {
+      store.saveOrcaCloudSession(`profile-${index}`, userDataPath, session)
+    }
+
+    expect(store.readOrcaCloudSession('profile-0', userDataPath)).toMatchObject({
+      status: 'missing'
+    })
+    expect(store.readOrcaCloudSession(`profile-${writesNeeded - 1}`, userDataPath)).toMatchObject({
+      status: 'found',
+      session
     })
   })
 })

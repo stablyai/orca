@@ -114,6 +114,7 @@ import {
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
+const TEST_MAX_HOOK_GITIGNORE_BYTES = 4 * 1024 * 1024
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
 const findExistingWorktreeSymlinkPathsMock = vi.hoisted(() => vi.fn())
 const resolveLocalGitUsernameMock = vi.hoisted(() => vi.fn(async () => ''))
@@ -439,6 +440,8 @@ vi.mock('../hooks', () => ({
     ORCA_ROOT_PATH: '/remote/repo',
     ORCA_WORKTREE_PATH: worktreePath
   }),
+  MAX_HOOK_GITIGNORE_BYTES: 4 * 1024 * 1024,
+  MAX_ISSUE_COMMAND_BYTES: 1024 * 1024,
   loadHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
   shouldRunSetupForCreate: vi
@@ -3278,7 +3281,10 @@ describe('OrcaRuntimeService', () => {
 
     expect(listWorktrees).not.toHaveBeenCalled()
     expect(gitProvider.listWorktrees).toHaveBeenCalledWith('//Server/Share/Repo')
-    expect(fsProvider.readDir).toHaveBeenCalledWith('\\\\Server\\Share\\Repo\\src')
+    expect(fsProvider.readDir).toHaveBeenCalledWith('\\\\Server\\Share\\Repo\\src', {
+      maxEntries: 10_000,
+      maxRetainedBytes: 4 * 1024 * 1024
+    })
     expect(gitProvider.getStatus).toHaveBeenCalledWith('//Server/Share/Repo')
   })
 
@@ -3345,7 +3351,10 @@ describe('OrcaRuntimeService', () => {
     }
 
     expect(fsProvider.stat).toHaveBeenCalledWith(folderPath)
-    expect(fsProvider.readDir).toHaveBeenCalledWith('/srv/platform/src')
+    expect(fsProvider.readDir).toHaveBeenCalledWith('/srv/platform/src', {
+      maxEntries: 10_000,
+      maxRetainedBytes: 4 * 1024 * 1024
+    })
     expect(fsProvider.stat).toHaveBeenCalledWith('/srv/platform/src/app.ts')
     expect(fsProvider.readFile).toHaveBeenCalledWith('/srv/platform/src/app.ts')
   })
@@ -5217,6 +5226,12 @@ describe('OrcaRuntimeService', () => {
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
     const fsProvider = {
+      stat: vi.fn(async (filePath: string) => {
+        if (filePath.endsWith('orca.yaml')) {
+          return { size: 7, type: 'file', mtime: 0 }
+        }
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }),
       readFile: vi.fn().mockResolvedValue({ isBinary: false, content: 'hooks:\n' }),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
@@ -5374,6 +5389,12 @@ describe('OrcaRuntimeService', () => {
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
     const fsProvider = {
+      stat: vi.fn(async (filePath: string) => {
+        if (filePath.endsWith('orca.yaml')) {
+          return { size: 7, type: 'file', mtime: 0 }
+        }
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }),
       readFile: vi.fn().mockResolvedValue({ isBinary: false, content: 'hooks:\n' }),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
@@ -5586,6 +5607,7 @@ describe('OrcaRuntimeService', () => {
       ]
     }
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 32, type: 'file', mtime: 0 }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  setup: pnpm install\n',
         isBinary: false
@@ -5662,6 +5684,7 @@ describe('OrcaRuntimeService', () => {
       ]
     }
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 32, type: 'file', mtime: 0 }),
       readFile: vi.fn(async (filePath: string) => ({
         content: filePath.endsWith('orca.yaml')
           ? 'scripts:\n  setup: pnpm install\n'
@@ -5707,6 +5730,49 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('does not materialize an oversized SSH .gitignore while writing an issue command', async () => {
+    const remoteStore = {
+      ...store,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: '/remote/repo',
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ]
+    }
+    const fsProvider = {
+      stat: vi.fn().mockResolvedValue({
+        size: TEST_MAX_HOOK_GITIGNORE_BYTES + 1,
+        type: 'file',
+        mtime: 0
+      }),
+      readFile: vi.fn(),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      createDir: vi.fn().mockResolvedValue(undefined)
+    }
+    registerSshFilesystemProvider('ssh-1', fsProvider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
+
+    try {
+      await expect(runtime.writeRepoIssueCommand('id:repo-1', 'Ship it')).resolves.toEqual({
+        ok: true
+      })
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(fsProvider.readFile).not.toHaveBeenCalled()
+    expect(fsProvider.writeFile).toHaveBeenCalledOnce()
+    expect(fsProvider.writeFile).toHaveBeenCalledWith(
+      '/remote/repo/.orca/issue-command',
+      'Ship it\n'
+    )
+  })
+
   it('resolves SSH issue commands from shared orca.yaml and deletes empty overrides', async () => {
     const remoteStore = {
       ...store,
@@ -5726,6 +5792,7 @@ describe('OrcaRuntimeService', () => {
       issueCommand: 'claude -p "Fix #{{issue}}"'
     })
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 48, type: 'file', mtime: 0 }),
       readFile: vi.fn(async (filePath: string) => {
         if (filePath.endsWith('.orca/issue-command')) {
           throw Object.assign(new Error('missing'), { code: 'ENOENT' })
@@ -30699,6 +30766,42 @@ describe('OrcaRuntimeService', () => {
       repos.map((repo) => `${repo.path}/main`)
     )
     expect(listWorktrees).toHaveBeenCalledTimes(15)
+  })
+
+  it('bounds resolved worktree scanning to a fixed repo worker pool', async () => {
+    vi.mocked(listWorktrees).mockReset()
+    const repos = Array.from({ length: 40 }, (_, index) => ({
+      id: `repo-${index}`,
+      path: `/tmp/repo-${index}`,
+      displayName: `repo-${index}`,
+      badgeColor: 'blue' as const,
+      addedAt: 1
+    }))
+    const gate = deferred<void>()
+    let inFlight = 0
+    let peak = 0
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await gate.promise
+      inFlight -= 1
+      return [makeWorktreeInfo(repoPath)]
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((candidate) => candidate.id === id),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined
+    } as never)
+
+    const listing = runtime.listManagedWorktrees()
+    await vi.waitFor(() => expect(listWorktrees).toHaveBeenCalledTimes(8))
+    expect(peak).toBe(8)
+    gate.resolve()
+    await expect(listing).resolves.toMatchObject({ totalCount: repos.length })
+    expect(listWorktrees).toHaveBeenCalledTimes(repos.length)
+    expect(peak).toBe(8)
   })
 
   it('worktree scan cache: shares one in-flight repo scan across concurrent consumers', async () => {

@@ -57,14 +57,34 @@ async function loadLinuxIdentity(fixture: LinuxIdentityFixture) {
       uid: process.getuid?.() ?? 0
     }
   })
+  const readNodeFileWithinLimit = vi.fn(async (path: string, maxBytes: number) => {
+    if (String(path).endsWith('host-id') && fixture.hostToken) {
+      if (Buffer.byteLength(fixture.hostToken, 'utf8') > maxBytes) {
+        throw new Error('file too large')
+      }
+      return {
+        buffer: Buffer.from(fixture.hostToken, 'utf8'),
+        stats: { size: Buffer.byteLength(fixture.hostToken, 'utf8') }
+      }
+    }
+    throw Object.assign(new Error(`unavailable path: ${String(path)}`), { code: 'ENOENT' })
+  })
   vi.doMock('node:fs/promises', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     lstat,
     mkdir,
     readFile,
-    readlink
+    readlink,
+    writeFile: vi.fn(async () => {
+      throw Object.assign(new Error('host-local storage unavailable'), { code: 'EACCES' })
+    })
   }))
-  return { identity: await import('./managed-hook-owner-identity'), readFile }
+  vi.doMock('../../shared/node-bounded-file-reader', () => ({ readNodeFileWithinLimit }))
+  return {
+    identity: await import('./managed-hook-owner-identity'),
+    readFile,
+    readNodeFileWithinLimit
+  }
 }
 
 afterEach(() => {
@@ -76,10 +96,23 @@ afterEach(() => {
   }
   vi.unstubAllEnvs()
   vi.doUnmock('node:fs/promises')
+  vi.doUnmock('../../shared/node-bounded-file-reader')
   vi.resetModules()
 })
 
 describe('managed hook owner identity', () => {
+  it('rejects an oversized durable host token before materializing it', async () => {
+    const { identity, readNodeFileWithinLimit } = await loadLinuxIdentity({
+      hostToken: 'x'.repeat(1025)
+    })
+
+    await expect(identity.readManagedHookHostIdentity()).resolves.toMatch(/^runtime:/)
+    expect(readNodeFileWithinLimit).toHaveBeenCalledWith(
+      '/var/tmp/orca-managed-hooks-1000/host-id',
+      1024
+    )
+  })
+
   it('uses durable host-local identity without requiring Linux machine identity files', async () => {
     vi.stubEnv('SSH_CONNECTION', '198.51.100.8 53100 10.0.0.7 2222')
     const { identity, readFile } = await loadLinuxIdentity({

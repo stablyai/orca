@@ -168,6 +168,7 @@ import {
 } from './ssh-system-fallback'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
+import { SSH_CONNECTION_ERROR_MAX_UTF8_BYTES } from '../../shared/ssh-retained-payload-admission'
 
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   return {
@@ -434,6 +435,16 @@ describe('SshConnection', () => {
 
     await expect(conn.connect()).rejects.toThrow('Connection refused')
     expect(conn.getState().status).toBe('error')
+  })
+
+  it('does not retain an oversized provider error in connection state', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'x'.repeat(SSH_CONNECTION_ERROR_MAX_UTF8_BYTES + 100)
+    const conn = new SshConnection(createTarget(), createCallbacks())
+
+    await conn.connect().catch(() => undefined)
+
+    expect(conn.getState().error).toHaveLength(SSH_CONNECTION_ERROR_MAX_UTF8_BYTES)
   })
 
   it('guards late ssh2 errors emitted while destroying a failed startup client', async () => {

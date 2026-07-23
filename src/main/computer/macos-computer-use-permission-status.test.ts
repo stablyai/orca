@@ -1,12 +1,17 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as nodeBoundedFileReader from '../../shared/node-bounded-file-reader'
 
 const resolveHelperAppPathMock = vi.hoisted(() => vi.fn())
 const resolveHelperExecutablePathMock = vi.hoisted(() => vi.fn())
 const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
 const permissionStatusPath = join(permissionStatusTempDir, 'status.json')
+const { readNodeFileWithinLimitMock } = vi.hoisted(() => ({
+  readNodeFileWithinLimitMock: vi.fn()
+}))
 
 vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
@@ -30,10 +35,14 @@ vi.mock('child_process', () => ({
 
 vi.mock('fs/promises', () => ({
   mkdtemp: vi.fn(),
-  readFile: vi.fn(),
   rm: vi.fn(),
   stat: vi.fn()
 }))
+
+vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => {
+  const actual = await importOriginal<typeof nodeBoundedFileReader>()
+  return { ...actual, readNodeFileWithinLimit: readNodeFileWithinLimitMock }
+})
 
 vi.mock('./macos-native-provider-paths', () => ({
   resolveMacOSComputerUseAppPath: resolveHelperAppPathMock,
@@ -48,7 +57,7 @@ describe('getComputerUsePermissionStatus', () => {
     vi.mocked(spawnSync).mockClear()
     vi.mocked(execFileSync).mockReset()
     vi.mocked(mkdtemp).mockReset()
-    vi.mocked(readFile).mockReset()
+    readNodeFileWithinLimitMock.mockReset()
     vi.mocked(rm).mockReset()
     vi.mocked(stat).mockReset()
     resolveHelperAppPathMock.mockReset()
@@ -162,6 +171,56 @@ describe('getComputerUsePermissionStatus', () => {
     })
   })
 
+  it('kills the helper and rejects oversized launch output', async () => {
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
+      stderr: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.stdout = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
+    child.stderr = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
+    child.kill = vi.fn()
+    vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
+
+    const statusPromise = getComputerUsePermissionStatus()
+    await Promise.resolve()
+    child.stdout.emit('data', 'x'.repeat(64 * 1024 + 1))
+
+    await expect(statusPromise).rejects.toMatchObject({
+      name: 'RuntimeClientError',
+      code: 'accessibility_error',
+      message: 'Permission helper returned too much launch output'
+    })
+    expect(child.kill).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves helper diagnostics delivered as 50,000 one-byte fragments', async () => {
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
+      stderr: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.stdout = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
+    child.stderr = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
+    child.kill = vi.fn()
+    vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
+    const statusPromise = getComputerUsePermissionStatus()
+    await Promise.resolve()
+
+    for (let index = 0; index < 50_000; index += 1) {
+      child.stderr.emit('data', ' ')
+    }
+    child.stderr.emit('data', 'permission denied')
+    child.emit('close', 1)
+
+    await expect(statusPromise).rejects.toMatchObject({
+      code: 'accessibility_error',
+      message: 'Could not check permissions: permission denied'
+    })
+  })
+
   it('reads permission status through the helper app identity', async () => {
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
     mockPermissionStatus('{"accessibility":"granted","screenshots":"not-granted"}')
@@ -187,10 +246,23 @@ describe('getComputerUsePermissionStatus', () => {
       { stdio: ['ignore', 'pipe', 'pipe'] }
     )
     expect(spawnSync).not.toHaveBeenCalled()
-    expect(readFile).toHaveBeenCalledWith(permissionStatusPath, 'utf8')
+    expect(readNodeFileWithinLimitMock).toHaveBeenCalledWith(permissionStatusPath, 64 * 1024)
     expect(rm).toHaveBeenCalledWith(permissionStatusTempDir, {
       recursive: true,
       force: true
+    })
+  })
+
+  it('maps an oversized permission status file to a stable runtime error', async () => {
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    readNodeFileWithinLimitMock.mockRejectedValueOnce(
+      new nodeBoundedFileReader.NodeFileReadTooLargeError(64 * 1024 + 1, 64 * 1024)
+    )
+
+    await expect(getComputerUsePermissionStatus()).rejects.toMatchObject({
+      name: 'RuntimeClientError',
+      code: 'accessibility_error',
+      message: 'Permission helper returned too much status data'
     })
   })
 
@@ -213,7 +285,10 @@ describe('getComputerUsePermissionStatus', () => {
 
 function mockPermissionStatus(json: string): void {
   vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
-  vi.mocked(readFile).mockResolvedValue(json)
+  readNodeFileWithinLimitMock.mockResolvedValue({
+    buffer: Buffer.from(json),
+    stats: { size: Buffer.byteLength(json) }
+  })
 }
 
 function setPlatform(platform: NodeJS.Platform): void {

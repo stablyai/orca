@@ -1,7 +1,9 @@
 import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
+import { readAgentHookRemoteTextFile } from './agent-hook-sftp-text-reader'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 
@@ -29,6 +31,51 @@ afterEach(async () => {
 })
 
 describe('managed-hook local filesystem', () => {
+  it('uses the bounded local reader instead of the legacy whole-file callback', async () => {
+    const home = await createTempHome()
+    const configPath = join(home, 'oversized-config.json')
+    await writeFile(configPath, '123456789', 'utf8')
+    const filesystem = createManagedHookLocalFilesystem()
+    const legacyRead = vi.spyOn(filesystem, 'readFile')
+
+    await expect(
+      readAgentHookRemoteTextFile(filesystem, configPath, 8, 1_000)
+    ).rejects.toBeInstanceOf(NodeFileReadTooLargeError)
+    expect(legacyRead).not.toHaveBeenCalled()
+  })
+
+  it('probes a directory without reading or retaining any child entries', async () => {
+    let closeCalls = 0
+    let readCalls = 0
+    const filesystem = createManagedHookLocalFilesystem({
+      openDirectory(_path, callback) {
+        callback(null, {
+          close(closeCallback) {
+            closeCalls += 1
+            closeCallback(null)
+          },
+          read() {
+            readCalls += 1
+          }
+        } as never)
+      }
+    })
+
+    const entries = await new Promise<unknown[]>((resolve, reject) => {
+      filesystem.readdir('/directory-with-millions-of-entries', (error, value) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(value ?? [])
+      })
+    })
+
+    expect(entries).toEqual([])
+    expect(closeCalls).toBe(1)
+    expect(readCalls).toBe(0)
+  })
+
   it('supports cold and warm aggregate installs without SFTP or temp-file residue', async () => {
     const home = await createTempHome()
     const filesystem = createManagedHookLocalFilesystem()

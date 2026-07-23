@@ -3,12 +3,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
-  createAuthFilesystemOperation,
+  AuthFilesystemOperationRegistry,
   type SharedAuthFilesystemOperation
 } from './auth-filesystem-operation'
 
 const AUTH_PRESENCE_TIMEOUT_MS = 5_000
-const authPresenceProbeByPath = new Map<string, SharedAuthFilesystemOperation<CodexAuthPresence>>()
+const authPresenceProbes = new AuthFilesystemOperationRegistry<CodexAuthPresence>()
 
 export type CodexAuthPresence = 'present' | 'absent' | 'timeout' | 'unavailable'
 
@@ -22,15 +22,13 @@ function isMissingPathError(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-function getAuthPresenceProbe(authPath: string): SharedAuthFilesystemOperation<CodexAuthPresence> {
-  const existing = authPresenceProbeByPath.get(authPath)
-  if (existing) {
-    return existing
-  }
+function getAuthPresenceProbe(
+  authPath: string
+): SharedAuthFilesystemOperation<CodexAuthPresence> | null {
   // Why: aborting a Node fs promise does not necessarily cancel an already
   // issued UNC operation. Share the raw probe until it really settles so a
   // disconnected WSL home cannot accumulate native requests across polls.
-  const probe = createAuthFilesystemOperation(authPath, async () => {
+  return authPresenceProbes.getOrCreate(authPath, async () => {
     try {
       await access(authPath)
       return 'present'
@@ -38,14 +36,6 @@ function getAuthPresenceProbe(authPath: string): SharedAuthFilesystemOperation<C
       return isMissingPathError(error) ? 'absent' : 'unavailable'
     }
   })
-  authPresenceProbeByPath.set(authPath, probe)
-  const clearProbe = (): void => {
-    if (authPresenceProbeByPath.get(authPath) === probe) {
-      authPresenceProbeByPath.delete(authPath)
-    }
-  }
-  void probe.result.then(clearProbe, clearProbe)
-  return probe
 }
 
 // Why: the background quota poller spawns the real `codex` binary to read rate
@@ -68,14 +58,22 @@ export async function probeCodexAuthPresence(
     // Why: managed WSL homes are UNC paths. A synchronous stat can park
     // Electron main while Windows wakes or reconnects the distro; the race
     // also keeps a disconnected distro from serializing all later refreshes.
-    const authPresence = await getAuthPresenceProbe(authPath).wait(signal)
+    const authProbe = getAuthPresenceProbe(authPath)
+    if (!authProbe) {
+      return 'unavailable'
+    }
+    const authPresence = await authProbe.wait(signal)
     if (authPresence !== 'absent' || !parseWslUncPath(home)) {
       return authPresence
     }
 
     // Why: ENOENT on a WSL UNC auth path can mean either a missing auth file or
     // an unavailable distro. Only an accessible Codex home proves signed-out.
-    const homePresence = await getAuthPresenceProbe(home).wait(signal)
+    const homeProbe = getAuthPresenceProbe(home)
+    if (!homeProbe) {
+      return 'unavailable'
+    }
+    const homePresence = await homeProbe.wait(signal)
     return homePresence === 'present' ? 'absent' : 'unavailable'
   } catch {
     return timeoutSignal.aborted && !options.signal?.aborted ? 'timeout' : 'unavailable'

@@ -11923,7 +11923,10 @@
         "CsvViewer": {
           "eedd0d37a7": "columnas",
           "ac31d2cd60": "filas",
-          "a233d55b77": "Archivo vacío"
+          "a233d55b77": "Archivo vacío",
+          "2b65aa2913": "Este CSV es demasiado grande para mostrarse de forma segura.",
+          "59cfb175a2": "Cambia al modo de código fuente para inspeccionar el texto sin procesar.",
+          "d5e8a2b453": "La vista de tabla está limitada a {{rows}} filas, {{columns}} columnas y {{cells}} celdas."
         },
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "Este archivo",

@@ -13,8 +13,8 @@ vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
 }))
 
-vi.mock('node:fs/promises', () => ({
-  readFile: readFileMock
+vi.mock('../integration-credential-file', () => ({
+  readIntegrationCredentialFileText: readFileMock
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -461,7 +461,7 @@ describe('fetchCodexRateLimits', () => {
         }
       ]
     })
-    expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'), 'utf8')
+    expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'))
     expect(fetch).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
       expect.objectContaining({

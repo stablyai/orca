@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ActiveViewPreference, getActiveViewPreferenceFile } from './active-view-preference'
+import {
+  ActiveViewPreference,
+  getActiveViewPreferenceFile,
+  MAX_ACTIVE_VIEW_PREFERENCE_FILE_BYTES
+} from './active-view-preference'
 
 describe('ActiveViewPreference', () => {
   let dir: string
@@ -87,5 +91,13 @@ describe('ActiveViewPreference', () => {
     expect(preference.get()).toBe('tasks')
     expect(preference.set('__proto__')).toBe(false)
     expect(preference.get()).toBe('tasks')
+  })
+
+  it('falls back without loading an oversized sparse sidecar', () => {
+    const preferenceFile = getActiveViewPreferenceFile(dataFile)
+    writeFileSync(preferenceFile, '{"activeView":"settings"}', 'utf-8')
+    truncateSync(preferenceFile, MAX_ACTIVE_VIEW_PREFERENCE_FILE_BYTES + 1)
+
+    expect(new ActiveViewPreference(dataFile, 'tasks').get()).toBe('tasks')
   })
 })

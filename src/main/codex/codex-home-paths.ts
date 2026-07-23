@@ -3,7 +3,6 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  readFileSync,
   readlinkSync,
   rmdirSync,
   rmSync,
@@ -14,8 +13,11 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { nodeSourceAndCopyContentsEqualSync } from '../../shared/node-source-copy-content-equality'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
+const CODEX_RESOURCE_COPY_MARKER_MAX_BYTES = 64 * 1024
 
 const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'skills',
@@ -124,7 +126,7 @@ function linkSystemCodexResource(
     // rewriting an unchanged file across the UNC boundary on every launch.
     if (
       entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY &&
-      copiedFileContentsMatch(sourcePath, targetPath)
+      nodeSourceAndCopyContentsEqualSync(sourcePath, targetPath)
     ) {
       return
     }
@@ -213,19 +215,6 @@ function pathEntryExists(entryPath: string): boolean {
   }
 }
 
-function copiedFileContentsMatch(sourcePath: string, targetPath: string): boolean {
-  try {
-    // Why: reading a FIFO or device synchronously can block Codex launch.
-    // Follow source symlinks, but only compare two regular files.
-    if (!statSync(sourcePath).isFile() || !lstatSync(targetPath).isFile()) {
-      return false
-    }
-    return readFileSync(sourcePath).equals(readFileSync(targetPath))
-  } catch {
-    return false
-  }
-}
-
 function targetAlreadyPointsToSource(targetPath: string, sourcePath: string): boolean {
   try {
     return (
@@ -264,7 +253,10 @@ function markCopiedResource(managedHomePath: string, entryName: string, sourcePa
 function readCopiedResourceSourcePath(managedHomePath: string, entryName: string): string | null {
   try {
     const parsed: unknown = JSON.parse(
-      readFileSync(getResourceCopyMarkerPath(managedHomePath, entryName), 'utf-8')
+      readNodeFileSyncWithinLimit(
+        getResourceCopyMarkerPath(managedHomePath, entryName),
+        CODEX_RESOURCE_COPY_MARKER_MAX_BYTES
+      ).buffer.toString('utf8')
     )
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null

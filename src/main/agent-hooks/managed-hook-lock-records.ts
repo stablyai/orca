@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { link, lstat, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { link, lstat, opendir, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import { readManagedHookProcessIdentity } from './managed-hook-owner-identity'
+
+export const MANAGED_HOOK_LOCK_DIRECTORY_BUFFER_SIZE = 32
+export const MANAGED_HOOK_LOCK_CLEANUP_CONCURRENCY = 8
+export const MANAGED_HOOK_LOCK_RECORD_MAX_BYTES = 2 * 1024 * 1024
 
 const UUID_PATTERN = '[\\da-f]{8}-[\\da-f]{4}-[1-5][\\da-f]{3}-[89ab][\\da-f]{3}-[\\da-f]{12}'
 const OWNER_FILE_PATTERN = new RegExp(
@@ -127,10 +132,16 @@ export async function removeFileIfPresent(path: string): Promise<boolean> {
   }
 }
 
+export async function readManagedHookLockRecord(path: string): Promise<string> {
+  return (await readNodeFileWithinLimit(path, MANAGED_HOOK_LOCK_RECORD_MAX_BYTES)).buffer.toString(
+    'utf8'
+  )
+}
+
 export async function inspectManagedHookLock(lockPath: string): Promise<ManagedHookLockState> {
   let rawOwner: string
   try {
-    rawOwner = await readFile(lockPath, 'utf8')
+    rawOwner = await readManagedHookLockRecord(lockPath)
   } catch (error) {
     if (hasCode(error, 'ENOENT')) {
       return { kind: 'missing' }
@@ -193,7 +204,7 @@ async function cleanOwnerEntry(path: string, token: string, hostIdentity: string
   if (stats.nlink !== 1) {
     return
   }
-  const owner = parseOwner(await readFile(path, 'utf8'), token)
+  const owner = parseOwner(await readManagedHookLockRecord(path), token)
   if (!owner || owner.hostIdentity !== hostIdentity) {
     return
   }
@@ -229,7 +240,7 @@ async function cleanLockEntry(
   if (!claimMatch?.[1] || !claimMatch[2]) {
     return
   }
-  const claim = parseClaim(await readFile(path, 'utf8'), claimMatch[1], claimMatch[2])
+  const claim = parseClaim(await readManagedHookLockRecord(path), claimMatch[1], claimMatch[2])
   if (!claim || claim.hostIdentity !== hostIdentity) {
     return
   }
@@ -250,25 +261,59 @@ async function cleanLockEntry(
   }
 }
 
+function isManagedHookLockRecord(entry: string): boolean {
+  return (
+    OWNER_FILE_PATTERN.test(entry) ||
+    OWNER_DRAFT_PATTERN.test(entry) ||
+    CLAIMED_OWNER_PATTERN.test(entry) ||
+    CLAIM_RECORD_PATTERN.test(entry)
+  )
+}
+
+async function cleanLockEntrySafely(
+  entry: string,
+  lockParent: string,
+  hostIdentity: string
+): Promise<void> {
+  try {
+    await cleanLockEntry(entry, lockParent, hostIdentity)
+  } catch (error) {
+    if (!hasCode(error, 'ENOENT')) {
+      console.warn('[agent-hooks] Failed to clean managed-hook lock file', error)
+    }
+  }
+}
+
 export async function cleanupManagedHookLockFiles(
   lockParent: string,
   hostIdentity: string
 ): Promise<void> {
-  let entries: string[]
+  let directory: Awaited<ReturnType<typeof opendir>>
   try {
-    entries = await readdir(lockParent)
+    directory = await opendir(lockParent, {
+      bufferSize: MANAGED_HOOK_LOCK_DIRECTORY_BUFFER_SIZE
+    })
   } catch {
     return
   }
-  await Promise.all(
-    entries.map(async (entry) => {
-      try {
-        await cleanLockEntry(entry, lockParent, hostIdentity)
-      } catch (error) {
-        if (!hasCode(error, 'ENOENT')) {
-          console.warn('[agent-hooks] Failed to clean managed-hook lock file', error)
-        }
+
+  const pending: string[] = []
+  try {
+    for await (const entry of directory) {
+      if (!isManagedHookLockRecord(entry.name)) {
+        continue
       }
-    })
-  )
+      pending.push(entry.name)
+      if (pending.length === MANAGED_HOOK_LOCK_CLEANUP_CONCURRENCY) {
+        await Promise.all(
+          pending.splice(0).map((name) => cleanLockEntrySafely(name, lockParent, hostIdentity))
+        )
+      }
+    }
+    await Promise.all(
+      pending.splice(0).map((name) => cleanLockEntrySafely(name, lockParent, hostIdentity))
+    )
+  } catch {
+    // Directory enumeration is best-effort, matching the prior readdir behavior.
+  }
 }

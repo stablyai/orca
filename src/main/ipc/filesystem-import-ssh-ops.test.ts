@@ -9,6 +9,7 @@ const {
   mkdirMock,
   realpathMock,
   copyFileMock,
+  opendirMock,
   readdirMock,
   getConnMgrMock
 } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const {
   mkdirMock: vi.fn(),
   realpathMock: vi.fn(),
   copyFileMock: vi.fn(),
+  opendirMock: vi.fn(),
   readdirMock: vi.fn(),
   getConnMgrMock: vi.fn()
 }))
@@ -29,14 +31,15 @@ vi.mock('fs/promises', () => ({
   writeFile: vi.fn(),
   realpath: realpathMock,
   copyFile: copyFileMock,
-  readdir: readdirMock
+  opendir: opendirMock
 }))
 vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import {
   advanceSshConnectionGeneration,
-  resetSshConnectionGenerations
+  resetSshConnectionGenerations,
+  setSshConnectionGeneration
 } from '../ssh/ssh-connection-generation'
 import {
   registerSshFilesystemProvider,
@@ -82,6 +85,7 @@ function createProvider(uploadSession: FileUploadSession): IFilesystemProvider {
 }
 
 describe('fs:importExternalPaths — SSH operations', () => {
+  const sessionCounterStride = 2 ** 13
   const destDir = '/home/user/project/src'
   const connId = 'ssh-conn-1'
   let provider: IFilesystemProvider
@@ -130,12 +134,15 @@ describe('fs:importExternalPaths — SSH operations', () => {
 
   beforeEach(() => {
     handlers.clear()
+    resetSshConnectionGenerations()
+    setSshConnectionGeneration(connId, 0)
     ;[
       handleMock,
       lstatMock,
       mkdirMock,
       realpathMock,
       copyFileMock,
+      opendirMock,
       readdirMock,
       getConnMgrMock
     ].forEach((m) => m.mockReset())
@@ -145,6 +152,12 @@ describe('fs:importExternalPaths — SSH operations', () => {
     realpathMock.mockImplementation(async (p: string) => p)
     lstatMock.mockRejectedValue(enoent())
     readdirMock.mockResolvedValue([])
+    opendirMock.mockImplementation(async (directoryPath: string) => ({
+      async *[Symbol.asyncIterator]() {
+        yield* await readdirMock(directoryPath, { withFileTypes: true })
+      },
+      close: vi.fn().mockResolvedValue(undefined)
+    }))
     getConnMgrMock.mockReturnValue({ getConnection: () => makeConn() })
     uploadSession = {
       uploadFile: vi.fn().mockResolvedValue(undefined),
@@ -162,6 +175,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
 
   it('rejects a staged upload when a restarted HUB reaches the same target counter', async () => {
     resetSshConnectionGenerations(71)
+    setSshConnectionGeneration(connId, 71 * sessionCounterStride)
     const stagedGeneration = advanceSshConnectionGeneration(connId)
     const sourcePath = path.resolve('/tmp/dropped/restart.txt')
     lstatMock.mockImplementation(async (candidate: string) => {
@@ -169,6 +183,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
         throw enoent()
       }
       resetSshConnectionGenerations(72)
+      setSshConnectionGeneration(connId, 72 * sessionCounterStride)
       advanceSshConnectionGeneration(connId)
       return {
         size: 12,

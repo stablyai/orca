@@ -1,9 +1,29 @@
 import { statSync } from 'node:fs'
 import { safeStorage } from 'electron'
 import {
+  readNodeFileSyncWithinLimit,
+  readNodeFileWithinLimit
+} from '../shared/node-bounded-file-reader'
+import {
   credentialDecryptionMessage,
   type IntegrationCredentialService
 } from '../shared/integration-credential-errors'
+
+export const MAX_INTEGRATION_CREDENTIAL_FILE_BYTES = 1024 * 1024
+
+export function readIntegrationCredentialFileSync(filePath: string): Buffer {
+  return readNodeFileSyncWithinLimit(filePath, MAX_INTEGRATION_CREDENTIAL_FILE_BYTES).buffer
+}
+
+export function readIntegrationCredentialFileSyncText(filePath: string): string {
+  return readIntegrationCredentialFileSync(filePath).toString('utf8')
+}
+
+export async function readIntegrationCredentialFileText(filePath: string): Promise<string> {
+  return (
+    await readNodeFileWithinLimit(filePath, MAX_INTEGRATION_CREDENTIAL_FILE_BYTES)
+  ).buffer.toString('utf8')
+}
 
 // Why: connection status treats a token file as a saved credential; empty
 // files read as "missing", so counting them would split-brain getStatus.

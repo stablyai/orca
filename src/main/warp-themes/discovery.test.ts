@@ -7,10 +7,10 @@ type MockDirectoryEntry = {
   isDirectory: () => boolean
 }
 
-const readdirSyncMock = vi.hoisted(() => vi.fn<() => MockDirectoryEntry[]>(() => []))
+const opendirSyncMock = vi.hoisted(() => vi.fn())
 
 vi.mock('fs', () => ({
-  readdirSync: readdirSyncMock
+  opendirSync: opendirSyncMock
 }))
 
 vi.mock('os', () => ({
@@ -34,13 +34,21 @@ function fileEntry(name: string): MockDirectoryEntry {
   }
 }
 
+function mockDirectory(entries: MockDirectoryEntry[]) {
+  let index = 0
+  const readSync = vi.fn(() => entries[index++] ?? null)
+  const closeSync = vi.fn()
+  opendirSyncMock.mockReturnValue({ readSync, closeSync })
+  return { readSync, closeSync }
+}
+
 describe('getWarpThemeDirectories', () => {
   beforeEach(() => {
     vi.unstubAllEnvs()
     platformMock.mockReset()
     homedirMock.mockReturnValue('/Users/alice')
-    readdirSyncMock.mockReset()
-    readdirSyncMock.mockReturnValue([])
+    opendirSyncMock.mockReset()
+    mockDirectory([])
   })
 
   it('returns macOS Warp channel theme directories in stable-first order', () => {
@@ -57,11 +65,12 @@ describe('getWarpThemeDirectories', () => {
 
   it('adds dynamic macOS .warp directories after known channels', () => {
     platformMock.mockReturnValue('darwin')
-    readdirSyncMock.mockReturnValue([
-      directoryEntry('.warp-future'),
+    mockDirectory([
+      directoryEntry('.warp-z'),
       fileEntry('.warp-note'),
       directoryEntry('.not-warp'),
-      directoryEntry('.warp-preview')
+      directoryEntry('.warp-preview'),
+      directoryEntry('.warp-a')
     ])
 
     expect(getWarpThemeDirectories()).toEqual([
@@ -71,7 +80,8 @@ describe('getWarpThemeDirectories', () => {
       '/Users/alice/.warp-dev/themes',
       '/Users/alice/.warp-local/themes',
       '/Users/alice/.warp-integration/themes',
-      '/Users/alice/.warp-future/themes'
+      '/Users/alice/.warp-a/themes',
+      '/Users/alice/.warp-z/themes'
     ])
   })
 
@@ -91,7 +101,7 @@ describe('getWarpThemeDirectories', () => {
   it('adds dynamic Linux warp data directories', () => {
     platformMock.mockReturnValue('linux')
     vi.stubEnv('XDG_DATA_HOME', '/data/alice')
-    readdirSyncMock.mockReturnValue([
+    mockDirectory([
       directoryEntry('warp-future'),
       directoryEntry('warp-terminal'),
       directoryEntry('not-warp'),
@@ -121,8 +131,8 @@ describe('getWarpThemeDirectories', () => {
       '/Users/alice/.local/share/warp-terminal-local/themes',
       '/Users/alice/.local/share/warp-terminal-integration/themes'
     ])
-    expect(readdirSyncMock).toHaveBeenCalledWith('/Users/alice/.local/share', {
-      withFileTypes: true
+    expect(opendirSyncMock).toHaveBeenCalledWith('/Users/alice/.local/share', {
+      bufferSize: 32
     })
   })
 
@@ -143,7 +153,7 @@ describe('getWarpThemeDirectories', () => {
   it('adds dynamic Windows Warp app data directories', () => {
     platformMock.mockReturnValue('win32')
     vi.stubEnv('APPDATA', 'C:\\Users\\alice\\AppData\\Roaming')
-    readdirSyncMock.mockReturnValue([
+    mockDirectory([
       directoryEntry('WarpFuture'),
       directoryEntry('WarpPreview'),
       fileEntry('WarpNote')
@@ -158,6 +168,34 @@ describe('getWarpThemeDirectories', () => {
       'C:\\Users\\alice\\AppData\\Roaming\\warp\\WarpIntegration\\data\\themes',
       'C:\\Users\\alice\\AppData\\Roaming\\warp\\WarpFuture\\data\\themes'
     ])
+  })
+
+  it('caps dynamic discovery while closing the streamed directory', () => {
+    platformMock.mockReturnValue('darwin')
+    const { readSync, closeSync } = mockDirectory(
+      Array.from({ length: 1_025 }, (_, index) =>
+        directoryEntry(`.warp-dynamic-${String(index).padStart(4, '0')}`)
+      )
+    )
+
+    const directories = getWarpThemeDirectories()
+
+    expect(directories).toHaveLength(1_030)
+    expect(directories).toContain('/Users/alice/.warp-dynamic-1023/themes')
+    expect(directories).not.toContain('/Users/alice/.warp-dynamic-1024/themes')
+    expect(readSync).toHaveBeenCalledTimes(1_024)
+    expect(closeSync).toHaveBeenCalledOnce()
+  })
+
+  it('streams past unrelated entries without consuming the match budget', () => {
+    platformMock.mockReturnValue('darwin')
+    const { readSync } = mockDirectory([
+      ...Array.from({ length: 1_024 }, (_, index) => fileEntry(`note-${index}`)),
+      directoryEntry('.warp-future')
+    ])
+
+    expect(getWarpThemeDirectories()).toContain('/Users/alice/.warp-future/themes')
+    expect(readSync).toHaveBeenCalledTimes(1_026)
   })
 })
 

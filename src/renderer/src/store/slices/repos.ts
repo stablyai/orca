@@ -45,6 +45,7 @@ import { applyManualRepoOrder, getManualRepoOrder } from '../../../../shared/man
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
 import {
@@ -88,11 +89,13 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/worksp
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 import { getEnvironmentSshStateGeneration } from './runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
+import { SafeAutoForkSyncAttempts } from './safe-auto-fork-sync-attempts'
+import { RuntimeRepoFetchTracker } from './runtime-repo-fetch-tracker'
 
 const ERROR_TOAST_DURATION = 60_000
-const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
-const safeAutoForkSyncAttempts = new Map<string, { attemptedAt: number; promise?: Promise<void> }>()
-const runtimeRepoFetchGenerationByEnvironment = new Map<string, number>()
+const RUNTIME_CATALOG_FETCH_CONCURRENCY = 4
+const safeAutoForkSyncAttempts = new SafeAutoForkSyncAttempts()
+const runtimeRepoFetches = new RuntimeRepoFetchTracker()
 
 export type RepoUpdate = Partial<
   Pick<
@@ -318,39 +321,28 @@ async function warnIfProjectKnownInAnotherProfile(
 
 function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): void {
   for (const repo of repos) {
-    if (repo.kind === 'folder' || repo.forkSyncMode !== 'safe-auto' || !repo.upstream) {
+    const upstream = repo.upstream
+    if (repo.kind === 'folder' || repo.forkSyncMode !== 'safe-auto' || !upstream) {
       continue
     }
     const key = getSafeAutoForkSyncKey(repo)
-    const existingAttempt = safeAutoForkSyncAttempts.get(key)
     const now = Date.now()
-    if (
-      existingAttempt?.promise ||
-      (existingAttempt && now - existingAttempt.attemptedAt < SAFE_AUTO_FORK_SYNC_COOLDOWN_MS)
-    ) {
-      continue
-    }
-    const promise = syncRuntimeGitForkDefaultBranch(
-      {
-        settings: settingsForRepoOwner(get(), repo.id),
-        worktreeId: repo.id,
-        worktreePath: repo.path,
-        connectionId: repo.connectionId ?? undefined
-      },
-      repo.upstream
+    safeAutoForkSyncAttempts.run(key, now, () =>
+      syncRuntimeGitForkDefaultBranch(
+        {
+          settings: settingsForRepoOwner(get(), repo.id),
+          worktreeId: repo.id,
+          worktreePath: repo.path,
+          connectionId: repo.connectionId ?? undefined
+        },
+        upstream
+      )
+        .then(() => undefined)
+        .catch((error) => {
+          // Why: safe-auto is opportunistic; auth/protection/divergence failures shouldn't add startup noise (Sync Now handles explicit diagnosis).
+          console.info('Safe fork auto-sync skipped', error)
+        })
     )
-      .then(() => undefined)
-      .catch((error) => {
-        // Why: safe-auto is opportunistic; auth/protection/divergence failures shouldn't add startup noise (Sync Now handles explicit diagnosis).
-        console.info('Safe fork auto-sync skipped', error)
-      })
-      .finally(() => {
-        const current = safeAutoForkSyncAttempts.get(key)
-        if (current?.promise === promise) {
-          safeAutoForkSyncAttempts.set(key, { attemptedAt: now })
-        }
-      })
-    safeAutoForkSyncAttempts.set(key, { attemptedAt: now, promise })
   }
 }
 
@@ -1605,15 +1597,17 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   fetchRuntimeEnvironmentRepos: async (environmentId) => {
-    const requestGeneration = (runtimeRepoFetchGenerationByEnvironment.get(environmentId) ?? 0) + 1
-    runtimeRepoFetchGenerationByEnvironment.set(environmentId, requestGeneration)
+    const requestToken = runtimeRepoFetches.begin(environmentId)
+    if (!requestToken) {
+      return []
+    }
     const connectionGeneration = getEnvironmentSshStateGeneration(environmentId)
     const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
     try {
       const target = { kind: 'environment' as const, environmentId }
       const catalog = await fetchRepoCatalogForTarget(target)
       if (
-        runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
+        !runtimeRepoFetches.isCurrent(environmentId, requestToken) ||
         getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
         getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
       ) {
@@ -1622,7 +1616,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       let finalizedHostRepos: Repo[] = []
       set((s) => {
         if (
-          runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
+          !runtimeRepoFetches.isCurrent(environmentId, requestToken) ||
           getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
           getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
         ) {
@@ -1674,6 +1668,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     } catch (err) {
       console.error(`Failed to fetch repos for runtime environment ${environmentId}:`, err)
       return []
+    } finally {
+      runtimeRepoFetches.end(environmentId, requestToken)
     }
   },
 
@@ -1761,9 +1757,14 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
 
     const environments = await listRuntimeEnvironmentsForAllHostLoad()
-    // Why: unreachable remotes can spend the full connect timeout; merge each resolved host via the state updater so parallel loads don't clobber.
-    await Promise.all(
-      environments.map(async (environment) => {
+    // Why: bound slow remote loads while merging each result without clobbering peers.
+    await forEachWithConcurrency(
+      environments,
+      RUNTIME_CATALOG_FETCH_CONCURRENCY,
+      async (environment) => {
+        if (get().reposFetchGeneration !== generation) {
+          return
+        }
         try {
           applyCatalog(
             await fetchRepoCatalogForTarget({
@@ -1775,7 +1776,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           failed = true
           console.warn(`Skipped repos for runtime environment ${environment.id}:`, err)
         }
-      })
+      }
     )
     // Why: validate repo-scoped UI only after every host answers; first-paint loads only local repos, so an offline runtime would erase its saved filters.
     if (!failed && get().reposFetchGeneration === generation) {
@@ -1815,8 +1816,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
 
     const environments = await listRuntimeEnvironmentsForAllHostLoad()
-    await Promise.all(
-      environments.map(async (environment) => {
+    await forEachWithConcurrency(
+      environments,
+      RUNTIME_CATALOG_FETCH_CONCURRENCY,
+      async (environment) => {
         try {
           applyCatalog(
             await fetchProjectGroupCatalogForTarget({
@@ -1827,7 +1830,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         } catch (err) {
           console.warn(`Skipped project groups for runtime environment ${environment.id}:`, err)
         }
-      })
+      }
     )
   },
 
@@ -1870,8 +1873,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
 
     const environments = await listRuntimeEnvironmentsForAllHostLoad()
-    await Promise.all(
-      environments.map(async (environment) => {
+    await forEachWithConcurrency(
+      environments,
+      RUNTIME_CATALOG_FETCH_CONCURRENCY,
+      async (environment) => {
         try {
           applyCatalog(
             await fetchFolderWorkspaceCatalogForTarget({
@@ -1883,7 +1888,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           failed = true
           console.warn(`Skipped folder workspaces for runtime environment ${environment.id}:`, err)
         }
-      })
+      }
     )
     if (!failed) {
       set((s) => ({

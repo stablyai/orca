@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: hook parsing, layered issue-command resolution, and cross-platform runner setup share one execution surface, so keeping them together avoids subtle drift across create/read/write paths. */
-import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { exec, execFile } from 'node:child_process'
 import { getDefaultRepoHookSettings } from '../shared/constants'
@@ -21,8 +21,17 @@ import type {
   WorktreeSetupLaunch
 } from '../shared/types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
+import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
+import { MAX_ORCA_YAML_BYTES } from '../shared/orca-yaml-file-limit'
 
 const HOOK_TIMEOUT = 120_000 // 2 minutes
+export { MAX_ORCA_YAML_BYTES }
+export const MAX_ISSUE_COMMAND_BYTES = 1024 * 1024
+export const MAX_HOOK_GITIGNORE_BYTES = 4 * 1024 * 1024
+
+function readHookFile(path: string, maxBytes: number): string {
+  return readNodeFileSyncWithinLimit(path, maxBytes).buffer.toString('utf8')
+}
 
 export type HookRuntimeTarget = {
   wslDistro?: string | null
@@ -48,7 +57,7 @@ export function loadHooks(repoPath: string): OrcaHooks | null {
   }
 
   try {
-    const content = readFileSync(yamlPath, 'utf-8')
+    const content = readHookFile(yamlPath, MAX_ORCA_YAML_BYTES)
     return parseOrcaYaml(content)
   } catch {
     return null
@@ -73,7 +82,7 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set([
 /** True when `orca.yaml` has a top-level key this version of Orca does not handle. */
 export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   try {
-    const content = readFileSync(join(repoPath, 'orca.yaml'), 'utf-8')
+    const content = readHookFile(join(repoPath, 'orca.yaml'), MAX_ORCA_YAML_BYTES)
     for (const line of iterateLfScriptLines(content)) {
       // Why: match bare `key:` at end-of-line too, since a mapping with a block value on the next line is valid YAML.
       const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
@@ -118,7 +127,7 @@ export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
 
   if (existsSync(filePath)) {
     try {
-      const content = readFileSync(filePath, 'utf-8').trim()
+      const content = readHookFile(filePath, MAX_ISSUE_COMMAND_BYTES).trim()
       localContent = content || null
     } catch {
       localContent = null
@@ -169,7 +178,7 @@ function ensureOrcaDirIgnored(repoPath: string): void {
   const gitignorePath = join(repoPath, '.gitignore')
   try {
     if (existsSync(gitignorePath)) {
-      const content = readFileSync(gitignorePath, 'utf-8')
+      const content = readHookFile(gitignorePath, MAX_HOOK_GITIGNORE_BYTES)
       if (/^\.orca\/?$/m.test(content)) {
         return
       }

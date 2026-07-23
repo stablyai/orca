@@ -4,14 +4,18 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   _getCodexSessionIndexTitleCacheSizeForTest,
+  _getCodexSessionIndexRetainedTitleCountForTest,
   _hasCodexSessionIndexTitleCacheEntryForTest,
   _readCachedCodexSessionIndexTitlesForTest,
   _storeCodexSessionIndexTitleCacheEntryForTest,
+  CODEX_SESSION_INDEX_RETAINED_UTF8_BYTES_MAX,
+  CODEX_SESSION_INDEX_SESSION_ID_MAX_UTF8_BYTES,
   readCodexSessionIndexTitle,
   resetCodexSessionIndexTitleCacheForTests
 } from './session-scanner-codex-title-index'
 
 const CACHE_LIMIT = 64
+const RETAINED_TITLE_LIMIT = 2_048
 
 let tempRoots: string[] = []
 
@@ -42,6 +46,42 @@ async function readTitle(codexHome: string, index: number): Promise<string | nul
 }
 
 describe('codex session index title cache', () => {
+  it('bounds retained titles without dropping an older requested title', async () => {
+    const codexHome = await createCodexHome(0)
+    const lines = Array.from({ length: RETAINED_TITLE_LIMIT + 1 }, (_, index) =>
+      JSON.stringify({ id: `session-${index}`, thread_name: `Title ${index}` })
+    )
+    await writeFile(join(codexHome, 'session_index.jsonl'), `${lines.join('\n')}\n`)
+
+    expect(await readTitle(codexHome, 0)).toBe('Title 0')
+    expect(await _getCodexSessionIndexRetainedTitleCountForTest(codexHome)).toBe(
+      RETAINED_TITLE_LIMIT
+    )
+  })
+
+  it('bounds retained title-key bytes without dropping an oversized requested id', async () => {
+    const codexHome = await createCodexHome(0)
+    const ids = Array.from({ length: 9 }, (_, index) =>
+      `${index}`.padEnd(CODEX_SESSION_INDEX_SESSION_ID_MAX_UTF8_BYTES, 'x')
+    )
+    const oversizedId = `${ids[0]}x`
+    const lines = [
+      JSON.stringify({ id: oversizedId, thread_name: 'Oversized requested title' }),
+      ...ids.map((id, index) => JSON.stringify({ id, thread_name: `Title ${index}` }))
+    ]
+    await writeFile(join(codexHome, 'session_index.jsonl'), `${lines.join('\n')}\n`)
+
+    await expect(
+      readCodexSessionIndexTitle(
+        join(codexHome, 'sessions', `${oversizedId}.jsonl`),
+        codexHome,
+        oversizedId
+      )
+    ).resolves.toBe('Oversized requested title')
+    expect(await _getCodexSessionIndexRetainedTitleCountForTest(codexHome)).toBeLessThan(9)
+    expect(CODEX_SESSION_INDEX_RETAINED_UTF8_BYTES_MAX).toBe(512 * 1024)
+  })
+
   it('caps cached title indexes by Codex home', async () => {
     const homes: string[] = []
 

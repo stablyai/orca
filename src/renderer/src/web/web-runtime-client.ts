@@ -1,6 +1,13 @@
 /* eslint-disable max-lines -- Why: one transport boundary — E2EE WebSocket state machine, JSON-RPC routing, streaming, binary frame forwarding. */
 import type { RuntimeRpcResponse, RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
+import { measureUtf8ByteLength } from '../../../shared/utf8-byte-limits'
+import { MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS } from '../../../shared/e2ee-crypto'
+import {
+  createWsOutboundBackpressureQueue,
+  type WsOutboundEnqueueResult,
+  type WsOutboundBackpressureQueue
+} from '../../../shared/ws-outbound-backpressure-queue'
 import type { WebPairingOffer } from './web-pairing'
 import { installWindowVisibilityInterval } from '../lib/window-visibility-interval'
 import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime-tailscale-hint'
@@ -14,6 +21,21 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './web-e2ee'
+import {
+  createWebRuntimeOutboundMemoryBudget,
+  WEB_RUNTIME_OUTBOUND_MAX_QUEUED_BYTES,
+  WEB_RUNTIME_OUTBOUND_MAX_QUEUED_FRAMES,
+  type WebRuntimeOutboundMemoryBudget,
+  type WebRuntimeOutboundSocketMemory
+} from './web-runtime-outbound-memory-budget'
+import {
+  stringifyWebRuntimeOutboundJson,
+  WebRuntimeOutboundJsonLimitError
+} from './web-runtime-outbound-json'
+import {
+  isWebRuntimeJsonStructureCapacityError,
+  parseWebRuntimeInboundJson
+} from './web-runtime-inbound-json'
 
 type WebRuntimeConnectionState =
   | 'disconnected'
@@ -23,6 +45,7 @@ type WebRuntimeConnectionState =
   | 'auth-failed'
 
 type PendingRequest = {
+  cancelQueuedFrame: () => boolean
   method: string
   resolve: (response: RuntimeRpcResponse<unknown>) => void
   reject: (error: Error) => void
@@ -41,9 +64,25 @@ type SubscriptionCallbacks = {
 type RuntimeSubscription = {
   id: string
   method: string
-  params: unknown
+  paramsJson: string | undefined
+  paramsByteLength: number
   callbacks: SubscriptionCallbacks
   needsReplay: boolean
+  releaseRetainedBytes: () => void
+  cancelQueuedFrame: () => boolean
+}
+
+type PreparedSubscriptionInput = {
+  paramsJson: string | undefined
+  paramsByteLength: number
+  retainedBytes: number
+  teardownKey: string
+  worktree: string
+}
+
+type WebRuntimeOutboundFrame = {
+  bytes: number
+  payload: string | Uint8Array<ArrayBuffer>
 }
 
 export type WebRuntimeSubscriptionHandle = {
@@ -66,6 +105,29 @@ const SHARED_CONNECTION_SUBSCRIPTION_METHODS = new Set(['files.watch'])
 const HEARTBEAT_INTERVAL_MS = 10_000
 const HEARTBEAT_IDLE_MS = 25_000
 const HEARTBEAT_PROBE_GRACE_MS = 20_000
+export const WEB_RUNTIME_MAX_CONNECTION_WAITERS = 256
+export const WEB_RUNTIME_MAX_PENDING_REQUESTS = 256
+export const WEB_RUNTIME_MAX_SUBSCRIPTIONS = 256
+export const WEB_RUNTIME_MAX_CHILD_CLIENTS = 64
+export const WEB_RUNTIME_MAX_BINARY_FRAME_BYTES = 64 * 1024 * 1024
+export const WEB_RUNTIME_MAX_ENCRYPTED_TEXT_FRAME_BYTES = MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS
+export const WEB_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024
+export const WEB_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES = 1024 * 1024
+export const WEB_RUNTIME_MAX_RPC_METHOD_BYTES = 8 * 1024
+export const WEB_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES = 8 * 1024 * 1024
+
+const WEB_RUNTIME_OUTBOUND_SOCKET_SOFT_CAP_BYTES = 8 * 1024 * 1024
+const WEB_RUNTIME_MAX_OUTBOUND_WIRE_FRAME_BYTES = WEB_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 64
+
+const WEB_RUNTIME_BUSY_MESSAGE = 'Remote Orca runtime client is busy; retry after requests finish.'
+const RPC_PARAMS_MEMBER_PREFIX = ',"params":'
+const cancelNothing = (): boolean => false
+const releaseNothing = (): void => undefined
+const REJECTED_OUTBOUND_ENQUEUE: WsOutboundEnqueueResult = {
+  accepted: false,
+  queued: false,
+  cancel: cancelNothing
+}
 
 export class WebRuntimeClient {
   private ws: WebSocket | null = null
@@ -89,8 +151,15 @@ export class WebRuntimeClient {
   private readonly childClients = new Set<WebRuntimeClient>()
   private readonly waiters: { resolve: () => void; reject: (error: Error) => void }[] = []
   private readonly serverPublicKey: Uint8Array
+  private outboundQueue: WsOutboundBackpressureQueue<WebRuntimeOutboundFrame> | null = null
+  private outboundSocketMemory: WebRuntimeOutboundSocketMemory | null = null
+  private activeCallAdmissions = 0
+  private pendingSubscriptionAdmissions = 0
 
-  constructor(private readonly pairing: WebPairingOffer) {
+  constructor(
+    private readonly pairing: WebPairingOffer,
+    private readonly outboundMemoryBudget: WebRuntimeOutboundMemoryBudget = createWebRuntimeOutboundMemoryBudget()
+  ) {
     this.serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
     this.openConnection()
   }
@@ -100,21 +169,66 @@ export class WebRuntimeClient {
     params?: unknown,
     options?: { timeoutMs?: number }
   ): Promise<RuntimeRpcResponse<unknown>> {
-    await this.waitForConnected(options?.timeoutMs)
-    return new Promise((resolve, reject) => {
+    assertRpcMethodWithinLimit(method)
+    const releaseCallAdmission = this.claimCallAdmission()
+    let releasePreparedBytes: (() => void) | null = null
+    let serialized: string | undefined
+    try {
       const id = this.nextId()
-      const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
-      const timeout = window.setTimeout(() => {
-        this.pending.delete(id)
-        reject(new Error(`Request timed out: ${method}`))
-      }, timeoutMs)
-      this.pending.set(id, { method, resolve, reject, timeout })
-      if (!this.sendEncrypted({ id, deviceToken: this.pairing.deviceToken, method, params })) {
+      serialized = stringifyWebRuntimeOutboundJson(
+        { id, deviceToken: this.pairing.deviceToken, method, params },
+        WEB_RUNTIME_MAX_OUTBOUND_JSON_BYTES
+      ).serialized
+      params = undefined
+      releasePreparedBytes = this.outboundMemoryBudget.claimPreparedRpcBytes(
+        retainedPreparedFrameBytes(serialized, method)
+      )
+      if (!releasePreparedBytes) {
+        throw new Error(WEB_RUNTIME_BUSY_MESSAGE)
+      }
+      await this.waitForConnected(options?.timeoutMs)
+      return await new Promise((resolve, reject) => {
+        if (this.pending.size >= WEB_RUNTIME_MAX_PENDING_REQUESTS) {
+          reject(new Error(WEB_RUNTIME_BUSY_MESSAGE))
+          return
+        }
+        const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
+        const pending: PendingRequest = {
+          cancelQueuedFrame: cancelNothing,
+          method,
+          resolve,
+          reject,
+          timeout: 0
+        }
+        const timeout = window.setTimeout(() => {
+          if (this.pending.get(id) !== pending) {
+            return
+          }
+          pending.cancelQueuedFrame()
+          this.pending.delete(id)
+          reject(new Error(`Request timed out: ${method}`))
+        }, timeoutMs)
+        pending.timeout = timeout
+        this.pending.set(id, pending)
+        const sent = serialized
+          ? this.sendEncryptedSerialized(serialized)
+          : REJECTED_OUTBOUND_ENQUEUE
+        serialized = undefined
+        pending.cancelQueuedFrame = sent.cancel
+        releasePreparedBytes?.()
+        releasePreparedBytes = null
+        if (sent.accepted) {
+          return
+        }
         this.pending.delete(id)
         window.clearTimeout(timeout)
-        reject(new Error('Remote Orca runtime is not connected.'))
-      }
-    })
+        reject(new Error('Remote Orca runtime could not send the request.'))
+      })
+    } finally {
+      serialized = undefined
+      releasePreparedBytes?.()
+      releaseCallAdmission()
+    }
   }
 
   async subscribe(
@@ -123,56 +237,97 @@ export class WebRuntimeClient {
     callbacks: SubscriptionCallbacks,
     options?: SubscribeOptions
   ): Promise<WebRuntimeSubscriptionHandle> {
-    if (SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(method)) {
-      // Why: sharing the main socket for file watches avoids exhausting the server's WebSocket connection cap.
-      return this.subscribeSharedFileWatch(params, callbacks, options)
+    assertRpcMethodWithinLimit(method)
+    const sharedConnection = SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(method)
+    if (!sharedConnection && this.childClients.size >= WEB_RUNTIME_MAX_CHILD_CLIENTS) {
+      throw new Error(WEB_RUNTIME_BUSY_MESSAGE)
     }
-    const client = new WebRuntimeClient(this.pairing)
-    this.childClients.add(client)
-    const closeChild = (notifySubscriptions = false): void => {
-      this.childClients.delete(client)
-      client.close({ notifySubscriptions })
-    }
+    const releaseAdmission = this.claimSubscriptionAdmission()
+    let releaseRetainedBytes: (() => void) | null = null
+    let ownershipTransferred = false
     try {
+      const preparedInput = prepareSubscriptionInput(method, params)
+      params = undefined
+      releaseRetainedBytes = this.outboundMemoryBudget.claimSubscriptionBytes(
+        preparedInput.retainedBytes
+      )
+      if (!releaseRetainedBytes) {
+        throw new Error(WEB_RUNTIME_BUSY_MESSAGE)
+      }
+      if (sharedConnection) {
+        // Why: sharing the main socket for file watches avoids exhausting the server's WebSocket connection cap.
+        const handle = await this.subscribeSharedFileWatch(
+          preparedInput,
+          releaseRetainedBytes,
+          callbacks,
+          options
+        )
+        ownershipTransferred = true
+        return handle
+      }
+      const client = new WebRuntimeClient(this.pairing, this.outboundMemoryBudget)
+      this.childClients.add(client)
+      const closeChild = (notifySubscriptions = false): void => {
+        this.childClients.delete(client)
+        client.close({ notifySubscriptions })
+      }
       const wrappedCallbacks: SubscriptionCallbacks = {
         ...callbacks,
         onError: (error) => {
-          callbacks.onError?.(error)
           closeChild()
+          invokeConsumerCallback(() => callbacks.onError?.(error))
         },
         onClose: () => {
-          callbacks.onClose?.()
           closeChild()
+          invokeConsumerCallback(() => callbacks.onClose?.())
         }
       }
-      const handle = await client.subscribeOnCurrentConnection(
-        method,
-        params,
-        wrappedCallbacks,
-        options
-      )
+      let handle: WebRuntimeSubscriptionHandle
+      try {
+        handle = await client.subscribePreparedOnCurrentConnection(
+          method,
+          preparedInput,
+          releaseRetainedBytes,
+          wrappedCallbacks,
+          options
+        )
+      } catch (error) {
+        closeChild()
+        throw error
+      }
+      ownershipTransferred = true
+      preparedInput.paramsJson = undefined
+      preparedInput.teardownKey = ''
       return {
         unsubscribe: () => {
           // Why: emit the teardown RPC before closing the child socket so the server reaps the fs-watcher on view-toggle.
-          handle.unsubscribe()
-          closeChild()
+          try {
+            handle.unsubscribe()
+          } finally {
+            closeChild()
+          }
         },
         sendBinary: (bytes) => handle.sendBinary(bytes)
       }
-    } catch (error) {
-      closeChild()
-      throw error
+    } finally {
+      if (!ownershipTransferred) {
+        releaseRetainedBytes?.()
+      }
+      releaseAdmission()
     }
   }
 
   private async subscribeSharedFileWatch(
-    params: unknown,
+    preparedInput: PreparedSubscriptionInput,
+    releaseRetainedBytes: () => void,
     callbacks: SubscriptionCallbacks,
     options?: { timeoutMs?: number }
   ): Promise<WebRuntimeSubscriptionHandle> {
-    const teardownKey = JSON.stringify(params) ?? String(params)
+    const initialTeardownKey = preparedInput.teardownKey
+    let teardownKey: string | null = initialTeardownKey
+    const worktree = preparedInput.worktree
     await Promise.all(
-      Array.from(this.fileWatchTeardownRetries.get(teardownKey) ?? [], (retry) => retry())
+      Array.from(this.fileWatchTeardownRetries.get(initialTeardownKey) ?? [], (retry) => retry())
     )
     let stopped = false
     let remoteSubscriptionId: string | null = null
@@ -198,12 +353,14 @@ export class WebRuntimeClient {
           if (response.ok === false) {
             throw new Error(`${response.error.code}: ${response.error.message}`)
           }
-          const retries = this.fileWatchTeardownRetries.get(teardownKey)
+          const key = teardownKey
+          const retries = key ? this.fileWatchTeardownRetries.get(key) : undefined
           retries?.delete(retryRemoteUnwatch)
           if (retries?.size === 0) {
-            this.fileWatchTeardownRetries.delete(teardownKey)
+            this.fileWatchTeardownRetries.delete(key!)
           }
           dropLocalSubscription()
+          teardownKey = null
         })
         .catch((error: unknown) => {
           console.warn('Failed to unwatch remote file subscription:', error)
@@ -225,9 +382,14 @@ export class WebRuntimeClient {
         return
       }
       // Why: retain the callback and retry until the server acks physical teardown; a new watch joins this barrier.
-      const retries = this.fileWatchTeardownRetries.get(teardownKey) ?? new Set()
+      const key = teardownKey
+      if (!key) {
+        dropLocalSubscription()
+        return
+      }
+      const retries = this.fileWatchTeardownRetries.get(key) ?? new Set()
       retries.add(retryRemoteUnwatch)
-      this.fileWatchTeardownRetries.set(teardownKey, retries)
+      this.fileWatchTeardownRetries.set(key, retries)
       void retryRemoteUnwatch().catch(() => {})
     }
     const wrappedCallbacks: SubscriptionCallbacks = {
@@ -247,11 +409,13 @@ export class WebRuntimeClient {
           return
         }
         if (!stopped) {
-          callbacks.onResponse(response)
+          invokeConsumerCallback(() => callbacks.onResponse(response))
           if (pendingReplayResync && nextSubscriptionId && response.ok) {
             pendingReplayResync = false
             // Why: a replayed watch only reports events after its own setup, so consumers must re-scan the reconnect gap.
-            callbacks.onResponse(createFileWatchReplayOverflowResponse(response, params))
+            invokeConsumerCallback(() =>
+              callbacks.onResponse(createFileWatchReplayOverflowResponse(response, worktree))
+            )
           }
         } else if (response.ok === false) {
           dropLocalSubscription()
@@ -259,12 +423,12 @@ export class WebRuntimeClient {
       },
       onError: (error) => {
         if (!stopped) {
-          callbacks.onError?.(error)
+          invokeConsumerCallback(() => callbacks.onError?.(error))
         }
       },
       onClose: () => {
         if (!stopped) {
-          callbacks.onClose?.()
+          invokeConsumerCallback(() => callbacks.onClose?.())
         }
       },
       onTransportInterrupted: () => {
@@ -273,25 +437,30 @@ export class WebRuntimeClient {
         if (!stopped) {
           return
         }
-        const retries = this.fileWatchTeardownRetries.get(teardownKey)
+        const key = teardownKey
+        const retries = key ? this.fileWatchTeardownRetries.get(key) : undefined
         retries?.delete(retryRemoteUnwatch)
         if (retries?.size === 0) {
-          this.fileWatchTeardownRetries.delete(teardownKey)
+          this.fileWatchTeardownRetries.delete(key!)
         }
         // Why: socket close physically releases the server subscription — a stopped watch must not replay on the replacement.
         dropLocalSubscription()
+        teardownKey = null
       },
       onTransportReplayed: () => {
         transportInterrupted = false
         pendingReplayResync = true
       }
     }
-    handle = await this.subscribeOnCurrentConnection(
+    handle = await this.subscribePreparedOnCurrentConnection(
       'files.watch',
-      params,
+      preparedInput,
+      releaseRetainedBytes,
       wrappedCallbacks,
       options
     )
+    preparedInput.paramsJson = undefined
+    preparedInput.teardownKey = ''
 
     return {
       unsubscribe: () => {
@@ -311,25 +480,88 @@ export class WebRuntimeClient {
     }
   }
 
-  private async subscribeOnCurrentConnection(
+  protected async subscribeOnCurrentConnection(
     method: string,
     params: unknown,
     callbacks: SubscriptionCallbacks,
     options?: SubscribeOptions
   ): Promise<WebRuntimeSubscriptionHandle> {
+    assertRpcMethodWithinLimit(method)
+    const releaseAdmission = this.claimSubscriptionAdmission()
+    let releaseRetainedBytes: (() => void) | null = null
+    let ownershipTransferred = false
+    try {
+      const preparedInput = prepareSubscriptionInput(method, params)
+      params = undefined
+      releaseRetainedBytes = this.outboundMemoryBudget.claimSubscriptionBytes(
+        preparedInput.retainedBytes
+      )
+      if (!releaseRetainedBytes) {
+        throw new Error(WEB_RUNTIME_BUSY_MESSAGE)
+      }
+      const handle = await this.subscribePreparedOnCurrentConnection(
+        method,
+        preparedInput,
+        releaseRetainedBytes,
+        callbacks,
+        options
+      )
+      ownershipTransferred = true
+      preparedInput.paramsJson = undefined
+      preparedInput.teardownKey = ''
+      return handle
+    } finally {
+      if (!ownershipTransferred) {
+        releaseRetainedBytes?.()
+      }
+      releaseAdmission()
+    }
+  }
+
+  private async subscribePreparedOnCurrentConnection(
+    method: string,
+    preparedInput: PreparedSubscriptionInput,
+    releaseRetainedBytes: () => void,
+    callbacks: SubscriptionCallbacks,
+    options?: SubscribeOptions
+  ): Promise<WebRuntimeSubscriptionHandle> {
     await this.waitForConnected(options?.timeoutMs)
+    if (this.subscriptions.size >= WEB_RUNTIME_MAX_SUBSCRIPTIONS) {
+      throw new Error(WEB_RUNTIME_BUSY_MESSAGE)
+    }
     const id = this.nextId()
-    const subscription: RuntimeSubscription = { id, method, params, callbacks, needsReplay: false }
+    const serialized = serializePreparedRpcFrame({
+      id,
+      deviceToken: this.pairing.deviceToken,
+      method,
+      paramsJson: preparedInput.paramsJson,
+      paramsByteLength: preparedInput.paramsByteLength
+    })
+    const subscription: RuntimeSubscription = {
+      id,
+      method,
+      paramsJson: preparedInput.paramsJson,
+      paramsByteLength: preparedInput.paramsByteLength,
+      callbacks,
+      needsReplay: false,
+      releaseRetainedBytes,
+      cancelQueuedFrame: cancelNothing
+    }
     this.subscriptions.set(id, subscription)
-    if (!this.sendEncrypted({ id, deviceToken: this.pairing.deviceToken, method, params })) {
-      this.subscriptions.delete(id)
-      throw new Error('Remote Orca runtime is not connected.')
+    const sent = this.sendEncryptedSerialized(serialized)
+    subscription.cancelQueuedFrame = sent.cancel
+    if (!sent.accepted) {
+      this.removeSubscription(id, subscription)
+      throw new Error('Remote Orca runtime could not send the subscription.')
     }
     return {
       unsubscribe: () => {
-        this.subscriptions.delete(subscription.id)
+        const paramsJson = subscription.paramsJson
+        if (!this.removeSubscription(subscription.id, subscription)) {
+          return
+        }
         // Tell the server to reap its keyed cleanup before the socket closes; best-effort (a closed socket already reaps).
-        const teardown = options?.buildUnsubscribe?.(params)
+        const teardown = options?.buildUnsubscribe?.(parseSerializedParams(paramsJson))
         if (teardown) {
           this.sendEncrypted({
             id: this.nextId(),
@@ -348,25 +580,36 @@ export class WebRuntimeClient {
   close(options: { notifySubscriptions?: boolean } = {}): void {
     const shouldNotifySubscriptions = options.notifySubscriptions ?? true
     this.intentionallyClosed = true
-    for (const child of Array.from(this.childClients)) {
-      child.close({ notifySubscriptions: shouldNotifySubscriptions })
-    }
+    const children = Array.from(this.childClients)
     this.childClients.clear()
     this.fileWatchTeardownRetries.clear()
     this.clearTimers()
+    const ws = this.ws
+    this.ws = null
+    this.sharedKey = null
+    this.disposeOutboundTransport()
+    if (ws) {
+      try {
+        ws.close()
+      } catch {
+        // The client is already detached; a browser close failure must not retain transport state.
+      }
+    }
     this.rejectAllPending('Remote Orca runtime connection closed.')
     this.rejectAllWaiters(new Error('Remote Orca runtime connection closed.'))
+    this.setState('disconnected')
+    for (const child of children) {
+      try {
+        child.close({ notifySubscriptions: shouldNotifySubscriptions })
+      } catch {
+        // Continue closing sibling transports even if one child cleanup fails.
+      }
+    }
     if (shouldNotifySubscriptions) {
       this.notifySubscriptionsClosed()
     } else {
-      this.subscriptions.clear()
+      this.clearSubscriptions()
     }
-    if (this.ws) {
-      this.ws.close()
-      this.ws = null
-    }
-    this.sharedKey = null
-    this.setState('disconnected')
   }
 
   private openConnection(): void {
@@ -378,6 +621,15 @@ export class WebRuntimeClient {
       ws = new WebSocket(this.pairing.endpoint)
     } catch (error) {
       this.rejectAllPending(error instanceof Error ? error.message : String(error))
+      this.scheduleReconnect()
+      return
+    }
+    try {
+      this.outboundSocketMemory = this.outboundMemoryBudget.registerBufferedAmount(
+        () => ws.bufferedAmount
+      )
+    } catch {
+      ws.close()
       this.scheduleReconnect()
       return
     }
@@ -402,6 +654,7 @@ export class WebRuntimeClient {
       this.setState('handshaking')
       const keyPair = generateKeyPair()
       this.sharedKey = deriveSharedKey(keyPair.secretKey, this.serverPublicKey)
+      this.ensureOutboundQueue(ws)
       ws.send(
         JSON.stringify({
           type: 'e2ee_hello',
@@ -443,17 +696,28 @@ export class WebRuntimeClient {
 
   private async handleSocketMessage(rawData: unknown, sourceWs?: WebSocket): Promise<void> {
     const raw = typeof rawData === 'string' ? rawData : null
+    if (raw !== null && raw.length > WEB_RUNTIME_MAX_ENCRYPTED_TEXT_FRAME_BYTES) {
+      const offendingSocket = sourceWs ?? this.ws
+      if (offendingSocket) {
+        this.failOutboundSocket(offendingSocket)
+      }
+      return
+    }
     if (this.state === 'handshaking') {
       if (raw === null || !this.sharedKey) {
         return
       }
       try {
-        const control = JSON.parse(raw) as { type?: unknown }
+        const control = parseWebRuntimeInboundJson<{ type?: unknown }>(raw)
         if (control.type === 'e2ee_ready') {
           this.sendEncrypted({ type: 'e2ee_auth', deviceToken: this.pairing.deviceToken })
           return
         }
-      } catch {
+      } catch (error) {
+        if (isWebRuntimeJsonStructureCapacityError(error)) {
+          this.failInboundJsonCapacity(sourceWs)
+          return
+        }
         // The authenticated control frame is encrypted, so non-JSON is normal here.
       }
 
@@ -462,22 +726,22 @@ export class WebRuntimeClient {
         return
       }
       try {
-        const control = JSON.parse(plaintext) as {
+        const control = parseWebRuntimeInboundJson<{
           type?: unknown
           error?: { code?: string; message?: string }
-        }
+        }>(plaintext)
         if (control.type === 'e2ee_authenticated') {
           this.clearHandshakeTimer()
           this.reconnectAttempt = 0
           this.setState('connected')
         } else if (control.type === 'e2ee_error' || control.error?.code === 'unauthorized') {
-          this.intentionallyClosed = true
-          this.setState('auth-failed')
-          this.rejectAllPending('Unauthorized. Pair this web client again.')
-          this.notifySubscriptionsError('unauthorized', 'Unauthorized. Pair this web client again.')
-          this.ws?.close()
+          this.handleAuthenticationFailure()
         }
-      } catch {
+      } catch (error) {
+        if (isWebRuntimeJsonStructureCapacityError(error)) {
+          this.failInboundJsonCapacity(sourceWs)
+          return
+        }
         // Ignore malformed handshake payloads; the server will close on timeout.
       }
       return
@@ -499,8 +763,8 @@ export class WebRuntimeClient {
       if (!plaintext) {
         return
       }
-      for (const subscription of this.subscriptions.values()) {
-        subscription.callbacks.onBinary?.(plaintext)
+      for (const subscription of Array.from(this.subscriptions.values())) {
+        invokeConsumerCallback(() => subscription.callbacks.onBinary?.(plaintext))
       }
       return
     }
@@ -512,8 +776,13 @@ export class WebRuntimeClient {
 
     let response: RuntimeRpcResponse<unknown> | Record<string, unknown>
     try {
-      response = JSON.parse(plaintext) as RuntimeRpcResponse<unknown> | Record<string, unknown>
-    } catch {
+      response = parseWebRuntimeInboundJson<RuntimeRpcResponse<unknown> | Record<string, unknown>>(
+        plaintext
+      )
+    } catch (error) {
+      if (isWebRuntimeJsonStructureCapacityError(error)) {
+        this.failInboundJsonCapacity(sourceWs)
+      }
       return
     }
     if (isKeepaliveFrame(response)) {
@@ -523,26 +792,23 @@ export class WebRuntimeClient {
       return
     }
     if (isRuntimeFailureResponse(response) && response.error.code === 'unauthorized') {
-      this.intentionallyClosed = true
-      this.setState('auth-failed')
-      this.rejectAllPending('Unauthorized. Pair this web client again.')
-      this.notifySubscriptionsError('unauthorized', 'Unauthorized. Pair this web client again.')
-      this.ws?.close()
+      this.handleAuthenticationFailure()
       return
     }
 
     const subscription = this.subscriptions.get(response.id)
     if (subscription) {
       const subscriptionResponse = response as RuntimeRpcResponse<unknown>
-      // Why: setup failures must be evicted before callbacks so reconnect cannot replay them.
-      if (subscriptionResponse.ok === false) {
-        this.subscriptions.delete(response.id)
+      subscription.cancelQueuedFrame = cancelNothing
+      const ended = subscriptionResponse.ok && isEndResult(subscriptionResponse.result)
+      // Why: terminal subscriptions must release replay payloads before consumer code can throw or reconnect.
+      if (subscriptionResponse.ok === false || ended) {
+        this.removeSubscription(response.id, subscription)
       }
       // Why: subscription-backed unary RPCs can return ordinary success frames.
-      subscription.callbacks.onResponse(subscriptionResponse)
-      if (subscriptionResponse.ok && isEndResult(subscriptionResponse.result)) {
-        this.subscriptions.delete(response.id)
-        subscription.callbacks.onClose?.()
+      invokeConsumerCallback(() => subscription.callbacks.onResponse(subscriptionResponse))
+      if (ended) {
+        invokeConsumerCallback(() => subscription.callbacks.onClose?.())
       }
       return
     }
@@ -551,27 +817,61 @@ export class WebRuntimeClient {
     if (!pending) {
       return
     }
+    pending.cancelQueuedFrame()
+    pending.cancelQueuedFrame = cancelNothing
     this.pending.delete(response.id)
     window.clearTimeout(pending.timeout)
     pending.resolve(response as RuntimeRpcResponse<unknown>)
   }
 
   private sendEncrypted(message: unknown): boolean {
-    const ws = this.ws
-    if (!ws || ws.readyState !== WebSocket.OPEN || !this.sharedKey) {
+    try {
+      const { serialized } = stringifyWebRuntimeOutboundJson(
+        message,
+        WEB_RUNTIME_MAX_OUTBOUND_JSON_BYTES
+      )
+      return serialized !== undefined && this.sendEncryptedSerialized(serialized).accepted
+    } catch {
       return false
     }
-    ws.send(encrypt(JSON.stringify(message), this.sharedKey))
-    return true
+  }
+
+  private sendEncryptedSerialized(serialized: string): WsOutboundEnqueueResult {
+    const ws = this.ws
+    if (!ws || ws.readyState !== WebSocket.OPEN || !this.sharedKey) {
+      return REJECTED_OUTBOUND_ENQUEUE
+    }
+    const queue = this.ensureOutboundQueue(ws)
+    if (!queue) {
+      return REJECTED_OUTBOUND_ENQUEUE
+    }
+    try {
+      const payload = encrypt(serialized, this.sharedKey)
+      return queue.enqueueCancelable({ payload, bytes: payload.length })
+    } catch {
+      return REJECTED_OUTBOUND_ENQUEUE
+    }
   }
 
   private sendEncryptedBinary(bytes: Uint8Array<ArrayBufferLike>): boolean {
     const ws = this.ws
+    if (ws && bytes.byteLength > WEB_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES) {
+      this.failOutboundSocket(ws)
+      return false
+    }
     if (!ws || ws.readyState !== WebSocket.OPEN || !this.sharedKey) {
       return false
     }
-    ws.send(encryptBytes(bytes, this.sharedKey))
-    return true
+    const queue = this.ensureOutboundQueue(ws)
+    if (!queue) {
+      return false
+    }
+    try {
+      const payload = encryptBytes(bytes, this.sharedKey)
+      return queue.enqueue({ payload, bytes: payload.byteLength })
+    } catch {
+      return false
+    }
   }
 
   private waitForConnected(timeoutMs = REQUEST_TIMEOUT_MS): Promise<void> {
@@ -583,6 +883,9 @@ export class WebRuntimeClient {
     }
     if (this.intentionallyClosed) {
       return Promise.reject(new Error('Remote Orca runtime connection closed.'))
+    }
+    if (this.waiters.length >= WEB_RUNTIME_MAX_CONNECTION_WAITERS) {
+      return Promise.reject(new Error(WEB_RUNTIME_BUSY_MESSAGE))
     }
     return new Promise((resolve, reject) => {
       const timeout = window.setTimeout(() => {
@@ -612,10 +915,50 @@ export class WebRuntimeClient {
     })
   }
 
+  private claimCallAdmission(): () => void {
+    if (this.activeCallAdmissions >= WEB_RUNTIME_MAX_PENDING_REQUESTS) {
+      throw new Error(WEB_RUNTIME_BUSY_MESSAGE)
+    }
+    this.activeCallAdmissions += 1
+    return releaseOnce(() => {
+      this.activeCallAdmissions -= 1
+    })
+  }
+
+  private claimSubscriptionAdmission(): () => void {
+    if (this.pendingSubscriptionAdmissions >= WEB_RUNTIME_MAX_SUBSCRIPTIONS) {
+      throw new Error(WEB_RUNTIME_BUSY_MESSAGE)
+    }
+    this.pendingSubscriptionAdmissions += 1
+    return releaseOnce(() => {
+      this.pendingSubscriptionAdmissions -= 1
+    })
+  }
+
+  private handleAuthenticationFailure(): void {
+    this.intentionallyClosed = true
+    this.clearTimers()
+    this.setState('auth-failed')
+    const ws = this.ws
+    this.ws = null
+    this.sharedKey = null
+    this.disposeOutboundTransport()
+    if (ws) {
+      try {
+        ws.close()
+      } catch {
+        // Authentication failure already detached the socket and released its memory claims.
+      }
+    }
+    this.rejectAllPending('Unauthorized. Pair this web client again.')
+    this.notifySubscriptionsError('unauthorized', 'Unauthorized. Pair this web client again.')
+  }
+
   private handleSocketClosed(closedWs: WebSocket): void {
     if (this.ws !== closedWs) {
       return
     }
+    this.disposeOutboundTransport()
     this.ws = null
     this.sharedKey = null
     this.clearConnectTimer()
@@ -629,6 +972,69 @@ export class WebRuntimeClient {
     }
     this.setState('disconnected')
     this.scheduleReconnect()
+  }
+
+  private ensureOutboundQueue(
+    ws: WebSocket
+  ): WsOutboundBackpressureQueue<WebRuntimeOutboundFrame> | null {
+    if (this.outboundQueue) {
+      return this.outboundQueue
+    }
+    if (!this.outboundSocketMemory) {
+      try {
+        this.outboundSocketMemory = this.outboundMemoryBudget.registerBufferedAmount(
+          () => ws.bufferedAmount
+        )
+      } catch {
+        return null
+      }
+    }
+    const socketMemory = this.outboundSocketMemory
+    this.outboundQueue = createWsOutboundBackpressureQueue<WebRuntimeOutboundFrame>({
+      send: (frame) => {
+        try {
+          ws.send(frame.payload)
+        } catch {
+          this.failOutboundSocket(ws)
+        }
+      },
+      byteLengthOf: (frame) => frame.bytes,
+      getBufferedAmount: () => ws.bufferedAmount,
+      isWritable: () => this.ws === ws && ws.readyState === WebSocket.OPEN && !!this.sharedKey,
+      canSend: (bytes) => socketMemory.canSend(bytes),
+      claimQueuedBytes: (bytes) => this.outboundMemoryBudget.claimQueuedBytes(bytes),
+      softCapBytes: WEB_RUNTIME_OUTBOUND_SOCKET_SOFT_CAP_BYTES,
+      maxQueuedBytes: WEB_RUNTIME_OUTBOUND_MAX_QUEUED_BYTES,
+      maxQueuedFrames: WEB_RUNTIME_OUTBOUND_MAX_QUEUED_FRAMES,
+      maxFrameBytes: WEB_RUNTIME_MAX_OUTBOUND_WIRE_FRAME_BYTES,
+      onOverflow: () => this.failOutboundSocket(ws)
+    })
+    return this.outboundQueue
+  }
+
+  private failOutboundSocket(ws: WebSocket): void {
+    if (this.ws !== ws) {
+      return
+    }
+    try {
+      ws.close()
+    } finally {
+      this.handleSocketClosed(ws)
+    }
+  }
+
+  private failInboundJsonCapacity(sourceWs?: WebSocket): void {
+    const ws = sourceWs ?? this.ws
+    if (ws) {
+      this.failOutboundSocket(ws)
+    }
+  }
+
+  private disposeOutboundTransport(): void {
+    this.outboundQueue?.dispose()
+    this.outboundQueue = null
+    this.outboundSocketMemory?.release()
+    this.outboundSocketMemory = null
   }
 
   private scheduleReconnect(): void {
@@ -667,6 +1073,8 @@ export class WebRuntimeClient {
     for (const [id, pending] of this.pending) {
       this.pending.delete(id)
       window.clearTimeout(pending.timeout)
+      pending.cancelQueuedFrame()
+      pending.cancelQueuedFrame = cancelNothing
       pending.reject(error)
     }
   }
@@ -677,22 +1085,44 @@ export class WebRuntimeClient {
     }
   }
 
+  private removeSubscription(id: string, expected?: RuntimeSubscription): boolean {
+    const subscription = this.subscriptions.get(id)
+    if (!subscription || (expected && subscription !== expected)) {
+      return false
+    }
+    this.subscriptions.delete(id)
+    subscription.cancelQueuedFrame?.()
+    subscription.cancelQueuedFrame = cancelNothing
+    subscription.paramsJson = undefined
+    subscription.paramsByteLength = 0
+    subscription.releaseRetainedBytes?.()
+    subscription.releaseRetainedBytes = releaseNothing
+    return true
+  }
+
+  private clearSubscriptions(): void {
+    for (const [id, subscription] of Array.from(this.subscriptions)) {
+      this.removeSubscription(id, subscription)
+    }
+  }
+
   private notifySubscriptionsClosed(): void {
     const subscriptions = Array.from(this.subscriptions.values())
-    this.subscriptions.clear()
+    this.clearSubscriptions()
     for (const subscription of subscriptions) {
-      subscription.callbacks.onClose?.()
+      invokeConsumerCallback(() => subscription.callbacks.onClose?.())
     }
   }
 
   private handleInterruptedSubscriptions(): void {
     for (const [id, subscription] of Array.from(this.subscriptions)) {
       if (!SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(subscription.method)) {
-        this.subscriptions.delete(id)
-        subscription.callbacks.onClose?.()
+        this.removeSubscription(id, subscription)
+        invokeConsumerCallback(() => subscription.callbacks.onClose?.())
         continue
       }
-      subscription.callbacks.onTransportInterrupted?.()
+      subscription.cancelQueuedFrame = cancelNothing
+      invokeConsumerCallback(() => subscription.callbacks.onTransportInterrupted?.())
       if (this.subscriptions.get(subscription.id) === subscription) {
         subscription.needsReplay = true
       }
@@ -708,15 +1138,22 @@ export class WebRuntimeClient {
       subscription.id = this.nextId()
       subscription.needsReplay = false
       this.subscriptions.set(subscription.id, subscription)
-      if (
-        this.sendEncrypted({
+      let sent = REJECTED_OUTBOUND_ENQUEUE
+      try {
+        const serialized = serializePreparedRpcFrame({
           id: subscription.id,
           deviceToken: this.pairing.deviceToken,
           method: subscription.method,
-          params: subscription.params
+          paramsJson: subscription.paramsJson,
+          paramsByteLength: subscription.paramsByteLength
         })
-      ) {
-        subscription.callbacks.onTransportReplayed?.()
+        sent = this.sendEncryptedSerialized(serialized)
+      } catch {
+        // A previously admitted subscription stays replayable if a replacement frame cannot be prepared.
+      }
+      subscription.cancelQueuedFrame = sent.cancel
+      if (sent.accepted) {
+        invokeConsumerCallback(() => subscription.callbacks.onTransportReplayed?.())
       } else {
         subscription.needsReplay = true
       }
@@ -725,9 +1162,9 @@ export class WebRuntimeClient {
 
   private notifySubscriptionsError(code: string, message: string): void {
     const subscriptions = Array.from(this.subscriptions.values())
-    this.subscriptions.clear()
+    this.clearSubscriptions()
     for (const subscription of subscriptions) {
-      subscription.callbacks.onError?.({ code, message })
+      invokeConsumerCallback(() => subscription.callbacks.onError?.({ code, message }))
     }
   }
 
@@ -836,6 +1273,81 @@ export class WebRuntimeClient {
   }
 }
 
+function assertRpcMethodWithinLimit(method: string): void {
+  if (
+    measureUtf8ByteLength(method, { stopAfterBytes: WEB_RUNTIME_MAX_RPC_METHOD_BYTES })
+      .exceededLimit
+  ) {
+    throw new Error(`Remote runtime RPC method exceeds ${WEB_RUNTIME_MAX_RPC_METHOD_BYTES} bytes`)
+  }
+}
+
+function prepareSubscriptionInput(method: string, params: unknown): PreparedSubscriptionInput {
+  const prepared = stringifyWebRuntimeOutboundJson(params, WEB_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES)
+  const canonicalParams = parseSerializedParams(prepared.serialized)
+  const worktree = (canonicalParams as { worktree?: unknown } | null)?.worktree
+  const normalizedWorktree = typeof worktree === 'string' ? worktree : ''
+  return {
+    paramsJson: prepared.serialized,
+    paramsByteLength: prepared.byteLength,
+    retainedBytes:
+      retainedPreparedFrameBytes(prepared.serialized, method) + normalizedWorktree.length * 2,
+    teardownKey: prepared.serialized ?? String(canonicalParams),
+    worktree: normalizedWorktree
+  }
+}
+
+function serializePreparedRpcFrame(input: {
+  id: string
+  deviceToken: string
+  method: string
+  paramsJson: string | undefined
+  paramsByteLength: number
+}): string {
+  const header = stringifyWebRuntimeOutboundJson(
+    { id: input.id, deviceToken: input.deviceToken, method: input.method },
+    WEB_RUNTIME_MAX_OUTBOUND_JSON_BYTES
+  )
+  if (header.serialized === undefined) {
+    throw new WebRuntimeOutboundJsonLimitError(WEB_RUNTIME_MAX_OUTBOUND_JSON_BYTES)
+  }
+  if (input.paramsJson === undefined) {
+    return header.serialized
+  }
+  const totalBytes = header.byteLength + RPC_PARAMS_MEMBER_PREFIX.length + input.paramsByteLength
+  if (totalBytes > WEB_RUNTIME_MAX_OUTBOUND_JSON_BYTES) {
+    throw new WebRuntimeOutboundJsonLimitError(WEB_RUNTIME_MAX_OUTBOUND_JSON_BYTES)
+  }
+  return `${header.serialized.slice(0, -1)}${RPC_PARAMS_MEMBER_PREFIX}${input.paramsJson}}`
+}
+
+function parseSerializedParams(serialized: string | undefined): unknown {
+  return serialized === undefined ? undefined : JSON.parse(serialized)
+}
+
+function retainedPreparedFrameBytes(serialized: string | undefined, method: string): number {
+  return (serialized?.length ?? 0) * 2 + method.length * 2 + 256
+}
+
+function releaseOnce(release: () => void): () => void {
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    release()
+  }
+}
+
+function invokeConsumerCallback(callback: () => void): void {
+  try {
+    callback()
+  } catch {
+    // One consumer must not block transport cleanup, replay, or sibling notifications.
+  }
+}
+
 function isRuntimeFailureResponse(
   response: RuntimeRpcResponse<unknown> | Record<string, unknown>
 ): response is RuntimeRpcResponse<unknown> & { ok: false } {
@@ -863,19 +1375,18 @@ function getFileWatchSubscriptionId(response: RuntimeRpcResponse<unknown>): stri
 
 function createFileWatchReplayOverflowResponse(
   readyResponse: RuntimeRpcSuccess<unknown>,
-  params: unknown
+  worktree: string
 ): RuntimeRpcSuccess<{
   type: 'changed'
   worktree: string
   events: { kind: 'overflow'; absolutePath: string }[]
 }> {
-  const worktree = (params as { worktree?: unknown } | null)?.worktree
   return {
     id: readyResponse.id,
     ok: true,
     result: {
       type: 'changed',
-      worktree: typeof worktree === 'string' ? worktree : '',
+      worktree,
       // Why: overflow consumers re-scan the whole root and ignore the path (client lacks the server-side root here).
       events: [{ kind: 'overflow', absolutePath: '' }]
     },
@@ -902,12 +1413,15 @@ async function websocketPayloadToUint8(
   value: unknown
 ): Promise<Uint8Array<ArrayBufferLike> | null> {
   if (value instanceof Uint8Array) {
-    return value
+    return value.byteLength <= WEB_RUNTIME_MAX_BINARY_FRAME_BYTES ? value : null
   }
   if (value instanceof ArrayBuffer) {
-    return new Uint8Array(value)
+    return value.byteLength <= WEB_RUNTIME_MAX_BINARY_FRAME_BYTES ? new Uint8Array(value) : null
   }
   if (value instanceof Blob) {
+    if (value.size > WEB_RUNTIME_MAX_BINARY_FRAME_BYTES) {
+      return null
+    }
     return new Uint8Array(await value.arrayBuffer())
   }
   return null

@@ -18,8 +18,10 @@ import {
   writeSync
 } from 'node:fs'
 import { dirname } from 'node:path'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 
 const DEFAULT_FLUSH_BUFFER_THRESHOLD = 32
+export const DEFAULT_FLUSH_BUFFER_BYTE_THRESHOLD = 1024 * 1024
 export const DEFAULT_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
 export const DEFAULT_MAX_FILES = 10
 export const DEFAULT_BATCH_WINDOW_MS = 200
@@ -32,6 +34,7 @@ export type LocalFileSinkOptions = {
   readonly maxFiles?: number
   readonly batchWindowMs?: number
   readonly flushBufferThreshold?: number
+  readonly flushBufferByteThreshold?: number
 }
 
 export type LocalFileSink = {
@@ -66,6 +69,14 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
   const maxFiles = opts.maxFiles ?? DEFAULT_MAX_FILES
   const batchWindowMs = opts.batchWindowMs ?? DEFAULT_BATCH_WINDOW_MS
   const flushThreshold = opts.flushBufferThreshold ?? DEFAULT_FLUSH_BUFFER_THRESHOLD
+  const requestedFlushByteThreshold =
+    opts.flushBufferByteThreshold ?? DEFAULT_FLUSH_BUFFER_BYTE_THRESHOLD
+  const flushByteThreshold = Number.isFinite(requestedFlushByteThreshold)
+    ? Math.max(
+        1,
+        Math.min(DEFAULT_FLUSH_BUFFER_BYTE_THRESHOLD, Math.trunc(requestedFlushByteThreshold))
+      )
+    : DEFAULT_FLUSH_BUFFER_BYTE_THRESHOLD
 
   // Traces hold paths and crash context; lock to current-user regardless of umask.
   const traceDirectory = dirname(filePath)
@@ -78,6 +89,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
   let currentBytes: number = safeFstatSize(fd)
 
   let buffer: string[] = []
+  let bufferBytes = 0
   let timer: NodeJS.Timeout | null = null
   let closed = false
 
@@ -135,6 +147,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
     }
     const lines = buffer
     buffer = []
+    bufferBytes = 0
     let pendingChunk: string[] = []
     let pendingChunkBytes = 0
 
@@ -210,14 +223,21 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
         return
       }
       let line: string
+      let lineBytes: number
       try {
-        line = `${JSON.stringify(record)}\n`
+        const serialized = stringifyJsonWithinByteLimit(record, Math.max(0, maxBytes - 1))
+        line = `${serialized.serialized}\n`
+        lineBytes = serialized.byteLength + 1
       } catch {
         // Redactor handles cycles upstream; a throw here means pre-redact data slipped in — drop rather than crash (best-effort).
         return
       }
+      if (bufferBytes > 0 && bufferBytes + lineBytes > flushByteThreshold) {
+        flushBuffer()
+      }
       buffer.push(line)
-      if (buffer.length >= flushThreshold) {
+      bufferBytes += lineBytes
+      if (buffer.length >= flushThreshold || bufferBytes >= flushByteThreshold) {
         flushBuffer()
       } else {
         ensureTimer()

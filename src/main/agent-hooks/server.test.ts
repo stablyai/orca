@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  truncateSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
@@ -17,6 +18,8 @@ import {
   AgentHookServer,
   agentHookServer,
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,
+  MAX_AGENT_HOOK_LAST_STATUS_FILE_BYTES,
+  MAX_AGENT_HOOK_LAST_STATUS_STRUCTURAL_TOKENS,
   _internals
 } from './server'
 import {
@@ -6614,6 +6617,46 @@ describe('Last-status persistence', () => {
     } finally {
       server.stop()
       warnSpy.mockRestore()
+    }
+  })
+
+  it('treats an oversized sparse last-status file as empty hydration', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(lastStatusPath(), '{"version":2,"entries":{}}', 'utf8')
+    truncateSync(lastStatusPath(), MAX_AGENT_HOOK_LAST_STATUS_FILE_BYTES + 1)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([])
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[agent-hooks] failed to read last-status file:',
+        expect.any(Error)
+      )
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('rejects structurally amplified last-status JSON before parsing', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const values = '0,'.repeat(MAX_AGENT_HOOK_LAST_STATUS_STRUCTURAL_TOKENS)
+    writeFileSync(lastStatusPath(), `[${values}0]`, 'utf8')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([])
+      expect(parseSpy).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[agent-hooks] last-status file is invalid or too complex; ignoring'
+      )
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+      parseSpy.mockRestore()
     }
   })
 

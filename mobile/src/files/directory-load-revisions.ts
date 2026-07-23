@@ -19,6 +19,21 @@ export function resetDirectoryLoadRevisions(revisions: DirectoryLoadRevisions): 
   revisions.revisionsByPath.clear()
 }
 
+export function forgetDirectoryLoadBranches(
+  revisions: DirectoryLoadRevisions,
+  relativePaths: readonly string[]
+): void {
+  for (const loadedPath of revisions.revisionsByPath.keys()) {
+    if (
+      relativePaths.some(
+        (relativePath) => loadedPath === relativePath || loadedPath.startsWith(`${relativePath}/`)
+      )
+    ) {
+      revisions.revisionsByPath.delete(loadedPath)
+    }
+  }
+}
+
 export function beginDirectoryLoad(
   revisions: DirectoryLoadRevisions,
   scope: string,

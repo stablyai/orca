@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -136,6 +136,24 @@ describe('getRelayShellLaunchConfig', () => {
       'export ORCA_USER_ZDOTDIR="${ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
     )
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'replaces a sparse oversized wrapper without reading its payload',
+    () => {
+      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const wrapperPath = join(zshRoot, '.zshenv')
+      mkdirSync(zshRoot, { recursive: true })
+      writeFileSync(wrapperPath, '')
+      truncateSync(wrapperPath, 1024 * 1024 * 1024)
+
+      getRelayShellLaunchConfig('/bin/zsh', {
+        HOME: homeDir,
+        ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay'
+      })
+
+      expect(readFileSync(wrapperPath, 'utf8')).toContain('export ORCA_USER_ZDOTDIR=')
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'wraps zsh when MiMo home must survive shell startup',

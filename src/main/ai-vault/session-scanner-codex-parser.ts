@@ -1,7 +1,6 @@
-import { createReadStream } from 'node:fs'
-import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
+import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { normalizePromptField } from '../../shared/agent-status-field-normalization'
 import {
@@ -9,6 +8,7 @@ import {
   cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
+  sessionAccumulatorRetainedUtf8Bytes,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
@@ -38,10 +38,7 @@ export async function parseCodexSessionFile(
   codexHome: string | null = null,
   executionHostId?: ExecutionHostId
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
+  const lines = iterateAiVaultJsonlLines(file.path)
 
   return parseCodexSessionLines({
     file,
@@ -276,6 +273,7 @@ function codexResumeStateFromParseState(
     consumeLine: (line) => consumeCodexRecordLine(state, line),
     clone: () =>
       codexResumeStateFromParseState(cloneCodexParseState(state), codexHome, titleReader),
+    retainedUtf8Bytes: () => sessionAccumulatorRetainedUtf8Bytes(state.accumulator),
     touchFile: (file) => {
       state.accumulator.modifiedAt = file.modifiedAt
     },

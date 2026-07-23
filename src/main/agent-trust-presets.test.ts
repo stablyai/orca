@@ -6,11 +6,14 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
+  truncateSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MAX_AGENT_STATE_FILE_BYTES } from './agent-state-file-reader'
 
 const testState = {
   fakeHomeDir: '',
@@ -38,8 +41,12 @@ vi.mock('node:os', async () => {
   }
 })
 
-const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTrusted } =
-  await import('./agent-trust-presets')
+const {
+  MAX_AGENT_TRUST_GIT_POINTER_BYTES,
+  markCodexProjectTrusted,
+  markCopilotFolderTrusted,
+  markCursorWorkspaceTrusted
+} = await import('./agent-trust-presets')
 
 beforeEach(() => {
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-'))
@@ -134,9 +141,115 @@ describe('markCopilotFolderTrusted', () => {
       rmSync(workspace, { recursive: true, force: true })
     }
   })
+
+  it('does not overwrite a sparse config above the 4 MiB read ceiling', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
+    const configDir = join(testState.fakeHomeDir, '.copilot')
+    const configPath = join(configDir, 'config.json')
+    try {
+      mkdirSync(configDir, { recursive: true })
+      writeFileSync(configPath, '{"keep":true}')
+      truncateSync(configPath, MAX_AGENT_STATE_FILE_BYTES + 1)
+
+      markCopilotFolderTrusted(workspace)
+
+      expect(statSync(configPath).size).toBe(MAX_AGENT_STATE_FILE_BYTES + 1)
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('markCodexProjectTrusted', () => {
+  it('accepts both linked-worktree pointers at the exact 64 KiB boundary', () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), 'orca-codex-exact-git-pointers-'))
+    const repository = join(fixtureRoot, 'repo')
+    const workspace = join(fixtureRoot, 'worktrees', 'feature')
+    const worktreeGitDir = join(repository, '.git', 'worktrees', 'feature')
+    const padPointer = (value: string): string =>
+      value + ' '.repeat(MAX_AGENT_TRUST_GIT_POINTER_BYTES - Buffer.byteLength(value))
+    try {
+      mkdirSync(worktreeGitDir, { recursive: true })
+      mkdirSync(workspace, { recursive: true })
+      const gitPointer = padPointer(`gitdir: ${worktreeGitDir}\n`)
+      const backlink = padPointer(`${join(workspace, '.git')}\n`)
+      expect(Buffer.byteLength(gitPointer)).toBe(MAX_AGENT_TRUST_GIT_POINTER_BYTES)
+      expect(Buffer.byteLength(backlink)).toBe(MAX_AGENT_TRUST_GIT_POINTER_BYTES)
+      writeFileSync(join(workspace, '.git'), gitPointer)
+      writeFileSync(join(worktreeGitDir, 'gitdir'), backlink)
+
+      markCodexProjectTrusted(workspace)
+
+      const written = readFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), 'utf8')
+      expect(written).toContain(
+        `[projects."${escapeTomlBasicString(realpathSync.native(repository))}"]`
+      )
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to the workspace when its sparse .git pointer exceeds 64 KiB', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-large-git-pointer-'))
+    try {
+      const gitPointerPath = join(workspace, '.git')
+      writeFileSync(gitPointerPath, '')
+      truncateSync(gitPointerPath, MAX_AGENT_TRUST_GIT_POINTER_BYTES + 1)
+
+      markCodexProjectTrusted(workspace)
+
+      const written = readFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), 'utf8')
+      expect(written).toContain(
+        `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]`
+      )
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to the workspace when the sparse gitdir backlink exceeds 64 KiB', () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), 'orca-codex-large-gitdir-pointer-'))
+    const repository = join(fixtureRoot, 'repo')
+    const workspace = join(fixtureRoot, 'worktrees', 'feature')
+    const worktreeGitDir = join(repository, '.git', 'worktrees', 'feature')
+    try {
+      mkdirSync(worktreeGitDir, { recursive: true })
+      mkdirSync(workspace, { recursive: true })
+      writeFileSync(join(workspace, '.git'), `gitdir: ${worktreeGitDir}\n`)
+      const backlinkPath = join(worktreeGitDir, 'gitdir')
+      writeFileSync(backlinkPath, '')
+      truncateSync(backlinkPath, MAX_AGENT_TRUST_GIT_POINTER_BYTES + 1)
+
+      markCodexProjectTrusted(workspace)
+
+      const written = readFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), 'utf8')
+      expect(written).toContain(
+        `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]`
+      )
+      expect(written).not.toContain(
+        `[projects."${escapeTomlBasicString(realpathSync.native(repository))}"]`
+      )
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('does not overwrite a sparse config above the 4 MiB read ceiling', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+    const configDir = join(testState.fakeHomeDir, '.codex')
+    const configPath = join(configDir, 'config.toml')
+    try {
+      mkdirSync(configDir, { recursive: true })
+      writeFileSync(configPath, 'model = "keep"\n')
+      truncateSync(configPath, MAX_AGENT_STATE_FILE_BYTES + 1)
+
+      expect(() => markCodexProjectTrusted(workspace)).toThrow('File too large')
+      expect(statSync(configPath).size).toBe(MAX_AGENT_STATE_FILE_BYTES + 1)
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('trusts the main repository root for a linked worktree without reading commondir', () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), 'orca-codex-linked-ws-'))
     const repository = join(fixtureRoot, 'repo')

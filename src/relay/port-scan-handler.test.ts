@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseHexAddress } from './port-scan-handler'
+import { LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES } from '../shared/linux-proc-port-scan-limits'
+import { parseHexAddress, parseLinuxProcListeningSockets } from './port-scan-handler'
 import { parseWindowsNetstatOutput, parseWindowsPowerShellPortRows } from './windows-port-scan'
 
 describe('parseHexAddress', () => {
@@ -65,6 +66,20 @@ describe('parseHexAddress', () => {
   it('parses port 3306 (mysql)', () => {
     const result = parseHexAddress('00000000:0CEA')
     expect(result).toEqual({ host: '0.0.0.0', port: 3306 })
+  })
+})
+
+describe('parseLinuxProcListeningSockets', () => {
+  it('caps retained listeners before inode and process scans', () => {
+    const rows = Array.from(
+      { length: LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES + 5 },
+      (_, index) =>
+        ` ${index}: 0100007F:${(index + 1).toString(16).padStart(4, '0')} 00000000:0000 0A 00000000:00000000 00:00000000 00000000 1000 0 ${index + 1}`
+    )
+
+    expect(parseLinuxProcListeningSockets(['header', ...rows].join('\n'))).toHaveLength(
+      LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES
+    )
   })
 })
 

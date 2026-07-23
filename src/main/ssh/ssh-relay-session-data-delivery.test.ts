@@ -56,6 +56,12 @@ vi.mock('../ipc/pty', () => ({
   setPtyOwnership: vi.fn()
 }))
 
+vi.mock('../ipc/pty-renderer-delivery-router', () => ({
+  routeExternalPtyData: vi.fn(),
+  routeExternalPtyReplay: vi.fn(),
+  routeExternalPtyExit: vi.fn()
+}))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
@@ -68,6 +74,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const { registerSshPtyProvider } = await import('../ipc/pty')
+const { routeExternalPtyData } = await import('../ipc/pty-renderer-delivery-router')
 
 describe('SshRelaySession data delivery', () => {
   beforeEach(() => {
@@ -76,16 +83,9 @@ describe('SshRelaySession data delivery', () => {
     mockDeploySuccess()
   })
 
-  it('delivers empty transformed relay spans with raw sequence metadata', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
-    const runtime = { onPtyData: vi.fn(() => 17), onPtyExit: vi.fn() }
-    const session = new SshRelaySession(
-      'target-1',
-      getMainWindow,
-      mockStore,
-      mockPortForward,
-      runtime as never
-    )
+  it('routes empty transformed relay spans with raw sequence metadata', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
       onData: ReturnType<typeof vi.fn>
@@ -99,14 +99,11 @@ describe('SshRelaySession data delivery', () => {
 
     onData({ id: 'ssh-pty-1', data: '', sequenceChars: 9, transformed: true })
 
-    expect(runtime.onPtyData).toHaveBeenCalledWith('ssh-pty-1', '', expect.any(Number), 9, true)
-    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+    expect(routeExternalPtyData).toHaveBeenCalledWith({
       id: 'ssh-pty-1',
       data: '',
       sequenceChars: 9,
-      transformed: true,
-      seq: 17,
-      rawLength: 9
+      transformed: true
     })
   })
 })

@@ -9,6 +9,12 @@ import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 import { useMountedRef } from './useMountedRef'
+import { InstalledSkillDiscoveryCoordinator } from './installed-skill-discovery-coordinator'
+
+export {
+  MAX_CACHED_SKILL_DISCOVERY_TARGETS,
+  MAX_PENDING_SKILL_DISCOVERY_TARGETS
+} from './installed-skill-discovery-cache'
 
 export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
   'home'
@@ -32,9 +38,7 @@ export type InstalledAgentSkillState = {
   refresh: () => Promise<boolean>
 }
 
-let cachedDiscoveryByTarget = new Map<string, SkillDiscoveryResult>()
-let pendingDiscoveryByTarget = new Map<string, Promise<SkillDiscoveryResult>>()
-let pendingDiscoverySatisfiesForcedRefreshByTarget = new Map<string, boolean>()
+let skillDiscoveryCoordinator = new InstalledSkillDiscoveryCoordinator()
 
 function normalizeSkillName(value: string): string {
   return value.trim().toLowerCase()
@@ -77,7 +81,7 @@ export function hasInstalledAgentSkillNamed(
 }
 
 export function notifyInstalledAgentSkillsChanged(): void {
-  cachedDiscoveryByTarget.clear()
+  skillDiscoveryCoordinator.clearCache()
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(INSTALLED_AGENT_SKILLS_CHANGED_EVENT))
   }
@@ -120,67 +124,26 @@ function getSkillDiscoveryTargetKey(target: SkillDiscoveryTarget | undefined): s
   return normalizedTarget?.runtime === 'wsl' ? `wsl:${normalizedTarget.wslDistro ?? ''}` : 'host'
 }
 
-function startInstalledAgentSkillDiscovery(
-  force: boolean,
-  target: SkillDiscoveryTarget | undefined
-): Promise<SkillDiscoveryResult> {
-  const key = getSkillDiscoveryTargetKey(target)
-  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
-  const discovery = window.api.skills
-    .discover(normalizedTarget)
-    .then((result) => {
-      cachedDiscoveryByTarget.set(key, result)
-      return result
-    })
-    .finally(() => {
-      if (pendingDiscoveryByTarget.get(key) === discovery) {
-        pendingDiscoveryByTarget.delete(key)
-        pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
-      }
-    })
-  pendingDiscoveryByTarget.set(key, discovery)
-  pendingDiscoverySatisfiesForcedRefreshByTarget.set(key, force)
-  return discovery
-}
-
-async function discoverInstalledAgentSkills(
+function discoverInstalledAgentSkills(
   force: boolean,
   target?: SkillDiscoveryTarget
 ): Promise<SkillDiscoveryResult> {
   const key = getSkillDiscoveryTargetKey(target)
-  const cachedDiscovery = cachedDiscoveryByTarget.get(key)
-  if (!force && cachedDiscovery) {
-    return cachedDiscovery
-  }
-
-  const inFlightDiscovery = pendingDiscoveryByTarget.get(key)
-  if (inFlightDiscovery) {
-    if (!force || pendingDiscoverySatisfiesForcedRefreshByTarget.get(key)) {
-      return inFlightDiscovery
-    }
-    try {
-      await inFlightDiscovery
-    } catch {
-      // Why: an explicit re-check should still read current disk state even if
-      // the older background scan failed.
-    }
-    const nextPendingDiscovery = pendingDiscoveryByTarget.get(key)
-    if (nextPendingDiscovery && nextPendingDiscovery !== inFlightDiscovery) {
-      return nextPendingDiscovery
-    }
-  }
-
-  return startInstalledAgentSkillDiscovery(force, target)
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
+  return skillDiscoveryCoordinator.discover({
+    force,
+    key,
+    run: () => window.api.skills.discover(normalizedTarget)
+  })
 }
 
 export const _installedAgentSkillDiscoveryInternalsForTests = {
   discoverInstalledAgentSkills,
   getSkillDiscoveryTargetKey,
   isOrchestrationSkillName,
+  cacheSizes: () => skillDiscoveryCoordinator.sizes(),
   reset(): void {
-    cachedDiscoveryByTarget = new Map()
-    pendingDiscoveryByTarget = new Map()
-    pendingDiscoverySatisfiesForcedRefreshByTarget = new Map()
+    skillDiscoveryCoordinator = new InstalledSkillDiscoveryCoordinator()
   }
 }
 
@@ -199,7 +162,7 @@ export function useInstalledAgentSkillNames(
   const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
   const discoveryTargetKey = getSkillDiscoveryTargetKey(discoveryTarget)
-  const cachedDiscovery = cachedDiscoveryByTarget.get(discoveryTargetKey) ?? null
+  const cachedDiscovery = skillDiscoveryCoordinator.getCached(discoveryTargetKey) ?? null
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
   const [loading, setLoading] = useState(enabled && !cachedDiscovery)
   const [error, setError] = useState<string | null>(null)
@@ -217,7 +180,7 @@ export function useInstalledAgentSkillNames(
     stateResetInputRef.current.discoveryTargetKey !== discoveryTargetKey ||
     stateResetInputRef.current.enabled !== enabled
   ) {
-    const nextCachedDiscovery = cachedDiscoveryByTarget.get(discoveryTargetKey) ?? null
+    const nextCachedDiscovery = skillDiscoveryCoordinator.getCached(discoveryTargetKey) ?? null
     const nextLoading = enabled && !nextCachedDiscovery
     stateResetInputRef.current = { discoveryTargetKey, enabled }
     resultForRender = nextCachedDiscovery

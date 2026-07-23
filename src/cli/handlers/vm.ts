@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
@@ -18,6 +18,8 @@ import {
   runEphemeralVmRecipeStart
 } from '../../shared/ephemeral-vm-recipe-runner'
 import type { OrcaVmRecipe } from '../../shared/types'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { MAX_ORCA_YAML_BYTES } from '../../shared/orca-yaml-file-limit'
 
 export const VM_HANDLERS: Record<string, CommandHandler> = {
   'vm recipe doctor': async ({ flags, cwd, json }) => {
@@ -80,7 +82,7 @@ function doctorRecipe(repoPath: string, recipeId: string): DoctorResult {
 }
 
 function readTextFile(path: string): string {
-  return readFileSync(path, 'utf8')
+  return readNodeFileSyncWithinLimit(path, MAX_ORCA_YAML_BYTES).buffer.toString('utf8')
 }
 
 // Why: give the agent the full create/destroy output so it can self-diagnose a

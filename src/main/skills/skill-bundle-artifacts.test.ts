@@ -1,8 +1,15 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { loadSkillBundleArtifacts } from './skill-bundle-artifacts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
+import {
+  loadSkillBundleArtifacts,
+  readSkillBundleArtifactJson,
+  SKILL_BUNDLE_CURRENT_MANIFEST_MAX_BYTES,
+  SKILL_BUNDLE_JSON_MAX_STRUCTURAL_TOKENS,
+  SKILL_BUNDLE_SNAPSHOT_REGISTRY_MAX_BYTES
+} from './skill-bundle-artifacts'
 
 const temporaryDirectories: string[] = []
 
@@ -75,5 +82,46 @@ describe('skill bundle artifacts', () => {
     await expect(loadSkillBundleArtifacts(resourceRoot)).rejects.toThrow(
       'Invalid skill release mapping'
     )
+  })
+
+  it('rejects a sparse oversized artifact without poisoning a later bounded load', async () => {
+    const resourceRoot = await mkdtemp(join(tmpdir(), 'orca-skill-artifacts-'))
+    temporaryDirectories.push(resourceRoot)
+    const target = join(resourceRoot, 'skills')
+    const source = resolve('resources', 'skills')
+    await mkdir(target, { recursive: true })
+    const [manifest, registry, releaseMapping] = await Promise.all(
+      ['current-manifest.json', 'snapshot-registry.json', 'release-mapping.json'].map((name) =>
+        readFile(join(source, name), 'utf8')
+      )
+    )
+    const manifestPath = join(target, 'current-manifest.json')
+    await Promise.all([
+      writeFile(manifestPath, ''),
+      writeFile(join(target, 'snapshot-registry.json'), registry),
+      writeFile(join(target, 'release-mapping.json'), releaseMapping)
+    ])
+    await truncate(manifestPath, SKILL_BUNDLE_CURRENT_MANIFEST_MAX_BYTES + 1)
+
+    await expect(loadSkillBundleArtifacts(resourceRoot)).rejects.toThrow(NodeFileReadTooLargeError)
+
+    await writeFile(manifestPath, manifest)
+    await expect(loadSkillBundleArtifacts(resourceRoot)).resolves.toMatchObject({
+      manifest: { schemaVersion: 2 }
+    })
+  })
+
+  it('rejects structural amplification before parsing a bounded artifact', async () => {
+    const resourceRoot = await mkdtemp(join(tmpdir(), 'orca-skill-artifacts-'))
+    temporaryDirectories.push(resourceRoot)
+    const path = join(resourceRoot, 'amplified.json')
+    await writeFile(path, `[${'0,'.repeat(SKILL_BUNDLE_JSON_MAX_STRUCTURAL_TOKENS)}0]`)
+    const parseSpy = vi.spyOn(JSON, 'parse')
+
+    await expect(
+      readSkillBundleArtifactJson(path, SKILL_BUNDLE_SNAPSHOT_REGISTRY_MAX_BYTES)
+    ).rejects.toThrow('JSON structure exceeds')
+    expect(parseSpy).not.toHaveBeenCalled()
+    parseSpy.mockRestore()
   })
 })

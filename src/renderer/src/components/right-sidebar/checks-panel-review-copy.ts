@@ -263,6 +263,17 @@ const SKIPPED_COPY: Partial<
         'Orca could not refresh {{reviewLabel}} status for this remote context. Retry after the host is available.'
     },
     recovery: ['retry']
+  },
+  capacity: {
+    title: {
+      key: 'auto.components.right.sidebar.checks.panel.review.skipped.capacity.title',
+      fallback: 'Refresh queue busy'
+    },
+    body: {
+      key: 'auto.components.right.sidebar.checks.panel.review.skipped.capacity.body',
+      fallback: 'Orca is handling many review updates. Retry this refresh in a moment.'
+    },
+    recovery: ['retry']
   }
 }
 

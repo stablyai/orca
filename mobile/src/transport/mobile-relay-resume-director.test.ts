@@ -63,4 +63,27 @@ describe('mobile relay resume director', () => {
       resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl: oversized })
     ).rejects.toThrow(/too large/)
   })
+
+  it('cancels a streamed response once it crosses the mobile limit', async () => {
+    let cancelled = false
+    const streamed = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array(16 * 1024))
+              controller.enqueue(new Uint8Array([1]))
+            },
+            cancel() {
+              cancelled = true
+            }
+          })
+        )
+    )
+
+    await expect(
+      resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl: streamed })
+    ).rejects.toThrow(/too large/)
+    expect(cancelled).toBe(true)
+  })
 })

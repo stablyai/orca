@@ -7,7 +7,10 @@ import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
 } from '../../../../shared/editor-save-events'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
-import { attachEditorAutosaveController } from './editor-autosave-controller'
+import {
+  attachEditorAutosaveController,
+  EDITOR_BULK_SAVE_CONCURRENCY
+} from './editor-autosave-controller'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import { __clearSelfWriteRegistryForTests, hasRecentSelfWrite } from './editor-self-write-registry'
 import {
@@ -193,6 +196,70 @@ describe('attachEditorAutosaveController', () => {
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
       expect(store.getState().editorDrafts).toEqual({})
+    } finally {
+      cleanup()
+    }
+  })
+
+  it.each([
+    ['at the limit', EDITOR_BULK_SAVE_CONCURRENCY],
+    ['above the limit', EDITOR_BULK_SAVE_CONCURRENCY + 1]
+  ])('bounds dirty-file writes %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    const releases: (() => void)[] = []
+    const writeFile = vi.fn(async () => {
+      active++
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      active--
+    })
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: { fs: { writeFile } }
+    } satisfies WindowStub)
+    const store = createEditorStore()
+    store.setState({
+      settings: { editorAutoSave: false, editorAutoSaveDelayMs: 1000 } as never
+    })
+    for (let index = 0; index < count; index++) {
+      const filePath = `/repo/file-${index}.ts`
+      store.getState().openFile({
+        filePath,
+        relativePath: `file-${index}.ts`,
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      })
+      store.getState().setEditorDraft(filePath, `draft ${index}`)
+      store.getState().markFileDirty(filePath, true)
+    }
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      const save = requestDirtyFileSave()
+      for (
+        let turn = 0;
+        turn < 10 && writeFile.mock.calls.length < Math.min(count, EDITOR_BULK_SAVE_CONCURRENCY);
+        turn++
+      ) {
+        await Promise.resolve()
+      }
+      expect(writeFile).toHaveBeenCalledTimes(Math.min(count, EDITOR_BULK_SAVE_CONCURRENCY))
+      if (count > EDITOR_BULK_SAVE_CONCURRENCY) {
+        releases.shift()?.()
+        await vi.waitFor(() => expect(writeFile).toHaveBeenCalledTimes(count))
+      }
+      releases.splice(0).forEach((release) => release())
+      await save
+
+      expect(peak).toBe(Math.min(count, EDITOR_BULK_SAVE_CONCURRENCY))
+      expect(store.getState().openFiles.filter((file) => file.isDirty)).toEqual([])
     } finally {
       cleanup()
     }

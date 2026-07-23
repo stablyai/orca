@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import { appendCompactedStringChunk } from '../../shared/string-chunk-compaction'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
 import type { TerminalPreviewDataPayload } from '../../shared/terminal-preview'
 
@@ -7,6 +8,7 @@ export const TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES = 64 * 1024
 const OUTPUT_IN_FLIGHT_MAX_BYTES = 512 * 1024
 const OUTPUT_PENDING_MAX_BYTES = 256 * 1024
 const INITIAL_PENDING_MAX_BYTES = 256 * 1024
+export const TERMINAL_PREVIEW_PENDING_MAX_RECORDS = 4_096
 
 export type TerminalPreviewOutputMeta = {
   seq?: number
@@ -81,7 +83,7 @@ export class TerminalPreviewOutputStream {
   }
 
   append(data: string, meta?: TerminalPreviewOutputMeta): void {
-    if (this.isDisposed || this.awaitingReconnect || this.resyncPending) {
+    if (data.length === 0 || this.isDisposed || this.awaitingReconnect || this.resyncPending) {
       return
     }
     if (this.bufferingSnapshot) {
@@ -205,7 +207,10 @@ export class TerminalPreviewOutputStream {
     }
     this.pendingBatches.push({ data, bytes })
     this.pendingBatchBytes += bytes
-    if (this.pendingBatchBytes > OUTPUT_PENDING_MAX_BYTES) {
+    if (
+      this.pendingBatchBytes > OUTPUT_PENDING_MAX_BYTES ||
+      this.pendingBatches.length > TERMINAL_PREVIEW_PENDING_MAX_RECORDS
+    ) {
       // Why: a stuck renderer heals from a fresh authoritative snapshot instead of retaining output without bound.
       this.pendingBatches = []
       this.pendingBatchBytes = 0
@@ -237,7 +242,7 @@ export class TerminalPreviewOutputStream {
       ) {
         this.flushBatch()
       }
-      this.batchChunks.push(chunk)
+      appendCompactedStringChunk(this.batchChunks, chunk)
       this.batchBytes += bytes
       if (this.batchBytes >= TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES) {
         this.flushBatch()
@@ -249,11 +254,18 @@ export class TerminalPreviewOutputStream {
   }
 
   private appendInitial(data: string, meta?: TerminalPreviewOutputMeta): void {
+    if (this.initialPendingOverflowed) {
+      return
+    }
     const bytes = Buffer.byteLength(data, 'utf8')
     this.initialPending.push({ data, bytes, meta })
     this.initialPendingBytes += bytes
-    while (this.initialPendingBytes > INITIAL_PENDING_MAX_BYTES && this.initialPending.length > 0) {
-      this.initialPendingBytes -= this.initialPending.shift()!.bytes
+    if (
+      this.initialPendingBytes > INITIAL_PENDING_MAX_BYTES ||
+      this.initialPending.length > TERMINAL_PREVIEW_PENDING_MAX_RECORDS
+    ) {
+      this.initialPending = []
+      this.initialPendingBytes = 0
       this.initialPendingOverflowed = true
     }
   }

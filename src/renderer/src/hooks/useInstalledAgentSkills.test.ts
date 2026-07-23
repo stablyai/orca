@@ -3,10 +3,13 @@ import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../shared/skil
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  MAX_CACHED_SKILL_DISCOVERY_TARGETS,
+  MAX_PENDING_SKILL_DISCOVERY_TARGETS,
   _installedAgentSkillDiscoveryInternalsForTests,
   hasInstalledAgentSkill,
   hasInstalledAgentSkillNamed
 } from './useInstalledAgentSkills'
+import { InstalledSkillDiscoveryCoordinator } from './installed-skill-discovery-coordinator'
 
 afterEach(() => {
   _installedAgentSkillDiscoveryInternalsForTests.reset()
@@ -307,5 +310,106 @@ describe('discoverInstalledAgentSkills', () => {
       runtime: 'host',
       projectRuntime: projectHostRuntime
     })
+  })
+
+  it('evicts the least recently used historical runtime result', async () => {
+    const discover = vi.fn().mockImplementation(() => Promise.resolve(discoveryResult()))
+    vi.stubGlobal('window', { api: { skills: { discover } } })
+
+    for (let index = 0; index <= MAX_CACHED_SKILL_DISCOVERY_TARGETS; index += 1) {
+      await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false, {
+        projectRuntime: {
+          status: 'resolved',
+          runtime: {
+            kind: 'windows-host',
+            hostPlatform: 'win32',
+            projectId: `repo-${index}`,
+            reason: 'project-override',
+            cacheKey: `runtime-${index}`
+          }
+        }
+      })
+    }
+
+    expect(_installedAgentSkillDiscoveryInternalsForTests.cacheSizes().cached).toBe(
+      MAX_CACHED_SKILL_DISCOVERY_TARGETS
+    )
+    await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false, {
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'windows-host',
+          hostPlatform: 'win32',
+          projectId: 'repo-0',
+          reason: 'project-override',
+          cacheKey: 'runtime-0'
+        }
+      }
+    })
+    expect(discover).toHaveBeenCalledTimes(MAX_CACHED_SKILL_DISCOVERY_TARGETS + 2)
+  })
+
+  it('rejects excess concurrent target scans instead of retaining unbounded work', async () => {
+    const scans = Array.from({ length: MAX_PENDING_SKILL_DISCOVERY_TARGETS }, () =>
+      deferred<SkillDiscoveryResult>()
+    )
+    const discover = vi.fn().mockImplementation(() => scans[discover.mock.calls.length - 1].promise)
+    vi.stubGlobal('window', { api: { skills: { discover } } })
+    const pending = scans.map((_, index) =>
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false, {
+        projectRuntime: {
+          status: 'resolved',
+          runtime: {
+            kind: 'windows-host',
+            hostPlatform: 'win32',
+            projectId: `repo-${index}`,
+            reason: 'project-override',
+            cacheKey: `pending-${index}`
+          }
+        }
+      })
+    )
+
+    await expect(
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false, {
+        projectRuntime: {
+          status: 'resolved',
+          runtime: {
+            kind: 'windows-host',
+            hostPlatform: 'win32',
+            projectId: 'overflow',
+            reason: 'project-override',
+            cacheKey: 'pending-overflow'
+          }
+        }
+      })
+    ).rejects.toThrow(/Too many concurrent/)
+    expect(_installedAgentSkillDiscoveryInternalsForTests.cacheSizes().pending).toBe(
+      MAX_PENDING_SKILL_DISCOVERY_TARGETS
+    )
+
+    scans.forEach((scan) => scan.resolve(discoveryResult()))
+    await Promise.all(pending)
+  })
+})
+
+describe('InstalledSkillDiscoveryCoordinator invalidation', () => {
+  it('does not let a scan started before cache invalidation repopulate stale data', async () => {
+    const coordinator = new InstalledSkillDiscoveryCoordinator()
+    const staleScan = deferred<SkillDiscoveryResult>()
+    const staleResult = discoveryResult([])
+    const freshResult = discoveryResult([skill({ name: 'fresh-skill' })])
+    const run = vi.fn().mockReturnValueOnce(staleScan.promise).mockResolvedValueOnce(freshResult)
+
+    const pending = coordinator.discover({ force: false, key: 'host', run })
+    coordinator.clearCache()
+    staleScan.resolve(staleResult)
+    await expect(pending).resolves.toBe(staleResult)
+
+    expect(coordinator.getCached('host')).toBeUndefined()
+    await expect(coordinator.discover({ force: false, key: 'host', run })).resolves.toBe(
+      freshResult
+    )
+    expect(run).toHaveBeenCalledTimes(2)
   })
 })

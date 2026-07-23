@@ -105,6 +105,54 @@ describe('SshFilesystemProvider readFile streaming', () => {
     expect(result).toEqual(legacyResult)
   })
 
+  it('propagates validated raster dimensions from stream metadata', async () => {
+    const content = Buffer.from('png-header')
+    mux.request.mockImplementation(async () => {
+      setImmediate(() => {
+        mux._emitMethod('fs.streamChunk', {
+          streamId: 3,
+          seq: 0,
+          data: content.toString('base64')
+        })
+        mux._emitMethod('fs.streamEnd', { streamId: 3 })
+      })
+      return {
+        streamId: 3,
+        totalSize: content.length,
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png',
+        imageDimensions: { width: 640, height: 480 },
+        resultEncoding: 'base64'
+      }
+    })
+
+    await expect(provider.readFile('/home/image.png')).resolves.toEqual({
+      content: content.toString('base64'),
+      isBinary: true,
+      isImage: true,
+      mimeType: 'image/png',
+      imageDimensions: { width: 640, height: 480 }
+    })
+  })
+
+  it('rejects unsafe raster dimensions in stream metadata', async () => {
+    mux.request.mockResolvedValue({
+      streamId: 4,
+      totalSize: 1,
+      isBinary: true,
+      isImage: true,
+      mimeType: 'image/png',
+      imageDimensions: { width: 32_769, height: 1 },
+      resultEncoding: 'base64'
+    })
+
+    await expect(provider.readFile('/home/bomb.png')).rejects.toThrow(
+      'Malformed file stream metadata'
+    )
+    expect(mux.notify).toHaveBeenCalledWith('fs.cancelStream', { streamId: 4 })
+  })
+
   it('rejects when chunk arrives out of order', async () => {
     const totalSize = 256 * 1024 * 2
     mux.request.mockImplementation(async () => {
@@ -178,7 +226,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
         resultEncoding: 'base64'
       }
     })
-    await expect(provider.readFile('/home/x.bin')).rejects.toThrow(/count mismatch/i)
+    await expect(provider.readFile('/home/x.bin')).rejects.toThrow(/incomplete/i)
   })
 
   it('rejects a short final chunk instead of zero-filling the buffer', async () => {

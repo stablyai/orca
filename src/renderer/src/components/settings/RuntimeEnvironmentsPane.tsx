@@ -61,9 +61,11 @@ import {
   getRemoteServerManualUpdateHelp,
   RemoteServerUpdateStatus
 } from './RemoteServerUpdateStatus'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 
 const LOCAL_RUNTIME_VALUE = '__local__'
 const NO_RUNTIME_VALUE = '__none__'
+export const RUNTIME_ENVIRONMENT_REFRESH_CONCURRENCY = 5
 
 type RuntimeEnvironmentsPaneProps = {
   settings: GlobalSettings
@@ -333,8 +335,10 @@ export function RuntimeEnvironmentsPane({
           return next
         })
       }
-      await Promise.allSettled(
-        visibleEnvironments.map(async (environment) => {
+      await mapWithConcurrency(
+        visibleEnvironments,
+        RUNTIME_ENVIRONMENT_REFRESH_CONCURRENCY,
+        async (environment) => {
           try {
             const response = await window.api.runtimeEnvironments.getStatus({
               selector: environment.id,
@@ -379,7 +383,7 @@ export function RuntimeEnvironmentsPane({
               }
             }))
           }
-        })
+        }
       )
     } catch (error) {
       if (mountedRef.current) {
@@ -635,7 +639,9 @@ export function RuntimeEnvironmentsPane({
       // Why: Connect is not the Active Server selector anymore, but connected
       // hosts should still contribute their projects/workspaces to the sidebar.
       const repos = await store.fetchRuntimeEnvironmentRepos(environment.id)
-      await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
+      await mapWithConcurrency(repos, RUNTIME_ENVIRONMENT_REFRESH_CONCURRENCY, async (repo) =>
+        useAppStore.getState().fetchWorktrees(repo.id)
+      )
       await useAppStore.getState().fetchWorktreeLineage()
       if (mountedRef.current) {
         toast.success(

@@ -1,11 +1,26 @@
 import { join } from 'node:path'
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { existsSync, opendirSync } from 'node:fs'
 import type { SessionMeta } from './history-manager'
 import type { TerminalCheckpointFile, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog } from './terminal-history-log'
 import { HeadlessEmulator } from './headless-emulator'
+import {
+  readTerminalHistoryBuffer,
+  readTerminalHistoryJson,
+  readTerminalHistoryText
+} from './terminal-history-file-reader'
+import {
+  TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+  TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES,
+  TERMINAL_HISTORY_LOG_MAX_BYTES,
+  TERMINAL_HISTORY_META_MAX_BYTES
+} from './terminal-history-file-limits'
+import {
+  retainNewestRestorableTerminalHistorySessions,
+  type RestorableTerminalHistorySession
+} from './terminal-history-restorable-retention'
 
 export type ColdRestoreInfo = {
   snapshotAnsi: string
@@ -59,7 +74,10 @@ export class HistoryReader {
     let checkpoint: TerminalCheckpointFile | null = null
     if (checkpointExists) {
       try {
-        checkpoint = JSON.parse(readFileSync(checkpointPath, 'utf-8'))
+        checkpoint = readTerminalHistoryJson<TerminalCheckpointFile>(
+          checkpointPath,
+          TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+        )
       } catch {
         checkpoint = null
       }
@@ -88,31 +106,55 @@ export class HistoryReader {
       return []
     }
 
-    let entries: { isDirectory(): boolean; name: string }[]
+    let directory: ReturnType<typeof opendirSync>
     try {
-      entries = readdirSync(this.basePath, { withFileTypes: true })
+      directory = opendirSync(this.basePath)
     } catch {
       return []
     }
-    const restorable: string[] = []
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) {
-        continue
-      }
-      let sessionId: string
-      try {
-        sessionId = decodeURIComponent(entry.name)
-      } catch {
-        continue
-      }
-      const meta = this.readMeta(sessionId)
-      if (meta && meta.endedAt === null) {
-        restorable.push(sessionId)
+    const sessions = function* (
+      reader: HistoryReader
+    ): Generator<RestorableTerminalHistorySession> {
+      let order = 0
+      while (true) {
+        const entry = directory.readSync()
+        if (!entry) {
+          return
+        }
+        if (!entry.isDirectory()) {
+          continue
+        }
+        let sessionId: string
+        try {
+          sessionId = decodeURIComponent(entry.name)
+        } catch {
+          continue
+        }
+        const meta = reader.readMeta(sessionId)
+        if (meta && meta.endedAt === null) {
+          const parsedStartedAt = Date.parse(meta.startedAt)
+          yield {
+            sessionId,
+            startedAtMs: Number.isFinite(parsedStartedAt) ? parsedStartedAt : 0,
+            order
+          }
+          order += 1
+        }
       }
     }
 
-    return restorable
+    try {
+      return retainNewestRestorableTerminalHistorySessions(sessions(this))
+    } catch {
+      return []
+    } finally {
+      try {
+        directory.closeSync()
+      } catch {
+        // Best effort after a directory read failure.
+      }
+    }
   }
 
   // Why a scratch emulator: replaying base + raw records through the same
@@ -127,7 +169,10 @@ export class HistoryReader {
   ): ColdRestoreInfo | null {
     let logBuffer: Buffer
     try {
-      logBuffer = readFileSync(join(sessionDir, 'output.log'))
+      logBuffer = readTerminalHistoryBuffer(
+        join(sessionDir, 'output.log'),
+        TERMINAL_HISTORY_LOG_MAX_BYTES
+      )
     } catch {
       return null
     }
@@ -228,7 +273,7 @@ export class HistoryReader {
       return null
     }
     try {
-      return JSON.parse(readFileSync(metaPath, 'utf-8'))
+      return readTerminalHistoryJson<SessionMeta>(metaPath, TERMINAL_HISTORY_META_MAX_BYTES)
     } catch {
       return null
     }
@@ -249,7 +294,10 @@ export class HistoryReader {
       return null
     }
     try {
-      const scrollback = readFileSync(scrollbackPath, 'utf-8')
+      const scrollback = readTerminalHistoryText(
+        scrollbackPath,
+        TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES
+      )
       const truncated = this.truncateAltScreen(scrollback)
       return {
         snapshotAnsi: truncated,

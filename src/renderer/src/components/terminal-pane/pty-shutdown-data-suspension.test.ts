@@ -5,6 +5,7 @@ import {
   drainRolledBackPtyShutdownData,
   ptyDataHandlers,
   ptyReplayHandlers,
+  PTY_SHUTDOWN_OUTPUT_MAX_EVENTS,
   ptyShutdownLifecycleHandlers,
   ptyTeardownHandlers,
   unregisterPtyDataHandlers
@@ -73,4 +74,21 @@ it('retains ordered rollback output across detach and another pending shutdown',
   ptyReplayHandlers.delete(ptyId)
   ptyTeardownHandlers.delete(ptyId)
   ptyShutdownLifecycleHandlers.delete(ptyId)
+})
+
+it('bounds zero-byte shutdown events independently of buffered text', () => {
+  const ptyId = 'pty-shutdown-empty-event-flood'
+  const delivered = vi.fn()
+  ptyDataHandlers.set(ptyId, delivered)
+  ptyReplayHandlers.set(ptyId, vi.fn())
+
+  const [snapshot] = unregisterPtyDataHandlers([ptyId])
+  for (let index = 0; index < PTY_SHUTDOWN_OUTPUT_MAX_EVENTS + 10; index += 1) {
+    expect(bufferPtyShutdownData(ptyId, '')).toBe(true)
+  }
+  snapshot.rollback()
+
+  expect(delivered).toHaveBeenCalledTimes(PTY_SHUTDOWN_OUTPUT_MAX_EVENTS)
+  ptyDataHandlers.delete(ptyId)
+  ptyReplayHandlers.delete(ptyId)
 })

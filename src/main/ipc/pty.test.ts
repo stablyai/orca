@@ -11,6 +11,8 @@ import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { TuiAgent } from '../../shared/types'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
+import type * as NodeBoundedFileReader from '../../shared/node-bounded-file-reader'
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
@@ -123,6 +125,21 @@ vi.mock('fs', () => ({
   chmodSync: chmodSyncMock,
   constants: {
     X_OK: 1
+  }
+}))
+
+vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeBoundedFileReader>()),
+  readNodeFileSyncWithinLimit: (path: string, maxBytes: number) => {
+    const content = readFileSyncMock(path)
+    if (typeof content !== 'string' && !Buffer.isBuffer(content)) {
+      throw new Error('File unavailable')
+    }
+    const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content)
+    if (buffer.byteLength > maxBytes) {
+      throw new Error('File too large')
+    }
+    return { buffer, stats: { size: buffer.byteLength } }
   }
 }))
 
@@ -1017,6 +1034,52 @@ describe('registerPtyHandlers', () => {
     expect(isCurrentPtyExit({ id: owner.ptyId, incarnationId: 'incarnation-recovered' })).toBe(true)
     expect(provider.spawn).not.toHaveBeenCalled()
     clearProviderPtyState(owner.ptyId)
+  })
+
+  it('fails claimed ensure closed before aggregate owner listings amplify memory', async () => {
+    const ownersPerSession = 256
+    const sessionCount = Math.floor(MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES / ownersPerSession) + 1
+    const sessions = Array.from({ length: sessionCount }, (_, sessionIndex) => {
+      const id = `pty-owner-cap-${sessionIndex}`
+      return {
+        id,
+        incarnationId: 'incarnation-owner-cap',
+        cwd: '/tmp/recovered-worktree',
+        title: 'Codex',
+        agentSessionOwners: Array.from({ length: ownersPerSession }, (_, ownerIndex) => {
+          const index = sessionIndex * ownersPerSession + ownerIndex
+          return {
+            claim: {
+              ...recoveredAgentClaim,
+              identityDigest: index.toString(36).padStart(43, 'a')
+            },
+            generation: `generation-owner-cap-${index}`,
+            phase: 'live' as const,
+            ptyId: id,
+            surface: recoveredAgentSurface
+          }
+        })
+      }
+    })
+    const provider = createAgentClaimProvider({ sessions })
+    setLocalPtyProvider(provider as never)
+    const controller = registerAgentClaimController()
+
+    await expect(
+      controller.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/recovered-worktree',
+        agentSessionEnsure: {
+          claim: {
+            ...recoveredAgentClaim,
+            identityDigest: '7777777777777777777777777777777777777777777'
+          },
+          surface: recoveredAgentSurface
+        }
+      })
+    ).rejects.toThrow('execution_owner_unavailable')
+    expect(provider.spawn).not.toHaveBeenCalled()
   })
 
   it('releases an adopted-owner fence when that owner exits during admission', async () => {

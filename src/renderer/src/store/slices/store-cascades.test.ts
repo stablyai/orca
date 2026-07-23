@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
+const mockForgetRetiredTerminalPaneRecovery = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
@@ -21,6 +22,10 @@ vi.mock('sonner', () => ({
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   restorePtyDataHandlersAfterFailedShutdown: mockRestorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
+}))
+
+vi.mock('@/components/terminal-pane/terminal-pane-recovery-retirement', () => ({
+  forgetRetiredTerminalPaneRecovery: mockForgetRetiredTerminalPaneRecovery
 }))
 
 // Mock agent-status (imported by terminal-helpers)
@@ -190,6 +195,7 @@ describe('removeWorktree cascade', () => {
     expect(s.activeTabTypeByWorktree[worktreeId]).toBeUndefined()
     expect(s.rightSidebarExplorerViewByWorktree[worktreeId]).toBeUndefined()
     expect(loadSessionCommitDrafts()).toEqual({ 'repo1::/path/wt2': 'fix: keep draft' })
+    expect(mockForgetRetiredTerminalPaneRecovery.mock.calls).toEqual([['tab1'], ['tab2']])
   })
 
   it('warns when workspace removal keeps the local branch', async () => {
@@ -2452,6 +2458,7 @@ describe('setActiveWorktree', () => {
     expect(s.unreadTerminalTabs[closing.id]).toBeUndefined()
     // Siblings untouched.
     expect(s.unreadTerminalTabs[surviving.id]).toBe(true)
+    expect(mockForgetRetiredTerminalPaneRecovery).toHaveBeenCalledWith(closing.id)
   })
 
   // Why: focus events that normally clear unread never arrive for dead PTYs, so the shutdown path must drop the flags itself.

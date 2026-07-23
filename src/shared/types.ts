@@ -1310,6 +1310,7 @@ export type GitHubPRRefreshSkippedReason =
   | 'disconnected'
   | 'remote'
   | 'rate-limit'
+  | 'capacity'
 
 type GitHubPRRefreshEventBase = {
   sequence: number
@@ -3034,6 +3035,7 @@ export type NotificationDispatchResult = {
     | 'not-supported'
     | 'not-displayed'
     | 'blocked-by-system'
+    | 'invalid-request'
 }
 
 export type NotificationDismissResult = {

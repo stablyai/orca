@@ -1,10 +1,17 @@
-import { appendFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { appendFileSync, mkdirSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import {
+  MAX_CODEX_SESSION_INDEX_HEAL_JSONL_LINE_BYTES,
+  readCodexSessionIndexHealJsonlRecords
+} from './codex-session-index-heal-jsonl'
+
+export { MAX_CODEX_SESSION_INDEX_HEAL_JSONL_LINE_BYTES }
 
 // State files for the session index heal: which backfilled rollouts exist
 // (the backfill audit ledger), which thread ids this pass already processed
@@ -14,6 +21,22 @@ import { writeFileAtomically } from '../codex-accounts/fs-utils'
 // Bump to re-drive the heal for every host after a semantics change; already
 // processed thread ids are re-read because ledger lines are version-scoped.
 export const CODEX_SESSION_INDEX_HEAL_VERSION = 3
+export const MAX_CODEX_SESSION_INDEX_HEAL_TRACKED_THREADS = 100_000
+export const MAX_CODEX_SESSION_INDEX_HEAL_MARKER_FILE_BYTES = 64 * 1024
+
+const MAX_AUDIT_TARGET_LENGTH = 64 * 1024
+const MAX_AUDIT_RECORD_ID_LENGTH = 128
+const MAX_ROLLOUT_STAMP_LENGTH = 512
+const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export class CodexSessionIndexHealCapacityError extends Error {
+  constructor(kind: 'pending' | 'processed') {
+    super(
+      `Codex session index heal ${kind} state exceeds ${MAX_CODEX_SESSION_INDEX_HEAL_TRACKED_THREADS} entries`
+    )
+    this.name = 'CodexSessionIndexHealCapacityError'
+  }
+}
 
 // Why: an unsupported CLI stays unsupported until upgraded; re-probing once a
 // day is enough to notice an upgrade without a per-startup spawn.
@@ -53,11 +76,11 @@ export type HealMarkerSummary = {
 export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): PendingHealThread[] {
   const processed = readProcessedHealThreads(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
-  for (const line of readJsonlLines(paths.auditLogPath, true)) {
+  for (const line of readCodexSessionIndexHealJsonlRecords(paths.auditLogPath)) {
     if (line.action !== 'hardlink' && line.action !== 'copy' && line.action !== 'existing') {
       continue
     }
-    if (typeof line.target !== 'string') {
+    if (typeof line.target !== 'string' || line.target.length > MAX_AUDIT_TARGET_LENGTH) {
       continue
     }
     // Why: the append-only audit can contain runs for several custom Codex
@@ -66,10 +89,13 @@ export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): Pe
       continue
     }
     const match = CODEX_ROLLOUT_THREAD_ID_PATTERN.exec(lastPathSegment(line.target))
-    if (!match) {
+    if (!match || match[1].length > MAX_ROLLOUT_STAMP_LENGTH) {
       continue
     }
     const threadId = match[2].toLowerCase()
+    if (typeof line.recordId === 'string' && line.recordId.length > MAX_AUDIT_RECORD_ID_LENGTH) {
+      continue
+    }
     const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
     if (
       processed.healedThreadIds.has(threadId) ||
@@ -81,6 +107,12 @@ export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): Pe
       // processed event must displace an older pending event from this scan.
       pendingByThreadId.delete(threadId)
       continue
+    }
+    if (
+      !pendingByThreadId.has(threadId) &&
+      pendingByThreadId.size >= MAX_CODEX_SESSION_INDEX_HEAL_TRACKED_THREADS
+    ) {
+      throw new CodexSessionIndexHealCapacityError('pending')
     }
     pendingByThreadId.set(threadId, { threadId, rolloutStamp: match[1], auditRecordId })
   }
@@ -102,22 +134,48 @@ function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): {
   const missingAuditRecords = new Set<string>()
   const legacyMissingThreadIds = new Set<string>()
   const expectedRoot = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
-  for (const line of readJsonlLines(paths.healLedgerPath)) {
-    if (
-      line.v === CODEX_SESSION_INDEX_HEAL_VERSION &&
-      typeof line.threadId === 'string' &&
-      typeof line.systemSessionsRoot === 'string' &&
-      (line.outcome === 'healed' || line.outcome === 'missing') &&
-      normalizeRuntimePathForComparison(line.systemSessionsRoot) === expectedRoot
-    ) {
-      const threadId = line.threadId.toLowerCase()
-      if (line.outcome === 'healed') {
-        healedThreadIds.add(threadId)
-      } else if (typeof line.auditRecordId === 'string') {
-        missingAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
-      } else {
-        legacyMissingThreadIds.add(threadId)
+  let trackedEntries = 0
+  const addTrackedEntry = (entries: Set<string>, key: string): void => {
+    if (entries.has(key)) {
+      return
+    }
+    if (trackedEntries >= MAX_CODEX_SESSION_INDEX_HEAL_TRACKED_THREADS) {
+      throw new CodexSessionIndexHealCapacityError('processed')
+    }
+    entries.add(key)
+    trackedEntries += 1
+  }
+  try {
+    for (const line of readCodexSessionIndexHealJsonlRecords(paths.healLedgerPath)) {
+      if (
+        line.v === CODEX_SESSION_INDEX_HEAL_VERSION &&
+        typeof line.threadId === 'string' &&
+        CODEX_THREAD_ID_PATTERN.test(line.threadId) &&
+        typeof line.systemSessionsRoot === 'string' &&
+        (line.outcome === 'healed' || line.outcome === 'missing') &&
+        normalizeRuntimePathForComparison(line.systemSessionsRoot) === expectedRoot
+      ) {
+        const threadId = line.threadId.toLowerCase()
+        if (line.outcome === 'healed') {
+          addTrackedEntry(healedThreadIds, threadId)
+        } else if (
+          typeof line.auditRecordId === 'string' &&
+          line.auditRecordId.length <= MAX_AUDIT_RECORD_ID_LENGTH
+        ) {
+          addTrackedEntry(missingAuditRecords, `${threadId}\0${line.auditRecordId}`)
+        } else if (line.auditRecordId === undefined) {
+          addTrackedEntry(legacyMissingThreadIds, threadId)
+        }
       }
+    }
+  } catch (error) {
+    if (error instanceof CodexSessionIndexHealCapacityError) {
+      throw error
+    }
+    return {
+      healedThreadIds: new Set(),
+      missingAuditRecords: new Set(),
+      legacyMissingThreadIds: new Set()
     }
   }
   return { healedThreadIds, missingAuditRecords, legacyMissingThreadIds }
@@ -153,35 +211,6 @@ export function appendHealLedgerRecord(
   }
 }
 
-function readJsonlLines(filePath: string, throwOnReadFailure = false): Record<string, unknown>[] {
-  let contents: string
-  try {
-    contents = readFileSync(filePath, 'utf-8')
-  } catch (error) {
-    if (throwOnReadFailure && !isNotFoundError(error)) {
-      // Why: the audit is the heal work queue. Treating EACCES/EIO as empty
-      // would write a completion marker that permanently skips every session.
-      throw error
-    }
-    return []
-  }
-  const lines: Record<string, unknown>[] = []
-  for (const raw of contents.split('\n')) {
-    if (!raw.trim()) {
-      continue
-    }
-    try {
-      const parsed: unknown = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        lines.push(parsed as Record<string, unknown>)
-      }
-    } catch {
-      // Skip torn/corrupt lines; both ledgers are append-only diagnostics.
-    }
-  }
-  return lines
-}
-
 export function readAuditLogSize(auditLogPath: string): number {
   try {
     return statSync(auditLogPath).size
@@ -202,7 +231,12 @@ export function isHealMarkerCurrent(
   auditBytes: number
 ): boolean {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(paths.healMarkerPath, 'utf-8'))
+    const parsed: unknown = JSON.parse(
+      readNodeFileSyncWithinLimit(
+        paths.healMarkerPath,
+        MAX_CODEX_SESSION_INDEX_HEAL_MARKER_FILE_BYTES
+      ).buffer.toString('utf8')
+    )
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return false
     }

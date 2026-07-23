@@ -678,6 +678,35 @@ describe('github owner/repo resolution', () => {
       await rm(repoPath, { recursive: true, force: true })
     }
   })
+
+  it('parses exact-limit config files and safely skips oversized include graphs', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    const gitDir = join(repoPath, '.git')
+    const includedConfigPath = join(repoPath, 'included.gitconfig')
+    const configPath = join(gitDir, 'config')
+    const maxConfigBytes = 4 * 1024 * 1024
+    await mkdir(gitDir)
+    await writeFile(includedConfigPath, '[user]\n\tname = first\n')
+    const includePrefix = `[include]\n\tpath = "${includedConfigPath}"\n#`
+    await writeFile(configPath, includePrefix + 'x'.repeat(maxConfigBytes - includePrefix.length))
+    try {
+      const exactFirst = await readLocalGitConfigSignature({ repoPath, connectionId: null })
+      await writeFile(includedConfigPath, '[user]\n\tname = exact-limit-change\n')
+      const exactSecond = await readLocalGitConfigSignature({ repoPath, connectionId: null })
+      expect(exactSecond).not.toEqual(exactFirst)
+
+      await writeFile(
+        configPath,
+        includePrefix + 'x'.repeat(maxConfigBytes + 1 - includePrefix.length)
+      )
+      const oversizedFirst = await readLocalGitConfigSignature({ repoPath, connectionId: null })
+      await writeFile(includedConfigPath, '[user]\n\tname = ignored-oversized-change\n')
+      const oversizedSecond = await readLocalGitConfigSignature({ repoPath, connectionId: null })
+      expect(oversizedSecond).toEqual(oversizedFirst)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('resolveIssueSource', () => {

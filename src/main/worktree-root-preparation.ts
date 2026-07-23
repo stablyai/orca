@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import type { GlobalSettings, Repo } from '../shared/types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { forEachWithConcurrency } from '../shared/map-with-concurrency'
 import { isFolderRepo } from '../shared/repo-kind'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
 
@@ -9,6 +10,8 @@ type WorktreeRootPreparationStore = {
   getSettings: () => WorktreeRootPreparationSettings
   getRepos: () => Repo[]
 }
+
+export const LOCAL_WORKTREE_ROOT_PREPARATION_CONCURRENCY = 8
 
 export async function prepareLocalWorktreeRootForRepo(
   store: Pick<WorktreeRootPreparationStore, 'getSettings'>,
@@ -31,5 +34,9 @@ export async function prepareLocalWorktreeRootForRepo(
 export async function prepareLocalWorktreeRootsForRepos(
   store: WorktreeRootPreparationStore
 ): Promise<void> {
-  await Promise.all(store.getRepos().map((repo) => prepareLocalWorktreeRootForRepo(store, repo)))
+  await forEachWithConcurrency(
+    store.getRepos(),
+    LOCAL_WORKTREE_ROOT_PREPARATION_CONCURRENCY,
+    (repo) => prepareLocalWorktreeRootForRepo(store, repo)
+  )
 }

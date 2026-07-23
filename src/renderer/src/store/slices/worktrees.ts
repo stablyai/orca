@@ -39,6 +39,7 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../components/terminal-pane/terminal-parked-watcher-registry'
+import { forgetRetiredTerminalPaneRecovery } from '../../components/terminal-pane/terminal-pane-recovery-retirement'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -3340,6 +3341,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
       forgetForegroundTerminalTabs(tabIds)
       forgetAgentStartupDeliveriesForTabs(tabIds)
+      for (const tabId of tabIds) {
+        forgetRetiredTerminalPaneRecovery(tabId)
+      }
 
       // Why: snapshot the sidebar top-row anchor in the same tick we remove the row; recording at click time goes stale across the await.
       requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')

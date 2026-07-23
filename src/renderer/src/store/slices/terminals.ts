@@ -71,6 +71,7 @@ import {
   disposeParkedTerminalWatchersForPtyIds,
   retireParkedTerminalTab
 } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import { forgetRetiredTerminalPaneRecovery } from '@/components/terminal-pane/terminal-pane-recovery-retirement'
 import {
   clearCommittedPtyShutdownSettlements,
   hasCommittedPtyShutdownSettlement,
@@ -79,9 +80,11 @@ import {
   settleDeferredPtyShutdownExits
 } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import {
+  collectTerminalLayoutLeafIds,
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
 } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { releaseTerminalScrollIntentKeys } from '@/lib/pane-manager/terminal-scroll-intent'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -1157,10 +1160,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       opts?.precomputedRetirementPlan?.tabId === tabId
         ? opts.precomputedRetirementPlan
         : buildTerminalTabRetirementPlan(get(), tabId)
+    const retiringScrollIntentLeafIds = collectTerminalLayoutLeafIds(
+      get().terminalLayoutsByTabId[tabId]
+    )
     let closingWorktreeId: string | null = null
 
     // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
     retireParkedTerminalTab(tabId)
+    forgetRetiredTerminalPaneRecovery(tabId)
     if (retiresSession) {
       const fallbackWorktreeRoute = retirementPlan.worktreeId
         ? resolveTerminalWorktreeRoute(get(), retirementPlan.worktreeId)
@@ -1401,6 +1408,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           : {})
       }
     })
+    releaseTerminalScrollIntentKeys(retiringScrollIntentLeafIds)
     // Why: closing a tab sweeps live and retained agent-status for it; use dropAgentStatusByTabPrefix so retention suppressors block a same-frame live→gone re-snapshot.
     // Why: Pi can leave a completed row keyed under an already-missing tab id; pass the worktree to sweep that orphan while preserving active pre-render child rows.
     get().dropAgentStatusByTabPrefix(

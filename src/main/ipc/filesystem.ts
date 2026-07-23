@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { readdir, readFile, writeFile, stat, lstat, open, rename, rm } from 'node:fs/promises'
+import { writeFile, stat, lstat, open, rename, rm } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { dirname, extname, join, resolve } from 'node:path'
@@ -39,6 +39,7 @@ import {
   ingestRgJsonLine,
   SEARCH_TIMEOUT_MS
 } from '../../shared/text-search'
+import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
 import {
   getStatus,
   getSubmoduleStatus,
@@ -119,6 +120,7 @@ import {
 import { listRepoWorktrees } from '../repo-worktrees'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
+import { readLocalFilesystemDirectory } from './filesystem-directory-reader'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -127,6 +129,8 @@ import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+import { assertRasterImagePreviewWithinLimits } from '../../shared/raster-image-preview-limits'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
@@ -150,30 +154,14 @@ async function readLocalLogSnapshot(filePath: string): Promise<{
   isBinary: boolean
   fileIdentity?: string
 }> {
-  const handle = await open(filePath, 'r')
-  try {
-    const stats = await handle.stat()
-    if (stats.size > MAX_TEXT_FILE_SIZE) {
-      throw new Error(
-        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
-      )
-    }
-    const buffer = await handle.readFile()
-    if (buffer.byteLength > MAX_TEXT_FILE_SIZE) {
-      throw new Error(
-        `File too large: ${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
-      )
-    }
-    if (isBinaryBuffer(buffer)) {
-      return { content: '', isBinary: true }
-    }
-    return {
-      content: buffer.toString('utf8'),
-      isBinary: false,
-      fileIdentity: localLogFileIdentity(stats)
-    }
-  } finally {
-    await handle.close()
+  const { buffer, stats } = await readNodeFileWithinLimit(filePath, MAX_TEXT_FILE_SIZE)
+  if (isBinaryBuffer(buffer)) {
+    return { content: '', isBinary: true }
+  }
+  return {
+    content: buffer.toString('utf8'),
+    isBinary: false,
+    fileIdentity: localLogFileIdentity(stats)
   }
 }
 
@@ -446,23 +434,6 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
   }
 }
 
-async function isDirectoryEntry(
-  dirPath: string,
-  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
-  _resolveEntryPath: (entryPath: string) => Promise<string>
-): Promise<boolean> {
-  // Why: following a symlink in readDir can touch macOS TCC-protected containers; treat links as file-like until explicitly opened.
-  void _resolveEntryPath
-  if (entry.isSymbolicLink()) {
-    void dirPath
-    return false
-  }
-  if (entry.isDirectory()) {
-    return true
-  }
-  return false
-}
-
 export function registerFilesystemHandlers(
   store: Store,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
@@ -510,22 +481,7 @@ export function registerFilesystemHandlers(
         throwSite = 'authorize'
         const dirPath = await resolveAuthorizedPath(args.dirPath, store)
         throwSite = 'readdir'
-        const entries = await readdir(dirPath, { withFileTypes: true })
-        const mapped = await Promise.all(
-          entries.map(async (entry) => ({
-            name: entry.name,
-            isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
-              resolveAuthorizedPath(entryPath, store)
-            ),
-            isSymlink: entry.isSymbolicLink()
-          }))
-        )
-        return mapped.sort((a, b) => {
-          if (a.isDirectory !== b.isDirectory) {
-            return a.isDirectory ? -1 : 1
-          }
-          return a.name.localeCompare(b.name)
-        })
+        return await readLocalFilesystemDirectory(dirPath)
       } catch (error: unknown) {
         recordCrashBreadcrumb(
           'fs_readdir_error',
@@ -551,6 +507,7 @@ export function registerFilesystemHandlers(
       isBinary: boolean
       isImage?: boolean
       mimeType?: string
+      imageDimensions?: { width: number; height: number }
       fileIdentity?: string
     }> => {
       if (args.connectionId) {
@@ -571,13 +528,15 @@ export function registerFilesystemHandlers(
       }
 
       if (mimeType) {
-        const buffer = await readFile(filePath)
+        const { buffer } = await readNodeFileWithinLimit(filePath, sizeLimit)
+        const imageDimensions = assertRasterImagePreviewWithinLimits(buffer, mimeType)
         return {
           content: buffer.toString('base64'),
           isBinary: true,
           // Why: the renderer keys previewable-binary rendering off `isImage`, so set it for PDFs too to stay compatible.
           isImage: true,
-          mimeType
+          mimeType,
+          ...(imageDimensions ? { imageDimensions } : {})
         }
       }
 
@@ -586,7 +545,7 @@ export function registerFilesystemHandlers(
         return { content: '', isBinary: true }
       }
 
-      const buffer = await readFile(filePath)
+      const { buffer } = await readNodeFileWithinLimit(filePath, sizeLimit)
       if (isBinaryBuffer(buffer)) {
         return { content: '', isBinary: true }
       }
@@ -796,7 +755,12 @@ export function registerFilesystemHandlers(
     ): Promise<MarkdownDocument[]> => {
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
-        const relativePaths = await provider.listFiles(args.rootPath)
+        if (!provider.listMarkdownDocuments) {
+          throw new Error(
+            'Remote Markdown link discovery is unavailable. Reconnect the SSH target and retry.'
+          )
+        }
+        const relativePaths = await provider.listMarkdownDocuments(args.rootPath)
         return markdownDocumentsFromRelativePaths(args.rootPath, relativePaths)
       }
 
@@ -961,7 +925,7 @@ export function registerFilesystemHandlers(
         activeTextSearches.get(searchKey)?.kill()
 
         const acc = createAccumulator()
-        let stdoutBuffer = ''
+        const stdoutLines = new SearchSubprocessLineAccumulator()
         let resolved = false
         let child: ChildProcess | null = null
         let killTimeout: ReturnType<typeof setTimeout>
@@ -1004,12 +968,11 @@ export function registerFilesystemHandlers(
         child = nextChild
         activeTextSearches.set(searchKey, nextChild)
 
-        const handleStdoutData = (chunk: string): void => {
-          stdoutBuffer += chunk
-          const lines = stdoutBuffer.split('\n')
-          stdoutBuffer = lines.pop() ?? ''
-          for (const line of lines) {
-            processLine(line)
+        const handleStdoutData = (chunk: Buffer): void => {
+          if (!stdoutLines.push(chunk, processLine)) {
+            acc.truncated = true
+            child?.kill()
+            resolveOnce()
           }
         }
         const handleStderrData = (): void => {
@@ -1019,13 +982,13 @@ export function registerFilesystemHandlers(
           resolveOnce()
         }
         const handleClose = (): void => {
-          if (stdoutBuffer) {
-            processLine(stdoutBuffer)
+          const trailingLine = stdoutLines.finish()
+          if (trailingLine !== null) {
+            processLine(trailingLine)
           }
           resolveOnce()
         }
 
-        nextChild.stdout!.setEncoding('utf-8')
         nextChild.stdout!.on('data', handleStdoutData)
         nextChild.stderr!.on('data', handleStderrData)
         nextChild.once('error', handleError)

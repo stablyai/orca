@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this file is the single security boundary for the bundled CLI — transport setup, auth-token enforcement, admission control, keepalive framing, and orphan-socket sweeping all co-locate deliberately so a reviewer can audit the boundary in one sitting. Splitting this across files would scatter the invariants without reducing complexity. */
 // Why: the single security boundary for the bundled CLI — auth-token enforcement, metadata publication, transport orchestration.
 import { randomBytes } from 'node:crypto'
-import { readdirSync, rmSync } from 'node:fs'
+import { opendirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
@@ -41,6 +41,7 @@ import {
   decodeTerminalStreamFrame,
   type TerminalStreamFrame
 } from '../../shared/terminal-stream-protocol'
+import { parseRemoteRuntimeJsonText } from '../../shared/remote-runtime-request-frames'
 
 const DEFAULT_WS_PORT = 6768
 
@@ -54,9 +55,10 @@ type OrcaRuntimeRpcServerOptions = {
   // Why: true when the caller pinned a port (`orca serve --port`) so bind order prefers it over a stale STA-1511 fallback (#8535).
   preferPinnedWsPort?: boolean
   webClientRoot?: string
-  // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
+  // Why: test-only overrides for the admission constants below; production uses the defaults.
   keepaliveIntervalMs?: number
   longPollCap?: number
+  shortRequestCap?: number
 }
 
 export type PairingOfferUnavailableReason =
@@ -114,6 +116,8 @@ const KEEPALIVE_INTERVAL_MS = 10_000
 
 // Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
 const LONG_POLL_CAP = 16
+// Why: multiplexed sockets otherwise let one peer retain an unbounded number of active request graphs.
+const SHORT_REQUEST_CAP = 64
 
 function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
@@ -431,6 +435,7 @@ export class OrcaRuntimeRpcServer {
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
+  private readonly shortRequestCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
@@ -452,6 +457,7 @@ export class OrcaRuntimeRpcServer {
   >()
   // Why: separate from server.maxConnections — count only long-running dispatches, not short RPCs. See §3.1 + §7 risk #2.
   private activeLongPolls = 0
+  private activeShortRequests = 0
 
   constructor({
     runtime,
@@ -463,7 +469,8 @@ export class OrcaRuntimeRpcServer {
     preferPinnedWsPort = false,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
-    longPollCap = LONG_POLL_CAP
+    longPollCap = LONG_POLL_CAP,
+    shortRequestCap = SHORT_REQUEST_CAP
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime })
@@ -476,6 +483,7 @@ export class OrcaRuntimeRpcServer {
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
+    this.shortRequestCap = shortRequestCap
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
@@ -862,7 +870,7 @@ export class OrcaRuntimeRpcServer {
           // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
           let id = 'unknown'
           try {
-            const parsed = JSON.parse(msg) as { id?: unknown }
+            const parsed = parseRemoteRuntimeJsonText(msg) as { id?: unknown }
             if (typeof parsed.id === 'string' && parsed.id.length > 0) {
               id = parsed.id
             }
@@ -1009,7 +1017,7 @@ export class OrcaRuntimeRpcServer {
     }
     const request = parsed.request
 
-    // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
+    // Why: long-polls and short work have separate budgets so waits cannot starve ordinary RPCs.
     const longPoll = isLongPollRequest(request)
     if (longPoll && this.activeLongPolls >= this.longPollCap) {
       return this.buildError(
@@ -1018,10 +1026,19 @@ export class OrcaRuntimeRpcServer {
         'long-poll capacity reached; retry with backoff'
       )
     }
+    if (!longPoll && this.activeShortRequests >= this.shortRequestCap) {
+      return this.buildError(
+        request.id,
+        'runtime_busy',
+        'short-request capacity reached; retry with backoff'
+      )
+    }
     if (longPoll) {
       this.activeLongPolls += 1
       // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
       context?.startKeepalive()
+    } else {
+      this.activeShortRequests += 1
     }
 
     try {
@@ -1031,6 +1048,8 @@ export class OrcaRuntimeRpcServer {
     } finally {
       if (longPoll) {
         this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
+      } else {
+        this.activeShortRequests = Math.max(0, this.activeShortRequests - 1)
       }
     }
   }
@@ -1038,7 +1057,7 @@ export class OrcaRuntimeRpcServer {
   private parseAndAuth(rawMessage: string): { request: RpcRequest } | { error: RpcResponse } {
     let request: RpcRequest
     try {
-      request = JSON.parse(rawMessage) as RpcRequest
+      request = parseRemoteRuntimeJsonText(rawMessage) as RpcRequest
     } catch {
       return { error: this.buildError('unknown', 'bad_request', 'Invalid JSON request') }
     }
@@ -1071,7 +1090,7 @@ export class OrcaRuntimeRpcServer {
   ): Promise<void> {
     let request: RpcRequest
     try {
-      request = JSON.parse(rawMessage) as RpcRequest
+      request = parseRemoteRuntimeJsonText(rawMessage) as RpcRequest
     } catch {
       reply(JSON.stringify(this.buildError('unknown', 'bad_request', 'Invalid JSON request')))
       return
@@ -1136,10 +1155,24 @@ export class OrcaRuntimeRpcServer {
       )
       return
     }
+    if (!longPoll && this.activeShortRequests >= this.shortRequestCap) {
+      reply(
+        JSON.stringify(
+          this.buildError(
+            request.id,
+            'runtime_busy',
+            'short-request capacity reached; retry with backoff'
+          )
+        )
+      )
+      return
+    }
 
     const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
     if (longPoll) {
       this.activeLongPolls += 1
+    } else {
+      this.activeShortRequests += 1
     }
 
     // Why: older pairings may lack scope metadata, so stamp the authenticated scope onto status.get.
@@ -1190,6 +1223,8 @@ export class OrcaRuntimeRpcServer {
       abortRegistration?.dispose()
       if (longPoll) {
         this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
+      } else {
+        this.activeShortRequests = Math.max(0, this.activeShortRequests - 1)
       }
     }
   }
@@ -1214,37 +1249,49 @@ export class OrcaRuntimeRpcServer {
 export const RUNTIME_SOCKET_NAME_REGEX = /^o-(\d+)-[A-Za-z0-9_-]+\.sock$/
 
 export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number): void {
-  let entries: string[]
+  let directory: ReturnType<typeof opendirSync>
   try {
-    entries = readdirSync(userDataPath)
+    directory = opendirSync(userDataPath)
   } catch {
     // Why: first-launch userData may not exist yet; nothing to sweep.
     return
   }
-  for (const entry of entries) {
-    const match = RUNTIME_SOCKET_NAME_REGEX.exec(entry)
-    if (!match) {
-      continue
-    }
-    const pid = Number(match[1])
-    if (!Number.isFinite(pid)) {
-      continue
-    }
-    // Why: never delete our own socket — a bug here would rmSync one we're about to bind.
-    if (pid === ownPid) {
-      continue
-    }
-    try {
-      // Why: signal 0 is the POSIX liveness probe (sends nothing); ESRCH = dead pid, EPERM = foreign owner (left alone).
-      process.kill(pid, 0)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
-        try {
-          rmSync(join(userDataPath, entry), { force: true })
-        } catch {
-          // Why: best-effort sweep; a later start() or OS reboot cleans any socket we can't unlink.
+  try {
+    while (true) {
+      const entry = directory.readSync()
+      if (!entry) {
+        break
+      }
+      const match = RUNTIME_SOCKET_NAME_REGEX.exec(entry.name)
+      if (!match) {
+        continue
+      }
+      const pid = Number(match[1])
+      if (!Number.isFinite(pid)) {
+        continue
+      }
+      // Why: never delete our own socket — a bug here would rmSync one we're about to bind.
+      if (pid === ownPid) {
+        continue
+      }
+      try {
+        // Why: signal 0 is the POSIX liveness probe (sends nothing); ESRCH = dead pid, EPERM = foreign owner (left alone).
+        process.kill(pid, 0)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+          try {
+            rmSync(join(userDataPath, entry.name), { force: true })
+          } catch {
+            // Why: best-effort sweep; a later start() or OS reboot cleans any socket we can't unlink.
+          }
         }
       }
+    }
+  } finally {
+    try {
+      directory.closeSync()
+    } catch {
+      // Best-effort sweep cleanup.
     }
   }
 }

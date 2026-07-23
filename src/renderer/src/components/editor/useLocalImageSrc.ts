@@ -2,15 +2,24 @@ import { useEffect, useState } from 'react'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { readRuntimeFilePreview } from '@/runtime/runtime-file-client'
+import {
+  LocalImageBlobRetention,
+  MAX_LOCAL_IMAGE_BLOB_BYTES,
+  type RetainedLocalImageBlob
+} from './local-image-blob-retention'
+import { LocalImageLoadAdmission } from './local-image-load-admission'
+import { decodeBase64Bytes } from './base64-byte-decoder'
+import { assertRasterImagePreviewWithinLimits } from '../../../../shared/raster-image-preview-limits'
+import { validateRasterImageDataUri } from '../../../../shared/image-data-uri'
 
 // Why: the renderer is served from http://localhost in dev mode, so file://
 // URLs in <img> tags are blocked by cross-origin restrictions. Loading images
 // via the existing fs.readFile IPC and converting to blob URLs bypasses this
 // limitation and works identically in both dev and production modes.
 
-const BLOB_URL_CACHE_MAX_SIZE = 100
-const blobUrlCache = new Map<string, string>()
+const blobUrlCache = new LocalImageBlobRetention((url) => URL.revokeObjectURL(url))
 const inFlightBlobUrlLoads = new Map<string, Promise<string | null>>()
+const imageLoadAdmission = new LocalImageLoadAdmission()
 
 export function getLocalImageCacheKey(
   absolutePath: string,
@@ -31,53 +40,45 @@ export function getLocalImageCacheKey(
 // the cache grows without bound and leaks memory. We evict the oldest entry
 // (Map iteration order is insertion order) and revoke its blob URL so the
 // browser can free the underlying data.
-function cacheBlobUrl(key: string, url: string): void {
-  const previousUrl = blobUrlCache.get(key)
-  if (previousUrl !== undefined) {
-    blobUrlCache.delete(key)
-    if (previousUrl !== url) {
-      // Why: cache replacements must release the superseded Blob even when
-      // they come from rare stale state or future loader changes.
-      URL.revokeObjectURL(previousUrl)
-    }
-  }
-  blobUrlCache.set(key, url)
-  if (blobUrlCache.size > BLOB_URL_CACHE_MAX_SIZE) {
-    const oldest = blobUrlCache.keys().next().value
-    if (oldest !== undefined) {
-      const oldUrl = blobUrlCache.get(oldest)
-      blobUrlCache.delete(oldest)
-      if (oldUrl) {
-        URL.revokeObjectURL(oldUrl)
-      }
-    }
-  }
+function cacheBlobUrl(key: string, entry: RetainedLocalImageBlob): void {
+  blobUrlCache.set(key, entry)
 }
 const cacheListeners = new Set<() => void>()
 let cacheGeneration = 0
-const pendingBlobUrlRevocations = new Set<string>()
+const pendingBlobUrlRevocations = new Map<string, number>()
+let pendingBlobUrlRevocationBytes = 0
 let pendingBlobUrlRevocationTimer: ReturnType<typeof setTimeout> | null = null
 
-function base64ToBlobUrl(base64: string, mimeType: string): string {
-  const binary = atob(base64.replace(/\s/g, ''))
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return URL.createObjectURL(new Blob([bytes], { type: mimeType }))
+function base64ToBlobUrl(base64: string, mimeType: string): RetainedLocalImageBlob {
+  const bytes = decodeBase64Bytes(base64)
+  assertRasterImagePreviewWithinLimits(bytes, mimeType)
+  return { url: URL.createObjectURL(new Blob([bytes], { type: mimeType })), bytes: bytes.length }
 }
 
 function revokePendingBlobUrls(): void {
   pendingBlobUrlRevocationTimer = null
-  for (const url of pendingBlobUrlRevocations) {
+  for (const url of pendingBlobUrlRevocations.keys()) {
     URL.revokeObjectURL(url)
   }
   pendingBlobUrlRevocations.clear()
+  pendingBlobUrlRevocationBytes = 0
 }
 
-function scheduleBlobUrlRevocation(urls: string[]): void {
-  for (const url of urls) {
-    pendingBlobUrlRevocations.add(url)
+function scheduleBlobUrlRevocation(entries: RetainedLocalImageBlob[]): void {
+  for (const { url, bytes } of entries) {
+    const previousBytes = pendingBlobUrlRevocations.get(url) ?? 0
+    pendingBlobUrlRevocations.set(url, bytes)
+    pendingBlobUrlRevocationBytes += bytes - previousBytes
+  }
+  while (pendingBlobUrlRevocationBytes > MAX_LOCAL_IMAGE_BLOB_BYTES) {
+    const oldest = pendingBlobUrlRevocations.entries().next().value
+    if (!oldest) {
+      break
+    }
+    const [url, bytes] = oldest
+    pendingBlobUrlRevocations.delete(url)
+    pendingBlobUrlRevocationBytes -= bytes
+    URL.revokeObjectURL(url)
   }
   if (pendingBlobUrlRevocationTimer !== null || pendingBlobUrlRevocations.size === 0) {
     return
@@ -92,9 +93,9 @@ function scheduleBlobUrlRevocation(urls: string[]): void {
 // display the old data while the fresh IPC load completes, avoiding a visible
 // flash. The 30-second window is generous enough for even slow IPC reads.
 function invalidateImageCache(): void {
-  const staleUrls = Array.from(blobUrlCache.values())
-  blobUrlCache.clear()
+  const staleUrls = blobUrlCache.clear()
   inFlightBlobUrlLoads.clear()
+  imageLoadAdmission.clearPending()
   cacheGeneration += 1
   for (const listener of cacheListeners) {
     listener()
@@ -109,6 +110,7 @@ function invalidateImageCache(): void {
 }
 
 function disposeImageCacheModuleState(): void {
+  cacheGeneration += 1
   if (typeof window !== 'undefined') {
     window.removeEventListener('focus', invalidateImageCache)
   }
@@ -117,10 +119,10 @@ function disposeImageCacheModuleState(): void {
     pendingBlobUrlRevocationTimer = null
   }
   revokePendingBlobUrls()
-  for (const url of blobUrlCache.values()) {
+  for (const { url } of blobUrlCache.clear()) {
     URL.revokeObjectURL(url)
   }
-  blobUrlCache.clear()
+  imageLoadAdmission.clearPending()
   inFlightBlobUrlLoads.clear()
   cacheListeners.clear()
 }
@@ -146,13 +148,13 @@ export function onImageCacheInvalidated(listener: () => void): () => void {
   }
 }
 
-function isExternalUrl(src: string): boolean {
-  return (
-    src.startsWith('http://') ||
-    src.startsWith('https://') ||
-    src.startsWith('data:') ||
-    src.startsWith('blob:')
-  )
+function resolveExternalImageUrl(src: string): string | null {
+  if (src.startsWith('data:')) {
+    return validateRasterImageDataUri(src)
+  }
+  return src.startsWith('http://') || src.startsWith('https://') || src.startsWith('blob:')
+    ? src
+    : null
 }
 
 /**
@@ -177,8 +179,9 @@ export function useLocalImageSrc(
     if (!rawSrc) {
       return undefined
     }
-    if (isExternalUrl(rawSrc)) {
-      return rawSrc
+    const externalSrc = resolveExternalImageUrl(rawSrc)
+    if (externalSrc) {
+      return externalSrc
     }
     const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
     if (absolutePath) {
@@ -196,8 +199,9 @@ export function useLocalImageSrc(
       return
     }
 
-    if (isExternalUrl(rawSrc)) {
-      setDisplaySrc(rawSrc)
+    const externalSrc = resolveExternalImageUrl(rawSrc)
+    if (externalSrc) {
+      setDisplaySrc(externalSrc)
       return
     }
 
@@ -247,13 +251,9 @@ export async function loadLocalImageSrc(
   connectionId?: string | null,
   runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null }
 ): Promise<string | null> {
-  if (
-    rawSrc.startsWith('http://') ||
-    rawSrc.startsWith('https://') ||
-    rawSrc.startsWith('data:') ||
-    rawSrc.startsWith('blob:')
-  ) {
-    return rawSrc
+  const externalSrc = resolveExternalImageUrl(rawSrc)
+  if (externalSrc) {
+    return externalSrc
   }
 
   const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
@@ -287,20 +287,26 @@ export function loadLocalImageAbsolutePath(
   }
 
   const readGeneration = cacheGeneration
-  const loadPromise = readImagePreview(absolutePath, connectionId, runtimeContext)
+  const admitted = imageLoadAdmission.admit(() =>
+    readImagePreview(absolutePath, connectionId, runtimeContext)
+  )
+  if (!admitted) {
+    return Promise.resolve(null)
+  }
+  const loadPromise = admitted
     .then((result) => {
-      if (!result.isBinary || !result.content || cacheGeneration !== readGeneration) {
+      if (!result?.isBinary || !result.content || cacheGeneration !== readGeneration) {
         // Why: local image paths must stay behind IPC/runtime authorization;
         // handing raw file: or relative paths back to Chromium can escape it.
         return null
       }
-      const url = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
+      const entry = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
       if (cacheGeneration !== readGeneration) {
-        URL.revokeObjectURL(url)
+        URL.revokeObjectURL(entry.url)
         return null
       }
-      cacheBlobUrl(cacheKey, url)
-      return url
+      cacheBlobUrl(cacheKey, entry)
+      return entry.url
     })
     .catch(() => null)
     .finally(() => {
@@ -318,13 +324,14 @@ export function resetLocalImageSrcStateForTests(): void {
     pendingBlobUrlRevocationTimer = null
   }
   revokePendingBlobUrls()
-  for (const url of blobUrlCache.values()) {
+  for (const { url } of blobUrlCache.clear()) {
     URL.revokeObjectURL(url)
   }
-  blobUrlCache.clear()
+  imageLoadAdmission.clearPending()
   inFlightBlobUrlLoads.clear()
-  cacheGeneration = 0
+  cacheGeneration += 1
   pendingBlobUrlRevocations.clear()
+  pendingBlobUrlRevocationBytes = 0
   cacheListeners.clear()
 }
 

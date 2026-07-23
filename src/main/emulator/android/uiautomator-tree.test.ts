@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { EmulatorError } from '../emulator-errors'
-import { parseAndroidBounds, parseUiAutomatorXml } from './uiautomator-tree'
+import {
+  ANDROID_UIAUTOMATOR_XML_MAX_ATTRIBUTES_PER_ELEMENT,
+  ANDROID_UIAUTOMATOR_XML_MAX_DEPTH,
+  ANDROID_UIAUTOMATOR_XML_MAX_ELEMENTS,
+  parseAndroidBounds,
+  parseUiAutomatorXml
+} from './uiautomator-tree'
 
 // Realistic `uiautomator dump` output: an XML prolog, a <hierarchy> root, and
 // nested self-describing <node> elements (mix of container + self-closing leaf).
@@ -96,6 +102,23 @@ describe('parseUiAutomatorXml', () => {
     expect(() => parseUiAutomatorXml('not xml at all')).toThrowError(EmulatorError)
     expect(() => parseUiAutomatorXml('')).toThrowError(EmulatorError)
     expect(() => parseUiAutomatorXml('<hierarchy></node>')).toThrowError(EmulatorError)
+  })
+
+  it('rejects element-count, nesting, and per-element attribute amplification', () => {
+    const tooManyElements = `<hierarchy>${'<node />'.repeat(
+      ANDROID_UIAUTOMATOR_XML_MAX_ELEMENTS
+    )}</hierarchy>`
+    const tooDeep = `${'<node>'.repeat(ANDROID_UIAUTOMATOR_XML_MAX_DEPTH + 1)}${'</node>'.repeat(
+      ANDROID_UIAUTOMATOR_XML_MAX_DEPTH + 1
+    )}`
+    const tooManyAttributes = `<node ${Array.from(
+      { length: ANDROID_UIAUTOMATOR_XML_MAX_ATTRIBUTES_PER_ELEMENT + 1 },
+      (_, index) => `a${index}="x"`
+    ).join(' ')} />`
+
+    expect(() => parseUiAutomatorXml(tooManyElements)).toThrow('exceeds 50000 elements')
+    expect(() => parseUiAutomatorXml(tooDeep)).toThrow('exceeds 256 levels')
+    expect(() => parseUiAutomatorXml(tooManyAttributes)).toThrow('exceeds 64 attributes')
   })
 })
 

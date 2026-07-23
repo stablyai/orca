@@ -11,6 +11,7 @@ import {
   PRIMARY_CHECKOUT_METADATA_FILES,
   startGitCommonPolling
 } from './worktree-git-common-polling'
+import type { WorktreePollingScanLimits } from './worktree-polling-scan-budget'
 
 // Watches a repo's `<common>/.git/worktrees` metadata plus the primary
 // checkout's shallow branch/index files — the only paths the git-common event
@@ -284,7 +285,8 @@ export async function startGitCommonWatch(
   pollIntervalMs: number,
   platform: NodeJS.Platform,
   visibility: WorktreePollerWindowVisibility,
-  onFullScan?: () => void
+  onFullScan?: () => void,
+  scanLimits: Partial<WorktreePollingScanLimits> = {}
 ): Promise<WorktreeBaseSubscription> {
   if (platform === 'darwin') {
     const [narrowWatch, primaryMetadataPoll] = await Promise.all([
@@ -303,5 +305,13 @@ export async function startGitCommonWatch(
       }
     }
   }
-  return startGitCommonPolling(target.path, onEvents, pollIntervalMs, visibility, onFullScan)
+  return startGitCommonPolling(
+    target.path,
+    onEvents,
+    pollIntervalMs,
+    visibility,
+    onFullScan,
+    true,
+    scanLimits
+  )
 }

@@ -55,6 +55,7 @@ import {
   closeMR,
   diagnoseAuth,
   getRateLimit,
+  GITLAB_RATE_LIMIT_CACHE_HOST_MAX_BYTES,
   listMergeRequests,
   listWorkItems,
   mergeMR,
@@ -338,6 +339,15 @@ describe('gitlab client — MR operations', () => {
       }
 
       expect(_getGitLabRateLimitCacheSize()).toBe(64)
+    })
+
+    it('does not retain an oversized host snapshot', async () => {
+      glabApiWithHeadersMock.mockResolvedValue({ body: '{}', headers: {} })
+      await getRateLimit({
+        host: 'h'.repeat(GITLAB_RATE_LIMIT_CACHE_HOST_MAX_BYTES + 1),
+        force: true
+      })
+      expect(_getGitLabRateLimitCacheSize()).toBe(0)
     })
   })
 

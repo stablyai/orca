@@ -1,29 +1,19 @@
 /* eslint-disable max-lines -- Why: holds an inline JS plugin source emitted as one file; splitting across TS modules would scatter tightly coupled string-template logic. */
 import { app } from 'electron'
 import { join } from 'node:path'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  statSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
+import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
+import { getGeneratedNodeBoundedFileReaderSourceLines } from '../generated-node-bounded-file-reader'
+import { ConfigOverlayCapacityError } from '../pty/config-overlay-mirroring'
+import {
+  ORCA_OPENCODE_PLUGIN_FILE,
+  mirrorOpenCodeConfigWithManifest
+} from './config-overlay-manifest'
 
-const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
 const OPENCODE_OVERLAY_DIR = 'opencode-config-overlays'
 const OPENCODE_SHARED_CONFIG_DIR = 'shared'
-const OPENCODE_OVERLAY_MANIFEST_FILE = '.orca-opencode-overlay-manifest.json'
-
-type OpenCodeOverlayManifest = {
-  topLevelEntries: string[]
-  pluginEntries: string[]
-}
 
 // Why: bounds-check only — the id is a daemon sessionId with path separators, hashed downstream to a filesystem-safe name (an old regex rejecting "/"/":" broke every such id, #1148); 1024 just caps pathological hash input.
 function isUsableId(id: string): boolean {
@@ -48,12 +38,13 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     "// OpenCode's Node process (not Orca's) and has no access to server.ts's",
     '// equivalent warnedVersions / warnedEnvs Sets.',
     'let warnedBadEndpoint = false;',
+    ...getGeneratedNodeBoundedFileReaderSourceLines(),
     '',
     '// Why: message.part.updated can fire many times per second during a',
     '// streaming assistant reply, and each post() calls resolveHookCoords()',
     '// which reads the endpoint file. The file only changes on Orca restart',
     '// (rare), so a stat+mtime check is substantially cheaper than a full',
-    '// readFileSync+parse on every streamed part. On stat error we fall',
+    '// bounded read+parse on every streamed part. On stat error we fall',
     '// through to parse so the fail-open behavior is preserved.',
     'let cachedEndpointKey = "";',
     'let cachedEndpointValues = null;',
@@ -74,7 +65,7 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '      if (cacheKey === cachedEndpointKey && cachedEndpointValues) {',
     '        return cachedEndpointValues;',
     '      }',
-    '      const contents = fs.readFileSync(path, "utf8");',
+    '      const contents = readOrcaManagedFileWithinLimit(fs, path);',
     '      const out = {};',
     '      for (const line of contents.split(/\\r?\\n/)) {',
     '        // Why: Windows endpoint.cmd uses `set KEY=VALUE`; Unix endpoint.env',
@@ -91,7 +82,7 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '      return out;',
     '    } catch (ioErr) {',
     '      // Why: any stat or read failure (file yanked mid-read, permission',
-    '      // race, unlink between stat and readFileSync) must invalidate the',
+    '      // race, unlink between stat and bounded read) must invalidate the',
     '      // cache so a transient failure does not lock in a stale parse for',
     '      // the remaining process lifetime; rethrow to the outer catch.',
     '      cachedEndpointKey = "";',
@@ -377,6 +368,8 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
 
 // Why: installs the plugin into OPENCODE_CONFIG_DIR so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini (the old loopback-IPC path never reached agentStatusByPaneKey).
 export class OpenCodeHookService {
+  private warnedOverlayCapacity = false
+
   clearPty(_ptyId: string): void {
     // Why: no-op — config dirs are app/source-scoped now, and recursive delete on the main-process hot path could freeze on Windows.
   }
@@ -407,7 +400,16 @@ export class OpenCodeHookService {
       mkdirSync(overlayDir, { recursive: true })
       this.mirrorUserConfig(existingConfigDir, overlayDir)
       this.writePluginIntoOverlay(overlayDir)
-    } catch {
+    } catch (error) {
+      if (
+        !this.warnedOverlayCapacity &&
+        (error instanceof ConfigOverlayCapacityError || error instanceof NodeFileReadTooLargeError)
+      ) {
+        this.warnedOverlayCapacity = true
+        console.warn(
+          '[opencode-hooks] config overlay exceeded its memory limit; using the original OPENCODE_CONFIG_DIR without Orca status integration'
+        )
+      }
       // Why: best-effort — symlink creation needs Windows developer mode (else EPERM) and userData may be read-only; preserve the user's config over dropping their auth/models/keymap.
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
@@ -427,90 +429,8 @@ export class OpenCodeHookService {
     return join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR, OPENCODE_SHARED_CONFIG_DIR)
   }
 
-  private readOverlayManifest(overlayDir: string): OpenCodeOverlayManifest {
-    try {
-      const parsed = JSON.parse(
-        readFileSync(join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE), 'utf8')
-      ) as Partial<OpenCodeOverlayManifest>
-      return {
-        topLevelEntries: Array.isArray(parsed.topLevelEntries) ? parsed.topLevelEntries : [],
-        pluginEntries: Array.isArray(parsed.pluginEntries) ? parsed.pluginEntries : []
-      }
-    } catch {
-      return { topLevelEntries: [], pluginEntries: [] }
-    }
-  }
-
-  private writeOverlayManifest(overlayDir: string, manifest: OpenCodeOverlayManifest): void {
-    writeFileSync(
-      join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE),
-      `${JSON.stringify(manifest, null, 2)}\n`
-    )
-  }
-
-  private clearManifestEntries(overlayDir: string, manifest: OpenCodeOverlayManifest): void {
-    for (const entryName of manifest.topLevelEntries) {
-      safeRemoveTree(join(overlayDir, entryName))
-    }
-
-    const overlayPluginsDir = join(overlayDir, 'plugins')
-    for (const entryName of manifest.pluginEntries) {
-      if (entryName === ORCA_OPENCODE_PLUGIN_FILE) {
-        continue
-      }
-      safeRemoveTree(join(overlayPluginsDir, entryName))
-    }
-  }
-
-  // Why: mirror user config entries as symlinks so edits propagate live; only plugins/ becomes a real overlay dir so Orca can drop a sibling plugin file.
   private mirrorUserConfig(sourceDir: string, overlayDir: string): void {
-    const previousManifest = this.readOverlayManifest(overlayDir)
-    // Why: overlays persist across terminals; remove only Orca-mirrored paths so stale user config clears but OpenCode runtime dirs (node_modules) survive.
-    this.clearManifestEntries(overlayDir, previousManifest)
-
-    const nextManifest: OpenCodeOverlayManifest = { topLevelEntries: [], pluginEntries: [] }
-
-    for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
-      const sourcePath = join(sourceDir, entry.name)
-
-      if (entry.name === 'plugins') {
-        // Why: check isSymbolicLink before isDirectory — a Windows junction reports both, and the symlink branch must win.
-        const isSymlink = entry.isSymbolicLink()
-        let isLinkPointingToDir = false
-        if (isSymlink) {
-          try {
-            isLinkPointingToDir = statSync(sourcePath).isDirectory()
-          } catch {
-            // Why: broken/inaccessible symlink — mirror the dangling link verbatim instead of resolving through it.
-            isLinkPointingToDir = false
-          }
-        }
-
-        if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          // Why: resolve a symlinked plugins/ to its real target so <overlay>/plugins stays a real dir and writePluginIntoOverlay can't write through the user's link.
-          const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
-          const overlayPluginsDir = join(overlayDir, 'plugins')
-          mkdirSync(overlayPluginsDir, { recursive: true })
-          for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
-            if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
-              continue
-            }
-            mirrorEntry(
-              join(resolvedSource, pluginEntry.name),
-              join(overlayPluginsDir, pluginEntry.name)
-            )
-            nextManifest.pluginEntries.push(pluginEntry.name)
-          }
-          continue
-        }
-      }
-
-      mirrorEntry(sourcePath, join(overlayDir, entry.name))
-      nextManifest.topLevelEntries.push(entry.name)
-    }
-
-    this.writeOverlayManifest(overlayDir, nextManifest)
+    mirrorOpenCodeConfigWithManifest(sourceDir, overlayDir)
   }
 
   // Why: pre-write unlink guards against POSIX writeFileSync writing through a mirrored symlink and clobbering a same-named user plugin.
@@ -520,8 +440,10 @@ export class OpenCodeHookService {
     const pluginPath = join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE)
     try {
       unlinkSync(pluginPath)
-    } catch {
-      // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error
+      }
     }
     writeFileSync(pluginPath, getOpenCodePluginSource())
   }
@@ -531,7 +453,7 @@ export class OpenCodeHookService {
     const pluginsDir = join(configDir, 'plugins')
     try {
       mkdirSync(pluginsDir, { recursive: true })
-      writeFileSync(join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE), getOpenCodePluginSource())
+      this.writePluginIntoOverlay(configDir)
     } catch {
       // Why: userData can be locked on Windows (EPERM/EBUSY); plugin is non-critical, so spawn without it.
       return null

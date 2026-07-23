@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  MAX_INTEGRATION_ACCOUNTS,
+  MAX_INTEGRATION_CREDENTIAL_BYTES
+} from '../integration-account-persistence-limits'
 
 type ViewerFixture = {
   displayName: string
@@ -388,5 +392,58 @@ describe('Linear client workspace storage', () => {
     })
 
     expect(() => linear.getClients('bad')).toThrow('Could not decrypt')
+  })
+
+  it('admits the exact saved-workspace boundary without changing order', async () => {
+    const workspaces = Array.from({ length: MAX_INTEGRATION_ACCOUNTS }, (_, index) => ({
+      id: `workspace-${index}`,
+      token: `token-${index}`
+    }))
+    writeMultiWorkspaceFiles(workspaces, 'all')
+    const linear = await loadClientModule()
+
+    const status = linear.getStatus()
+    expect(status.workspaces).toHaveLength(MAX_INTEGRATION_ACCOUNTS)
+    expect(status.workspaces?.map((workspace) => workspace.id)).toEqual(
+      workspaces.map((workspace) => workspace.id)
+    )
+  })
+
+  it('preserves an over-limit saved-workspace file and refuses to overwrite it', async () => {
+    const workspaces = Array.from({ length: MAX_INTEGRATION_ACCOUNTS + 1 }, (_, index) => ({
+      id: `workspace-${index}`,
+      token: `token-${index}`
+    }))
+    writeMultiWorkspaceFiles(workspaces, 'all')
+    const path = join(tempHome, '.orca', 'linear-workspaces.json')
+    const before = readFileSync(path, 'utf8')
+    const linear = await loadClientModule()
+
+    expect(linear.getStatus()).toMatchObject({ connected: false, workspaces: [] })
+    await expect(linear.connect('token-alpha')).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('left unchanged')
+    })
+    expect(linearClientMock).not.toHaveBeenCalled()
+    expect(readFileSync(path, 'utf8')).toBe(before)
+  })
+
+  it('admits an exact-size Linear credential and rejects credential byte +1 before SDK use', async () => {
+    const exactToken = 't'.repeat(MAX_INTEGRATION_CREDENTIAL_BYTES)
+    fixtures.set(exactToken, {
+      displayName: 'Ada',
+      email: 'ada@example.com',
+      organizationId: 'org-exact',
+      organizationName: 'Exact',
+      organizationUrlKey: 'exact'
+    })
+    const linear = await loadClientModule()
+
+    await expect(linear.connect(exactToken)).resolves.toMatchObject({ ok: true })
+    await expect(linear.connect(`${exactToken}t`)).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining(`${MAX_INTEGRATION_CREDENTIAL_BYTES} UTF-8 bytes`)
+    })
+    expect(linearClientMock).toHaveBeenCalledTimes(1)
   })
 })

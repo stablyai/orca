@@ -2,13 +2,13 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  readFileSync,
   readlinkSync,
   realpathSync,
   statSync,
   writeFileSync
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
@@ -50,7 +50,7 @@ function readSettingsBaseline(runtimeHomePath: string): Map<string, string> | nu
     return null
   }
   try {
-    const parsed: unknown = JSON.parse(readFileSync(baselinePath, 'utf-8'))
+    const parsed = readAgentStateJsonFileSync(baselinePath)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
@@ -76,7 +76,7 @@ function readTopLevelSettingValues(configPath: string): Map<string, TopLevelSett
   if (!existsSync(configPath)) {
     return result
   }
-  const lines = readFileSync(configPath, 'utf-8').split('\n')
+  const lines = readAgentStateFileSync(configPath).split('\n')
   let state = createTomlLineScanState()
   for (const line of lines) {
     if (isTomlStructuralLine(state)) {
@@ -118,7 +118,7 @@ export function snapshotCodexRuntimeSettingsBaseline(
     const baselinePath = getSettingsBaselinePath(runtimeHomePath)
     const serialized = `${JSON.stringify(file, null, 2)}\n`
     // Why: launch prep runs repeatedly; skip byte-identical rewrites to avoid needless disk writes.
-    if (existsSync(baselinePath) && readFileSync(baselinePath, 'utf-8') === serialized) {
+    if (existsSync(baselinePath) && readAgentStateFileSync(baselinePath) === serialized) {
       return
     }
     writeFileSync(baselinePath, serialized, {
@@ -204,7 +204,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(homes: CodexSettingsPromotion
   // Why: a dangling symlink may target an unmade dir tree; create its real parent so the atomic temp write has a home.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
   const targetExists = existsSync(writeTarget.path)
-  const systemContent = targetExists ? readFileSync(writeTarget.path, 'utf-8') : ''
+  const systemContent = targetExists ? readAgentStateFileSync(writeTarget.path) : ''
   const nextContent = upsertTopLevelSettingsInContent(systemContent, updates)
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // Why: \\wsl$ 9P symlink metadata is unreliable; write through the existing file to preserve the WSL-side inode.

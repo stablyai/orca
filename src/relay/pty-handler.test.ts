@@ -11,6 +11,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../shared/setup-agent-sequencing'
 import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
+import { MAX_TERMINAL_COLS } from '../shared/terminal-size-limits'
 
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -24,7 +25,9 @@ const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),
-    clear: vi.fn()
+    clear: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn()
   }
 }))
 
@@ -38,9 +41,11 @@ import {
   PtyHandler,
   attachIdentityMismatches
 } from './pty-handler'
-import type { RelayDispatcher } from './dispatcher'
+import { MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES } from './pty-persistence-envelope'
+import type { RelayDispatcher, RelayNotificationWriteResult } from './dispatcher'
 
 type TestRequestContext = {
+  clientId?: number
   isStale: () => boolean
   signal?: AbortSignal
 }
@@ -50,8 +55,18 @@ function createMockDispatcher() {
     string,
     (params: Record<string, unknown>, context?: TestRequestContext) => Promise<unknown>
   >()
-  const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
+  const notificationHandlers = new Map<
+    string,
+    (params: Record<string, unknown>, context: TestRequestContext) => void
+  >()
   const notifications: { method: string; params?: Record<string, unknown> }[] = []
+  const targetedNotifications: {
+    clientId: number
+    method: string
+    params?: Record<string, unknown>
+  }[] = []
+  const clientDetachListeners = new Set<(clientId: number) => void>()
+  const connectedClientIds = new Set([1])
 
   const dispatcher = {
     onRequest: vi.fn(
@@ -62,33 +77,75 @@ function createMockDispatcher() {
         requestHandlers.set(method, handler)
       }
     ),
-    onNotification: vi.fn((method: string, handler: (params: Record<string, unknown>) => void) => {
-      notificationHandlers.set(method, handler)
+    onNotification: vi.fn(
+      (
+        method: string,
+        handler: (params: Record<string, unknown>, context: TestRequestContext) => void
+      ) => {
+        notificationHandlers.set(method, handler)
+      }
+    ),
+    onClientDetached: vi.fn((listener: (clientId: number) => void) => {
+      clientDetachListeners.add(listener)
+      return () => clientDetachListeners.delete(listener)
+    }),
+    connectedClientIds: vi.fn(() => Array.from(connectedClientIds)),
+    evictClient: vi.fn((clientId: number) => {
+      connectedClientIds.delete(clientId)
+      for (const listener of clientDetachListeners) {
+        listener(clientId)
+      }
     }),
     notify: vi.fn((method: string, params?: Record<string, unknown>) => {
       notifications.push({ method, params })
     }),
+    notifyClientWithBackpressure: vi.fn(
+      (
+        clientId: number,
+        method: string,
+        params?: Record<string, unknown>
+      ): RelayNotificationWriteResult => {
+        targetedNotifications.push({ clientId, method, params })
+        const { deliveryToken: _deliveryToken, ...legacyParams } = params ?? {}
+        dispatcher.notify(method, legacyParams)
+        return { delivered: true, saturated: false, drained: Promise.resolve() }
+      }
+    ),
     // Helpers for tests
     _requestHandlers: requestHandlers,
     _notificationHandlers: notificationHandlers,
     _notifications: notifications,
+    _targetedNotifications: targetedNotifications,
     async callRequest(
       method: string,
       params: Record<string, unknown> = {},
-      context?: TestRequestContext
+      context: TestRequestContext = { clientId: 1, isStale: () => false }
     ) {
       const handler = requestHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
+      if (typeof context?.clientId === 'number') {
+        connectedClientIds.add(context.clientId)
+      }
       return handler(params, context)
     },
-    callNotification(method: string, params: Record<string, unknown> = {}) {
+    callNotification(
+      method: string,
+      params: Record<string, unknown> = {},
+      context: TestRequestContext = { clientId: 1, isStale: () => false }
+    ) {
       const handler = notificationHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      handler(params)
+      handler(params, context)
+    },
+    emitClientDetached(clientId: number) {
+      connectedClientIds.delete(clientId)
+      for (const listener of clientDetachListeners) {
+        listener(clientId)
+      }
     }
   }
 
@@ -126,6 +183,8 @@ describe('PtyHandler', () => {
     mockPtyInstance.resize.mockReset()
     mockPtyInstance.kill.mockReset()
     mockPtyInstance.clear.mockReset()
+    mockPtyInstance.pause.mockReset()
+    mockPtyInstance.resume.mockReset()
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
@@ -207,6 +266,13 @@ describe('PtyHandler', () => {
     expect(result).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('rejects oversized spawn dimensions before native allocation', async () => {
+    await expect(
+      dispatcher.callRequest('pty.spawn', { cols: MAX_TERMINAL_COLS + 1, rows: 24 })
+    ).rejects.toThrow(`1 through ${MAX_TERMINAL_COLS}`)
+    expect(mockPtySpawn).not.toHaveBeenCalled()
   })
 
   it("does not forward Orca's own NODE_ENV into the spawned shell", async () => {
@@ -412,6 +478,25 @@ describe('PtyHandler', () => {
     })
     expect(mockPtySpawn).toHaveBeenCalledTimes(MAX_RELAY_PTY_SESSIONS)
     expect(handler.activePtyCount).toBe(MAX_RELAY_PTY_SESSIONS)
+  })
+
+  it('rejects oversized retained spawn fields before creating a native PTY', async () => {
+    await expect(
+      dispatcher.callRequest('pty.spawn', {
+        cwd: 'x'.repeat(MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES + 1)
+      })
+    ).rejects.toThrow(`exceeds ${MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES} bytes`)
+
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('bounds the requested PTY serialization id list', async () => {
+    await expect(
+      dispatcher.callRequest('pty.serialize', {
+        ids: Array.from({ length: MAX_RELAY_PTY_SESSIONS + 1 }, (_, index) => `pty-${index}`)
+      })
+    ).rejects.toThrow(`PTY persistence request exceeds ${MAX_RELAY_PTY_SESSIONS} entries`)
   })
 
   it('spawns a PTY without post-Node-18 array copy methods', async () => {
@@ -2338,7 +2423,7 @@ describe('PtyHandler', () => {
     expect(mockPtySpawn).not.toHaveBeenCalled()
   })
 
-  it('applies the physical PTY cap to untrusted revive state', async () => {
+  it('rejects untrusted revive state above the physical PTY cap transactionally', async () => {
     const state = JSON.stringify(
       Array.from({ length: MAX_RELAY_PTY_SESSIONS + 1 }, (_, index) => ({
         id: `pty-${index + 1}`,
@@ -2349,17 +2434,11 @@ describe('PtyHandler', () => {
         worktreeId: 'repo-id::/repo'
       }))
     )
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-    try {
-      await expect(dispatcher.callRequest('pty.revive', { state })).rejects.toThrow(
-        'Maximum number of PTY sessions reached (50)'
-      )
-    } finally {
-      killSpy.mockRestore()
-    }
-
-    expect(mockPtySpawn).toHaveBeenCalledTimes(MAX_RELAY_PTY_SESSIONS)
-    expect(handler.activePtyCount).toBe(MAX_RELAY_PTY_SESSIONS)
+    await expect(dispatcher.callRequest('pty.revive', { state })).rejects.toThrow(
+      `PTY persistence state exceeds ${MAX_RELAY_PTY_SESSIONS} entries`
+    )
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(0)
   })
 
   it('deduplicates concurrent revive requests for the same physical PTY id', async () => {
@@ -2879,6 +2958,40 @@ describe('PtyHandler', () => {
     await dispose
     expect(handler.activePtyCount).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps output delivery registered when relay disposal cannot kill a live PTY', async () => {
+    let onDataCb: ((data: string) => void) | undefined
+    let rejectKill = true
+    const mockKill = vi.fn(() => {
+      if (rejectKill) {
+        throw new Error('persistent dispose kill failure')
+      }
+    })
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn((cb: (data: string) => void) => {
+        onDataCb = cb
+      })
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    const dispose = handler.dispose({ waitForPhysicalExit: false })
+    const rejected = expect(dispose).rejects.toThrow('persistent dispose kill failure')
+    await vi.advanceTimersByTimeAsync(250)
+    await rejected
+
+    onDataCb?.('still alive')
+    await vi.advanceTimersByTimeAsync(8)
+    expect(dispatcher._notifications).toContainEqual({
+      method: 'pty.data',
+      params: { id: 'pty-1', data: 'still alive' }
+    })
+
+    rejectKill = false
+    await handler.dispose({ waitForPhysicalExit: false })
+    expect(handler.activePtyCount).toBe(0)
   })
 
   it('takes ownership when dispose overlaps a queued graceful force-kill retry', async () => {

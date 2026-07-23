@@ -1,12 +1,18 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import Database from '../sqlite/sync-database'
 import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import {
+  OPENCODE_SQLITE_MESSAGE_JSON_MAX_BYTES,
+  OPENCODE_SQLITE_MODEL_JSON_MAX_BYTES,
+  OPENCODE_SQLITE_PART_JSON_MAX_BYTES,
+  OPENCODE_SQLITE_SESSION_ID_MAX_BYTES
+} from './session-scanner-opencode-sqlite-limits'
 
 // Part B (#8864) bounds: discovery reads only the newest session identities and
 // recency fields, while the preview join reads parts of only the newest 100
@@ -15,6 +21,7 @@ import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 let tempDirs: string[] = []
 
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -120,6 +127,22 @@ function insertMessageWithPart(
 }
 
 describe('listOpenCodeSqliteSessions — LIMIT-first discovery', () => {
+  it('keeps an exact-limit session id and omits limit +1 before materializing it', async () => {
+    const { db, path } = createTempDb()
+    applySchema(db)
+    const exactId = 'e'.repeat(OPENCODE_SQLITE_SESSION_ID_MAX_BYTES)
+    const oversizedId = 'o'.repeat(OPENCODE_SQLITE_SESSION_ID_MAX_BYTES + 1)
+    insertSession(db, exactId, 1_777_634_001_000)
+    insertSession(db, oversizedId, 1_777_634_002_000)
+    db.close()
+
+    const candidates = await listOpenCodeSqliteSessions({ dbPaths: [path], limit: 10, issues: [] })
+
+    expect(candidates.map((candidate) => candidate.file.path)).toEqual([
+      buildOpenCodeSqliteCandidatePath(path, exactId)
+    ])
+  })
+
   it('returns only the newest `limit` sessions by time_updated', async () => {
     const { db, path } = createTempDb()
     applySchema(db)
@@ -174,6 +197,88 @@ describe('listOpenCodeSqliteSessions — LIMIT-first discovery', () => {
 })
 
 describe('parseOpenCodeSqliteSession — bounded preview window', () => {
+  it('preserves exact-limit model JSON and drops limit +1 before JSON.parse', async () => {
+    const { db, path } = createTempDb()
+    applySchema(db)
+    insertSession(db, 'ses_model_exact', 1_777_634_001_000)
+    insertSession(db, 'ses_model_oversized', 1_777_634_002_000)
+    const modelPrefix = '{"id":"'
+    const modelSuffix = '"}'
+    db.prepare(`UPDATE session SET model = ? WHERE id = 'ses_model_exact'`).run(
+      `${modelPrefix}${'m'.repeat(
+        OPENCODE_SQLITE_MODEL_JSON_MAX_BYTES - modelPrefix.length - modelSuffix.length
+      )}${modelSuffix}`
+    )
+    db.prepare(`UPDATE session SET model = ? WHERE id = 'ses_model_oversized'`).run(
+      'x'.repeat(OPENCODE_SQLITE_MODEL_JSON_MAX_BYTES + 1)
+    )
+    db.close()
+
+    const exact = await parseOpenCodeSqliteSession({
+      dbPath: path,
+      sessionId: 'ses_model_exact',
+      platform: 'darwin'
+    })
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const oversized = await parseOpenCodeSqliteSession({
+      dbPath: path,
+      sessionId: 'ses_model_oversized',
+      platform: 'darwin'
+    })
+
+    expect(exact?.model).toHaveLength(
+      OPENCODE_SQLITE_MODEL_JSON_MAX_BYTES - modelPrefix.length - modelSuffix.length
+    )
+    expect(oversized?.model).toBeNull()
+    expect(parseSpy).not.toHaveBeenCalled()
+  })
+
+  it('omits oversized message and part JSON before retaining previews', async () => {
+    const { db, path } = createTempDb()
+    applySchema(db)
+    insertSession(db, 'ses_oversized_rows', 1_777_634_001_000)
+    db.prepare(`INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)`).run(
+      'msg_oversized',
+      'ses_oversized_rows',
+      1_777_634_000_100,
+      'x'.repeat(OPENCODE_SQLITE_MESSAGE_JSON_MAX_BYTES + 1)
+    )
+    db.prepare(
+      `INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)`
+    ).run(
+      'part_for_oversized_message',
+      'msg_oversized',
+      'ses_oversized_rows',
+      1_777_634_000_100,
+      JSON.stringify({ type: 'text', text: 'must not surface' })
+    )
+    db.prepare(`INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)`).run(
+      'msg_normal',
+      'ses_oversized_rows',
+      1_777_634_000_200,
+      JSON.stringify({ role: 'user' })
+    )
+    db.prepare(
+      `INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)`
+    ).run(
+      'part_oversized',
+      'msg_normal',
+      'ses_oversized_rows',
+      1_777_634_000_200,
+      'x'.repeat(OPENCODE_SQLITE_PART_JSON_MAX_BYTES + 1)
+    )
+    db.close()
+
+    const session = await parseOpenCodeSqliteSession({
+      dbPath: path,
+      sessionId: 'ses_oversized_rows',
+      platform: 'darwin'
+    })
+
+    expect(session?.messageCount).toBe(1)
+    expect(session?.previewMessages).toEqual([])
+  })
+
   it('surfaces the newest text previews and retains the full message count', async () => {
     // Positive coverage of preview selection (newest OPENCODE_SQLITE_PREVIEW_LIMIT
     // by recency) + full-count retention. The window bound itself is pinned by the

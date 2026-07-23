@@ -2,16 +2,25 @@
    cancellation, symlink, and top-level compaction semantics in one scanner. */
 import { execFile } from 'node:child_process'
 import type { Dirent } from 'node:fs'
-import { lstat, readdir } from 'node:fs/promises'
+import { lstat, opendir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { platform } from 'node:process'
 import { promisify } from 'node:util'
 import type {
   WorkspaceSpaceDirectoryScanResult,
-  WorkspaceSpaceItem,
-  WorkspaceSpaceItemKind
+  WorkspaceSpaceItem
 } from '../shared/workspace-space-types'
 import { compactWorkspaceSpaceItems } from '../shared/workspace-space-compaction'
+import { mapWithConcurrency } from '../shared/map-with-concurrency'
+import {
+  scanWorkspaceSpaceEntryTree,
+  type WorkspaceSpaceEntryScan
+} from '../shared/workspace-space-entry-traversal'
+import {
+  collectWorkspaceSpaceDirectoryEntries,
+  createWorkspaceSpaceScanBudget,
+  WorkspaceSpaceScanCapacityError
+} from '../shared/workspace-space-scan-budget'
 import type { RequestContext } from './dispatcher'
 
 const RELAY_FS_CONCURRENCY = 48
@@ -19,15 +28,7 @@ const DU_TIMEOUT_MS = 120_000
 const DU_MAX_BUFFER_BYTES = 16 * 1024 * 1024
 const execFileAsync = promisify(execFile)
 
-type AsyncLimiter = <T>(task: () => Promise<T>) => Promise<T>
-
-type ScanStats = {
-  name: string
-  path: string
-  kind: WorkspaceSpaceItemKind
-  sizeBytes: number
-  skippedEntryCount: number
-}
+type ScanStats = WorkspaceSpaceEntryScan
 
 class RelayWorkspaceSpaceScanCancelledError extends Error {
   constructor() {
@@ -39,57 +40,6 @@ class RelayWorkspaceSpaceScanCancelledError extends Error {
 function throwIfCancelled(context: RequestContext): void {
   if (context.isStale() || context.signal?.aborted) {
     throw new RelayWorkspaceSpaceScanCancelledError()
-  }
-}
-
-function createAsyncLimiter(maxConcurrent: number, context: RequestContext): AsyncLimiter {
-  let active = 0
-  const queue: { resolve: () => void }[] = []
-
-  const acquire = async (): Promise<void> => {
-    throwIfCancelled(context)
-    if (active < maxConcurrent) {
-      active += 1
-      return
-    }
-    await new Promise<void>((resolve, reject) => {
-      let onAbort: (() => void) | null = null
-      const waiter = {
-        resolve: () => {
-          if (onAbort) {
-            context.signal?.removeEventListener('abort', onAbort)
-          }
-          resolve()
-        }
-      }
-      onAbort = () => {
-        const index = queue.indexOf(waiter)
-        if (index !== -1) {
-          queue.splice(index, 1)
-        }
-        reject(new RelayWorkspaceSpaceScanCancelledError())
-      }
-      queue.push(waiter)
-      if (context.signal) {
-        context.signal.addEventListener('abort', onAbort, { once: true })
-        if (context.signal.aborted) {
-          onAbort()
-        }
-      }
-    })
-    throwIfCancelled(context)
-    active += 1
-  }
-
-  return async <T>(task: () => Promise<T>): Promise<T> => {
-    await acquire()
-    try {
-      return await task()
-    } finally {
-      active -= 1
-      const next = queue.shift()
-      next?.resolve()
-    }
   }
 }
 
@@ -142,11 +92,10 @@ async function scanTopLevelEntryWithDu(
   entryPath: string,
   name: string,
   duSizes: Map<string, number>,
-  limit: AsyncLimiter,
   context: RequestContext
 ): Promise<ScanStats> {
   throwIfCancelled(context)
-  const stats = await limit(() => lstat(entryPath))
+  const stats = await lstat(entryPath)
   throwIfCancelled(context)
 
   if (stats.isSymbolicLink()) {
@@ -181,77 +130,30 @@ async function scanTopLevelEntryWithDu(
 async function scanEntryAggregate(
   entryPath: string,
   name: string,
-  limit: AsyncLimiter,
   context: RequestContext
 ): Promise<ScanStats> {
-  throwIfCancelled(context)
-  const stats = await limit(() => lstat(entryPath))
-  throwIfCancelled(context)
-
-  if (stats.isSymbolicLink()) {
-    return {
-      name,
-      path: entryPath,
-      kind: 'symlink',
-      sizeBytes: stats.size,
-      skippedEntryCount: 0
-    }
-  }
-
-  if (!stats.isDirectory()) {
-    return {
-      name,
-      path: entryPath,
-      kind: 'file',
-      sizeBytes: stats.size,
-      skippedEntryCount: 0
-    }
-  }
-
-  let entries: Dirent[]
-  try {
-    entries = await limit(() => readdir(entryPath, { withFileTypes: true }))
-  } catch {
-    return {
-      name,
-      path: entryPath,
-      kind: 'directory',
-      sizeBytes: stats.size,
-      skippedEntryCount: 1
-    }
-  }
-
-  const childStats = await Promise.all(
-    entries.map(async (entry): Promise<ScanStats | null> => {
-      try {
-        return await scanEntryAggregate(join(entryPath, entry.name), entry.name, limit, context)
-      } catch (error) {
-        if (error instanceof RelayWorkspaceSpaceScanCancelledError) {
-          throw error
-        }
-        return null
+  return scanWorkspaceSpaceEntryTree<Dirent>({
+    rootPath: entryPath,
+    rootName: name,
+    concurrency: RELAY_FS_CONCURRENCY,
+    signal: context.signal,
+    entryName: (entry) => entry.name,
+    joinPath: join,
+    classifyEntry: async (path) => {
+      const stats = await lstat(path)
+      throwIfCancelled(context)
+      if (stats.isSymbolicLink()) {
+        return { kind: 'symlink', sizeBytes: stats.size }
       }
-    })
-  )
-
-  let sizeBytes = stats.size
-  let skippedEntryCount = 0
-  for (const child of childStats) {
-    if (!child) {
-      skippedEntryCount += 1
-      continue
-    }
-    sizeBytes += child.sizeBytes
-    skippedEntryCount += child.skippedEntryCount
-  }
-
-  return {
-    name,
-    path: entryPath,
-    kind: 'directory',
-    sizeBytes,
-    skippedEntryCount
-  }
+      return stats.isDirectory()
+        ? { kind: 'directory', sizeBytes: stats.size }
+        : { kind: 'file', sizeBytes: stats.size }
+    },
+    readDirectory: (path) => opendir(path),
+    checkCancelled: () => throwIfCancelled(context),
+    createCancellationError: () => new RelayWorkspaceSpaceScanCancelledError(),
+    isCancellationError: (error) => error instanceof RelayWorkspaceSpaceScanCancelledError
+  })
 }
 
 async function scanDirectoryWithDu(
@@ -266,19 +168,27 @@ async function scanDirectoryWithDu(
   }
 
   const [entries, duSizes] = await Promise.all([
-    readdir(rootPath, { withFileTypes: true }),
+    opendir(rootPath).then((directory) =>
+      collectWorkspaceSpaceDirectoryEntries(
+        directory,
+        rootPath,
+        (entry) => entry.name,
+        createWorkspaceSpaceScanBudget(),
+        () => throwIfCancelled(context)
+      )
+    ),
     readDuDepthOne(rootPath, context)
   ])
   throwIfCancelled(context)
-  const limit = createAsyncLimiter(RELAY_FS_CONCURRENCY, context)
-  const childStats = await Promise.all(
-    entries.map(async (entry): Promise<ScanStats | null> => {
+  const childStats = await mapWithConcurrency(
+    entries,
+    RELAY_FS_CONCURRENCY,
+    async (entry): Promise<ScanStats | null> => {
       try {
         return await scanTopLevelEntryWithDu(
           join(rootPath, entry.name),
           entry.name,
           duSizes,
-          limit,
           context
         )
       } catch (error) {
@@ -287,7 +197,7 @@ async function scanDirectoryWithDu(
         }
         return null
       }
-    })
+    }
   )
   const children = childStats.filter((child): child is ScanStats => child !== null)
   const compact = compactWorkspaceSpaceItems(children.map(toWorkspaceSpaceItem))
@@ -305,55 +215,13 @@ async function scanDirectoryWithNode(
   rootPath: string,
   context: RequestContext
 ): Promise<WorkspaceSpaceDirectoryScanResult> {
-  throwIfCancelled(context)
-  const limit = createAsyncLimiter(RELAY_FS_CONCURRENCY, context)
-  const rootStats = await lstat(rootPath)
-  throwIfCancelled(context)
-  if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
-    const root = await scanEntryAggregate(rootPath, basename(rootPath), limit, context)
-    return {
-      sizeBytes: root.sizeBytes,
-      skippedEntryCount: root.skippedEntryCount,
-      topLevelItems: [],
-      omittedTopLevelItemCount: 0,
-      omittedTopLevelSizeBytes: 0
-    }
-  }
-
-  let entries: Dirent[]
-  try {
-    entries = await readdir(rootPath, { withFileTypes: true })
-  } catch {
-    return {
-      sizeBytes: rootStats.size,
-      skippedEntryCount: 1,
-      topLevelItems: [],
-      omittedTopLevelItemCount: 0,
-      omittedTopLevelSizeBytes: 0
-    }
-  }
-
-  const childStats = await Promise.all(
-    entries.map(async (entry): Promise<ScanStats | null> => {
-      try {
-        return await scanEntryAggregate(join(rootPath, entry.name), entry.name, limit, context)
-      } catch (error) {
-        if (error instanceof RelayWorkspaceSpaceScanCancelledError) {
-          throw error
-        }
-        return null
-      }
-    })
-  )
-  const children = childStats.filter((child): child is ScanStats => child !== null)
+  const root = await scanEntryAggregate(rootPath, basename(rootPath), context)
+  const children = root.children ?? []
   const compact = compactWorkspaceSpaceItems(children.map(toWorkspaceSpaceItem))
 
   return {
-    sizeBytes: rootStats.size + children.reduce((sum, child) => sum + child.sizeBytes, 0),
-    skippedEntryCount:
-      children.reduce((sum, child) => sum + child.skippedEntryCount, 0) +
-      childStats.length -
-      children.length,
+    sizeBytes: root.sizeBytes,
+    skippedEntryCount: root.skippedEntryCount,
     ...compact
   }
 }
@@ -366,7 +234,10 @@ export async function scanWorkspaceSpaceDirectory(
     try {
       return await scanDirectoryWithDu(rootPath, context)
     } catch (error) {
-      if (error instanceof RelayWorkspaceSpaceScanCancelledError) {
+      if (
+        error instanceof RelayWorkspaceSpaceScanCancelledError ||
+        error instanceof WorkspaceSpaceScanCapacityError
+      ) {
         throw error
       }
     }

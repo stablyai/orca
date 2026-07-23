@@ -5,6 +5,7 @@ import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
+import { OPENCODE_SQLITE_SESSION_ID_MAX_BYTES } from './session-scanner-opencode-sqlite-limits'
 
 // Why: the SQLite session-list query + reader lives in its own electron-free
 // module so both the worker entry and the main-thread worker client can import
@@ -41,7 +42,9 @@ function buildSessionListQuery(db: SyncDatabase): string {
   // refresh; the parse path loads metadata only for candidates it actually uses.
   return `SELECT id, time_created, time_updated
           FROM session
-          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
+          WHERE typeof(id) = 'text'
+            AND length(CAST(id AS BLOB)) <= ${OPENCODE_SQLITE_SESSION_ID_MAX_BYTES}
+            ${parentIdPredicate} ${archivedPredicate}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
           LIMIT ?`
 }

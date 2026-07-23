@@ -3,6 +3,11 @@
 // See design-ssh-support.md § JSON-RPC Protocol Specification.
 
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
+import {
+  JsonStringifyByteLimitError,
+  stringifyJsonWithinByteLimit
+} from '../../shared/node-bounded-json-stringify'
+import { parseRelayJsonText } from '../../shared/relay-json-admission'
 
 export const RELAY_VERSION = '0.1.0'
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
@@ -13,6 +18,8 @@ export const RELAY_REMOTE_DIR = '.orca-remote'
 
 export const HEADER_LENGTH = 13
 export const MAX_MESSAGE_SIZE = 16 * 1024 * 1024 // 16 MB
+export const MAX_BUFFERED_FRAME_CHUNKS = 4_096
+const MAX_COALESCED_TINY_FRAME_CHUNK_BYTES = 8 * 1024
 
 /** Message type byte. */
 export const MessageType = {
@@ -36,7 +43,8 @@ export const RelayErrorCode = {
   PtyAllocationFailed: -33004,
   DiskFull: -33005,
   TooManyStreams: -33006,
-  StreamProtocolError: -33007
+  StreamProtocolError: -33007,
+  MarkdownDocumentListingCapacity: -33008
 } as const
 
 export const JsonRpcErrorCode = {
@@ -68,6 +76,11 @@ export const GIT_RESPONSE_STREAM_THRESHOLD = 256 * 1024
  * so it stays cross-version safe. */
 export const GIT_RESPONSE_CHUNK_SIZE = 128 * 1024
 
+/** Bounds retained serialized Git results while preserving responses far above
+ * the per-file render limit and git.exec's output ceiling. */
+export const MAX_GIT_RESPONSE_STREAM_BYTES = 64 * 1024 * 1024
+export const MAX_GIT_RESPONSE_STREAM_CHUNKS = 4_096
+
 /** Sentinel the relay returns as the RPC result when the real payload streams
  * as git.responseChunk frames. Absent from old relays, so a new client falls
  * back to the plain result they return. */
@@ -85,11 +98,11 @@ export function isGitResponseStreamMarker(value: unknown): value is GitResponseS
   }
   const fields = marker as Record<string, unknown>
   return (
-    Number.isInteger(fields.streamId) &&
+    Number.isSafeInteger(fields.streamId) &&
     (fields.streamId as number) > 0 &&
-    Number.isInteger(fields.totalBytes) &&
+    Number.isSafeInteger(fields.totalBytes) &&
     (fields.totalBytes as number) >= 0 &&
-    Number.isInteger(fields.chunkCount) &&
+    Number.isSafeInteger(fields.chunkCount) &&
     (fields.chunkCount as number) >= 0
   )
 }
@@ -144,10 +157,16 @@ export function encodeFrame(
 }
 
 export function encodeJsonRpcFrame(msg: JsonRpcMessage, id: number, ack: number): Buffer {
-  const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
-  if (payload.length > MAX_MESSAGE_SIZE) {
-    throw new Error(`Message too large: ${payload.length} bytes (max ${MAX_MESSAGE_SIZE})`)
+  let serialized: string
+  try {
+    serialized = stringifyJsonWithinByteLimit(msg, MAX_MESSAGE_SIZE).serialized
+  } catch (error) {
+    if (error instanceof JsonStringifyByteLimitError) {
+      throw new Error(`Message too large: more than ${MAX_MESSAGE_SIZE} bytes`)
+    }
+    throw error
   }
+  const payload = Buffer.from(serialized, 'utf-8')
   return encodeFrame(MessageType.Regular, id, ack, payload)
 }
 
@@ -173,6 +192,7 @@ export class FrameDecoder {
   // list assembles each frame exactly once instead.
   private chunks: Buffer[] = []
   private bufferedLength = 0
+  private oversizedPayloadBytesRemaining = 0
   private onFrame: (frame: DecodedFrame) => void
   private onError: ((err: Error) => void) | null
 
@@ -182,12 +202,18 @@ export class FrameDecoder {
   }
 
   feed(chunk: Buffer | Uint8Array): void {
-    const buf = Buffer.isBuffer(chunk)
+    let buf = Buffer.isBuffer(chunk)
       ? chunk
       : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+    if (this.oversizedPayloadBytesRemaining > 0 && buf.length > 0) {
+      const discarded = Math.min(this.oversizedPayloadBytesRemaining, buf.length)
+      this.oversizedPayloadBytesRemaining -= discarded
+      buf = buf.subarray(discarded)
+    }
     if (buf.length > 0) {
       this.chunks.push(buf)
       this.bufferedLength += buf.length
+      this.coalesceBufferedChunks()
     }
 
     while (this.bufferedLength >= HEADER_LENGTH) {
@@ -195,23 +221,24 @@ export class FrameDecoder {
       const length = header.readUInt32BE(9)
       const totalLength = HEADER_LENGTH + length
 
-      if (this.bufferedLength < totalLength) {
-        // Not fully received yet (also holds oversized frames until they can
-        // be skipped whole, keeping the decoder synchronized).
-        break
-      }
-
-      // Why: throwing here would leave the buffer in a partially consumed
-      // state — subsequent feed() calls would try to parse leftover payload
-      // bytes as a new header, corrupting every future frame. Instead we
-      // skip the entire oversized frame so the decoder stays synchronized.
       if (length > MAX_MESSAGE_SIZE) {
-        this.discardBytes(totalLength)
+        // Why: retain only the header, then stream-discard the advertised
+        // payload so a 13-byte malicious header cannot pin up to 4 GiB.
+        this.discardBytes(HEADER_LENGTH)
+        this.oversizedPayloadBytesRemaining = length
+        this.discardBufferedOversizedPayload()
         const err = new Error(`Frame payload too large: ${length} bytes — discarded`)
         if (this.onError) {
           this.onError(err)
         }
+        if (this.oversizedPayloadBytesRemaining > 0) {
+          break
+        }
         continue
+      }
+
+      if (this.bufferedLength < totalLength) {
+        break
       }
 
       const framed = this.takeBytes(totalLength)
@@ -228,6 +255,7 @@ export class FrameDecoder {
   reset(): void {
     this.chunks = []
     this.bufferedLength = 0
+    this.oversizedPayloadBytesRemaining = 0
   }
 
   /** View of the first `count` buffered bytes without consuming them. */
@@ -292,14 +320,40 @@ export class FrameDecoder {
     }
     this.bufferedLength -= count
   }
+
+  private discardBufferedOversizedPayload(): void {
+    const discarded = Math.min(this.oversizedPayloadBytesRemaining, this.bufferedLength)
+    if (discarded === 0) {
+      return
+    }
+    this.discardBytes(discarded)
+    this.oversizedPayloadBytesRemaining -= discarded
+  }
+
+  private coalesceBufferedChunks(): void {
+    // Why: merge adversarial tiny fragments without copying ordinary transport chunks.
+    while (this.chunks.length >= 2) {
+      const right = this.chunks.at(-1)!
+      const left = this.chunks.at(-2)!
+      if (
+        left.length > right.length ||
+        left.length + right.length > MAX_COALESCED_TINY_FRAME_CHUNK_BYTES
+      ) {
+        break
+      }
+      this.chunks.splice(-2, 2, Buffer.concat([left, right], left.length + right.length))
+    }
+    if (this.chunks.length > MAX_BUFFERED_FRAME_CHUNKS) {
+      this.chunks = [Buffer.concat(this.chunks, this.bufferedLength)]
+    }
+  }
 }
 
 /**
  * Parse a JSON-RPC message from a frame payload.
  */
 export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
-  const text = payload.toString('utf-8')
-  const msg = JSON.parse(text) as JsonRpcMessage
+  const msg = parseRelayJsonText<JsonRpcMessage>(payload.toString('utf-8'))
   if (msg.jsonrpc !== '2.0') {
     throw new Error(`Invalid JSON-RPC version: ${(msg as Record<string, unknown>).jsonrpc}`)
   }

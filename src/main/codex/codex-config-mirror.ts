@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { readAgentStateFileSync } from '../agent-state-file-reader'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
@@ -58,7 +59,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe({
     return
   }
 
-  const rawSystemConfig = systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : ''
+  const rawSystemConfig = systemConfigExists ? readAgentStateFileSync(systemConfigPath) : ''
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)
   if (!runtimeConfigExists) {
     writeFileAtomically(
@@ -69,7 +70,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe({
   }
 
   const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
-  const runtimeConfig = readFileSync(runtimeConfigPath, 'utf-8')
+  const runtimeConfig = readAgentStateFileSync(runtimeConfigPath)
   const mergedConfig = mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig)
   if (mergedConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, mergedConfig)

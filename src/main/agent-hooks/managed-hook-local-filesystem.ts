@@ -1,7 +1,22 @@
-import { chmod, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs'
+import { chmod, mkdir, opendir, readFile, rename, stat, unlink, writeFile } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileWithinLimit
+} from '../../shared/node-bounded-file-reader'
 
 type Callback<T = void> = (error: Error | null, value?: T) => void
+
+type DirectoryProbeHandle = {
+  close(callback: (error: NodeJS.ErrnoException | null) => void): void
+}
+
+export type ManagedHookLocalFilesystemOptions = {
+  openDirectory?: (
+    path: string,
+    callback: (error: NodeJS.ErrnoException | null, directory?: DirectoryProbeHandle) => void
+  ) => void
+}
 
 function asSftpError(error: NodeJS.ErrnoException): Error & { code: number } {
   const translated = new Error(error.message, { cause: error }) as Error & { code: number }
@@ -20,10 +35,40 @@ function finish<T>(callback: Callback<T>, error: NodeJS.ErrnoException | null, v
 
 /** The managed installers only need this small callback-style SFTP surface.
  *  On the remote host it turns hundreds of WAN round trips into local fs calls. */
-export function createManagedHookLocalFilesystem(): SFTPWrapper {
+export function createManagedHookLocalFilesystem(
+  options?: ManagedHookLocalFilesystemOptions
+): SFTPWrapper {
+  const openDirectory =
+    options?.openDirectory ??
+    ((
+      path: string,
+      callback: (error: NodeJS.ErrnoException | null, directory?: DirectoryProbeHandle) => void
+    ) => {
+      opendir(path, callback)
+    })
   const adapter = {
     readFile(path: string, _encoding: string, callback: Callback<string | Buffer>): void {
       readFile(path, 'utf8', (error, contents) => finish(callback, error, contents))
+    },
+    orcaReadFileWithinLimit(
+      path: string,
+      maxBytes: number,
+      callback: Callback<string | Buffer>
+    ): void {
+      void readNodeFileWithinLimit(path, maxBytes).then(
+        ({ buffer }) => callback(null, buffer),
+        (error: unknown) => {
+          if (error instanceof NodeFileReadTooLargeError) {
+            callback(error)
+            return
+          }
+          callback(
+            error instanceof Error
+              ? asSftpError(error as NodeJS.ErrnoException)
+              : new Error(String(error))
+          )
+        }
+      )
     },
     writeFile(
       path: string,
@@ -37,9 +82,15 @@ export function createManagedHookLocalFilesystem(): SFTPWrapper {
       stat(path, (error, stats) => finish(callback, error, stats))
     },
     readdir(path: string, callback: Callback<[]>): void {
-      // Why: installers use readdir only as an existence check; names and
-      // attrs would allocate work that no caller consumes.
-      readdir(path, (error) => finish(callback, error, []))
+      // Why: installers only probe directory existence; opening and closing
+      // avoids materializing every child name before returning the unused [].
+      openDirectory(path, (error, directory) => {
+        if (error || !directory) {
+          finish(callback, error ?? new Error('Directory probe returned no handle'))
+          return
+        }
+        directory.close((closeError) => finish(callback, closeError, []))
+      })
     },
     mkdir(path: string, callback: Callback): void {
       mkdir(path, (error) => finish(callback, error))

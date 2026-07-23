@@ -198,6 +198,8 @@ type ActiveDownload = {
   cleanup: (() => void) | null
 }
 
+export const MAX_ACTIVE_BROWSER_DOWNLOADS = 64
+
 function safeOrigin(rawUrl: string): string {
   const external = normalizeExternalBrowserUrl(rawUrl)
   const urlToParse = external ?? rawUrl
@@ -1257,6 +1259,14 @@ export class BrowserManager {
 
   handleGuestWillDownload(args: { guestWebContentsId: number; item: Electron.DownloadItem }): void {
     const { guestWebContentsId, item } = args
+    if (this.downloadsById.size >= MAX_ACTIVE_BROWSER_DOWNLOADS) {
+      try {
+        item.cancel()
+      } catch {
+        // Why: rejecting excess admission must remain safe if Chromium already finalized the item.
+      }
+      return
+    }
     const downloadId = randomUUID()
     const requestedFilename = (() => {
       try {

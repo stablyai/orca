@@ -1,5 +1,7 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
+import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
 import { buildBareOrcaCliScript } from './linux-bare-orca-dispatcher'
 
 const SHIM_DIR_NAME = 'linux-orca-cli-shim'
@@ -8,6 +10,37 @@ const SHIM_DIR_NAME = 'linux-orca-cli-shim'
 // changes with the install itself, so one successful write per process is enough.
 // Failures are NOT cached so a transient fs error retries on the next spawn.
 const ensuredShimDirs = new Map<string, string>()
+export const LINUX_TERMINAL_SHIM_CACHE_MAX_ENTRIES = 64
+export const LINUX_TERMINAL_SHIM_CACHE_KEY_MAX_BYTES = 64 * 1024
+
+function getEnsuredShimDir(userDataPath: string): string | undefined {
+  const cached = ensuredShimDirs.get(userDataPath)
+  if (cached === undefined) {
+    return undefined
+  }
+  ensuredShimDirs.delete(userDataPath)
+  ensuredShimDirs.set(userDataPath, cached)
+  return cached
+}
+
+function rememberEnsuredShimDir(userDataPath: string, shimDir: string): void {
+  if (
+    measureUtf8ByteLength(userDataPath, {
+      stopAfterBytes: LINUX_TERMINAL_SHIM_CACHE_KEY_MAX_BYTES
+    }).exceededLimit
+  ) {
+    return
+  }
+  ensuredShimDirs.delete(userDataPath)
+  ensuredShimDirs.set(userDataPath, shimDir)
+  while (ensuredShimDirs.size > LINUX_TERMINAL_SHIM_CACHE_MAX_ENTRIES) {
+    const oldest = ensuredShimDirs.keys().next().value
+    if (oldest === undefined) {
+      return
+    }
+    ensuredShimDirs.delete(oldest)
+  }
+}
 
 export type LinuxTerminalOrcaCliShimOptions = {
   userDataPath: string
@@ -27,7 +60,7 @@ export type LinuxTerminalOrcaCliShimOptions = {
 export function ensureLinuxTerminalOrcaCliShimDir(
   options: LinuxTerminalOrcaCliShimOptions
 ): string | null {
-  const cached = ensuredShimDirs.get(options.userDataPath)
+  const cached = getEnsuredShimDir(options.userDataPath)
   if (cached !== undefined) {
     return cached
   }
@@ -47,7 +80,7 @@ export function ensureLinuxTerminalOrcaCliShimDir(
   const shimDir = join(options.userDataPath, SHIM_DIR_NAME)
   const shimPath = join(shimDir, 'orca')
   try {
-    if (readShim(shimPath) !== resolved.script) {
+    if (!shimMatches(shimPath, resolved.script)) {
       mkdirSync(shimDir, { recursive: true })
       writeFileSync(shimPath, resolved.script, 'utf8')
     }
@@ -57,14 +90,28 @@ export function ensureLinuxTerminalOrcaCliShimDir(
   } catch {
     return null
   }
-  ensuredShimDirs.set(options.userDataPath, shimDir)
+  rememberEnsuredShimDir(options.userDataPath, shimDir)
   return shimDir
 }
 
-function readShim(shimPath: string): string | null {
+export function _resetLinuxTerminalShimCacheForTests(): void {
+  ensuredShimDirs.clear()
+}
+
+export function _getLinuxTerminalShimCacheSizeForTests(): number {
+  return ensuredShimDirs.size
+}
+
+export function _isLinuxTerminalShimCacheKeyRetainableForTests(userDataPath: string): boolean {
+  return !measureUtf8ByteLength(userDataPath, {
+    stopAfterBytes: LINUX_TERMINAL_SHIM_CACHE_KEY_MAX_BYTES
+  }).exceededLimit
+}
+
+function shimMatches(shimPath: string, expected: string): boolean {
   try {
-    return readFileSync(shimPath, 'utf8')
+    return nodeFileContentsEqualSync(shimPath, expected)
   } catch {
-    return null
+    return false
   }
 }

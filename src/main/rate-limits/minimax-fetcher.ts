@@ -1,4 +1,5 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
 import {
   extractMiniMaxCookieValue,
   fetchMiniMaxWithManualCookieHeader,
@@ -244,7 +245,7 @@ export async function fetchMiniMaxRateLimits(
     }
     let payload: MiniMaxUsageResponse
     try {
-      payload = (await fetchResult.response.json()) as MiniMaxUsageResponse
+      payload = await readFetchResponseJsonWithinLimit<MiniMaxUsageResponse>(fetchResult.response)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid MiniMax usage response'
       return makeError(redactMiniMaxSecret(message), 'parse')

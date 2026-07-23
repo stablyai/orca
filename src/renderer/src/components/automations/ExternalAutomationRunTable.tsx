@@ -24,6 +24,7 @@ const PAGE_SIZE = 8
 export type ExternalAutomationRunPage = {
   runs: ExternalAutomationRun[]
   totalCount?: number
+  totalCountSaturated?: boolean
 }
 
 export type FetchExternalAutomationRuns = (input: {
@@ -110,7 +111,14 @@ export function ExternalAutomationRunTable({
     // before paint so stale fetched rows/selection never flash for the new job.
     setTableState(resolvedTableState)
   }
-  const { page, selectedRunId, fetchedRuns, fetchedTotalCount, fetchError } = resolvedTableState
+  const {
+    page,
+    selectedRunId,
+    fetchedRuns,
+    fetchedTotalCount,
+    fetchedTotalCountSaturated,
+    fetchError
+  } = resolvedTableState
 
   useEffect(() => {
     if (!onFetchRuns) {
@@ -143,6 +151,7 @@ export function ExternalAutomationRunTable({
             ...resolveExternalAutomationRunTableState(current, jobRef.current),
             fetchedRuns: null,
             fetchedTotalCount: null,
+            fetchedTotalCountSaturated: false,
             fetchError: error instanceof Error ? error.message : 'Failed to load runs.'
           }))
         }
@@ -162,6 +171,11 @@ export function ExternalAutomationRunTable({
     ? (fetchedRuns ?? fallbackRuns.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE))
     : fallbackRuns.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
   const totalCount = onFetchRuns ? (fetchedTotalCount ?? job.runCount) : job.runCount
+  const totalCountSaturated = onFetchRuns
+    ? fetchedTotalCount === null
+      ? job.runCountSaturated === true
+      : fetchedTotalCountSaturated
+    : job.runCountSaturated === true
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const selectedRun = useMemo(
     () =>
@@ -199,7 +213,8 @@ export function ExternalAutomationRunTable({
           ) : null}
         </div>
         <div className="text-xs text-muted-foreground">
-          {totalCount}{' '}
+          {totalCount}
+          {totalCountSaturated ? '+' : ''}{' '}
           {totalCount === 1
             ? translate('auto.components.automations.ExternalAutomationRunTable.872d032d05', 'run')
             : translate(
@@ -290,6 +305,7 @@ export function ExternalAutomationRunTable({
             {pageStart}-{pageEnd}{' '}
             {translate('auto.components.automations.ExternalAutomationRunTable.7475c0ce96', 'of')}{' '}
             {totalCount}
+            {totalCountSaturated ? '+' : ''}
           </span>
         </div>
         <div className="flex items-center gap-1">

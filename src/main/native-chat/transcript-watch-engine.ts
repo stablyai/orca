@@ -6,11 +6,12 @@ import {
   type TranscriptFileVersion
 } from './transcript-file-version'
 import {
+  createIncrementalTranscriptState,
   readIncrementalTranscriptMessages,
-  resetIncrementalTranscriptState,
-  type IncrementalTranscriptState
+  resetIncrementalTranscriptState
 } from './transcript-incremental-reader'
 import { createTranscriptNativeWatcher } from './transcript-native-watcher'
+import { withNativeChatTranscriptWatchDrainAdmission } from './transcript-read-admission'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
 import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
 import type {
@@ -61,13 +62,7 @@ export async function installTranscriptWatcher(
   const { onAppend, onInitialSnapshot, onReplace, initialLimit } = args
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
 
-  const state: IncrementalTranscriptState = {
-    offset: 0,
-    pendingChunks: [],
-    pendingStart: 0,
-    pendingBytes: 0,
-    droppingOversizedRecord: false
-  }
+  const state = createIncrementalTranscriptState()
   let watchedVersion: TranscriptFileVersion | null = null
   let watchedBoundary = ''
   let initialDrain = true
@@ -78,6 +73,7 @@ export async function installTranscriptWatcher(
   let reading = false
   let pendingReadRequested = false
   let rotationRetryCount = 0
+  const drainController = new AbortController()
 
   function scheduleRotationRetry(): void {
     if (closed) {
@@ -134,7 +130,7 @@ export async function installTranscriptWatcher(
     scheduleRotationRetry()
   }
 
-  async function drainOnce(): Promise<void> {
+  async function drainOnceAdmitted(): Promise<void> {
     const current = await readTranscriptFileVersion(filePath)
     const currentBoundary = await boundaryFingerprint(filePath, state.offset)
     if (closed) {
@@ -239,6 +235,14 @@ export async function installTranscriptWatcher(
     await finishSuccessfulDrain(current)
   }
 
+  async function drainOnce(): Promise<void> {
+    await withNativeChatTranscriptWatchDrainAdmission(drainController.signal, async () => {
+      if (!closed) {
+        await drainOnceAdmitted()
+      }
+    })
+  }
+
   async function drain(): Promise<void> {
     if (closed) {
       return
@@ -317,6 +321,7 @@ export async function installTranscriptWatcher(
         return
       }
       closed = true
+      drainController.abort()
       scheduler.dispose()
       nativeWatcher.dispose()
       activeWatcherCount--

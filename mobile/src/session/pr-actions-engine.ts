@@ -8,6 +8,9 @@ import type { PrActionMutations } from './pr-action-mutation-contract'
 
 export type { PrActionMutations } from './pr-action-mutation-contract'
 
+export const MOBILE_PR_ACTIONS_MAX_REVIEWER_FIELDS = 64
+const MOBILE_PR_ACTIONS_MAX_REVIEWER_LOGIN_CHARACTERS = 256
+
 // Pure (React-free) engine for the PR mutation actions: owns optimistic fields,
 // busy/error/blocked state, and the success/transient/permanent routing. The hook
 // is a thin adapter that subscribes to `onChange` and exposes these methods. Kept
@@ -96,10 +99,23 @@ export class PrActionsEngine {
   private reviewerField(login: string): OptimisticField<boolean> {
     let f = this.reviewerFields.get(login)
     if (!f) {
+      if (
+        login.length === 0 ||
+        login.length > MOBILE_PR_ACTIONS_MAX_REVIEWER_LOGIN_CHARACTERS ||
+        this.reviewerFields.size >= MOBILE_PR_ACTIONS_MAX_REVIEWER_FIELDS
+      ) {
+        throw new Error('Too many reviewer actions are pending')
+      }
       f = createOptimisticField<boolean>(this.cfg.onChange)
       this.reviewerFields.set(login, f)
     }
     return f
+  }
+
+  private releaseReviewerFieldIfIdle(login: string, field: OptimisticField<boolean>): void {
+    if (field.peek() === undefined && this.reviewerFields.get(login) === field) {
+      this.reviewerFields.delete(login)
+    }
   }
 
   // Why: action start pairs setBusy + setError(null); skip notify when unchanged
@@ -264,6 +280,7 @@ export class PrActionsEngine {
       })
     } finally {
       this.clearBusyIfOwned(identity, { kind: 'reviewer', login })
+      this.releaseReviewerFieldIfIdle(login, field)
     }
   }
 
@@ -286,6 +303,7 @@ export class PrActionsEngine {
       })
     } finally {
       this.clearBusyIfOwned(identity, { kind: 'reviewer', login })
+      this.releaseReviewerFieldIfIdle(login, field)
     }
   }
 
@@ -318,5 +336,10 @@ export class PrActionsEngine {
   resolveReviewerRequested(login: string, authoritative: boolean): boolean {
     const f = this.reviewerFields.get(login)
     return f ? f.resolve(authoritative) : authoritative
+  }
+
+  /** Test-only evidence for retained optimistic reviewer state. */
+  retainedReviewerFieldCountForTests(): number {
+    return this.reviewerFields.size
   }
 }

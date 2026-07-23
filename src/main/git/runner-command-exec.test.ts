@@ -15,6 +15,7 @@ vi.mock('node:child_process', () => ({
 
 import {
   commandExecFileAsync,
+  DEFAULT_GIT_MAX_BUFFER,
   ghExecFileAsync,
   gitExecFileAsync,
   gitStreamStdout,
@@ -155,6 +156,35 @@ describe('commandExecFileAsync Windows command shims', () => {
     })
   })
 
+  it('applies the default output cap to Windows .cmd shim executions', async () => {
+    await withPlatform('win32', async () => {
+      const command = createMockChildProcess(1234)
+      const taskkill = createMockTaskkillProcess()
+      spawnMock.mockImplementation((cmd: string) => (cmd === 'taskkill' ? taskkill : command))
+      const toString = vi.fn(() => 'should not decode')
+      const oversizedChunk = {
+        byteLength: DEFAULT_GIT_MAX_BUFFER + 1,
+        toString
+      } as unknown as Buffer
+
+      const promise = commandExecFileAsync('C:\\tools\\pnpm.cmd', ['store', 'prune'], {
+        cwd: 'C:\\repo'
+      })
+      const rejection = expect(promise).rejects.toThrow(
+        'C:\\tools\\pnpm.cmd stdout exceeded maxBuffer.'
+      )
+      command.stdout.emit('data', oversizedChunk)
+
+      await rejection
+      expect(toString).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '1234', '/t', '/f'],
+        expect.objectContaining({ stdio: 'ignore', windowsHide: true })
+      )
+    })
+  })
+
   it('removes listeners after successful Windows .cmd shim executions', async () => {
     await withPlatform('win32', async () => {
       const command = createMockChildProcess(1234)
@@ -172,6 +202,26 @@ describe('commandExecFileAsync Windows command shims', () => {
       expect(command.stderr.listenerCount('data')).toBe(0)
       expect(command.listenerCount('error')).toBe(0)
       expect(command.listenerCount('close')).toBe(0)
+    })
+  })
+
+  it('captures 100,000 one-byte fragments from a Windows command shim', async () => {
+    await withPlatform('win32', async () => {
+      const command = createMockChildProcess(1234)
+      spawnMock.mockReturnValue(command)
+      const promise = commandExecFileAsync('C:\\tools\\pnpm.cmd', ['--version'], {
+        cwd: 'C:\\repo'
+      })
+      const fragment = Buffer.from('x')
+
+      for (let index = 0; index < 100_000; index += 1) {
+        command.stdout.emit('data', fragment)
+      }
+      command.emit('close', 0)
+
+      const result = await promise
+      expect(result.stdout).toHaveLength(100_000)
+      expect(result.stdout.slice(-4)).toBe('xxxx')
     })
   })
 })
@@ -643,6 +693,21 @@ describe('gitStreamStdout', () => {
     child.emit('close', 128)
 
     await rejection
+  })
+
+  it('captures streamed stderr delivered as 100,000 one-byte fragments', async () => {
+    const child = createMockChildProcess(1234)
+    spawnMock.mockReturnValue(child)
+    const promise = gitStreamStdout(['status'], { cwd: '/repo', onStdout: () => {} })
+    const fragment = Buffer.from(' ')
+
+    for (let index = 0; index < 100_000; index += 1) {
+      child.stderr.emit('data', fragment)
+    }
+    child.stderr.emit('data', Buffer.from('fatal: fragmented'))
+    child.emit('close', 128)
+
+    await expect(promise).rejects.toThrow(/fatal: fragmented$/)
   })
 
   it('rejects (not crashes) when the onStdout callback throws', async () => {

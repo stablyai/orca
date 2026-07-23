@@ -1,5 +1,7 @@
 import type { Issue, IssueSearchResult } from '@linear/sdk'
 import type { LinearIssue, LinearIssueChildSummary } from '../../shared/types'
+import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../shared/linear-issue-read-limits'
+import { INTEGRATION_PAGINATION_MAX_ITEMS } from '../integration-pagination-budget'
 
 type IssueWithChildren = Issue & {
   children: Issue['children']
@@ -51,21 +53,24 @@ export async function mapLinearIssue(
   let labelIds: string[] = []
   if ('labels' in issue && typeof issue.labels === 'function') {
     try {
-      const labelsConnection = await (issue as Issue).labels()
-      labelNames = labelsConnection.nodes.map((l) => l.name)
-      labelIds = labelsConnection.nodes.map((l) => l.id)
+      const labelsConnection = await (issue as Issue).labels({
+        first: LINEAR_ISSUE_API_PAGE_SIZE_MAX
+      })
+      const labels = labelsConnection.nodes.slice(0, LINEAR_ISSUE_API_PAGE_SIZE_MAX)
+      labelNames = labels.map((label) => label.name)
+      labelIds = labels.map((label) => label.id)
     } catch {
       // Swallow — labels are non-critical display data.
     }
   } else if ('labelIds' in issue && Array.isArray(issue.labelIds)) {
-    labelIds = issue.labelIds as string[]
+    labelIds = issue.labelIds.slice(0, INTEGRATION_PAGINATION_MAX_ITEMS) as string[]
   }
 
   let subIssues: LinearIssueChildSummary[] | undefined
   if (options.includeChildren && 'children' in issue && typeof issue.children === 'function') {
     try {
       const childrenConnection = await (issue as IssueWithChildren).children({ first: 25 })
-      subIssues = childrenConnection.nodes.map(mapLinearIssueChild)
+      subIssues = childrenConnection.nodes.slice(0, 25).map(mapLinearIssueChild)
     } catch {
       // Swallow — child issues are secondary display data and creation still works without them.
     }

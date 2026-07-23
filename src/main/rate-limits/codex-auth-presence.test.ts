@@ -15,6 +15,7 @@ vi.mock('node:os', () => ({
 }))
 
 import { probeCodexAuthPresence } from './codex-auth-presence'
+import { MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES } from './auth-filesystem-operation'
 
 function fsError(code: string): NodeJS.ErrnoException {
   return Object.assign(new Error(code), { code })
@@ -151,5 +152,51 @@ describe('probeCodexAuthPresence', () => {
 
     resolveAccess()
     await Promise.resolve()
+  })
+
+  it('caps distinct stalled probes and admits a new path after one settles', async () => {
+    const accessResolvers = new Map<string, () => void>()
+    accessMock.mockImplementation(
+      (path: string) =>
+        new Promise<void>((resolve) => {
+          accessResolvers.set(path, resolve)
+        })
+    )
+    const controllers = Array.from(
+      { length: MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES + 2 },
+      () => new AbortController()
+    )
+    const probes = Array.from({ length: MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES }, (_, index) =>
+      probeCodexAuthPresence(`/managed/${index}`, { signal: controllers[index]!.signal })
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(accessMock).toHaveBeenCalledTimes(MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES)
+    await expect(
+      probeCodexAuthPresence('/managed/overflow', {
+        signal: controllers[MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES]!.signal
+      })
+    ).resolves.toBe('unavailable')
+    expect(accessMock).toHaveBeenCalledTimes(MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES)
+
+    accessResolvers.get(join('/managed/0', 'auth.json'))!()
+    await expect(probes[0]).resolves.toBe('present')
+
+    const recovered = probeCodexAuthPresence('/managed/recovered', {
+      signal: controllers[MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES + 1]!.signal
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(accessMock).toHaveBeenCalledTimes(MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES + 1)
+    accessResolvers.get(join('/managed/recovered', 'auth.json'))!()
+    await expect(recovered).resolves.toBe('present')
+
+    for (let index = 1; index < MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES; index += 1) {
+      accessResolvers.get(join(`/managed/${index}`, 'auth.json'))!()
+    }
+    await expect(Promise.all(probes.slice(1))).resolves.toEqual(
+      Array.from({ length: MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES - 1 }, () => 'present')
+    )
   })
 })

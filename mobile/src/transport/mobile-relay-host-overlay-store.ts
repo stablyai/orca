@@ -3,23 +3,36 @@ import {
   MobileRelayHostOverlaySchema,
   type MobileRelayHostOverlay
 } from './mobile-relay-host-overlay'
+import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
 
 const OVERLAY_STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
+export const MOBILE_RELAY_HOST_OVERLAY_MAX_ENTRIES = 64
+export const MOBILE_RELAY_HOST_OVERLAY_MAX_STORAGE_CHARACTERS = 512 * 1024
 let overlayMutation: Promise<void> = Promise.resolve()
 
 function parseOverlays(raw: string | null): MobileRelayHostOverlay[] | null {
   if (raw === null) {
     return []
   }
+  if (raw.length > MOBILE_RELAY_HOST_OVERLAY_MAX_STORAGE_CHARACTERS) {
+    return null
+  }
   try {
-    const value = JSON.parse(raw) as unknown
+    const value = parseMobileJsonTextWithinLimits(raw)
     if (!Array.isArray(value)) {
       return null
     }
-    return value.flatMap((item) => {
+    if (value.length > MOBILE_RELAY_HOST_OVERLAY_MAX_ENTRIES) {
+      return null
+    }
+    const overlays: MobileRelayHostOverlay[] = []
+    for (const item of value) {
       const result = MobileRelayHostOverlaySchema.safeParse(item)
-      return result.success ? [result.data] : []
-    })
+      if (result.success) {
+        overlays.push(result.data)
+      }
+    }
+    return overlays
   } catch {
     return null
   }
@@ -44,11 +57,22 @@ async function mutateOverlays(
     // Why: direct-only saves commonly have no overlay to remove; avoid a full
     // AsyncStorage write when cleanup leaves the durable list unchanged.
     if (next !== current) {
-      await AsyncStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(next))
+      await AsyncStorage.setItem(OVERLAY_STORAGE_KEY, serializeOverlays(next))
     }
   })
   overlayMutation = mutation.catch(() => {})
   return mutation
+}
+
+function serializeOverlays(overlays: MobileRelayHostOverlay[]): string {
+  if (overlays.length > MOBILE_RELAY_HOST_OVERLAY_MAX_ENTRIES) {
+    throw new Error('mobile relay host overlay count limit exceeded')
+  }
+  const serialized = JSON.stringify(overlays)
+  if (serialized.length > MOBILE_RELAY_HOST_OVERLAY_MAX_STORAGE_CHARACTERS) {
+    throw new Error('mobile relay host overlay storage limit exceeded')
+  }
+  return serialized
 }
 
 export async function loadMobileRelayHostOverlays(

@@ -1,10 +1,6 @@
 import {
   chmodSync,
-  closeSync,
-  fstatSync,
   lstatSync,
-  openSync,
-  readFileSync,
   readlinkSync,
   realpathSync,
   unlinkSync,
@@ -12,6 +8,8 @@ import {
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { MAX_AGENT_STATE_FILE_BYTES } from '../agent-state-file-reader'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 
 export type CodexTrustConfigSnapshot =
@@ -43,26 +41,21 @@ function resolveConfigRestorePath(tomlPath: string): string {
 
 export function captureCodexTrustConfig(tomlPath: string): CodexTrustConfigSnapshot {
   const restorePath = resolveConfigRestorePath(tomlPath)
-  let descriptor: number
   try {
-    descriptor = openSync(restorePath, 'r')
+    // Why: contents and mode come from one descriptor, so a path replacement
+    // cannot pair one file's bytes with another file's permissions.
+    const { buffer, stats } = readNodeFileSyncWithinLimit(restorePath, MAX_AGENT_STATE_FILE_BYTES)
+    return {
+      existed: true,
+      contents: buffer,
+      mode: stats.mode,
+      restorePath
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return restorePath === tomlPath ? { existed: false } : { existed: false, restorePath }
     }
     throw error
-  }
-  try {
-    // Why: read and stat the same open file so replacement between two path
-    // lookups cannot pair one file's contents with another file's mode.
-    return {
-      existed: true,
-      contents: readFileSync(descriptor),
-      mode: fstatSync(descriptor).mode,
-      restorePath
-    }
-  } finally {
-    closeSync(descriptor)
   }
 }
 
@@ -82,7 +75,11 @@ export function restoreCodexTrustConfig(
   }
   const { restorePath } = snapshot
   try {
-    if (readFileSync(restorePath).equals(snapshot.contents)) {
+    if (
+      readNodeFileSyncWithinLimit(restorePath, MAX_AGENT_STATE_FILE_BYTES).buffer.equals(
+        snapshot.contents
+      )
+    ) {
       // Why: the RPC may change permissions without changing bytes; rollback
       // restores the complete captured file state, not only its contents.
       chmodSync(restorePath, snapshot.mode)

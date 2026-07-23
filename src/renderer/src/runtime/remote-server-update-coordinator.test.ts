@@ -11,7 +11,11 @@ import {
   type RemoteServerUpdateEntry,
   type RemoteServerUpdateTransport
 } from './remote-server-update-coordinator'
-import { runRemoteServerUpdateBatch } from './remote-server-update-batch'
+import {
+  REMOTE_SERVER_CHECK_CONCURRENCY,
+  runRemoteServerCheckBatch,
+  runRemoteServerUpdateBatch
+} from './remote-server-update-batch'
 
 const environment: PublicKnownRuntimeEnvironment = {
   id: 'server-1',
@@ -314,5 +318,34 @@ describe('remote server update execution', () => {
     }
     await running
     expect(peak).toBe(2)
+  })
+
+  it('bounds checks and continues after one server rejects', async () => {
+    const count = REMOTE_SERVER_CHECK_CONCURRENCY + 1
+    const releases: (() => void)[] = []
+    let active = 0
+    let peak = 0
+    let started = 0
+    const checking = runRemoteServerCheckBatch(
+      Array.from({ length: count }, (_, index) => index),
+      async (index) => {
+        started += 1
+        active += 1
+        peak = Math.max(peak, active)
+        await new Promise<void>((resolve) => releases.push(resolve))
+        active -= 1
+        if (index === 0) {
+          throw new Error('offline')
+        }
+      }
+    )
+
+    await vi.waitFor(() => expect(started).toBe(REMOTE_SERVER_CHECK_CONCURRENCY))
+    releases.shift()?.()
+    await vi.waitFor(() => expect(started).toBe(count))
+    releases.splice(0).forEach((release) => release())
+
+    await expect(checking).resolves.toBeUndefined()
+    expect(peak).toBe(REMOTE_SERVER_CHECK_CONCURRENCY)
   })
 })

@@ -14,12 +14,14 @@ vi.mock('expo-secure-store', () => ({
 vi.mock('react-native', () => ({ Platform: platform }))
 
 import {
+  MOBILE_RELAY_CREDENTIAL_BUNDLE_MAX_STORAGE_CHARACTERS,
   deleteMobileRelayCredentialBundle,
   promotePairingJournalCredential,
   readMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import { MOBILE_HOST_ID_MAX_CHARACTERS, PAIRING_DEVICE_TOKEN_MAX_CHARACTERS } from './types'
 
 const journal = {
   metadata: {
@@ -104,6 +106,51 @@ describe('mobile relay credential bundle', () => {
         }
       })
     ).toThrow(/does not match/)
+  })
+
+  it('round-trips exact field and raw limits and rejects one character more', async () => {
+    const exact = {
+      v: 1 as const,
+      hostId: 'h'.repeat(MOBILE_HOST_ID_MAX_CHARACTERS),
+      deviceToken: 't'.repeat(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS),
+      current: {
+        token: 'A'.repeat(43),
+        hash: 'B'.repeat(43),
+        version: 1,
+        expiresAt: 10_000
+      }
+    }
+
+    await expect(writeMobileRelayCredentialBundle(exact)).resolves.toBeUndefined()
+    const serialized = stored!
+    stored =
+      serialized +
+      ' '.repeat(MOBILE_RELAY_CREDENTIAL_BUNDLE_MAX_STORAGE_CHARACTERS - serialized.length)
+    await expect(readMobileRelayCredentialBundle(exact.hostId)).resolves.toEqual(exact)
+    await expect(
+      writeMobileRelayCredentialBundle({
+        ...exact,
+        deviceToken: `${exact.deviceToken}t`
+      })
+    ).rejects.toThrow()
+  })
+
+  it('does not parse an oversized secure-store record', async () => {
+    stored = {
+      length: MOBILE_RELAY_CREDENTIAL_BUNDLE_MAX_STORAGE_CHARACTERS + 1
+    } as unknown as string
+    const parse = vi.spyOn(JSON, 'parse')
+
+    await expect(readMobileRelayCredentialBundle('host-1')).resolves.toBeNull()
+    expect(parse).not.toHaveBeenCalled()
+    parse.mockRestore()
+  })
+
+  it('does not construct a secure-store key for an oversized host id', async () => {
+    await expect(
+      readMobileRelayCredentialBundle('h'.repeat(MOBILE_HOST_ID_MAX_CHARACTERS + 1))
+    ).resolves.toBeNull()
+    expect(secureStore.getItemAsync).not.toHaveBeenCalled()
   })
 
   it('deletes the namespaced bundle and never enables it on web', async () => {

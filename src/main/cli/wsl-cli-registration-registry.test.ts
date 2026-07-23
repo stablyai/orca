@@ -1,11 +1,12 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   getWslCliRegistrationCandidates,
   recordWslCliRegistrationObservations,
-  recordWslCliRegistrationRemoved
+  recordWslCliRegistrationRemoved,
+  WSL_CLI_REGISTRY_MAX_BYTES
 } from './wsl-cli-registration-registry'
 
 describe('WSL CLI registration registry', () => {
@@ -138,6 +139,16 @@ describe('WSL CLI registration registry', () => {
   it('rediscovers available distros when the registry is corrupt', async () => {
     await mkdir(userDataPath, { recursive: true })
     await writeFile(join(userDataPath, 'wsl-cli-registrations.json'), '{broken', 'utf8')
+
+    await expect(
+      getWslCliRegistrationCandidates(userDataPath, ['Ubuntu', 'Debian'])
+    ).resolves.toEqual(['Ubuntu', 'Debian'])
+  })
+
+  it('rediscovers available distros without reading an oversized sparse registry', async () => {
+    const registryPath = join(userDataPath, 'wsl-cli-registrations.json')
+    await writeFile(registryPath, '{"schemaVersion":2}', 'utf8')
+    await truncate(registryPath, WSL_CLI_REGISTRY_MAX_BYTES + 1)
 
     await expect(
       getWslCliRegistrationCandidates(userDataPath, ['Ubuntu', 'Debian'])

@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: persistence keeps schema defaults, migration, and load/save/flush in one file so the storage contract reviews as a unit. */
 import { app, safeStorage } from 'electron'
 import {
-  readFileSync,
   writeFileSync,
   mkdirSync,
   existsSync,
@@ -245,6 +244,19 @@ import {
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import {
+  assertPersistedStateSecretWithinLimit,
+  encodePersistedStateJsonStringContent,
+  isPersistedStateFileCapacityError,
+  parsePersistedStateJsonBuffer,
+  readPersistedStateJsonFileSync,
+  readPersistedStateFileBytesSync,
+  replacePersistedStateJsonWithinLimit,
+  replacedPersistedStateJsonByteLength,
+  restorePersistedStateBackupSync,
+  stringifyPersistedStateWithinLimit,
+  updatePersistedStateHashWithJsonRange
+} from '../shared/persisted-state-file-bounds'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -406,7 +418,7 @@ function gcStaleWorktreeMeta(state: PersistedState): number {
 
 function readGithubCacheSnapshot(dataFile: string): PersistedState['githubCache'] | null {
   try {
-    const parsed = JSON.parse(readFileSync(getGithubCacheFile(dataFile), 'utf-8')) as unknown
+    const { value: parsed } = readPersistedStateJsonFileSync<unknown>(getGithubCacheFile(dataFile))
     const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
       typeof value === 'object' && value !== null && !Array.isArray(value)
     if (
@@ -2568,7 +2580,6 @@ export class Store {
   private lastWrittenStateHash: string | null = null
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
-  private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
     (
@@ -2757,24 +2768,26 @@ export class Store {
     }
   }
 
-  private restoreFromBackup(dataFile: string): boolean {
+  private restoreFromBackup(dataFile: string): {
+    rejectedOversizedBackup: boolean
+    restored: boolean
+  } {
+    let rejectedOversizedBackup = false
     for (let i = 0; i < BACKUP_COUNT; i++) {
       const path = backupPath(dataFile, i)
       if (!existsSync(path)) {
         continue
       }
       try {
-        const raw = readFileSync(path, 'utf-8')
-        JSON.parse(raw)
-        mkdirSync(dirname(dataFile), { recursive: true })
-        writeFileSync(dataFile, raw, 'utf-8')
+        restorePersistedStateBackupSync(path, dataFile)
         console.warn(`[persistence] Recovered state from backup slot ${i}: ${path}`)
-        return true
+        return { rejectedOversizedBackup, restored: true }
       } catch (err) {
+        rejectedOversizedBackup ||= isPersistedStateFileCapacityError(err)
         console.error(`[persistence] Backup slot ${i} unusable, trying next:`, err)
       }
     }
-    return false
+    return { rejectedOversizedBackup, restored: false }
   }
 
   private load(allowBackupRecovery = true): PersistedState {
@@ -2786,16 +2799,17 @@ export class Store {
     })
 
     let result: PersistedState | null = null
+    let rejectedOversizedState = false
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
-        const raw = readFileSync(dataFile, 'utf-8')
+        const { buffer } = readPersistedStateFileBytesSync(dataFile)
         logPersistenceStartupMilestone('persistence-read-done', {
-          bytes: Buffer.byteLength(raw),
+          bytes: buffer.byteLength,
           durationMs: Math.round(performance.now() - readStartedAt)
         })
         logPersistenceStartupMilestone('persistence-json-parse-start')
-        const parsed = JSON.parse(raw) as PersistedState
+        const parsed = parsePersistedStateJsonBuffer<PersistedState>(buffer)
         logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
@@ -3339,6 +3353,7 @@ export class Store {
         }
       }
     } catch (err) {
+      rejectedOversizedState = isPersistedStateFileCapacityError(err)
       console.error('[persistence] Failed to load primary state, trying backups:', err)
     }
 
@@ -3352,14 +3367,23 @@ export class Store {
         }
       }
       if (fileExistedOnLoad || hasBackup) {
-        if (this.restoreFromBackup(dataFile)) {
+        const recovery = this.restoreFromBackup(dataFile)
+        if (recovery.restored) {
           return this.load(false)
         }
+        rejectedOversizedState ||= recovery.rejectedOversizedBackup
         console.error('[persistence] No usable state file or backup found, using defaults')
       }
     }
 
     if (result === null) {
+      if (rejectedOversizedState) {
+        // Why: keep recoverable oversized bytes intact instead of replacing them with fallback defaults.
+        this.writesFrozen = true
+        console.error(
+          '[persistence] State exceeds the safe load limit; using defaults with state writes frozen'
+        )
+      }
       result = getDefaultPersistedState(homedir())
     }
 
@@ -3548,49 +3572,79 @@ export class Store {
     // on deterministic-IV platforms (macOS/legacy-Linux OSCrypt). A per-slot
     // random UUID can't occur anywhere else in the serialized state (the user
     // sets their data before it is minted), so it appears exactly once.
-    const secretSubs: { sentinel: string; blob: string; plaintext: string }[] = []
-    const encryptToSentinel = (plaintext: string): string => {
-      const blob = encrypt(plaintext)
-      // Deterministic already (empty secret / safeStorage unavailable / encrypt
-      // failure): blob === plaintext, so no normalization — and no sentinel,
-      // which also avoids substituting an empty or plaintext-shaped slot.
-      if (blob === plaintext) {
-        return blob
-      }
+    const secretSubs: { sentinel: string; plaintext: string }[] = []
+    const replaceSecretWithSentinel = (plaintext: string): string => {
+      assertPersistedStateSecretWithinLimit(plaintext)
       const sentinel = `orca-secret-slot-${randomUUID()}`
-      secretSubs.push({ sentinel, blob, plaintext })
+      secretSubs.push({ sentinel, plaintext })
       return sentinel
     }
-    // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
+    // Why: clone with sentinels so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
-        httpProxyUrl: encryptToSentinel(this.state.settings.httpProxyUrl ?? '')
+        opencodeSessionCookie: replaceSecretWithSentinel(this.state.settings.opencodeSessionCookie),
+        httpProxyUrl: replaceSecretWithSentinel(this.state.settings.httpProxyUrl ?? '')
       },
       ui: {
         ...this.state.ui,
         browserKagiSessionLink: this.state.ui.browserKagiSessionLink
-          ? encryptToSentinel(this.state.ui.browserKagiSessionLink)
+          ? replaceSecretWithSentinel(this.state.ui.browserKagiSessionLink)
           : null
       }
     }
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
     // One full-state stringify; secret slots currently hold sentinels.
-    const serialized = JSON.stringify(stateToSave)
-    // Substitute each unique sentinel exactly once: ciphertext for the on-disk
-    // payload, plaintext for the guard hash. Function-form replacement keeps
-    // `$` in blob/plaintext inert; both sides read the sentinel as JSON-escaped
-    // in `serialized`, so each replace is byte-for-byte position-exact.
-    let payload = serialized
-    let hashInput = serialized
-    for (const { sentinel, blob, plaintext } of secretSubs) {
-      const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
-      payload = payload.replace(escapedSentinel, () => blob)
-      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(plaintext).slice(1, -1))
+    const { serialized, byteLength: serializedBytes } =
+      stringifyPersistedStateWithinLimit(stateToSave)
+    const preparedSecretSubs: {
+      escapedPlaintext: string
+      escapedSentinel: string
+      index: number
+      plaintext: string
+    }[] = []
+    let normalizedBytes = serializedBytes
+    for (const { sentinel, plaintext } of secretSubs) {
+      const escapedSentinel = encodePersistedStateJsonStringContent(sentinel)
+      const escapedPlaintext = encodePersistedStateJsonStringContent(plaintext)
+      const index = serialized.indexOf(escapedSentinel)
+      if (index === -1 || serialized.includes(escapedSentinel, index + escapedSentinel.length)) {
+        throw new Error('Persisted state secret sentinel is missing or ambiguous')
+      }
+      normalizedBytes = replacedPersistedStateJsonByteLength({
+        currentBytes: normalizedBytes,
+        search: escapedSentinel,
+        replacement: escapedPlaintext
+      })
+      preparedSecretSubs.push({ escapedPlaintext, escapedSentinel, index, plaintext })
     }
-    const stateHash = createHash('sha1').update(hashInput).digest('hex')
+
+    const normalizedHash = createHash('sha1')
+    let normalizedOffset = 0
+    for (const { escapedPlaintext, escapedSentinel, index } of preparedSecretSubs.sort(
+      (left, right) => left.index - right.index
+    )) {
+      updatePersistedStateHashWithJsonRange(normalizedHash, serialized, normalizedOffset, index)
+      updatePersistedStateHashWithJsonRange(normalizedHash, escapedPlaintext)
+      normalizedOffset = index + escapedSentinel.length
+    }
+    updatePersistedStateHashWithJsonRange(normalizedHash, serialized, normalizedOffset)
+
+    let payload = serialized
+    let payloadBytes = serializedBytes
+    for (const { escapedSentinel, plaintext } of preparedSecretSubs) {
+      const escapedBlob = encodePersistedStateJsonStringContent(encrypt(plaintext))
+      const nextPayload = replacePersistedStateJsonWithinLimit({
+        serialized: payload,
+        currentBytes: payloadBytes,
+        search: escapedSentinel,
+        replacement: escapedBlob
+      })
+      payload = nextPayload.serialized
+      payloadBytes = nextPayload.byteLength
+    }
+    const stateHash = normalizedHash.digest('hex')
     return { payload, stateHash }
   }
 
@@ -3833,8 +3887,7 @@ export class Store {
     if (!repo) {
       return false
     }
-    const previous = this.gitUsernameCache.get(repo.path) ?? repo.gitUsername ?? ''
-    this.gitUsernameCache.set(repo.path, username)
+    const previous = repo.gitUsername ?? ''
     if (previous === username) {
       return false
     }
@@ -4486,9 +4539,7 @@ export class Store {
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
     // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
-    const gitUsername = isFolderRepo(repo)
-      ? ''
-      : (this.gitUsernameCache.get(repo.path) ?? repo.gitUsername ?? '')
+    const gitUsername = isFolderRepo(repo) ? '' : (repo.gitUsername ?? '')
 
     return {
       ...repoWithoutIcon,
@@ -6506,7 +6557,8 @@ export class Store {
     const cacheFile = getGithubCacheFile(this.dataFile)
     const tmpFile = `${cacheFile}.${process.pid}.tmp`
     try {
-      writeFileSync(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')
+      const { serialized } = stringifyPersistedStateWithinLimit(this.state.githubCache)
+      writeFileSync(tmpFile, serialized, 'utf-8')
       renameSync(tmpFile, cacheFile)
       this.githubCacheDirty = false
     } catch (err) {

@@ -1,11 +1,12 @@
 import type { LinearErrorCode, LinearIncludeErrorCode } from '../../shared/linear-agent-access'
+import { boundedIntegrationErrorMessage } from '../integration-error-message'
 
 export class LinearAgentAccessError extends Error {
   readonly code: LinearErrorCode
   readonly data?: unknown
 
   constructor(code: LinearErrorCode, message: string, data?: unknown) {
-    super(message)
+    super(boundedIntegrationErrorMessage(message))
     this.name = 'LinearAgentAccessError'
     this.code = code
     this.data = data
@@ -58,13 +59,12 @@ export function classifyLinearError(error: unknown): LinearErrorCode {
 }
 
 export function linearMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return sanitizeLinearErrorMessage(message)
+  return sanitizeLinearErrorMessage(boundedIntegrationErrorMessage(error))
 }
 
 export function sanitizeLinearErrorMessage(message: string): string {
   // Why: provider text is useful in CLI errors, but raw SDK failures can embed secrets or user payloads.
-  return stripLinearStackTrace(message)
+  return stripLinearStackTrace(boundedIntegrationErrorMessage(message))
     .replace(
       /(headers?\s*[:=]\s*)\{[^{}]*(?:authorization|token|api[-_]?key)[^{}]*\}/gi,
       '$1[REDACTED]'

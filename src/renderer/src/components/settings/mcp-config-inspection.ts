@@ -6,6 +6,7 @@ import {
   selectExistingMcpConfigCandidates,
   type McpConfigDirectoryEntry
 } from '../../../../shared/mcp-config'
+import { MCP_CONFIG_INSPECTION_MAX_BYTES } from '../../../../shared/mcp-config-inspection-limits'
 import { joinPath } from '../../lib/path'
 import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import type { LoadedMcpConfigInspection } from './McpConfigFileRow'
@@ -74,6 +75,23 @@ export async function loadMcpConfigInspections(
       }
 
       try {
+        const fileStat = await window.api.fs.stat({ filePath: absolutePath, connectionId })
+        if (
+          fileStat.isDirectory ||
+          !Number.isSafeInteger(fileStat.size) ||
+          fileStat.size < 0 ||
+          fileStat.size > MCP_CONFIG_INSPECTION_MAX_BYTES
+        ) {
+          return {
+            ...inspectMcpConfigContent(candidate, null),
+            exists: true,
+            status: 'invalid',
+            error: fileStat.isDirectory
+              ? 'MCP config path is a directory.'
+              : 'MCP config exceeds the inspection size limit.',
+            absolutePath
+          }
+        }
         const result = await window.api.fs.readFile({ filePath: absolutePath, connectionId })
         const inspection = inspectMcpConfigContent(candidate, result.isBinary ? '' : result.content)
         return { ...inspection, absolutePath }

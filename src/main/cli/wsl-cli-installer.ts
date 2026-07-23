@@ -24,6 +24,8 @@ const BRIDGE_MANAGED_MARKER = getWslBridgeMarker()
 const WSL_COMMAND_NAME = 'orca-ide'
 const LEGACY_WSL_COMMAND_NAME = 'orca'
 const WSL_COMMAND_TIMEOUT_MS = 10_000
+const WSL_BOUNDED_FILE_OUTPUT_PREFIX = '__ORCA_BOUNDED_FILE_BASE64__:'
+export const WSL_CLI_INSPECTION_MAX_BYTES = 64 * 1024
 
 function normalizeManagedScriptContent(content: string): string {
   return content.replace(/\n+$/u, '\n')
@@ -383,6 +385,7 @@ export class WslCliInstaller {
     const output = await this.run(
       distro,
       [
+        'set -o pipefail',
         `if [ -L ${quoteShell(commandPath)} ]; then`,
         '  printf __ORCA_NOT_FILE__',
         `elif [ ! -e ${quoteShell(commandPath)} ]; then`,
@@ -390,7 +393,8 @@ export class WslCliInstaller {
         `elif [ ! -f ${quoteShell(commandPath)} ]; then`,
         '  printf __ORCA_NOT_FILE__',
         'else',
-        `  cat ${quoteShell(commandPath)}`,
+        `  printf ${quoteShell(WSL_BOUNDED_FILE_OUTPUT_PREFIX)}`,
+        `  head -c ${WSL_CLI_INSPECTION_MAX_BYTES + 1} -- ${quoteShell(commandPath)} | base64`,
         'fi'
       ].join('\n')
     )
@@ -400,7 +404,7 @@ export class WslCliInstaller {
     if (output === '__ORCA_NOT_FILE__') {
       return 'not_file'
     }
-    return output
+    return parseBoundedWslFileOutput(output)
   }
 
   private buildStatus(args: {
@@ -506,10 +510,24 @@ function buildEncodedWslBashCommand(command: string): string {
   return `set -o pipefail; printf %s ${quoteShell(encoded)} | base64 -d | bash`
 }
 
+function parseBoundedWslFileOutput(output: string): string | 'not_file' {
+  if (!output.startsWith(WSL_BOUNDED_FILE_OUTPUT_PREFIX)) {
+    return output
+  }
+  const encoded = output.slice(WSL_BOUNDED_FILE_OUTPUT_PREFIX.length).replace(/\s/gu, '')
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(encoded)) {
+    return 'not_file'
+  }
+  const decoded = Buffer.from(encoded, 'base64')
+  return decoded.length <= WSL_CLI_INSPECTION_MAX_BYTES ? decoded.toString('utf8') : 'not_file'
+}
+
 export const _internals = {
   buildEncodedWslBashCommand,
   buildWslBridgeScript,
   buildWslLauncher,
   getBridgePathFromCommandPath,
-  parseManagedLauncherTarget
+  parseManagedLauncherTarget,
+  parseBoundedWslFileOutput,
+  WSL_BOUNDED_FILE_OUTPUT_PREFIX
 }

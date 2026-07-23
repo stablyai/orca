@@ -19,6 +19,7 @@ import {
   copyLocalDownloadedFileNoClobber,
   publishLocalDownloadedFileNoClobber
 } from './local-downloaded-folder-promotion'
+import { LOCAL_DOWNLOADED_FOLDER_PROMOTION_LIMITS } from './local-downloaded-folder-promotion-budget'
 
 describe('promoteLocalDownloadedFolder', () => {
   const roots: string[] = []
@@ -113,6 +114,30 @@ describe('promoteLocalDownloadedFolder', () => {
 
     await expect(readdir(tempPath)).resolves.toEqual(['nested'])
     await expect(readdir(destinationPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('rejects excessive depth before claiming the destination', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-folder-promotion-'))
+    roots.push(root)
+    const tempPath = join(root, '.transfer.download')
+    const destinationPath = join(root, 'downloaded')
+    await mkdir(tempPath)
+    let nested = tempPath
+    for (
+      let depth = 0;
+      depth <= LOCAL_DOWNLOADED_FOLDER_PROMOTION_LIMITS.maximumDepth;
+      depth += 1
+    ) {
+      nested = join(nested, 'd')
+      await mkdir(nested)
+    }
+
+    await expect(promoteLocalDownloadedFolder(tempPath, destinationPath)).rejects.toMatchObject({
+      reason: 'depth'
+    })
+
+    await expect(lstat(destinationPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(lstat(nested)).resolves.toMatchObject({ isDirectory: expect.any(Function) })
   })
 
   it('rolls back unchanged entries after a mid-publication failure', async () => {

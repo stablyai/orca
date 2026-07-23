@@ -3,7 +3,7 @@ restart, teardown); the "swap the provider atomically" invariant keeps restart +
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
-import { mkdirSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, existsSync, unlinkSync, writeFileSync } from 'node:fs'
 import { fork, type ChildProcess } from 'node:child_process'
 import { connect } from 'node:net'
 import {
@@ -51,6 +51,7 @@ import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
+import { readDaemonControlFileText } from './daemon-control-file-reader'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -1015,7 +1016,7 @@ async function waitForDaemonEndpointExit(socketPath: string): Promise<boolean> {
 function legacyDaemonProcessMayBeAlive(runtimeDir: string, protocolVersion: number): boolean {
   try {
     const parsed = parseDaemonPidFile(
-      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+      readDaemonControlFileText(getDaemonPidPath(runtimeDir, protocolVersion))
     )
     if (!parsed) {
       return false

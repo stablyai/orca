@@ -1,6 +1,5 @@
 /* eslint-disable max-lines -- Why: notification IPC keeps permission, dispatch, custom sound asset, and sound-loading handlers colocated so renderer/main contracts stay auditable. */
 import { app, BrowserWindow, Notification, ipcMain, shell } from 'electron'
-import { readFile, stat } from 'node:fs/promises'
 import { extname, isAbsolute, normalize } from 'node:path'
 import beepSoundPath from '../../../resources/notification-sounds/beep.mp3?asset'
 import blipSoundPath from '../../../resources/notification-sounds/blip.mp3?asset'
@@ -28,11 +27,40 @@ import { readNotificationAuthorizationStatus } from './notification-authorizatio
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileWithinLimit
+} from '../../shared/node-bounded-file-reader'
+import {
+  boundedUniqueNotificationDismissIds,
+  normalizeNotificationDispatchRequest
+} from './notification-ipc-admission'
+import {
+  deleteRetainedNativeNotificationId,
+  getRetainedNativeNotificationById,
+  retainNativeNotification,
+  setRetainedNativeNotificationId,
+  type RetainedNativeNotificationIdEntry
+} from './native-notification-retention'
+
+export {
+  MAX_NOTIFICATION_DISMISS_IDS,
+  MAX_NOTIFICATION_DISMISS_SCAN_ENTRIES,
+  MAX_NOTIFICATION_DISMISS_TOTAL_ID_BYTES,
+  MAX_NOTIFICATION_DISPATCH_INPUT_BYTES,
+  MAX_NOTIFICATION_ID_BYTES,
+  MAX_NOTIFICATION_PANE_KEY_BYTES,
+  MAX_NOTIFICATION_WORKTREE_ID_BYTES
+} from './notification-ipc-admission'
+export {
+  clearActiveNativeNotificationsForTest,
+  getActiveNativeNotificationCountForTest,
+  MAX_ACTIVE_NATIVE_NOTIFICATIONS
+} from './native-notification-retention'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 const MAX_RECENT_NOTIFICATION_KEYS = 50
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
-const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
 const MACOS_PACKAGED_BUNDLE_ID = 'com.stablyai.orca'
 const MACOS_NOTIFICATION_SETTINGS_URL =
@@ -57,44 +85,6 @@ const BUILT_IN_NOTIFICATION_SOUNDS: ReadonlyMap<string, string> = new Map([
   ['beep', beepSoundPath]
 ])
 type NotificationSoundId = NotificationSettings['customSoundId']
-
-// Why: keep a strong reference so GC can't collect notifications (and their click handlers) before the user interacts with them.
-const activeNotifications = new Set<Notification>()
-const activeNotificationsById = new Map<
-  string,
-  { notification: Notification; release: () => void }
->()
-
-function retainNotificationUntilRelease(
-  notification: Notification,
-  onRelease?: () => void
-): () => void {
-  activeNotifications.add(notification)
-  let released = false
-  let releaseTimer: ReturnType<typeof setTimeout> | null = null
-
-  function release(): void {
-    if (released) {
-      return
-    }
-    released = true
-    activeNotifications.delete(notification)
-    notification.removeListener('close', release)
-    if (releaseTimer) {
-      clearTimeout(releaseTimer)
-      releaseTimer = null
-    }
-    onRelease?.()
-  }
-
-  notification.on('close', release)
-  releaseTimer = setTimeout(release, NOTIFICATION_RELEASE_FALLBACK_MS)
-  if (typeof releaseTimer.unref === 'function') {
-    releaseTimer.unref()
-  }
-
-  return release
-}
 
 const NOTIFICATION_PROBE_RESULT_TIMEOUT_MS = 3000
 const NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS = 4000
@@ -123,20 +113,19 @@ function probeNotificationDelivery(): Promise<NotificationDeliveryProbeResult> {
     body: 'Orca will alert you when agents finish or terminals need attention.',
     silent: true
   })
-  activeNotifications.add(probe)
 
   deliveryProbeInFlight = new Promise<NotificationDeliveryProbeResult>((resolve) => {
     let settled = false
     let timeoutTimer: ReturnType<typeof setTimeout> | null = null
+    let closeTimer: ReturnType<typeof setTimeout> | null = null
+    let releaseRetention = (): void => {}
 
     function releaseProbe(): void {
-      activeNotifications.delete(probe)
-      probe.removeListener('show', onShow)
-      probe.removeListener('failed', onFailed)
+      releaseRetention()
       probe.close()
     }
 
-    function settle(state: 'delivered' | 'blocked'): void {
+    function settle(state: 'delivered' | 'blocked', recordOutcome: boolean): void {
       if (settled) {
         return
       }
@@ -145,14 +134,16 @@ function probeNotificationDelivery(): Promise<NotificationDeliveryProbeResult> {
         clearTimeout(timeoutTimer)
         timeoutTimer = null
       }
-      lastObservedDeliveryOutcome = state === 'delivered' ? 'delivered' : 'failed'
+      if (recordOutcome) {
+        lastObservedDeliveryOutcome = state === 'delivered' ? 'delivered' : 'failed'
+      }
       resolve({ state, authoritative: false })
     }
 
     function onShow(): void {
-      settle('delivered')
+      settle('delivered', true)
       // Why: the probe banner doubles as the user-facing confirmation, so let it linger briefly instead of vanishing instantly.
-      const closeTimer = setTimeout(releaseProbe, NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS)
+      closeTimer = setTimeout(releaseProbe, NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS)
       if (typeof closeTimer.unref === 'function') {
         closeTimer.unref()
       }
@@ -160,17 +151,34 @@ function probeNotificationDelivery(): Promise<NotificationDeliveryProbeResult> {
 
     function onFailed(_event: unknown, _error?: string): void {
       // Why: a rejected probe is expected (denied permission); don't log — it would spam the console on every poll.
-      settle('blocked')
+      settle('blocked', true)
       releaseProbe()
     }
 
+    releaseRetention = retainNativeNotification(
+      probe,
+      () => {
+        probe.removeListener('show', onShow)
+        probe.removeListener('failed', onFailed)
+        if (timeoutTimer) {
+          clearTimeout(timeoutTimer)
+          timeoutTimer = null
+        }
+        if (closeTimer) {
+          clearTimeout(closeTimer)
+          closeTimer = null
+        }
+        settle('blocked', false)
+      },
+      () => settle('blocked', false),
+      { fallbackMs: null }
+    )
     probe.once('show', onShow)
     probe.once('failed', onFailed)
     // Why: don't record 'failed' on timeout — a missing callback is ambiguous, only the 'failed' event is definitive.
     timeoutTimer = setTimeout(() => {
       if (!settled) {
-        settled = true
-        resolve({ state: 'blocked', authoritative: false })
+        settle('blocked', false)
         releaseProbe()
       }
     }, NOTIFICATION_PROBE_RESULT_TIMEOUT_MS)
@@ -228,8 +236,12 @@ function getSelectedNotificationSoundPath(settings: NotificationSettings): {
   return { path: normalizedPath }
 }
 
-function waitForNotificationDisplay(notification: Notification): Promise<boolean> {
-  return new Promise((resolve) => {
+function waitForNotificationDisplay(notification: Notification): {
+  cancel: () => void
+  result: Promise<boolean>
+} {
+  let cancel = (): void => {}
+  const result = new Promise<boolean>((resolve) => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
 
@@ -250,6 +262,7 @@ function waitForNotificationDisplay(notification: Notification): Promise<boolean
       cleanup()
       resolve(displayed)
     }
+    cancel = () => settle(false)
 
     function onShow(): void {
       settle(true)
@@ -263,6 +276,7 @@ function waitForNotificationDisplay(notification: Notification): Promise<boolean
     notification.once('failed', onFailed)
     timer = setTimeout(() => settle(false), NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
   })
+  return { cancel, result }
 }
 
 function logNativeNotificationFailure(context: string, error?: string): void {
@@ -370,12 +384,10 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
   ipcMain.removeHandler('notifications:dismiss')
   ipcMain.handle('notifications:dismiss', (_event, ids: string[]): NotificationDismissResult => {
-    const uniqueIds = Array.from(
-      new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))
-    )
+    const uniqueIds = boundedUniqueNotificationDismissIds(ids)
     let dismissed = 0
     for (const id of uniqueIds) {
-      const entry = activeNotificationsById.get(id)
+      const entry = getRetainedNativeNotificationById(id)
       if (entry) {
         entry.notification.close()
         entry.release()
@@ -391,8 +403,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     'notifications:dispatch',
     (
       _event,
-      args: NotificationDispatchRequest
+      request: unknown
     ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
+      const normalizedArgs = normalizeNotificationDispatchRequest(request)
+      if (!normalizedArgs) {
+        return { delivered: false, reason: 'invalid-request' }
+      }
+      const args: NotificationDispatchRequest = normalizedArgs
       // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
       if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
         const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
@@ -465,7 +482,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         }
         const notification = new Notification(notificationOptions)
         if (args.notificationId) {
-          const previous = activeNotificationsById.get(args.notificationId)
+          const previous = getRetainedNativeNotificationById(args.notificationId)
           if (previous) {
             previous.notification.close()
             previous.release()
@@ -475,9 +492,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         // Why: prevent GC from collecting the notification and its click handler while it's still visible.
         let clickHandler: (() => void) | null = null
         let failedHandler: ((_event: unknown, error?: string) => void) | null = null
-        const entryForId: { notification: Notification; release: () => void } | null =
-          args.notificationId ? { notification, release: () => {} } : null
-        const release = retainNotificationUntilRelease(notification, () => {
+        let cancelDisplayConfirmation: (() => void) | null = null
+        const entryForId: RetainedNativeNotificationIdEntry | null = args.notificationId
+          ? { notification, release: () => {} }
+          : null
+        const release = retainNativeNotification(notification, () => {
+          cancelDisplayConfirmation?.()
+          cancelDisplayConfirmation = null
           if (clickHandler) {
             notification.removeListener('click', clickHandler)
             clickHandler = null
@@ -486,16 +507,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
             notification.removeListener('failed', failedHandler)
             failedHandler = null
           }
-          if (
-            args.notificationId &&
-            activeNotificationsById.get(args.notificationId) === entryForId
-          ) {
-            activeNotificationsById.delete(args.notificationId)
+          if (args.notificationId && entryForId) {
+            deleteRetainedNativeNotificationId(args.notificationId, entryForId)
           }
         })
         if (entryForId && args.notificationId) {
           entryForId.release = release
-          activeNotificationsById.set(args.notificationId, entryForId)
+          setRetainedNativeNotificationId(args.notificationId, entryForId)
         }
 
         failedHandler = (_event, error) => {
@@ -546,10 +564,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         const displayConfirmation = args.requireDisplayConfirmation
           ? waitForNotificationDisplay(notification)
           : null
+        cancelDisplayConfirmation = displayConfirmation?.cancel ?? null
         notification.show()
 
         if (displayConfirmation) {
-          return displayConfirmation.then((displayed) => {
+          return displayConfirmation.result.then((displayed) => {
+            cancelDisplayConfirmation = null
             if (!displayed) {
               release()
               return { delivered: false, reason: 'not-displayed' }
@@ -610,17 +630,18 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
 
     try {
-      const fileStat = await stat(normalizedPath)
-      if (!fileStat.isFile()) {
+      const { buffer, stats } = await readNodeFileWithinLimit(
+        normalizedPath,
+        MAX_NOTIFICATION_SOUND_BYTES
+      )
+      if (!stats.isFile()) {
         return { ok: false, reason: 'invalid-path' }
       }
-      if (fileStat.size > MAX_NOTIFICATION_SOUND_BYTES) {
+      return { ok: true, data: new Uint8Array(buffer), mimeType, path: normalizedPath }
+    } catch (error) {
+      if (error instanceof NodeFileReadTooLargeError) {
         return { ok: false, reason: 'too-large' }
       }
-
-      const data = await readFile(normalizedPath)
-      return { ok: true, data: new Uint8Array(data), mimeType, path: normalizedPath }
-    } catch {
       return { ok: false, reason: 'read-failed' }
     }
   })
@@ -647,12 +668,10 @@ export function triggerStartupNotificationRegistration(store: Store): void {
     body: 'Allow notifications so Orca can alert you when agents finish or terminals need attention.'
   })
 
-  // Why: prevent GC from collecting the notification and its click handler while it's still visible.
-  activeNotifications.add(notification)
-
   let handled = false
   let closeTimer: ReturnType<typeof setTimeout> | null = null
   let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+  let releaseRetention = (): void => {}
 
   function clearStartupTimers(): void {
     if (closeTimer) {
@@ -665,16 +684,22 @@ export function triggerStartupNotificationRegistration(store: Store): void {
     }
   }
 
-  function cleanup(): void {
+  function releaseState(): void {
     if (handled) {
       return
     }
     handled = true
     clearStartupTimers()
-    activeNotifications.delete(notification)
     notification.removeListener('click', onClick)
     notification.removeListener('show', onShow)
     notification.removeListener('failed', onFailed)
+  }
+
+  function cleanup(): void {
+    if (handled) {
+      return
+    }
+    releaseRetention()
     notification.close()
   }
 
@@ -702,6 +727,9 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   notification.on('click', onClick)
   notification.on('show', onShow)
   notification.on('failed', onFailed)
+  releaseRetention = retainNativeNotification(notification, releaseState, undefined, {
+    fallbackMs: null
+  })
 
   // Fallback in case macOS doesn't fire the 'show' event (e.g. user denies).
   fallbackTimer = setTimeout(cleanup, 10_000)

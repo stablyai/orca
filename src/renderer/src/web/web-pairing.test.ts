@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS,
+  PAIRING_PUBLIC_KEY_MAX_CHARACTERS
+} from '../../../shared/mobile-relay-pairing-offer'
 import { decideWebPairingStartup, parseWebPairingInput, type WebPairingOffer } from './web-pairing'
 
 describe('web pairing input', () => {
@@ -49,6 +56,23 @@ describe('web pairing input', () => {
   it('rejects orca URLs outside the exact pairing route', () => {
     expect(parseWebPairingInput(`orca://pairing?code=${encodeOffer()}`)).toBeNull()
     expect(parseWebPairingInput(`orca://pair-extra?code=${encodeOffer()}`)).toBeNull()
+  })
+
+  it('rejects oversized input before base64 decoding', () => {
+    const atob = vi.spyOn(globalThis, 'atob')
+
+    expect(parseWebPairingInput('A'.repeat(PAIRING_INPUT_MAX_CHARACTERS + 1))).toBeNull()
+    expect(parseWebPairingInput('A'.repeat(PAIRING_CODE_MAX_CHARACTERS + 1))).toBeNull()
+    expect(atob).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['endpoint', PAIRING_ENDPOINT_MAX_CHARACTERS],
+    ['deviceToken', PAIRING_DEVICE_TOKEN_MAX_CHARACTERS],
+    ['publicKeyB64', PAIRING_PUBLIC_KEY_MAX_CHARACTERS]
+  ] as const)('accepts %s at its limit and rejects one extra character', (field, limit) => {
+    expect(parseWebPairingInput(encodeOffer({ [field]: 'x'.repeat(limit) }))).not.toBeNull()
+    expect(parseWebPairingInput(encodeOffer({ [field]: 'x'.repeat(limit + 1) }))).toBeNull()
   })
 
   it('auto-saves scoped runtime offers during web startup', () => {

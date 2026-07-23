@@ -37,10 +37,10 @@ import {
   isCurrentPtyExit
 } from '../ipc/pty'
 import {
-  recordHiddenRendererPtyDataDrop,
-  shouldDropHiddenRendererPtyData
-} from '../ipc/pty-hidden-delivery-gate'
-import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
+  routeExternalPtyData,
+  routeExternalPtyExit,
+  routeExternalPtyReplay
+} from '../ipc/pty-renderer-delivery-router'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider,
@@ -919,45 +919,10 @@ export class SshRelaySession {
 
   private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
     ptyProvider.onData((payload) => {
-      const rawLength = payload.sequenceChars ?? payload.data.length
-      const seq = this.runtime?.onPtyData(
-        payload.id,
-        payload.data,
-        Date.now(),
-        rawLength,
-        payload.transformed
-      )
-      const win = this.getMainWindow()
-      if (!win || win.isDestroyed()) {
-        return
-      }
-      // Why: hidden-delivery gate parity with ipc/pty.ts — latch model-restore out-of-band, never an in-band pty:data sentinel (OSC-9999-only chunks strip to empty).
-      const store = this.store as { getSettings?: Store['getSettings'] }
-      if (shouldDropHiddenRendererPtyData(payload.id, store.getSettings?.())) {
-        const drop = recordHiddenRendererPtyDataDrop(payload.id, rawLength)
-        if (drop.shouldEmitRestoreMarker) {
-          win.webContents.send('pty:modelRestoreNeeded', {
-            id: payload.id,
-            reason: 'hidden-drop',
-            ...(typeof seq === 'number' ? { markerSeq: seq } : {})
-          } satisfies PtyModelRestoreNeededEvent)
-        }
-        return
-      }
-      if (payload.data.length > 0 || payload.transformed) {
-        win.webContents.send('pty:data', {
-          ...payload,
-          ...(typeof seq === 'number' ? { seq } : {}),
-          rawLength,
-          ...(payload.transformed ? { transformed: true } : {})
-        })
-      }
+      routeExternalPtyData(payload)
     })
     ptyProvider.onReplay((payload) => {
-      const win = this.getMainWindow()
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('pty:replay', payload)
-      }
+      routeExternalPtyReplay(payload)
     })
     ptyProvider.onExit((payload) => {
       const pendingReattach = this.pendingPtyReattaches.get(payload.id)
@@ -980,10 +945,7 @@ export class SshRelaySession {
     this.forwardedReattachReplayByPty.delete(payload.id)
     this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
     this.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
-    const win = this.getMainWindow()
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('pty:exit', payload)
-    }
+    routeExternalPtyExit(payload)
   }
 
   private replayFingerprint(data: string): string {
@@ -1008,10 +970,7 @@ export class SshRelaySession {
     if (!data || !this.shouldForwardReattachReplay(appPtyId, data)) {
       return
     }
-    const win = this.getMainWindow()
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('pty:replay', { id: appPtyId, data })
-    }
+    routeExternalPtyReplay({ id: appPtyId, data })
   }
 
   private async reattachKnownPtys(shouldContinue: () => boolean): Promise<void> {
@@ -1125,10 +1084,7 @@ export class SshRelaySession {
         this.forwardedReattachReplayByPty.delete(appPtyId)
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')
         // Why: reattach failure means the remote process is gone; tell the renderer to clear the stale pane.
-        const win = this.getMainWindow()
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('pty:exit', { id: appPtyId, code: -1 })
-        }
+        routeExternalPtyExit({ id: appPtyId, code: -1 })
       } finally {
         if (this.pendingPtyReattaches.get(appPtyId) === pendingReattach) {
           this.pendingPtyReattaches.delete(appPtyId)

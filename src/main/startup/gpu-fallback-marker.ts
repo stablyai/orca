@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 
 /**
  * Persisted "disable hardware acceleration for this build" marker.
@@ -12,6 +13,7 @@ import { join } from 'node:path'
 
 export const GPU_FALLBACK_MARKER_FILE = 'gpu-fallback.json'
 export const GPU_FALLBACK_SCHEME_VERSION = 2
+export const MAX_GPU_FALLBACK_MARKER_FILE_BYTES = 8 * 1024
 
 export type GpuFallbackEnvironment = {
   appVersion: string
@@ -36,9 +38,12 @@ function markerPath(userDataPath: string): string {
 
 export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker | null {
   try {
-    const parsed = JSON.parse(readFileSync(markerPath(userDataPath), 'utf-8')) as Partial<
-      Record<keyof GpuFallbackMarker, unknown>
-    >
+    const parsed = JSON.parse(
+      readNodeFileSyncWithinLimit(
+        markerPath(userDataPath),
+        MAX_GPU_FALLBACK_MARKER_FILE_BYTES
+      ).buffer.toString('utf8')
+    ) as Partial<Record<keyof GpuFallbackMarker, unknown>>
     if (parsed.schemeVersion !== GPU_FALLBACK_SCHEME_VERSION) {
       return null
     }

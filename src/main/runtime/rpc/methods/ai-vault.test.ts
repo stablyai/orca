@@ -4,6 +4,7 @@ import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultScanOptions } from '../../../ai-vault/session-scanner-types'
+import { AI_VAULT_SESSION_ID_MAX_UTF8_BYTES } from '../../../ai-vault/session-list-retention'
 
 const { scanAiVaultSessions } = vi.hoisted(() => ({
   scanAiVaultSessions: vi.fn()
@@ -178,6 +179,24 @@ describe('aiVault.listSessions handler + shared cache', () => {
     await listAiVaultSessions({ limit: 500 })
     // Second call via the RPC method with the same cache key.
     await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
+    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds a pathological result before retaining it in the shared cache', async () => {
+    const oversized = makeSession()
+    oversized.sessionId = 'x'.repeat(AI_VAULT_SESSION_ID_MAX_UTF8_BYTES + 1)
+    scanAiVaultSessions.mockResolvedValue({
+      sessions: [oversized],
+      issues: [],
+      scannedAt: SCANNED_AT
+    })
+
+    const first = await listAiVaultSessions({ limit: 500 })
+    const second = await listAiVaultSessions({ limit: 500 })
+
+    expect(first.sessions).toEqual([])
+    expect(first.issues.at(-1)?.message).toContain('AI Vault omitted')
+    expect(second).toBe(first)
     expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
   })
 

@@ -2,21 +2,16 @@
 import { app } from 'electron'
 import { execFile } from 'node:child_process'
 import { constants, existsSync } from 'node:fs'
-import {
-  access,
-  lstat,
-  mkdir,
-  readFile,
-  readlink,
-  stat,
-  symlink,
-  unlink,
-  writeFile
-} from 'node:fs/promises'
+import { access, lstat, mkdir, readlink, stat, symlink, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-install-types'
+import { nodeFileContentsEqual } from '../../shared/node-file-content-equality'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileWithinLimit
+} from '../../shared/node-bounded-file-reader'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
 import {
   invalidateWindowsUserPathRegistryCache,
@@ -32,6 +27,7 @@ const LINUX_COMMAND_NAME = 'orca-ide'
 const LEGACY_LINUX_COMMAND_NAME = 'orca'
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
 const WINDOWS_PATH_WRITE_TIMEOUT_MS = 5_000
+export const CLI_LAUNCHER_INSPECTION_MAX_BYTES = 64 * 1024
 
 type CliInstallerOptions = {
   platform?: NodeJS.Platform
@@ -500,19 +496,18 @@ export class CliInstaller {
         })
       }
 
-      const currentContent = await readFile(commandPath, 'utf8')
       const expectedContent = buildAppImageCliWrapper(appImagePath)
+      const matches = await nodeFileContentsEqual(commandPath, expectedContent)
       return this.buildStatus({
         commandPath,
         launcherPath: appImagePath,
         installMethod: 'wrapper',
         supported: true,
-        state: currentContent === expectedContent ? 'installed' : 'stale',
+        state: matches ? 'installed' : 'stale',
         currentTarget: appImagePath,
-        detail:
-          currentContent === expectedContent
-            ? `Registered at ${commandPath}.`
-            : `${commandPath} points to a different launcher.`
+        detail: matches
+          ? `Registered at ${commandPath}.`
+          : `${commandPath} points to a different launcher.`
       })
     } catch (error) {
       if (isMissingError(error)) {
@@ -538,8 +533,7 @@ export class CliInstaller {
       const stats = await lstat(commandPath)
       if (!stats.isSymbolicLink()) {
         if (stats.isFile()) {
-          const currentContent = await readFile(commandPath, 'utf8')
-          const managedTarget = extractManagedUnixLauncherTarget(currentContent)
+          const managedTarget = await readManagedUnixLauncherTarget(commandPath)
           if (managedTarget) {
             return this.buildStatus({
               commandPath,
@@ -694,19 +688,18 @@ export class CliInstaller {
         })
       }
 
-      const currentContent = await readFile(commandPath, 'utf8')
       const expectedContent = buildWindowsForwarder(launcherPath)
+      const matches = await nodeFileContentsEqual(commandPath, expectedContent)
       return this.buildStatus({
         commandPath,
         launcherPath,
         installMethod: 'wrapper',
         supported: true,
-        state: currentContent === expectedContent ? 'installed' : 'stale',
+        state: matches ? 'installed' : 'stale',
         currentTarget: launcherPath,
-        detail:
-          currentContent === expectedContent
-            ? `Registered at ${commandPath}.`
-            : `${commandPath} points to a different launcher.`
+        detail: matches
+          ? `Registered at ${commandPath}.`
+          : `${commandPath} points to a different launcher.`
       })
     } catch (error) {
       if (isMissingError(error)) {
@@ -1011,6 +1004,20 @@ function extractManagedUnixLauncherTarget(content: string): string | null {
   return /(?:^|[/\\])(?:out|app\.asar\.unpacked[/\\]out)[/\\]cli[/\\]index\.js$/.test(cliPath)
     ? cliPath
     : null
+}
+
+async function readManagedUnixLauncherTarget(filePath: string): Promise<string | null> {
+  try {
+    const contents = (
+      await readNodeFileWithinLimit(filePath, CLI_LAUNCHER_INSPECTION_MAX_BYTES)
+    ).buffer.toString('utf8')
+    return extractManagedUnixLauncherTarget(contents)
+  } catch (error) {
+    if (error instanceof NodeFileReadTooLargeError) {
+      return null
+    }
+    throw error
+  }
 }
 
 function extractShellAssignment(content: string, name: string): string | null {

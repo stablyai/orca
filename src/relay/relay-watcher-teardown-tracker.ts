@@ -15,6 +15,7 @@ export type RelayWatcherTeardownState = {
 }
 
 export class RelayWatcherTeardownTracker {
+  // Why: these entries own native handles and cannot be evicted; watcher admission bounds their count and aggregate root-key bytes.
   private readonly pending = new Map<string, Promise<void>>()
   private readonly failed = new Map<string, { state: RelayWatcherTeardownState; error: unknown }>()
 

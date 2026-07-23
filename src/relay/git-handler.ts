@@ -11,6 +11,7 @@ import {
   parseWorktreeList
 } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
+import { iterateNulDelimitedFields } from '../shared/nul-delimited-fields'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
@@ -77,7 +78,15 @@ import {
   isUnsupportedRevParsePathFormatError
 } from '../shared/git-worktree-command-capabilities'
 import { GitResponseStreamRegistry } from './git-response-stream'
-import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
+import {
+  JsonStringifyByteLimitError,
+  stringifyJsonWithinByteLimit
+} from '../shared/node-bounded-json-stringify'
+import {
+  GIT_RESPONSE_STREAM_THRESHOLD,
+  MAX_GIT_RESPONSE_STREAM_BYTES,
+  RelayErrorCode
+} from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
 import { streamRelayGitStdout } from './git-stdout-stream'
@@ -269,11 +278,26 @@ export class GitHandler {
     if (params.__streamResponse !== true || !context) {
       return result
     }
-    const payload = Buffer.from(JSON.stringify(result ?? null), 'utf-8')
-    if (payload.length <= GIT_RESPONSE_STREAM_THRESHOLD) {
+    let serialized: string
+    let payloadBytes: number
+    try {
+      const bounded = stringifyJsonWithinByteLimit(result ?? null, MAX_GIT_RESPONSE_STREAM_BYTES)
+      serialized = bounded.serialized
+      payloadBytes = bounded.byteLength
+    } catch (error) {
+      if (!(error instanceof JsonStringifyByteLimitError)) {
+        throw error
+      }
+      const oversized = new Error(
+        `Git response is too large to transfer safely (more than ${MAX_GIT_RESPONSE_STREAM_BYTES} bytes)`
+      ) as Error & { code: number }
+      oversized.code = RelayErrorCode.StreamProtocolError
+      throw oversized
+    }
+    if (payloadBytes <= GIT_RESPONSE_STREAM_THRESHOLD) {
       return result
     }
-    return this.responseStreams.startStream(payload, this.dispatcher, context)
+    return this.responseStreams.startStream(serialized, this.dispatcher, context)
   }
 
   private clearGitMutationReadCaches(): void {
@@ -691,7 +715,7 @@ export class GitHandler {
           worktreePath
         )
         // Why: a selected tracked directory can make `ls-files -z` return enough descendants for push(...split) to exceed the argument limit.
-        for (const trackedPathSpec of stdout.split('\0')) {
+        for (const trackedPathSpec of iterateNulDelimitedFields(stdout)) {
           if (trackedPathSpec) {
             trackedPathSpecs.push(trackedPathSpec)
           }

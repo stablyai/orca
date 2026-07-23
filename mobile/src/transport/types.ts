@@ -1,5 +1,10 @@
 import { z } from 'zod'
 import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS,
+  PAIRING_PUBLIC_KEY_MAX_CHARACTERS,
   PairingOfferSchema,
   type PairingOffer
 } from '../../../src/shared/mobile-relay-pairing-offer'
@@ -10,8 +15,19 @@ import {
 } from './mobile-relay-host-overlay'
 import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
 
-export { PairingOfferSchema }
+export {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS,
+  PAIRING_PUBLIC_KEY_MAX_CHARACTERS,
+  PairingOfferSchema
+}
 export type { PairingOffer }
+
+export const MOBILE_HOST_ID_MAX_CHARACTERS = 4_096
+export const MOBILE_HOST_NAME_MAX_CHARACTERS = 4_096
+export const MobileHostIdSchema = z.string().min(1).max(MOBILE_HOST_ID_MAX_CHARACTERS)
 
 export type RpcRequest = {
   id: string
@@ -72,11 +88,11 @@ export type HostProfile = {
 }
 
 export const HostProfileSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  endpoint: z.string().min(1),
-  deviceToken: z.string().min(1),
-  publicKeyB64: z.string().min(1),
+  id: MobileHostIdSchema,
+  name: z.string().min(1).max(MOBILE_HOST_NAME_MAX_CHARACTERS),
+  endpoint: z.string().min(1).max(PAIRING_ENDPOINT_MAX_CHARACTERS),
+  deviceToken: z.string().min(1).max(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS),
+  publicKeyB64: z.string().min(1).max(PAIRING_PUBLIC_KEY_MAX_CHARACTERS),
   lastConnected: z.number().finite(),
   endpoints: z.array(MobileAccessEndpointSchema).min(1).max(16).optional(),
   relayHostId: z
@@ -90,10 +106,10 @@ export const HostProfileSchema = z.object({
 // deviceToken is held in iOS Keychain via expo-secure-store and joined
 // in at load time; it must NOT appear in AsyncStorage anymore.
 export const StoredHostProfileSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  endpoint: z.string().min(1),
-  publicKeyB64: z.string().min(1),
+  id: MobileHostIdSchema,
+  name: z.string().min(1).max(MOBILE_HOST_NAME_MAX_CHARACTERS),
+  endpoint: z.string().min(1).max(PAIRING_ENDPOINT_MAX_CHARACTERS),
+  publicKeyB64: z.string().min(1).max(PAIRING_PUBLIC_KEY_MAX_CHARACTERS),
   lastConnected: z.number().finite()
 })
 

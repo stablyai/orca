@@ -1,8 +1,10 @@
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import path from 'node:path'
 import type { Repo, Worktree } from '../../shared/types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+import { MAX_WORKTREE_GIT_POINTER_BYTES } from '../worktree-orphan-gitdir-proof'
 
 type StatPath = (targetPath: string) => Promise<{ mtimeMs: number }>
 type ReadTextFile = (targetPath: string) => Promise<string>
@@ -42,7 +44,9 @@ async function statLocalPath(targetPath: string): Promise<{ mtimeMs: number }> {
 }
 
 async function readLocalTextFile(targetPath: string): Promise<string> {
-  return readFile(targetPath, 'utf8')
+  return (
+    await readNodeFileWithinLimit(targetPath, MAX_WORKTREE_GIT_POINTER_BYTES)
+  ).buffer.toString('utf8')
 }
 
 async function resolveWorkspaceCleanupActivityAt(

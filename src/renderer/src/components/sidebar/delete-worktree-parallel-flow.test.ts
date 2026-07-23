@@ -46,7 +46,7 @@ vi.mock('sonner', () => ({
 }))
 
 import { toast } from 'sonner'
-import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
+import { CROSS_REPO_DELETE_CONCURRENCY, runWorktreeDeletesInParallel } from './delete-worktree-flow'
 
 function deferredDeleteResult(): {
   promise: Promise<{ ok: true }>
@@ -67,6 +67,45 @@ describe('runWorktreeDeletesInParallel', () => {
     mocks.state.deleteStateByWorktreeId = {}
     vi.mocked(toast.error).mockClear()
     vi.mocked(toast.info).mockClear()
+  })
+
+  it.each([
+    ['at the limit', CROSS_REPO_DELETE_CONCURRENCY],
+    ['above the limit', CROSS_REPO_DELETE_CONCURRENCY + 1]
+  ])('bounds cross-project deletes %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    const pending: ReturnType<typeof deferredDeleteResult>[] = []
+    mocks.state.removeWorktree.mockImplementation(() => {
+      const result = deferredDeleteResult()
+      pending.push(result)
+      active++
+      peak = Math.max(peak, active)
+      return result.promise.finally(() => {
+        active--
+      })
+    })
+    const targets = Array.from({ length: count }, (_, index) => ({
+      id: `wt-${index}`,
+      displayName: `workspace ${index}`,
+      repoId: `repo-${index}`,
+      path: `/workspaces/${index}`
+    }))
+
+    const deleted = runWorktreeDeletesInParallel(targets)
+    await vi.waitFor(() =>
+      expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(
+        Math.min(count, CROSS_REPO_DELETE_CONCURRENCY)
+      )
+    )
+    if (count > CROSS_REPO_DELETE_CONCURRENCY) {
+      pending.shift()?.resolve({ ok: true })
+      await vi.waitFor(() => expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(count))
+    }
+    pending.splice(0).forEach((result) => result.resolve({ ok: true }))
+
+    await expect(deleted).resolves.toEqual(targets.map((target) => target.id))
+    expect(peak).toBe(Math.min(count, CROSS_REPO_DELETE_CONCURRENCY))
   })
 
   it('starts every selected delete before waiting for earlier deletes to finish', async () => {

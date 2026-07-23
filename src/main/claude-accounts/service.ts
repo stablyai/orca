@@ -2,7 +2,7 @@
 for login, credential capture, Keychain storage, selection, and rate-limit refresh. */
 import { randomUUID } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
 import type {
@@ -12,6 +12,7 @@ import type {
 } from '../../shared/types'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
+import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
@@ -611,7 +612,7 @@ export class ClaudeAccountService {
       }
     }
     const credentialsPath = join(configDir, '.credentials.json')
-    return existsSync(credentialsPath) ? readFileSync(credentialsPath, 'utf-8') : null
+    return existsSync(credentialsPath) ? readAgentStateFileSync(credentialsPath) : null
   }
 
   private readOauthAccountFromConfigDir(configDir: string): unknown {
@@ -620,7 +621,7 @@ export class ClaudeAccountService {
         continue
       }
       try {
-        const parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+        const parsed = readAgentStateJsonFileSync(configPath) as Record<string, unknown>
         if (parsed.oauthAccount) {
           return parsed.oauthAccount
         }

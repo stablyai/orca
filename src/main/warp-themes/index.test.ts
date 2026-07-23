@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
+import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
 import type * as WarpThemeDiscovery from './discovery'
 
 const opendirMock = vi.hoisted(() => vi.fn())
-const readFileMock = vi.hoisted(() => vi.fn())
+const readNodeFileWithinLimitMock = vi.hoisted(() => vi.fn())
 const realpathMock = vi.hoisted(() => vi.fn((filePath: string) => Promise.resolve(filePath)))
 const statMock = vi.hoisted(() => vi.fn())
 const getWarpThemeDirectoriesMock = vi.hoisted(() => vi.fn(() => ['/Users/alice/.warp/themes']))
@@ -17,9 +18,13 @@ vi.mock('electron', () => ({
 
 vi.mock('fs/promises', () => ({
   opendir: opendirMock,
-  readFile: readFileMock,
   realpath: realpathMock,
   stat: statMock
+}))
+
+vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => ({
+  ...(await importOriginal<typeof BoundedFileReader>()),
+  readNodeFileWithinLimit: readNodeFileWithinLimitMock
 }))
 
 vi.mock('./discovery', async (importOriginal) => {
@@ -36,6 +41,7 @@ vi.mock('./parser-runner', () => ({
 
 import { previewWarpThemeImport } from './index'
 import { parseWarpThemeYaml } from './parser'
+import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
 import type { Store } from '../persistence'
 
 const VALID_THEME = `
@@ -97,12 +103,19 @@ function mockStat(filePath: string) {
     : { isFile: () => true, size: VALID_THEME.length }
 }
 
+function fileRead(content: string, size = Buffer.byteLength(content)) {
+  return {
+    buffer: Buffer.from(content),
+    stats: { isFile: () => true, size }
+  }
+}
+
 describe('previewWarpThemeImport', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getWarpThemeDirectoriesMock.mockReturnValue(['/Users/alice/.warp/themes'])
     statMock.mockImplementation(mockStat)
-    readFileMock.mockResolvedValue(VALID_THEME)
+    readNodeFileWithinLimitMock.mockResolvedValue(fileRead(VALID_THEME))
     realpathMock.mockImplementation((filePath: string) => Promise.resolve(filePath))
     opendirMock.mockResolvedValue(mockDirectory([fileEntry('z.yml'), fileEntry('a.yml')]))
     parseWarpThemeYamlWithTimeoutMock.mockImplementation(parseWarpThemeYaml)
@@ -115,10 +128,9 @@ describe('previewWarpThemeImport', () => {
       'warp:duplicate:a-yml',
       'warp:duplicate:z-yml'
     ])
-    expect(readFileMock.mock.calls.map(([filePath]) => path.basename(filePath as string))).toEqual([
-      'a.yml',
-      'z.yml'
-    ])
+    expect(
+      readNodeFileWithinLimitMock.mock.calls.map(([filePath]) => path.basename(filePath as string))
+    ).toEqual(['a.yml', 'z.yml'])
   })
 
   it('returns an empty errorless preview when no local Warp theme folder exists', async () => {
@@ -135,7 +147,7 @@ describe('previewWarpThemeImport', () => {
       skippedFiles: []
     })
     expect(preview.error).toBeUndefined()
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(readNodeFileWithinLimitMock).not.toHaveBeenCalled()
   })
 
   it('returns an empty errorless preview for an empty readable local Warp theme folder', async () => {
@@ -150,7 +162,7 @@ describe('previewWarpThemeImport', () => {
       skippedFiles: []
     })
     expect(preview.error).toBeUndefined()
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(readNodeFileWithinLimitMock).not.toHaveBeenCalled()
   })
 
   it('merges themes from multiple readable Warp directories', async () => {
@@ -170,7 +182,7 @@ describe('previewWarpThemeImport', () => {
 
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
-    expect(readFileMock.mock.calls.map(([filePath]) => filePath)).toEqual([
+    expect(readNodeFileWithinLimitMock.mock.calls.map(([filePath]) => filePath)).toEqual([
       path.join('/Users/alice/.warp/themes', 'stable.yaml'),
       path.join('/Users/alice/.warp-preview/themes', 'preview.yaml')
     ])
@@ -195,7 +207,7 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
     expect(preview.found).toBe(true)
-    expect(readFileMock.mock.calls.map(([filePath]) => filePath)).toEqual([
+    expect(readNodeFileWithinLimitMock.mock.calls.map(([filePath]) => filePath)).toEqual([
       path.join('/Users/alice/.warp-oss/themes', 'oss.yaml')
     ])
     expect(preview.themes.map((theme) => theme.sourceLabel)).toEqual(['.warp-oss'])
@@ -220,9 +232,9 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
     expect(preview.themes).toHaveLength(1)
-    expect(readFileMock).toHaveBeenCalledWith(
+    expect(readNodeFileWithinLimitMock).toHaveBeenCalledWith(
       path.join('/Users/alice/.warp/themes', 'shared.yaml'),
-      'utf-8'
+      1_000_000
     )
     expect(preview.themes[0]?.sourceLabel).toBe('.warp')
     expect(preview.skippedFiles).not.toContainEqual({
@@ -237,9 +249,9 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
     expect(preview.found).toBe(true)
-    expect(readFileMock).toHaveBeenCalledWith(
+    expect(readNodeFileWithinLimitMock).toHaveBeenCalledWith(
       path.join('/Users/alice/.warp/themes', 'linked.yaml'),
-      'utf-8'
+      1_000_000
     )
   })
 
@@ -254,7 +266,7 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
     expect(preview.themes).toHaveLength(1)
-    expect(readFileMock).toHaveBeenCalledTimes(1)
+    expect(readNodeFileWithinLimitMock).toHaveBeenCalledTimes(1)
   })
 
   it('applies the theme file cap globally across merged auto-discovery directories', async () => {
@@ -283,7 +295,7 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
     expect(preview.themes).toHaveLength(200)
-    expect(readFileMock).toHaveBeenCalledTimes(200)
+    expect(readNodeFileWithinLimitMock).toHaveBeenCalledTimes(200)
     expect(preview.skippedFiles).toContainEqual({
       label: 'Warp themes',
       reason: 'Only the first 200 theme files were scanned.'
@@ -312,9 +324,9 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
     expect(preview.themes).toHaveLength(200)
-    expect(readFileMock).not.toHaveBeenCalledWith(
+    expect(readNodeFileWithinLimitMock).not.toHaveBeenCalledWith(
       path.join('/Users/alice/.warp-preview/themes', 'preview.yaml'),
-      'utf-8'
+      1_000_000
     )
     expect(preview.skippedFiles).toContainEqual({
       label: 'Warp themes',
@@ -358,7 +370,10 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
     expect(preview.themes).toHaveLength(200)
-    expect(readFileMock).toHaveBeenCalledWith(path.join(previewDirectory, 'unique.yaml'), 'utf-8')
+    expect(readNodeFileWithinLimitMock).toHaveBeenCalledWith(
+      path.join(previewDirectory, 'unique.yaml'),
+      1_000_000
+    )
   })
 
   it('reports bounded skips when local Warp folders are unreadable', async () => {
@@ -466,10 +481,12 @@ describe('previewWarpThemeImport', () => {
   it('keeps same-basename manual file ids stable independent of dialog order', async () => {
     const firstPath = path.join('/Users/alice/light', 'duplicate.yaml')
     const secondPath = path.join('/Users/alice/dark', 'duplicate.yaml')
-    readFileMock.mockImplementation((filePath: string) =>
-      filePath === firstPath
-        ? VALID_THEME.replace("background: '#111111'", "background: '#222222'")
-        : VALID_THEME.replace("background: '#111111'", "background: '#333333'")
+    readNodeFileWithinLimitMock.mockImplementation((filePath: string) =>
+      fileRead(
+        filePath === firstPath
+          ? VALID_THEME.replace("background: '#111111'", "background: '#222222'")
+          : VALID_THEME.replace("background: '#111111'", "background: '#333333'")
+      )
     )
     showOpenDialogMock.mockResolvedValueOnce({
       canceled: false,
@@ -560,7 +577,7 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
     expect(preview.found).toBe(true)
-    expect(readFileMock.mock.calls.map(([filePath]) => filePath)).toEqual([
+    expect(readNodeFileWithinLimitMock.mock.calls.map(([filePath]) => filePath)).toEqual([
       path.join('/Users/alice/.warp/themes', 'standard', 'tokyo-night.yaml'),
       path.join('/Users/alice/.warp/themes', 'warp_bundled', 'dracula.yml')
     ])
@@ -711,8 +728,8 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'chooseFile' })
 
     expect(preview.themes).toHaveLength(200)
-    expect(readFileMock.mock.calls[0]?.[0]).toBe(themePaths[0])
-    expect(readFileMock.mock.calls.at(-1)?.[0]).toBe(themePaths[199])
+    expect(readNodeFileWithinLimitMock.mock.calls[0]?.[0]).toBe(themePaths[0])
+    expect(readNodeFileWithinLimitMock.mock.calls.at(-1)?.[0]).toBe(themePaths[199])
     expect(preview.skippedFiles).toContainEqual({
       label: 'Selected Warp themes',
       reason: 'Only the first 200 theme files were scanned.'
@@ -778,5 +795,42 @@ describe('previewWarpThemeImport', () => {
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
     expect(preview.skippedFiles).toEqual([{ label: 'private.yml', reason: 'Could not read file.' }])
+  })
+
+  it('accepts a theme at the exact byte limit', async () => {
+    const themePath = path.join('/Users/alice/.warp/themes', 'boundary.yml')
+    opendirMock.mockResolvedValue(mockDirectory([fileEntry('boundary.yml')]))
+    statMock.mockImplementation((filePath: string) =>
+      filePath === themePath ? { isFile: () => true, size: 1_000_000 } : mockStat(filePath)
+    )
+    readNodeFileWithinLimitMock.mockResolvedValue(fileRead(VALID_THEME, 1_000_000))
+
+    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
+
+    expect(preview.found).toBe(true)
+    expect(readNodeFileWithinLimitMock).toHaveBeenCalledWith(themePath, 1_000_000)
+    expect(parseWarpThemeYamlWithTimeoutMock).toHaveBeenCalledOnce()
+  })
+
+  it('rejects theme growth beyond the limit before parsing', async () => {
+    const themePath = path.join('/Users/alice/.warp/themes', 'growing.yml')
+    opendirMock.mockResolvedValue(mockDirectory([fileEntry('growing.yml')]))
+    statMock.mockImplementation((filePath: string) =>
+      filePath === themePath ? { isFile: () => true, size: 128 } : mockStat(filePath)
+    )
+    readNodeFileWithinLimitMock.mockRejectedValue(
+      new NodeFileReadTooLargeError(1_000_001, 1_000_000)
+    )
+
+    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
+
+    expect(preview.found).toBe(false)
+    expect(preview.skippedFiles).toEqual([
+      {
+        label: 'growing.yml',
+        reason: 'File is too large to import (1000001 bytes, limit 1000000).'
+      }
+    ])
+    expect(parseWarpThemeYamlWithTimeoutMock).not.toHaveBeenCalled()
   })
 })

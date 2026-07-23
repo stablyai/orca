@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: git status/discard/chunking behavior is verified together here to keep the command contract readable in one place. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
+import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
 import path from 'node:path'
 import {
   MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
@@ -61,6 +62,33 @@ vi.mock('fs/promises', () => ({
 vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
+
+vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => {
+  const actual = await importOriginal<typeof BoundedFileReader>()
+  return {
+    ...actual,
+    readNodeFileWithinLimit: async (filePath: string, maxBytes: number) => {
+      if (maxBytes === 64 * 1024) {
+        const value = await readFileMock(filePath)
+        const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
+        if (buffer.length > maxBytes) {
+          throw new actual.NodeFileReadTooLargeError(buffer.length, maxBytes)
+        }
+        return { buffer, stats: { isFile: () => true, size: buffer.length } }
+      }
+      const stats = await statMock(filePath)
+      if (stats.size > maxBytes) {
+        throw new actual.NodeFileReadTooLargeError(stats.size, maxBytes)
+      }
+      const value = await readFileMock(filePath)
+      const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
+      if (buffer.length > maxBytes) {
+        throw new actual.NodeFileReadTooLargeError(buffer.length, maxBytes)
+      }
+      return { buffer, stats }
+    }
+  }
+})
 
 import {
   abortMerge,

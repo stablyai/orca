@@ -9,6 +9,7 @@ import {
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
+import { NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES } from './native-chat-composer-scope-cache'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
@@ -110,6 +111,23 @@ describe('useNativeChatComposerAttachments', () => {
     expect(second.latest().imageAttachments).toMatchObject([
       { path: '/tmp/orca-native-chat-attach-test.png' }
     ])
+    act(() => second.root.unmount())
+  })
+
+  it('keeps an oversized attachment in the mounted view without retaining it', async () => {
+    const first = await renderProbe('pty-1')
+    const path = `${'x'.repeat(NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES)}.png`
+
+    await act(async () => {
+      first.latest().attachResolvedPaths([path])
+    })
+
+    expect(first.latest().imageAttachments).toMatchObject([{ path }])
+    expect(readNativeChatAttachmentCache('pty-1')).toEqual([])
+
+    act(() => first.root.unmount())
+    const second = await renderProbe('pty-1')
+    expect(second.latest().imageAttachments).toEqual([])
     act(() => second.root.unmount())
   })
 

@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { app } from 'electron'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 
 // Why: headless `orca serve` backs browser panes with offscreen BrowserWindows.
 // On Linux, Electron has no display platform without an X server and segfaults
@@ -12,6 +13,7 @@ const XVFB_STARTUP_TIMEOUT_MS = 5_000
 const XVFB_POLL_INTERVAL_MS = 50
 const VIRTUAL_DISPLAY_NUMBER = 99
 const VIRTUAL_DISPLAY = `:${VIRTUAL_DISPLAY_NUMBER}`
+export const X_DISPLAY_LOCK_MAX_BYTES = 64
 
 let xvfbProcess: ChildProcess | null = null
 
@@ -41,13 +43,8 @@ function isDisplayServerAlive(displayNumber: number): boolean {
     // No lock means no server claimed this display; the bare socket is stale.
     return false
   }
-  let pid: number
-  try {
-    pid = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10)
-  } catch {
-    return false
-  }
-  if (!Number.isInteger(pid) || pid <= 0) {
+  const pid = readXDisplayLockPid(lockPath)
+  if (pid === null) {
     return false
   }
   try {
@@ -56,6 +53,18 @@ function isDisplayServerAlive(displayNumber: number): boolean {
     return true
   } catch {
     return false
+  }
+}
+
+export function readXDisplayLockPid(lockPath: string): number | null {
+  try {
+    const raw = readNodeFileSyncWithinLimit(lockPath, X_DISPLAY_LOCK_MAX_BYTES)
+      .buffer.toString('utf8')
+      .trim()
+    const pid = Number.parseInt(raw, 10)
+    return Number.isInteger(pid) && pid > 0 ? pid : null
+  } catch {
+    return null
   }
 }
 

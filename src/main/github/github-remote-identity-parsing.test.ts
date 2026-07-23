@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseGitHubOwnerRepo, parseGitHubRemoteIdentity } from './github-remote-identity-parsing'
+import {
+  GITHUB_REMOTE_REPO_MAX_BYTES,
+  GITHUB_REMOTE_URL_MAX_BYTES,
+  parseGitHubOwnerRepo,
+  parseGitHubRemoteIdentity
+} from './github-remote-identity-parsing'
 
 describe('parseGitHubRemoteIdentity', () => {
+  it('rejects oversized remote URLs and identity fields before retention', () => {
+    expect(parseGitHubRemoteIdentity('x'.repeat(GITHUB_REMOTE_URL_MAX_BYTES + 1))).toBeNull()
+    expect(
+      parseGitHubRemoteIdentity(
+        `git@github.com:owner/${'r'.repeat(GITHUB_REMOTE_REPO_MAX_BYTES + 1)}.git`
+      )
+    ).toBeNull()
+  })
+
   it('parses a plain github.com https remote', () => {
     expect(parseGitHubRemoteIdentity('https://github.com/team/orca.git')).toEqual({
       host: 'github.com',

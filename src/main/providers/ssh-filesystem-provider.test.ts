@@ -63,20 +63,6 @@ describe('SshFilesystemProvider', () => {
     expect(provider.getConnectionId()).toBe('conn-1')
   })
 
-  describe('readDir', () => {
-    it('sends fs.readDir request', async () => {
-      const entries = [
-        { name: 'src', isDirectory: true, isSymlink: false },
-        { name: 'README.md', isDirectory: false, isSymlink: false }
-      ]
-      mux.request.mockResolvedValue(entries)
-
-      const result = await provider.readDir('/home/user/project')
-      expect(mux.request).toHaveBeenCalledWith('fs.readDir', { dirPath: '/home/user/project' })
-      expect(result).toEqual(entries)
-    })
-  })
-
   describe('readFile', () => {
     it('short-circuits on empty:true metadata without subscribing to chunks', async () => {
       mux.request.mockResolvedValue({ totalSize: 0, isBinary: false, empty: true })

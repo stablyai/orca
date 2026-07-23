@@ -3,8 +3,10 @@ import type { MarkdownDocument } from '../../../../shared/types'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   getMarkdownDocumentListRequestKey,
+  MARKDOWN_DOCUMENT_LIST_MAX_IN_FLIGHT,
   requestSharedMarkdownDocumentList
 } from './markdown-document-list-request'
+import { MarkdownDocumentListingCapacityError } from '../../../../shared/markdown-document-listing-limits'
 
 function context(overrides: Partial<RuntimeFileOperationArgs> = {}): RuntimeFileOperationArgs {
   return {
@@ -172,5 +174,30 @@ describe('shared Markdown document list requests', () => {
       []
     )
     expect(load).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects the first distinct scan beyond the global in-flight cap', async () => {
+    const pending = Array.from({ length: MARKDOWN_DOCUMENT_LIST_MAX_IN_FLIGHT }, () =>
+      deferred<MarkdownDocument[]>()
+    )
+    const load = vi.fn((_context: RuntimeFileOperationArgs, rootPath: string) => {
+      const index = Number(rootPath.slice('/route-'.length))
+      return pending[index].promise
+    })
+    const requests = pending.map((_entry, index) =>
+      requestSharedMarkdownDocumentList(context(), `/route-${index}`, {}, load)
+    )
+
+    await expect(
+      requestSharedMarkdownDocumentList(context(), '/one-too-many', {}, load)
+    ).rejects.toBeInstanceOf(MarkdownDocumentListingCapacityError)
+    expect(load).toHaveBeenCalledTimes(MARKDOWN_DOCUMENT_LIST_MAX_IN_FLIGHT)
+
+    for (const entry of pending) {
+      entry.resolve([])
+    }
+    await expect(Promise.all(requests)).resolves.toEqual(
+      Array.from({ length: MARKDOWN_DOCUMENT_LIST_MAX_IN_FLIGHT }, () => [])
+    )
   })
 })

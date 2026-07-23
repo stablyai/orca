@@ -231,7 +231,7 @@ export function mapIssue(issue: RawIssue): LinearIssueSummary {
     project: issue.project ?? null,
     cycle: issue.cycle ?? null,
     assignee: issue.assignee ?? null,
-    labels: issue.labels?.nodes ?? [],
+    labels: (issue.labels?.nodes ?? []).slice(0, 50),
     priority: issue.priority,
     estimate: issue.estimate,
     dueDate: issue.dueDate,

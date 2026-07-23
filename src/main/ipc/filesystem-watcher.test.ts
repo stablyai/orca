@@ -30,6 +30,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 import {
   closeAllWatchers,
   closeRemoteWatcherForWorktreePath,
+  LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY,
   registerFilesystemWatcherHandlers,
   restoreRemoteWatcherAfterFailedRemoval
 } from './filesystem-watcher'
@@ -43,6 +44,7 @@ import {
   WatcherChildCapacityError
 } from './parcel-watcher-child-registry'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
+import { FILESYSTEM_WATCHER_MAX_CLAIMS_PER_SENDER } from './filesystem-watcher-admission'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
 
@@ -92,6 +94,99 @@ describe('registerFilesystemWatcherHandlers', () => {
     )
 
     await closeAllWatchers()
+  })
+
+  it('rejects pending watcher churn at the sender cap and recovers after unwatch', async () => {
+    vi.useFakeTimers()
+    getSshFilesystemProviderMock.mockReturnValue(undefined)
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    for (let index = 0; index < FILESYSTEM_WATCHER_MAX_CLAIMS_PER_SENDER; index += 1) {
+      await handlers['fs:watchWorktree'](
+        { sender },
+        { worktreePath: `/missing/repo-${index}`, connectionId: 'conn-1' }
+      )
+    }
+    await expect(
+      handlers['fs:watchWorktree'](
+        { sender },
+        { worktreePath: '/missing/overflow', connectionId: 'conn-1' }
+      )
+    ).rejects.toThrow('Filesystem watcher capacity reached')
+
+    handlers['fs:unwatchWorktree'](
+      { sender },
+      { worktreePath: '/missing/repo-0', connectionId: 'conn-1' }
+    )
+    await expect(
+      handlers['fs:watchWorktree'](
+        { sender },
+        { worktreePath: '/missing/recovered', connectionId: 'conn-1' }
+      )
+    ).resolves.toBeUndefined()
+    await closeAllWatchers()
+    warn.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it.each([
+    ['at the limit', LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY],
+    ['above the limit', LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY + 1]
+  ])('bounds event directory stats %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    let started = 0
+    const releases: (() => void)[] = []
+    vi.mocked(stat).mockImplementation((filePath) => {
+      if (filePath === '/repo') {
+        return Promise.resolve({ isDirectory: () => true } as never)
+      }
+      started++
+      active++
+      peak = Math.max(peak, active)
+      return new Promise((resolve) => {
+        releases.push(() => {
+          active--
+          resolve({ isDirectory: () => false } as never)
+        })
+      })
+    })
+    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: vi.fn() } as never)
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/repo' })
+    const onEvents = vi.mocked(subscribeParcelWatcher).mock.calls[0][1] as (
+      error: Error | null,
+      events: { type: 'create'; path: string }[]
+    ) => void
+
+    vi.useFakeTimers()
+    onEvents(
+      null,
+      Array.from({ length: count }, (_, index) => ({
+        type: 'create',
+        path: `/repo/file-${index}`
+      }))
+    )
+    await vi.advanceTimersByTimeAsync(150)
+    expect(started).toBe(Math.min(count, LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY))
+    if (count > LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY) {
+      releases.shift()?.()
+      for (let turn = 0; turn < 5 && started < count; turn++) {
+        await Promise.resolve()
+      }
+      expect(started).toBe(count)
+    }
+    releases.splice(0).forEach((release) => release())
+
+    expect(peak).toBe(Math.min(count, LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY))
+    await vi.waitFor(() =>
+      expect(sender.send).toHaveBeenCalledWith(
+        'fs:changed',
+        expect.objectContaining({ events: expect.arrayContaining([expect.any(Object)]) })
+      )
+    )
+    vi.useRealTimers()
   })
 
   it('automatically retries a WSL watcher when child capacity becomes available', async () => {

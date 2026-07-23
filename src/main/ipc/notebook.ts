@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
+import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 
 export type NotebookRunResult = {
   stdout: string
@@ -16,9 +17,9 @@ const PYTHON_RUN_TIMEOUT_MS = 60_000
 const MAX_CAPTURE_BYTES = 2 * 1024 * 1024
 
 type BoundedCapture = {
-  text: string
-  bytes: number
+  buffer: GrowingByteBuffer
   truncated: boolean
+  truncationMarker: boolean
 }
 
 function pythonCandidates(): { command: string; argsPrefix: string[] }[] {
@@ -38,19 +39,23 @@ function appendBounded(capture: BoundedCapture, chunk: Buffer): void {
   if (capture.truncated) {
     return
   }
-  const remainingBytes = MAX_CAPTURE_BYTES - capture.bytes
+  const remainingBytes = MAX_CAPTURE_BYTES - capture.buffer.byteLength
   if (remainingBytes <= 0) {
     capture.truncated = true
     return
   }
   if (chunk.byteLength <= remainingBytes) {
-    capture.text += chunk.toString('utf8')
-    capture.bytes += chunk.byteLength
+    capture.buffer.append(chunk)
     return
   }
-  capture.text += `${chunk.subarray(0, remainingBytes).toString('utf8')}\n[output truncated]\n`
-  capture.bytes = MAX_CAPTURE_BYTES
+  capture.buffer.append(chunk.subarray(0, remainingBytes))
   capture.truncated = true
+  capture.truncationMarker = true
+}
+
+function boundedCaptureText(capture: BoundedCapture): string {
+  const text = capture.buffer.toString()
+  return capture.truncationMarker ? `${text}\n[output truncated]\n` : text
 }
 
 function terminateNotebookProcessTree(
@@ -117,8 +122,16 @@ async function runPythonCandidate(
   cwd: string
 ): Promise<NotebookRunResult> {
   return new Promise((resolve) => {
-    const stdout: BoundedCapture = { text: '', bytes: 0, truncated: false }
-    const stderr: BoundedCapture = { text: '', bytes: 0, truncated: false }
+    const stdout: BoundedCapture = {
+      buffer: new GrowingByteBuffer(),
+      truncated: false,
+      truncationMarker: false
+    }
+    const stderr: BoundedCapture = {
+      buffer: new GrowingByteBuffer(),
+      truncated: false,
+      truncationMarker: false
+    }
     let settled = false
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -162,8 +175,8 @@ async function runPythonCandidate(
       forceKillTimer = terminateNotebookProcessTree(child)
       finish(
         {
-          stdout: stdout.text,
-          stderr: stderr.text,
+          stdout: boundedCaptureText(stdout),
+          stderr: boundedCaptureText(stderr),
           exitCode: null,
           error: 'Python cell timed out.'
         },
@@ -178,12 +191,17 @@ async function runPythonCandidate(
       appendBounded(stderr, chunk)
     }
     const onError = (error: Error): void => {
-      finish({ stdout: stdout.text, stderr: stderr.text, exitCode: null, error: error.message })
+      finish({
+        stdout: boundedCaptureText(stdout),
+        stderr: boundedCaptureText(stderr),
+        exitCode: null,
+        error: error.message
+      })
     }
     const onClose = (exitCode: number | null): void => {
       finish({
-        stdout: stdout.text,
-        stderr: stderr.text,
+        stdout: boundedCaptureText(stdout),
+        stderr: boundedCaptureText(stderr),
         exitCode
       })
     }

@@ -14,12 +14,14 @@ export function createSharedControlSubscription<TResult>(args: {
   requestId: string
   method: string
   params: unknown
+  retainedParamsBytes: number
   callbacks: SharedControlSubscriptionCallbacks<TResult>
 }): SharedControlLogicalSubscription<TResult> {
   return {
     requestId: args.requestId,
     method: args.method,
     params: args.params,
+    retainedParamsBytes: args.retainedParamsBytes,
     callbacks: args.callbacks,
     sent: false,
     closed: false,

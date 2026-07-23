@@ -16,6 +16,7 @@ import type {
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 
@@ -23,6 +24,7 @@ const CLIENT_ID = randomUUID()
 const CLIENT_NAME = hostname() || 'This device'
 const SNAPSHOT_SCHEMA_VERSION = 1
 export const REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES = 64
+export const REMOTE_WORKSPACE_PATCH_CONCURRENCY = 4
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
 const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshot>()
@@ -420,8 +422,10 @@ export function registerRemoteWorkspaceHandlers(
           ) ?? []
 
       const workspaceSession = args.session ?? store.getWorkspaceSession()
-      const results = await Promise.all(
-        targets.map(async (target) => {
+      const results = await mapWithConcurrency(
+        targets,
+        REMOTE_WORKSPACE_PATCH_CONCURRENCY,
+        async (target) => {
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
           const session = exportSessionForTarget(store, target.id, workspaceSession)
@@ -429,7 +433,7 @@ export function registerRemoteWorkspaceHandlers(
             patchRemoteWorkspaceSession(target, session)
           )
           return result ? { targetId: target.id, result } : null
-        })
+        }
       )
       return results.filter(
         (entry): entry is { targetId: string; result: RemoteWorkspacePatchResult } => entry !== null

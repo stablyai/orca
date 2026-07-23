@@ -24,11 +24,11 @@ import {
   linearError,
   linearMessage
 } from './issue-context-errors'
+import { getFanoutClientEntries, type WorkspaceReadFailure } from './issue-context-fanout'
 import {
-  getFanoutClientEntries,
-  workspaceFailure,
-  type WorkspaceReadFailure
-} from './issue-context-fanout'
+  readLinearIssueWorkspaceFanout,
+  readLinearSearchWorkspaceFanout
+} from './issue-context-fanout-reads'
 import {
   ambiguousWorkspace,
   resolveWorkspaceSelector,
@@ -59,11 +59,10 @@ export async function searchLinearIssuesForAgents(args: {
     })
   }
 
-  const perWorkspace = await readSearchWorkspaces(
+  const perWorkspace = await readLinearSearchWorkspaceFanout(
     entries,
-    args.query,
-    limit + 1,
     workspaceId,
+    (entry) => readSearchWorkspace(entry, args.query, limit + 1, workspaceId),
     entryFailures
   )
   const merged = perWorkspace.results
@@ -77,8 +76,8 @@ export async function searchLinearIssuesForAgents(args: {
       workspaceId,
       limit,
       returned: limited.length,
-      limitReached: merged.length > limit,
-      partial: perWorkspace.failures.length > 0,
+      limitReached: perWorkspace.truncated || merged.length > limit,
+      partial: perWorkspace.truncated || perWorkspace.failures.length > 0,
       workspaceErrors: perWorkspace.failures.map(({ workspace, code, message }) => ({
         workspace,
         code,
@@ -106,9 +105,21 @@ export async function resolveIssue(
     })
   }
 
-  const results = await readIssueWorkspaces(entries, identifier, selection, entryFailures)
+  const issueFanout = await readLinearIssueWorkspaceFanout(
+    entries,
+    selection,
+    (entry) => readIssueWorkspace(entry, identifier),
+    entryFailures
+  )
+  const results = issueFanout.results
 
   if (results.length === 0) {
+    if (issueFanout.truncated) {
+      throw linearError(
+        'linear_partial',
+        'Linear issue lookup exceeded its aggregate result budget.'
+      )
+    }
     throw linearError('linear_issue_not_found', `Linear issue ${identifier} was not found.`)
   }
   if (results.length > 1) {
@@ -203,42 +214,6 @@ async function readIssueWorkspace(
   return response ? { issue: mapIssue(response), workspace: entry.workspace } : null
 }
 
-async function readIssueWorkspaces(
-  entries: LinearClientForWorkspace[],
-  identifier: string,
-  selection: string | 'all',
-  initialFailures: WorkspaceReadFailure[] = []
-): Promise<ResolvedIssue[]> {
-  if (selection !== 'all') {
-    const selected = await readIssueWorkspace(entries[0], identifier)
-    return selected ? [selected] : []
-  }
-
-  const settled = await Promise.allSettled(
-    entries.map((entry) => readIssueWorkspace(entry, identifier))
-  )
-  const results: ResolvedIssue[] = []
-  const failures: LinearAgentAccessError[] = initialFailures.map((failure) => failure.error)
-
-  for (const result of settled) {
-    if (result.status === 'fulfilled') {
-      if (result.value) {
-        results.push(result.value)
-      }
-      continue
-    }
-    if (result.reason instanceof LinearAgentAccessError) {
-      failures.push(result.reason)
-    }
-    console.warn('[linear] agent issue read failed:', result.reason)
-  }
-
-  if (results.length === 0 && failures[0]) {
-    throw failures[0]
-  }
-  return results
-}
-
 async function readSearchWorkspace(
   entry: LinearClientForWorkspace,
   query: string,
@@ -252,7 +227,7 @@ async function readSearchWorkspace(
         SEARCH_QUERY,
         { term: query, first: limit }
       )
-      return raw.data?.searchIssues?.nodes ?? []
+      return (raw.data?.searchIssues?.nodes ?? []).slice(0, limit)
     },
     workspaceId
   )
@@ -263,42 +238,4 @@ async function readSearchWorkspace(
       name: entry.workspace.organizationName
     }
   }))
-}
-
-async function readSearchWorkspaces(
-  entries: LinearClientForWorkspace[],
-  query: string,
-  limit: number,
-  workspaceId?: string | 'all',
-  initialFailures: WorkspaceReadFailure[] = []
-): Promise<{ results: LinearSearchIssueSummary[][]; failures: WorkspaceReadFailure[] }> {
-  if (workspaceId && workspaceId !== 'all') {
-    return {
-      results: [await readSearchWorkspace(entries[0], query, limit, workspaceId)],
-      failures: []
-    }
-  }
-
-  const settled = await Promise.allSettled(
-    entries.map(async (entry) => readSearchWorkspace(entry, query, limit, workspaceId))
-  )
-  const attemptedWorkspaceCount = entries.length + initialFailures.length
-  const results: LinearSearchIssueSummary[][] = []
-  const failures: WorkspaceReadFailure[] = [...initialFailures]
-  for (let index = 0; index < settled.length; index += 1) {
-    const result = settled[index]
-    if (result.status === 'fulfilled') {
-      results.push(result.value)
-      continue
-    }
-    if (result.reason instanceof LinearAgentAccessError) {
-      failures.push(workspaceFailure(entries[index].workspace, result.reason))
-    }
-    console.warn('[linear] agent search failed:', result.reason)
-  }
-
-  if (results.length === 0 && failures.length === attemptedWorkspaceCount && failures[0]) {
-    throw failures[0].error
-  }
-  return { results, failures }
 }

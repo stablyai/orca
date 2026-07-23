@@ -141,7 +141,7 @@ import {
   timeRendererStartupStep,
   timeRendererStartupSyncStep
 } from './startup/startup-diagnostics'
-import { reconnectSshTargetForRendererStartup } from './startup/ssh-startup-reconnect'
+import { reconnectSshTargetsForRendererStartup } from './startup/ssh-startup-reconnect'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
 import { getSystemPrefersDark } from './lib/terminal-theme'
@@ -978,26 +978,18 @@ function App(): React.JSX.Element {
               }
 
               // Why: treat timed-out eager targets as deferred so their PTYs reattach on tab focus (ssh.connect keeps running in main and likely finishes by then).
-              const timedOutTargets: string[] = []
-              await timeRendererStartupStep(
+              const timedOutTargets = await timeRendererStartupStep(
                 'ssh-reconnect',
                 () =>
-                  Promise.all(
-                    eagerTargets.map(async ({ targetId }) => {
-                      const result = await reconnectSshTargetForRendererStartup({
-                        targetId,
-                        timeoutMs: SSH_RECONNECT_TIMEOUT_MS,
-                        connect: (id) => window.api.ssh.connect({ targetId: id }),
-                        publishState: actions.setSshConnectionState,
-                        onFailure: (id, error) => {
-                          console.warn(`SSH auto-reconnect failed for ${id}:`, error)
-                        }
-                      })
-                      if (result.timedOut) {
-                        timedOutTargets.push(targetId)
-                      }
-                    })
-                  ),
+                  reconnectSshTargetsForRendererStartup({
+                    targetIds: eagerTargets.map((target) => target.targetId),
+                    timeoutMs: SSH_RECONNECT_TIMEOUT_MS,
+                    connect: (id) => window.api.ssh.connect({ targetId: id }),
+                    publishState: actions.setSshConnectionState,
+                    onFailure: (id, error) => {
+                      console.warn(`SSH auto-reconnect failed for ${id}:`, error)
+                    }
+                  }),
                 {
                   eagerTargets: eagerTargets.length,
                   deferredTargets: deferredTargets.length

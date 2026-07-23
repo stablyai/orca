@@ -1,13 +1,5 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
-import {
-  closeSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  realpathSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { closeSync, mkdirSync, openSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, normalize } from 'node:path'
 import {
   AGENT_SESSION_CLAIM_DIGEST_VERSION,
@@ -20,6 +12,7 @@ import {
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
 } from '../../shared/agent-session-resume'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 
 const COORDINATION_KEY_BYTES = 32
 const COORDINATION_KEY_FILE = 'agent-session-authority.key'
@@ -146,7 +139,7 @@ export function loadAgentSessionClaimSigner(
   mkdirSync(dirname(keyPath), { recursive: true })
   let key: Buffer
   try {
-    key = readFileSync(keyPath)
+    key = readNodeFileSyncWithinLimit(keyPath, COORDINATION_KEY_BYTES).buffer
   } catch {
     const candidate = randomBytes(COORDINATION_KEY_BYTES)
     let fd: number | null = null
@@ -155,7 +148,7 @@ export function loadAgentSessionClaimSigner(
       writeFileSync(fd, candidate)
       key = candidate
     } catch {
-      key = readFileSync(keyPath)
+      key = readNodeFileSyncWithinLimit(keyPath, COORDINATION_KEY_BYTES).buffer
     } finally {
       if (fd !== null) {
         closeSync(fd)

@@ -4,7 +4,6 @@
  */
 import * as path from 'node:path'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
 import type { GitExec } from './git-handler-ops'
 import type { RelayGitStreamExec } from './git-stdout-stream'
@@ -24,11 +23,16 @@ import {
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
 } from '../shared/git-status-line-stats-cache'
+import { readNodeFileWithinLimit } from '../shared/node-bounded-file-reader'
+
+const MAX_GIT_POINTER_FILE_BYTES = 64 * 1024
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
   try {
-    const contents = await readFile(dotGitPath, 'utf-8')
+    const contents = (
+      await readNodeFileWithinLimit(dotGitPath, MAX_GIT_POINTER_FILE_BYTES)
+    ).buffer.toString('utf-8')
     const match = contents.match(/^gitdir:\s*(.+)\s*$/m)
     if (match) {
       return path.resolve(worktreePath, match[1])

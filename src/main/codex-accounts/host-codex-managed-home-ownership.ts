@@ -1,5 +1,6 @@
-import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, lstatSync, realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { readAgentStateFileSync } from '../agent-state-file-reader'
 
 type HostCodexManagedHomeOwnershipOptions = {
   candidatePath: string
@@ -87,7 +88,7 @@ export function assertOwnedHostCodexManagedHomePath({
   if (!markerIsRegularFile) {
     throw new Error('Managed Codex home ownership marker is not a regular file.')
   }
-  const markerContents = readFileSync(markerPath, 'utf-8')
+  const markerContents = readAgentStateFileSync(markerPath)
   if (expectedAccountId !== undefined && markerContents.trim() !== expectedAccountId) {
     throw new Error('Managed Codex home ownership marker does not match its account ID.')
   }

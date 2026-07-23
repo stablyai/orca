@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
 
@@ -95,7 +96,7 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       }
       return null
     }
-    return (await response.json()) as T
+    return await readFetchResponseJsonWithinLimit<T>(response)
   } catch (error) {
     if (throwOnFailure) {
       throw error

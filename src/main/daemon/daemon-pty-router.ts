@@ -8,6 +8,10 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import {
+  collectPtyProcessListings,
+  PtyProcessListAdmission
+} from '../providers/pty-process-list-admission'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -49,10 +53,12 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async discoverLegacySessions(): Promise<void> {
+    const admission = new PtyProcessListAdmission()
     for (const adapter of this.legacy) {
       try {
         const sessions = await adapter.listProcesses()
-        for (const session of sessions) {
+        for (const rawSession of sessions) {
+          const session = admission.admit(rawSession)
           this.sessionAdapters.set(session.id, adapter)
         }
       } catch (error) {
@@ -210,10 +216,9 @@ export class DaemonPtyRouter implements IPtyProvider {
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
     // Why: runtime exact-stop/liveness flows must fail closed if any adapter
     // cannot provide a trustworthy process list.
-    const results = await Promise.all(
-      this.allAdapters().map((adapter) => adapter.listProcesses(opts))
+    return await collectPtyProcessListings(this.allAdapters(), (adapter) =>
+      adapter.listProcesses(opts)
     )
-    return results.flat()
   }
 
   async getDefaultShell(): Promise<string> {

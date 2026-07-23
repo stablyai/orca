@@ -313,9 +313,11 @@ describe('subscribeToDesktopNotifications', () => {
 
   // Why: notificationId is unique per completion, so the map grew unbounded when
   // the desktop never sent a dismiss (the remote-mobile case). It is now capped.
-  it('evicts the oldest scheduled entry once the cap is exceeded', async () => {
+  it('dismisses the oldest scheduled entry when reusing its bounded slot', async () => {
     setScheduledNotificationsMaxForTests(1)
     try {
+      vi.mocked(Notifications.scheduleNotificationAsync).mockReset()
+      vi.mocked(Notifications.dismissNotificationAsync).mockReset()
       vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
       vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
         status: 'granted',
@@ -341,16 +343,117 @@ describe('subscribeToDesktopNotifications', () => {
       onEvent?.({ type: 'notification', title: 't', body: 'b', notificationId: 'agent:new' })
       await flushAsync()
 
-      // The older entry was evicted by the cap: dismissing it is a no-op...
+      expect(Notifications.dismissNotificationAsync).toHaveBeenCalledWith('scheduled-old')
+
+      // The older entry was already dismissed during eviction, so a later desktop dismiss is a no-op...
       onEvent?.({ type: 'dismiss', notificationId: 'agent:old' })
       await flushAsync()
-      expect(Notifications.dismissNotificationAsync).not.toHaveBeenCalledWith('scheduled-old')
+      expect(Notifications.dismissNotificationAsync).toHaveBeenCalledTimes(1)
 
       // ...while the most-recent entry is retained and still dismissable.
       onEvent?.({ type: 'dismiss', notificationId: 'agent:new' })
       await flushAsync()
       expect(Notifications.dismissNotificationAsync).toHaveBeenCalledWith('scheduled-new')
     } finally {
+      setScheduledNotificationsMaxForTests()
+    }
+  })
+
+  it('keeps overload gaps replayable and advances after reconnect catches up', async () => {
+    setScheduledNotificationsMaxForTests(1)
+    const firstSchedule = makeDeferred<string>()
+    try {
+      vi.mocked(Notifications.scheduleNotificationAsync).mockReset()
+      vi.mocked(Notifications.dismissNotificationAsync).mockReset()
+      vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+      vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+        status: 'granted',
+        canAskAgain: true
+      } as never)
+      vi.mocked(Notifications.scheduleNotificationAsync)
+        .mockReturnValueOnce(firstSchedule.promise)
+        .mockResolvedValueOnce('scheduled-after-drain')
+        .mockResolvedValueOnce('scheduled-replayed')
+      vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
+      let onEvent: ((data: unknown) => void) | null = null
+      const client = {
+        subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
+          onEvent = callback
+          return vi.fn()
+        }),
+        getState: vi.fn(() => 'connected'),
+        sendRequest: vi.fn(async (method: string) => {
+          if (method === 'notifications.getMissedSince') {
+            return {
+              ok: true,
+              result: {
+                notifications: [
+                  {
+                    type: 'notification',
+                    title: 'two',
+                    body: 'two',
+                    notificationId: 'two',
+                    notificationSeq: 2
+                  },
+                  {
+                    type: 'notification',
+                    title: 'three',
+                    body: 'three',
+                    notificationId: 'three',
+                    notificationSeq: 3
+                  }
+                ]
+              }
+            } as never
+          }
+          return { ok: true, result: undefined } as never
+        })
+      } as unknown as RpcClient
+
+      subscribeToDesktopNotifications(client, 'host-hung')
+      onEvent?.({ type: 'ready', subscriptionId: 'sub-1' })
+      onEvent?.({
+        type: 'notification',
+        title: 'one',
+        body: 'one',
+        notificationId: 'one',
+        notificationSeq: 1
+      })
+      await flushAsync()
+      onEvent?.({
+        type: 'notification',
+        title: 'two',
+        body: 'two',
+        notificationId: 'two',
+        notificationSeq: 2
+      })
+      await flushAsync()
+      expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledOnce()
+      expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+
+      firstSchedule.resolve('scheduled-first')
+      await flushAsync()
+      onEvent?.({
+        type: 'notification',
+        title: 'three',
+        body: 'three',
+        notificationId: 'three',
+        notificationSeq: 3
+      })
+      await flushAsync()
+      expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(2)
+      expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+
+      onEvent?.({ type: 'ready', subscriptionId: 'sub-2' })
+      await flushAsync()
+      await flushAsync()
+      expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(3)
+      expect(AsyncStorage.setItem).toHaveBeenLastCalledWith(
+        'orca:mobileNotificationsLastSeq:host-hung',
+        '3'
+      )
+    } finally {
+      firstSchedule.resolve('scheduled-first')
       setScheduledNotificationsMaxForTests()
     }
   })

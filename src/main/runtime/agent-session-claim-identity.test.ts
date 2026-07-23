@@ -1,7 +1,11 @@
+import { closeSync, ftruncateSync, mkdtempSync, openSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   canonicalizeAgentSessionIdentity,
-  createEphemeralAgentSessionClaimSigner
+  createEphemeralAgentSessionClaimSigner,
+  loadAgentSessionClaimSigner
 } from './agent-session-claim-identity'
 
 describe('agent session claim identity', () => {
@@ -39,5 +43,18 @@ describe('agent session claim identity', () => {
     expect(() =>
       canonicalizeAgentSessionIdentity('blank', { key: 'session_id', id: 'session-1' })
     ).toThrow('agent_session_identity_required')
+  })
+
+  it('rejects an oversized persisted coordination key before reading it', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-claim-key-'))
+    try {
+      const descriptor = openSync(join(directory, 'agent-session-authority.key'), 'w')
+      ftruncateSync(descriptor, 1024 * 1024 * 1024)
+      closeSync(descriptor)
+
+      expect(() => loadAgentSessionClaimSigner(directory, 'profile-1')).toThrow()
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

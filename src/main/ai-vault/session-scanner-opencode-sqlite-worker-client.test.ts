@@ -4,6 +4,7 @@ import {
   IDLE_TEARDOWN_MS,
   LIST_TIMEOUT_MS,
   MAX_CONSECUTIVE_DEATHS,
+  MAX_PENDING_CALLS,
   OpenCodeSqliteWorkerClient,
   PARSE_TIMEOUT_MS
 } from './session-scanner-opencode-sqlite-worker-client'
@@ -120,6 +121,33 @@ describe('OpenCodeSqliteWorkerClient', () => {
     await expect(second).resolves.toBe('B')
     // The worker is reused across serial calls (one persistent worker).
     expect(workers).toHaveLength(1)
+  })
+
+  it('rejects overload beyond the bounded process-wide queue and recovers after draining', async () => {
+    const workers: FakeWorker[] = []
+    const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+    const admitted = Array.from({ length: MAX_PENDING_CALLS }, (_, index) =>
+      client.parse({ dbPath: `/db#${index}`, sessionId: `s${index}`, platform: 'darwin' })
+    )
+    const settled = admitted.map((promise) => promise.catch((error: unknown) => error))
+
+    await expect(
+      client.parse({ dbPath: '/db#overflow', sessionId: 'overflow', platform: 'darwin' })
+    ).rejects.toThrow(/256-request capacity/)
+    expect(workers[0]!.postedRequests).toHaveLength(1)
+
+    for (let index = 0; index < MAX_CONSECUTIVE_DEATHS; index += 1) {
+      workers.at(-1)!.emit('error', new Error(`drain ${index}`))
+    }
+    await Promise.all(settled)
+
+    const recovered = client.parse({
+      dbPath: '/db#recovered',
+      sessionId: 'recovered',
+      platform: 'darwin'
+    })
+    workers.at(-1)!.emit('message', { id: workers.at(-1)!.lastId(), ok: true, value: 'ok' })
+    await expect(recovered).resolves.toBe('ok')
   })
 
   it('times out only the active call, then respawns and drains the queue', async () => {

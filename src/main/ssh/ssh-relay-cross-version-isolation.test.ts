@@ -14,8 +14,10 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('fs', () => ({
-  existsSync: vi.fn().mockReturnValue(true),
-  readFileSync: vi.fn().mockReturnValue('0.1.0+v2hash')
+  existsSync: vi.fn().mockReturnValue(true)
+}))
+vi.mock('../../shared/relay-version-marker', () => ({
+  readRelayVersionMarkerSync: vi.fn().mockReturnValue('0.1.0+v2hash')
 }))
 
 vi.mock('./relay-protocol', () => ({

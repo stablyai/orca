@@ -1,6 +1,7 @@
 import type { ProjectRef } from './gl-utils'
 
 const projectRefInFlight = new Map<string, Promise<ProjectRef | null>>()
+export const PROJECT_REF_MAX_IN_FLIGHT = 32
 
 export function clearProjectRefInFlight(): void {
   projectRefInFlight.clear()
@@ -13,6 +14,9 @@ export async function runProjectRefProbeOnce(
   const inFlight = projectRefInFlight.get(cacheKey)
   if (inFlight) {
     return inFlight
+  }
+  if (projectRefInFlight.size >= PROJECT_REF_MAX_IN_FLIGHT) {
+    return createProbe()
   }
   const probe = createProbe()
   projectRefInFlight.set(cacheKey, probe)

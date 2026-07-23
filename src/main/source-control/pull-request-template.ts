@@ -1,8 +1,10 @@
-import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+
+export const MAX_HOSTED_REVIEW_TEMPLATE_BYTES = 1024 * 1024
 
 const PULL_REQUEST_TEMPLATE_CANDIDATES = [
   '.github/pull_request_template.md',
@@ -28,6 +30,11 @@ function getTemplateCandidates(provider?: HostedReviewProvider | null): string[]
   if (provider === 'gitlab') {
     return [...MERGE_REQUEST_TEMPLATE_CANDIDATES, ...PULL_REQUEST_TEMPLATE_CANDIDATES]
   }
+  if (provider === 'github') {
+    return PULL_REQUEST_TEMPLATE_CANDIDATES.filter(
+      (candidate) => !candidate.startsWith('.azuredevops/') && !candidate.startsWith('.gitea/')
+    )
+  }
   return PULL_REQUEST_TEMPLATE_CANDIDATES
 }
 
@@ -38,27 +45,54 @@ export async function readHostedPullRequestTemplate(
   return readHostedReviewTemplate(repoPath, connectionId)
 }
 
+export async function readGitLabMergeRequestTemplate(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<string> {
+  return readHostedReviewTemplateCandidates(
+    repoPath,
+    connectionId,
+    MERGE_REQUEST_TEMPLATE_CANDIDATES
+  )
+}
+
 export async function readHostedReviewTemplate(
   repoPath: string,
   connectionId?: string | null,
   provider?: HostedReviewProvider | null
 ): Promise<string> {
+  return readHostedReviewTemplateCandidates(repoPath, connectionId, getTemplateCandidates(provider))
+}
+
+async function readHostedReviewTemplateCandidates(
+  repoPath: string,
+  connectionId: string | null | undefined,
+  candidates: readonly string[]
+): Promise<string> {
   const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
   if (connectionId && !remoteProvider) {
     return ''
   }
-  for (const relativeCandidate of getTemplateCandidates(provider)) {
+  for (const relativeCandidate of candidates) {
     try {
       if (remoteProvider) {
         const result = await remoteProvider.readFile(
           joinWorktreeRelativePath(repoPath, relativeCandidate)
         )
-        if (result.isBinary) {
+        if (
+          result.isBinary ||
+          Buffer.byteLength(result.content, 'utf8') > MAX_HOSTED_REVIEW_TEMPLATE_BYTES
+        ) {
           continue
         }
         return result.content
       }
-      return await readFile(join(repoPath, relativeCandidate), 'utf8')
+      return (
+        await readNodeFileWithinLimit(
+          join(repoPath, relativeCandidate),
+          MAX_HOSTED_REVIEW_TEMPLATE_BYTES
+        )
+      ).buffer.toString('utf8')
     } catch {
       // Try the next conventional hosted-review template path.
     }

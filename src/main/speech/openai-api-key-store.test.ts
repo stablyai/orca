@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -83,6 +83,15 @@ describe('OpenAI speech API key store', () => {
 
     expect(store.hasOpenAiSpeechApiKey()).toBe(false)
     expect(existsSync(join(tempHome, '.orca'))).toBe(false)
+    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+  })
+
+  it('rejects an oversized sparse key file before decrypting it', async () => {
+    writeStoredOpenAiKey('x')
+    truncateSync(join(tempHome, '.orca', 'openai-speech-token.enc'), 1024 * 1024 + 1)
+    const store = await loadStoreModule()
+
+    expect(() => store.readOpenAiSpeechApiKey()).toThrow('could not be decrypted')
     expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
   })
 })

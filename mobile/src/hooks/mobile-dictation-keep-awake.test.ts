@@ -11,9 +11,11 @@ vi.mock('expo-keep-awake', () => ({
 }))
 
 import {
+  MOBILE_DICTATION_KEEP_AWAKE_MAX_TRACKED_TAGS,
   MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS,
   MobileDictationKeepAwakeOwner,
-  drainMobileDictationKeepAwakeCleanup
+  drainMobileDictationKeepAwakeCleanup,
+  resetMobileDictationKeepAwakeForTests
 } from './mobile-dictation-keep-awake'
 
 function deferred(): {
@@ -36,8 +38,31 @@ function deferred(): {
 
 describe('MobileDictationKeepAwakeOwner', () => {
   beforeEach(() => {
+    resetMobileDictationKeepAwakeForTests()
     keepAwake.activate.mockReset().mockResolvedValue(undefined)
     keepAwake.deactivate.mockReset().mockResolvedValue(undefined)
+  })
+
+  it('accepts the exact tracked-tag cap, rejects one over, and recovers after release', async () => {
+    const owners = Array.from(
+      { length: MOBILE_DICTATION_KEEP_AWAKE_MAX_TRACKED_TAGS },
+      () => new MobileDictationKeepAwakeOwner()
+    )
+    await Promise.all(owners.map((owner, index) => owner.acquire(`dictation-${index}`)))
+    expect(keepAwake.activate).toHaveBeenCalledTimes(MOBILE_DICTATION_KEEP_AWAKE_MAX_TRACKED_TAGS)
+
+    const oneOver = new MobileDictationKeepAwakeOwner()
+    await expect(oneOver.acquire('one-over')).rejects.toThrow(
+      'Too many dictation keep-awake operations are pending'
+    )
+    expect(keepAwake.activate).toHaveBeenCalledTimes(MOBILE_DICTATION_KEEP_AWAKE_MAX_TRACKED_TAGS)
+
+    await owners[0]!.release('dictation-0')
+    await expect(oneOver.reacquire('one-over')).resolves.toBeUndefined()
+    await Promise.all([
+      ...owners.slice(1).map((owner, index) => owner.release(`dictation-${index + 1}`)),
+      oneOver.release('one-over')
+    ])
   })
 
   it('retries a failed native deactivation after the hook owner is replaced', async () => {

@@ -1,4 +1,4 @@
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
@@ -6,9 +6,11 @@ import type { GitWorktreeInfo, Repo, WorktreeMeta } from '../shared/types'
 import { areWorktreePathsEqual } from './ipc/worktree-logic'
 import {
   gitFileProvesOrphanedWorktreeDirectory,
+  MAX_WORKTREE_GIT_POINTER_BYTES,
   type ReadPath,
   type StatPath
 } from './worktree-orphan-gitdir-proof'
+import { readNodeFileWithinLimit } from '../shared/node-bounded-file-reader'
 
 type PathOps = typeof posix
 
@@ -151,7 +153,8 @@ export async function canSafelyRemoveOrphanedWorktreeDirectory(
   worktreePath: string,
   repoPath: string,
   statPath: StatPath = lstat,
-  readPath: ReadPath = (path) => readFile(path, 'utf8')
+  readPath: ReadPath = async (path) =>
+    (await readNodeFileWithinLimit(path, MAX_WORKTREE_GIT_POINTER_BYTES)).buffer.toString('utf8')
 ): Promise<boolean> {
   if (isDangerousWorktreeRemovalPath(worktreePath, repoPath)) {
     return false

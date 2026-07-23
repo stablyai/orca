@@ -1,4 +1,4 @@
-import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, opendir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { app, ipcMain } from 'electron'
 import type {
@@ -79,29 +79,23 @@ export async function writeTerminalRenderDesyncEvidence(
 }
 
 async function pruneRenderDesyncEvidence(root: string, currentDirectory: string): Promise<void> {
-  const entries = await readdir(root, { withFileTypes: true })
-  const captures = await Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory())
-      .map(async (entry) => {
-        const directory = path.join(root, entry.name)
-        const [directoryStat, files] = await Promise.all([
-          stat(directory),
-          readdir(directory, { withFileTypes: true })
-        ])
-        const sizes = await Promise.all(
-          files.filter((file) => file.isFile()).map((file) => stat(path.join(directory, file.name)))
-        )
-        return {
-          directory,
-          bytes: sizes.reduce((total, file) => total + file.size, 0),
-          modifiedAt: directoryStat.mtimeMs
-        }
-      })
-  )
+  const captures: EvidenceCapture[] = []
+  const entries = await opendir(root)
+  for await (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue
+    }
+    captures.push(await inspectEvidenceCapture(path.join(root, entry.name)))
+    captures.sort((a, b) => a.modifiedAt - b.modifiedAt)
+    if (captures.length > MAX_CAPTURE_DIRECTORIES) {
+      const removableIndex = captures.findIndex((capture) => capture.directory !== currentDirectory)
+      const [capture] = captures.splice(Math.max(removableIndex, 0), 1)
+      await rm(capture.directory, { recursive: true, force: true })
+    }
+  }
   captures.sort((a, b) => a.modifiedAt - b.modifiedAt)
   let totalBytes = captures.reduce((total, capture) => total + capture.bytes, 0)
-  while (captures.length > MAX_CAPTURE_DIRECTORIES || totalBytes > MAX_EVIDENCE_BYTES) {
+  while (totalBytes > MAX_EVIDENCE_BYTES) {
     const removableIndex = captures.findIndex((capture) => capture.directory !== currentDirectory)
     const index = Math.max(removableIndex, 0)
     const [capture] = captures.splice(index, 1)
@@ -111,4 +105,24 @@ async function pruneRenderDesyncEvidence(root: string, currentDirectory: string)
       throw new Error('Render-desync evidence exceeds the aggregate storage budget')
     }
   }
+}
+
+type EvidenceCapture = {
+  directory: string
+  bytes: number
+  modifiedAt: number
+}
+
+async function inspectEvidenceCapture(directory: string): Promise<EvidenceCapture> {
+  const directoryStat = await stat(directory)
+  const files = await opendir(directory)
+  let bytes = 0
+  for await (const file of files) {
+    if (!file.isFile()) {
+      continue
+    }
+    const fileStat = await stat(path.join(directory, file.name))
+    bytes = Math.min(MAX_EVIDENCE_BYTES + 1, bytes + fileStat.size)
+  }
+  return { directory, bytes, modifiedAt: directoryStat.mtimeMs }
 }

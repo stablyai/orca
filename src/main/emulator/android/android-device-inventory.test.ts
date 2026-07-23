@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AndroidCommandResult, AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import {
+  ANDROID_AVD_NAME_LOOKUP_CONCURRENCY,
   findRunningAvdSerial,
   listAndroidDevices,
-  mergeAndroidDevices
+  mergeAndroidDevices,
+  resolveRunningAvdNames
 } from './android-device-inventory'
 import { parseAdbDevices } from './adb-devices'
 
@@ -87,5 +89,42 @@ describe('findRunningAvdSerial', () => {
     const running = parseAdbDevices('List of devices attached\nemulator-5554\tdevice')
     expect(await findRunningAvdSerial(fake, SDK, 'Pixel_7', running)).toBe('emulator-5554')
     expect(await findRunningAvdSerial(fake, SDK, 'Other', running)).toBeNull()
+  })
+
+  it.each([
+    ['at the limit', ANDROID_AVD_NAME_LOOKUP_CONCURRENCY],
+    ['above the limit', ANDROID_AVD_NAME_LOOKUP_CONCURRENCY + 1]
+  ])('bounds AVD name probes %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    let started = 0
+    const releases: (() => void)[] = []
+    const fake: AndroidCommandRunner = async (_binary, args) => {
+      started++
+      active++
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      active--
+      return ok(`${args[1]}\nOK`)
+    }
+    const running = parseAdbDevices(
+      `List of devices attached\n${Array.from(
+        { length: count },
+        (_, index) => `emulator-${index}\tdevice`
+      ).join('\n')}`
+    )
+
+    const result = resolveRunningAvdNames(fake, SDK, running)
+    await vi.waitFor(() =>
+      expect(started).toBe(Math.min(count, ANDROID_AVD_NAME_LOOKUP_CONCURRENCY))
+    )
+    if (count > ANDROID_AVD_NAME_LOOKUP_CONCURRENCY) {
+      releases.shift()?.()
+      await vi.waitFor(() => expect(started).toBe(count))
+    }
+    releases.splice(0).forEach((release) => release())
+
+    expect((await result).size).toBe(count)
+    expect(peak).toBe(Math.min(count, ANDROID_AVD_NAME_LOOKUP_CONCURRENCY))
   })
 })

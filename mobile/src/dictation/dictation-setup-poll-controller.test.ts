@@ -132,6 +132,27 @@ describe('DictationSetupPollController', () => {
     poller.dispose()
   })
 
+  it('shares one completion while repeated manual refreshes are pending', async () => {
+    const requests = [deferred<boolean>(), deferred<boolean>()]
+    const refresh = vi.fn(() => requests[refresh.mock.calls.length - 1].promise)
+    const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
+    poller.setPolling(true)
+    poller.setVisible(true)
+    poller.setForeground(true)
+
+    const completions = Array.from({ length: 1_000 }, () => poller.refreshNow())
+    expect(new Set(completions).size).toBe(1)
+    expect(refresh).toHaveBeenCalledOnce()
+
+    requests[0].resolve(true)
+    await flushPromises()
+    expect(refresh).toHaveBeenCalledTimes(2)
+
+    requests[1].resolve(false)
+    await expect(completions[0]).resolves.toBeUndefined()
+    poller.dispose()
+  })
+
   it('refreshes immediately when visibility or foreground eligibility resumes', async () => {
     const refresh = vi.fn().mockResolvedValue(true)
     const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)

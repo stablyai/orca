@@ -3,13 +3,13 @@ import {
   linkSync,
   lstatSync,
   mkdirSync,
-  readFileSync,
   readlinkSync,
   renameSync,
   rmSync,
   symlinkSync
 } from 'node:fs'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
+import { readAgentStateFileSync } from '../agent-state-file-reader'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
   listCodexSessionJsonlFiles,
@@ -334,7 +334,7 @@ function getLegacySessionCopyMarkerPath(relativePath: string): string {
 function readLegacyCopiedSessionMarker(relativePath: string): LegacyCopiedSessionMarker | null {
   try {
     const parsed: unknown = JSON.parse(
-      readFileSync(getLegacySessionCopyMarkerPath(relativePath), 'utf-8')
+      readAgentStateFileSync(getLegacySessionCopyMarkerPath(relativePath))
     )
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null

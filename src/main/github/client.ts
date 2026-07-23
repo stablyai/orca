@@ -34,7 +34,7 @@ import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
   sortWorkItemsByNumber
 } from '../../shared/work-items'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { sliceCheckLogTail } from './check-job-log-tail-slice'
@@ -43,8 +43,6 @@ import {
   safePRRefreshErrorMessage
 } from './pr-refresh-error-classification'
 import { getPRConflictSummary } from './conflict-summary'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import { splitRemoteBranchName } from '../../shared/git-effective-upstream'
 import {
   execFileAsync,
@@ -74,6 +72,9 @@ import {
 } from '../source-control/hosted-review-git-options'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
+import { readHostedReviewTemplate } from '../source-control/pull-request-template'
+import { cacheIdentityDigest } from '../cache-identity-digest'
+import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
 import {
   getGitHubApiRepositoryForRemote,
   getIssueGitHubApiRepository,
@@ -1773,41 +1774,6 @@ async function findOpenPRByHeadBase(args: {
   return { number: list[0].number, url: list[0].url }
 }
 
-async function readPullRequestTemplate(
-  repoPath: string,
-  connectionId?: string | null
-): Promise<string> {
-  const relativeCandidates = [
-    '.github/pull_request_template.md',
-    '.github/PULL_REQUEST_TEMPLATE.md',
-    'pull_request_template.md',
-    'PULL_REQUEST_TEMPLATE.md',
-    'docs/pull_request_template.md',
-    'docs/PULL_REQUEST_TEMPLATE.md'
-  ]
-  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-  if (connectionId && !remoteProvider) {
-    return ''
-  }
-  for (const relativeCandidate of relativeCandidates) {
-    try {
-      if (remoteProvider) {
-        const result = await remoteProvider.readFile(
-          joinWorktreeRelativePath(repoPath, relativeCandidate)
-        )
-        if (result.isBinary) {
-          continue
-        }
-        return result.content
-      }
-      return await readFile(join(repoPath, relativeCandidate), 'utf8')
-    } catch {
-      // Try the next conventional PR template path.
-    }
-  }
-  return ''
-}
-
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
@@ -1862,7 +1828,7 @@ export async function createGitHubPullRequest(
   try {
     const body =
       input.useTemplate && !input.body?.trim()
-        ? await readPullRequestTemplate(repoPath, connectionId)
+        ? await readHostedReviewTemplate(repoPath, connectionId, 'github')
         : (input.body ?? '')
     await writeFile(bodyPath, body, 'utf8')
     const createArgs = [
@@ -2216,7 +2182,7 @@ async function detectRepositoryMergeMetadata(
   branchName: string | undefined,
   ghOptions: GhExecOptions
 ): Promise<GitHubRepositoryMergeMetadata> {
-  const cacheKey = `${githubRepoIdentityKey(ownerRepo)}:${branchName ?? '__repo__'}`
+  const cacheKey = cacheIdentityDigest([githubRepoIdentityKey(ownerRepo), branchName ?? '__repo__'])
   pruneRepositoryMergeMetadataCache()
   const cached = repositoryMergeMetadataCache.get(cacheKey)
   if (cached) {
@@ -2390,11 +2356,16 @@ type TrackedUpstreamBranch = {
 
 const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
 const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 512
+export const TRACKED_UPSTREAM_SNAPSHOT_MAX_IN_FLIGHT = 32
+export const TRACKED_UPSTREAM_SNAPSHOT_MAX_BRANCHES = 4096
+export const TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024
+export const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_BYTES = 32 * 1024 * 1024
 
 type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
   gitConfigSignature?: string
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  retainedBytes: number
 }
 
 type TrackedUpstreamSnapshotProbeResult = {
@@ -2402,6 +2373,7 @@ type TrackedUpstreamSnapshotProbeResult = {
   gitConfigSignature?: string
   probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  retainedBytes: number
 }
 
 const trackedUpstreamSnapshotCache = new Map<string, TrackedUpstreamSnapshotCacheEntry>()
@@ -2410,6 +2382,16 @@ const trackedUpstreamSnapshotInFlight = new Map<
   Promise<TrackedUpstreamSnapshotProbeResult>
 >()
 const trackedUpstreamSnapshotGenerations = new Map<string, symbol>()
+let trackedUpstreamSnapshotCacheBytes = 0
+
+function deleteTrackedUpstreamSnapshot(cacheKey: string): void {
+  const cached = trackedUpstreamSnapshotCache.get(cacheKey)
+  if (!cached) {
+    return
+  }
+  trackedUpstreamSnapshotCacheBytes -= cached.retainedBytes
+  trackedUpstreamSnapshotCache.delete(cacheKey)
+}
 
 function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
   const generation = Symbol()
@@ -2427,16 +2409,19 @@ function finishTrackedUpstreamSnapshotProbe(cacheKey: string, generation: symbol
 function pruneTrackedUpstreamSnapshotCache(now: number): void {
   for (const [cacheKey, cached] of trackedUpstreamSnapshotCache) {
     if (cached.expiresAt <= now) {
-      trackedUpstreamSnapshotCache.delete(cacheKey)
+      deleteTrackedUpstreamSnapshot(cacheKey)
     }
   }
   // Why: workspace/runtime churn can create unbounded unique keys within one TTL window, so expiry sweeping alone isn't a memory bound.
-  while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
+  while (
+    trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES ||
+    trackedUpstreamSnapshotCacheBytes > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_BYTES
+  ) {
     const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
     if (oldestKey === undefined) {
       break
     }
-    trackedUpstreamSnapshotCache.delete(oldestKey)
+    deleteTrackedUpstreamSnapshot(oldestKey)
   }
 }
 
@@ -2456,6 +2441,7 @@ export function __resetTrackedUpstreamBranchCacheForTests(): void {
   trackedUpstreamSnapshotCache.clear()
   trackedUpstreamSnapshotInFlight.clear()
   trackedUpstreamSnapshotGenerations.clear()
+  trackedUpstreamSnapshotCacheBytes = 0
 }
 
 function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch | null {
@@ -2463,7 +2449,10 @@ function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch 
   if (!parsed) {
     return null
   }
-  return parsed
+  return {
+    remoteName: parsed.remoteName.replace(/$/u, ''),
+    branchName: parsed.branchName.replace(/$/u, '')
+  }
 }
 
 function shouldRetryTrackedUpstreamBranch(
@@ -2504,10 +2493,10 @@ async function getTrackedUpstreamBranch(
     ) {
       return cached.upstreamsByBranchName.get(branchName) ?? null
     }
-    trackedUpstreamSnapshotCache.delete(cacheKey)
+    deleteTrackedUpstreamSnapshot(cacheKey)
   }
   if (cached) {
-    trackedUpstreamSnapshotCache.delete(cacheKey)
+    deleteTrackedUpstreamSnapshot(cacheKey)
   }
 
   const inFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
@@ -2524,18 +2513,31 @@ async function getTrackedUpstreamBranch(
     }
   }
 
+  if (trackedUpstreamSnapshotInFlight.size >= TRACKED_UPSTREAM_SNAPSHOT_MAX_IN_FLIGHT) {
+    const result = await probeTrackedUpstreamSnapshot(
+      repoPath,
+      connectionId,
+      localGitOptions,
+      branchName
+    )
+    return result.upstreamsByBranchName.get(branchName) ?? null
+  }
+
   // Why: PR polling asks about hundreds of branches at once; read all upstreams in one git process per repo/runtime, not one probe per branch.
   const probeGeneration = beginTrackedUpstreamSnapshotProbe(cacheKey)
-  const probe = probeTrackedUpstreamSnapshot(repoPath, connectionId, localGitOptions)
+  const probe = probeTrackedUpstreamSnapshot(repoPath, connectionId, localGitOptions, branchName)
   trackedUpstreamSnapshotInFlight.set(cacheKey, probe)
   try {
     const result = await probe
     if (result.cacheable && trackedUpstreamSnapshotGenerations.get(cacheKey) === probeGeneration) {
+      deleteTrackedUpstreamSnapshot(cacheKey)
       trackedUpstreamSnapshotCache.set(cacheKey, {
         ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
+        retainedBytes: result.retainedBytes,
         expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
+      trackedUpstreamSnapshotCacheBytes += result.retainedBytes
       pruneTrackedUpstreamSnapshotCache(Date.now())
     }
     if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
@@ -2556,7 +2558,8 @@ async function getTrackedUpstreamBranch(
 async function probeTrackedUpstreamSnapshot(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: { wslDistro?: string } = {}
+  localGitOptions: { wslDistro?: string } = {},
+  requestedBranchName?: string
 ): Promise<TrackedUpstreamSnapshotProbeResult> {
   const startingGitConfigSignature = await readLocalGitConfigSignature({
     repoPath,
@@ -2566,8 +2569,10 @@ async function probeTrackedUpstreamSnapshot(
   const { probeFailed, upstreamsByBranchName } = await probeTrackedUpstreamBranches(
     repoPath,
     connectionId,
-    localGitOptions
+    localGitOptions,
+    requestedBranchName
   )
+  const retainedBytes = measureTrackedUpstreamSnapshotBytes(upstreamsByBranchName)
   const endingGitConfigSignature = await readLocalGitConfigSignature({
     repoPath,
     connectionId: connectionId ?? null,
@@ -2583,7 +2588,8 @@ async function probeTrackedUpstreamSnapshot(
     cacheable: !configSignatureChanged && !probeFailed,
     probeFailed,
     ...(gitConfigSignature ? { gitConfigSignature } : {}),
-    upstreamsByBranchName
+    upstreamsByBranchName,
+    retainedBytes
   }
 }
 
@@ -2626,13 +2632,14 @@ function getTrackedUpstreamBranchCacheKey(
   const runtimeKey = connectionId
     ? `ssh:${connectionId}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
-  return [runtimeKey, repoPath].join('\0')
+  return cacheIdentityDigest([runtimeKey, repoPath])
 }
 
 async function probeTrackedUpstreamBranches(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: { wslDistro?: string } = {}
+  localGitOptions: { wslDistro?: string } = {},
+  requestedBranchName?: string
 ): Promise<{
   probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
@@ -2648,27 +2655,104 @@ async function probeTrackedUpstreamBranches(
         })
     return {
       probeFailed: false,
-      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)
+      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout, requestedBranchName)
     }
   } catch {
     return { probeFailed: true, upstreamsByBranchName: new Map() }
   }
 }
 
-function parseTrackedUpstreamBranches(stdout: string): Map<string, TrackedUpstreamBranch | null> {
+function parseTrackedUpstreamBranches(
+  stdout: string,
+  requestedBranchName?: string
+): Map<string, TrackedUpstreamBranch | null> {
   const upstreamsByBranchName = new Map<string, TrackedUpstreamBranch | null>()
-  for (const line of stdout.split(/\r?\n/)) {
+  let retainedBytes = 0
+  let lineStart = 0
+  while (lineStart <= stdout.length) {
+    const newline = stdout.indexOf('\n', lineStart)
+    const lineEnd = newline === -1 ? stdout.length : newline
+    const line = stdout.slice(
+      lineStart,
+      lineEnd > lineStart && stdout[lineEnd - 1] === '\r' ? lineEnd - 1 : lineEnd
+    )
+    lineStart = newline === -1 ? stdout.length + 1 : newline + 1
     if (!line) {
       continue
     }
-    const [branchName, upstreamRef] = line.split('\0')
-    const localBranchName = branchName?.replace(/^refs\/heads\//, '')
+    const separator = line.indexOf('\0')
+    const branchName = separator === -1 ? line : line.slice(0, separator)
+    const upstreamRef = separator === -1 ? '' : line.slice(separator + 1)
+    const localBranchName = branchName.startsWith('refs/heads/')
+      ? branchName.slice('refs/heads/'.length)
+      : branchName
     if (!localBranchName) {
       continue
     }
-    upstreamsByBranchName.set(localBranchName, parseTrackedUpstreamRef(upstreamRef ?? ''))
+    const parsedUpstream = parseTrackedUpstreamRef(upstreamRef)
+    const entryBytes = measureTrackedUpstreamEntryBytes(localBranchName, parsedUpstream)
+    if (entryBytes === null) {
+      continue
+    }
+    const isRequested = localBranchName === requestedBranchName
+    while (
+      isRequested &&
+      upstreamsByBranchName.size > 0 &&
+      (upstreamsByBranchName.size >= TRACKED_UPSTREAM_SNAPSHOT_MAX_BRANCHES ||
+        retainedBytes + entryBytes > TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES)
+    ) {
+      const oldest = upstreamsByBranchName.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      retainedBytes -=
+        measureTrackedUpstreamEntryBytes(oldest, upstreamsByBranchName.get(oldest) ?? null) ?? 0
+      upstreamsByBranchName.delete(oldest)
+    }
+    if (
+      upstreamsByBranchName.size >= TRACKED_UPSTREAM_SNAPSHOT_MAX_BRANCHES ||
+      retainedBytes + entryBytes > TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES
+    ) {
+      continue
+    }
+    upstreamsByBranchName.set(localBranchName.replace(/$/u, ''), parsedUpstream)
+    retainedBytes += entryBytes
   }
   return upstreamsByBranchName
+}
+
+export function _parseTrackedUpstreamBranchesForTests(
+  stdout: string,
+  requestedBranchName?: string
+): Map<string, TrackedUpstreamBranch | null> {
+  return parseTrackedUpstreamBranches(stdout, requestedBranchName)
+}
+
+function measureTrackedUpstreamEntryBytes(
+  branchName: string,
+  upstream: TrackedUpstreamBranch | null
+): number | null {
+  let remainingBytes = TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES - 64
+  let bytes = 64
+  for (const value of [branchName, upstream?.remoteName ?? '', upstream?.branchName ?? '']) {
+    const measured = measureUtf8ByteLength(value, { stopAfterBytes: remainingBytes })
+    if (measured.exceededLimit) {
+      return null
+    }
+    remainingBytes -= measured.byteLength
+    bytes += measured.byteLength
+  }
+  return bytes <= TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES ? bytes : null
+}
+
+function measureTrackedUpstreamSnapshotBytes(
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+): number {
+  let bytes = 0
+  for (const [branchName, upstream] of upstreamsByBranchName) {
+    bytes += measureTrackedUpstreamEntryBytes(branchName, upstream) ?? 0
+  }
+  return bytes
 }
 
 function parseTrackedUpstreamRef(upstreamRef: string): TrackedUpstreamBranch | null {
@@ -3787,7 +3871,9 @@ async function attachFailedJobLogTails(
   // Why: cap log fetches so failed-job details stay a bounded follow-up, not a burst of hosted log downloads.
   for (const job of failedJobs) {
     const jobCacheKey = getCheckJobLogTailCacheKey(job)
-    const cacheKey = jobCacheKey ? `${githubRepoIdentityKey(ownerRepo)}:${jobCacheKey}` : null
+    const cacheKey = jobCacheKey
+      ? cacheIdentityDigest([githubRepoIdentityKey(ownerRepo), jobCacheKey])
+      : null
     if (!cacheKey) {
       continue
     }

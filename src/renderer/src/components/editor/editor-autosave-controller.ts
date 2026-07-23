@@ -43,8 +43,22 @@ import {
   type EditorPrepareHotExitDetail,
   type EditorSaveDirtyFilesDetail
 } from '../../../../shared/editor-save-events'
+import {
+  mapSettledWithConcurrency,
+  mapWithConcurrency
+} from '../../../../shared/map-with-concurrency'
 
 type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
+export const EDITOR_BULK_SAVE_CONCURRENCY = 4
+
+function throwFirstRejected(results: readonly PromiseSettledResult<unknown>[]): void {
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  )
+  if (failure) {
+    throw failure.reason
+  }
+}
 
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const autoSaveTimers = new Map<string, number>()
@@ -253,15 +267,18 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
-      await Promise.all(
-        dirtyFiles.map(async (file) => {
+      const saves = await mapSettledWithConcurrency(
+        dirtyFiles,
+        EDITOR_BULK_SAVE_CONCURRENCY,
+        async (file) => {
           const content = getLatestWritableContent(file)
           if (content === null) {
             throw new Error(`Missing editor buffer for ${file.relativePath}`)
           }
           await queueSave(file, content)
-        })
+        }
       )
+      throwFirstRejected(saves)
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))
@@ -278,7 +295,9 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       detail.claim()
 
       const initiallyDirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
-      await Promise.all(initiallyDirtyFiles.map((file) => quiesceFileSave(file.id)))
+      await mapWithConcurrency(initiallyDirtyFiles, EDITOR_BULK_SAVE_CONCURRENCY, (file) =>
+        quiesceFileSave(file.id)
+      )
 
       const state = store.getState()
       const dirtyFiles = state.openFiles.filter((file) => file.isDirty)
@@ -369,7 +388,9 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         ? store.getState().openFiles.filter((file) => file.id === detail.fileId)
         : getOpenFilesForExternalFileChange(store.getState().openFiles, detail)
 
-    await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
+    await mapWithConcurrency(matchingFiles, EDITOR_BULK_SAVE_CONCURRENCY, (file) =>
+      quiesceFileSave(file.id)
+    )
     detail.resolve()
   }
 

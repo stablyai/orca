@@ -439,6 +439,21 @@ describe('web keybindings preload API', () => {
 
     unsubscribe()
   })
+
+  it('caps keybinding listeners and releases their storage handlers on reinstall', async () => {
+    const { api, window } = await installApi('Linux')
+    const { installWebPreloadApi, WEB_PRELOAD_MAX_KEYBINDING_LISTENERS } =
+      await import('./web-preload-api')
+    for (let index = 0; index < WEB_PRELOAD_MAX_KEYBINDING_LISTENERS; index += 1) {
+      api.keybindings.onChanged(vi.fn())
+    }
+
+    expect(() => api.keybindings.onChanged(vi.fn())).toThrow('listener capacity reached')
+    installWebPreloadApi()
+
+    expect(window.removeEventListener).toHaveBeenCalledTimes(WEB_PRELOAD_MAX_KEYBINDING_LISTENERS)
+    expect(() => window.api.keybindings.onChanged(vi.fn())).not.toThrow()
+  })
 })
 
 describe('web settings preload API', () => {

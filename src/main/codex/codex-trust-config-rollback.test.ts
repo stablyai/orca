@@ -8,10 +8,13 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  truncateSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
+import { MAX_AGENT_STATE_FILE_BYTES } from '../agent-state-file-reader'
 import { captureCodexTrustConfig, restoreCodexTrustConfig } from './codex-trust-config-rollback'
 
 const roots: string[] = []
@@ -29,6 +32,15 @@ function tempConfigPath(): string {
 }
 
 describe('Codex trust config rollback', () => {
+  it('rejects a sparse config above 4 MiB without changing it', () => {
+    const configPath = tempConfigPath()
+    writeFileSync(configPath, '')
+    truncateSync(configPath, MAX_AGENT_STATE_FILE_BYTES + 1)
+
+    expect(() => captureCodexTrustConfig(configPath)).toThrow(NodeFileReadTooLargeError)
+    expect(statSync(configPath).size).toBe(MAX_AGENT_STATE_FILE_BYTES + 1)
+  })
+
   it('treats a missing config as absent and tolerates it remaining absent', () => {
     const configPath = tempConfigPath()
     const snapshot = captureCodexTrustConfig(configPath)

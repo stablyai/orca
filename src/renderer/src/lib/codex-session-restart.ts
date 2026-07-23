@@ -1,6 +1,9 @@
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+
+export const CODEX_PTY_INSPECTION_CONCURRENCY = 8
 
 function normalizeProcessName(processName: string | null): string | null {
   if (!processName) {
@@ -23,31 +26,20 @@ function isCodexForegroundProcess(processName: string | null): boolean {
 
 async function getLiveCodexSessionPtyIds(state: AppState): Promise<string[]> {
   const tabs = Object.values(state.tabsByWorktree).flat()
-  const checks = await Promise.all(
-    tabs.map(async (tab) => {
-      const ptyIds = state.ptyIdsByTabId[tab.id] ?? []
-      if (ptyIds.length === 0) {
-        return [] as string[]
-      }
+  const ptyIds = tabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
 
-      // Why: Codex sessions are not reliably discoverable from tab labels.
-      // Tabs keep fallback names until a CLI emits an OSC title, and Codex
-      // does not always do that. The foreground PTY process is the stable
-      // source of truth for whether this live tab is actually running Codex.
-      const foregroundProcesses = await Promise.all(
-        ptyIds.map((ptyId) =>
-          inspectRuntimeTerminalProcess(state.settings, ptyId).then(
-            (inspection) => inspection.foregroundProcess,
-            // Why: one stale remote pane must not hide restart notices for other confirmed Codex panes.
-            () => null
-          )
-        )
+  // Why: Codex sessions are not reliably discoverable from tab labels.
+  const foregroundProcesses = await mapWithConcurrency(
+    ptyIds,
+    CODEX_PTY_INSPECTION_CONCURRENCY,
+    (ptyId) =>
+      inspectRuntimeTerminalProcess(state.settings, ptyId).then(
+        (inspection) => inspection.foregroundProcess,
+        // Why: one stale remote pane must not hide notices for other confirmed Codex panes.
+        () => null
       )
-      return ptyIds.filter((_, index) => isCodexForegroundProcess(foregroundProcesses[index]))
-    })
   )
-
-  return checks.flat()
+  return ptyIds.filter((_, index) => isCodexForegroundProcess(foregroundProcesses[index]))
 }
 
 export async function markLiveCodexSessionsForRestart(args: {

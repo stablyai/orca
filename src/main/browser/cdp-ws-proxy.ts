@@ -3,11 +3,18 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
-import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
+import {
+  assertCdpPdfWithinMemoryLimit,
+  buildPrintToPdfOptions,
+  CdpPdfStreamStore
+} from './cdp-print-to-pdf'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
+import { BROWSER_PDF_BUSY_ERROR, startBrowserPdfPrint } from './browser-pdf-admission'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
+export const CDP_PROXY_MAX_MESSAGE_BYTES = 16 * 1024 * 1024
+export const CDP_PROXY_MAX_TCP_CONNECTIONS = 16
 
 export class CdpWsProxy {
   // Why: holds each session's last DOM.focus params to replay right before the next
@@ -40,7 +47,12 @@ export class CdpWsProxy {
     await this.attachDebugger()
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => this.handleHttpRequest(req, res))
-      this.wss = new WebSocketServer({ server: this.httpServer })
+      // Why: raw sockets that never upgrade must not bypass the proxy's single active WebSocket.
+      this.httpServer.maxConnections = CDP_PROXY_MAX_TCP_CONNECTIONS
+      this.wss = new WebSocketServer({
+        server: this.httpServer,
+        maxPayload: CDP_PROXY_MAX_MESSAGE_BYTES
+      })
       const failStart = (error: Error): void => {
         this.httpServer?.removeListener('error', onListenError)
         this.wss?.close()
@@ -635,8 +647,13 @@ export class CdpWsProxy {
       this.sendError(clientId, 'Browser tab is no longer available', client)
       return
     }
+    const print = startBrowserPdfPrint(this.webContents, buildPrintToPdfOptions(params))
+    if (!print) {
+      this.sendError(clientId, BROWSER_PDF_BUSY_ERROR, client)
+      return
+    }
     try {
-      const pdf = await this.webContents.printToPDF(buildPrintToPdfOptions(params))
+      const pdf = await print
       // Why: printToPDF can resolve after the client disconnected (or was
       // replaced). Bail before registering a stream so its buffer isn't
       // orphaned in pdfStreams past the disconnect's clear() until the TTL.
@@ -644,6 +661,7 @@ export class CdpWsProxy {
         return
       }
       const buffer = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf)
+      assertCdpPdfWithinMemoryLimit(buffer)
       if (params.transferMode === 'ReturnAsStream') {
         const handle = this.pdfStreams.create(buffer)
         this.sendResult(clientId, { data: '', stream: handle }, client)

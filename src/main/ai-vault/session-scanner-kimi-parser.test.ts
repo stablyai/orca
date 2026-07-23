@@ -209,6 +209,25 @@ describe('parseKimiSessionFile', () => {
     expect(assistantPreview.text.endsWith('...')).toBe(true)
   })
 
+  it('bounds many streamed assistant chunks before the preview is flushed', async () => {
+    const wireLines = Array.from({ length: 600 }, () => ({
+      type: 'context.append_loop_event',
+      event: { type: 'content.part', part: { type: 'text', text: 'x'.repeat(1024) } }
+    }))
+    wireLines.push({
+      type: 'context.append_loop_event',
+      event: { type: 'step.end', part: { type: 'text', text: '' } }
+    })
+    const { file } = await writeKimiSession({ wireLines })
+
+    const session = await parseKimiSessionFile(file, 'darwin')
+
+    expect(session?.messageCount).toBe(1)
+    expect(session?.previewMessages).toEqual([
+      { role: 'assistant', text: `${'x'.repeat(217)}...`, timestamp: null }
+    ])
+  })
+
   it('falls back to lastPrompt when the title is empty', async () => {
     const { file } = await writeKimiSession({
       state: {

@@ -22,8 +22,11 @@ const homedirMock = vi.fn(() => '/home/test')
 
 vi.mock('node:fs', () => ({
   existsSync: existsSyncMock,
-  readFileSync: readFileSyncMock,
   rmSync: rmSyncMock
+}))
+
+vi.mock('../integration-credential-file', () => ({
+  readIntegrationCredentialFileSync: readFileSyncMock
 }))
 
 vi.mock('node:os', () => ({

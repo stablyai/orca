@@ -1,6 +1,13 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs'
-import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import { writeSecureJsonFile } from '../../shared/secure-file'
+import { existsSync, rmSync } from 'node:fs'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import {
+  getRuntimeMetadataPath,
+  MAX_RUNTIME_METADATA_FILE_BYTES,
+  parseRuntimeMetadataJson,
+  type RuntimeMetadata
+} from '../../shared/runtime-bootstrap'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
+import { writeSecureFile } from '../../shared/secure-file'
 
 export function writeRuntimeMetadata(userDataPath: string, metadata: RuntimeMetadata): void {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
@@ -12,7 +19,11 @@ export function readRuntimeMetadata(userDataPath: string): RuntimeMetadata | nul
   if (!existsSync(metadataPath)) {
     return null
   }
-  return JSON.parse(readFileSync(metadataPath, 'utf-8')) as RuntimeMetadata
+  return parseRuntimeMetadataJson(
+    readNodeFileSyncWithinLimit(metadataPath, MAX_RUNTIME_METADATA_FILE_BYTES).buffer.toString(
+      'utf8'
+    )
+  )
 }
 
 export function clearRuntimeMetadata(userDataPath: string): void {
@@ -52,5 +63,6 @@ export function clearRuntimeMetadataIfOwned(
 }
 
 function writeMetadataFile(path: string, metadata: RuntimeMetadata): void {
-  writeSecureJsonFile(path, metadata)
+  const { serialized } = stringifyJsonWithinByteLimit(metadata, MAX_RUNTIME_METADATA_FILE_BYTES, 2)
+  writeSecureFile(path, serialized)
 }

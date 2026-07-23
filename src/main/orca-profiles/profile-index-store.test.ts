@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  truncateSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -168,6 +176,40 @@ describe('profile index store', () => {
     const recovered = store.getOrcaProfileListState()
     expect(recovered.profiles.map((profile) => profile.id)).toContain(created.profile.id)
     expect(recovered.profiles.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('recovers an oversized sparse profile index from the backup copy', async () => {
+    const store = await loadProfileIndexStore()
+    store.ensureActiveOrcaProfile()
+    const created = store.createLocalOrcaProfile({ name: 'Work' })
+    store.setActiveOrcaProfile(created.profile.id)
+    const indexPath = store.getOrcaProfileIndexPath()
+    truncateSync(indexPath, store.MAX_ORCA_PROFILE_INDEX_FILE_BYTES + 1)
+
+    expect(store.getOrcaProfileListState().profiles.map((profile) => profile.id)).toContain(
+      created.profile.id
+    )
+  })
+
+  it('rejects an oversized profile index without changing the primary or backup', async () => {
+    const store = await loadProfileIndexStore()
+    store.ensureActiveOrcaProfile()
+    store.createLocalOrcaProfile({ name: 'Work' })
+    const indexPath = store.getOrcaProfileIndexPath()
+    const primaryBefore = readFileSync(indexPath, 'utf-8')
+    const backupBefore = readFileSync(`${indexPath}.bak`, 'utf-8')
+    const oversized = store.readProfileIndex(indexPath)!
+    oversized.profiles[0] = {
+      ...oversized.profiles[0],
+      name: 'x'.repeat(store.MAX_ORCA_PROFILE_INDEX_FILE_BYTES)
+    }
+
+    expect(() => store.writeProfileIndex(indexPath, oversized)).toThrow(
+      `JSON output exceeds ${store.MAX_ORCA_PROFILE_INDEX_FILE_BYTES} bytes`
+    )
+    expect(readFileSync(indexPath, 'utf-8')).toBe(primaryBefore)
+    expect(readFileSync(`${indexPath}.bak`, 'utf-8')).toBe(backupBefore)
+    expect(existsSync(`${indexPath}.tmp`)).toBe(false)
   })
 
   it('rejects profile ids that are not safe path segments', async () => {

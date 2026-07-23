@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as childProcessModule from 'node:child_process'
 import type * as fsModule from 'node:fs'
+import type * as boundedFileReaderModule from '../../shared/node-bounded-file-reader'
 
-const { sessionFromPartitionMock, dialogShowOpenDialogMock } = vi.hoisted(() => ({
-  sessionFromPartitionMock: vi.fn(),
-  dialogShowOpenDialogMock: vi.fn()
-}))
+const { sessionFromPartitionMock, dialogShowOpenDialogMock, boundedLocalStateReadMock } =
+  vi.hoisted(() => ({
+    sessionFromPartitionMock: vi.fn(),
+    dialogShowOpenDialogMock: vi.fn(),
+    boundedLocalStateReadMock: vi.fn<(filePath: string) => string>()
+  }))
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: vi.fn() },
@@ -13,10 +16,30 @@ vi.mock('electron', () => ({
   session: { fromPartition: sessionFromPartitionMock }
 }))
 
+vi.mock('../../shared/node-bounded-file-reader', async () => {
+  const actual = await vi.importActual<typeof boundedFileReaderModule>(
+    '../../shared/node-bounded-file-reader'
+  )
+  return {
+    ...actual,
+    readNodeFileSyncWithinLimit: (filePath: string, maxBytes: number) => {
+      const buffer = Buffer.from(boundedLocalStateReadMock(filePath))
+      if (buffer.byteLength > maxBytes) {
+        throw new actual.NodeFileReadTooLargeError(buffer.byteLength, maxBytes)
+      }
+      return { buffer, stats: { size: buffer.byteLength } }
+    }
+  }
+})
+
 import { BROWSER_FAMILY_LABELS } from '../../shared/constants'
 
 function slashPath(pathValue: string): string {
   return pathValue.replaceAll('\\', '/')
+}
+
+function mockLocalState(value: unknown): void {
+  boundedLocalStateReadMock.mockReturnValue(JSON.stringify(value))
 }
 
 describe('detectInstalledBrowsers — Helium', () => {
@@ -30,6 +53,10 @@ describe('detectInstalledBrowsers — Helium', () => {
     vi.resetModules()
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     process.env.HOME = '/Users/test'
+    boundedLocalStateReadMock.mockReset()
+    boundedLocalStateReadMock.mockImplementation(() => {
+      throw new Error('ENOENT')
+    })
   })
 
   afterEach(() => {
@@ -39,6 +66,7 @@ describe('detectInstalledBrowsers — Helium', () => {
   })
 
   it('detects Helium under its bundle-id data dir via the legacy Cookies path', async () => {
+    mockLocalState({ profile: { info_cache: { Default: { name: 'Default' } } } })
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
       return {
@@ -93,6 +121,14 @@ describe('detectInstalledBrowsers — Helium', () => {
   })
 
   it('enumerates all Helium profiles from Local State info_cache', async () => {
+    mockLocalState({
+      profile: {
+        info_cache: {
+          Default: { name: 'Personal' },
+          'Profile 1': { name: 'Work' }
+        }
+      }
+    })
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
       return {

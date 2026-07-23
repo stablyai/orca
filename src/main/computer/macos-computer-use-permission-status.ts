@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -13,8 +13,14 @@ import {
   resolveMacOSComputerUseExecutablePath
 } from './macos-native-provider-paths'
 import { RuntimeClientError } from './runtime-client-error'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileWithinLimit
+} from '../../shared/node-bounded-file-reader'
+import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 
 const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
+export const PERMISSION_STATUS_MAX_BYTES = 64 * 1024
 
 export function getComputerUsePermissionStatus(): Promise<ComputerUsePermissionStatusResult> {
   return getComputerUsePermissionStatusAsync()
@@ -86,10 +92,22 @@ async function readPermissionStatusFromHelperApp(
 
     for (let attempt = 0; attempt < 50; attempt++) {
       if (await fileExists(statusPath)) {
-        const output = await readFile(statusPath, 'utf8')
-        return JSON.parse(output) as Partial<
-          Record<ComputerUsePermissionId, ComputerUsePermissionStatus>
-        >
+        try {
+          const output = (
+            await readNodeFileWithinLimit(statusPath, PERMISSION_STATUS_MAX_BYTES)
+          ).buffer.toString('utf8')
+          return JSON.parse(output) as Partial<
+            Record<ComputerUsePermissionId, ComputerUsePermissionStatus>
+          >
+        } catch (error) {
+          if (error instanceof NodeFileReadTooLargeError) {
+            throw new RuntimeClientError(
+              'accessibility_error',
+              'Permission helper returned too much status data'
+            )
+          }
+          throw error
+        }
       }
       await delay(100)
     }
@@ -108,16 +126,41 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
         stdio: ['ignore', 'pipe', 'pipe']
       }
     )
-    let stdout = ''
-    let stderr = ''
+    const stdout = new GrowingByteBuffer()
+    const stderr = new GrowingByteBuffer()
+    let outputBytes = 0
 
     launch.stdout?.setEncoding('utf8')
     launch.stderr?.setEncoding('utf8')
     const onStdoutData = (chunk: string): void => {
-      stdout += chunk
+      const bytes = Buffer.from(chunk)
+      outputBytes += bytes.byteLength
+      if (outputBytes > PERMISSION_STATUS_MAX_BYTES) {
+        launch.kill()
+        settleReject(
+          new RuntimeClientError(
+            'accessibility_error',
+            'Permission helper returned too much launch output'
+          )
+        )
+        return
+      }
+      stdout.append(bytes)
     }
     const onStderrData = (chunk: string): void => {
-      stderr += chunk
+      const bytes = Buffer.from(chunk)
+      outputBytes += bytes.byteLength
+      if (outputBytes > PERMISSION_STATUS_MAX_BYTES) {
+        launch.kill()
+        settleReject(
+          new RuntimeClientError(
+            'accessibility_error',
+            'Permission helper returned too much launch output'
+          )
+        )
+        return
+      }
+      stderr.append(bytes)
     }
     let settled = false
     let launchTimeout: ReturnType<typeof setTimeout> | null = null
@@ -137,6 +180,8 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
       }
       settled = true
       removeListeners()
+      stdout.clear()
+      stderr.clear()
       resolve()
     }
     const settleReject = (error: Error): void => {
@@ -145,6 +190,8 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
       }
       settled = true
       removeListeners()
+      stdout.clear()
+      stderr.clear()
       reject(error)
     }
     const onError = (): void => {
@@ -160,7 +207,8 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
         settleResolve()
         return
       }
-      const detail = stderr.trim() || stdout.trim() || `exit ${status ?? 'unknown'}`
+      const detail =
+        stderr.toString().trim() || stdout.toString().trim() || `exit ${status ?? 'unknown'}`
       settleReject(
         new RuntimeClientError('accessibility_error', `Could not check permissions: ${detail}`)
       )

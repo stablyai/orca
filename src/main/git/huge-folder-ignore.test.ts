@@ -84,6 +84,35 @@ describe('appendFolderToGitignore', () => {
     expect(wrote).toBe(false)
   })
 
+  it('streams a large single-line file while preserving append semantics', async () => {
+    const gitignorePath = path.join(dir, '.gitignore')
+    await fs.writeFile(gitignorePath, 'x')
+    await fs.truncate(gitignorePath, 8 * 1024 * 1024)
+
+    expect(await appendFolderToGitignore(dir, 'dist')).toBe(true)
+
+    const handle = await fs.open(gitignorePath, 'r')
+    try {
+      const info = await handle.stat()
+      const tail = Buffer.alloc(7)
+      await handle.read(tail, 0, tail.length, info.size - tail.length)
+      expect(tail.toString('utf8')).toBe('\ndist/\n')
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('preserves trimmed-line matching across streamed chunks', async () => {
+    const gitignorePath = path.join(dir, '.gitignore')
+    await fs.writeFile(gitignorePath, 'x')
+    await fs.truncate(gitignorePath, 8 * 1024 * 1024)
+    await fs.appendFile(gitignorePath, '\n\u00a0node_modules/\u00a0\n')
+    const sizeBefore = (await fs.stat(gitignorePath)).size
+
+    expect(await appendFolderToGitignore(dir, 'node_modules')).toBe(false)
+    expect((await fs.stat(gitignorePath)).size).toBe(sizeBefore)
+  })
+
   it('rejects folder names outside the known allowlist (injection guard)', async () => {
     await expect(appendFolderToGitignore(dir, 'node_modules\n/etc/passwd')).rejects.toThrow(
       /Refusing to add/

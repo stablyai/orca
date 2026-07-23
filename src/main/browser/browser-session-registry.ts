@@ -2,17 +2,11 @@
 import { app, session } from 'electron'
 import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   getOrcaProfileBrowserDefaultPartition,
@@ -46,6 +40,9 @@ export type BrowserSessionRegistryProfileOptions = {
 }
 
 const BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
+export const MAX_BROWSER_SESSION_META_FILE_BYTES = 1024 * 1024
+export const MAX_BROWSER_SESSION_PROFILES = 256
+export const MAX_BROWSER_SESSION_LABEL_BYTES = 16 * 1024
 const LEGACY_BROWSER_SESSION_PARTITION_RE =
   /^persist:orca-browser-session-[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/
 
@@ -103,8 +100,12 @@ class BrowserSessionRegistry {
     try {
       const existing = this.loadPersistedMeta()
       const tmpPath = `${this.metadataPath}.tmp`
+      const serialized = stringifyJsonWithinByteLimit(
+        { ...existing, ...updates },
+        MAX_BROWSER_SESSION_META_FILE_BYTES
+      ).serialized
       mkdirSync(dirname(this.metadataPath), { recursive: true })
-      writeFileSync(tmpPath, JSON.stringify({ ...existing, ...updates }))
+      writeFileSync(tmpPath, serialized)
       renameSync(tmpPath, this.metadataPath)
     } catch {
       // best-effort
@@ -126,7 +127,10 @@ class BrowserSessionRegistry {
 
   private loadPersistedMeta(): BrowserSessionMeta {
     try {
-      const raw = readFileSync(this.metadataPath, 'utf-8')
+      const raw = readNodeFileSyncWithinLimit(
+        this.metadataPath,
+        MAX_BROWSER_SESSION_META_FILE_BYTES
+      ).buffer.toString('utf8')
       const data = JSON.parse(raw)
       const legacyUserAgent = typeof data?.userAgent === 'string' ? data.userAgent : null
       const userAgentByPartition: Record<string, string> =
@@ -340,7 +344,11 @@ class BrowserSessionRegistry {
 
   createProfile(scope: BrowserSessionProfileScope, label: string): BrowserSessionProfile | null {
     // Why: block scope:'default' here — only the constructor makes the default profile; a second one sharing the partition breaks delete.
-    if (scope === 'default') {
+    if (
+      scope === 'default' ||
+      Buffer.byteLength(label, 'utf8') > MAX_BROWSER_SESSION_LABEL_BYTES ||
+      this.profiles.size >= MAX_BROWSER_SESSION_PROFILES
+    ) {
       return null
     }
     const id = randomUUID()

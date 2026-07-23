@@ -64,6 +64,8 @@ import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from '../../shared/ssh-types'
+import { powerShellReadRelayMarkerAssignment } from './ssh-relay-bounded-marker-commands'
+import { windowsRelayTailLogCommand } from './ssh-windows-log-tail-command'
 
 export type RelayDeployResult = {
   transport: MultiplexerTransport
@@ -1164,7 +1166,7 @@ async function readWindowsActiveRelayEndpoint(
     conn,
     hostPlatform,
     powerShellCommand(
-      `if (Test-Path -LiteralPath ${powerShellLiteral(markerPath)} -PathType Leaf) { Get-Content -LiteralPath ${powerShellLiteral(markerPath)} -Raw -ErrorAction SilentlyContinue }`
+      `${powerShellReadRelayMarkerAssignment(markerPath)}; if ($null -ne $orcaMarkerValue) { [Console]::Out.Write($orcaMarkerValue) }`
     ),
     { signal }
   ).catch(() => {
@@ -1517,15 +1519,4 @@ function windowsRelayWaitCommand(
       powerShellLiteral(String(opts.intervalMs))
     ].join(' ')
   )
-}
-
-function windowsRelayTailLogCommand(logFile: string, errFile: string): string {
-  const script = [
-    `$out = if (Test-Path -LiteralPath ${powerShellLiteral(logFile)}) { Get-Content -LiteralPath ${powerShellLiteral(logFile)} -Tail 20 -ErrorAction SilentlyContinue } else { '(no stdout log)' }`,
-    `$err = if (Test-Path -LiteralPath ${powerShellLiteral(errFile)}) { Get-Content -LiteralPath ${powerShellLiteral(errFile)} -Tail 20 -ErrorAction SilentlyContinue } else { '(no stderr log)' }`,
-    'Write-Output $out',
-    "Write-Output '--- stderr ---'",
-    'Write-Output $err'
-  ].join('; ')
-  return powerShellCommand(script)
 }

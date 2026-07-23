@@ -1,5 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { AGENT_HOOK_CONFIG_MAX_BYTES } from '../agent-hooks/agent-hook-file-limits'
 import { isPlainObject, type HooksConfig } from '../agent-hooks/installer-utils'
 
 /** Devin documents config.json as JSONC; stock JSON.parse rejects comments. */
@@ -9,7 +11,10 @@ export function readDevinHooksConfig(configPath: string): HooksConfig | null {
   }
 
   try {
-    const text = readFileSync(configPath, 'utf-8')
+    const text = readNodeFileSyncWithinLimit(
+      configPath,
+      AGENT_HOOK_CONFIG_MAX_BYTES
+    ).buffer.toString('utf8')
     return parseDevinHooksConfigText(text, 'Devin config.json')
   } catch {
     return null

@@ -6,8 +6,7 @@ import React, {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
-  useSyncExternalStore
+  useState
 } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -85,6 +84,12 @@ import {
 } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
+import { createCombinedDiffLoadScheduler } from '@/components/editor/combined-diff-load-scheduler'
+import {
+  COMBINED_DIFF_VIEW_STATE_CACHE_MAX_ENTRIES,
+  retainCombinedDiffSectionText,
+  retainCombinedDiffViewStateText
+} from '@/components/editor/combined-diff-text-retention'
 import {
   MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
   MAX_RENDERED_DIFF_LINES_PER_SIDE,
@@ -163,10 +168,18 @@ import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
+import { emitGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
 import {
-  emitGitHubWorkItemDetailsCacheMutation,
-  onGitHubWorkItemDetailsCacheMutation
-} from '@/lib/github-work-item-details-cache-events'
+  WORK_ITEM_DETAILS_FRESH_MS,
+  WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
+  getWorkItemDetailsCacheEntry,
+  getWorkItemDetailsCacheGeneration,
+  getWorkItemDetailsCacheKey,
+  invalidateWorkItemDetailsCacheByMatch,
+  invalidateWorkItemDetailsCacheForKey,
+  touchWorkItemDetailsCache,
+  useWorkItemDetailsCacheEntry
+} from '@/lib/github-work-item-details-cache'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import {
   canUseGitHubRepoContext,
@@ -1452,102 +1465,12 @@ function isPRFileViewed(file: GitHubPRFile): boolean {
   return file.viewerViewedState === 'VIEWED'
 }
 
-// SWR cache: reopening a drawer paints cached data instantly while a background refetch reconciles. See docs/gh-work-item-drawer-cache.md.
-const WORK_ITEM_DETAILS_CACHE_MAX = 50
-const WORK_ITEM_DETAILS_FRESH_MS = 30_000
-const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for this GitHub item.'
-type WorkItemDetailsCacheEntry = {
-  details: GitHubWorkItemDetails | null
-  fetchedAt: number
-  pending?: Promise<GitHubWorkItemDetails | null>
-  error?: string
-}
-const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
-
-// Why: useSyncExternalStore snapshot stability relies on every cache write replacing the entry object identity (delete+set).
-const workItemDetailsCacheListeners = new Set<() => void>()
-function subscribeWorkItemDetailsCache(listener: () => void): () => void {
-  workItemDetailsCacheListeners.add(listener)
-  return () => {
-    workItemDetailsCacheListeners.delete(listener)
-  }
-}
-function notifyWorkItemDetailsCache(): void {
-  for (const listener of workItemDetailsCacheListeners) {
-    listener()
-  }
-}
-
-function getWorkItemDetailsCacheKey(args: {
-  repoPath: string
-  repoId: string
-  issueSourcePreference: string | undefined
-  sourceCacheScope?: string | null
-  type: 'issue' | 'pr'
-  number: number
-}): string {
-  // Why: `\0` separator avoids collisions between key fields that may contain `:` or `/`.
-  const keyParts = args.sourceCacheScope
-    ? [args.repoId, args.sourceCacheScope, args.issueSourcePreference ?? 'auto', args.type]
-    : [args.repoId, args.issueSourcePreference ?? 'auto', args.type]
-  return [...keyParts, args.number].join('\0')
-}
-
-function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
-  // Why: re-insert moves the key to MRU; Map insertion order keeps the oldest key first when evicting.
-  workItemDetailsCache.delete(key)
-  workItemDetailsCache.set(key, entry)
-  while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
-    const oldest = workItemDetailsCache.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    workItemDetailsCache.delete(oldest)
-  }
-  notifyWorkItemDetailsCache()
-}
-
-// Exposed so mutation handlers can drop a stale entry after a local mutation (cross-window invalidation arrives via the `gh:workItemMutated` listener below).
-export function invalidateWorkItemDetailsCacheForKey(key: string): void {
-  // Why: bump generation so an in-flight fetch launched before this invalidation won't write its stale result back.
-  workItemDetailsCacheGeneration += 1
-  const existed = workItemDetailsCache.delete(key)
-  if (existed) {
-    notifyWorkItemDetailsCache()
-  }
-}
-
-// Why: monotonic counter so an in-flight refetch that started before a mutation detects its result is stale and skips the write-back.
-let workItemDetailsCacheGeneration = 0
-
-// Why: without the exact key (cross-window events carry only repoPath+number+type), drop every entry matching that tuple regardless of source preference.
-function invalidateWorkItemDetailsCacheByMatch(args: {
-  repoPath: string
-  repoId?: string
-  type: 'issue' | 'pr'
-  number: number
-}): void {
-  const suffix = `\0${args.type}\0${args.number}`
-  const prefix = `${args.repoId ?? args.repoPath}\0`
-  let removed = false
-  for (const key of Array.from(workItemDetailsCache.keys())) {
-    if (key.startsWith(prefix) && key.endsWith(suffix)) {
-      workItemDetailsCache.delete(key)
-      removed = true
-    }
-  }
-  if (removed) {
-    workItemDetailsCacheGeneration += 1
-    notifyWorkItemDetailsCache()
-  }
-}
-
 function patchCachedPRFileViewedState(
   cacheKey: string,
   path: string,
   viewerViewedState: GitHubPRFileViewedState
 ): GitHubPRFileViewedState | undefined {
-  const prev = workItemDetailsCache.get(cacheKey)
+  const prev = getWorkItemDetailsCacheEntry(cacheKey)
   const files = prev?.details?.files
   if (!prev?.details || !files) {
     return undefined
@@ -1572,7 +1495,7 @@ function patchCachedPRFileViewedState(
 }
 
 function patchCachedPRChecks(cacheKey: string, checks: PRCheckDetail[]): void {
-  const prev = workItemDetailsCache.get(cacheKey)
+  const prev = getWorkItemDetailsCacheEntry(cacheKey)
   if (!prev?.details) {
     return
   }
@@ -1588,7 +1511,7 @@ function patchCachedPRReviewRequests(
   cacheKey: string,
   reviewRequests: GitHubAssignableUser[]
 ): void {
-  const prev = workItemDetailsCache.get(cacheKey)
+  const prev = getWorkItemDetailsCacheEntry(cacheKey)
   if (!prev?.details) {
     return
   }
@@ -1604,7 +1527,7 @@ function patchCachedPRReviewRequests(
 }
 
 function patchCachedWorkItemBody(cacheKey: string, body: string): void {
-  const prev = workItemDetailsCache.get(cacheKey)
+  const prev = getWorkItemDetailsCacheEntry(cacheKey)
   if (!prev?.details) {
     return
   }
@@ -1613,29 +1536,6 @@ function patchCachedWorkItemBody(cacheKey: string, body: string): void {
     details: { ...prev.details, body },
     fetchedAt: Date.now(),
     error: undefined
-  })
-}
-
-// Install once at module load (all dialogs share the cache); track the unsubscribe so Vite HMR doesn't accumulate listeners across reloads.
-let workItemMutatedUnsub: (() => void) | undefined
-let workItemDetailsCacheEventUnsub: (() => void) | undefined
-if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
-  workItemMutatedUnsub = window.api.gh.onWorkItemMutated((payload) => {
-    invalidateWorkItemDetailsCacheByMatch({
-      repoPath: payload.repoPath,
-      repoId: payload.repoId,
-      type: payload.type,
-      number: payload.number
-    })
-  })
-  workItemDetailsCacheEventUnsub = onGitHubWorkItemDetailsCacheMutation((payload) => {
-    invalidateWorkItemDetailsCacheByMatch(payload)
-  })
-}
-if (typeof import.meta !== 'undefined' && import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    workItemMutatedUnsub?.()
-    workItemDetailsCacheEventUnsub?.()
   })
 }
 
@@ -2339,14 +2239,48 @@ function PRFilesCombinedDiffViewer({
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
+  const protectedSectionKeysRef = useRef<ReadonlySet<string>>(new Set())
   const generationRef = useRef(0)
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
+  const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
+  const loadSchedulerRef = useRef(
+    createCombinedDiffLoadScheduler({
+      loadSection: (index) => loadSectionRef.current(index),
+      // Why: keep hosted fetch latency responsive without stacking a PR worth of response bodies.
+      maxConcurrent: 2
+    })
+  )
+  const applySectionTextRetention = useCallback(
+    (nextSections: DiffSection[], additionallyProtectedKey?: string): DiffSection[] => {
+      const protectedSectionKeys = new Set(protectedSectionKeysRef.current)
+      if (additionallyProtectedKey) {
+        protectedSectionKeys.add(additionallyProtectedKey)
+      }
+      const retained = retainCombinedDiffSectionText({
+        sections: nextSections,
+        loadedIndices: loadedIndicesRef.current,
+        protectedSectionKeys
+      })
+      for (const index of retained.evictedIndices) {
+        loadedIndicesRef.current.delete(index)
+      }
+      return retained.sections
+    },
+    []
+  )
   sectionsRef.current = sections
+
+  useEffect(() => {
+    const scheduler = loadSchedulerRef.current
+    scheduler.reset()
+    return () => scheduler.dispose()
+  }, [])
 
   useEffect(() => {
     // Why: bump generation so stale async diff loads from the previous view can't patch the restored sections.
     generationRef.current += 1
+    loadSchedulerRef.current.reset()
     const cached = prFilesDiffViewStateCache.get(viewStateKey)
     if (cached && cached.entrySignature === entrySignature) {
       const restoredSections = cached.sections
@@ -2389,10 +2323,10 @@ function PRFilesCombinedDiffViewer({
     )
   }, [entries, entrySignature, viewStateKey])
 
-  const loadSection = useCallback(
-    (index: number) => {
+  const loadSectionNow = useCallback(
+    async (index: number) => {
       const section = sectionsRef.current[index]
-      if (!section || section.collapsed) {
+      if (!section || section.collapsed || !protectedSectionKeysRef.current.has(section.key)) {
         return
       }
       if (loadedIndicesRef.current.has(index) || loadingIndicesRef.current.has(index)) {
@@ -2449,74 +2383,86 @@ function PRFilesCombinedDiffViewer({
         return { result: getPRFileDiffResult(contents), resultContents: contents }
       }
 
-      load()
-        .catch((error) => ({
-          result: {
-            kind: 'text',
-            originalContent: '',
-            modifiedContent: '',
-            originalIsBinary: false,
-            modifiedIsBinary: false
-          } as GitDiffResult,
-          resultContents: undefined,
-          error: error instanceof Error ? error.message : 'Failed to load diff.'
-        }))
-        .then(({ result, resultContents, error }) => {
-          loadingIndicesRef.current.delete(index)
-          if (generationRef.current !== generation) {
-            return
-          }
-          const largeDiffRenderLimit =
-            !error && result.kind === 'text' && resultContents
-              ? getPRFileContentsRenderLimit(resultContents)
-              : null
-          const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
-          const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
-          loadedIndicesRef.current.add(index)
-          setSections((prev) =>
-            prev.map((current, currentIndex) =>
-              currentIndex === index
-                ? {
-                    ...current,
-                    diffResult: storedResult,
-                    originalContent: storedContent.originalContent,
-                    modifiedContent: storedContent.modifiedContent,
-                    loading: false,
-                    error,
-                    largeDiffRenderLimit
-                  }
-                : current
-            )
-          )
-        })
-    },
-    [baseSha, fileByPath, headSha, prNumber, prRepo, repoId, repoPath, sourceContext]
-  )
-
-  const retrySection = useCallback(
-    (index: number) => {
-      loadedIndicesRef.current.delete(index)
+      const { result, resultContents, error } = await load().catch((error) => ({
+        result: {
+          kind: 'text',
+          originalContent: '',
+          modifiedContent: '',
+          originalIsBinary: false,
+          modifiedIsBinary: false
+        } as GitDiffResult,
+        resultContents: undefined,
+        error: error instanceof Error ? error.message : 'Failed to load diff.'
+      }))
       loadingIndicesRef.current.delete(index)
-      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
-      setSections((prev) =>
-        prev.map((section, sectionIndex) =>
-          sectionIndex === index
+      if (generationRef.current !== generation) {
+        return
+      }
+      const largeDiffRenderLimit =
+        !error && result.kind === 'text' && resultContents
+          ? getPRFileContentsRenderLimit(resultContents)
+          : null
+      const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
+      const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
+      loadedIndicesRef.current.add(index)
+      setSections((prev) => {
+        const nextSections = prev.map((current, currentIndex) =>
+          currentIndex === index
             ? {
-                ...section,
-                diffResult: null,
-                originalContent: '',
-                modifiedContent: '',
-                loading: true,
-                error: undefined,
-                largeDiffRenderLimit: null
+                ...current,
+                diffResult: storedResult,
+                originalContent: storedContent.originalContent,
+                modifiedContent: storedContent.modifiedContent,
+                loading: false,
+                error,
+                largeDiffRenderLimit
               }
-            : section
+            : current
         )
-      )
-      loadSection(index)
+        return applySectionTextRetention(nextSections, nextSections[index]?.key)
+      })
     },
-    [loadSection]
+    [
+      applySectionTextRetention,
+      baseSha,
+      fileByPath,
+      headSha,
+      prNumber,
+      prRepo,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
   )
+  loadSectionRef.current = loadSectionNow
+
+  const loadSection = useCallback((index: number) => {
+    if (!sectionsRef.current[index]?.collapsed) {
+      loadSchedulerRef.current.request(index)
+    }
+  }, [])
+
+  const retrySection = useCallback((index: number) => {
+    loadedIndicesRef.current.delete(index)
+    loadingIndicesRef.current.delete(index)
+    setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
+    setSections((prev) =>
+      prev.map((section, sectionIndex) =>
+        sectionIndex === index
+          ? {
+              ...section,
+              diffResult: null,
+              originalContent: '',
+              modifiedContent: '',
+              loading: true,
+              error: undefined,
+              largeDiffRenderLimit: null
+            }
+          : section
+      )
+    )
+    loadSchedulerRef.current.rerequest(index)
+  }, [])
 
   const toggleSection = useCallback(
     (index: number) => {
@@ -2533,17 +2479,11 @@ function PRFilesCombinedDiffViewer({
     [loadSection]
   )
 
-  const setAllSectionsCollapsed = useCallback(
-    (collapsed: boolean) => {
-      setSections((prev) => prev.map((section) => ({ ...section, collapsed })))
-      if (!collapsed) {
-        window.requestAnimationFrame(() => {
-          sectionsRef.current.forEach((_, index) => loadSection(index))
-        })
-      }
-    },
-    [loadSection]
-  )
+  const setAllSectionsCollapsed = useCallback((collapsed: boolean) => {
+    // Why: expanded virtual rows load on mount; prefetching every offscreen file
+    // can queue an entire large PR's response bodies before retention runs.
+    setSections((prev) => prev.map((section) => ({ ...section, collapsed })))
+  }, [])
 
   const allSectionsCollapsed = sections.length > 0 && sections.every((section) => section.collapsed)
   const sectionIndexByKey = useMemo(() => createCombinedDiffSectionIndexMap(sections), [sections])
@@ -2582,6 +2522,18 @@ function PRFilesCombinedDiffViewer({
         : `${index}:${entrySignature}`
     }
   })
+  const protectedSectionKeys = [
+    ...virtualizer
+      .getVirtualItems()
+      .map((item) => sections[item.index]?.key)
+      .filter((key): key is string => key !== undefined),
+    ...(activeTreeSectionKey ? [activeTreeSectionKey] : [])
+  ]
+  protectedSectionKeysRef.current = new Set(protectedSectionKeys)
+  const protectedSectionSignature = protectedSectionKeys.join('\0')
+  useLayoutEffect(() => {
+    setSections((current) => applySectionTextRetention(current))
+  }, [applySectionTextRetention, protectedSectionSignature, sections])
 
   useLayoutEffect(() => {
     virtualizer.measure()
@@ -2593,18 +2545,24 @@ function PRFilesCombinedDiffViewer({
     }
     const preservedScrollTop =
       prFilesDiffScrollTopCache.get(viewStateKey) ?? scrollContainerRef.current?.scrollTop ?? 0
-    setWithLRU(prFilesDiffViewStateCache, viewStateKey, {
-      entrySignature,
-      sections,
-      sectionHeights,
-      loadedIndices: Array.from(loadedIndicesRef.current).filter(
-        (index) => !sections[index]?.loading
-      ),
-      scrollTop: preservedScrollTop,
-      sideBySide,
-      fileTreeCollapsed,
-      activeTreeSectionKey
-    })
+    setWithLRU(
+      prFilesDiffViewStateCache,
+      viewStateKey,
+      {
+        entrySignature,
+        sections,
+        sectionHeights,
+        loadedIndices: Array.from(loadedIndicesRef.current).filter(
+          (index) => !sections[index]?.loading
+        ),
+        scrollTop: preservedScrollTop,
+        sideBySide,
+        fileTreeCollapsed,
+        activeTreeSectionKey
+      },
+      COMBINED_DIFF_VIEW_STATE_CACHE_MAX_ENTRIES
+    )
+    retainCombinedDiffViewStateText(prFilesDiffViewStateCache)
   }, [
     activeTreeSectionKey,
     entries.length,
@@ -6619,14 +6577,8 @@ export default function PullRequestPage({
     }
   }, [workItem])
 
-  // Why: subscribe to the module cache so reopening a cached item paints synchronously; writes replace entry identity (delete+set), so Map.get is a stable snapshot.
-  const cachedEntry = useSyncExternalStore(
-    subscribeWorkItemDetailsCache,
-    useCallback(
-      () => (detailsCacheKey ? workItemDetailsCache.get(detailsCacheKey) : undefined),
-      [detailsCacheKey]
-    )
-  )
+  // Why: rejected oversized results stay local to the mounted page without re-entering retention.
+  const cachedEntry = useWorkItemDetailsCacheEntry(detailsCacheKey)
 
   // Why: bumped on cold open (no cached details) so the details memo re-runs and surfaces the optimistic comment via the loading shell; cache-notify handles the warm case.
   const [optimisticTick, setOptimisticTick] = useState(0)
@@ -6680,7 +6632,7 @@ export default function PullRequestPage({
     }
     prevItemIdRef.current = workItem.id
 
-    const cached = workItemDetailsCache.get(detailsCacheKey)
+    const cached = getWorkItemDetailsCacheEntry(detailsCacheKey)
     const now = Date.now()
     const hasFreshData = cached?.details && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
 
@@ -6700,7 +6652,7 @@ export default function PullRequestPage({
       })
 
     // Why: snapshot the generation so a mid-flight invalidation (generation advance) blocks writing a stale result back.
-    const launchedAtGeneration = workItemDetailsCacheGeneration
+    const launchedAtGeneration = getWorkItemDetailsCacheGeneration()
 
     if (!cached?.pending) {
       touchWorkItemDetailsCache(detailsCacheKey, {
@@ -6713,8 +6665,8 @@ export default function PullRequestPage({
 
     inflight
       .then((result) => {
-        const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
-        const prev = workItemDetailsCache.get(detailsCacheKey)
+        const invalidatedMidFlight = getWorkItemDetailsCacheGeneration() !== launchedAtGeneration
+        const prev = getWorkItemDetailsCacheEntry(detailsCacheKey)
         if (invalidatedMidFlight && prev?.pending !== inflight) {
           // Why: entry was deliberately dropped (or later repopulated) — don't recreate or clobber it.
           return
@@ -6742,8 +6694,8 @@ export default function PullRequestPage({
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : 'Failed to load details'
-        const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
-        const prev = workItemDetailsCache.get(detailsCacheKey)
+        const invalidatedMidFlight = getWorkItemDetailsCacheGeneration() !== launchedAtGeneration
+        const prev = getWorkItemDetailsCacheEntry(detailsCacheKey)
         if (invalidatedMidFlight && prev?.pending !== inflight) {
           return
         }
@@ -6854,7 +6806,7 @@ export default function PullRequestPage({
       optimisticCommentsRef.current.push(comment)
       // Why: write through the shared cache so subscribers re-render; fetchedAt=0 forces a background refresh next open for server-side fields.
       if (detailsCacheKey) {
-        const prev = workItemDetailsCache.get(detailsCacheKey)
+        const prev = getWorkItemDetailsCacheEntry(detailsCacheKey)
         if (prev?.details) {
           const ids = new Set(prev.details.comments.map((c) => c.id))
           if (!ids.has(comment.id)) {

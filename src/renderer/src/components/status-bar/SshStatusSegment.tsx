@@ -20,6 +20,9 @@ import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-envi
 import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
+import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
+
+export const RUNTIME_HOST_CATALOG_FETCH_CONCURRENCY = 4
 
 function isConnecting(status: SshConnectionStatus): boolean {
   return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
@@ -158,7 +161,9 @@ export async function connectRuntimeHostForNavigation(args: {
     return false
   }
   const repos = await args.fetchRepos(args.environmentId)
-  await Promise.all(repos.map((repo) => args.fetchWorktrees(repo.id)))
+  await forEachWithConcurrency(repos, RUNTIME_HOST_CATALOG_FETCH_CONCURRENCY, async (repo) => {
+    await args.fetchWorktrees(repo.id)
+  })
   await args.fetchLineage()
   return true
 }

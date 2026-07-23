@@ -11,6 +11,7 @@ import {
   updateIpynbCellSource,
   updateIpynbCellSources
 } from './ipynb-parse'
+import { IPYNB_MEMORY_LIMITS } from './ipynb-json-admission'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -87,6 +88,18 @@ describe('ipynb parsing', () => {
   it('rejects invalid notebook roots', () => {
     expect(() => parseIpynb('[]')).toThrow('Notebook root must be a JSON object')
     expect(() => parseIpynb('{}')).toThrow('Notebook is missing a cells array')
+  })
+
+  it('rejects renderer-amplifying cell counts before projecting cells', () => {
+    const content = JSON.stringify({
+      cells: Array.from({ length: IPYNB_MEMORY_LIMITS.cells + 1 }, () => ({
+        cell_type: 'raw',
+        metadata: {},
+        source: []
+      }))
+    })
+
+    expect(() => parseIpynb(content)).toThrow('safe cell limit')
   })
 
   it('serializes cell source edits while preserving notebook metadata', () => {

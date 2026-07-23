@@ -3,6 +3,10 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import {
+  subscribeFrameStreamFrames,
+  subscribeVideoStreamFrames
+} from './emulator-stream-frame-listeners'
 import type { AppIdentity } from '../shared/app-identity'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
@@ -2582,14 +2586,7 @@ const api = {
       ipcRenderer.invoke('emulator:frameStreamStop', args),
     onFrameStreamFrame: (
       callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { streamId: string; bytes: ArrayBuffer }
-      ) => callback(data)
-      ipcRenderer.on('emulator:frameStreamFrame', listener)
-      return () => ipcRenderer.removeListener('emulator:frameStreamFrame', listener)
-    },
+    ): (() => void) => subscribeFrameStreamFrames(ipcRenderer, callback),
     onFrameStreamError: (
       callback: (data: { streamId: string; message: string }) => void
     ): (() => void) => {
@@ -2632,20 +2629,7 @@ const api = {
         keyFrame: boolean
         bytes: ArrayBuffer
       }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          streamId: string
-          deviceId: string
-          config: boolean
-          keyFrame: boolean
-          bytes: ArrayBuffer
-        }
-      ) => callback(data)
-      ipcRenderer.on('emulator:videoStreamFrame', listener)
-      return () => ipcRenderer.removeListener('emulator:videoStreamFrame', listener)
-    },
+    ): (() => void) => subscribeVideoStreamFrames(ipcRenderer, callback),
     onPaneFocus: (callback: (data: { worktreeId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
         callback(data)

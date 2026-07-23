@@ -1,7 +1,6 @@
 import {
   existsSync,
   mkdirSync,
-  readFileSync,
   statSync,
   writeFileSync,
   chmodSync,
@@ -13,6 +12,11 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
+import { readAgentHookFileForComparison } from './agent-hook-file-comparison'
+import {
+  AGENT_HOOK_CONFIG_MAX_BYTES,
+  AGENT_HOOK_MANAGED_SCRIPT_MAX_BYTES
+} from './agent-hook-file-limits'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
@@ -60,6 +64,7 @@ export function buildManagedCommandDefinition(command: string): HookDefinition {
 export {
   isPlainObject,
   readHooksJson,
+  readHooksJsonRawForGenerationCheck,
   readHooksJsonWithRaw,
   type HooksJsonSnapshot
 } from './hooks-json-read'
@@ -257,15 +262,12 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   mkdirSync(dir, { recursive: true })
 
   if (existsSync(scriptPath)) {
-    try {
-      if (readFileSync(scriptPath, 'utf-8') === content) {
-        if (process.platform !== 'win32') {
-          chmodSync(scriptPath, 0o755)
-        }
-        return
+    const existing = readAgentHookFileForComparison(scriptPath, AGENT_HOOK_MANAGED_SCRIPT_MAX_BYTES)
+    if (existing === content) {
+      if (process.platform !== 'win32') {
+        chmodSync(scriptPath, 0o755)
       }
-    } catch {
-      // Fall through to the atomic write path.
+      return
     }
   }
 
@@ -327,12 +329,9 @@ export function writeHooksJson(
   // file and rolls the backup forward, which can silently destroy the last
   // recoverable copy if install() is called repeatedly (e.g. on app start).
   if (existsSync(writePath)) {
-    try {
-      if (readFileSync(writePath, 'utf-8') === serialized) {
-        return
-      }
-    } catch {
-      // Fall through to the normal write path; a read error isn't worth failing the install for.
+    const existing = readAgentHookFileForComparison(writePath, AGENT_HOOK_CONFIG_MAX_BYTES)
+    if (existing === serialized) {
+      return
     }
   }
 

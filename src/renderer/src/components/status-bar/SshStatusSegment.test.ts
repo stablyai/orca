@@ -2,8 +2,19 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   connectRuntimeHostForNavigation,
   isConnectedRuntimeHostState,
+  RUNTIME_HOST_CATALOG_FETCH_CONCURRENCY,
   runtimeStatusForOverall
 } from './SshStatusSegment'
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  return {
+    promise: new Promise<void>((nextResolve) => {
+      resolve = nextResolve
+    }),
+    resolve
+  }
+}
 
 describe('SshStatusSegment host status helpers', () => {
   it('counts connected remote servers as connected hosts', () => {
@@ -55,5 +66,37 @@ describe('connectRuntimeHostForNavigation', () => {
       })
     ).resolves.toBe(false)
     expect(fetchRepos).not.toHaveBeenCalled()
+  })
+
+  it('bounds catalog worktree fetches for large remote hosts', async () => {
+    const count = RUNTIME_HOST_CATALOG_FETCH_CONCURRENCY + 1
+    const releases = Array.from({ length: count }, deferred)
+    let active = 0
+    let peak = 0
+    const fetchWorktrees = vi.fn(async (_repoId: string) => {
+      const release = releases[fetchWorktrees.mock.calls.length - 1]
+      active += 1
+      peak = Math.max(peak, active)
+      await release.promise
+      active -= 1
+    })
+    const loading = connectRuntimeHostForNavigation({
+      environmentId: 'windows-2',
+      refreshStatus: vi.fn().mockResolvedValue(true),
+      fetchRepos: vi
+        .fn()
+        .mockResolvedValue(Array.from({ length: count }, (_, index) => ({ id: `repo-${index}` }))),
+      fetchWorktrees,
+      fetchLineage: vi.fn().mockResolvedValue(undefined)
+    })
+
+    await vi.waitFor(() =>
+      expect(fetchWorktrees).toHaveBeenCalledTimes(RUNTIME_HOST_CATALOG_FETCH_CONCURRENCY)
+    )
+    releases[0].resolve()
+    await vi.waitFor(() => expect(fetchWorktrees).toHaveBeenCalledTimes(count))
+    releases.slice(1).forEach(({ resolve }) => resolve())
+    await expect(loading).resolves.toBe(true)
+    expect(peak).toBe(RUNTIME_HOST_CATALOG_FETCH_CONCURRENCY)
   })
 })

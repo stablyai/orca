@@ -1,5 +1,12 @@
-import { open, readFile, stat } from 'node:fs/promises'
+import { open, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
+import { readNodeFileWithinLimit } from '../shared/node-bounded-file-reader'
+import {
+  assertRasterImagePreviewWithinLimits,
+  isKnownRasterImageMimeType,
+  RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES
+} from '../shared/raster-image-preview-limits'
+import type { RasterImageDimensions } from '../shared/raster-image-dimensions'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE, RelayErrorCode } from './protocol'
 import type { RelayStreamRegistry, TooManyStreamsError } from './fs-stream-registry'
@@ -23,15 +30,22 @@ export async function readRelayFileContent(filePath: string) {
   }
 
   if (mimeType) {
-    const buffer = await readFile(filePath)
-    return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
+    const { buffer } = await readNodeFileWithinLimit(filePath, sizeLimit)
+    const imageDimensions = assertRasterImagePreviewWithinLimits(buffer, mimeType)
+    return {
+      content: buffer.toString('base64'),
+      isBinary: true,
+      isImage: true,
+      mimeType,
+      ...(imageDimensions ? { imageDimensions } : {})
+    }
   }
 
   if (stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
     return { content: '', isBinary: true }
   }
 
-  const buffer = await readFile(filePath)
+  const { buffer } = await readNodeFileWithinLimit(filePath, sizeLimit)
   if (isBinaryBuffer(buffer)) {
     return { content: '', isBinary: true }
   }
@@ -44,6 +58,7 @@ export type StreamMetadata = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
+  imageDimensions?: RasterImageDimensions
   /** On-the-wire encoding of each chunk's `data` field. Always 'base64'. */
   chunkEncoding?: 'base64'
   /** Encoding of the assembled FileReadResult.content. */
@@ -105,30 +120,37 @@ export async function readRelayFileStreamMetadata(
   const handle = await open(filePath, 'r')
   let streamId: number
   try {
-    streamId = registry.register(handle)
+    let imageDimensions: RasterImageDimensions | undefined
+    if (isKnownRasterImageMimeType(mimeType)) {
+      const header = Buffer.alloc(Math.min(stats.size, RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES))
+      const headerBytesRead = await readFullStreamChunk(handle, header, header.length, 0)
+      imageDimensions = assertRasterImagePreviewWithinLimits(
+        header.subarray(0, headerBytesRead),
+        mimeType
+      )
+    }
+    streamId = registry.register(handle, context.clientId)
+    process.stderr.write(`[relay] stream start id=${streamId} size=${stats.size}\n`)
+
+    // Why: start after metadata returns so the subscribed client cannot miss the first chunk.
+    const resolvedPumpOptions = pumpOptions ?? { paceWithAcks: false }
+    setImmediate(() => {
+      void pumpChunks(streamId, stats.size, dispatcher, registry, context, resolvedPumpOptions)
+    })
+
+    return {
+      streamId,
+      totalSize: stats.size,
+      isBinary: !!mimeType,
+      isImage: mimeType ? true : undefined,
+      mimeType,
+      ...(imageDimensions ? { imageDimensions } : {}),
+      chunkEncoding: 'base64',
+      resultEncoding: mimeType ? 'base64' : 'utf-8'
+    }
   } catch (err) {
     await handle.close()
     throw err
-  }
-
-  process.stderr.write(`[relay] stream start id=${streamId} size=${stats.size}\n`)
-
-  // Why: pumpChunks owns its own try/finally for handle release; the outer
-  // setImmediate kicks the pump off the metadata-response task so the client
-  // sees the response before the first chunk frame.
-  const resolvedPumpOptions = pumpOptions ?? { paceWithAcks: false }
-  setImmediate(() => {
-    void pumpChunks(streamId, stats.size, dispatcher, registry, context, resolvedPumpOptions)
-  })
-
-  return {
-    streamId,
-    totalSize: stats.size,
-    isBinary: !!mimeType,
-    isImage: mimeType ? true : undefined,
-    mimeType,
-    chunkEncoding: 'base64',
-    resultEncoding: mimeType ? 'base64' : 'utf-8'
   }
 }
 
@@ -203,6 +225,7 @@ async function pumpChunks(
         // Why: the bulk lane waits out sink saturation, so a flood of chunk
         // frames cannot pile up in the outbound pipe ahead of interactive
         // pty.data frames written via plain notify().
+        registry.recordSent(streamId, seq)
         await dispatcher.notifyBulk(
           'fs.streamChunk',
           { streamId, seq, data },
@@ -227,14 +250,23 @@ async function pumpChunks(
 
     try {
       if (endReason === 'end') {
-        dispatcher.notify('fs.streamEnd', { streamId })
+        if (pumpOptions.clientId !== undefined) {
+          dispatcher.notifyClient(pumpOptions.clientId, 'fs.streamEnd', { streamId })
+        } else {
+          dispatcher.notify('fs.streamEnd', { streamId })
+        }
         process.stderr.write(`[relay] stream end id=${streamId}\n`)
       } else if (endReason === 'error') {
-        dispatcher.notify('fs.streamError', {
+        const params = {
           streamId,
           code: errorCode ?? 'ESTREAMERROR',
           message: errorMessage ?? 'stream error'
-        })
+        }
+        if (pumpOptions.clientId !== undefined) {
+          dispatcher.notifyClient(pumpOptions.clientId, 'fs.streamError', params)
+        } else {
+          dispatcher.notify('fs.streamError', params)
+        }
         process.stderr.write(`[relay] stream error id=${streamId} code=${errorCode}\n`)
       } else if (endReason === 'aborted') {
         process.stderr.write(`[relay] stream cancel id=${streamId}\n`)

@@ -1,5 +1,12 @@
-import { readFile, readdir, readlink } from 'node:fs/promises'
 import { getProcessOutputFields } from '../shared/process-output-field-scanner'
+import { mapLinuxSocketInodesToPids } from '../shared/linux-proc-socket-owner-scanner'
+import {
+  createLinuxProcTextReadBudget,
+  LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES,
+  readLinuxProcNetworkTable,
+  readLinuxProcTextWithinBudget,
+  type LinuxProcTextReadBudget
+} from '../shared/linux-proc-port-scan-limits'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { scanWindowsListeningPorts } from './windows-port-scan'
 
@@ -43,16 +50,17 @@ export class PortScanHandler {
       this.readProcNet('/proc/net/tcp6')
     ])
 
-    const listeningSockets = [...tcp4, ...tcp6]
+    const listeningSockets = [...tcp4, ...tcp6].slice(0, LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES)
     if (listeningSockets.length === 0) {
       return []
     }
 
     const inodeSet = new Set(listeningSockets.map((s) => s.inode))
-    const inodeToPid = await this.mapInodesToPids(inodeSet)
+    const inodeToPid = await mapLinuxSocketInodesToPids(inodeSet)
 
     const seen = new Set<string>()
     const results: DetectedPort[] = []
+    const metadataBudget = createLinuxProcTextReadBudget()
     const relayPid = process.pid
     const relayParentPid = process.ppid
 
@@ -72,7 +80,7 @@ export class PortScanHandler {
         continue
       }
 
-      const processName = pid != null ? await this.getProcessName(pid) : undefined
+      const processName = pid != null ? await this.getProcessName(pid, metadataBudget) : undefined
 
       if (processName === 'sshd') {
         continue
@@ -95,109 +103,47 @@ export class PortScanHandler {
   private async readProcNet(
     path: string
   ): Promise<{ port: number; host: string; inode: number }[]> {
-    let content: string
-    try {
-      content = await readFile(path, 'utf-8')
-    } catch {
-      return []
-    }
-
-    const lines = content.split('\n')
-    const results: { port: number; host: string; inode: number }[] = []
-
-    for (let i = 1; i < lines.length; i++) {
-      const fields = getProcessOutputFields(lines[i], 10)
-      if (fields.length < 10) {
-        continue
-      }
-
-      // State field (index 3): 0A = TCP_LISTEN
-      if (fields[3] !== '0A') {
-        continue
-      }
-
-      const localAddress = fields[1]
-      const parsed = parseHexAddress(localAddress)
-      if (!parsed) {
-        continue
-      }
-
-      const inode = Number.parseInt(fields[9], 10)
-      if (Number.isNaN(inode) || inode === 0) {
-        continue
-      }
-
-      results.push({ port: parsed.port, host: parsed.host, inode })
-    }
-
-    return results
+    const content = await readLinuxProcNetworkTable(path)
+    return content === null ? [] : parseLinuxProcListeningSockets(content)
   }
 
-  private async mapInodesToPids(inodes: Set<number>): Promise<Map<number, number>> {
-    const result = new Map<number, number>()
-    if (inodes.size === 0) {
-      return result
-    }
-
-    let pids: string[]
-    try {
-      pids = (await readdir('/proc')).filter((name) => /^\d+$/.test(name))
-    } catch {
-      return result
-    }
-
-    for (const pidStr of pids) {
-      const fdDir = `/proc/${pidStr}/fd`
-      let fds: string[]
-      try {
-        fds = await readdir(fdDir)
-      } catch {
-        continue
-      }
-
-      const pid = Number.parseInt(pidStr, 10)
-
-      for (const fd of fds) {
-        let link: string
-        try {
-          link = await readlink(`${fdDir}/${fd}`)
-        } catch {
-          continue
-        }
-
-        const match = link.match(/^socket:\[(\d+)\]$/)
-        if (!match) {
-          continue
-        }
-
-        const inode = Number.parseInt(match[1], 10)
-        if (inodes.has(inode)) {
-          result.set(inode, pid)
-        }
-      }
-    }
-
-    return result
-  }
-
-  private async getProcessName(pid: number): Promise<string | undefined> {
-    try {
-      const cmdline = await readFile(`/proc/${pid}/cmdline`, 'utf-8')
-      if (!cmdline) {
-        return undefined
-      }
-
-      const exe = cmdline.split('\0')[0]
-      if (!exe) {
-        return undefined
-      }
-
-      const parts = exe.split('/')
-      return parts.at(-1)
-    } catch {
+  private async getProcessName(
+    pid: number,
+    budget: LinuxProcTextReadBudget
+  ): Promise<string | undefined> {
+    const cmdline = await readLinuxProcTextWithinBudget(`/proc/${pid}/cmdline`, budget)
+    if (!cmdline) {
       return undefined
     }
+
+    const exe = cmdline.split('\0')[0]
+    return exe ? exe.split('/').at(-1) : undefined
   }
+}
+
+export function parseLinuxProcListeningSockets(
+  content: string
+): { port: number; host: string; inode: number }[] {
+  const lines = content.split('\n')
+  const results: { port: number; host: string; inode: number }[] = []
+
+  for (let i = 1; i < lines.length; i++) {
+    const fields = getProcessOutputFields(lines[i], 10)
+    if (fields.length < 10 || fields[3] !== '0A') {
+      continue
+    }
+    const parsed = parseHexAddress(fields[1])
+    const inode = Number.parseInt(fields[9], 10)
+    if (!parsed || !Number.isFinite(inode) || inode === 0) {
+      continue
+    }
+    results.push({ port: parsed.port, host: parsed.host, inode })
+    if (results.length >= LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES) {
+      break
+    }
+  }
+
+  return results
 }
 
 // Why: /proc/net/tcp encodes addresses as hex pairs in host-byte-order.

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { encodeFrame, createFrameParser, FrameType, FRAME_HEADER_SIZE } from './binary-frame'
+import { FRAME_MAX_PAYLOAD } from './types'
 
 describe('encodeFrame', () => {
   it('encodes a data frame with correct header', () => {
@@ -128,6 +129,22 @@ describe('createFrameParser', () => {
     expect(onFrame).toHaveBeenCalledOnce()
     expect(onFrame.mock.calls[0][0]).toBe(FrameType.Kill)
     expect(onFrame.mock.calls[0][1].length).toBe(0)
+  })
+
+  it('rejects an oversized declared payload from the header alone', () => {
+    const onFrame = vi.fn()
+    const parser = createFrameParser(onFrame)
+    const header = Buffer.alloc(FRAME_HEADER_SIZE)
+    header[0] = FrameType.Data
+    header.writeUInt32BE(FRAME_MAX_PAYLOAD + 1, 1)
+
+    expect(() => parser.feed(header)).toThrow(
+      `Frame payload ${FRAME_MAX_PAYLOAD + 1} exceeds max ${FRAME_MAX_PAYLOAD}`
+    )
+    expect(onFrame).not.toHaveBeenCalled()
+
+    parser.feed(encodeFrame(FrameType.Data, Buffer.from('fresh')))
+    expect(onFrame).toHaveBeenCalledOnce()
   })
 
   it('parses different frame types correctly', () => {

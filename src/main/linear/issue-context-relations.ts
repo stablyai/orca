@@ -1,5 +1,6 @@
 import type { LinearCollectionMeta, LinearIssueRelation } from '../../shared/linear-agent-access'
 import { LINEAR_RELATIONS_CAP } from '../../shared/linear-agent-access'
+import { IntegrationPaginationBudget } from '../integration-pagination-budget'
 import type { ResolvedIssue } from './issue-context-client'
 import { getRequiredEntry, withLinearRead } from './issue-context-client'
 import { readConnectionPages } from './issue-context-pagination'
@@ -16,15 +17,20 @@ export async function readIssueRelations(
   resolved: ResolvedIssue
 ): Promise<{ items: LinearIssueRelation[]; meta: LinearCollectionMeta }> {
   const entry = getRequiredEntry(resolved.workspace.id)
-  const response = await readConnectionPages(LINEAR_RELATIONS_CAP, async (page) => {
-    return await withLinearRead(entry, async () => {
-      const raw = await entry.client.client.rawRequest<
-        RawRelationsResponse,
-        Record<string, unknown>
-      >(RELATIONS_QUERY, { id: resolved.issue.id, ...page })
-      return raw.data?.issue?.relations ?? null
-    })
-  })
+  const budget = new IntegrationPaginationBudget()
+  const response = await readConnectionPages(
+    LINEAR_RELATIONS_CAP,
+    async (page) => {
+      return await withLinearRead(entry, async () => {
+        const raw = await entry.client.client.rawRequest<
+          RawRelationsResponse,
+          Record<string, unknown>
+        >(RELATIONS_QUERY, { id: resolved.issue.id, ...page })
+        return raw.data?.issue?.relations ?? null
+      })
+    },
+    budget
+  )
   const outbound = response.nodes
     .slice(0, LINEAR_RELATIONS_CAP)
     .map((node) => mapRelation(node, 'outbound', node.relatedIssue))
@@ -32,15 +38,19 @@ export async function readIssueRelations(
   // Why: when outbound relations exactly fill the cap, probe inverse relations so
   // the response cannot claim completeness while silently omitting inbound ones.
   const inverseReadLimit = Math.max(1, remaining)
-  const inverse = await readConnectionPages(inverseReadLimit, async (page) => {
-    return await withLinearRead(entry, async () => {
-      const raw = await entry.client.client.rawRequest<
-        RawRelationsResponse,
-        Record<string, unknown>
-      >(INVERSE_RELATIONS_QUERY, { id: resolved.issue.id, ...page })
-      return raw.data?.issue?.inverseRelations ?? null
-    })
-  })
+  const inverse = await readConnectionPages(
+    inverseReadLimit,
+    async (page) => {
+      return await withLinearRead(entry, async () => {
+        const raw = await entry.client.client.rawRequest<
+          RawRelationsResponse,
+          Record<string, unknown>
+        >(INVERSE_RELATIONS_QUERY, { id: resolved.issue.id, ...page })
+        return raw.data?.issue?.inverseRelations ?? null
+      })
+    },
+    budget
+  )
   const inbound = inverse.nodes
     .slice(0, remaining)
     .map((node) => mapRelation(node, 'inbound', node.issue))

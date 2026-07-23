@@ -3,7 +3,11 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
 import { decodeBrowserScreencastFrame } from '../../shared/browser-screencast-protocol'
-import { startBrowserScreencast } from './browser-screencast-stream'
+import {
+  decodeBrowserScreencastImage,
+  MAX_BROWSER_SCREENCAST_BASE64_CHARACTERS,
+  startBrowserScreencast
+} from './browser-screencast-stream'
 
 function createMockWebContents() {
   let attached = false
@@ -57,6 +61,16 @@ function jpegWithSize(width: number, height: number): Buffer {
 }
 
 describe('startBrowserScreencast', () => {
+  it('rejects oversized CDP image text before base64 decoding', () => {
+    const decode = vi.spyOn(Buffer, 'from')
+
+    expect(
+      decodeBrowserScreencastImage('A'.repeat(MAX_BROWSER_SCREENCAST_BASE64_CHARACTERS + 1))
+    ).toBeNull()
+    expect(decode).not.toHaveBeenCalled()
+    decode.mockRestore()
+  })
+
   it('emits an initial captured frame before CDP produces screencast events', async () => {
     const webContents = createMockWebContents()
     const firstFrame = Buffer.from('first-frame')

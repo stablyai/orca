@@ -1,7 +1,12 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { safeStorage } from 'electron'
-import { writeSecureJsonFile } from '../../shared/secure-file'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import {
+  JsonStringifyByteLimitError,
+  stringifyJsonWithinByteLimit
+} from '../../shared/node-bounded-json-stringify'
+import { writeSecureJsonFileWithinLimit } from '../../shared/bounded-secure-json-file'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -47,12 +52,52 @@ type PersistedPlaintextSession = {
 type CachedOrcaCloudSession = {
   session: OrcaCloudSession
   persistence: Exclude<OrcaCloudSessionPersistence, 'none'>
+  bytes: number
 }
 
 const memorySessions = new Map<string, CachedOrcaCloudSession>()
+export const MAX_ORCA_CLOUD_SESSION_FILE_BYTES = 1024 * 1024
+export const MAX_ORCA_CLOUD_SESSION_PAYLOAD_BYTES = MAX_ORCA_CLOUD_SESSION_FILE_BYTES
+export const MAX_ORCA_CLOUD_MEMORY_SESSIONS = 128
+export const MAX_ORCA_CLOUD_MEMORY_SESSION_BYTES = 16 * 1024 * 1024
+let memorySessionBytes = 0
 
 function sessionCacheKey(profileId: string, userDataPath: string): string {
   return `${userDataPath}\0${profileId}`
+}
+
+function rememberMemorySession(
+  cacheKey: string,
+  session: OrcaCloudSession,
+  persistence: Exclude<OrcaCloudSessionPersistence, 'none'>,
+  bytes: number
+): void {
+  const previous = memorySessions.get(cacheKey)
+  if (previous) {
+    memorySessionBytes -= previous.bytes
+    memorySessions.delete(cacheKey)
+  }
+  while (
+    memorySessions.size >= MAX_ORCA_CLOUD_MEMORY_SESSIONS ||
+    memorySessionBytes + bytes > MAX_ORCA_CLOUD_MEMORY_SESSION_BYTES
+  ) {
+    const oldestKey = memorySessions.keys().next().value as string | undefined
+    if (oldestKey === undefined) {
+      break
+    }
+    const oldest = memorySessions.get(oldestKey)
+    memorySessions.delete(oldestKey)
+    memorySessionBytes -= oldest?.bytes ?? 0
+  }
+  memorySessions.set(cacheKey, { session, persistence, bytes })
+  memorySessionBytes += bytes
+}
+
+function serializedSessionWithinLimit(
+  session: OrcaCloudSession,
+  maxBytes = MAX_ORCA_CLOUD_SESSION_PAYLOAD_BYTES
+): { serialized: string; byteLength: number } {
+  return stringifyJsonWithinByteLimit(session, maxBytes)
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -106,15 +151,29 @@ export function saveOrcaCloudSession(
   session: OrcaCloudSession
 ): OrcaCloudSessionPersistence {
   const cacheKey = sessionCacheKey(profileId, userDataPath)
+  const payload = serializedSessionWithinLimit(session)
   if (safeStorage.isEncryptionAvailable()) {
     const encrypted: PersistedEncryptedSession = {
       version: 1,
       format: 'electron-safe-storage-v1',
       savedAt: Date.now(),
-      ciphertext: safeStorage.encryptString(JSON.stringify(session)).toString('base64')
+      ciphertext: safeStorage.encryptString(payload.serialized).toString('base64')
     }
-    writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), encrypted)
-    memorySessions.set(cacheKey, { session, persistence: 'encrypted' })
+    try {
+      writeSecureJsonFileWithinLimit(
+        getOrcaCloudSessionPath(profileId, userDataPath),
+        encrypted,
+        MAX_ORCA_CLOUD_SESSION_FILE_BYTES
+      )
+    } catch (error) {
+      if (!(error instanceof JsonStringifyByteLimitError)) {
+        throw error
+      }
+      rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
+      rememberMemorySession(cacheKey, session, 'memory-only', payload.byteLength)
+      return 'memory-only'
+    }
+    rememberMemorySession(cacheKey, session, 'encrypted', payload.byteLength)
     return 'encrypted'
   }
 
@@ -125,14 +184,27 @@ export function saveOrcaCloudSession(
       savedAt: Date.now(),
       session
     }
-    writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), plaintext)
-    memorySessions.set(cacheKey, { session, persistence: 'dev-plaintext' })
+    try {
+      writeSecureJsonFileWithinLimit(
+        getOrcaCloudSessionPath(profileId, userDataPath),
+        plaintext,
+        MAX_ORCA_CLOUD_SESSION_FILE_BYTES
+      )
+    } catch (error) {
+      if (!(error instanceof JsonStringifyByteLimitError)) {
+        throw error
+      }
+      rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
+      rememberMemorySession(cacheKey, session, 'memory-only', payload.byteLength)
+      return 'memory-only'
+    }
+    rememberMemorySession(cacheKey, session, 'dev-plaintext', payload.byteLength)
     return 'dev-plaintext'
   }
 
   // Why: Orca account refresh tokens must not silently fall back to plaintext
   // in production. Memory-only keeps cloud features usable until restart.
-  memorySessions.set(cacheKey, { session, persistence: 'memory-only' })
+  rememberMemorySession(cacheKey, session, 'memory-only', payload.byteLength)
   return 'memory-only'
 }
 
@@ -172,6 +244,8 @@ export function readOrcaCloudSession(
   const cacheKey = sessionCacheKey(profileId, userDataPath)
   const memorySession = memorySessions.get(cacheKey)
   if (memorySession) {
+    memorySessions.delete(cacheKey)
+    memorySessions.set(cacheKey, memorySession)
     return {
       status: 'found',
       session: memorySession.session,
@@ -185,9 +259,9 @@ export function readOrcaCloudSession(
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as
-      | PersistedEncryptedSession
-      | PersistedPlaintextSession
+    const parsed = JSON.parse(
+      readNodeFileSyncWithinLimit(path, MAX_ORCA_CLOUD_SESSION_FILE_BYTES).buffer.toString('utf8')
+    ) as PersistedEncryptedSession | PersistedPlaintextSession
     if (parsed.version !== 1) {
       return { status: 'decrypt-failed', persistence: 'none', error: 'Unsupported session format.' }
     }
@@ -204,14 +278,19 @@ export function readOrcaCloudSession(
       if (!isOrcaCloudSession(session)) {
         return { status: 'decrypt-failed', persistence: 'none', error: 'Invalid saved session.' }
       }
-      memorySessions.set(cacheKey, { session, persistence: 'encrypted' })
+      const payload = serializedSessionWithinLimit(session, MAX_ORCA_CLOUD_SESSION_FILE_BYTES)
+      rememberMemorySession(cacheKey, session, 'encrypted', payload.byteLength)
       return { status: 'found', session, persistence: 'encrypted' }
     }
     if (parsed.format === 'dev-plaintext-v1' && allowsPlaintextOrcaCloudSession()) {
       if (!isOrcaCloudSession(parsed.session)) {
         return { status: 'decrypt-failed', persistence: 'none', error: 'Invalid saved session.' }
       }
-      memorySessions.set(cacheKey, { session: parsed.session, persistence: 'dev-plaintext' })
+      const payload = serializedSessionWithinLimit(
+        parsed.session,
+        MAX_ORCA_CLOUD_SESSION_FILE_BYTES
+      )
+      rememberMemorySession(cacheKey, parsed.session, 'dev-plaintext', payload.byteLength)
       return { status: 'found', session: parsed.session, persistence: 'dev-plaintext' }
     }
     return { status: 'decrypt-failed', persistence: 'none', error: 'Unsafe session format.' }
@@ -225,6 +304,11 @@ export function readOrcaCloudSession(
 }
 
 export function clearOrcaCloudSession(profileId: string, userDataPath: string): void {
-  memorySessions.delete(sessionCacheKey(profileId, userDataPath))
+  const cacheKey = sessionCacheKey(profileId, userDataPath)
+  const cached = memorySessions.get(cacheKey)
+  if (cached) {
+    memorySessionBytes -= cached.bytes
+    memorySessions.delete(cacheKey)
+  }
   rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
 }

@@ -52,6 +52,7 @@ import {
   isGitHubProjectRefInputTooLarge
 } from '../../shared/github-project-ref-input'
 import { githubProjectHost } from '../../shared/github-project-identity'
+import { cacheIdentityDigest } from '../cache-identity-digest'
 
 // Re-export the public API so existing `./project-view` call sites keep working; the split is internal-only.
 export { isValidOwnerSlug, isValidRepoSlug, isValidSlug } from './project-view/internals'
@@ -129,12 +130,11 @@ const parentFieldProbeInFlight = new Map<string, Promise<void>>()
 // host's probe result can't leak into another. Normalize github.com so
 // host-less callers share the same probe state as explicitly pinned calls.
 function ownerScopeKey(owner: string, ownerType: GitHubProjectOwnerType, host?: string): string {
-  const base = `${owner}\u0000${ownerType}`
-  return `${base}\u0000${githubProjectHost(host)}`
+  return cacheIdentityDigest([owner, ownerType, githubProjectHost(host)])
 }
 
 function ownerTypeCacheKey(owner: string, host?: string): string {
-  return `${owner}\u0000${githubProjectHost(host)}`
+  return cacheIdentityDigest([owner, githubProjectHost(host)])
 }
 
 function rememberOwnerType(

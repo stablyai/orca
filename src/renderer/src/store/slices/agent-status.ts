@@ -45,6 +45,7 @@ import {
   transferAgentPaneAuthorityAlias
 } from './agent-pane-authority'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
+import { retainTransientAgentStatusClearedConnection } from '@/lib/transient-agent-status-clear-retention'
 
 /** Snapshot of a finished/vanished agent status entry, kept so the dashboard and sidebar hover
  *  keep showing the completion until the user clicks the worktree. `worktreeId` is stamped at
@@ -2231,8 +2232,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           next ??= { ...s.agentStatusByPaneKey }
           delete next[paneKey]
         }
-        const wasAlreadyBlocked = connectionId in s.transientClearedAgentStatusConnectionIds
-        if (!next && wasAlreadyBlocked) {
+        const retainedClearedConnections = retainTransientAgentStatusClearedConnection(
+          s.transientClearedAgentStatusConnectionIds,
+          connectionId
+        )
+        if (!next && retainedClearedConnections === s.transientClearedAgentStatusConnectionIds) {
           return s
         }
         removed = next !== null
@@ -2246,9 +2250,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
                 sortEpoch: s.sortEpoch + 1
               }
             : {}),
-          transientClearedAgentStatusConnectionIds: wasAlreadyBlocked
-            ? s.transientClearedAgentStatusConnectionIds
-            : { ...s.transientClearedAgentStatusConnectionIds, [connectionId]: true }
+          transientClearedAgentStatusConnectionIds: retainedClearedConnections
         }
       })
       if (removed) {

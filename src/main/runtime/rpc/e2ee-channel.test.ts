@@ -2,6 +2,11 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
 import { generateKeyPair, deriveSharedKey, encrypt, decrypt, encryptBytes } from './e2ee-crypto'
+import {
+  REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
+  REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
+} from '../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS } from '../../../shared/remote-runtime-request-frames'
 
 function publicKeyToBase64(key: Uint8Array): string {
   return Buffer.from(key).toString('base64')
@@ -140,6 +145,39 @@ describe('E2EEChannel', () => {
       expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid handshake message')
     })
 
+    it('rejects structurally amplified hello JSON before parsing', () => {
+      const ctx = setup()
+      const amplified = `{"type":"e2ee_hello","padding":[${'0,'.repeat(REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS.structuralTokens)}0]}`
+      const parse = vi.spyOn(JSON, 'parse')
+
+      ctx.channel.handleRawMessage(amplified)
+
+      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid handshake message')
+      expect(parse).not.toHaveBeenCalled()
+      parse.mockRestore()
+      ctx.channel.destroy()
+    })
+
+    it('rejects structurally amplified auth JSON before parsing', () => {
+      const ctx = setup()
+      ctx.channel.handleRawMessage(
+        JSON.stringify({
+          type: 'e2ee_hello',
+          publicKeyB64: publicKeyToBase64(ctx.clientKeys.publicKey)
+        })
+      )
+      const sharedKey = deriveSharedKey(ctx.clientKeys.secretKey, ctx.serverKeys.publicKey)
+      const amplified = `{"type":"e2ee_auth","deviceToken":"valid-token","padding":[${'0,'.repeat(REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS.structuralTokens)}0]}`
+      const parse = vi.spyOn(JSON, 'parse')
+
+      ctx.channel.handleRawMessage(encrypt(amplified, sharedKey))
+
+      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid e2ee_auth')
+      expect(parse).not.toHaveBeenCalled()
+      parse.mockRestore()
+      ctx.channel.destroy()
+    })
+
     it('rejects missing fields', () => {
       const ctx = setup()
       ctx.channel.handleRawMessage(JSON.stringify({ type: 'e2ee_hello' }))
@@ -157,6 +195,19 @@ describe('E2EEChannel', () => {
       )
 
       expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid public key')
+    })
+
+    it('rejects oversized public key text before base64 decoding', () => {
+      const ctx = setup()
+      const decode = vi.spyOn(Buffer, 'from')
+
+      ctx.channel.handleRawMessage(
+        JSON.stringify({ type: 'e2ee_hello', publicKeyB64: 'A'.repeat(45) })
+      )
+
+      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid public key')
+      expect(decode).not.toHaveBeenCalled()
+      decode.mockRestore()
     })
 
     it('times out if no hello received', () => {
@@ -207,6 +258,38 @@ describe('E2EEChannel', () => {
       const replyEncrypted = ctx.ws.sent[2]!
       const replyPlain = decrypt(replyEncrypted, sharedKey)
       expect(replyPlain).toBe('{"id":"rpc-1","ok":true}')
+    })
+
+    it('rejects an oversized text reply before encryption', () => {
+      const ctx = setup()
+      const sharedKey = doHandshake(ctx)
+      const sentBefore = ctx.ws.sent.length
+
+      ctx.channel.onMessage((_plaintext, encryptedReply) => {
+        encryptedReply('x'.repeat(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES + 1))
+      })
+      ctx.channel.handleRawMessage(encrypt('request', sharedKey))
+
+      expect(ctx.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
+      expect(ctx.ws.sent).toHaveLength(sentBefore)
+    })
+
+    it('rejects an oversized binary reply before encryption', () => {
+      const ctx = setup()
+      const sharedKey = doHandshake(ctx)
+      const sentBefore = ctx.ws.sent.length
+      let accepted: boolean | void = undefined
+
+      ctx.channel.onMessage((_plaintext, _encryptedReply, encryptedBinaryReply) => {
+        accepted = encryptedBinaryReply(
+          new Uint8Array(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1)
+        )
+      })
+      ctx.channel.handleRawMessage(encrypt('request', sharedKey))
+
+      expect(accepted).toBe(false)
+      expect(ctx.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
+      expect(ctx.ws.sent).toHaveLength(sentBefore)
     })
 
     it('decrypts and forwards binary messages after authentication', () => {

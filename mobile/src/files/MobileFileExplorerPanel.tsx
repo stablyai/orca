@@ -16,14 +16,15 @@ import {
   flattenDirectoryCache,
   getDirectoryCacheState,
   type DirectoryCache,
-  type FileExplorerRow,
-  type MobileDirEntry
+  type DirectoryState,
+  type FileExplorerRow
 } from './file-tree'
 import type { RpcSuccess } from '../transport/types'
 import { colors } from '../theme/mobile-theme'
 import {
   beginDirectoryLoad,
   createDirectoryLoadRevisions,
+  forgetDirectoryLoadBranches,
   isCurrentDirectoryLoad,
   resetDirectoryLoadRevisions,
   type DirectoryLoadRevisions
@@ -36,6 +37,12 @@ import {
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
+import {
+  MOBILE_DIRECTORY_CACHE_LIMIT_MESSAGE,
+  parseBoundedMobileDirectoryEntries,
+  removeEvictedExpandedPaths,
+  retainMobileDirectoryState
+} from './mobile-directory-cache-retention'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -54,12 +61,47 @@ export function MobileFileExplorerPanel(props: {
   const directoryLoadRevisionsRef = useRef<DirectoryLoadRevisions>(createDirectoryLoadRevisions())
   const pendingDirectoryRetriesRef = useRef<Set<string>>(new Set())
   const directoryCacheRef = useRef<DirectoryCache>({})
+  const directoryCacheAccessRef = useRef(0)
   const [directoryCache, setDirectoryCache] = useState<DirectoryCache>({})
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const expandedRef = useRef(expanded)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [legacyListTruncated, setLegacyListTruncated] = useState(false)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
+
+  const commitDirectoryState = useCallback(
+    (relativePath: string, state: DirectoryState): boolean => {
+      const retained = retainMobileDirectoryState(
+        directoryCacheRef.current,
+        relativePath,
+        { ...state, lastAccess: ++directoryCacheAccessRef.current },
+        expandedRef.current
+      )
+      if (!retained.admitted) {
+        return false
+      }
+      directoryCacheRef.current = retained.cache
+      setDirectoryCache(retained.cache)
+      if (retained.evictedPaths.length > 0) {
+        forgetDirectoryLoadBranches(directoryLoadRevisionsRef.current, retained.evictedPaths)
+        for (const pendingPath of pendingDirectoryRetriesRef.current) {
+          if (
+            retained.evictedPaths.some(
+              (evicted) => pendingPath === evicted || pendingPath.startsWith(`${evicted}/`)
+            )
+          ) {
+            pendingDirectoryRetriesRef.current.delete(pendingPath)
+          }
+        }
+        const nextExpanded = removeEvictedExpandedPaths(expandedRef.current, retained.evictedPaths)
+        expandedRef.current = nextExpanded
+        setExpanded(nextExpanded)
+      }
+      return true
+    },
+    []
+  )
 
   const loadDirectory = useCallback(
     async (relativePath: string) => {
@@ -77,13 +119,10 @@ export function MobileFileExplorerPanel(props: {
           // Why: transient reconnects should not blank an already browsable tree.
           setError(hasLoadedRoot ? null : message)
         } else {
-          setDirectoryCache((prev) => ({
-            ...prev,
-            [relativePath]: {
-              entries: getDirectoryCacheState(prev, relativePath)?.entries ?? [],
-              error: message
-            }
-          }))
+          commitDirectoryState(relativePath, {
+            entries: getDirectoryCacheState(directoryCacheRef.current, relativePath)?.entries ?? [],
+            error: message
+          })
         }
         return
       }
@@ -98,13 +137,16 @@ export function MobileFileExplorerPanel(props: {
         }
         setError(null)
       }
-      setDirectoryCache((prev) => ({
-        ...prev,
-        [relativePath]: {
-          entries: getDirectoryCacheState(prev, relativePath)?.entries ?? [],
-          loading: true
-        }
-      }))
+      const admittedLoading = commitDirectoryState(relativePath, {
+        entries: getDirectoryCacheState(directoryCacheRef.current, relativePath)?.entries ?? [],
+        loading: true
+      })
+      if (!admittedLoading) {
+        forgetDirectoryLoadBranches(directoryLoadRevisionsRef.current, [relativePath])
+        setLoading(false)
+        setError(MOBILE_DIRECTORY_CACHE_LIMIT_MESSAGE)
+        return
+      }
 
       try {
         const response = await client.sendRequest('files.readDir', {
@@ -133,7 +175,9 @@ export function MobileFileExplorerPanel(props: {
                 return
               }
               const legacyResult = (legacy as RpcSuccess).result as LegacyFilesListResult
-              setDirectoryCache(directoryCacheFromFileList(legacyResult.files))
+              const legacyCache = directoryCacheFromFileList(legacyResult.files)
+              directoryCacheRef.current = legacyCache
+              setDirectoryCache(legacyCache)
               // Why: the capped list silently omits files past the cap — keep
               // the legacy explorer's "Showing first 5000" note.
               setLegacyListTruncated(legacyResult.truncated)
@@ -150,14 +194,13 @@ export function MobileFileExplorerPanel(props: {
         ) {
           return
         }
-        const entries = (response as RpcSuccess).result as MobileDirEntry[]
+        const entries = parseBoundedMobileDirectoryEntries((response as RpcSuccess).result)
         if (rootLoad) {
           setLegacyListTruncated(false)
         }
-        setDirectoryCache((prev) => ({
-          ...prev,
-          [relativePath]: { entries }
-        }))
+        if (!commitDirectoryState(relativePath, { entries })) {
+          throw new Error(MOBILE_DIRECTORY_CACHE_LIMIT_MESSAGE)
+        }
       } catch (err) {
         if (
           !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
@@ -170,13 +213,10 @@ export function MobileFileExplorerPanel(props: {
           // only a cold load surfaces the full-screen error.
           setError(hadLoadedRoot ? null : message)
         } else {
-          setDirectoryCache((prev) => ({
-            ...prev,
-            [relativePath]: {
-              entries: getDirectoryCacheState(prev, relativePath)?.entries ?? [],
-              error: message
-            }
-          }))
+          commitDirectoryState(relativePath, {
+            entries: getDirectoryCacheState(directoryCacheRef.current, relativePath)?.entries ?? [],
+            error: message
+          })
         }
       } finally {
         if (
@@ -187,7 +227,7 @@ export function MobileFileExplorerPanel(props: {
         }
       }
     },
-    [client, connState, worktreeId]
+    [client, commitDirectoryState, connState, worktreeId]
   )
 
   useEffect(() => {
@@ -195,16 +235,14 @@ export function MobileFileExplorerPanel(props: {
     resetDirectoryLoadRevisions(directoryLoadRevisionsRef.current)
     pendingDirectoryRetriesRef.current.clear()
     directoryCacheRef.current = {}
+    directoryCacheAccessRef.current = 0
     setDirectoryCache({})
-    setExpanded(new Set())
+    expandedRef.current = new Set()
+    setExpanded(expandedRef.current)
     setLoading(true)
     setError(null)
     setLegacyListTruncated(false)
   }, [scope])
-
-  useEffect(() => {
-    directoryCacheRef.current = directoryCache
-  }, [directoryCache])
 
   useEffect(() => {
     void loadDirectory('')
@@ -228,21 +266,21 @@ export function MobileFileExplorerPanel(props: {
 
   const toggleDirectory = useCallback(
     (relativePath: string) => {
-      setExpanded((prev) => {
-        const next = new Set(prev)
-        if (next.has(relativePath)) {
-          next.delete(relativePath)
-        } else {
-          next.add(relativePath)
-        }
-        return next
-      })
+      const wasExpanded = expandedRef.current.has(relativePath)
+      const nextExpanded = new Set(expandedRef.current)
+      if (wasExpanded) {
+        nextExpanded.delete(relativePath)
+      } else {
+        nextExpanded.add(relativePath)
+      }
+      expandedRef.current = nextExpanded
+      setExpanded(nextExpanded)
       const state = getDirectoryCacheState(directoryCache, relativePath)
-      if (!expanded.has(relativePath) && !state?.loading && (!state?.entries || state.error)) {
+      if (!wasExpanded && !state?.loading && (!state?.entries || state.error)) {
         void loadDirectory(relativePath)
       }
     },
-    [directoryCache, expanded, loadDirectory]
+    [directoryCache, loadDirectory]
   )
 
   const retryDirectory = useCallback(

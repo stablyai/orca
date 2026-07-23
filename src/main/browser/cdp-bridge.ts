@@ -48,8 +48,16 @@ import {
 import { insertTextThroughCdp } from './browser-text-insertion'
 import type { BrowserManager } from './browser-manager'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
-
-const CAPTURE_LOG_LIMIT = 1000
+import { CdpCommandQueue } from './cdp-command-queue'
+import {
+  buildBoundedCdpConsoleEntry,
+  buildBoundedCdpInterceptedRequest,
+  buildBoundedCdpNetworkEntry,
+  CDP_CAPTURE_LOG_LIMIT,
+  CDP_MAX_IFRAME_SESSIONS,
+  CDP_MAX_PAUSED_REQUESTS,
+  isBoundedCdpIframeSession
+} from './cdp-event-memory-bounds'
 
 export class BrowserError extends Error {
   constructor(
@@ -79,21 +87,21 @@ type TabState = {
   networkRequestMap: Map<string, BrowserNetworkEntry>
 }
 
-type QueuedCommand = {
-  execute: () => Promise<unknown>
-  resolve: (value: unknown) => void
-  reject: (reason: unknown) => void
-}
-
 export class CdpBridge {
   private activeWebContentsId: number | null = null
   private readonly tabState = new Map<string, TabState>()
-  private readonly commandQueues = new Map<string, QueuedCommand[]>()
-  private readonly processingQueues = new Set<string>()
+  private readonly commandQueue: CdpCommandQueue
   private readonly browserManager: BrowserManager
 
   constructor(browserManager: BrowserManager) {
     this.browserManager = browserManager
+    this.commandQueue = new CdpCommandQueue(
+      () =>
+        new BrowserError(
+          'browser_busy',
+          'Browser command queue is full; retry after the current commands finish'
+        )
+    )
   }
 
   setActiveTab(webContentsId: number): void {
@@ -1010,7 +1018,13 @@ export class CdpBridge {
         this.removeDebuggerListeners(guest, state)
       }
       this.tabState.delete(tabId)
-      this.commandQueues.delete(tabId)
+      this.commandQueue.closeTab(
+        tabId,
+        new BrowserError(
+          'browser_debugger_detached',
+          'Browser tab closed before command execution.'
+        )
+      )
     }
   }
 
@@ -1195,10 +1209,21 @@ export class CdpBridge {
             }
           | undefined
         if (p?.sessionId && p.targetInfo?.type === 'iframe' && p.targetInfo.targetId) {
-          state.iframeSessions.set(p.targetInfo.targetId, p.sessionId)
-          guest.debugger.sendCommand('DOM.enable', {}, p.sessionId).catch(() => {})
-          guest.debugger.sendCommand('Accessibility.enable', {}, p.sessionId).catch(() => {})
-          guest.debugger.sendCommand('Runtime.enable', {}, p.sessionId).catch(() => {})
+          const frameId = p.targetInfo.targetId
+          const canRetainSession =
+            isBoundedCdpIframeSession(frameId, p.sessionId) &&
+            (state.iframeSessions.has(frameId) ||
+              state.iframeSessions.size < CDP_MAX_IFRAME_SESSIONS)
+          if (canRetainSession) {
+            state.iframeSessions.set(frameId, p.sessionId)
+            guest.debugger.sendCommand('DOM.enable', {}, p.sessionId).catch(() => {})
+            guest.debugger.sendCommand('Accessibility.enable', {}, p.sessionId).catch(() => {})
+            guest.debugger.sendCommand('Runtime.enable', {}, p.sessionId).catch(() => {})
+          } else {
+            guest.debugger
+              .sendCommand('Target.detachFromTarget', { sessionId: p.sessionId })
+              .catch(() => {})
+          }
         }
       }
       if (method === 'Target.detachedFromTarget') {
@@ -1224,15 +1249,8 @@ export class CdpBridge {
               }
             | undefined
           if (p) {
-            const text = (p.args ?? []).map((a) => a.value ?? a.description ?? '').join(' ')
-            state.consoleLog.push({
-              level: p.type ?? 'log',
-              text,
-              timestamp: p.timestamp ?? Date.now(),
-              url: p.stackTrace?.callFrames?.[0]?.url,
-              line: p.stackTrace?.callFrames?.[0]?.lineNumber
-            })
-            if (state.consoleLog.length > CAPTURE_LOG_LIMIT) {
+            state.consoleLog.push(buildBoundedCdpConsoleEntry(p))
+            if (state.consoleLog.length > CDP_CAPTURE_LOG_LIMIT) {
               state.consoleLog.shift()
             }
           }
@@ -1252,20 +1270,13 @@ export class CdpBridge {
               }
             | undefined
           if (p?.response) {
-            const entry: BrowserNetworkEntry = {
-              url: p.response.url ?? '',
-              method: '',
-              status: p.response.status ?? 0,
-              mimeType: p.response.mimeType ?? '',
-              size: 0,
-              timestamp: p.timestamp ?? Date.now()
-            }
+            const entry = buildBoundedCdpNetworkEntry(p.response, p.timestamp)
             state.networkLog.push(entry)
             // Why: map requestId→entry so loadingFinished attributes size to the right response, not the latest one.
             if (p.requestId) {
               state.networkRequestMap.set(p.requestId, entry)
             }
-            if (state.networkLog.length > CAPTURE_LOG_LIMIT) {
+            if (state.networkLog.length > CDP_CAPTURE_LOG_LIMIT) {
               const evicted = state.networkLog.shift()
               if (evicted) {
                 for (const [requestId, requestEntry] of state.networkRequestMap) {
@@ -1299,13 +1310,23 @@ export class CdpBridge {
             }
           | undefined
         if (p?.requestId && p.request) {
-          state.pausedRequests.set(p.requestId, {
-            id: p.requestId,
-            url: p.request.url ?? '',
-            method: p.request.method ?? 'GET',
-            headers: (p.request.headers ?? {}) as Record<string, string>,
-            resourceType: p.resourceType ?? 'Other'
+          const boundedRequest = buildBoundedCdpInterceptedRequest({
+            requestId: p.requestId,
+            request: p.request,
+            resourceType: p.resourceType
           })
+          if (
+            boundedRequest &&
+            (state.pausedRequests.has(p.requestId) ||
+              state.pausedRequests.size < CDP_MAX_PAUSED_REQUESTS)
+          ) {
+            state.pausedRequests.set(p.requestId, boundedRequest)
+          } else {
+            state.pausedRequests.delete(p.requestId)
+            guest.debugger
+              .sendCommand('Fetch.continueRequest', { requestId: p.requestId })
+              .catch(() => {})
+          }
         }
       }
     }
@@ -1681,40 +1702,7 @@ export class CdpBridge {
   private async enqueueCommand<T>(execute: () => Promise<T>): Promise<T> {
     const guest = this.getActiveGuest()
     const tabId = this.resolveTabId(guest.id)
-
-    return new Promise<T>((resolve, reject) => {
-      let queue = this.commandQueues.get(tabId)
-      if (!queue) {
-        queue = []
-        this.commandQueues.set(tabId, queue)
-      }
-      queue.push({
-        execute: execute as () => Promise<unknown>,
-        resolve: resolve as (value: unknown) => void,
-        reject
-      })
-      this.processQueue(tabId)
-    })
-  }
-
-  private async processQueue(tabId: string): Promise<void> {
-    if (this.processingQueues.has(tabId)) {
-      return
-    }
-    this.processingQueues.add(tabId)
-
-    const queue = this.commandQueues.get(tabId)
-    while (queue && queue.length > 0) {
-      const cmd = queue.shift()!
-      try {
-        const result = await cmd.execute()
-        cmd.resolve(result)
-      } catch (error) {
-        cmd.reject(error)
-      }
-    }
-
-    this.processingQueues.delete(tabId)
+    return this.commandQueue.enqueue(tabId, execute)
   }
 }
 

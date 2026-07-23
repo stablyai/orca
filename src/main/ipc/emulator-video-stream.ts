@@ -2,6 +2,10 @@ import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
+import { EmulatorVideoFrameDelivery } from './emulator-video-frame-delivery'
+
+export const EMULATOR_VIDEO_STREAM_MAX_SUBSCRIPTIONS_TOTAL = 8
+export const EMULATOR_VIDEO_STREAM_MAX_SUBSCRIPTIONS_PER_RENDERER = 2
 
 // Bridges the main-process scrcpy video registry to renderer subscribers. The
 // renderer calls emulator:videoStreamStart with a deviceId; meta + H.264 access
@@ -12,19 +16,41 @@ export function registerEmulatorVideoStreamHandlers(): void {
     owner: WebContents
     unsubscribe: () => void
     onOwnerDestroyed: () => void
+    delivery: EmulatorVideoFrameDelivery
+    deliveryToken: string
   }
   const subscriptions = new Map<string, Subscription>()
+
+  const assertSubscriptionCapacity = (owner: WebContents): void => {
+    let ownerSubscriptionCount = 0
+    for (const subscription of subscriptions.values()) {
+      if (subscription.owner === owner) {
+        ownerSubscriptionCount += 1
+      }
+    }
+    if (ownerSubscriptionCount >= EMULATOR_VIDEO_STREAM_MAX_SUBSCRIPTIONS_PER_RENDERER) {
+      throw new Error(
+        `A renderer can have at most ${EMULATOR_VIDEO_STREAM_MAX_SUBSCRIPTIONS_PER_RENDERER} active emulator video streams.`
+      )
+    }
+    if (subscriptions.size >= EMULATOR_VIDEO_STREAM_MAX_SUBSCRIPTIONS_TOTAL) {
+      throw new Error(
+        `Orca can have at most ${EMULATOR_VIDEO_STREAM_MAX_SUBSCRIPTIONS_TOTAL} active emulator video streams.`
+      )
+    }
+  }
 
   const stopSubscription = (streamId: string, owner?: WebContents): void => {
     const subscription = subscriptions.get(streamId)
     if (!subscription || (owner && subscription.owner !== owner)) {
       return
     }
-    subscription.unsubscribe()
+    subscriptions.delete(streamId)
     // Why: `.once('destroyed')` self-removes only when that event fires (window
     // close), so an explicit stop must drop it or each show/hide cycle leaks one.
     subscription.owner.removeListener('destroyed', subscription.onOwnerDestroyed)
-    subscriptions.delete(streamId)
+    subscription.delivery.clear()
+    subscription.unsubscribe()
   }
 
   ipcMain.handle(
@@ -44,36 +70,65 @@ export function registerEmulatorVideoStreamHandlers(): void {
         throw new Error('Video stream id is already in use by another renderer')
       }
       stopSubscription(streamId, owner)
+      assertSubscriptionCapacity(owner)
       const onOwnerDestroyed = (): void => stopSubscription(streamId, owner)
+      const deliveryToken = randomUUID()
+      const delivery = new EmulatorVideoFrameDelivery((frame, deliveryId) => {
+        const current = subscriptions.get(streamId)
+        if (!current || current.delivery !== delivery || owner.isDestroyed()) {
+          return
+        }
+        try {
+          owner.send('emulator:videoStreamFrame', {
+            streamId,
+            deliveryToken,
+            deliveryId,
+            deviceId: args.deviceId,
+            ...frame
+          })
+        } catch {
+          stopSubscription(streamId, owner)
+        }
+      })
       const pendingSubscription: Subscription = {
         owner,
         unsubscribe: () => {},
-        onOwnerDestroyed
+        onOwnerDestroyed,
+        delivery,
+        deliveryToken
       }
       subscriptions.set(streamId, pendingSubscription)
       setTimeout(() => {
         if (owner.isDestroyed() || subscriptions.get(streamId) !== pendingSubscription) {
           return
         }
-        const unsubscribe = scrcpyVideoRegistry.subscribe(args.deviceId, (videoEvent) => {
-          if (owner.isDestroyed()) {
+        try {
+          const unsubscribe = scrcpyVideoRegistry.subscribe(args.deviceId, (videoEvent) => {
+            if (owner.isDestroyed() || subscriptions.get(streamId) !== pendingSubscription) {
+              return
+            }
+            if (videoEvent.type === 'meta') {
+              try {
+                owner.send('emulator:videoStreamMeta', {
+                  streamId,
+                  deviceId: args.deviceId,
+                  meta: videoEvent.meta
+                })
+              } catch {
+                stopSubscription(streamId, owner)
+              }
+            } else {
+              delivery.enqueue(videoEvent.frame)
+            }
+          })
+          if (subscriptions.get(streamId) !== pendingSubscription) {
+            unsubscribe()
             return
           }
-          if (videoEvent.type === 'meta') {
-            owner.send('emulator:videoStreamMeta', {
-              streamId,
-              deviceId: args.deviceId,
-              meta: videoEvent.meta
-            })
-          } else {
-            owner.send('emulator:videoStreamFrame', {
-              streamId,
-              deviceId: args.deviceId,
-              ...videoEvent.frame
-            })
-          }
-        })
-        pendingSubscription.unsubscribe = unsubscribe
+          pendingSubscription.unsubscribe = unsubscribe
+        } catch {
+          stopSubscription(streamId, owner)
+        }
       }, 0)
       owner.once('destroyed', onOwnerDestroyed)
       return { streamId }
@@ -83,4 +138,19 @@ export function registerEmulatorVideoStreamHandlers(): void {
   ipcMain.handle('emulator:videoStreamStop', (event, args: { streamId: string }) => {
     stopSubscription(args.streamId, event.sender)
   })
+  ipcMain.on(
+    'emulator:videoStreamFrameAck',
+    (event, args: { streamId: string; deliveryToken: string; deliveryId: number }) => {
+      const subscription =
+        typeof args?.streamId === 'string' ? subscriptions.get(args.streamId) : undefined
+      if (
+        subscription?.owner === event.sender &&
+        args.deliveryToken === subscription.deliveryToken &&
+        Number.isSafeInteger(args.deliveryId) &&
+        args.deliveryId > 0
+      ) {
+        subscription.delivery.acknowledge(args.deliveryId)
+      }
+    }
+  )
 }

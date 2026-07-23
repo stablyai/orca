@@ -15,6 +15,7 @@ import {
   codexAppServerCapabilityCache,
   getCodexAppServerHostKey
 } from './codex-app-server-capability-cache'
+import { CodexHostRetryDeadlines } from './codex-host-retry-deadlines'
 import {
   writeCodexTrustGrantLedgerHome,
   type CodexTrustGrantBinaryStamp,
@@ -72,7 +73,7 @@ const diagnostics = {
   lastFallbackReason: null as CodexTrustGrantFallbackReason | null
 }
 export type CodexTrustGrantDiagnostics = typeof diagnostics
-const transientRetryAfterByHost = new Map<string, number>()
+const transientRetryAfterByHost = new CodexHostRetryDeadlines()
 
 export function getCodexTrustGrantDiagnostics(): CodexTrustGrantDiagnostics {
   return { ...diagnostics }

@@ -1,3 +1,5 @@
+import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
+
 const BROWSER_SCREENCAST_KIND = 0x62
 const BROWSER_SCREENCAST_VERSION = 1
 const HEADER_BYTES = 16
@@ -51,7 +53,7 @@ function byteToFormat(value: number): BrowserScreencastFormat | null {
 
 function decodeJson(bytes: Uint8Array): unknown {
   try {
-    return JSON.parse(new TextDecoder().decode(bytes)) as unknown
+    return parseMobileJsonTextWithinLimits(new TextDecoder().decode(bytes))
   } catch {
     return null
   }

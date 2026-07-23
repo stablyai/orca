@@ -2,8 +2,13 @@ import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
+import { JsonStringifyByteLimitError } from '../../../shared/node-bounded-json-stringify'
 import type { E2EEKeypair } from '../e2ee-keypair'
-import { RelayControlClient } from './relay-control-client'
+import {
+  RELAY_CONTROL_MAX_MESSAGE_BYTES,
+  RelayControlClient,
+  serializeRelayControlMessage
+} from './relay-control-client'
 
 const encoder = new TextEncoder()
 const HOST_PROOF_DOMAIN = 'orca-relay-host-proof/v1'
@@ -79,6 +84,21 @@ function nextJson(ws: WebSocket): Promise<Record<string, unknown>> {
 describe('RelayControlClient', () => {
   const servers: WebSocketServer[] = []
   const clients: RelayControlClient[] = []
+
+  it('preserves ordinary control message serialization byte-for-byte', () => {
+    const payload = { type: 'auth-refresh', relayJwt: 'token-😀' }
+
+    expect(serializeRelayControlMessage(payload)).toBe(JSON.stringify(payload))
+  })
+
+  it('rejects an oversized control message during bounded serialization', () => {
+    expect(() =>
+      serializeRelayControlMessage({
+        type: 'auth-refresh',
+        relayJwt: 'x'.repeat(RELAY_CONTROL_MAX_MESSAGE_BYTES)
+      })
+    ).toThrow(JsonStringifyByteLimitError)
+  })
 
   afterEach(async () => {
     for (const client of clients.splice(0)) {

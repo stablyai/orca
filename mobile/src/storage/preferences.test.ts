@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   HOST_DOCK_MAX_WIDTH,
   HOST_DOCK_MIN_WIDTH,
@@ -10,22 +10,29 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
+  loadPinnedIds,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
+  MOBILE_STORED_ID_SET_MAX_ENTRIES,
+  MOBILE_STORED_ID_SET_MAX_STORAGE_CHARACTERS,
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
+  savePinnedIds,
   savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
   saveTerminalLinkOpenMode
 } from './preferences'
 import {
+  SESSION_VIEW_OVERRIDE_MAX_ACTIVE_BARRIERS,
+  SESSION_VIEW_OVERRIDE_MAX_ENTRIES,
   loadDefaultSessionView,
   loadSessionViewOverrides,
   readDefaultSessionViewPreference,
   readSessionViewOverridesPreference,
+  resetSessionViewPreferencesForTests,
   saveDefaultSessionView,
   updateSessionViewOverride
 } from './session-view-preferences'
@@ -47,8 +54,13 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 describe('session view preference', () => {
   beforeEach(() => {
+    resetSessionViewPreferencesForTests()
     vi.mocked(AsyncStorage.getItem).mockReset()
     vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  afterEach(() => {
+    resetSessionViewPreferencesForTests()
   })
 
   it('defaults to terminal and persists the chat default', async () => {
@@ -270,6 +282,72 @@ describe('session view preference', () => {
       JSON.stringify({ tab: 'chat' })
     )
   })
+
+  it('loads the exact override count and rejects one over without parsing it into state', async () => {
+    const exact = Object.fromEntries(
+      Array.from({ length: SESSION_VIEW_OVERRIDE_MAX_ENTRIES }, (_, index) => [
+        `tab-${index}`,
+        'chat'
+      ])
+    )
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(exact))
+
+    await expect(readSessionViewOverridesPreference('host', 'worktree')).resolves.toEqual({
+      overrides: new Map(Object.entries(exact)) as Map<string, 'chat'>,
+      loaded: true
+    })
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(
+      JSON.stringify({ ...exact, 'one-over': 'terminal' })
+    )
+    await expect(readSessionViewOverridesPreference('host', 'worktree')).resolves.toEqual({
+      overrides: new Map(),
+      loaded: false
+    })
+  })
+
+  it('evicts the oldest override when a new user choice exceeds the count cap', async () => {
+    const exact = Object.fromEntries(
+      Array.from({ length: SESSION_VIEW_OVERRIDE_MAX_ENTRIES }, (_, index) => [
+        `tab-${index}`,
+        'chat'
+      ])
+    )
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(exact))
+
+    await updateSessionViewOverride('host', 'worktree', 'new-tab', 'terminal')
+
+    const stored = JSON.parse(vi.mocked(AsyncStorage.setItem).mock.calls[0]![1]) as Record<
+      string,
+      string
+    >
+    expect(Object.keys(stored)).toHaveLength(SESSION_VIEW_OVERRIDE_MAX_ENTRIES)
+    expect(stored['tab-0']).toBeUndefined()
+    expect(stored['new-tab']).toBe('terminal')
+  })
+
+  it('caps unresolved scoped write barriers and accepts another after one settles', async () => {
+    const blocked = deferred<void>()
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(() => blocked.promise)
+    const writes = Array.from({ length: SESSION_VIEW_OVERRIDE_MAX_ACTIVE_BARRIERS }, (_, index) =>
+      updateSessionViewOverride(`host-${index}`, 'worktree', 'tab', 'chat')
+    )
+    await vi.waitFor(() =>
+      expect(AsyncStorage.setItem).toHaveBeenCalledTimes(SESSION_VIEW_OVERRIDE_MAX_ACTIVE_BARRIERS)
+    )
+
+    await expect(updateSessionViewOverride('one-over', 'worktree', 'tab', 'chat')).rejects.toThrow(
+      'Too many session view override writes are pending'
+    )
+
+    blocked.resolve()
+    await Promise.all(writes)
+    vi.mocked(AsyncStorage.setItem).mockResolvedValue(undefined)
+    await expect(
+      updateSessionViewOverride('recovered', 'worktree', 'tab', 'chat')
+    ).resolves.toBeUndefined()
+  })
 })
 
 describe('push notification preference', () => {
@@ -405,6 +483,57 @@ describe('terminal live input disabled handles preference', () => {
       'orca:terminalLiveInputDisabled:host%2Fone:folder%3AC%3A%5Crepo',
       JSON.stringify(['pty-2', 'pty-1'])
     )
+  })
+
+  it('accepts the exact handle cap and persists the newest handles at one over', async () => {
+    const exact = new Set(
+      Array.from({ length: MOBILE_STORED_ID_SET_MAX_ENTRIES }, (_, index) => `pty-${index}`)
+    )
+    await saveDisabledTerminalLiveInputHandles('host', 'worktree', exact)
+    expect(JSON.parse(vi.mocked(AsyncStorage.setItem).mock.calls[0]![1])).toHaveLength(
+      MOBILE_STORED_ID_SET_MAX_ENTRIES
+    )
+
+    exact.add('one-over')
+    await saveDisabledTerminalLiveInputHandles('host', 'worktree', exact)
+    const retained = JSON.parse(vi.mocked(AsyncStorage.setItem).mock.calls[1]![1]) as string[]
+    expect(retained).toHaveLength(MOBILE_STORED_ID_SET_MAX_ENTRIES)
+    expect(retained).not.toContain('pty-0')
+    expect(retained).toContain('one-over')
+  })
+
+  it('rejects an oversized handle payload before parsing', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(
+      'x'.repeat(MOBILE_STORED_ID_SET_MAX_STORAGE_CHARACTERS + 1)
+    )
+
+    await expect(
+      readDisabledTerminalLiveInputHandlesPreference('host', 'worktree')
+    ).resolves.toEqual({ handles: new Set(), loaded: false })
+  })
+})
+
+describe('pinned worktree ids preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('round-trips normal pins unchanged', async () => {
+    const pins = new Set(['worktree-2', 'worktree-1'])
+    await savePinnedIds('host', pins)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pins:host', JSON.stringify([...pins]))
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify([...pins]))
+    await expect(loadPinnedIds('host')).resolves.toEqual(pins)
+  })
+
+  it('bounds oversized durable pin payloads', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(
+      'x'.repeat(MOBILE_STORED_ID_SET_MAX_STORAGE_CHARACTERS + 1)
+    )
+
+    await expect(loadPinnedIds('host')).resolves.toEqual(new Set())
   })
 })
 

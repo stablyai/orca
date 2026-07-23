@@ -19,6 +19,7 @@ import { errorMessage } from './session-scanner-values'
 export const LIST_TIMEOUT_MS = 30_000
 export const PARSE_TIMEOUT_MS = 15_000
 export const IDLE_TEARDOWN_MS = 30_000
+export const MAX_PENDING_CALLS = 256
 // After this many consecutive worker deaths, fail the remaining queued calls to
 // scan issues instead of respawning so a DB that reliably kills the worker can't
 // spin a crash loop. Reset on any successful response, after draining, and when a
@@ -142,6 +143,11 @@ export class OpenCodeSqliteWorkerClient {
   }
 
   private dispatch(request: OpenCodeSqliteRequestBody, timeoutMs: number): Promise<unknown> {
+    if (this.queue.length + (this.active ? 1 : 0) >= MAX_PENDING_CALLS) {
+      return Promise.reject(
+        new Error(`OpenCode SQLite worker reached its ${MAX_PENDING_CALLS}-request capacity`)
+      )
+    }
     return new Promise((resolve, reject) => {
       const id = this.nextId++
       // A fresh burst from full idle starts a new scan: clear any death count

@@ -5,6 +5,7 @@ import { Client as SshClient } from 'ssh2'
 import type { ChildProcess } from 'node:child_process'
 import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import { clampSshConnectionError } from '../../shared/ssh-retained-payload-admission'
 import {
   getOrcaControlSocketPath,
   spawnSystemSsh,
@@ -46,6 +47,7 @@ import {
   createLinkedSshFileTransferSignal,
   raceSftpFileTransferWithAbort
 } from './ssh-file-transfer-abort'
+import { SystemSshOutputTail } from './system-ssh-output-tail'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 type SshRemoteFileOptions = {
@@ -813,8 +815,8 @@ export class SshConnection {
     })
     try {
       await new Promise<void>((resolve, reject) => {
-        let stdout = ''
-        let stderr = ''
+        const stdout = new SystemSshOutputTail()
+        const stderr = new SystemSshOutputTail()
         let settled = false
         const cleanup = (): void => {
           clearTimeout(timeout)
@@ -833,10 +835,10 @@ export class SshConnection {
           callback()
         }
         const onStdoutData = (data: Buffer): void => {
-          stdout += data.toString('utf-8')
+          stdout.push(data)
         }
         const onStderrData = (data: Buffer): void => {
-          stderr += data.toString('utf-8')
+          stderr.push(data)
         }
         const onError = (err: Error): void => {
           settle(() => reject(err))
@@ -847,10 +849,11 @@ export class SshConnection {
               reject(new Error('SSH connection attempt was cancelled'))
               return
             }
-            if (code !== 0 || !stdout.includes('ORCA-SYSTEM-SSH-OK')) {
+            if (code !== 0 || !stdout.toString().includes('ORCA-SYSTEM-SSH-OK')) {
+              const stderrText = stderr.toString()
               reject(
                 new Error(
-                  `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
+                  `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderrText ? ` stderr: ${stderrText.trim()}` : ''}`
                 )
               )
               return
@@ -1327,7 +1330,7 @@ export class SshConnection {
     this.state = {
       ...this.state,
       status,
-      error: error ?? null,
+      error: clampSshConnectionError(error ?? null),
       supportsFolderDownload: status === 'connected' && !this.useSystemSshTransport
     }
     this.callbacks.onStateChange(this.target.id, { ...this.state })

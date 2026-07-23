@@ -87,6 +87,8 @@ export type ResumableParseFinalizeOptions = {
 export type ResumableSessionParseState = {
   consumeLine(line: string): void
   clone(): ResumableSessionParseState
+  // The cache budget must include fold state that persistence intentionally omits.
+  retainedUtf8Bytes(): number
   // Refresh per-scan file metadata (mtime display string) without re-parsing.
   touchFile(file: FileWithMtime): void
   finalize(

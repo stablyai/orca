@@ -5,7 +5,11 @@ import { EventEmitter } from 'node:events'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/relay-protocol'
+import {
+  MAX_BUFFERED_FRAME_CHUNKS,
+  RELAY_SENTINEL,
+  RELAY_SENTINEL_TIMEOUT_MS
+} from '../ssh/relay-protocol'
 import {
   MAX_STARTUP_BUFFER_BYTES,
   waitForWslRelaySentinel,
@@ -108,6 +112,26 @@ describe('waitForWslRelaySentinel', () => {
     expect(received).toEqual([])
     await Promise.resolve()
     expect(received).toEqual(['DEFER'])
+  })
+
+  it('closes instead of retaining too many post-sentinel fragments before attachment', async () => {
+    const child = fakeChild()
+    const promise = waitForWslRelaySentinel(child)
+    emitStdout(child, RELAY_SENTINEL)
+    for (let index = 0; index <= MAX_BUFFERED_FRAME_CHUNKS; index += 1) {
+      emitStdout(child, Buffer.from('x'))
+    }
+
+    const transport = await promise
+    const onClose = vi.fn()
+    const onData = vi.fn()
+    transport.onClose(onClose)
+    transport.onData(onData)
+    await Promise.resolve()
+
+    expect(child.kill).toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(onData).not.toHaveBeenCalled()
   })
 
   it('kills the child and rejects when startup output exceeds 64 KiB before the sentinel', async () => {

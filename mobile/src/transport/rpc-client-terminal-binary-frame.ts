@@ -9,7 +9,14 @@ export type TerminalSnapshotState = {
   streamId: number
   meta: Record<string, unknown>
   chunks: string[]
+  bytes: number
 }
+
+export const MOBILE_TERMINAL_STREAM_FRAME_MAX_PAYLOAD_BYTES = 256 * 1024
+export const MOBILE_TERMINAL_SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024
+export const MOBILE_TERMINAL_SNAPSHOT_MAX_AGGREGATE_BYTES = 16 * 1024 * 1024
+export const MOBILE_TERMINAL_SNAPSHOT_MAX_ACTIVE = 16
+export const MOBILE_TERMINAL_SNAPSHOT_MAX_CHUNKS = 1_024
 
 type StreamingListener = (result: unknown) => void
 
@@ -17,6 +24,29 @@ type TerminalBinaryFrameOptions = {
   terminalSnapshots: Map<number, TerminalSnapshotState>
   getListener: (streamId: number) => StreamingListener | undefined
   recordValidatedInboundTraffic: () => void
+  maxFramePayloadBytes?: number
+  maxSnapshotBytes?: number
+  maxSnapshotAggregateBytes?: number
+  maxActiveSnapshots?: number
+  maxSnapshotChunks?: number
+}
+
+function retainedSnapshotBytes(snapshots: Map<number, TerminalSnapshotState>): number {
+  let bytes = 0
+  for (const snapshot of snapshots.values()) {
+    bytes += snapshot.bytes
+  }
+  return bytes
+}
+
+function rejectSnapshot(
+  options: TerminalBinaryFrameOptions,
+  listener: StreamingListener,
+  streamId: number,
+  message: string
+): void {
+  options.terminalSnapshots.delete(streamId)
+  listener({ type: 'error', streamId, message })
 }
 
 export function handleTerminalBinaryFrame(
@@ -30,6 +60,12 @@ export function handleTerminalBinaryFrame(
   const listener = options.getListener(frame.streamId)
   if (!listener) {
     options.recordValidatedInboundTraffic()
+    return
+  }
+  const maxFramePayloadBytes =
+    options.maxFramePayloadBytes ?? MOBILE_TERMINAL_STREAM_FRAME_MAX_PAYLOAD_BYTES
+  if (frame.payload.byteLength > maxFramePayloadBytes) {
+    rejectSnapshot(options, listener, frame.streamId, 'Terminal stream frame exceeded size limit.')
     return
   }
   if (frame.opcode === TerminalStreamOpcode.Output) {
@@ -46,11 +82,20 @@ export function handleTerminalBinaryFrame(
     if (!meta) {
       return
     }
+    const maxActiveSnapshots = options.maxActiveSnapshots ?? MOBILE_TERMINAL_SNAPSHOT_MAX_ACTIVE
+    if (
+      !options.terminalSnapshots.has(frame.streamId) &&
+      options.terminalSnapshots.size >= maxActiveSnapshots
+    ) {
+      rejectSnapshot(options, listener, frame.streamId, 'Too many terminal snapshots are active.')
+      return
+    }
     options.recordValidatedInboundTraffic()
     options.terminalSnapshots.set(frame.streamId, {
       streamId: frame.streamId,
       meta,
-      chunks: []
+      chunks: [],
+      bytes: 0
     })
     return
   }
@@ -60,7 +105,21 @@ export function handleTerminalBinaryFrame(
     if (!snapshot) {
       return
     }
+    const maxSnapshotBytes = options.maxSnapshotBytes ?? MOBILE_TERMINAL_SNAPSHOT_MAX_BYTES
+    const maxSnapshotAggregateBytes =
+      options.maxSnapshotAggregateBytes ?? MOBILE_TERMINAL_SNAPSHOT_MAX_AGGREGATE_BYTES
+    const maxSnapshotChunks = options.maxSnapshotChunks ?? MOBILE_TERMINAL_SNAPSHOT_MAX_CHUNKS
+    if (
+      snapshot.chunks.length >= maxSnapshotChunks ||
+      snapshot.bytes + frame.payload.byteLength > maxSnapshotBytes ||
+      retainedSnapshotBytes(options.terminalSnapshots) + frame.payload.byteLength >
+        maxSnapshotAggregateBytes
+    ) {
+      rejectSnapshot(options, listener, frame.streamId, 'Terminal snapshot exceeded size limit.')
+      return
+    }
     snapshot.chunks.push(decodeTerminalStreamText(frame.payload))
+    snapshot.bytes += frame.payload.byteLength
     return
   }
   if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {

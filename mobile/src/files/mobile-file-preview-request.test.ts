@@ -28,6 +28,16 @@ function clientWithResponses(responses: RpcResponse[]) {
   }
 }
 
+function pngBase64(width = 1, height = 1): string {
+  const bytes = Buffer.alloc(24)
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write('IHDR', 12, 'ascii')
+  bytes.writeUInt32BE(width, 16)
+  bytes.writeUInt32BE(height, 20)
+  return bytes.toString('base64')
+}
+
 describe('mobile-file-preview-request', () => {
   it('selects readPreview for raster images and read for text-like files', () => {
     expect(createMobileFilePreviewRequest('wt-1', 'assets/logo.png')).toEqual({
@@ -45,14 +55,13 @@ describe('mobile-file-preview-request', () => {
   })
 
   it('loads images through readPreview and never calls files.open', async () => {
-    const client = clientWith(
-      ok({ content: 'aW1hZ2U=', isBinary: true, isImage: true, mimeType: 'image/png' })
-    )
+    const content = pngBase64()
+    const client = clientWith(ok({ content, isBinary: true, isImage: true, mimeType: 'image/png' }))
 
     await expect(loadMobileFilePreview(client, 'wt-1', 'assets/logo.png')).resolves.toEqual({
       status: 'ready',
       kind: 'image',
-      dataUri: 'data:image/png;base64,aW1hZ2U='
+      dataUri: `data:image/png;base64,${content}`
     })
     expect(client.sendRequest).toHaveBeenCalledWith('files.readPreview', {
       worktree: 'id:wt-1',
@@ -527,12 +536,30 @@ describe('mobile-file-preview-request', () => {
   })
 
   it.each([
-    ['missing isBinary', { content: 'aW1hZ2U=', isImage: true, mimeType: 'image/png' }],
-    ['missing isImage', { content: 'aW1hZ2U=', isBinary: true, mimeType: 'image/png' }],
-    ['missing mimeType', { content: 'aW1hZ2U=', isBinary: true, isImage: true }],
+    ['missing isBinary', { content: pngBase64(), isImage: true, mimeType: 'image/png' }],
+    ['missing isImage', { content: pngBase64(), isBinary: true, mimeType: 'image/png' }],
+    ['missing mimeType', { content: pngBase64(), isBinary: true, isImage: true }],
     ['empty content', { content: '', isBinary: true, isImage: true, mimeType: 'image/png' }]
   ])('rejects invalid image preview results: %s', (_label, result) => {
     expect(normalizeMobileFilePreviewResponse('assets/logo.png', ok(result))).toEqual({
+      status: 'error',
+      message: 'Binary preview unavailable',
+      reconnect: false
+    })
+  })
+
+  it('rejects an oversized raster response before React Native receives a data URI', () => {
+    expect(
+      normalizeMobileFilePreviewResponse(
+        'assets/logo.png',
+        ok({
+          content: pngBase64(32_769, 1),
+          isBinary: true,
+          isImage: true,
+          mimeType: 'image/png'
+        })
+      )
+    ).toEqual({
       status: 'error',
       message: 'Binary preview unavailable',
       reconnect: false

@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
+import { forEachWithConcurrency } from '../../shared/map-with-concurrency'
 import { notifyWorktreeGitStatusMetadataChanged, notifyWorktreesChanged } from './worktree-remote'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
@@ -34,6 +35,7 @@ type ActiveWatch = WorktreeBaseWatchTarget & {
 }
 
 const WATCH_DEBOUNCE_MS = 250
+export const WORKTREE_WATCH_CLOSE_LIMIT = 8
 const activeWatches = new Map<string, ActiveWatch>()
 let syncGeneration = 0
 let scheduledSync: ReturnType<typeof setTimeout> | null = null
@@ -327,10 +329,8 @@ export function scheduleCurrentWorktreeBaseDirectoryWatcherSync(): void {
 export async function disposeWorktreeBaseDirectoryWatchers(): Promise<void> {
   syncGeneration++
   latestSyncContext = null
-  if (scheduledSync) {
-    clearTimeout(scheduledSync)
-    scheduledSync = null
-  }
-  await Promise.all([...activeWatches.keys()].map((key) => removeWatch(key)))
+  clearTimeout(scheduledSync ?? undefined)
+  scheduledSync = null
+  await forEachWithConcurrency([...activeWatches.keys()], WORKTREE_WATCH_CLOSE_LIMIT, removeWatch)
   clearWorktreeBaseDirectoryWatchTargetWarnings()
 }

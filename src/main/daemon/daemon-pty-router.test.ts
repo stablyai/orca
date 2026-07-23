@@ -7,6 +7,7 @@ import {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
 } from './types'
+import { MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES } from '../providers/pty-process-list-admission'
 
 type AdapterMock = DaemonPtyAdapter & {
   emitData: (id: string, data: string, sequenceChars?: number) => void
@@ -419,6 +420,17 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await expect(router.listProcesses()).rejects.toThrow('legacy unavailable')
+  })
+
+  it('fails listProcesses closed when adapters amplify the aggregate listing', async () => {
+    const current = createAdapter(
+      'current',
+      buildSessionIds('current', MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES)
+    )
+    const legacy = createAdapter('legacy', ['legacy-over-cap'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.listProcesses()).rejects.toThrow('pty_process_list_capacity')
   })
 
   it('merges startup reconciliation and updates route mappings', async () => {

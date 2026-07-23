@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PRE_READY_STDIN_MAX_CODE_UNITS } from './session'
 import { PRODUCER_PAUSE_FAILSAFE_MS, SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/types'
@@ -8,12 +9,8 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Behavior-preserving: keep synthetic-pid sessions probing as alive so the wedged-ConPTY exit synthesis
-// never fires here (the synthesis path is covered in session-wedged-exit.test.ts).
-vi.mock('../pty/os-process-termination', () => ({
-  isProcessAlive: () => true,
-  killOsProcessTree: vi.fn()
-}))
+// Keep synthetic pids alive; exit synthesis is tested in session-wedged-exit.test.ts.
+vi.mock('../pty/os-process-termination', () => ({ isProcessAlive: () => true }))
 
 // Stub the subprocess — Session talks to it via an interface, not child_process directly.
 function createMockSubprocess() {
@@ -23,18 +20,15 @@ function createMockSubprocess() {
   let onExit: ((code: number) => void) | null = null
   let killed = false
   let clearCalls = 0
-  let pid = 12345
   let pauseCalls = 0
   let resumeCalls = 0
 
   return {
     written,
     signals,
+    pid: 12345,
     get killed() {
       return killed
-    },
-    get pid() {
-      return pid
     },
     get pauseCalls() {
       return pauseCalls
@@ -357,6 +351,19 @@ describe('Session', () => {
       subprocess.simulateData('\r\nuser@host $ ')
       vi.advanceTimersByTime(30)
       expect(subprocess.written).toEqual(['first\n', 'second\n'])
+    })
+
+    it('bounds aggregate input retained before shell readiness without changing admitted writes', () => {
+      createSession({ shellReadySupported: true })
+      const chunk = 'x'.repeat(16 * 1024)
+      const admittedChunks = PRE_READY_STDIN_MAX_CODE_UNITS / chunk.length
+
+      for (let index = 0; index < admittedChunks; index += 1) {
+        session.write(chunk)
+      }
+      expect(() => session.write('overflow')).toThrow('safe memory limit')
+      vi.advanceTimersByTime(15_000)
+      expect(subprocess.written).toEqual(Array(admittedChunks).fill(chunk))
     })
 
     it('uses the short settle path when marker and prompt bytes arrive together', () => {

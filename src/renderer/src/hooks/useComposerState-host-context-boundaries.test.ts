@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   canResolveFolderSmartGitHubSubmit,
+  COMPOSER_PROJECT_LOOKUP_CONCURRENCY,
   getInitialAutoManagedWorkspaceName,
   isExplicitWorkspaceNameInput,
   resolveSmartGitHubCreateNames,
@@ -402,7 +403,10 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(lookupSection).toContain('isProjectGroupTarget')
     expect(lookupSection).toContain('folderSourceRepos.filter(isGitRepoKind)')
-    expect(lookupSection).toContain('Promise.all')
+    expect(COMPOSER_PROJECT_LOOKUP_CONCURRENCY).toBe(4)
+    expect(lookupSection).toContain('await mapWithConcurrency(')
+    expect(lookupSection).toContain('COMPOSER_PROJECT_LOOKUP_CONCURRENCY')
+    expect(lookupSection).not.toContain('Promise.all')
     expect(lookupSection).toContain('buildTaskSourceContextFromRepo')
 
     const section = sourceBetween(

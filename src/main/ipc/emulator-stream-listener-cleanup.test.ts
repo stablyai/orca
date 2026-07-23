@@ -9,6 +9,9 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: (channel: string, listener: (event: unknown, args: unknown) => unknown) => {
       handlers.set(channel, listener)
+    },
+    on: (channel: string, listener: (event: unknown, args: unknown) => unknown) => {
+      handlers.set(channel, listener)
     }
   },
   // Any non-null return marks the sender as a real BrowserWindow renderer.
@@ -23,6 +26,8 @@ vi.mock('../emulator/mjpeg-frame-stream', () => ({
 }))
 
 vi.mock('../emulator/scrcpy-video-registry', () => ({
+  SCRCPY_VIDEO_MAX_GOP_FRAMES: 120,
+  SCRCPY_VIDEO_MAX_REPLAY_BYTES_PER_DEVICE: 32 * 1024 * 1024,
   scrcpyVideoRegistry: { subscribe: () => () => {} }
 }))
 

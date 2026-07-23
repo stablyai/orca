@@ -48,15 +48,79 @@ function toDefaultWslLinuxPath(windowsPath: string): string {
 
 const WSL_CANONICALIZE_TIMEOUT_MS = 5000
 const WSL_PATH_MISSING_OUTPUT = '__ORCA_WSL_PATH_MISSING__'
+export const WSL_CANONICAL_PATH_CACHE_MAX_ENTRIES = 256
+export const WSL_CANONICAL_PATH_CACHE_MAX_UTF8_BYTES = 2 * 1024 * 1024
 
 // Why: `readlink -f` over wsl.exe stalls up to the timeout on a cold or wedged
 // distro. Running it synchronously on the Electron main process froze the UI on
 // every Codex WSL launch, so resolve it off-thread and cache the latest result.
-const canonicalWslPathCache = new Map<string, string>()
+const canonicalWslPathCache = new Map<string, { canonicalPath: string; retainedBytes: number }>()
+let canonicalWslPathCacheBytes = 0
 const inFlightWslCanonicalizations = new Map<string, Set<WslCanonicalPathSettled>>()
 
 function wslCanonicalizeCacheKey(distro: string, linuxPath: string): string {
   return `${distro}\x00${linuxPath}`
+}
+
+function getCachedWslCanonicalPath(key: string): string | null {
+  const cached = canonicalWslPathCache.get(key)
+  if (!cached) {
+    return null
+  }
+  canonicalWslPathCache.delete(key)
+  canonicalWslPathCache.set(key, cached)
+  return cached.canonicalPath
+}
+
+function deleteCachedWslCanonicalPath(key: string): void {
+  const cached = canonicalWslPathCache.get(key)
+  if (!cached) {
+    return
+  }
+  canonicalWslPathCache.delete(key)
+  canonicalWslPathCacheBytes -= cached.retainedBytes
+}
+
+function cacheWslCanonicalPath(key: string, canonicalPath: string): void {
+  deleteCachedWslCanonicalPath(key)
+  const retainedBytes = Buffer.byteLength(key, 'utf8') + Buffer.byteLength(canonicalPath, 'utf8')
+  if (retainedBytes > WSL_CANONICAL_PATH_CACHE_MAX_UTF8_BYTES) {
+    return
+  }
+  while (
+    canonicalWslPathCache.size >= WSL_CANONICAL_PATH_CACHE_MAX_ENTRIES ||
+    canonicalWslPathCacheBytes + retainedBytes > WSL_CANONICAL_PATH_CACHE_MAX_UTF8_BYTES
+  ) {
+    const oldestKey = canonicalWslPathCache.keys().next().value as string | undefined
+    if (oldestKey === undefined) {
+      break
+    }
+    deleteCachedWslCanonicalPath(oldestKey)
+  }
+  canonicalWslPathCache.set(key, { canonicalPath, retainedBytes })
+  canonicalWslPathCacheBytes += retainedBytes
+}
+
+function settleWslCanonicalization(key: string, settlement: WslCanonicalPathSettlement): void {
+  if (settlement.status === 'resolved') {
+    cacheWslCanonicalPath(key, settlement.canonicalPath)
+  } else if (settlement.status === 'missing') {
+    // Why: a successful directory probe is stronger than a transport error;
+    // clear the identity so stale trust can be revoked and later rediscovered.
+    deleteCachedWslCanonicalPath(key)
+  }
+  // Why: keep the last known-good cache on timeout/transient WSL failures.
+  // Dropping it forces the next launch onto the logical `/mnt/...` guess,
+  // which is wrong under custom automount roots and rewrites trust keys.
+  const settledListeners = inFlightWslCanonicalizations.get(key) ?? new Set()
+  inFlightWslCanonicalizations.delete(key)
+  for (const listener of settledListeners) {
+    try {
+      listener(settlement)
+    } catch (listenerError) {
+      console.warn('[codex-wsl-hook-path] failed to reconcile canonical path', listenerError)
+    }
+  }
 }
 
 function scheduleWslLinuxPathCanonicalization(
@@ -102,40 +166,28 @@ function scheduleWslLinuxPathCanonicalization(
         'sh',
         linuxPath
       ]
-  execFile(
-    'wsl.exe',
-    args,
-    { encoding: 'utf-8', timeout: WSL_CANONICALIZE_TIMEOUT_MS, windowsHide: true },
-    (error, stdout) => {
-      const canonicalPath = stdout.trim()
-      const resolvedPath = !error && canonicalPath.startsWith('/') ? canonicalPath : null
-      const pathMissing = !error && canonicalPath === WSL_PATH_MISSING_OUTPUT
-      const settlement: WslCanonicalPathSettlement = resolvedPath
-        ? { status: 'resolved', canonicalPath: resolvedPath }
-        : pathMissing
-          ? { status: 'missing' }
-          : { status: 'unavailable' }
-      if (settlement.status === 'resolved') {
-        canonicalWslPathCache.set(key, canonicalPath)
-      } else if (settlement.status === 'missing') {
-        // Why: a successful directory probe is stronger than a transport error;
-        // clear the identity so stale trust can be revoked and later rediscovered.
-        canonicalWslPathCache.delete(key)
+  try {
+    execFile(
+      'wsl.exe',
+      args,
+      { encoding: 'utf-8', timeout: WSL_CANONICALIZE_TIMEOUT_MS, windowsHide: true },
+      (error, stdout) => {
+        const canonicalPath = stdout.trim()
+        const resolvedPath = !error && canonicalPath.startsWith('/') ? canonicalPath : null
+        const pathMissing = !error && canonicalPath === WSL_PATH_MISSING_OUTPUT
+        settleWslCanonicalization(
+          key,
+          resolvedPath
+            ? { status: 'resolved', canonicalPath: resolvedPath }
+            : pathMissing
+              ? { status: 'missing' }
+              : { status: 'unavailable' }
+        )
       }
-      // Why: keep the last known-good cache on timeout/transient WSL failures.
-      // Dropping it forces the next launch onto the logical `/mnt/...` guess,
-      // which is wrong under custom automount roots and rewrites trust keys.
-      const settledListeners = inFlightWslCanonicalizations.get(key) ?? new Set()
-      inFlightWslCanonicalizations.delete(key)
-      for (const listener of settledListeners) {
-        try {
-          listener(settlement)
-        } catch (listenerError) {
-          console.warn('[codex-wsl-hook-path] failed to reconcile canonical path', listenerError)
-        }
-      }
-    }
-  )
+    )
+  } catch {
+    settleWslCanonicalization(key, { status: 'unavailable' })
+  }
 }
 
 function canonicalizeWslLinuxPath(
@@ -147,7 +199,7 @@ function canonicalizeWslLinuxPath(
   if (process.platform !== 'win32') {
     return linuxPath
   }
-  const cached = canonicalWslPathCache.get(wslCanonicalizeCacheKey(distro, linuxPath))
+  const cached = getCachedWslCanonicalPath(wslCanonicalizeCacheKey(distro, linuxPath))
   // Why: every launch revalidates asynchronously. Returning the cache keeps
   // launch prep synchronous while settlement repairs or revokes trust in-place.
   scheduleWslLinuxPathCanonicalization(distro, linuxPath, windowsPath, onSettled)
@@ -199,6 +251,13 @@ export const _internals = {
   canonicalizeWslLinuxPath,
   resetWslCanonicalPathCache(): void {
     canonicalWslPathCache.clear()
+    canonicalWslPathCacheBytes = 0
     inFlightWslCanonicalizations.clear()
+  },
+  getWslCanonicalPathCacheSize(): number {
+    return canonicalWslPathCache.size
+  },
+  getWslCanonicalPathCacheBytes(): number {
+    return canonicalWslPathCacheBytes
   }
 }

@@ -22,8 +22,10 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../shared/runtime-types'
+import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
+export const RUNTIME_LIVENESS_READ_CONCURRENCY = 2
 
 type IntervalHandle = ReturnType<typeof setInterval>
 
@@ -103,8 +105,10 @@ async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLiv
   const targets = getRuntimeLivenessTargetWorktrees(state)
   const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
-  await Promise.all(
-    [...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
+  await mapWithConcurrency(
+    [...targets],
+    RUNTIME_LIVENESS_READ_CONCURRENCY,
+    async ([worktreeId, runtimeEnvironmentId]) => {
       try {
         const result = await callRuntimeRpc<RuntimeTerminalListResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
@@ -134,7 +138,7 @@ async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLiv
         // Why: stale runtime liveness is unsafe for all-or-nothing hibernation;
         // omitting the worktree makes the planner fail closed for this pass.
       }
-    })
+    }
   )
   return { runtimeLivePtyIdsByWorktreeId, runtimeLivenessRequiredWorktreeIds }
 }

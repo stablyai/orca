@@ -5,6 +5,7 @@ const MOBILE_DICTATION_KEEP_AWAKE_TAG_PREFIX = 'orca-mobile-dictation'
 // Native keep-awake promises can be lost during Activity teardown; a bounded
 // wait keeps the serialized queue below from wedging dictation until restart.
 export const MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS = 10_000
+export const MOBILE_DICTATION_KEEP_AWAKE_MAX_TRACKED_TAGS = 128
 
 let nextOwnerId = 0
 let keepAwakeOperation: Promise<void> = Promise.resolve()
@@ -51,7 +52,34 @@ function withNativeCallTimeout(nativeCall: Promise<void>): Promise<void> {
   })
 }
 
+function trackedTagCount(): number {
+  let count = activeTags.size
+  for (const tag of pendingCleanupTags) {
+    if (!activeTags.has(tag)) {
+      count += 1
+    }
+  }
+  for (const tag of pendingActivations.keys()) {
+    if (!activeTags.has(tag) && !pendingCleanupTags.has(tag)) {
+      count += 1
+    }
+  }
+  return count
+}
+
+function assertTrackedTagCapacity(tag: string): void {
+  if (
+    !activeTags.has(tag) &&
+    !pendingCleanupTags.has(tag) &&
+    !pendingActivations.has(tag) &&
+    trackedTagCount() >= MOBILE_DICTATION_KEEP_AWAKE_MAX_TRACKED_TAGS
+  ) {
+    throw new Error('Too many dictation keep-awake operations are pending')
+  }
+}
+
 async function activateTrackedTag(tag: string, isStillWanted: () => boolean): Promise<void> {
+  assertTrackedTagCapacity(tag)
   const nativeActivation = activateKeepAwakeAsync(tag)
   try {
     await withNativeCallTimeout(nativeActivation)
@@ -233,4 +261,13 @@ export function createMobileDictationKeepAwakeOwner(): MobileDictationKeepAwakeO
 // out after a dictation ended — otherwise nothing runs until the next one.
 export function drainMobileDictationKeepAwakeCleanup(): Promise<void> {
   return enqueueKeepAwakeOperation(cleanupPendingTags)
+}
+
+/** Test-only: drop retained native-operation bookkeeping between cases. */
+export function resetMobileDictationKeepAwakeForTests(): void {
+  nextOwnerId = 0
+  keepAwakeOperation = Promise.resolve()
+  activeTags.clear()
+  pendingCleanupTags.clear()
+  pendingActivations.clear()
 }

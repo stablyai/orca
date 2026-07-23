@@ -1,8 +1,9 @@
 /* eslint-disable max-lines -- Why: CLI parser tests share one mocked runtime client and fixture queue; splitting this file would duplicate setup and make command coverage harder to audit. */
 import path from 'node:path'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, truncateSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MAX_ORCA_YAML_BYTES } from '../shared/orca-yaml-file-limit'
 
 const {
   callMock,
@@ -2129,6 +2130,24 @@ describe('orca cli worktree awareness', () => {
           expect.objectContaining({ id: 'recipe.destroy', status: 'pass' })
         ])
       )
+      expect(callMock).not.toHaveBeenCalled()
+    } finally {
+      rmSync(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects an oversized sparse orca.yaml during vm recipe doctor', async () => {
+    const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-vm-doctor-bounds-'))
+    try {
+      const yamlPath = path.join(repoPath, 'orca.yaml')
+      writeFileSync(yamlPath, '')
+      truncateSync(yamlPath, MAX_ORCA_YAML_BYTES + 1)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(['vm', 'recipe', 'doctor', 'bounded', '--repo-path', repoPath, '--json'])
+
+      expect(process.exitCode).toBe(1)
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('File too large'))
       expect(callMock).not.toHaveBeenCalled()
     } finally {
       rmSync(repoPath, { recursive: true, force: true })

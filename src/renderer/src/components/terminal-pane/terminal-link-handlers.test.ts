@@ -11,7 +11,8 @@ import {
   installFilePathLinkClickFallback,
   isTerminalLinkActivation,
   openFilePathLinkAtBufferPosition,
-  openDetectedFilePath
+  openDetectedFilePath,
+  TERMINAL_FILE_LINK_PROBE_CONCURRENCY
 } from './terminal-link-handlers'
 import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from './terminal-path-exists-cache'
 import { handleOscLink } from './terminal-osc-link-routing'
@@ -1230,6 +1231,43 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(links).toEqual([])
     expect(shellPathExists).toHaveBeenCalled()
+  })
+
+  it.each([
+    ['at the limit', TERMINAL_FILE_LINK_PROBE_CONCURRENCY],
+    ['above the limit', TERMINAL_FILE_LINK_PROBE_CONCURRENCY + 1]
+  ])('bounds path-existence probes %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    const releases: (() => void)[] = []
+    const shellPathExists = vi.mocked(window.api.shell.pathExists)
+    shellPathExists.mockImplementation(async () => {
+      active++
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      active--
+      return true
+    })
+    const text = Array.from({ length: count }, (_, index) => `file-${index}.ts`).join(' ')
+    const { provider } = createProviderSetup([makeBufferLine(text)], new Map())
+    const links = new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(shellPathExists).toHaveBeenCalledTimes(
+      Math.min(count, TERMINAL_FILE_LINK_PROBE_CONCURRENCY)
+    )
+    if (count > TERMINAL_FILE_LINK_PROBE_CONCURRENCY) {
+      releases.shift()?.()
+      for (let turn = 0; turn < 5 && shellPathExists.mock.calls.length < count; turn++) {
+        await Promise.resolve()
+      }
+      expect(shellPathExists).toHaveBeenCalledTimes(count)
+    }
+    releases.splice(0).forEach((release) => release())
+
+    await expect(links).resolves.toHaveLength(count)
+    expect(peak).toBe(Math.min(count, TERMINAL_FILE_LINK_PROBE_CONCURRENCY))
   })
 
   it('does not invoke the xterm callback twice when the callback throws', async () => {

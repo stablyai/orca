@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from './ssh-connection'
+import { REMOTE_NODE_CANDIDATE_LIMIT_SENTINEL } from './ssh-remote-node-candidate-probe'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const execCommandMock = vi.hoisted(() => vi.fn())
@@ -99,7 +100,9 @@ describe('resolveRemoteNodePath', () => {
     await resolveRemoteNodePath(conn)
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('"$HOME/.local/share/mise/installs/node"/*/bin/node')
+    expect(callScript).toContain(
+      'find_node_candidates "$HOME/.local/share/mise/installs/node" "bin/node"'
+    )
   })
 
   it('probes asdf install directories', async () => {
@@ -110,7 +113,7 @@ describe('resolveRemoteNodePath', () => {
     await resolveRemoteNodePath(conn)
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('"$HOME/.asdf/installs/nodejs"/*/bin/node')
+    expect(callScript).toContain('find_node_candidates "$HOME/.asdf/installs/nodejs" "bin/node"')
   })
 
   it('probes volta bin directory', async () => {
@@ -134,10 +137,10 @@ describe('resolveRemoteNodePath', () => {
     const callScript = execCommandMock.mock.calls[0]![1] as string
     expect(callScript).toContain('nvm_dirs=${NVM_DIR:-"$HOME/.nvm"}')
     expect(callScript).toContain('NVM_DIR[[:space:]]*=')
-    expect(callScript).toContain('"$nvm_dir"/versions/node/*/bin/node')
+    expect(callScript).toContain('find_node_candidates "$nvm_dir/versions/node" "bin/node"')
   })
 
-  it('quotes version-manager directory prefixes while leaving globs active', async () => {
+  it('streams quoted version-manager directories without shell globs', async () => {
     execCommandMock
       .mockResolvedValueOnce('/home/u/.fnm/node-versions/v20.11.0/installation/bin/node\n')
       .mockResolvedValueOnce('v20.11.0\n')
@@ -145,10 +148,17 @@ describe('resolveRemoteNodePath', () => {
     await resolveRemoteNodePath(conn)
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('"$HOME/.fnm/node-versions"/*/installation/bin/node')
-    expect(callScript).toContain('"$HOME/.local/share/fnm/node-versions"/*/installation/bin/node')
-    expect(callScript).toContain('"$HOME/.local/share/mise/installs/node"/*/bin/node')
-    expect(callScript).toContain('"$HOME/.asdf/installs/nodejs"/*/bin/node')
+    expect(callScript).toContain(
+      'find_node_candidates "$HOME/.fnm/node-versions" "installation/bin/node"'
+    )
+    expect(callScript).toContain(
+      'find_node_candidates "$HOME/.local/share/fnm/node-versions" "installation/bin/node"'
+    )
+    expect(callScript).toContain(
+      'find_node_candidates "$HOME/.local/share/mise/installs/node" "bin/node"'
+    )
+    expect(callScript).toContain('find_node_candidates "$HOME/.asdf/installs/nodejs" "bin/node"')
+    expect(callScript).not.toContain('/*/')
   })
 
   it('probes fnm XDG data directory installs', async () => {
@@ -274,6 +284,20 @@ describe('resolveRemoteNodePath', () => {
       wrapCommand: false,
       timeoutMs: 8_000
     })
+  })
+
+  it('falls back without probing a partial capacity-limited candidate inventory', async () => {
+    execCommandMock
+      .mockResolvedValueOnce(`/old/node\n${REMOTE_NODE_CANDIDATE_LIMIT_SENTINEL}\n`)
+      .mockResolvedValueOnce('/bin/bash')
+      .mockResolvedValueOnce('/home/u/.nvm/versions/node/v20.11.0/bin/node\n')
+      .mockResolvedValueOnce('v20.11.0\n')
+
+    await expect(resolveRemoteNodePath(conn)).resolves.toBe(
+      '/home/u/.nvm/versions/node/v20.11.0/bin/node'
+    )
+
+    expect(execCommandMock.mock.calls[1]?.[1]).toBe('echo "${SHELL:-/bin/sh}"')
   })
 
   it('falls back to the login shell when every path-probe candidate is too old', async () => {

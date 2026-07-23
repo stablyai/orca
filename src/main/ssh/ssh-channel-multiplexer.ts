@@ -305,14 +305,14 @@ export class SshChannelMultiplexer {
     this.decoder.reset()
     this.transport.close?.()
 
-    for (const handler of this.disposeHandlers) {
+    // Why: stream handlers unsubscribe while failing; detach first so one cleanup cannot skip the next.
+    for (const handler of this.disposeHandlers.splice(0)) {
       try {
         handler(reason)
       } catch {
         // Don't let a handler error prevent other handlers from running
       }
     }
-    this.disposeHandlers.length = 0
   }
 
   isDisposed(): boolean {

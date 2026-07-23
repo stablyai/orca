@@ -5,6 +5,7 @@ import type { GlobalSettings, Repo } from '../../../shared/types'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForRepoRuntimeOwner } from './repo-runtime-owner'
 import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { measureUtf8ByteLength } from '../../../shared/utf8-byte-limits'
 
 /** Lowercased `owner/repo` → Repo[]. */
 export type SlugIndex = Map<string, Repo[]>
@@ -15,6 +16,22 @@ export type SlugIndex = Map<string, Repo[]>
 export const slugByRepoId = new Map<string, string | null>()
 const slugFailureExpiresAtByRepoId = new Map<string, number>()
 export const REPO_SLUG_FAILURE_TTL_MS = 60_000
+export const MAX_REPO_SLUG_CACHE_ENTRIES = 2_048
+export const REPO_SLUG_CACHE_MAX_ENTRY_BYTES = 8 * 1024
+
+function repoSlugCacheEntryFits(cacheKey: string, value: string | null): boolean {
+  const keyBytes = measureUtf8ByteLength(cacheKey, {
+    stopAfterBytes: REPO_SLUG_CACHE_MAX_ENTRY_BYTES
+  })
+  if (keyBytes.exceededLimit) {
+    return false
+  }
+  return value === null
+    ? true
+    : !measureUtf8ByteLength(value, {
+        stopAfterBytes: REPO_SLUG_CACHE_MAX_ENTRY_BYTES - keyBytes.byteLength
+      }).exceededLimit
+}
 
 export function readRepoSlugCache(
   cacheKey: string,
@@ -34,6 +51,16 @@ export function readRepoSlugCache(
 }
 
 export function rememberRepoSlug(cacheKey: string, value: string | null, now = Date.now()): void {
+  if (!repoSlugCacheEntryFits(cacheKey, value)) {
+    deleteRepoSlugCacheKey(cacheKey)
+    return
+  }
+  if (!slugByRepoId.has(cacheKey) && slugByRepoId.size >= MAX_REPO_SLUG_CACHE_ENTRIES) {
+    const oldestCacheKey = slugByRepoId.keys().next().value
+    if (oldestCacheKey !== undefined) {
+      deleteRepoSlugCacheKey(oldestCacheKey)
+    }
+  }
   slugByRepoId.set(cacheKey, value)
   if (value === null) {
     slugFailureExpiresAtByRepoId.set(cacheKey, now + REPO_SLUG_FAILURE_TTL_MS)

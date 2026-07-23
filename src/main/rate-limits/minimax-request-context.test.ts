@@ -27,6 +27,7 @@ import {
   getUniqueMiniMaxCookieNames,
   logMiniMaxFetchFailure,
   makeMiniMaxRequestHeaders,
+  MINIMAX_COOKIE_WRITE_CONCURRENCY,
   MINIMAX_USAGE_ENDPOINT,
   normalizeMiniMaxCookieHeader,
   redactMiniMaxSecret
@@ -164,7 +165,7 @@ describe('makeMiniMaxRequestHeaders', () => {
 describe('fetchMiniMaxWithSessionCookieJar', () => {
   beforeEach(() => {
     clearStorageDataMock.mockClear()
-    cookiesSetMock.mockClear()
+    cookiesSetMock.mockReset().mockResolvedValue(undefined)
     netFetchMock.mockReset()
     sessionFromPartitionMock.mockClear()
     sessionFromPartitionMock.mockImplementation(() => ({
@@ -276,6 +277,42 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
     )
   })
 
+  it.each([
+    ['at the limit', MINIMAX_COOKIE_WRITE_CONCURRENCY],
+    ['above the limit', MINIMAX_COOKIE_WRITE_CONCURRENCY + 1]
+  ])('bounds session cookie writes %s', async (_, count) => {
+    netFetchMock.mockResolvedValueOnce({ ok: true, status: 200 })
+    let active = 0
+    let peak = 0
+    const releases: (() => void)[] = []
+    cookiesSetMock.mockImplementation(async () => {
+      active++
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      active--
+    })
+
+    const fetchResult = fetchMiniMaxWithSessionCookieJar({
+      cookie: Array.from({ length: count }, (_, index) => `cookie_${index}=value`).join('; '),
+      endpoint: MINIMAX_USAGE_ENDPOINT,
+      groupId: null,
+      signal: new AbortController().signal
+    })
+    await vi.waitFor(() =>
+      expect(cookiesSetMock).toHaveBeenCalledTimes(
+        Math.min(count, MINIMAX_COOKIE_WRITE_CONCURRENCY)
+      )
+    )
+    if (count > MINIMAX_COOKIE_WRITE_CONCURRENCY) {
+      releases.shift()?.()
+      await vi.waitFor(() => expect(cookiesSetMock).toHaveBeenCalledTimes(count))
+    }
+    releases.splice(0).forEach((release) => release())
+
+    await fetchResult
+    expect(peak).toBe(Math.min(count, MINIMAX_COOKIE_WRITE_CONCURRENCY))
+  })
+
   it('reports the transport name as session-cookie-jar on success', async () => {
     netFetchMock.mockResolvedValueOnce({
       ok: true,
@@ -303,7 +340,7 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
 describe('fetchMiniMaxWithManualCookieHeader', () => {
   beforeEach(() => {
     clearStorageDataMock.mockClear()
-    cookiesSetMock.mockClear()
+    cookiesSetMock.mockReset().mockResolvedValue(undefined)
     netFetchMock.mockReset()
     sessionFromPartitionMock.mockClear()
     sessionFromPartitionMock.mockImplementation(() => ({

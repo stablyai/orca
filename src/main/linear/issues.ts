@@ -11,6 +11,7 @@ import type {
 } from '../../shared/types'
 import type { LinearClient } from '@linear/sdk'
 import { loadLinearSdk } from './linear-sdk'
+import { clampLinearSearchLimit } from '../../shared/linear-agent-access'
 import {
   LINEAR_ISSUE_API_PAGE_SIZE_MAX,
   clampLinearIssueListLimit
@@ -19,6 +20,15 @@ import {
   isEmptyLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
 } from '../../shared/linear-issue-attribute-filter'
+import {
+  boundedIntegrationErrorLog,
+  boundedIntegrationErrorMessage
+} from '../integration-error-message'
+import { createIntegrationFanoutBudget, runBoundedIntegrationFanout } from '../integration-fanout'
+import {
+  INTEGRATION_PAGINATION_MAX_ITEMS,
+  IntegrationPaginationBudget
+} from '../integration-pagination-budget'
 import {
   acquire,
   release,
@@ -397,7 +407,7 @@ function mapRawIssueForWorkspace(
   entry: LinearClientForWorkspace,
   issue: LinearIssueNode
 ): LinearIssue {
-  const labelNodes = issue.labels?.nodes ?? []
+  const labelNodes = (issue.labels?.nodes ?? []).slice(0, LINEAR_ISSUE_API_PAGE_SIZE_MAX)
   return {
     id: issue.id,
     identifier: issue.identifier,
@@ -418,7 +428,9 @@ function mapRawIssueForWorkspace(
     labels: labelNodes.map((label) => label.name),
     // Why: labelIds drives full-replace updates. Keep Linear's complete id
     // list even when display label nodes are paginated.
-    labelIds: issue.labelIds ?? labelNodes.map((label) => label.id),
+    labelIds:
+      issue.labelIds?.slice(0, INTEGRATION_PAGINATION_MAX_ITEMS) ??
+      labelNodes.map((label) => label.id),
     assignee: issue.assignee
       ? {
           id: issue.assignee.id,
@@ -441,6 +453,7 @@ async function readIssueConnectionPages(
   loadConnection: LinearIssueConnectionLoader
 ): Promise<{ items: LinearIssue[]; hasMore: boolean }> {
   const items: LinearIssue[] = []
+  const budget = new IntegrationPaginationBudget()
   let after: string | undefined
   let hasMore = false
 
@@ -449,12 +462,22 @@ async function readIssueConnectionPages(
     // cursors instead of asking for the whole expanded limit in one request.
     const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit - items.length)
     const connection = await loadConnection(after ? { first, after } : { first })
-    const nodes = connection?.nodes ?? []
-    items.push(...nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)))
-    hasMore = Boolean(connection?.pageInfo?.hasNextPage)
+    const pageNodes = connection?.nodes ?? []
+    const nodes = pageNodes.slice(0, first)
+    const pageItems = nodes.map((issue) => mapRawIssueForWorkspace(entry, issue))
+    hasMore = pageNodes.length > nodes.length || Boolean(connection?.pageInfo?.hasNextPage)
+    if (!budget.admitPage(pageItems)) {
+      console.warn('[linear] Issue list exceeded its retained result budget; truncating.')
+      return { items, hasMore: true }
+    }
+    items.push(...pageItems)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
-    if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
+    if (!hasMore || !nextCursor || nextCursor === after || pageNodes.length === 0) {
+      break
+    }
+    if (!budget.canRequestPage) {
+      console.warn('[linear] Issue list reached its retained result budget; truncating.')
       break
     }
     after = nextCursor
@@ -539,7 +562,7 @@ function shouldThrowAuthError(selection: LinearWorkspaceSelection | null | undef
 }
 
 function linearWriteMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return boundedIntegrationErrorMessage(error)
 }
 
 function isDuplicateIdError(error: unknown): boolean {
@@ -643,7 +666,7 @@ async function runLinearLookup<T>(
 }
 
 function isLinearLookupMiss(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = boundedIntegrationErrorMessage(error)
   // Why: Linear throws for direct entity lookups that miss; write-id probes
   // need the same null shape as GraphQL nullable data, not a failed write.
   return message.includes('Entity not found:') && message.includes('Could not find referenced')
@@ -703,7 +726,10 @@ function mapRawIssueWriteRecord(
 ): LinearIssueWriteRecord {
   return {
     ...issue,
-    labels: issue.labels?.nodes ?? []
+    ...(issue.labelIds
+      ? { labelIds: issue.labelIds.slice(0, INTEGRATION_PAGINATION_MAX_ITEMS) }
+      : {}),
+    labels: (issue.labels?.nodes ?? []).slice(0, LINEAR_ISSUE_API_PAGE_SIZE_MAX)
   }
 }
 
@@ -731,7 +757,7 @@ export async function getIssue(
           throw error
         }
       } else {
-        console.warn('[linear] getIssue failed:', error)
+        console.warn('[linear] getIssue failed:', boundedIntegrationErrorLog(error))
       }
     } finally {
       release()
@@ -814,20 +840,22 @@ export async function searchIssues(
   limit = 20,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue[]> {
+  const effectiveLimit = clampLinearSearchLimit(limit)
   const entries = getClients(workspaceId)
   if (entries.length === 0) {
     return []
   }
 
-  const results = await Promise.all(
-    entries.map(async (entry) => {
+  const fanout = await runBoundedIntegrationFanout(
+    entries,
+    async (entry) => {
       await acquire()
       try {
         const result = await entry.client.client.rawRequest<
           LinearIssueConnectionResponse,
           LinearRawVariables
-        >(SEARCH_ISSUES_QUERY, { term: query, first: limit })
-        const nodes = result.data?.searchIssues?.nodes ?? []
+        >(SEARCH_ISSUES_QUERY, { term: query, first: effectiveLimit })
+        const nodes = (result.data?.searchIssues?.nodes ?? []).slice(0, effectiveLimit)
         return nodes.map((issue) => mapRawIssueForWorkspace(entry, issue))
       } catch (error) {
         if (isAuthError(error)) {
@@ -836,21 +864,28 @@ export async function searchIssues(
             throw error
           }
         } else {
-          console.warn('[linear] searchIssues failed:', error)
+          console.warn('[linear] searchIssues failed:', boundedIntegrationErrorLog(error))
         }
         return []
       } finally {
         release()
       }
-    })
+    },
+    (issues) => issues
   )
   // Why: searchIssues returns Linear's relevance ranking. Re-sorting by
   // updatedAt would discard relevance order for single-workspace results,
   // diverging from Linear's web UI and pre-PR behavior.
-  if (entries.length === 1) {
-    return results.flat().slice(0, limit)
+  if (fanout.truncated) {
+    console.warn(
+      '[linear] Cross-workspace search exceeded its aggregate result budget; truncating.'
+    )
   }
-  return sortAndLimitIssues(results.flat(), limit)
+  const results = fanout.results.flat()
+  if (entries.length === 1) {
+    return results.slice(0, effectiveLimit)
+  }
+  return sortAndLimitIssues(results, effectiveLimit)
 }
 
 export type LinearListFilter = 'assigned' | 'created' | 'all' | 'completed' | 'open'
@@ -875,7 +910,7 @@ function linearWorkspaceError(
   entry: LinearClientForWorkspace,
   error: unknown
 ): LinearWorkspaceError {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = boundedIntegrationErrorMessage(error)
   const lower = message.toLocaleLowerCase()
   const type: LinearWorkspaceError['type'] = isAuthError(error)
     ? 'auth'
@@ -917,7 +952,7 @@ async function readListIssuesForWorkspace(
         throw error
       }
     } else {
-      console.warn('[linear] listIssues failed:', error)
+      console.warn('[linear] listIssues failed:', boundedIntegrationErrorLog(error))
     }
     return { items: [], hasMore: false, errors: [linearWorkspaceError(entry, error)] }
   } finally {
@@ -931,10 +966,11 @@ async function readIssueConnectionPage(
   page: LinearIssuePageRequest
 ): Promise<LinearIssuePageResult> {
   const connection = await loadConnection(page)
-  const nodes = connection?.nodes ?? []
+  const pageNodes = connection?.nodes ?? []
+  const nodes = pageNodes.slice(0, page.first)
   return {
     items: nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)),
-    hasMore: Boolean(connection?.pageInfo?.hasNextPage),
+    hasMore: pageNodes.length > nodes.length || Boolean(connection?.pageInfo?.hasNextPage),
     endCursor: connection?.pageInfo?.endCursor ?? undefined
   }
 }
@@ -942,8 +978,9 @@ async function readIssueConnectionPage(
 async function readListIssuesPageForState(
   state: LinearIssueWorkspacePageState,
   first: number,
-  workspaceId: LinearWorkspaceSelection | null | undefined
-): Promise<void> {
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  budget?: IntegrationPaginationBudget
+): Promise<boolean> {
   const previousCursor = state.after
   await acquire()
   try {
@@ -952,25 +989,38 @@ async function readListIssuesPageForState(
       state.loadConnection,
       previousCursor ? { first, after: previousCursor } : { first }
     )
+    if (budget && !budget.admitPage(page.items)) {
+      state.hasMore = true
+      state.canPage = false
+      return false
+    }
     state.items.push(...page.items)
     state.hasMore = page.hasMore
     state.after = page.endCursor
     state.canPage = Boolean(
       page.hasMore && page.endCursor && page.endCursor !== previousCursor && page.items.length > 0
     )
+    return true
   } catch (error) {
     state.items = []
     state.hasMore = false
     state.canPage = false
-    state.error = linearWorkspaceError(state.entry, error)
+    const workspaceError = linearWorkspaceError(state.entry, error)
+    state.error = workspaceError
     if (isAuthError(error)) {
       clearToken(state.entry.workspace.id)
       if (shouldThrowAuthError(workspaceId)) {
         throw error
       }
     } else {
-      console.warn('[linear] listIssues failed:', error)
+      console.warn('[linear] listIssues failed:', boundedIntegrationErrorLog(error))
     }
+    if (budget && !budget.admitPage([workspaceError])) {
+      state.error = undefined
+      state.hasMore = true
+      return false
+    }
+    return true
   } finally {
     release()
   }
@@ -1023,15 +1073,38 @@ async function readListIssuesAcrossWorkspaces(
     canPage: false
   }))
   const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit)
+  const aggregateBudget = createIntegrationFanoutBudget()
 
   // Why: "all workspaces" is a global sorted list. Pull one bounded page per
   // workspace first, then spend additional API calls only where unseen issues
   // can still change the global updatedAt cutoff.
-  await Promise.all(states.map((state) => readListIssuesPageForState(state, first, workspaceId)))
+  const initialFanout = await runBoundedIntegrationFanout(
+    states,
+    async (state) => {
+      await readListIssuesPageForState(state, first, workspaceId)
+      return state
+    },
+    (state) => [...state.items, ...(state.error ? [state.error] : [])],
+    { budget: aggregateBudget }
+  )
+  const acceptedStates = new Set(initialFanout.results)
+  for (const state of states) {
+    if (!acceptedStates.has(state)) {
+      state.items = []
+      state.error = undefined
+      state.hasMore = true
+      state.canPage = false
+    }
+  }
+  let aggregateTruncated = initialFanout.truncated
 
   for (;;) {
     const nextState = findWorkspaceToPageForLimit(states, limit)
     if (!nextState) {
+      break
+    }
+    if (!aggregateBudget.canRequestPage) {
+      aggregateTruncated = true
       break
     }
     const itemCount = states.reduce((count, state) => count + state.items.length, 0)
@@ -1042,7 +1115,10 @@ async function readListIssuesAcrossWorkspaces(
             LINEAR_ISSUE_API_PAGE_SIZE_MAX,
             Math.max(1, countSelectedIssuesOlderThanWorkspaceBoundary(states, nextState, limit))
           )
-    await readListIssuesPageForState(nextState, pageSize, workspaceId)
+    if (!(await readListIssuesPageForState(nextState, pageSize, workspaceId, aggregateBudget))) {
+      aggregateTruncated = true
+      break
+    }
   }
 
   const limited = sortLimitAndDescribeIssues(
@@ -1051,7 +1127,7 @@ async function readListIssuesAcrossWorkspaces(
   )
   return {
     items: limited.items,
-    hasMore: states.some((state) => state.hasMore) || limited.clipped,
+    hasMore: aggregateTruncated || states.some((state) => state.hasMore) || limited.clipped,
     errors: states.flatMap((state) => (state.error ? [state.error] : []))
   }
 }
@@ -1148,7 +1224,7 @@ export async function createIssue(
       clearToken(entry.workspace.id)
       throw error
     }
-    const message = error instanceof Error ? error.message : String(error)
+    const message = boundedIntegrationErrorMessage(error)
     return { ok: false, error: message }
   } finally {
     release()
@@ -1284,7 +1360,7 @@ export async function updateIssue(
       clearToken(entry.workspace.id)
       throw error
     }
-    const message = error instanceof Error ? error.message : String(error)
+    const message = boundedIntegrationErrorMessage(error)
     return { ok: false, error: message }
   } finally {
     release()
@@ -1381,7 +1457,7 @@ export async function addIssueComment(
       clearToken(entry.workspace.id)
       throw error
     }
-    const message = error instanceof Error ? error.message : String(error)
+    const message = boundedIntegrationErrorMessage(error)
     return { ok: false, error: message }
   } finally {
     release()
@@ -1511,7 +1587,7 @@ export async function getIssueComments(
       LinearRawVariables
     >(ISSUE_COMMENTS_QUERY, { id: issueId })
     const nodes = result.data?.issue?.comments?.nodes ?? []
-    return nodes.map((node) => ({
+    return nodes.slice(0, LINEAR_ISSUE_API_PAGE_SIZE_MAX).map((node) => ({
       id: node.id,
       body: node.body ?? '',
       // Why: rawRequest returns createdAt as an ISO string already; do not
@@ -1529,7 +1605,7 @@ export async function getIssueComments(
       clearToken(entry.workspace.id)
       throw error
     }
-    console.warn('[linear] getIssueComments failed:', error)
+    console.warn('[linear] getIssueComments failed:', boundedIntegrationErrorLog(error))
     return []
   } finally {
     release()

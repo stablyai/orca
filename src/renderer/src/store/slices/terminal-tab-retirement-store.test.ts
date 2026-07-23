@@ -22,6 +22,11 @@ import {
   parkedWatchersByTabId
 } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
+  bindTerminalScrollIntentKey,
+  getTerminalScrollIntentKind,
+  markTerminalPinnedViewport
+} from '@/lib/pane-manager/terminal-scroll-intent'
+import {
   createTestStore,
   makeWorktree,
   makeTab,
@@ -118,6 +123,48 @@ describe('terminal tab retirement store boundary', () => {
     expect(dispose).toHaveBeenCalledOnce()
     expect(parkedWatchersByTabId.has('tab-1')).toBe(false)
     expect(capturedPanesByTabId.has('tab-1')).toBe(false)
+  })
+
+  it('retires durable scroll intent for every historical layout leaf', () => {
+    const store = createTestStore()
+    const retiredTerminal = {
+      buffer: { active: { type: 'normal' as const, viewportY: 4, baseY: 20 } }
+    }
+    bindTerminalScrollIntentKey(retiredTerminal, 'leaf-retired')
+    markTerminalPinnedViewport(retiredTerminal)
+    const recordOnlyTerminal = {
+      buffer: { active: { type: 'normal' as const, viewportY: 8, baseY: 20 } }
+    }
+    bindTerminalScrollIntentKey(recordOnlyTerminal, 'leaf-record-only')
+    markTerminalPinnedViewport(recordOnlyTerminal)
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: null,
+          activeLeafId: 'leaf-retired',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-record-only': 'pty-record-only' }
+        }
+      }
+    })
+
+    store.getState().closeTab('tab-1', { reason: 'pty-exit' })
+    markTerminalPinnedViewport(retiredTerminal)
+    markTerminalPinnedViewport(recordOnlyTerminal)
+
+    const reusedTerminal = {
+      buffer: { active: { type: 'normal' as const, viewportY: 20, baseY: 20 } }
+    }
+    bindTerminalScrollIntentKey(reusedTerminal, 'leaf-retired')
+    expect(getTerminalScrollIntentKind(reusedTerminal)).toBe('followOutput')
+    const recordOnlyReuse = {
+      buffer: { active: { type: 'normal' as const, viewportY: 20, baseY: 20 } }
+    }
+    bindTerminalScrollIntentKey(recordOnlyReuse, 'leaf-record-only')
+    expect(getTerminalScrollIntentKind(recordOnlyReuse)).toBe('followOutput')
   })
 
   it('routes runtime handles to runtime close and preserves shared PTYs', async () => {

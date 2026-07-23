@@ -1381,6 +1381,56 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     markUsedSpy.mockRestore()
   })
 
+  it('drops a queued old-peer frame after unsubscribe and transport invalidation', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const close = vi.fn()
+    subscribeRemoteRuntimeRequestMock.mockResolvedValue({
+      requestId: 'queued-old-peer',
+      close,
+      sendBinary: vi.fn()
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; subscriptionId: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const result = await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.subscribe',
+        subscriptionId: 'queued-old-peer'
+      }
+    )
+    const callbacks = subscribeRemoteRuntimeRequestMock.mock.calls[0]![4] as {
+      onBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
+    }
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+
+    expect(await unsubscribe({ sender: { id: 1 } }, result)).toEqual({ unsubscribed: true })
+    invalidateRuntimeEnvironmentTransport(added.environment.id)
+    callbacks.onBinary(new Uint8Array([1, 2, 3]))
+
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(senderSend).not.toHaveBeenCalled()
+  })
+
   it('closes streaming subscriptions when their saved runtime is removed', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()

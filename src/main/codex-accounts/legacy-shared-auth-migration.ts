@@ -1,6 +1,7 @@
-import { lstatSync, readFileSync } from 'node:fs'
+import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CodexManagedAccount } from '../../shared/types'
+import { readAgentStateFileSync } from '../agent-state-file-reader'
 import { writeFileAtomically } from './fs-utils'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
 import { codexAuthMatchesManagedAccount, compareCodexAuthFreshness } from './codex-auth-identity'
@@ -174,7 +175,7 @@ function migrateSharedMcpCredentials(
 
 function readRegularFile(filePath: string): string | null {
   const state = regularFileState(filePath)
-  return state === 'missing' ? null : readFileSync(filePath, 'utf-8')
+  return state === 'missing' ? null : readAgentStateFileSync(filePath)
 }
 
 function regularFileState(filePath: string): 'missing' | 'present' {

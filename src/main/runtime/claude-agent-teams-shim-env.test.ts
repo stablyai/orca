@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -23,6 +23,19 @@ describe('claude agent teams shim env', () => {
     await ensureClaudeAgentTeamsShimDir(root)
 
     await expect(readFile(join(root, 'tmux'), 'utf8')).resolves.toContain('agent-teams-tmux "$@"')
+  })
+
+  it('replaces a large sparse shim without reading its payload', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-large-shim-'))
+    roots.push(root)
+    await ensureClaudeAgentTeamsShimDir(root)
+    const shimPath = join(root, 'tmux')
+    await truncate(shimPath, 256 * 1024 * 1024)
+
+    await ensureClaudeAgentTeamsShimDir(root)
+
+    expect((await stat(shimPath)).size).toBeLessThan(64 * 1024)
+    await expect(readFile(shimPath, 'utf8')).resolves.toContain('agent-teams-tmux "$@"')
   })
 
   it('builds native shim env only for direct Claude commands', async () => {

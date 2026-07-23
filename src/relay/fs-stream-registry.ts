@@ -3,7 +3,10 @@ import { MAX_CONCURRENT_STREAMS, RelayErrorCode, STREAM_ACK_STALL_RECHECK_MS } f
 
 type StreamEntry = {
   handle: FileHandle
+  ownerClientId: number
   aborted: boolean
+  /** Highest chunk seq admitted to the outbound bulk lane. */
+  sentThroughSeq: number
   /** Highest chunk seq the client acknowledged (in-order; -1 = none yet). */
   ackedThroughSeq: number
   /** Pumps parked on the ack credit window. Woken by acks, abort, release,
@@ -22,23 +25,25 @@ export class RelayStreamRegistry {
   private streams = new Map<number, StreamEntry>()
   private nextId = 1
 
-  register(handle: FileHandle): number {
+  register(handle: FileHandle, ownerClientId: number): number {
     if (this.streams.size >= MAX_CONCURRENT_STREAMS) {
       throw new TooManyStreamsError()
     }
     const streamId = this.nextId++
     this.streams.set(streamId, {
       handle,
+      ownerClientId,
       aborted: false,
+      sentThroughSeq: -1,
       ackedThroughSeq: -1,
       ackWaiters: new Set()
     })
     return streamId
   }
 
-  abort(streamId: number): void {
+  abort(streamId: number, clientId: number): void {
     const entry = this.streams.get(streamId)
-    if (entry) {
+    if (entry?.ownerClientId === clientId) {
       entry.aborted = true
       this.wakeAckWaiters(entry)
     }
@@ -52,9 +57,22 @@ export class RelayStreamRegistry {
     return this.streams.get(streamId)
   }
 
-  recordAck(streamId: number, seq: number): void {
+  recordSent(streamId: number, seq: number): void {
     const entry = this.streams.get(streamId)
-    if (!entry || typeof seq !== 'number' || !Number.isFinite(seq)) {
+    if (entry && Number.isSafeInteger(seq) && seq === entry.sentThroughSeq + 1) {
+      entry.sentThroughSeq = seq
+    }
+  }
+
+  recordAck(streamId: number, seq: number, clientId: number): void {
+    const entry = this.streams.get(streamId)
+    if (
+      !entry ||
+      entry.ownerClientId !== clientId ||
+      !Number.isSafeInteger(seq) ||
+      seq < 0 ||
+      seq > entry.sentThroughSeq
+    ) {
       return
     }
     if (seq > entry.ackedThroughSeq) {
@@ -129,7 +147,11 @@ export class RelayStreamRegistry {
     // cleanly on the next iteration boundary instead of seeing EBADF when
     // release closes the handle out from under an in-flight read.
     for (const id of this.streams.keys()) {
-      this.abort(id)
+      const entry = this.streams.get(id)
+      if (entry) {
+        entry.aborted = true
+        this.wakeAckWaiters(entry)
+      }
     }
     const ids = Array.from(this.streams.keys())
     await Promise.all(ids.map((id) => this.release(id)))

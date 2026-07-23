@@ -67,6 +67,7 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import type { TuiAgent } from '../../shared/types'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { killOsProcessTree } from '../pty/os-process-termination'
+import { appendCompactedStringChunk } from '../../shared/string-chunk-compaction'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -811,7 +812,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   const bufferPreListenerData = (data: string): void => {
     // Why: Windows shell-arg startup commands can print before Session wires this subprocess in; preserve that spawn-time race window.
-    pendingPreListenerData.push(data)
+    appendCompactedStringChunk(pendingPreListenerData, data)
     pendingPreListenerDataChars += data.length
     while (pendingPreListenerDataChars > PENDING_PRE_LISTENER_DATA_MAX_CHARS) {
       const removed = pendingPreListenerData.shift()

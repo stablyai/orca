@@ -1,9 +1,25 @@
 /* eslint-disable max-lines -- Why: Hermes run history has to reconcile
  * markdown output files with SQLite session transcripts from separate stores. */
 import { existsSync } from 'node:fs'
-import { open, readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { open, opendir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import {
+  type BoundedHermesRunRefs,
+  HERMES_RUN_REF_MAX_ENTRIES,
+  HERMES_SESSION_RUN_REFS_SELECT_SQL,
+  HermesRunRefRetainer
+} from '../../shared/hermes-run-ref-retention'
+import {
+  formatHermesSessionMessagesWithinLimits,
+  HERMES_PRIMARY_OUTPUT_MAX_BYTES,
+  HERMES_RUN_PAGE_MAX_RUNS,
+  HERMES_SESSION_RUN_SELECT_SQL,
+  HERMES_SESSION_TRANSCRIPT_SELECT_SQL,
+  HERMES_SESSION_TRANSCRIPT_TRUNCATED_ERROR,
+  hydrateHermesRunPageWithinLimits
+} from '../../shared/hermes-run-output-limits'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import Database from '../sqlite/sync-database'
 
 const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
@@ -22,6 +38,7 @@ const LATEST_LOG_PATH_PATTERN =
 
 export type HermesCronOutputRunsPage = {
   total: number
+  totalSaturated?: true
   runs: unknown[]
 }
 
@@ -362,9 +379,10 @@ async function readReferencedLogFile(content: string): Promise<{
       return null
     }
     if (logStat.size <= MAX_REFERENCED_LOG_BYTES) {
+      const { buffer } = await readNodeFileWithinLimit(logPath, MAX_REFERENCED_LOG_BYTES)
       return {
         path: logPath,
-        content: await readFile(logPath, 'utf-8'),
+        content: buffer.toString('utf-8'),
         truncated: false
       }
     }
@@ -409,31 +427,6 @@ async function appendReferencedLogFile(content: string): Promise<string> {
   ]
     .filter((part) => part !== null)
     .join('\n\n')
-}
-
-function formatSessionMessages(messages: Record<string, unknown>[]): string | null {
-  if (messages.length === 0) {
-    return null
-  }
-  return messages
-    .map((message) => {
-      const role = typeof message.role === 'string' ? message.role : 'message'
-      const content = typeof message.content === 'string' ? message.content.trim() : ''
-      const toolName = typeof message.tool_name === 'string' ? message.tool_name.trim() : ''
-      const reasoning =
-        typeof message.reasoning_content === 'string'
-          ? message.reasoning_content.trim()
-          : typeof message.reasoning === 'string'
-            ? message.reasoning.trim()
-            : ''
-      const parts = [
-        `## ${role}${toolName ? ` / ${toolName}` : ''}`,
-        reasoning ? `### Reasoning\n\n${reasoning}` : null,
-        content || '(empty)'
-      ].filter(Boolean)
-      return parts.join('\n\n')
-    })
-    .join('\n\n---\n\n')
 }
 
 function getRunKey(run: unknown): string | null {
@@ -579,18 +572,20 @@ export async function readHermesCronOutputRuns(jobId: string): Promise<unknown[]
     .runs
 }
 
-async function readHermesCronOutputRunRefs(jobId: string): Promise<HermesMergedRunRef[]> {
+async function readHermesCronOutputRunRefs(
+  jobId: string
+): Promise<BoundedHermesRunRefs<HermesMergedRunRef>> {
   const outputRuns = await readHermesOutputFileRunRefs(jobId)
-  return mergeHermesOutputAndSessionRunRefs(outputRuns, readHermesSessionDbRunRefs(jobId)).sort(
-    (a, b) => {
-      const aTime = getRawRunTime(a)
-      const bTime = getRawRunTime(b)
-      if (Number.isFinite(aTime) && Number.isFinite(bTime)) {
-        return bTime - aTime
-      }
-      return getRawRunId(b).localeCompare(getRawRunId(a))
-    }
-  )
+  const sessionRuns = readHermesSessionDbRunRefs(jobId)
+  const mergedRetainer = new HermesRunRefRetainer<HermesMergedRunRef>()
+  for (const ref of mergeHermesOutputAndSessionRunRefs(outputRuns.refs, sessionRuns.refs)) {
+    mergedRetainer.add(ref)
+  }
+  const merged = mergedRetainer.finish()
+  return {
+    refs: merged.refs,
+    saturated: outputRuns.saturated || sessionRuns.saturated || merged.saturated
+  }
 }
 
 // Why: opening the Automations page calls readHermesCronOutputRunsPage with
@@ -600,9 +595,10 @@ async function readHermesCronOutputRunRefs(jobId: string): Promise<HermesMergedR
 const HERMES_RUN_COUNT_CACHE_TTL_MS = 2000
 const HERMES_RUN_COUNT_CACHE_MAX_ENTRIES = 200
 type HermesRunCountCacheEntry = {
-  promise: Promise<number>
+  promise: Promise<HermesRunCount>
   expiresAt: number
 }
+type HermesRunCount = { total: number; totalSaturated?: true }
 const hermesRunCountCache = new Map<string, HermesRunCountCacheEntry>()
 
 export function clearHermesCronOutputRunCountCache(jobId?: string): void {
@@ -628,7 +624,7 @@ function pruneHermesRunCountCache(now: number): void {
   }
 }
 
-async function readHermesCronOutputRunCount(jobId: string): Promise<number> {
+async function readHermesCronOutputRunCount(jobId: string): Promise<HermesRunCount> {
   const now = Date.now()
   const cached = hermesRunCountCache.get(jobId)
   if (cached && cached.expiresAt > now) {
@@ -641,7 +637,10 @@ async function readHermesCronOutputRunCount(jobId: string): Promise<number> {
   // size bound and expired sweep, a long session can pin stale job ids forever.
   pruneHermesRunCountCache(now)
   const entry: HermesRunCountCacheEntry = {
-    promise: readHermesCronOutputRunRefs(jobId).then((refs) => refs.length),
+    promise: readHermesCronOutputRunRefs(jobId).then((result) => ({
+      total: result.refs.length,
+      ...(result.saturated ? { totalSaturated: true as const } : {})
+    })),
     expiresAt: Number.POSITIVE_INFINITY
   }
   hermesRunCountCache.set(jobId, entry)
@@ -685,57 +684,54 @@ export async function readHermesCronOutputRunsPage(
     return { total: 0, runs: [] }
   }
   const safePage = Math.max(1, Math.floor(page))
-  const safePageSize = Math.max(0, Math.floor(pageSize))
+  const safePageSize = Math.min(HERMES_RUN_PAGE_MAX_RUNS, Math.max(0, Math.floor(pageSize)))
   if (safePageSize === 0) {
     // Why: manager listing only needs a badge count; hydrating markdown logs
     // and full session transcripts can make opening Automations very slow.
-    return { total: await readHermesCronOutputRunCount(jobId), runs: [] }
+    return { ...(await readHermesCronOutputRunCount(jobId)), runs: [] }
   }
   const runRefs = await readHermesCronOutputRunRefs(jobId)
   const start = (safePage - 1) * safePageSize
-  const pageRefs = runRefs.slice(start, start + safePageSize)
+  const pageRefs = runRefs.refs.slice(start, start + safePageSize)
   return {
-    total: runRefs.length,
-    runs: await Promise.all(pageRefs.map((ref) => hydrateHermesRunRef(jobId, ref)))
+    total: runRefs.refs.length,
+    ...(runRefs.saturated ? { totalSaturated: true } : {}),
+    runs: await hydrateHermesRunPageWithinLimits(pageRefs, (ref) => hydrateHermesRunRef(jobId, ref))
   }
 }
 
-function getRawRunId(run: unknown): string {
-  if (typeof run === 'object' && run !== null && 'id' in run) {
-    return String((run as { id: unknown }).id)
-  }
-  return ''
-}
-
-function getRawRunTime(run: unknown): number {
-  if (typeof run !== 'object' || run === null || !('run_at' in run)) {
-    return Number.NaN
-  }
-  const runAt = (run as { run_at: unknown }).run_at
-  return typeof runAt === 'string' ? Date.parse(runAt) : Number.NaN
-}
-
-async function readHermesOutputFileRunRefs(jobId: string): Promise<HermesOutputRunRef[]> {
+async function readHermesOutputFileRunRefs(
+  jobId: string
+): Promise<BoundedHermesRunRefs<HermesOutputRunRef>> {
   const outputDir = join(HERMES_OUTPUT_DIR, jobId)
   if (!existsSync(outputDir)) {
-    return []
+    return { refs: [], saturated: false }
   }
-  const entries = await readdir(outputDir, { withFileTypes: true })
-  return entries
-    .filter((entry) => entry.isFile() && HERMES_OUTPUT_FILE_PATTERN.test(entry.name))
-    .map((entry) => ({
+  const retainer = new HermesRunRefRetainer<HermesOutputRunRef>()
+  const directory = await opendir(outputDir)
+  for await (const entry of directory) {
+    if (!entry.isFile() || !HERMES_OUTPUT_FILE_PATTERN.test(entry.name)) {
+      continue
+    }
+    retainer.add({
       kind: 'output' as const,
       id: `${jobId}:${entry.name}`,
       job_id: jobId,
       run_at: runAtFromHermesOutputFile(entry.name),
       run_key: runKeyFromHermesOutputFile(entry.name),
       output_path: join(outputDir, entry.name)
-    }))
+    })
+  }
+  return retainer.finish()
 }
 
 async function readHermesOutputFileRun(ref: HermesOutputRunRef): Promise<unknown> {
   try {
-    const content = await readFile(ref.output_path, 'utf-8')
+    const { buffer } = await readNodeFileWithinLimit(
+      ref.output_path,
+      HERMES_PRIMARY_OUTPUT_MAX_BYTES
+    )
+    const content = buffer.toString('utf-8')
     const parsed = parseHermesOutput(content)
     const outputContent = await appendReferencedLogFile(parsed.outputContent)
     return {
@@ -764,37 +760,41 @@ async function readHermesOutputFileRun(ref: HermesOutputRunRef): Promise<unknown
   }
 }
 
-function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[] {
+function readHermesSessionDbRunRefs(jobId: string): BoundedHermesRunRefs<HermesSessionRunRef> {
   if (!existsSync(HERMES_STATE_DB)) {
-    return []
+    return { refs: [], saturated: false }
   }
   try {
     const db = new Database(HERMES_STATE_DB, { readonly: true, fileMustExist: true })
     try {
       const pattern = `cron\\_${escapeSqlLike(jobId)}\\_%`
-      const rows = db
-        .prepare(
-          `SELECT id, started_at
-             FROM sessions
-            WHERE id LIKE ? ESCAPE '\\'
-            ORDER BY started_at DESC`
-        )
-        .all(pattern) as Record<string, unknown>[]
-      return rows.map((row) => {
+      const statement = db.prepare(HERMES_SESSION_RUN_REFS_SELECT_SQL)
+      const rows =
+        typeof statement.iterate === 'function'
+          ? (statement.iterate(pattern) as Iterable<Record<string, unknown>>)
+          : (statement.all(pattern) as Record<string, unknown>[])
+      const retainer = new HermesRunRefRetainer<HermesSessionRunRef>()
+      let read = 0
+      for (const row of rows) {
+        if (read >= HERMES_RUN_REF_MAX_ENTRIES + 1) {
+          break
+        }
+        read += 1
         const runId = typeof row.id === 'string' ? row.id : `${jobId}:${String(row.started_at)}`
-        return {
+        retainer.add({
           kind: 'session',
           id: runId,
           job_id: jobId,
           run_at: runAtFromUnixSeconds(row.started_at),
           run_key: runId.split(`${jobId}_`).at(-1) ?? null
-        }
-      })
+        })
+      }
+      return retainer.finish()
     } finally {
       db.close()
     }
   } catch {
-    return []
+    return { refs: [], saturated: false }
   }
 }
 
@@ -805,25 +805,18 @@ function readHermesSessionDbRunById(jobId: string, runId: string): unknown | nul
   try {
     const db = new Database(HERMES_STATE_DB, { readonly: true, fileMustExist: true })
     try {
-      const row = db
-        .prepare(
-          `SELECT id, title, started_at, ended_at, end_reason, model, message_count,
-                  input_tokens, output_tokens, estimated_cost_usd
-             FROM sessions
-            WHERE id = ?`
-        )
-        .get(runId) as Record<string, unknown> | undefined
+      const row = db.prepare(HERMES_SESSION_RUN_SELECT_SQL).get(runId) as
+        | Record<string, unknown>
+        | undefined
       if (!row) {
         return null
       }
-      const messages = db
-        .prepare(
-          `SELECT role, content, tool_name, reasoning, reasoning_content
-               FROM messages
-              WHERE session_id = ?
-              ORDER BY timestamp, id`
-        )
-        .all(runId) as Record<string, unknown>[]
+      const messageStatement = db.prepare(HERMES_SESSION_TRANSCRIPT_SELECT_SQL)
+      const messages =
+        typeof messageStatement.iterate === 'function'
+          ? (messageStatement.iterate(runId) as Iterable<Record<string, unknown>>)
+          : (messageStatement.all(runId) as Record<string, unknown>[])
+      const formattedMessages = formatHermesSessionMessagesWithinLimits(messages)
       const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null
       const model = typeof row.model === 'string' && row.model.trim() ? row.model.trim() : null
       const messageCount = typeof row.message_count === 'number' ? row.message_count : null
@@ -843,8 +836,8 @@ function readHermesSessionDbRunById(jobId: string, runId: string): unknown | nul
         run_key: runId.split(`${jobId}_`).at(-1) ?? null,
         status: typeof row.ended_at === 'number' ? 'completed' : 'unknown',
         output_preview: summaryParts.join(' · ') || null,
-        output_content: formatSessionMessages(messages),
-        error: null,
+        output_content: formattedMessages.content,
+        error: formattedMessages.truncated ? HERMES_SESSION_TRANSCRIPT_TRUNCATED_ERROR : null,
         output_path: HERMES_STATE_DB
       }
     } finally {

@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import * as NodeBoundedFileReader from '../../shared/node-bounded-file-reader'
 
 const {
   getSpawnArgsForWindowsMock,
   handleMock,
   openPathMock,
+  readNodeFileWithinLimitMock,
   resolveCliCommandMock,
+  readFileMock,
   showItemInFolderMock,
   showOpenDialogMock,
   spawnMock,
@@ -15,7 +18,9 @@ const {
   getSpawnArgsForWindowsMock: vi.fn(),
   handleMock: vi.fn(),
   openPathMock: vi.fn(),
+  readNodeFileWithinLimitMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
+  readFileMock: vi.fn(),
   showItemInFolderMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
   spawnMock: vi.fn(),
@@ -41,6 +46,11 @@ vi.mock('node:fs/promises', () => ({
   copyFile: vi.fn(),
   stat: statMock
 }))
+
+vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeBoundedFileReader>()
+  return { ...actual, readNodeFileWithinLimit: readNodeFileWithinLimitMock }
+})
 
 vi.mock('node:child_process', () => ({
   spawn: spawnMock
@@ -105,6 +115,11 @@ describe('registerShellHandlers', () => {
     getSpawnArgsForWindowsMock.mockReset()
     openPathMock.mockReset()
     resolveCliCommandMock.mockReset()
+    readFileMock.mockReset()
+    readNodeFileWithinLimitMock.mockReset()
+    readNodeFileWithinLimitMock.mockImplementation(async (path: string) => ({
+      buffer: await readFileMock(path)
+    }))
     showItemInFolderMock.mockReset()
     showOpenDialogMock.mockReset()
     spawnMock.mockReset()
@@ -152,6 +167,32 @@ describe('registerShellHandlers', () => {
 
     const handler = getHandler('shell:pickAudio')
     await expect(handler({})).resolves.toBeNull()
+  })
+
+  it('rejects a repo icon raster dimension bomb before returning a data URL', async () => {
+    const bytes = Buffer.alloc(24)
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
+    bytes.writeUInt32BE(13, 8)
+    bytes.write('IHDR', 12, 'ascii')
+    bytes.writeUInt32BE(32_769, 16)
+    bytes.writeUInt32BE(1, 20)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/tmp/bomb.png'] })
+    statMock.mockResolvedValue({ size: bytes.length })
+    readFileMock.mockResolvedValue(bytes)
+
+    const handler = getHandler('shell:pickRepoIconImage')
+    await expect(handler({})).rejects.toThrow('Image dimensions exceed the preview safety limit')
+  })
+
+  it('rejects a repo icon that grows past the byte cap after its size check', async () => {
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/tmp/growing.png'] })
+    statMock.mockResolvedValue({ size: 1 })
+    readNodeFileWithinLimitMock.mockRejectedValue(
+      new NodeBoundedFileReader.NodeFileReadTooLargeError(256 * 1024 + 1, 256 * 1024)
+    )
+
+    const handler = getHandler('shell:pickRepoIconImage')
+    await expect(handler({})).rejects.toThrow('Repo icon image must be 256KB or smaller.')
   })
 
   it('picks an existing directory without enabling native directory creation', async () => {

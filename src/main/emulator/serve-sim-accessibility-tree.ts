@@ -1,16 +1,22 @@
 import { net } from 'electron'
 import { EmulatorError } from './emulator-errors'
 import { normalizeServeSimAxTree, type NormalizedAxNode } from './serve-sim-ax-normalization'
+import {
+  API_RESPONSE_JSON_LIMITS,
+  readFetchResponseTextWithinLimit
+} from '../../shared/fetch-response-body'
+import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 
 const AX_REQUEST_TIMEOUT_MS = 5_000
 const MAX_ERROR_BODY_LENGTH = 512
+export const MAX_SERVE_SIM_AX_RESPONSE_BYTES = 16 * 1024 * 1024
 
 export async function requestServeSimAccessibilityTree(axUrl: string): Promise<NormalizedAxNode[]> {
   try {
     const response = await net.fetch(axUrl, {
       signal: AbortSignal.timeout(AX_REQUEST_TIMEOUT_MS)
     })
-    const body = await response.text()
+    const body = await readFetchResponseTextWithinLimit(response, MAX_SERVE_SIM_AX_RESPONSE_BYTES)
     if (!response.ok) {
       const detail = body.slice(0, MAX_ERROR_BODY_LENGTH) || response.statusText
       const retry = response.status === 503 ? ' Accessibility may still be warming up; retry.' : ''
@@ -22,6 +28,7 @@ export async function requestServeSimAccessibilityTree(axUrl: string): Promise<N
 
     let tree: unknown
     try {
+      assertJsonTextStructureWithinLimits(body, API_RESPONSE_JSON_LIMITS)
       tree = JSON.parse(body)
     } catch {
       throw new EmulatorError('emulator_error', 'serve-sim AX returned invalid JSON.')

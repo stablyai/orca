@@ -98,20 +98,21 @@ describe('PullRequestPage host boundaries', () => {
 
   it('uses source-aware initial details routing and cache identity', () => {
     const source = componentSource('PullRequestPage.tsx')
+    const cacheSource = componentSource('../lib/github-work-item-details-cache.ts')
     const propsSection = sourceBetween(
       source,
       'type PullRequestPageProps',
       'function formatRelativeTime'
     )
     const cacheKeySection = sourceBetween(
-      source,
-      'function getWorkItemDetailsCacheKey',
-      'function touchWorkItemDetailsCache'
+      cacheSource,
+      'export function getWorkItemDetailsCacheKey',
+      'export function getWorkItemDetailsCacheEntry'
     )
     const matchInvalidationSection = sourceBetween(
-      source,
-      'function invalidateWorkItemDetailsCacheByMatch',
-      'function patchCachedPRFileViewedState'
+      cacheSource,
+      'export function invalidateWorkItemDetailsCacheByMatch',
+      'export function clearWorkItemDetailsCacheForTests'
     )
 
     expect(propsSection).toContain('sourceContext?: TaskSourceContext | null')
@@ -119,9 +120,9 @@ describe('PullRequestPage host boundaries', () => {
     expect(source).toContain('sourceContext,')
     expect(cacheKeySection).toContain('sourceCacheScope')
     expect(source).toContain('getTaskSourceCacheScope(sourceContext)')
-    expect(matchInvalidationSection).toContain(
-      'if (removed) {\n    workItemDetailsCacheGeneration += 1'
-    )
+    expect(source).toContain('useWorkItemDetailsCacheEntry(detailsCacheKey)')
+    expect(source).not.toContain('new Map<string, WorkItemDetailsCacheEntry>')
+    expect(matchInvalidationSection).toContain('cacheGeneration += 1')
   })
 
   it('treats null details as unavailable while preserving empty detail payloads', () => {
@@ -138,6 +139,8 @@ describe('PullRequestPage host boundaries', () => {
     expect(resultSection).toContain('} else if (result === null) {')
     expect(resultSection).toContain('error: WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE')
     expect(resultSection).toContain('details: result')
+    expect(resultSection).toContain('getWorkItemDetailsCacheGeneration() !== launchedAtGeneration')
+    expect(resultSection).toContain('prev?.pending !== inflight')
   })
 
   it('routes file viewed mutations through the PR source context', () => {
@@ -201,6 +204,7 @@ describe('PullRequestPage host boundaries', () => {
 
   it('routes PR file contents and runtime viewed invalidations through the PR source context', () => {
     const source = componentSource('PullRequestPage.tsx')
+    const cacheSource = componentSource('../lib/github-work-item-details-cache.ts')
     const fileContentsSection = sourceBetween(
       source,
       'function loadPRFileContents',
@@ -211,7 +215,11 @@ describe('PullRequestPage host boundaries', () => {
       'function getPRFileContentCacheKey',
       'function loadPRFileContents'
     )
-    const listenerSection = sourceBetween(source, 'let workItemMutatedUnsub', '// Why: bounded LRU')
+    const listenerSection = sourceBetween(
+      cacheSource,
+      'let workItemMutatedUnsub',
+      "if (typeof import.meta !== 'undefined'"
+    )
     const commentContextSection = sourceBetween(
       source,
       'function CommentCodeContext',
@@ -228,6 +236,7 @@ describe('PullRequestPage host boundaries', () => {
     expect(fileContentsSection).toContain('sourceContext: args.sourceContext')
     expect(fileContentsSection).toContain('sourceContext,')
     expect(listenerSection).toContain('onGitHubWorkItemDetailsCacheMutation')
+    expect(listenerSection).toContain('invalidateWorkItemDetailsCacheByMatch')
     expect(source).toContain('emitGitHubWorkItemDetailsCacheMutation(args)')
     expect(source).toContain('options.local !== false')
     expect(source).toContain('notifyWorkItemMutated({')

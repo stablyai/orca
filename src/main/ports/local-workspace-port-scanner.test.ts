@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
+import { LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES } from '../../shared/linux-proc-port-scan-limits'
 import {
   attributePortToWorkspace,
   isContainerProcess,
@@ -109,6 +110,18 @@ describe('local workspace port scanner parsing', () => {
 
     expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, inode: 12345 }])
     expect(usedWhitespaceFieldSplit).toBe(false)
+  })
+
+  it('caps retained Linux proc listeners before process attribution', () => {
+    const rows = Array.from(
+      { length: LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES + 5 },
+      (_, index) =>
+        ` ${index}: 0100007F:${(index + 1).toString(16).padStart(4, '0')} 00000000:0000 0A 00000000:00000000 00:00000000 00000000 1000 0 ${index + 1}`
+    )
+
+    expect(parseProcNetTcp(['header', ...rows].join('\n'))).toHaveLength(
+      LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES
+    )
   })
 })
 

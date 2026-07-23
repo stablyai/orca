@@ -21,6 +21,7 @@ import {
   type NativeChatPendingSend
 } from './native-chat-pending'
 import { stripNoiseMessages } from './native-chat-noise'
+import { NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES } from './native-chat-composer-scope-cache'
 
 function userMessage(id: string, text: string): NativeChatMessage {
   return {
@@ -417,6 +418,36 @@ describe('pending send cache', () => {
 
     expect(readPendingSendCache(scope)).toEqual([])
   })
+
+  it('returns an oversized pending send for the mounted view without retaining it', () => {
+    clearPendingSendCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex' }
+    const entry = pendingOf('p1', 'x'.repeat(NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES))
+
+    const current = writePendingSendCache(scope, [entry])
+
+    expect(current).toEqual([entry])
+    expect(readPendingSendCache(scope)).toEqual([])
+  })
+
+  it('still caps an admissible pending-send list to the latest eight', () => {
+    clearPendingSendCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex' }
+    const pending = Array.from({ length: 10 }, (_, index) =>
+      pendingOf(`p${index}`, `prompt ${index}`)
+    )
+
+    expect(writePendingSendCache(scope, pending).map(({ id }) => id)).toEqual([
+      'p2',
+      'p3',
+      'p4',
+      'p5',
+      'p6',
+      'p7',
+      'p8',
+      'p9'
+    ])
+  })
 })
 
 describe('isPendingMessageId', () => {
@@ -487,6 +518,17 @@ describe('command marker cache', () => {
       '/cmd-8',
       '/cmd-9'
     ])
+  })
+
+  it('returns an oversized marker for the mounted view without retaining it', () => {
+    clearCommandMarkerCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex', sessionId: 'session-1' }
+    const command = 'x'.repeat(NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES)
+
+    const current = appendCommandMarkerCache(scope, command, 10)
+
+    expect(current).toEqual([{ id: '10-1', command, sentAt: 10 }])
+    expect(readCommandMarkerCache(scope)).toEqual([])
   })
 })
 

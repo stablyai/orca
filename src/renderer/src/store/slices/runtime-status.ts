@@ -8,6 +8,10 @@ import {
   unwrapRuntimeRpcResult
 } from '@/runtime/runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { mapSettledWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { OperationGenerationRegistry } from '@/lib/operation-generation-registry'
+
+const RUNTIME_STATUS_PROBE_CONCURRENCY = 4
 
 /** Live status for one saved runtime environment, as last observed by the
  * renderer. `status === null` records a probe that failed or timed out so the
@@ -50,16 +54,14 @@ export type RuntimeStatusSlice = {
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
 }
 
-const connectionGenerationByEnvironment = new Map<string, number>()
+const connectionGenerations = new OperationGenerationRegistry()
 
 export function getRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
-  return connectionGenerationByEnvironment.get(environmentId) ?? 0
+  return connectionGenerations.get(environmentId)
 }
 
 function advanceRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
-  const next = getRuntimeEnvironmentConnectionGeneration(environmentId) + 1
-  connectionGenerationByEnvironment.set(environmentId, next)
-  return next
+  return connectionGenerations.advance(environmentId)
 }
 
 export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeStatusSlice> = (
@@ -233,10 +235,9 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       return
     }
     get().setRuntimeEnvironments(environments)
-    // Why: fire-and-forget per env; one unreachable server must not block the
-    // others, and a failure records a null status rather than nothing.
-    await Promise.allSettled(
-      environments.map((environment) => get().refreshRuntimeEnvironmentStatus(environment.id))
+    // Why: bound slow remote probes; each failure still records null independently.
+    await mapSettledWithConcurrency(environments, RUNTIME_STATUS_PROBE_CONCURRENCY, (environment) =>
+      get().refreshRuntimeEnvironmentStatus(environment.id)
     )
   }
 })

@@ -7,12 +7,25 @@ import {
   normalizeRuntimePathSeparators
 } from '../../shared/cross-platform-path'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
-import { fastGetViaSftp, readDirViaSftp, statViaSftp } from './ssh-filesystem-provider-sftp'
+import {
+  fastGetViaSftp,
+  readDirectoryEntriesViaSftp,
+  statViaSftp
+} from './ssh-filesystem-provider-sftp'
+import {
+  SSH_DIRECTORY_TRANSFER_LIMITS,
+  SshDirectoryTransferBudget,
+  type SshDirectoryTransferLimits
+} from '../ssh/ssh-directory-transfer-budget'
 
 export type SftpFactory = (options?: { signal?: AbortSignal }) => Promise<SFTPWrapper>
 
 /** When known, windowsRemotePaths drives remote path joining; omit uses path-shape heuristics. */
-export type FolderDownloadOptions = { signal?: AbortSignal; windowsRemotePaths?: boolean }
+export type FolderDownloadOptions = {
+  signal?: AbortSignal
+  windowsRemotePaths?: boolean
+  limits?: SshDirectoryTransferLimits
+}
 
 const DOWNLOAD_UNAVAILABLE_MESSAGE =
   'Remote folder download is unavailable. Reconnect the SSH target and retry.'
@@ -82,13 +95,11 @@ async function downloadDirectoryTree(
   sftp: SFTPWrapper,
   sourceDir: string,
   destinationDir: string,
+  budget: SshDirectoryTransferBudget,
+  depth: number,
   signal?: AbortSignal,
   windowsRemotePaths?: boolean
 ): Promise<void> {
-  signal?.throwIfAborted()
-  const entries = (await readDirViaSftp(sftp, sourceDir, { signal })).filter(
-    (entry) => entry.filename !== '.' && entry.filename !== '..'
-  )
   signal?.throwIfAborted()
   const usedLocalNames = new Set<string>()
   const plannedEntries: {
@@ -96,7 +107,13 @@ async function downloadDirectoryTree(
     kind: 'directory' | 'file'
     localName: string
   }[] = []
-  for (const entry of entries) {
+  for await (const entry of readDirectoryEntriesViaSftp(sftp, sourceDir, { signal })) {
+    signal?.throwIfAborted()
+    if (entry.filename === '.' || entry.filename === '..') {
+      continue
+    }
+    const remotePath = joinSftpChildPath(sourceDir, entry.filename, windowsRemotePaths)
+    budget.recordPath(remotePath, depth + 1)
     const localName = sanitizeLocalDownloadFilename(entry.filename)
     if (usedLocalNames.has(localName)) {
       throw new Error(`Remote entries map to the same local name '${localName}'`)
@@ -115,7 +132,15 @@ async function downloadDirectoryTree(
     const remotePath = joinSftpChildPath(sourceDir, entry.filename, windowsRemotePaths)
     const localPath = join(destinationDir, localName)
     if (kind === 'directory') {
-      await downloadDirectoryTree(sftp, remotePath, localPath, signal, windowsRemotePaths)
+      await downloadDirectoryTree(
+        sftp,
+        remotePath,
+        localPath,
+        budget,
+        depth + 1,
+        signal,
+        windowsRemotePaths
+      )
       continue
     }
     // Why: filesystem semantics belong to the selected volume, not the host OS;
@@ -170,10 +195,14 @@ export async function downloadFolderViaSftp(
     if (!rootStats.isDirectory()) {
       throw new Error('Cannot download a file as a folder')
     }
+    const budget = new SshDirectoryTransferBudget(options?.limits ?? SSH_DIRECTORY_TRANSFER_LIMITS)
+    budget.recordPath(sourcePath, 0, { countEntry: false })
     await downloadDirectoryTree(
       sftp,
       sourcePath,
       destinationPath,
+      budget,
+      0,
       signal,
       options?.windowsRemotePaths
     )

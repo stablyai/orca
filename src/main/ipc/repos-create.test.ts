@@ -19,7 +19,9 @@ const {
   mockStore,
   mkdirMock,
   accessMock,
-  readdirMock,
+  opendirMock,
+  directoryReadMock,
+  directoryCloseMock,
   rmMock,
   gitExecFileAsyncMock,
   homedirMock,
@@ -37,7 +39,9 @@ const {
   },
   mkdirMock: vi.fn(),
   accessMock: vi.fn(),
-  readdirMock: vi.fn(),
+  opendirMock: vi.fn(),
+  directoryReadMock: vi.fn(),
+  directoryCloseMock: vi.fn(),
   rmMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   homedirMock: vi.fn(),
@@ -56,7 +60,7 @@ vi.mock('electron', () => ({
 vi.mock('fs/promises', () => ({
   mkdir: mkdirMock,
   access: accessMock,
-  readdir: readdirMock,
+  opendir: opendirMock,
   rm: rmMock
 }))
 
@@ -138,7 +142,12 @@ describe('repos:create', () => {
 
     // Default baseline: target does NOT exist yet, mkdir succeeds, git OK.
     accessMock.mockReset().mockRejectedValue(new Error('ENOENT'))
-    readdirMock.mockReset().mockResolvedValue([])
+    directoryReadMock.mockReset().mockResolvedValue(null)
+    directoryCloseMock.mockReset().mockResolvedValue(undefined)
+    opendirMock.mockReset().mockResolvedValue({
+      read: directoryReadMock,
+      close: directoryCloseMock
+    })
     mkdirMock.mockReset().mockResolvedValue(undefined)
     rmMock.mockReset().mockResolvedValue(undefined)
     gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
@@ -203,7 +212,7 @@ describe('repos:create', () => {
 
   it('rejects a non-empty existing directory without creating the target', async () => {
     accessMock.mockResolvedValueOnce(undefined) // exists
-    readdirMock.mockResolvedValueOnce(['README.md', '.DS_Store'])
+    directoryReadMock.mockResolvedValueOnce({ name: 'README.md' })
 
     const result = await callCreate({ parentPath: '/tmp', name: 'busy', kind: 'git' })
 
@@ -211,11 +220,12 @@ describe('repos:create', () => {
     expect(mkdirMock).toHaveBeenCalledWith('/tmp', { recursive: true })
     expect(mkdirMock).not.toHaveBeenCalledWith('/tmp/busy', expect.anything())
     expect(mockStore.addRepo).not.toHaveBeenCalled()
+    expect(directoryReadMock).toHaveBeenCalledOnce()
+    expect(directoryCloseMock).toHaveBeenCalledOnce()
   })
 
   it('accepts an empty existing directory and does not create the target', async () => {
     accessMock.mockResolvedValueOnce(undefined) // exists
-    readdirMock.mockResolvedValueOnce([])
 
     const result = await callCreate({ parentPath: '/tmp', name: 'empty', kind: 'folder' })
 
@@ -314,7 +324,6 @@ describe('repos:create', () => {
   it('does NOT rm a pre-existing empty directory when git init fails', async () => {
     // Pretend the directory already existed (and is empty) — user pre-created it.
     accessMock.mockResolvedValueOnce(undefined)
-    readdirMock.mockResolvedValueOnce([])
     gitExecFileAsyncMock.mockReset().mockRejectedValueOnce(new Error('git init blew up'))
 
     const result = await callCreate({ parentPath: '/tmp', name: 'preexisting', kind: 'git' })
@@ -357,7 +366,6 @@ describe('repos:create', () => {
     // The folder itself must survive (user owns it) but the half-init'd
     // .git/ should be removed so the folder looks untouched.
     accessMock.mockResolvedValueOnce(undefined)
-    readdirMock.mockResolvedValueOnce([])
     gitExecFileAsyncMock
       .mockReset()
       .mockResolvedValueOnce({ stdout: '', stderr: '' })

@@ -2,55 +2,39 @@ import { join } from 'node:path'
 import {
   mkdirSync,
   writeFileSync,
-  readFileSync,
   existsSync,
   rmSync,
   unlinkSync,
-  openSync,
-  closeSync,
-  readSync,
-  fstatSync,
   promises as fsPromises
 } from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
 import {
-  decodeLogHeader,
-  encodeLogBatch,
+  encodeLogBatchWithinLimit,
   encodeLogHeader,
   LOG_HEADER_BYTES
 } from './terminal-history-log'
 import type { PendingOutputRecord, TerminalCheckpointFile, TerminalSnapshot } from './types'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
+import {
+  TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+  TERMINAL_HISTORY_LOG_MAX_BYTES
+} from './terminal-history-file-limits'
+import {
+  readTerminalHistorySessionMeta,
+  stringifyTerminalHistorySessionMeta,
+  type HistoryManagerOptions,
+  type OpenSessionOptions,
+  type SessionMeta
+} from './terminal-history-session-metadata'
+import {
+  resolveTerminalHistoryLogState,
+  type TerminalHistoryLogState
+} from './terminal-history-log-state'
 
-// Why 5MB: bounds cold-restore replay time and per-session disk; hitting the cap triggers one checkpoint that resets the log.
-const LOG_MAX_BYTES = 5 * 1024 * 1024
+export type { HistoryManagerOptions, OpenSessionOptions, SessionMeta }
 
-export type SessionMeta = {
-  cwd: string
-  cols: number
-  rows: number
-  startedAt: string
-  endedAt: string | null
-  exitCode: number | null
-}
-
-export type OpenSessionOptions = {
-  cwd: string
-  cols: number
-  rows: number
-}
-
-type SessionWriter = {
+type SessionWriter = TerminalHistoryLogState & {
   dir: string
-  checkpointPath: string
-  logPath: string
-  /** Generation of the on-disk log header. Null until lazily resolved on first append after a warm registerWriter. */
-  logGeneration: number | null
-  /** Current log file size. Null until lazily resolved alongside generation. */
-  logBytes: number | null
-}
-
-export type HistoryManagerOptions = {
-  onWriteError?: (sessionId: string, error: Error) => void
 }
 
 export class HistoryManager {
@@ -78,7 +62,7 @@ export class HistoryManager {
         endedAt: null,
         exitCode: null
       }
-      writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
+      writeFileSync(join(dir, 'meta.json'), stringifyTerminalHistorySessionMeta(meta))
 
       // Why: clear stale recovery files (incl. legacy scrollback.bin) so a crash before the first checkpoint can't replay a prior session's content.
       const checkpointPath = join(dir, 'checkpoint.json')
@@ -153,11 +137,15 @@ export class HistoryManager {
       return 'ok'
     }
     try {
-      this.resolveLogState(writer)
-      const batch = encodeLogBatch(seq, records)
+      resolveTerminalHistoryLogState(writer)
       // Why max(..., header): a fresh log's header (written below) must count toward the projected size or the cap overshoots.
-      const projectedBytes = Math.max(writer.logBytes ?? 0, LOG_HEADER_BYTES) + batch.length
-      if (projectedBytes > LOG_MAX_BYTES) {
+      const existingBytes = Math.max(writer.logBytes ?? 0, LOG_HEADER_BYTES)
+      const batch = encodeLogBatchWithinLimit(
+        seq,
+        records,
+        TERMINAL_HISTORY_LOG_MAX_BYTES - existingBytes
+      )
+      if (!batch) {
         return 'needs-checkpoint'
       }
       if (writer.logBytes === 0) {
@@ -192,7 +180,7 @@ export class HistoryManager {
         effectiveCwd = meta?.cwd ?? null
       }
 
-      this.resolveLogState(writer)
+      resolveTerminalHistoryLogState(writer)
       const generation = (writer.logGeneration ?? 0) + 1
       const checkpointFile: TerminalCheckpointFile = {
         snapshotAnsi: snapshot.snapshotAnsi,
@@ -207,7 +195,10 @@ export class HistoryManager {
         generation,
         checkpointedAt: new Date().toISOString()
       }
-      const data = JSON.stringify(checkpointFile)
+      const data = stringifyJsonWithinByteLimit(
+        checkpointFile,
+        TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+      ).serialized
       // Why: tmp+rename is atomic (corrupt checkpoint > stale); async so a sync ~MB write can't stall IPC (worse under Windows AV).
       // The adapter's checkpointInFlight guard serializes checkpoints, so concurrent async writes can't collide on the fixed .tmp path.
       const tmpPath = `${writer.checkpointPath}.tmp`
@@ -219,46 +210,6 @@ export class HistoryManager {
       writer.logBytes = LOG_HEADER_BYTES
     } catch (err) {
       this.handleWriteError(sessionId, err)
-    }
-  }
-
-  // Why: a warm registerWriter may attach to an existing log; read generation/size once so appends continue it, not clobber it.
-  private resolveLogState(writer: SessionWriter): void {
-    if (writer.logBytes !== null && writer.logGeneration !== null) {
-      return
-    }
-    let headerGeneration: number | null = null
-    let size = 0
-    try {
-      const fd = openSync(writer.logPath, 'r')
-      try {
-        size = fstatSync(fd).size
-        const header = Buffer.alloc(LOG_HEADER_BYTES)
-        if (readSync(fd, header, 0, LOG_HEADER_BYTES, 0) === LOG_HEADER_BYTES) {
-          headerGeneration = decodeLogHeader(header)
-        }
-      } finally {
-        closeSync(fd)
-      }
-    } catch {
-      // Missing log file — fresh state below.
-    }
-    if (headerGeneration !== null) {
-      writer.logGeneration = headerGeneration
-      writer.logBytes = size
-      return
-    }
-    // Missing/unreadable header: logBytes = 0 makes the next append truncate-rewrite, so a garbage file can't be extended.
-    writer.logBytes = 0
-    writer.logGeneration = this.readCheckpointGeneration(writer) ?? 0
-  }
-
-  private readCheckpointGeneration(writer: SessionWriter): number | null {
-    try {
-      const checkpoint = JSON.parse(readFileSync(writer.checkpointPath, 'utf-8'))
-      return typeof checkpoint.generation === 'number' ? checkpoint.generation : null
-    } catch {
-      return null
     }
   }
 
@@ -306,7 +257,7 @@ export class HistoryManager {
       return null
     }
     try {
-      return JSON.parse(readFileSync(metaPath, 'utf-8'))
+      return readTerminalHistorySessionMeta(metaPath)
     } catch {
       return null
     }
@@ -333,7 +284,7 @@ export class HistoryManager {
   private readMetaFromDir(dir: string): SessionMeta | null {
     const metaPath = join(dir, 'meta.json')
     try {
-      return JSON.parse(readFileSync(metaPath, 'utf-8'))
+      return readTerminalHistorySessionMeta(metaPath)
     } catch {
       return null
     }
@@ -343,11 +294,11 @@ export class HistoryManager {
     const metaPath = join(dir, 'meta.json')
     let meta: SessionMeta
     try {
-      meta = JSON.parse(readFileSync(metaPath, 'utf-8'))
+      meta = readTerminalHistorySessionMeta(metaPath)
     } catch {
       return
     }
     Object.assign(meta, updates)
-    writeFileSync(metaPath, JSON.stringify(meta, null, 2))
+    writeFileSync(metaPath, stringifyTerminalHistorySessionMeta(meta))
   }
 }

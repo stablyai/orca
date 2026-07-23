@@ -5,6 +5,7 @@ export const TERMINAL_WRITE_FLUSH_WINDOW_MS = 48
 // Why: defense-in-depth only — server ack flow control bounds inflow; this cap keeps
 // an upstream flow-control bug from growing the buffer unboundedly. UTF-16 code units.
 export const TERMINAL_WRITE_MAX_PENDING_UNITS = 512 * 1024
+export const TERMINAL_WRITE_MAX_PENDING_CHUNKS = 4_096
 
 export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
   let pendingChunks: string[] = []
@@ -46,7 +47,10 @@ export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
     }
     pendingChunks.push(data)
     pendingUnits += data.length
-    if (pendingUnits > TERMINAL_WRITE_MAX_PENDING_UNITS) {
+    if (
+      pendingUnits > TERMINAL_WRITE_MAX_PENDING_UNITS ||
+      pendingChunks.length >= TERMINAL_WRITE_MAX_PENDING_CHUNKS
+    ) {
       flushNow()
       return
     }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Session } from './session'
+import { PENDING_OUTPUT_MAX_RECORDS, Session } from './session'
 
 // Coverage for the incremental-checkpoint record stream (issue #5096): every
 // PTY byte, resize, and clear is recorded so the 5s checkpoint can persist
@@ -113,6 +113,25 @@ describe('Session pending output', () => {
     const recovered = live.takePendingOutput(false)
     expect(recovered!.overflowed).toBe(false)
     expect(recovered!.records).toEqual([{ kind: 'output', data: 'post-overflow' }])
+  })
+
+  it('flags overflow when tiny records reach the metadata cap', () => {
+    const subprocess = createMockSubprocess()
+    const live = createSession(subprocess)
+
+    for (let index = 0; index <= PENDING_OUTPUT_MAX_RECORDS / 2; index += 1) {
+      subprocess.simulateData('x')
+      live.clearScrollback()
+    }
+
+    const overflowed = live.takePendingOutput(false)
+    expect(overflowed!.overflowed).toBe(true)
+    expect(overflowed!.records).toEqual([])
+
+    subprocess.simulateData('post-overflow')
+    expect(live.takePendingOutput(false)!.records).toEqual([
+      { kind: 'output', data: 'post-overflow' }
+    ])
   })
 
   it('returns the snapshot and drops records in the same take when requested', () => {

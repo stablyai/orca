@@ -1,8 +1,12 @@
-import { fstatSync, lstatSync } from 'node:fs'
-import { link, lstat, mkdir, open, readdir, rm, rmdir, unlink } from 'node:fs/promises'
-import type { BigIntStats } from 'node:fs'
+import { fstatSync, lstatSync, type BigIntStats } from 'node:fs'
+import { link, lstat, mkdir, open, rm, rmdir, unlink } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
+import { LocalDownloadedFolderPromotionBudget } from './local-downloaded-folder-promotion-budget'
+import {
+  assertPromotionTreeWithinCapacity,
+  readPromotionDirectoryEntries
+} from './local-downloaded-folder-promotion-traversal'
 
 const LOCAL_COPY_CHUNK_BYTES = 1024 * 1024
 
@@ -210,6 +214,8 @@ async function publishDirectoryNoClobber(
   sourcePath: string,
   destinationPath: string,
   publishedEntries: PublishedEntry[],
+  budget: LocalDownloadedFolderPromotionBudget,
+  depth: number,
   signal?: AbortSignal
 ): Promise<void> {
   await mkdir(destinationPath, { recursive: false })
@@ -217,9 +223,7 @@ async function publishDirectoryNoClobber(
   // claim so no async gap exists before rollback ownership is registered.
   const destinationStats = lstatSync(destinationPath, { bigint: true })
   publishedEntries.push(publishedEntryFromStats('directory', destinationPath, destinationStats))
-  const entries = (await readdir(sourcePath, { withFileTypes: true })).toSorted((a, b) =>
-    a.name.localeCompare(b.name)
-  )
+  const entries = await readPromotionDirectoryEntries(sourcePath, destinationPath, budget, depth)
   for (const entry of entries) {
     signal?.throwIfAborted()
     const sourceEntryPath = join(sourcePath, entry.name)
@@ -229,6 +233,8 @@ async function publishDirectoryNoClobber(
         sourceEntryPath,
         destinationEntryPath,
         publishedEntries,
+        budget,
+        depth + 1,
         signal
       )
     } else if (entry.isFile()) {
@@ -252,11 +258,20 @@ export async function promoteLocalDownloadedFolder(
   signal?: AbortSignal
 ): Promise<void> {
   signal?.throwIfAborted()
+  await assertPromotionTreeWithinCapacity(tempPath, destinationPath, signal)
+  signal?.throwIfAborted()
   const publishedEntries: PublishedEntry[] = []
   try {
     // Why: Node has no portable atomic no-replace directory rename. Claiming
     // the destination first preserves no-clobber while promotion stays local.
-    await publishDirectoryNoClobber(tempPath, destinationPath, publishedEntries, signal)
+    await publishDirectoryNoClobber(
+      tempPath,
+      destinationPath,
+      publishedEntries,
+      new LocalDownloadedFolderPromotionBudget(),
+      0,
+      signal
+    )
   } catch (error) {
     await rollbackPublishedEntries(publishedEntries)
     if (isEEXIST(error)) {

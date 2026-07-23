@@ -1,8 +1,9 @@
 import { watch, type FSWatcher } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 
 const MAC_BUNDLE_UPDATE_TIMEOUT_MS = 120_000
+export const MAC_BUNDLE_INFO_PLIST_MAX_BYTES = 1024 * 1024
 
 export function getMacAppBundlePath(executable: string): string | null {
   if (process.platform !== 'darwin') {
@@ -78,7 +79,9 @@ export async function waitForMacBundleVersion(
 
 async function readMacBundleVersion(infoPlistPath: string): Promise<string | null> {
   try {
-    const plist = await readFile(infoPlistPath, 'utf8')
+    const plist = (
+      await readNodeFileWithinLimit(infoPlistPath, MAC_BUNDLE_INFO_PLIST_MAX_BYTES)
+    ).buffer.toString('utf8')
     const match = /<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/.exec(plist)
     return match?.[1]?.trim() || null
   } catch {

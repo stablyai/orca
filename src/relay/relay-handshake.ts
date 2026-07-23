@@ -1,8 +1,9 @@
 // Wire-level handshake helpers for the Orca relay.
 
 import { dirname, join } from 'node:path'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import type { Socket } from 'node:net'
+import { readRelayVersionMarkerSync } from '../shared/relay-version-marker'
 import {
   RELAY_VERSION,
   MessageType,
@@ -34,7 +35,7 @@ export function readLaunchVersion(): string {
     }
     const versionFile = join(dir, '.version')
     if (existsSync(versionFile)) {
-      const v = readFileSync(versionFile, 'utf-8').trim()
+      const v = readRelayVersionMarkerSync(versionFile)
       if (v) {
         return v
       }

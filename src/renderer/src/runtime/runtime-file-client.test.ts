@@ -2078,7 +2078,14 @@ describe('runtime file client', () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
-      result: [{ relativePath: 'readme.md' }],
+      result: [
+        {
+          filePath: '/remote/repo/readme.md',
+          relativePath: 'readme.md',
+          basename: 'readme.md',
+          name: 'readme'
+        }
+      ],
       _meta: { runtimeId: 'remote-runtime' }
     })
     const context = {

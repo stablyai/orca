@@ -2,17 +2,19 @@ import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
 
-const { getConnMgrMock, lstatMock, providerMock, readdirMock, realpathMock } = vi.hoisted(() => ({
-  getConnMgrMock: vi.fn(),
-  lstatMock: vi.fn(),
-  providerMock: vi.fn(),
-  readdirMock: vi.fn(),
-  realpathMock: vi.fn()
-}))
+const { getConnMgrMock, lstatMock, opendirMock, providerMock, readdirMock, realpathMock } =
+  vi.hoisted(() => ({
+    getConnMgrMock: vi.fn(),
+    lstatMock: vi.fn(),
+    opendirMock: vi.fn(),
+    providerMock: vi.fn(),
+    readdirMock: vi.fn(),
+    realpathMock: vi.fn()
+  }))
 
 vi.mock('node:fs/promises', () => ({
   lstat: lstatMock,
-  readdir: readdirMock,
+  opendir: opendirMock,
   realpath: realpathMock
 }))
 vi.mock('./filesystem-auth', () => ({
@@ -25,6 +27,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 import { importExternalPathsSsh } from './filesystem-import-ssh'
+import { EXTERNAL_IMPORT_MAX_TREE_ENTRIES } from './filesystem-external-import-limits'
 
 function createProvider(uploadSession: FileUploadSession): IFilesystemProvider {
   const missing = Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -54,6 +57,12 @@ describe('SSH import remote path safety', () => {
     provider = createProvider(uploadSession)
     providerMock.mockReturnValue(provider)
     readdirMock.mockResolvedValue([])
+    opendirMock.mockImplementation(async (directoryPath: string) => ({
+      async *[Symbol.asyncIterator]() {
+        yield* await readdirMock(directoryPath, { withFileTypes: true })
+      },
+      close: vi.fn().mockResolvedValue(undefined)
+    }))
     realpathMock.mockImplementation(async (value: string) => value)
   })
 
@@ -187,6 +196,47 @@ describe('SSH import remote path safety', () => {
         { exclusive: true }
       )
     }
+  })
+
+  it('rejects an oversized directory before creating the remote root', async () => {
+    const sourcePath = path.resolve('/tmp/generated')
+    let yieldedEntries = 0
+    let iteratorClosed = false
+    lstatMock.mockResolvedValue({
+      isFile: () => false,
+      isDirectory: () => true,
+      isSymbolicLink: () => false
+    })
+    opendirMock.mockResolvedValue({
+      async *[Symbol.asyncIterator]() {
+        try {
+          while (yieldedEntries <= EXTERNAL_IMPORT_MAX_TREE_ENTRIES) {
+            const index = yieldedEntries
+            yieldedEntries += 1
+            yield {
+              name: `entry-${index}`,
+              isFile: () => true,
+              isDirectory: () => false,
+              isSymbolicLink: () => false
+            }
+          }
+        } finally {
+          iteratorClosed = true
+        }
+      },
+      close: vi.fn().mockResolvedValue(undefined)
+    })
+
+    const { results } = await importExternalPathsSsh([sourcePath], destDir, connectionId)
+
+    expect(results[0]).toMatchObject({
+      status: 'failed',
+      reason: 'External import tree exceeds 100,000 entries'
+    })
+    expect(yieldedEntries).toBe(EXTERNAL_IMPORT_MAX_TREE_ENTRIES + 1)
+    expect(iteratorClosed).toBe(true)
+    expect(provider.createDirNoClobber).not.toHaveBeenCalled()
+    expect(uploadSession.uploadFile).not.toHaveBeenCalled()
   })
 
   it('skips special entries without failing the directory import', async () => {

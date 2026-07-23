@@ -59,6 +59,25 @@ import {
   isAgentSessionSurfaceBinding,
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
+import { PtyOutputBroadcast } from './pty-output-broadcast'
+import {
+  assertRelayPtyPersistenceFieldWithinLimit,
+  assertRelayPtyRetainedFieldsWithinLimits,
+  parseRelayPtyPersistenceEnvelope,
+  parseRelayPtyPersistenceIds,
+  sanitizeRelayPtyEnvToDelete,
+  serializeRelayPtyPersistenceEnvelope,
+  type RelayPtyIdentity,
+  type RelayPtyPersistenceEntry
+} from './pty-persistence-envelope'
+import {
+  MAX_TERMINAL_COLS,
+  MAX_TERMINAL_ROWS,
+  normalizeTerminalSize,
+  terminalSizeAdmissionError
+} from '../shared/terminal-size-limits'
+
+export { PTY_OUTPUT_HIGH_WATER_CHARS, PTY_OUTPUT_LOW_WATER_CHARS } from './pty-output-broadcast'
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
   return (
@@ -109,13 +128,6 @@ type RelayAgentSessionCreateResult = {
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
 const AGENT_SESSION_CREATE_OPERATION_LIMIT = 4_096
-
-type PendingPtyOutput = {
-  data: string
-  rawLength?: number
-  transformed?: boolean
-  seq?: number
-}
 
 type ManagedStartupCommand = {
   command: string
@@ -173,13 +185,9 @@ const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 export const IMMEDIATE_PTY_EXIT_TIMEOUT_MS = 8_000
 export const MAX_RELAY_PTY_SESSIONS = 50
 export const REPLAY_BUFFER_MAX = 100 * 1024
-const PTY_OUTPUT_BATCH_INTERVAL_MS = 8
-const PTY_OUTPUT_DRAIN_CONTINUE_MS = 1
-const PTY_OUTPUT_FLUSH_CHUNK_CHARS = 16 * 1024
-const PTY_OUTPUT_FLUSH_MAX_WRITES = 2
 const INTERACTIVE_OUTPUT_WINDOW_MS = 100
 const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
-const INTERACTIVE_REDRAW_MAX_CHARS = PTY_OUTPUT_FLUSH_CHUNK_CHARS
+const INTERACTIVE_REDRAW_MAX_CHARS = 16 * 1024
 const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
 const STARTUP_COMMAND_WRITE_DELAY_MS = 50
 const STARTUP_COMMAND_SHELL_READY_FALLBACK_MS = 1500
@@ -233,35 +241,9 @@ type PtyProcessSummary = {
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
-type SerializedPtyEntry = {
-  id: string
-  pid: number
-  cols: number
-  rows: number
-  cwd: string
-  paneKey?: string
-  tabId?: string
-  attachIdentity?: PtyIdentity
-  worktreeId?: string
-  terminalHandle?: string
-  explicitTerm?: string
-  envToDelete?: string[]
-  /** Optional for state serialized by relays predating the credential guard. */
-  gitCredentialPromptGuarded?: boolean
-  agentSessionOwners?: AgentSessionOwnerBinding[]
-}
-
-function sanitizeEnvToDelete(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value
-        .filter((key): key is string => typeof key === 'string' && key.length > 0)
-        .slice(0, 1_024)
-    : []
-}
-
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 
-type PtyIdentity = { paneKey?: string; tabId?: string }
+type PtyIdentity = RelayPtyIdentity
 
 /**
  * True when a reattach's expected pane identity contradicts the target PTY's own.
@@ -292,10 +274,9 @@ export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
   private nextId = 1
   private dispatcher: RelayDispatcher
+  private readonly outputBroadcast: PtyOutputBroadcast
   private graceTimeMs: number
   private graceTimer: ReturnType<typeof setTimeout> | null = null
-  private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
-  private pendingOutputByPty = new Map<string, PendingPtyOutput>()
   private lastInputAtByPty = new Map<string, number>()
   private interactiveOutputCharsByPty = new Map<string, number>()
   private pendingSpawnCount = 0
@@ -319,6 +300,7 @@ export class PtyHandler {
 
   constructor(dispatcher: RelayDispatcher, graceTimeMs = DEFAULT_GRACE_TIME_MS) {
     this.dispatcher = dispatcher
+    this.outputBroadcast = new PtyOutputBroadcast(dispatcher)
     this.graceTimeMs = graceTimeMs
     this.registerHandlers()
   }
@@ -523,6 +505,7 @@ export class PtyHandler {
   private wireAndStore(managed: ManagedPty): void {
     managed.physicalExit = new PhysicalExitTracker()
     this.ptys.set(managed.id, managed)
+    this.outputBroadcast.register(managed.id, managed.pty)
     const emitIngressData = (emission: PtyIngressEmission): void => {
       const rawLength = emission.rawEndSeq - emission.rawStartSeq
       this.appendReplayBuffer(managed, emission.data)
@@ -567,7 +550,7 @@ export class PtyHandler {
       }
       this.clearStartupCommandTimer(managed)
       this.releaseRelayIngress(managed)
-      this.flushPtyOutput(managed.id)
+      this.outputBroadcast.flushForExit(managed.id)
       this.dispatcher.notify('pty.exit', {
         id: managed.id,
         code: exitCode,
@@ -612,7 +595,7 @@ export class PtyHandler {
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('pty.spawn', (p, context) => this.spawn(p, context))
-    this.dispatcher.onRequest('pty.attach', (p) => this.attach(p))
+    this.dispatcher.onRequest('pty.attach', (p, context) => this.attach(p, context))
     this.dispatcher.onRequest('pty.shutdown', (p) => this.shutdown(p))
     this.dispatcher.onRequest('pty.sendSignal', (p) => this.sendSignal(p))
     this.dispatcher.onRequest('pty.getCwd', (p) => this.getCwd(p))
@@ -638,9 +621,9 @@ export class PtyHandler {
 
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
-    this.dispatcher.onNotification('pty.ackData', (_p) => {
-      /* flow control ack -- not yet enforced */
-    })
+    this.dispatcher.onNotification('pty.ackData', (p, context) =>
+      this.outputBroadcast.acknowledge(p, context)
+    )
   }
 
   private isLikelyInteractiveRedraw(data: string): boolean {
@@ -686,105 +669,21 @@ export class PtyHandler {
     data: string,
     meta: { rawLength?: number; transformed?: boolean; seq?: number } = {}
   ): void {
-    const existing = this.pendingOutputByPty.get(id)
-    if (meta.transformed === true) {
-      // Why: transformed spans lack a raw-to-clean slice mapping, so they can't be folded into the output batch.
-      if (existing) {
-        this.flushPtyOutput(id)
-      }
-      this.dispatcher.notify('pty.data', { id, data, ...meta })
+    const managed = this.ptys.get(id)
+    if (!managed || managed.disposed) {
       return
     }
-    const pending: PendingPtyOutput = { data: (existing?.data ?? '') + data }
-    if (existing?.rawLength !== undefined || meta.rawLength !== undefined) {
-      pending.rawLength =
-        (existing?.rawLength ?? existing?.data.length ?? 0) + (meta.rawLength ?? data.length)
-    }
-    if (meta.seq !== undefined) {
-      pending.seq = meta.seq
-    }
-    if (this.shouldSendInteractiveOutputNow(id, pending.data)) {
-      this.pendingOutputByPty.delete(id)
-      this.clearOutputFlushTimerIfIdle()
-      // Why: send interactive echo immediately — batching must not add visible input delay for TUIs.
-      this.dispatcher.notify('pty.data', { id, ...pending })
-      return
-    }
-    this.pendingOutputByPty.set(id, pending)
-    this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
-  }
-
-  private scheduleOutputFlush(delayMs: number): void {
-    if (this.outputFlushTimer !== null) {
-      return
-    }
-    this.outputFlushTimer = setTimeout(() => this.flushPendingOutput(), delayMs)
-  }
-
-  private flushPendingOutput(): void {
-    this.outputFlushTimer = null
-    let writes = 0
-    for (const [id, pending] of Array.from(this.pendingOutputByPty.entries())) {
-      if (writes >= PTY_OUTPUT_FLUSH_MAX_WRITES) {
-        break
-      }
-      this.pendingOutputByPty.delete(id)
-      const chunk = pending.transformed
-        ? pending.data
-        : pending.data.slice(0, PTY_OUTPUT_FLUSH_CHUNK_CHARS)
-      const remaining = pending.transformed ? '' : pending.data.slice(PTY_OUTPUT_FLUSH_CHUNK_CHARS)
-      if (remaining) {
-        this.pendingOutputByPty.set(id, {
-          data: remaining,
-          ...(pending.rawLength === undefined ? {} : { rawLength: remaining.length }),
-          seq: pending.seq
-        })
-      }
-      const chunkRawLength = pending.transformed
-        ? pending.rawLength
-        : pending.rawLength === undefined
-          ? undefined
-          : chunk.length
-      const chunkSeq =
-        pending.seq === undefined ? undefined : pending.seq - (pending.data.length - chunk.length)
-      this.dispatcher.notify('pty.data', {
-        id,
-        data: chunk,
-        ...(chunkSeq === undefined ? {} : { seq: chunkSeq }),
-        ...(chunkRawLength === undefined ? {} : { rawLength: chunkRawLength }),
-        ...(pending.transformed ? { transformed: true } : {})
-      })
-      writes++
-    }
-    if (this.pendingOutputByPty.size > 0 && writes > 0) {
-      // Why: yield between slices of a large chunk so client input and control frames can interleave.
-      this.scheduleOutputFlush(PTY_OUTPUT_DRAIN_CONTINUE_MS)
-    }
-  }
-
-  private flushPtyOutput(id: string): void {
-    const pending = this.pendingOutputByPty.get(id)
-    if (!pending) {
-      return
-    }
-    this.pendingOutputByPty.delete(id)
-    this.dispatcher.notify('pty.data', { id, ...pending })
-    this.clearOutputFlushTimerIfIdle()
-  }
-
-  private clearOutputFlushTimerIfIdle(): void {
-    if (this.pendingOutputByPty.size > 0 || this.outputFlushTimer === null) {
-      return
-    }
-    clearTimeout(this.outputFlushTimer)
-    this.outputFlushTimer = null
+    this.outputBroadcast.enqueue(
+      id,
+      { data, ...meta },
+      meta.transformed === true || this.shouldSendInteractiveOutputNow(id, data)
+    )
   }
 
   private clearPtyFlowState(id: string): void {
-    this.pendingOutputByPty.delete(id)
+    this.outputBroadcast.unregister(id)
     this.lastInputAtByPty.delete(id)
     this.interactiveOutputCharsByPty.delete(id)
-    this.clearOutputFlushTimerIfIdle()
   }
 
   private beginPtyCreation(operationPaths: readonly (string | undefined)[]): () => void {
@@ -901,9 +800,13 @@ export class PtyHandler {
     context?: RequestContext
   ): Promise<RelayAgentSessionCreateResult> {
     const env = params.env as Record<string, string> | undefined
-    const worktreeId = env?.ORCA_WORKTREE_ID
+    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
+    if (worktreeId !== undefined) {
+      assertRelayPtyPersistenceFieldWithinLimit('worktreeId', worktreeId)
+    }
     const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
     const cwd = typeof params.cwd === 'string' ? params.cwd : resolveDefaultCwd()
+    assertRelayPtyPersistenceFieldWithinLimit('cwd', cwd)
     const finishCreation = this.beginPtyCreation([worktreePath, cwd])
     let physicalSpawnCommitted = false
     const markPhysicalSpawnCommitted = (): void => {
@@ -989,16 +892,21 @@ export class PtyHandler {
     context?: RequestContext,
     onPhysicalSpawnCommitted?: () => void
   ): Promise<{ id: string; incarnationId: string }> {
+    const sizeError = terminalSizeAdmissionError(params.cols, params.rows, 'pty.spawn', {
+      allowMissing: true
+    })
+    if (sizeError) {
+      throw new Error(sizeError)
+    }
     const pty = await this.loadPty()
     if (!pty) {
       throw new Error('node-pty is not available on this remote host')
     }
 
-    const cols = (params.cols as number) || 80
-    const rows = (params.rows as number) || 24
+    const { cols, rows } = normalizeTerminalSize(params.cols, params.rows)
     const cwd = (params.cwd as string) || resolveDefaultCwd()
     const env = params.env as Record<string, string> | undefined
-    const envToDelete = sanitizeEnvToDelete(params.envToDelete)
+    const envToDelete = sanitizeRelayPtyEnvToDelete(params.envToDelete)
     const explicitTerm =
       !envToDelete.includes('TERM') &&
       env &&
@@ -1021,6 +929,23 @@ export class PtyHandler {
     // Why: kept so a restarted runtime can re-adopt this PTY under its original handle (survives revive).
     const terminalHandle =
       typeof env?.ORCA_TERMINAL_HANDLE === 'string' ? env.ORCA_TERMINAL_HANDLE : undefined
+    const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
+    const attachIdentity = {
+      paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
+      tabId: typeof params.tabId === 'string' ? params.tabId : tabId
+    }
+    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
+    assertRelayPtyRetainedFieldsWithinLimits({
+      id,
+      cwd,
+      paneKey,
+      tabId,
+      attachIdentity,
+      worktreeId,
+      terminalHandle,
+      explicitTerm,
+      envToDelete
+    })
     const command = typeof params.command === 'string' ? params.command : undefined
     const terminalWindowsWslDistro =
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
@@ -1079,12 +1004,6 @@ export class PtyHandler {
     onPhysicalSpawnCommitted?.()
 
     // Why: capture paneKey so the exit listener can evict per-pane caches without a separate ptyId→paneKey map.
-    const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
-    const attachIdentity = {
-      paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
-      tabId: typeof params.tabId === 'string' ? params.tabId : tabId
-    }
-    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const startupIngressIntent =
       params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
         ? parsePtyStartupIngressIntent(params.startupIngress)
@@ -1143,7 +1062,8 @@ export class PtyHandler {
   }
 
   private async attach(
-    params: Record<string, unknown>
+    params: Record<string, unknown>,
+    context?: RequestContext
   ): Promise<{ incarnationId: string; replay?: string }> {
     const id = params.id as string
     const managed = this.ptys.get(id)
@@ -1156,7 +1076,7 @@ export class PtyHandler {
     if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
       managed.physicalExit?.markExited()
       this.releaseRelayIngress(managed)
-      this.flushPtyOutput(id)
+      this.outputBroadcast.flushForExit(id)
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
       disposeManagedPty(managed)
@@ -1177,14 +1097,14 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
+    if (typeof context?.clientId === 'number') {
+      this.outputBroadcast.resetClient(id, context.clientId)
+    }
     managed.startupIngress?.snapshotBarrier()
 
     // Why: renderer hasn't registered replay handlers yet during spawn, so return to the caller instead of notifying too early.
     // Why: buffer intentionally NOT cleared after replay (client clears xterm first) so later restarts still replay full history.
     if (managed.buffered) {
-      // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
-      this.pendingOutputByPty.delete(id)
-      this.clearOutputFlushTimerIfIdle()
       if (params.suppressReplayNotification) {
         return { incarnationId: managed.incarnationId, replay: managed.buffered }
       }
@@ -1209,8 +1129,8 @@ export class PtyHandler {
 
   private resize(params: Record<string, unknown>): void {
     const id = params.id as string
-    const cols = Math.max(1, Math.min(500, Math.floor(Number(params.cols) || 80)))
-    const rows = Math.max(1, Math.min(500, Math.floor(Number(params.rows) || 24)))
+    const cols = Math.max(1, Math.min(MAX_TERMINAL_COLS, Math.floor(Number(params.cols) || 80)))
+    const rows = Math.max(1, Math.min(MAX_TERMINAL_ROWS, Math.floor(Number(params.rows) || 24)))
     const managed = this.ptys.get(id)
     if (managed && !managed.disposed) {
       managed.pty.resize(cols, rows)
@@ -1237,7 +1157,6 @@ export class PtyHandler {
 
     if (immediate) {
       this.releaseStartupCommand(managed)
-      this.flushPtyOutput(id)
       this.requestForceKill(managed)
       // Why: remote Git deletion must not race the child's native handles; on timeout keep the map entry so onExit/retry still owns it.
       await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
@@ -1279,6 +1198,7 @@ export class PtyHandler {
     if (managed.gracefulKillSent) {
       return
     }
+    this.outputBroadcast.flushForExit(managed.id)
     managed.gracefulKillSent = true
     if (process.platform === 'win32') {
       // Why: ConPTY's bare kill is already force-final; block any later close of the handle.
@@ -1333,6 +1253,7 @@ export class PtyHandler {
     if (managed.forceKillSent || (process.platform === 'win32' && managed.gracefulKillSent)) {
       return
     }
+    this.outputBroadcast.flushForExit(managed.id)
     managed.forceKillSent = true
     try {
       killPtyProcess(managed.pty, 'SIGKILL')
@@ -1427,8 +1348,8 @@ export class PtyHandler {
   }
 
   private async serialize(params: Record<string, unknown>): Promise<string> {
-    const ids = params.ids as string[]
-    const entries: SerializedPtyEntry[] = []
+    const ids = parseRelayPtyPersistenceIds(params.ids, MAX_RELAY_PTY_SESSIONS)
+    const entries: RelayPtyPersistenceEntry[] = []
     for (const id of ids) {
       const managed = this.ptys.get(id)
       if (!managed) {
@@ -1451,12 +1372,11 @@ export class PtyHandler {
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
     }
-    return JSON.stringify(entries)
+    return serializeRelayPtyPersistenceEnvelope(entries, MAX_RELAY_PTY_SESSIONS)
   }
 
   private async revive(params: Record<string, unknown>): Promise<void> {
-    const state = params.state as string
-    const entries = JSON.parse(state) as SerializedPtyEntry[]
+    const entries = parseRelayPtyPersistenceEnvelope(params.state, MAX_RELAY_PTY_SESSIONS)
 
     for (const entry of entries) {
       if (this.ptys.has(entry.id) || this.pendingReviveIds.has(entry.id)) {
@@ -1482,7 +1402,7 @@ export class PtyHandler {
     }
   }
 
-  private async reviveEntry(entry: SerializedPtyEntry): Promise<void> {
+  private async reviveEntry(entry: RelayPtyPersistenceEntry): Promise<void> {
     const ptyMod = await this.loadPty()
     if (!ptyMod) {
       return
@@ -1509,7 +1429,7 @@ export class PtyHandler {
       revivedEnv.TERM = explicitTerm
     }
     // Why: serialized state may come from an older/untrusted client; reapply fresh-spawn bounds.
-    const envToDelete = sanitizeEnvToDelete(entry.envToDelete)
+    const envToDelete = sanitizeRelayPtyEnvToDelete(entry.envToDelete)
     const shell = resolveDefaultShell()
     const spawnEnv = this.buildSpawnEnv(
       revivedEnv,
@@ -1596,16 +1516,8 @@ export class PtyHandler {
     this.cancelGraceTimer()
     await this.waitForPendingPtyCreations()
     for (const managed of this.ptys.values()) {
-      this.releaseRelayIngress(managed)
-      this.flushPtyOutput(managed.id)
+      this.outputBroadcast.flushForExit(managed.id)
     }
-    if (this.outputFlushTimer !== null) {
-      clearTimeout(this.outputFlushTimer)
-      this.outputFlushTimer = null
-    }
-    this.pendingOutputByPty.clear()
-    this.lastInputAtByPty.clear()
-    this.interactiveOutputCharsByPty.clear()
     const results = await Promise.allSettled(
       [...this.ptys.values()].map((managed) =>
         this.disposePtyForRelayShutdown(managed, waitForPhysicalExit)
@@ -1617,6 +1529,9 @@ export class PtyHandler {
     if (rejected) {
       throw rejected.reason
     }
+    this.outputBroadcast.dispose()
+    this.lastInputAtByPty.clear()
+    this.interactiveOutputCharsByPty.clear()
   }
 
   private async disposePtyForRelayShutdown(
@@ -1628,9 +1543,9 @@ export class PtyHandler {
       managed.killTimer = undefined
     }
     this.clearStartupCommandTimer(managed)
-    this.releaseRelayIngress(managed)
     // Why: retain the native owner until SIGKILL is accepted (one bounded retry) or onExit proves it gone.
     await this.requestForceKillForRelayShutdown(managed)
+    this.releaseRelayIngress(managed)
     if (waitForPhysicalExit && this.ptys.get(managed.id) === managed && !managed.disposed) {
       try {
         await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)

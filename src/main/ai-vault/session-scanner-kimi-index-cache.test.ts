@@ -4,13 +4,18 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   KimiSessionIndexCache,
+  KIMI_WORK_DIR_CACHE_KEY_MAX_UTF8_BYTES,
   KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
+  KIMI_WORK_DIR_MAP_MAX_RETAINED_UTF8_BYTES,
+  KIMI_WORK_DIR_SESSION_ID_MAX_UTF8_BYTES,
   KIMI_WORK_DIR_CACHE_TTL_MS,
   type KimiSessionIndexIdentity
 } from './session-scanner-kimi-index-cache'
 import {
   clearKimiSessionIndexCache,
   hasKimiSessionIndexCacheEntryForTests,
+  KIMI_WORK_DIR_CACHE_MAX_SESSIONS_PER_INDEX,
+  readKimiWorkDirForSessionId,
   readKimiWorkDirBySessionId
 } from './session-scanner-kimi-paths'
 
@@ -121,9 +126,42 @@ describe('KimiSessionIndexCache', () => {
     expect(cache.has('index')).toBe(true)
     cache.clear()
   })
+
+  it('bounds index keys and retained map bytes without changing returned values', async () => {
+    const cache = new KimiSessionIndexCache()
+    const oversizedPath = 'x'.repeat(KIMI_WORK_DIR_CACHE_KEY_MAX_UTF8_BYTES + 1)
+    const oversizedId = 'x'.repeat(KIMI_WORK_DIR_SESSION_ID_MAX_UTF8_BYTES + 1)
+    const value = new Map([
+      [oversizedId, '/oversized'],
+      ['session', '/repo']
+    ])
+
+    await expect(
+      cache.get(oversizedPath, IDENTITY, cache.beginRead(), async () => value)
+    ).resolves.toBe(value)
+    expect(value).toEqual(new Map([['session', '/repo']]))
+    expect(cache.has(oversizedPath)).toBe(false)
+    expect(KIMI_WORK_DIR_MAP_MAX_RETAINED_UTF8_BYTES).toBe(512 * 1024)
+  })
 })
 
 describe('Kimi session index reader cache', () => {
+  it('bounds retained work dirs without dropping an older requested session', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-kimi-index-bounds-'))
+    tempDirs.push(root)
+    const indexPath = join(root, 'session_index.jsonl')
+    const lines = Array.from(
+      { length: KIMI_WORK_DIR_CACHE_MAX_SESSIONS_PER_INDEX + 1 },
+      (_, index) => JSON.stringify({ sessionId: `session-${index}`, workDir: `/repo/${index}` })
+    )
+    await writeFile(indexPath, `${lines.join('\n')}\n`)
+
+    await expect(readKimiWorkDirForSessionId(indexPath, 'session-0')).resolves.toBe('/repo/0')
+    expect((await readKimiWorkDirBySessionId(indexPath)).size).toBe(
+      KIMI_WORK_DIR_CACHE_MAX_SESSIONS_PER_INDEX
+    )
+  })
+
   it('releases a retained map when its index file disappears', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-kimi-index-delete-'))
     tempDirs.push(root)

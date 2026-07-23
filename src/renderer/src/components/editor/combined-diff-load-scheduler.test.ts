@@ -183,6 +183,70 @@ describe('combined diff load scheduler', () => {
     expect(started).toEqual([1, 3])
   })
 
+  it('counts stale in-flight loads against concurrency across repeated resets', async () => {
+    const blockers = new Map([1, 2, 3, 5].map((index) => [index, deferred()]))
+    const started: number[] = []
+    let active = 0
+    let maxActive = 0
+    const scheduler = createCombinedDiffLoadScheduler({
+      maxConcurrent: 2,
+      schedule: (callback) => callback(),
+      loadSection: async (index) => {
+        started.push(index)
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await blockers.get(index)!.promise
+        active -= 1
+      }
+    })
+
+    scheduler.request(1)
+    scheduler.request(2)
+    scheduler.reset()
+    scheduler.request(3)
+    scheduler.request(4)
+    expect(started).toEqual([1, 2])
+
+    blockers.get(1)!.resolve()
+    await flushMicrotasks()
+    expect(started).toEqual([1, 2, 3])
+
+    scheduler.reset()
+    scheduler.request(5)
+    blockers.get(2)!.resolve()
+    await flushMicrotasks()
+    expect(started).toEqual([1, 2, 3, 5])
+    expect(maxActive).toBe(2)
+
+    blockers.get(3)!.resolve()
+    blockers.get(5)!.resolve()
+    await flushMicrotasks()
+  })
+
+  it('keeps a rerequest deduped while the previous load settles', async () => {
+    const first = deferred()
+    const second = deferred()
+    const started: number[] = []
+    const scheduler = createCombinedDiffLoadScheduler({
+      schedule: (callback) => callback(),
+      loadSection: async (index) => {
+        started.push(index)
+        await (started.length === 1 ? first.promise : second.promise)
+      }
+    })
+
+    scheduler.request(4)
+    scheduler.rerequest(4)
+    scheduler.request(4)
+    first.resolve()
+    await flushMicrotasks()
+    scheduler.request(4)
+
+    expect(started).toEqual([4, 4])
+    second.resolve()
+    await flushMicrotasks()
+  })
+
   it('revives after dispose when reset for a StrictMode remount', async () => {
     const started: number[] = []
     const scheduler = createCombinedDiffLoadScheduler({

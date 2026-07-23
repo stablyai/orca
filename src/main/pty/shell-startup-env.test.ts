@@ -10,6 +10,16 @@ vi.mock('fs', () => ({
   readFileSync: readFileSyncMock
 }))
 
+vi.mock('../../shared/node-bounded-file-reader', () => ({
+  readNodeFileSyncWithinLimit: (path: string, maxBytes: number) => {
+    const buffer = Buffer.from(readFileSyncMock(path) as string)
+    if (buffer.byteLength > maxBytes) {
+      throw new Error('File too large')
+    }
+    return { buffer, stats: { size: buffer.byteLength } }
+  }
+}))
+
 import { __resetShellStartupEnvCache, readShellStartupEnvVar } from './shell-startup-env'
 
 describe('readShellStartupEnvVar', () => {

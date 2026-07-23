@@ -20,6 +20,7 @@ import {
 } from './terminal-view-attribute-responder'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import { normalizeTerminalSize } from '../../shared/terminal-size-limits'
 
 export type HeadlessEmulatorOptions = {
   cols: number
@@ -69,6 +70,7 @@ export class HeadlessEmulator {
   private partialEscapeTail = ''
 
   constructor(opts: HeadlessEmulatorOptions) {
+    const size = normalizeTerminalSize(opts.cols, opts.rows)
     this.pathFlavor = opts.pathFlavor
     this.remotePosixFileUriAuthority = opts.remotePosixFileUriAuthority === true
     this.oscText = new TerminalOscCwdTitleScanner({
@@ -77,8 +79,8 @@ export class HeadlessEmulator {
       wslDistro: opts.wslDistro
     })
     this.terminal = new Terminal({
-      cols: opts.cols,
-      rows: opts.rows,
+      cols: size.cols,
+      rows: size.rows,
       scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
       allowProposedApi: true,
       logLevel: 'off',
@@ -224,7 +226,8 @@ export class HeadlessEmulator {
       return
     }
     this.restoredOscLinks = []
-    this.terminal.resize(cols, rows)
+    const size = normalizeTerminalSize(cols, rows)
+    this.terminal.resize(size.cols, size.rows)
   }
 
   // Why: these dims proxy the child's real size, so they stay stale on a dropped resize the renderer must detect.

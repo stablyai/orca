@@ -4,19 +4,24 @@
 // draft would be lost on every TUI/GUI round-trip. Mirrors the attachment cache
 // so both halves of an unsent message survive toggles and reconnects.
 
-import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
+import {
+  clearBoundedScopeCache,
+  deleteBoundedScopeCacheEntry,
+  getBoundedScopeCacheEntry,
+  setBoundedScopeCacheEntry
+} from './native-chat-composer-scope-cache'
 
 const draftCache = new Map<string, string>()
 
 export function readNativeChatDraftCache(scopeKey: string): string {
-  return draftCache.get(scopeKey) ?? ''
+  return getBoundedScopeCacheEntry(draftCache, scopeKey) ?? ''
 }
 
 export function writeNativeChatDraftCache(scopeKey: string, draft: string): void {
   // An empty draft carries no state worth retaining; drop the entry so a stale
   // scope key never resurrects cleared text.
   if (draft === '') {
-    draftCache.delete(scopeKey)
+    deleteBoundedScopeCacheEntry(draftCache, scopeKey)
     return
   }
   // LRU-bounded so unsent drafts for permanently-removed panes can't accumulate.
@@ -24,5 +29,5 @@ export function writeNativeChatDraftCache(scopeKey: string, draft: string): void
 }
 
 export function clearNativeChatDraftCacheForTests(): void {
-  draftCache.clear()
+  clearBoundedScopeCache(draftCache)
 }

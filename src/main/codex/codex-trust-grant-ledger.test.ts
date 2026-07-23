@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -9,6 +9,7 @@ import {
   removeCodexTrustGrantLedgerHome,
   writeCodexTrustGrantLedgerHome
 } from './codex-trust-grant-ledger'
+import { MAX_AGENT_STATE_FILE_BYTES } from '../agent-state-file-reader'
 
 let userDataDir: string
 let previousUserDataPath: string | undefined
@@ -79,6 +80,26 @@ describe('codex trust grant ledger', () => {
     // Why: a corrupt file must not block recording the next verified grant.
     writeCodexTrustGrantLedgerHome(home, { binary: null, entries: {} })
     expect(readCodexTrustGrantLedgerHome(home)).not.toBeNull()
+  })
+
+  it('preserves the prior ledger when a grant exceeds its read ceiling', () => {
+    const home = join(userDataDir, 'codex-runtime-home', 'home')
+    const ledgerPath = getCodexTrustGrantLedgerPath()
+    writeCodexTrustGrantLedgerHome(home, { binary: null, entries: {} })
+    const before = readFileSync(ledgerPath, 'utf8')
+
+    expect(() =>
+      writeCodexTrustGrantLedgerHome(home, {
+        binary: null,
+        entries: {
+          oversized: {
+            signature: 'x'.repeat(MAX_AGENT_STATE_FILE_BYTES),
+            trustedHash: 'sha256:test'
+          }
+        }
+      })
+    ).toThrow('JSON output exceeds')
+    expect(readFileSync(ledgerPath, 'utf8')).toBe(before)
   })
 
   it('matches binary stamps only on identical identity', () => {

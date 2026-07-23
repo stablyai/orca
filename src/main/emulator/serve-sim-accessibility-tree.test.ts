@@ -4,7 +4,10 @@ const { netFetchMock } = vi.hoisted(() => ({ netFetchMock: vi.fn() }))
 
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
-import { requestServeSimAccessibilityTree } from './serve-sim-accessibility-tree'
+import {
+  MAX_SERVE_SIM_AX_RESPONSE_BYTES,
+  requestServeSimAccessibilityTree
+} from './serve-sim-accessibility-tree'
 
 const AX_URL = 'http://127.0.0.1:3100/ax'
 
@@ -80,6 +83,25 @@ describe('requestServeSimAccessibilityTree', () => {
     })
 
     netFetchMock.mockResolvedValueOnce(new Response('not json', { status: 200 }))
+    await expect(requestServeSimAccessibilityTree(AX_URL)).rejects.toMatchObject({
+      code: 'emulator_error'
+    })
+  })
+
+  it('rejects oversized or excessively nested payloads before parsing', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      new Response('[]', {
+        status: 200,
+        headers: { 'content-length': String(MAX_SERVE_SIM_AX_RESPONSE_BYTES + 1) }
+      })
+    )
+    await expect(requestServeSimAccessibilityTree(AX_URL)).rejects.toMatchObject({
+      code: 'emulator_helper_failed'
+    })
+
+    netFetchMock.mockResolvedValueOnce(
+      new Response(`${'['.repeat(129)}0${']'.repeat(129)}`, { status: 200 })
+    )
     await expect(requestServeSimAccessibilityTree(AX_URL)).rejects.toMatchObject({
       code: 'emulator_error'
     })

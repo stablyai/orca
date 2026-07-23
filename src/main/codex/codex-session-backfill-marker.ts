@@ -1,5 +1,6 @@
-import { mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { readAgentStateJsonFileSync } from '../agent-state-file-reader'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
 
@@ -12,7 +13,7 @@ export function hasCompletedCodexSessionBackfillMarker(
   systemSessionsRoot: string
 ): boolean {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(markerPath, 'utf-8'))
+    const parsed = readAgentStateJsonFileSync(markerPath)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return false
     }

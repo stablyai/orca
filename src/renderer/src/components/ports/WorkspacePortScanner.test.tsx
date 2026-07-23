@@ -12,11 +12,16 @@ import {
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 import {
   clearRuntimeCompatibilityCache,
-  markRuntimeEnvironmentCompatible
+  markRuntimeEnvironmentCompatible,
+  type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { useAppStore } from '@/store'
-import { WorkspacePortScanner } from './WorkspacePortScanner'
+import {
+  scanWorkspacePortTargets,
+  WorkspacePortScanner,
+  WORKSPACE_PORT_SCAN_CONCURRENCY
+} from './WorkspacePortScanner'
 
 const localScan = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -219,6 +224,40 @@ afterEach(() => {
 })
 
 describe('WorkspacePortScanner', () => {
+  it.each([
+    ['at the limit', WORKSPACE_PORT_SCAN_CONCURRENCY],
+    ['above the limit', WORKSPACE_PORT_SCAN_CONCURRENCY + 1]
+  ])('bounds execution-host scans %s', async (_, count) => {
+    const targets: RuntimeClientTarget[] = Array.from({ length: count }, (_, index) => ({
+      kind: 'environment',
+      environmentId: `env-${index}`
+    }))
+    let active = 0
+    let peak = 0
+    const releases: (() => void)[] = []
+    const scanTarget = vi.fn(async () => {
+      active++
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      active--
+      return emptyScan
+    })
+
+    const scans = scanWorkspacePortTargets(targets, scanTarget)
+    expect(scanTarget).toHaveBeenCalledTimes(Math.min(count, WORKSPACE_PORT_SCAN_CONCURRENCY))
+    if (count > WORKSPACE_PORT_SCAN_CONCURRENCY) {
+      releases.shift()?.()
+      for (let turn = 0; turn < 5 && scanTarget.mock.calls.length < count; turn++) {
+        await Promise.resolve()
+      }
+      expect(scanTarget).toHaveBeenCalledTimes(count)
+    }
+    releases.splice(0).forEach((release) => release())
+
+    await expect(scans).resolves.toHaveLength(count)
+    expect(peak).toBe(Math.min(count, WORKSPACE_PORT_SCAN_CONCURRENCY))
+  })
+
   it('turns a missing runtime scan payload into an unavailable result', async () => {
     runtimeEnvironmentCall.mockResolvedValue({ ok: true, result: undefined })
 

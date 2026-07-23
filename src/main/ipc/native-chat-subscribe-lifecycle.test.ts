@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 
-const { handlers, listeners, subscribeTranscript } = vi.hoisted(() => ({
+const { handlers, listeners, readTranscriptTail, subscribeTranscript } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   listeners: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
+  readTranscriptTail: vi.fn(),
   subscribeTranscript: vi.fn()
 }))
 
@@ -19,15 +20,28 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../native-chat/transcript-watch', () => ({
+  readNativeChatTranscriptTail: readTranscriptTail,
   subscribeNativeChatTranscript: subscribeTranscript
 }))
 
 import {
+  _getNativeChatLiveSubscriptionCountForTest,
   _getNativeChatPendingSubscriptionCountForTest,
+  _getNativeChatReadCountForTest,
   _getNativeChatSenderCleanupCountForTest,
+  _getNativeChatSetupAttemptCountForTest,
   clearNativeChatSubscriptions,
   registerNativeChatHandlers
 } from './native-chat'
+import {
+  MAX_NATIVE_CHAT_DESKTOP_READ_LIMIT,
+  MAX_NATIVE_CHAT_READS_PER_SENDER,
+  MAX_NATIVE_CHAT_SESSION_ID_BYTES,
+  MAX_NATIVE_CHAT_SETUP_ATTEMPTS_PER_SENDER,
+  MAX_NATIVE_CHAT_SUBSCRIPTIONS_PROCESS_WIDE,
+  MAX_NATIVE_CHAT_SUBSCRIPTIONS_PER_SENDER,
+  MAX_NATIVE_CHAT_SUBSCRIPTION_ID_BYTES
+} from './native-chat-ipc-admission'
 
 type TestSubscription = {
   unsubscribe: ReturnType<typeof vi.fn>
@@ -48,6 +62,7 @@ type SenderHarness = {
     id: number
     isDestroyed: () => boolean
     once: (event: string, callback: () => void) => void
+    removeListener: (event: string, callback: () => void) => void
     send: ReturnType<typeof vi.fn>
   }
 }
@@ -56,6 +71,8 @@ beforeEach(() => {
   clearNativeChatSubscriptions()
   handlers.clear()
   listeners.clear()
+  readTranscriptTail.mockReset()
+  readTranscriptTail.mockResolvedValue({ messages: [], hasMore: false, beforeOffset: 0 })
   subscribeTranscript.mockReset()
   registerNativeChatHandlers()
 })
@@ -82,7 +99,7 @@ function createSender(id: number): SenderHarness {
   return {
     destroy: () => {
       destroyed = true
-      for (const callback of destroyedCallbacks) {
+      for (const callback of destroyedCallbacks.slice()) {
         callback()
       }
     },
@@ -93,6 +110,15 @@ function createSender(id: number): SenderHarness {
       once: (event, callback) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
+        }
+      },
+      removeListener: (event, callback) => {
+        if (event !== 'destroyed') {
+          return
+        }
+        const index = destroyedCallbacks.indexOf(callback)
+        if (index >= 0) {
+          destroyedCallbacks.splice(index, 1)
         }
       },
       send: vi.fn()
@@ -145,6 +171,166 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1000): Promise<void
 }
 
 describe('nativeChat subscribe lifecycle', () => {
+  it('clamps read and watch windows before transcript work starts', async () => {
+    const read = handlers.get('nativeChat:readSession')
+    if (!read) {
+      throw new Error('read handler not registered')
+    }
+    await read(
+      { sender: { id: 9 } },
+      { agent: 'claude', sessionId: 'session', limit: Number.MAX_SAFE_INTEGER }
+    )
+    expect(readTranscriptTail).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: MAX_NATIVE_CHAT_DESKTOP_READ_LIMIT })
+    )
+
+    const pending = deferredSubscription()
+    subscribeTranscript.mockReturnValueOnce(pending.promise)
+    const renderer = createSender(10)
+    const listener = listeners.get('nativeChat:subscribe')!
+    listener(
+      { sender: renderer.sender },
+      {
+        subscriptionId: 'bounded-window',
+        agent: 'claude',
+        sessionId: 'session',
+        limit: Number.MAX_SAFE_INTEGER
+      }
+    )
+    expect(subscribeTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ initialLimit: MAX_NATIVE_CHAT_DESKTOP_READ_LIMIT })
+    )
+    pending.resolve()
+    await waitFor(() => _getNativeChatSetupAttemptCountForTest() === 0)
+    renderer.destroy()
+  })
+
+  it('rejects oversized retained identifiers before starting transcript work', async () => {
+    const renderer = createSender(11)
+    subscribe(renderer.sender, 'x'.repeat(MAX_NATIVE_CHAT_SUBSCRIPTION_ID_BYTES + 1))
+    const listener = listeners.get('nativeChat:subscribe')!
+    listener(
+      { sender: renderer.sender },
+      {
+        subscriptionId: 'valid',
+        agent: 'claude',
+        sessionId: 'x'.repeat(MAX_NATIVE_CHAT_SESSION_ID_BYTES + 1)
+      }
+    )
+
+    expect(subscribeTranscript).not.toHaveBeenCalled()
+    expect(_getNativeChatPendingSubscriptionCountForTest()).toBe(0)
+    expect(_getNativeChatSetupAttemptCountForTest()).toBe(0)
+  })
+
+  it('bounds concurrent transcript pages per renderer and releases admission', async () => {
+    let releaseReads!: (value: {
+      messages: never[]
+      hasMore: boolean
+      beforeOffset: number
+    }) => void
+    const readGate = new Promise<{
+      messages: never[]
+      hasMore: boolean
+      beforeOffset: number
+    }>((resolve) => {
+      releaseReads = resolve
+    })
+    readTranscriptTail.mockReturnValue(readGate)
+    const read = handlers.get('nativeChat:readSession')!
+    const reads = Array.from({ length: MAX_NATIVE_CHAT_READS_PER_SENDER }, () =>
+      read({ sender: { id: 20 } }, { agent: 'claude', sessionId: 'session' })
+    )
+
+    await vi.waitFor(() =>
+      expect(_getNativeChatReadCountForTest()).toBe(MAX_NATIVE_CHAT_READS_PER_SENDER)
+    )
+    await expect(
+      read({ sender: { id: 20 } }, { agent: 'claude', sessionId: 'session' })
+    ).resolves.toEqual({ error: 'Too many concurrent native chat transcript reads' })
+    expect(readTranscriptTail).toHaveBeenCalledTimes(MAX_NATIVE_CHAT_READS_PER_SENDER)
+
+    releaseReads({ messages: [], hasMore: false, beforeOffset: 0 })
+    await Promise.all(reads)
+    expect(_getNativeChatReadCountForTest()).toBe(0)
+  })
+
+  it('caps unique logical subscriptions per renderer and recovers after unsubscribe', async () => {
+    subscribeTranscript.mockImplementation(async () => ({
+      unsubscribe: vi.fn(),
+      watching: true
+    }))
+    const renderer = createSender(12)
+    for (let index = 0; index < MAX_NATIVE_CHAT_SUBSCRIPTIONS_PER_SENDER; index++) {
+      subscribe(renderer.sender, `sub-${index}`)
+    }
+    subscribe(renderer.sender, 'one-over')
+    await waitFor(() => _getNativeChatSetupAttemptCountForTest() === 0)
+
+    expect(subscribeTranscript).toHaveBeenCalledTimes(MAX_NATIVE_CHAT_SUBSCRIPTIONS_PER_SENDER)
+    expect(_getNativeChatLiveSubscriptionCountForTest()).toBe(
+      MAX_NATIVE_CHAT_SUBSCRIPTIONS_PER_SENDER
+    )
+
+    unsubscribe(renderer.sender, 'sub-0')
+    subscribe(renderer.sender, 'after-release')
+    await waitFor(() => _getNativeChatSetupAttemptCountForTest() === 0)
+    expect(subscribeTranscript).toHaveBeenCalledTimes(MAX_NATIVE_CHAT_SUBSCRIPTIONS_PER_SENDER + 1)
+    renderer.destroy()
+  })
+
+  it('caps logical subscriptions across renderers process-wide', async () => {
+    subscribeTranscript.mockImplementation(async () => ({
+      unsubscribe: vi.fn(),
+      watching: true
+    }))
+    const rendererCount = Math.ceil(
+      MAX_NATIVE_CHAT_SUBSCRIPTIONS_PROCESS_WIDE / MAX_NATIVE_CHAT_SUBSCRIPTIONS_PER_SENDER
+    )
+    const renderers = Array.from({ length: rendererCount + 1 }, (_, index) =>
+      createSender(100 + index)
+    )
+    for (let index = 0; index < MAX_NATIVE_CHAT_SUBSCRIPTIONS_PROCESS_WIDE; index++) {
+      const renderer = renderers[Math.floor(index / MAX_NATIVE_CHAT_SUBSCRIPTIONS_PER_SENDER)]
+      subscribe(renderer.sender, `global-${index}`)
+    }
+    subscribe(renderers.at(-1)!.sender, 'global-one-over')
+    await waitFor(() => _getNativeChatSetupAttemptCountForTest() === 0)
+
+    expect(subscribeTranscript).toHaveBeenCalledTimes(MAX_NATIVE_CHAT_SUBSCRIPTIONS_PROCESS_WIDE)
+    expect(_getNativeChatLiveSubscriptionCountForTest()).toBe(
+      MAX_NATIVE_CHAT_SUBSCRIPTIONS_PROCESS_WIDE
+    )
+    renderers.forEach((renderer) => renderer.destroy())
+  })
+
+  it('caps unresolved same-id setup attempts without displacing the latest admitted setup', async () => {
+    const pending = Array.from(
+      { length: MAX_NATIVE_CHAT_SETUP_ATTEMPTS_PER_SENDER },
+      deferredSubscription
+    )
+    for (const setup of pending) {
+      subscribeTranscript.mockReturnValueOnce(setup.promise)
+    }
+    const renderer = createSender(13)
+    for (let index = 0; index < pending.length; index++) {
+      subscribe(renderer.sender, 'same-id-storm')
+    }
+    subscribe(renderer.sender, 'same-id-storm')
+
+    expect(subscribeTranscript).toHaveBeenCalledTimes(MAX_NATIVE_CHAT_SETUP_ATTEMPTS_PER_SENDER)
+    expect(_getNativeChatSetupAttemptCountForTest()).toBe(MAX_NATIVE_CHAT_SETUP_ATTEMPTS_PER_SENDER)
+    expect(_getNativeChatPendingSubscriptionCountForTest()).toBe(1)
+
+    pending.forEach((setup) => setup.resolve())
+    await waitFor(() => _getNativeChatSetupAttemptCountForTest() === 0)
+    expect(pending.slice(0, -1).every((setup) => setup.unsubscribe.mock.calls.length === 1)).toBe(
+      true
+    )
+    expect(pending.at(-1)?.unsubscribe).not.toHaveBeenCalled()
+    renderer.destroy()
+  })
+
   it('closes a watcher that resolves after renderer unsubscribe', async () => {
     const pending = deferredSubscription()
     subscribeTranscript.mockReturnValueOnce(pending.promise)
@@ -161,6 +347,8 @@ describe('nativeChat subscribe lifecycle', () => {
     await waitFor(() => pending.unsubscribe.mock.calls.length === 1)
     unsubscribe(renderer.sender, 'unmount')
     expect(pending.unsubscribe).toHaveBeenCalledOnce()
+    expect(_getNativeChatSenderCleanupCountForTest()).toBe(0)
+    expect(renderer.registeredCleanupCount()).toBe(0)
     renderer.destroy()
     expect(_getNativeChatSenderCleanupCountForTest()).toBe(0)
   })
@@ -209,7 +397,8 @@ describe('nativeChat subscribe lifecycle', () => {
     subscribe(renderer.sender, 'retry')
     failed.reject(new Error('watch setup failed'))
     await waitFor(() => _getNativeChatPendingSubscriptionCountForTest() === 0)
-    expect(_getNativeChatSenderCleanupCountForTest()).toBe(1)
+    expect(_getNativeChatSenderCleanupCountForTest()).toBe(0)
+    expect(renderer.registeredCleanupCount()).toBe(0)
 
     subscribe(renderer.sender, 'retry')
     expect(renderer.registeredCleanupCount()).toBe(1)
@@ -217,6 +406,7 @@ describe('nativeChat subscribe lifecycle', () => {
     await waitFor(() => _getNativeChatPendingSubscriptionCountForTest() === 0)
     unsubscribe(renderer.sender, 'retry')
     expect(retry.unsubscribe).toHaveBeenCalledOnce()
+    expect(renderer.registeredCleanupCount()).toBe(0)
     renderer.destroy()
     expect(_getNativeChatSenderCleanupCountForTest()).toBe(0)
   })

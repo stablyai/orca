@@ -11946,7 +11946,10 @@
         "CsvViewer": {
           "eedd0d37a7": "columns",
           "ac31d2cd60": "rows",
-          "a233d55b77": "Empty file"
+          "a233d55b77": "Empty file",
+          "2b65aa2913": "This CSV is too large to display safely.",
+          "59cfb175a2": "Switch to source mode to inspect the raw text.",
+          "d5e8a2b453": "Table view is limited to {{rows}} rows, {{columns}} columns, and {{cells}} cells."
         },
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "This file",

@@ -11,22 +11,21 @@ import {
 import { writeSync } from 'node:fs'
 import { runCodexHookTrustGrantSession } from './codex-app-server-client'
 import { runCodexUserHookTrustRebaseSession } from './codex-user-hook-trust-rebase-client'
+import { readNodeReadableTextWithinLimit } from '../../shared/node-readable-text'
+import { parseCodexAppServerGrantJson } from './codex-app-server-grant-json'
 
 const HARD_EXIT_MARGIN_MS = 2_000
+const GRANT_ENTRY_MAX_INPUT_BYTES = 16 * 1024 * 1024
 
 async function readStdin(): Promise<string> {
-  const chunks: Buffer[] = []
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer)
-  }
-  return Buffer.concat(chunks).toString('utf8')
+  return await readNodeReadableTextWithinLimit(process.stdin, GRANT_ENTRY_MAX_INPUT_BYTES)
 }
 
 async function main(): Promise<void> {
   const raw = await readStdin()
   let request: CodexAppServerEntryRequest
   try {
-    request = JSON.parse(raw) as CodexAppServerEntryRequest
+    request = parseCodexAppServerGrantJson<CodexAppServerEntryRequest>(raw)
   } catch (error) {
     process.stdout.write(
       `${JSON.stringify({

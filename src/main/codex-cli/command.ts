@@ -1,6 +1,7 @@
-import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs'
+import { accessSync, constants, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
+import { discoverNvmVersionBinDirectories } from './nvm-version-directory-discovery'
 
 type ResolveCommandOptions = {
   pathEnv?: string | null
@@ -25,29 +26,6 @@ function splitPath(pathEnv: string | null | undefined): string[] {
     .split(delimiter)
     .map((entry) => entry.trim())
     .filter(Boolean)
-}
-
-function parseVersionSegment(raw: string): number[] {
-  return raw
-    .replace(/^v/i, '')
-    .split('.')
-    .map((segment) => Number.parseInt(segment, 10))
-    .map((segment) => (Number.isFinite(segment) ? segment : 0))
-}
-
-function compareVersionDesc(left: string, right: string): number {
-  const leftParts = parseVersionSegment(left)
-  const rightParts = parseVersionSegment(right)
-  const length = Math.max(leftParts.length, rightParts.length)
-
-  for (let index = 0; index < length; index += 1) {
-    const delta = (rightParts[index] ?? 0) - (leftParts[index] ?? 0)
-    if (delta !== 0) {
-      return delta
-    }
-  }
-
-  return right.localeCompare(left)
 }
 
 function findFirstExecutable(
@@ -123,19 +101,6 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
   return directories
 }
 
-function getNvmVersionDirectories(homePath: string): string[] {
-  const nvmVersionsDir = join(homePath, '.nvm', 'versions', 'node')
-  if (!existsSync(nvmVersionsDir)) {
-    return []
-  }
-
-  return readdirSync(nvmVersionsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort(compareVersionDesc)
-    .map((entry) => join(nvmVersionsDir, entry, 'bin'))
-}
-
 function getVersionManagerDirectories(
   platform: NodeJS.Platform,
   homePath: string,
@@ -147,7 +112,7 @@ function getVersionManagerDirectories(
   // command resolution probes the newest installed Node versions explicitly.
   const firstNvmMatch = findFirstExecutable(
     platform,
-    getNvmVersionDirectories(homePath),
+    discoverNvmVersionBinDirectories(homePath),
     executableNames
   )
   if (firstNvmMatch) {
@@ -189,7 +154,7 @@ export function resolveCliCommands(
   // Why: agent detection probes many CLIs at once; compute expensive install
   // directories, especially nvm versions, once per detection pass.
   const installDirectories = [
-    ...getNvmVersionDirectories(homePath),
+    ...discoverNvmVersionBinDirectories(homePath),
     ...getBaseVersionManagerDirectories(platform, homePath)
   ]
   const resolved = new Map<string, string>()

@@ -14,6 +14,8 @@ import {
   getEnterpriseGitHubRepoSlugForRemote,
   isGitHubHostAuthenticated
 } from './github-enterprise-repository'
+import { isValidGitHubApiRepository } from './github-api-repository-validation'
+import { cacheIdentityDigest } from '../cache-identity-digest'
 
 export type GitHubApiRepository = GitHubOwnerRepo
 export type GitHubRepoExecOptions = ReturnType<typeof ghRepoExecOptions> & { host?: string }
@@ -28,25 +30,12 @@ type GitHubApiRepositoryResolution =
   | undefined
   | (() => Promise<GitHubApiRepository | null>)
 
-// Why: renderer/RPC repository overrides are interpolated into REST paths.
-// Reject path syntax before an authenticated gh process can target it.
-const GITHUB_OWNER_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
-const GITHUB_REPO_SLUG_RE = /^[A-Za-z0-9._-]+$/
-
-function isValidGitHubApiRepository(repository: GitHubApiRepository): boolean {
-  return (
-    GITHUB_OWNER_SLUG_RE.test(repository.owner) &&
-    GITHUB_REPO_SLUG_RE.test(repository.repo) &&
-    repository.repo !== '.' &&
-    repository.repo !== '..'
-  )
-}
-
 // Why: the enterprise branch spawns an uncached `git remote get-url` (an SSH
 // round trip on connection-backed repos) — hot paths like per-file contents
 // and viewed-state toggles resolve per call, so cache like ownerRepoCache does.
 const ORIGIN_REPO_CACHE_TTL_MS = 30_000
 const ORIGIN_REPO_CACHE_MAX_ENTRIES = 512
+const ORIGIN_REPO_MAX_IN_FLIGHT = 32
 const originRepoCache = new Map<string, { value: GitHubApiRepository | null; expiresAt: number }>()
 const originRepoInFlight = new Map<string, Promise<GitHubApiRepository | null>>()
 
@@ -56,7 +45,12 @@ function originRepoCacheKey(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): string {
-  return `${connectionId ?? 'local'}\0${localGitOptions.wslDistro ?? ''}\0${repoPath}\0${remoteName}`
+  return cacheIdentityDigest([
+    connectionId ?? 'local',
+    localGitOptions.wslDistro ?? '',
+    repoPath,
+    remoteName
+  ])
 }
 
 /** @internal - exposed for tests only */
@@ -136,6 +130,9 @@ export async function getGitHubApiRepositoryForRemote(
     }
     return slug ?? null
   })()
+  if (originRepoInFlight.size >= ORIGIN_REPO_MAX_IN_FLIGHT) {
+    return probe
+  }
   originRepoInFlight.set(cacheKey, probe)
   try {
     return await probe

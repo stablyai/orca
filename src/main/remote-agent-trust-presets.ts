@@ -7,6 +7,14 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators
 } from '../shared/cross-platform-path'
+import { MAX_AGENT_STATE_FILE_BYTES } from './agent-state-file-reader'
+
+class RemoteAgentStateFileTooLargeError extends Error {
+  constructor() {
+    super(`Remote agent state exceeds ${MAX_AGENT_STATE_FILE_BYTES} bytes`)
+    this.name = 'RemoteAgentStateFileTooLargeError'
+  }
+}
 
 export async function markRemoteAgentWorkspaceTrusted(args: {
   preset: AgentTrustPreset
@@ -69,9 +77,24 @@ async function readRemoteTextFile(
 ): Promise<string> {
   try {
     const result = await fsProvider.readFile(filePath)
-    return result.isBinary ? '' : result.content
-  } catch {
+    if (result.isBinary) {
+      return ''
+    }
+    if (Buffer.byteLength(result.content, 'utf8') > MAX_AGENT_STATE_FILE_BYTES) {
+      throw new RemoteAgentStateFileTooLargeError()
+    }
+    return result.content
+  } catch (error) {
+    if (error instanceof RemoteAgentStateFileTooLargeError) {
+      throw error
+    }
     return ''
+  }
+}
+
+function assertRemoteAgentStateWithinLimit(content: string): void {
+  if (Buffer.byteLength(content, 'utf8') > MAX_AGENT_STATE_FILE_BYTES) {
+    throw new RemoteAgentStateFileTooLargeError()
   }
 }
 
@@ -91,6 +114,7 @@ async function markRemoteCodexProjectTrusted(
   if (updated === existing) {
     return
   }
+  assertRemoteAgentStateWithinLimit(updated)
   await fsProvider.createDir(codexDir)
   await fsProvider.writeFile(configPath, updated)
 }
@@ -113,10 +137,9 @@ async function markRemoteCursorWorkspaceTrusted(
     // Missing marker: write the same shape the local trust preset writes.
   }
   await fsProvider.createDir(trustDir)
-  await fsProvider.writeFile(
-    trustFile,
-    `${JSON.stringify({ trustedAt: new Date().toISOString(), workspacePath }, null, 2)}\n`
-  )
+  const content = `${JSON.stringify({ trustedAt: new Date().toISOString(), workspacePath }, null, 2)}\n`
+  assertRemoteAgentStateWithinLimit(content)
+  await fsProvider.writeFile(trustFile, content)
 }
 
 async function markRemoteCopilotFolderTrusted(
@@ -143,6 +166,8 @@ async function markRemoteCopilotFolderTrusted(
     return
   }
   config.trustedFolders = [...existing.filter((entry) => typeof entry === 'string'), workspacePath]
+  const content = `${JSON.stringify(config, null, 2)}\n`
+  assertRemoteAgentStateWithinLimit(content)
   await fsProvider.createDir(configDir)
-  await fsProvider.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`)
+  await fsProvider.writeFile(configPath, content)
 }
