@@ -45,6 +45,7 @@ import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
+import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -264,6 +265,7 @@ import {
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
 } from './source-control-create-pr-intent-flow'
+import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-intent-state'
 import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
 import {
   buildLoadingHostedReviewCreationEligibility,
@@ -288,6 +290,7 @@ import {
 } from './source-control-hosted-review-push-target'
 import { buildSourceControlManualReviewUrlFromContext } from './source-control-manual-review-url'
 import { parseRemoteRepo } from './source-control-remote-repo'
+export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningCommitMessageGenerationRecord,
   getCommitMessageGenerationRecordKey,
@@ -806,6 +809,7 @@ function SourceControlInner(): React.JSX.Element {
   const activeRepoConnectionId = activeRepo?.connectionId ?? null
   const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
+  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const entries = useAppStore((s) =>
     activeWorktreeId
@@ -2802,6 +2806,11 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
+  const openHostedReviewInChecks = useCallback(() => {
+    setRightSidebarOpen(true)
+    setRightSidebarTab('checks')
+  }, [setRightSidebarOpen, setRightSidebarTab])
+
   const handleBranchChangedByPullRequestGeneration = useCallback(async (): Promise<void> => {
     // Why: AI PR detail generation may rebase before summarizing, so refresh status if HEAD moved before the user submits the draft.
     await refreshActiveGitStatusAfterMutation()
@@ -4230,6 +4239,10 @@ function SourceControlInner(): React.JSX.Element {
     (!createPrHeaderAction.disabled || isCreatingPr || prGenerating)
       ? createPrHeaderAction
       : null
+  const visibleCreatePrHeaderAction = resolveVisibleCreatePrHeaderAction({
+    createPrHeaderAction
+  })
+
   const dropdownItems: DropdownEntry[] = useMemo(
     () =>
       resolveDropdownItems({
@@ -4696,6 +4709,19 @@ function SourceControlInner(): React.JSX.Element {
     remoteStatusForActions,
     runCreatePrIntent
   ])
+
+  const handleCreatePrHeaderClick = useCallback((): void => {
+    if (!createPrHeaderAction || createPrHeaderAction.disabled) {
+      return
+    }
+    if (createPrHeaderAction.kind === 'create_pr') {
+      void handleCreatePullRequest()
+      return
+    }
+    if (createPrHeaderAction.kind === 'create_pr_intent') {
+      void runCreatePrIntent()
+    }
+  }, [createPrHeaderAction, handleCreatePullRequest, runCreatePrIntent])
 
   const branchCompareInFlightRef = useRef(false)
   const branchCompareRerunRef = useRef(false)
@@ -5426,11 +5452,16 @@ function SourceControlInner(): React.JSX.Element {
     <>
       <div ref={setSourceControlRoot} className="relative flex h-full flex-col overflow-hidden">
         <SourceControlHeaderToolbar
-          gitIdentityDisplay={gitIdentityDisplay}
           filterQuery={filterQuery}
           filterExpanded={filterExpanded}
           onFilterQueryChange={setFilterQuery}
           onFilterExpandedChange={setFilterExpanded}
+          visibleCreatePrHeaderAction={visibleCreatePrHeaderAction}
+          hostedReview={hostedReview}
+          isCreatePrIntentInFlight={isCreatePrIntentInFlight}
+          isCreatingPr={isCreatingPr || prGenerating}
+          onCreatePrHeaderClick={handleCreatePrHeaderClick}
+          onOpenHostedReviewInChecks={openHostedReviewInChecks}
           sourceControlViewMode={sourceControlViewMode}
           viewModeToggleDisabled={settings === null}
           onToggleViewMode={handleToggleSourceControlViewMode}
@@ -5444,6 +5475,12 @@ function SourceControlInner(): React.JSX.Element {
           upstreamStatus={remoteStatus}
           manualReviewUrl={manualReviewUrl}
         />
+
+        {detachedHeadDisplay && (
+          <div className="border-b border-border px-3 py-2">
+            <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />
+          </div>
+        )}
 
         {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (

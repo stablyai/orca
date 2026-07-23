@@ -150,7 +150,7 @@ import {
   ensureRealHomeCodexHookState,
   isRealHomeCodexHookLaneUsable
 } from './codex/codex-real-home-hook-install'
-import { setCodexTrustGrantTelemetry } from './codex/codex-hook-trust-grant'
+import { setCodexTrustGrantTelemetry } from './codex/codex-trust-grant-telemetry'
 import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
@@ -1852,11 +1852,14 @@ app.whenReady().then(async () => {
   // Why: the trust-grant module is bundled into plain-node CLI entries where
   // the telemetry client cannot load, so the tracker is injected here instead
   // of imported there.
-  setCodexTrustGrantTelemetry(({ outcome, hostKind, reason }) => {
+  setCodexTrustGrantTelemetry(({ outcome, hostKind, lane, reason, errorClass, verifyClass }) => {
     track('codex_trust_grant', {
       outcome,
       host_kind: hostKind,
-      ...(reason !== undefined ? { fallback_reason: reason } : {})
+      lane,
+      ...(reason !== undefined ? { fallback_reason: reason } : {}),
+      ...(errorClass !== undefined ? { error_class: errorClass } : {}),
+      ...(verifyClass !== undefined ? { verify_class: verifyClass } : {})
     })
   })
   // Why: the error-tracking lane (telemetry-error-tracking.md) is its own

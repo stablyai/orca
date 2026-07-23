@@ -5,6 +5,7 @@ import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
 import { EmulatorSessionRegistry } from './emulator-session-registry'
+import { deriveServeSimAxUrl } from './serve-sim-detached-session'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
 import type {
@@ -197,6 +198,17 @@ export class EmulatorBridge {
   async exec(command: string, opts?: EmulatorTargetOpts): Promise<unknown> {
     const { backend, device } = await this.resolveTarget(opts)
     return backend.exec(device, command)
+  }
+
+  async accessibilityTree(opts?: EmulatorTargetOpts): Promise<unknown> {
+    return this.runCapability('accessibilityTree', opts, async (backend, device) => {
+      const udid = await backend.resolveDeviceId(device)
+      const session = this.sessionRegistry.getSession(udid)
+      // Fallback heals sessions registered without axUrl (e.g. renderer-supplied
+      // info that predates ax derivation); Android backends ignore the argument.
+      const axUrl = session?.axUrl ?? deriveServeSimAxUrl(session?.streamUrl) ?? null
+      return backend.accessibilityTree!(udid, axUrl)
+    })
   }
 
   // Runs a capability-gated verb against the resolved target, rejecting backends

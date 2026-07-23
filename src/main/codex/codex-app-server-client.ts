@@ -41,6 +41,13 @@ export type CodexGrantedHookTrust = {
   trustedHash: string
 }
 
+/** Closed verify-failure taxonomy — crosses the grant-bridge JSON envelope, so
+ *  telemetry never has to parse the free-form `reason` diagnostics string. */
+export type CodexTrustGrantSessionVerifyClass =
+  | 'list-mismatch'
+  | 'post-grant-untrusted'
+  | 'post-grant-mismatch'
+
 export type CodexHookTrustGrantSessionResult =
   | {
       outcome: 'granted'
@@ -48,7 +55,7 @@ export type CodexHookTrustGrantSessionResult =
       /** False when every expected entry was already trusted (no write). */
       wroteTrust: boolean
     }
-  | { outcome: 'verify-failed'; reason: string }
+  | { outcome: 'verify-failed'; reason: string; reasonClass: CodexTrustGrantSessionVerifyClass }
 
 type CodexHookListing = {
   key: string
@@ -117,7 +124,8 @@ export async function runCodexHookTrustGrantSession(
       ) {
         return {
           outcome: 'verify-failed',
-          reason: `hooks/list reported ${managedListings.length} entries covering ${managedKeyCoverage.size} of ${expectedKeys.size} expected managed entries`
+          reason: `hooks/list reported ${managedListings.length} entries covering ${managedKeyCoverage.size} of ${expectedKeys.size} expected managed entries`,
+          reasonClass: 'list-mismatch'
         }
       }
 
@@ -144,13 +152,17 @@ export async function runCodexHookTrustGrantSession(
         !setContainsEvery(verifiedKeyCoverage, expectedKeys) ||
         untrusted.length > 0
       ) {
-        return {
-          outcome: 'verify-failed',
-          reason:
-            untrusted.length > 0
-              ? `post-grant verify left ${untrusted.length} entries ${untrusted[0].trustStatus}`
-              : `post-grant verify reported ${verifiedListings.length} entries covering ${verifiedKeyCoverage.size} of ${expectedKeys.size} expected entries`
-        }
+        return untrusted.length > 0
+          ? {
+              outcome: 'verify-failed',
+              reason: `post-grant verify left ${untrusted.length} entries ${untrusted[0].trustStatus}`,
+              reasonClass: 'post-grant-untrusted'
+            }
+          : {
+              outcome: 'verify-failed',
+              reason: `post-grant verify reported ${verifiedListings.length} entries covering ${verifiedKeyCoverage.size} of ${expectedKeys.size} expected entries`,
+              reasonClass: 'post-grant-mismatch'
+            }
       }
       return {
         outcome: 'granted',
