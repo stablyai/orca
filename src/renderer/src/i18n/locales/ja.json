@@ -2214,6 +2214,11 @@
                 "7c302f8174": "無題"
               }
             }
+          },
+          "ProjectBoardView": {
+            "no-group-field": "このボードにはグループ化に使える単一選択フィールドがありません。",
+            "empty": "このビューのフィルターに一致する項目はありません。",
+            "restricted": "制限事項"
           }
         },
         "GitHubMarkdownComposer": {

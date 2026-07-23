@@ -2214,6 +2214,11 @@
                 "7c302f8174": "Sin título"
               }
             }
+          },
+          "ProjectBoardView": {
+            "no-group-field": "Este tablero no tiene un campo de selección única para agrupar.",
+            "empty": "Ningún elemento coincide con el filtro de esta vista.",
+            "restricted": "Elemento restringido"
           }
         },
         "GitHubMarkdownComposer": {

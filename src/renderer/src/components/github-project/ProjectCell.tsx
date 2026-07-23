@@ -1091,7 +1091,8 @@ type ChipColors = {
   border: string
 }
 
-function chipStyle(colors: ChipColors): React.CSSProperties {
+// Exported for ProjectBoardView column headers — same chip treatment as cells.
+export function chipStyle(colors: ChipColors): React.CSSProperties {
   return {
     '--github-project-chip-fg-light': colors.fgLight,
     '--github-project-chip-fg-dark': colors.fgDark,
@@ -1100,7 +1101,7 @@ function chipStyle(colors: ChipColors): React.CSSProperties {
   } as React.CSSProperties
 }
 
-function singleSelectChipColors(color: string): ChipColors {
+export function singleSelectChipColors(color: string): ChipColors {
   if (!color) {
     return labelChipColors('')
   }
