@@ -310,6 +310,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     visibleTaskProvidersDefaultedForJira: true,
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
+    linearLaunchPromptTemplate: '',
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
     minimaxGroupId: '',

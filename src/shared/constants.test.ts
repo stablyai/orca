@@ -149,6 +149,12 @@ describe('getDefaultTerminalRightClickToPaste', () => {
   })
 })
 
+describe('getDefaultSettings linearLaunchPromptTemplate', () => {
+  it('defaults the Linear launch prompt template to an empty string', () => {
+    expect(getDefaultSettings('/home/test').linearLaunchPromptTemplate).toBe('')
+  })
+})
+
 describe('MiniMax defaults', () => {
   it('starts MiniMax with empty group id and the canonical default model', () => {
     const settings = getDefaultSettings('/tmp')
