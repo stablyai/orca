@@ -1,6 +1,7 @@
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../shared/setup-script-imports'
+import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
 
 export type HooksApi = {
   /** `background`: a render-driven probe, refused (status 'error') rather than booting a stopped WSL distro. */
@@ -16,6 +17,12 @@ export type HooksApi = {
     repoId: string
     hostId?: ExecutionHostId
   }) => Promise<SetupScriptImportCandidate[]>
+  prepareSetupRunner: (args: { repoId: string; worktreePath: string }) => Promise<{
+    status: 'ok' | 'error'
+    setup: WorktreeSetupLaunch | null
+    reason?: 'no-setup-configured' | 'folder-repo' | 'runner-failed'
+    message?: string
+  }>
   /** `wakeWslDistro`: a launch, a user act that may start the repo's stopped WSL distro. */
   readIssueCommand: (args: {
     repoId: string
