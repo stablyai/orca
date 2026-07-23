@@ -92,7 +92,7 @@ export default function CodeBlockCopyButton({
 }
 
 /** Recursively extract text from React children. */
-function extractText(node: React.ReactNode): string {
+export function extractText(node: React.ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)
   }

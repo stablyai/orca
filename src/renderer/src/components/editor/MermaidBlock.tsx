@@ -73,11 +73,11 @@ export default function MermaidBlock({
         mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
         if (!cancelled && containerRef.current) {
-          // Why: although mermaid uses DOMPurify internally, we add an explicit
-          // sanitization pass as defense-in-depth against XSS in case upstream
-          // behaviour changes or a mermaid version ships without sanitization.
+          // Why: allow SVG styles, filters, and foreignObjects so Mermaid themes and labels survive DOMPurify sanitization.
           containerRef.current.innerHTML = DOMPurify.sanitize(svg, {
-            USE_PROFILES: { svg: true }
+            USE_PROFILES: { svg: true, svgFilters: true },
+            ADD_TAGS: ['style', 'foreignObject'],
+            ADD_ATTR: ['target']
           })
           setError(null)
         }

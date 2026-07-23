@@ -10,6 +10,7 @@ import {
   resolveMarkdownPreviewSourceWorktree
 } from './MarkdownPreview'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { extractText } from './CodeBlockCopyButton'
 
 function makeWorktree(id: string, path: string): Worktree {
   return {
@@ -170,5 +171,24 @@ describe('MarkdownPreview source link routing', () => {
     }
 
     expect(getMarkdownPreviewAnchorScrollTop(container, target)).toBe(493)
+  })
+})
+
+describe('extractText for markdown code blocks', () => {
+  it('preserves multiline mermaid content without array comma insertion', () => {
+    const lines = [
+      'flowchart LR\n',
+      '    PATH3D["3D 真实 Ground-Truth 轨迹点 P(x, y, z)"] --> PROJ["相机内参/外参矩阵 3D->2D 投影"]\n',
+      '    PROJ --> PIXEL["2D 图像像素坐标 (u, v)"]\n',
+      '    DEPTH["相机深度图 Depth Map"] --> FILTER{"深度遮挡过滤:<br/>Distance > Depth ?"}\n',
+      '    PIXEL --> FILTER\n',
+      '    FILTER -- "是 (被遮挡)" --> DISCARD["丢弃不可见点"]\n',
+      '    FILTER -- "否 (可见点)" --> FAR{"计算可见点距离:<br/>取最远可见点 (Farthest Pixel Goal)"}\n',
+      '    FAR --> TARGET["生成训练 Token: <pixel_u, pixel_v>"]'
+    ]
+    const extracted = extractText(lines)
+    expect(extracted).not.toContain('flowchart LR,')
+    expect(extracted).toContain('flowchart LR\n    PATH3D')
+    expect(extracted).toContain('<br/>')
   })
 })
