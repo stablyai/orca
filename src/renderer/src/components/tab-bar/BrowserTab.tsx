@@ -24,7 +24,7 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
-import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabWidthClasses } from './use-tab-container-width'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
@@ -134,6 +134,7 @@ export default function BrowserTab({
     id: tab.id,
     data: dragData
   })
+  const tabWidthClasses = useTabWidthClasses()
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
@@ -215,7 +216,7 @@ export default function BrowserTab({
           muted-foreground made the icon read as "disabled" in practice. */}
       <BrowserTabFavicon tabId={tab.id} faviconUrl={tab.faviconUrl} />
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
+      <span className={`${tabWidthClasses.label} mr-1`}>{tabLabel}</span>
       {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
         <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
       )}
@@ -241,7 +242,7 @@ export default function BrowserTab({
   return (
     <>
       <div
-        className={TAB_CONTAINER_WIDTH_CLASSES}
+        className={tabWidthClasses.container}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))

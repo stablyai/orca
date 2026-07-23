@@ -20,7 +20,8 @@ import {
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { translate } from '@/i18n/i18n'
-import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_EDITING_CONTAINER_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabWidthClasses } from './use-tab-container-width'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
@@ -103,6 +104,7 @@ export default function SortableTab({
   )
   const renamingTabId = useAppStore((s) => s.renamingTabId)
   const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
+  const tabWidthClasses = useTabWidthClasses()
 
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
@@ -307,16 +309,16 @@ export default function SortableTab({
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
           onAuxClick={(event) => event.stopPropagation()}
-          // Why: base Input's min-w-0 lets flex shrink it to ~0 in a saturated tab bar; force a usable minimum width.
-          className="mr-1 h-5 min-w-[72px] flex-1 px-1 py-0 text-xs"
+          // Why: base Input's min-w-0 lets flex shrink it to ~0 in a saturated tab bar; force a usable minimum width so the typed title stays visible.
+          className="mr-1 h-5 min-w-[132px] flex-1 px-1 py-0 text-xs"
           spellCheck={false}
         />
       ) : isEditing || menuOpen ? (
-        <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
+        <span className={`${tabWidthClasses.label} mr-1`}>{displayTitle}</span>
       ) : (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
+            <span className={`${tabWidthClasses.label} mr-1`}>{displayTitle}</span>
           </TooltipTrigger>
           <TooltipContent
             side="bottom"
@@ -401,7 +403,7 @@ export default function SortableTab({
   return (
     <>
       <div
-        className={TAB_CONTAINER_WIDTH_CLASSES}
+        className={isEditing ? TAB_EDITING_CONTAINER_WIDTH_CLASSES : tabWidthClasses.container}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))

@@ -35,6 +35,16 @@
       "menuBarIcon": {
         "title": "显示菜单栏图标",
         "description": "在 macOS 菜单栏中保留 Orca 快捷方式和活动指示器。"
+      },
+      "tabWidth": {
+        "title": "Tab Width",
+        "description": "Control how wide tabs grow and how narrow they shrink before overflowing.",
+        "option": {
+          "hug": "Hug",
+          "default": "Default",
+          "large": "Large",
+          "xlarge": "X-Large"
+        }
       }
     }
   },
