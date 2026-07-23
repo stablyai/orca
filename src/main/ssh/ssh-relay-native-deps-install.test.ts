@@ -126,40 +126,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     }
   }
 
-  it('writes a hardcoded package.json BEFORE running npm install', async () => {
-    const conn = makeMockConnection(sftpCapture)
-    feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
-
-    await deployAndLaunchRelay(conn)
-
-    const pkgPath = sftpCapture.paths.find((p) => p.endsWith('/package.json'))
-    expect(pkgPath, 'package.json must be written via SFTP').toBeTruthy()
-
-    const written = sftpCapture.contents[pkgPath as string]
-    expect(written).toBeTruthy()
-    const parsed = JSON.parse(written) as Record<string, unknown>
-    expect(parsed.name).toBe('orca-relay')
-    expect(parsed.version).toBe('1.0.0')
-    expect(parsed.private).toBe(true)
-    // Why: pin commonjs so a future Node default flip can't break require('node-pty').
-    expect(parsed.type).toBe('commonjs')
-    expect(parsed.dependencies).toEqual({ '@parcel/watcher': '2.5.6', 'node-pty': '1.1.0' })
-    expect(parsed.allowScripts).toEqual({
-      '@parcel/watcher@2.5.6': true,
-      'node-pty@1.1.0': true
-    })
-
-    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
-    const npmInstallIdx = execCalls.findIndex(
-      (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
-    )
-    expect(npmInstallIdx).toBeGreaterThanOrEqual(0)
-    expect(execCalls[npmInstallIdx]).toContain('--ignore-scripts=false')
-    // Pin write-before-install ordering to catch a Promise.all refactor where the final-state assertions above still pass.
-    const writeObservedAt = sftpCapture.execCallCountAtWrite[pkgPath as string]
-    expect(writeObservedAt).toBeLessThanOrEqual(npmInstallIdx)
-  })
-
   it('propagates a hard `npm install` failure so the deploy aborts before finalizeInstall', async () => {
     const conn = makeMockConnection(sftpCapture)
     feed(

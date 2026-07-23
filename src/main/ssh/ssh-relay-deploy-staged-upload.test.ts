@@ -1,0 +1,350 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('electron', () => ({
+  app: { getAppPath: () => '/mock/app' }
+}))
+
+vi.mock('fs', () => ({
+  existsSync: vi.fn().mockReturnValue(true),
+  readFileSync: vi.fn().mockReturnValue('0.1.0+abcdef012345')
+}))
+
+vi.mock('./relay-protocol', () => ({
+  RELAY_VERSION: '0.1.0',
+  RELAY_REMOTE_DIR: '.orca-remote',
+  parseUnameToRelayPlatform: vi.fn((os: string, arch: string) => {
+    const normalizedOs = os.toLowerCase()
+    const normalizedArch = arch.toLowerCase()
+    const relayArch = normalizedArch === 'arm64' || normalizedArch === 'aarch64' ? 'arm64' : 'x64'
+    if (normalizedOs === 'windows' || normalizedOs === 'win32') {
+      return `win32-${relayArch}`
+    }
+    if (normalizedOs === 'darwin') {
+      return `darwin-${relayArch}`
+    }
+    if (normalizedOs === 'linux') {
+      return `linux-${relayArch}`
+    }
+    return null
+  }),
+  RELAY_SENTINEL: 'ORCA-RELAY v0.1.0 READY\n',
+  RELAY_SENTINEL_TIMEOUT_MS: 10_000
+}))
+
+vi.mock('./ssh-relay-deploy-helpers', () => ({
+  uploadDirectory: vi.fn().mockResolvedValue(undefined),
+  waitForSentinel: vi.fn().mockResolvedValue({
+    write: vi.fn(),
+    onData: vi.fn(),
+    onClose: vi.fn()
+  }),
+  isUnconfirmedSshCommandTermination: (error: unknown) =>
+    error instanceof Error &&
+    (error as Error & { sshChannelCloseConfirmed?: boolean }).sshChannelCloseConfirmed === false,
+  execCommand: vi.fn().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+}))
+
+vi.mock('./ssh-remote-node-resolution', () => ({
+  resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+}))
+
+vi.mock('./ssh-relay-versioned-install', () => ({
+  readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+abcdef012345'),
+  computeRemoteRelayDir: (home: string, v: string) => `${home}/.orca-remote/relay-${v}`,
+  isRelayAlreadyInstalled: vi.fn().mockResolvedValue(true),
+  finalizeInstall: vi.fn().mockResolvedValue(undefined),
+  abandonInstall: vi.fn().mockResolvedValue(undefined),
+  gcOldRelayVersions: vi.fn().mockResolvedValue(undefined)
+}))
+
+vi.mock('./ssh-relay-install-lock', () => ({
+  acquireInstallLock: vi.fn().mockResolvedValue(undefined),
+  RELAY_INSTALL_LOCK_NAME: '.install-lock'
+}))
+
+vi.mock('./ssh-relay-repair-lock', () => ({
+  tryAcquireRelayRepairLock: vi.fn().mockResolvedValue('acquired')
+}))
+
+vi.mock('./ssh-connection-utils', () => ({
+  shellEscape: (s: string) => `'${s}'`,
+  createSshOperationAbortError: () =>
+    Object.assign(new Error('SSH operation was cancelled'), {
+      name: 'AbortError'
+    })
+}))
+
+import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
+import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
+import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
+import { acquireInstallLock } from './ssh-relay-install-lock'
+import type { SshConnection } from './ssh-connection'
+
+function makeMockConnection(): SshConnection {
+  return {
+    canRunConcurrentExecCommands: vi.fn().mockReturnValue(true),
+    exec: vi.fn().mockResolvedValue({
+      on: vi.fn(),
+      stderr: { on: vi.fn() },
+      stdin: {},
+      stdout: { on: vi.fn() },
+      close: vi.fn()
+    }),
+    sftp: vi.fn().mockResolvedValue({
+      mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
+      createWriteStream: vi.fn().mockReturnValue({
+        on: vi.fn((_event: string, cb: () => void) => {
+          if (_event === 'close') {
+            setTimeout(cb, 0)
+          }
+        }),
+        end: vi.fn()
+      }),
+      end: vi.fn()
+    })
+  } as unknown as SshConnection
+}
+
+describe('deployAndLaunchRelay staged uploads', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(execCommand).mockReset().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+    vi.mocked(waitForSentinel).mockReset().mockResolvedValue({
+      write: vi.fn(),
+      onData: vi.fn(),
+      onClose: vi.fn()
+    })
+    vi.mocked(resolveRemoteNodePath).mockReset().mockResolvedValue('/usr/bin/node')
+    vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(true)
+    vi.mocked(acquireInstallLock).mockReset().mockResolvedValue(undefined)
+  })
+
+  it('aborts an in-progress relay upload at the overall deploy timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = makeMockConnection()
+      vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(true)
+      vi.mocked(execCommand)
+        .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        .mockResolvedValueOnce('/home/user')
+        .mockResolvedValueOnce('')
+      vi.mocked(isRelayAlreadyInstalled).mockResolvedValueOnce(false).mockResolvedValueOnce(false)
+      let uploadSignal: AbortSignal | undefined
+      conn.uploadDirectory = vi.fn((_localDir, _remoteDir, options) => {
+        uploadSignal = options?.signal
+        return new Promise<void>((_resolve, reject) => {
+          uploadSignal?.addEventListener('abort', () => reject(uploadSignal?.reason), {
+            once: true
+          })
+        })
+      })
+
+      const promise = deployAndLaunchRelay(conn).catch((err: Error) => err)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(conn.uploadDirectory).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(900_000)
+
+      const result = await promise
+      expect(result).toBeInstanceOf(Error)
+      expect((result as Error).message).toBe('Relay deployment timed out after 900s')
+      expect(uploadSignal?.aborted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for a deferred SFTP upload before acquiring the install lock', async () => {
+    const conn = makeMockConnection()
+    vi.mocked(isRelayAlreadyInstalled)
+      .mockReset()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true)
+    let socketProbe = 0
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('uname')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      }
+      if (command === 'echo $HOME') {
+        return Promise.resolve('/home/user')
+      }
+      if (command.includes('test -S')) {
+        return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
+      }
+      if (command.includes('ORCA-NATIVE')) {
+        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      }
+      return Promise.resolve('')
+    })
+    conn.writeFile = vi.fn().mockResolvedValue(undefined)
+    let finishUpload: () => void = () => {}
+    conn.uploadDirectory = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishUpload = resolve
+        })
+    )
+
+    const deploy = deployAndLaunchRelay(conn).catch(() => undefined)
+    await vi.waitFor(() => expect(conn.uploadDirectory).toHaveBeenCalledTimes(1))
+    expect(acquireInstallLock).not.toHaveBeenCalled()
+    finishUpload()
+    await vi.waitFor(() => expect(acquireInstallLock).toHaveBeenCalledTimes(1))
+    await deploy
+  })
+
+  it('removes stale upload stages before starting a fresh upload', async () => {
+    const conn = makeMockConnection()
+    vi.mocked(isRelayAlreadyInstalled)
+      .mockReset()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true)
+    const staleStageA =
+      '/home/user/.orca-remote/relay-0.1.0.upload-123e4567-e89b-12d3-a456-426614174000'
+    const staleStageB =
+      '/home/user/.orca-remote/relay-0.1.0.upload-123e4567-e89b-12d3-a456-426614174001'
+    let socketProbe = 0
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('uname')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      }
+      if (command === 'echo $HOME') {
+        return Promise.resolve('/home/user')
+      }
+      if (command.includes('.upload-*')) {
+        return Promise.resolve(`${staleStageA}\n${staleStageB}\n`)
+      }
+      if (command.includes('test -S')) {
+        return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
+      }
+      if (command.includes('ORCA-NATIVE')) {
+        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      }
+      return Promise.resolve('')
+    })
+    conn.writeFile = vi.fn().mockResolvedValue(undefined)
+    conn.uploadDirectory = vi.fn().mockImplementation(async () => {
+      const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
+      expect(
+        commands.some((command) => command.includes(staleStageA) && command.includes('rm -rf'))
+      ).toBe(true)
+      expect(
+        commands.some((command) => command.includes(staleStageB) && command.includes('rm -rf'))
+      ).toBe(true)
+    })
+
+    await deployAndLaunchRelay(conn)
+  })
+
+  it('keeps the staging tree after an unconfirmed system SSH upload termination', async () => {
+    const conn = makeMockConnection()
+    vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(false)
+    vi.mocked(execCommand).mockImplementation((_conn, command) =>
+      Promise.resolve(
+        command.includes('uname') ? '__ORCA_REMOTE_PLATFORM__ Linux x86_64' : '/home/user'
+      )
+    )
+    conn.writeFile = vi.fn().mockResolvedValue(undefined)
+    const termination = Object.assign(new Error('upload teardown unconfirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+    conn.uploadDirectory = vi.fn().mockRejectedValue(termination)
+
+    await expect(deployAndLaunchRelay(conn)).rejects.toBe(termination)
+    expect(acquireInstallLock).not.toHaveBeenCalled()
+    expect(
+      vi
+        .mocked(execCommand)
+        .mock.calls.some(([, command]) => command.includes('upload-') && command.includes('rm -rf'))
+    ).toBe(false)
+  })
+
+  it('retries immediately after an unconfirmed upload termination instead of waiting on a fresh install lock', async () => {
+    const conn = makeMockConnection()
+    const termination = Object.assign(new Error('upload teardown unconfirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+    let lockHeld = false
+    vi.mocked(acquireInstallLock).mockImplementation((_conn, _dir, _host, options) => {
+      if (!lockHeld) {
+        lockHeld = true
+        return Promise.resolve()
+      }
+      return new Promise<void>((_resolve, reject) => {
+        options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), {
+          once: true
+        })
+      })
+    })
+    vi.mocked(isRelayAlreadyInstalled)
+      .mockReset()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true)
+    let socketProbe = 0
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('uname')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      }
+      if (command === 'echo $HOME') {
+        return Promise.resolve('/home/user')
+      }
+      if (command.includes('test -S')) {
+        return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
+      }
+      if (command.includes('ORCA-NATIVE')) {
+        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      }
+      return Promise.resolve('')
+    })
+    conn.writeFile = vi.fn().mockResolvedValue(undefined)
+    conn.uploadDirectory = vi.fn().mockRejectedValueOnce(termination).mockResolvedValue(undefined)
+
+    await expect(deployAndLaunchRelay(conn)).rejects.toBe(termination)
+    await deployAndLaunchRelay(conn)
+
+    expect(conn.uploadDirectory).toHaveBeenCalledTimes(2)
+    expect(acquireInstallLock).toHaveBeenCalledTimes(1)
+  })
+
+  it('cleans a confirmed-abort staging tree so the next deployment retries immediately', async () => {
+    const conn = makeMockConnection()
+    const termination = Object.assign(new Error('upload aborted'), {
+      sshChannelCloseConfirmed: true
+    })
+    vi.mocked(isRelayAlreadyInstalled)
+      .mockReset()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true)
+    let socketProbe = 0
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('uname')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      }
+      if (command === 'echo $HOME') {
+        return Promise.resolve('/home/user')
+      }
+      if (command.includes('test -S')) {
+        return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
+      }
+      if (command.includes('ORCA-NATIVE')) {
+        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      }
+      return Promise.resolve('')
+    })
+    conn.writeFile = vi.fn().mockResolvedValue(undefined)
+    conn.uploadDirectory = vi.fn().mockRejectedValueOnce(termination).mockResolvedValue(undefined)
+
+    await expect(deployAndLaunchRelay(conn)).rejects.toBe(termination)
+    expect(
+      vi
+        .mocked(execCommand)
+        .mock.calls.some(([, command]) => command.includes('upload-') && command.includes('rm -rf'))
+    ).toBe(true)
+
+    await deployAndLaunchRelay(conn)
+    expect(conn.uploadDirectory).toHaveBeenCalledTimes(2)
+  })
+})
