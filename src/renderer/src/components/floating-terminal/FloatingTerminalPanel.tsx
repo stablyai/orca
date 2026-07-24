@@ -158,6 +158,14 @@ function setFloatingTerminalInputFocusedInMain(focused: boolean): void {
   setInputFocused(focused)
 }
 
+function setFloatingPanelFocusedInMain(focused: boolean): void {
+  const setPanelFocused = window.api.ui.setFloatingPanelFocused
+  if (typeof setPanelFocused !== 'function') {
+    return
+  }
+  setPanelFocused(focused)
+}
+
 export function FloatingTerminalPanel({
   open,
   onOpenChange,
@@ -1324,8 +1332,12 @@ export function FloatingTerminalPanel({
   useEffect(() => {
     if (!open) {
       setFloatingTerminalInputFocusedInMain(false)
+      setFloatingPanelFocusedInMain(false)
     }
-    return () => setFloatingTerminalInputFocusedInMain(false)
+    return () => {
+      setFloatingTerminalInputFocusedInMain(false)
+      setFloatingPanelFocusedInMain(false)
+    }
   }, [open])
 
   useEffect(() => {
@@ -1339,6 +1351,7 @@ export function FloatingTerminalPanel({
         return
       }
       setFloatingTerminalInputFocusedInMain(false)
+      setFloatingPanelFocusedInMain(false)
       const active = document.activeElement
       if (active instanceof HTMLElement && panel.contains(active)) {
         // Why: regular tab strip items are non-focusable, so clicking them can
@@ -1356,6 +1369,7 @@ export function FloatingTerminalPanel({
       // Why: browser webviews focus out-of-process and do not emit renderer
       // pointerdown events, so release floating ownership on renderer blur too.
       setFloatingTerminalInputFocusedInMain(false)
+      setFloatingPanelFocusedInMain(false)
       if (isFloatingWorkspaceTerminalInputTarget(active)) {
         // Why: the terminal focus lifecycle preserves this exact helper across
         // app blur so macOS can rebuild its native input context on return.
@@ -1506,12 +1520,23 @@ export function FloatingTerminalPanel({
         const rect = event.currentTarget.getBoundingClientRect()
         commitUserBounds({ ...stagedBoundsRef.current, width: rect.width, height: rect.height })
       }}
-      onFocusCapture={(event) => setFloatingTerminalInputFocused(event.target)}
+      onFocusCapture={(event) => {
+        setFloatingTerminalInputFocused(event.target)
+        setFloatingPanelFocusedInMain(true)
+      }}
       onBlurCapture={(event) => {
         // Why: keep terminal-first shortcut ownership latched during the
         // synchronous macOS IME refresh blur; refocus or its skip callback settles it.
         if (!isTerminalImeInputContextRefreshing(event.target)) {
           setFloatingTerminalInputFocused(event.relatedTarget)
+        }
+        const panel = panelRef.current
+        if (
+          !event.relatedTarget ||
+          !(event.relatedTarget instanceof Node) ||
+          !panel?.contains(event.relatedTarget)
+        ) {
+          setFloatingPanelFocusedInMain(false)
         }
       }}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}

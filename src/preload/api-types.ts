@@ -3039,6 +3039,7 @@ export type PreloadApi = {
     setMarkdownEditorFocused: (focused: boolean) => void
     setTerminalInputFocused: (focused: boolean) => void
     setFloatingTerminalInputFocused: (focused: boolean) => void
+    setFloatingPanelFocused: (focused: boolean) => void
     setShortcutRecorderFocused: (focused: boolean) => void
     onRichMarkdownContextCommand: (
       callback: (payload: RichMarkdownContextMenuCommandPayload) => void

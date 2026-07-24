@@ -3809,6 +3809,9 @@ const api = {
     setFloatingTerminalInputFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setFloatingTerminalInputFocused', focused)
     },
+    setFloatingPanelFocused: (focused: boolean): void => {
+      ipcRenderer.send('ui:setFloatingPanelFocused', focused)
+    },
     setShortcutRecorderFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setShortcutRecorderFocused', focused)
     },
