@@ -7,14 +7,19 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
 import type { PluginSources } from '../../relay/plugin-overlay'
 
+/** Structural, not the deps type itself, so this stays free of the deps module. */
+type GuestPluginInstallDeps = {
+  pluginSources: () => PluginSources
+  warn: (message: string) => void
+}
+
 export async function requestGuestOpenCodeOverlayDir(
   mux: SshChannelMultiplexer,
-  sources: PluginSources,
-  distro: string,
-  warn: (message: string) => void
+  deps: GuestPluginInstallDeps,
+  distro: string
 ): Promise<string | null> {
   try {
-    const res = (await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, sources)) as {
+    const res = (await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, deps.pluginSources())) as {
       overlayDirs?: { opencode?: unknown }
     }
     const dir = res?.overlayDirs?.opencode
@@ -25,7 +30,7 @@ export async function requestGuestOpenCodeOverlayDir(
     if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED' || mux.isDisposed()) {
       return null
     }
-    warn(
+    deps.warn(
       `[agent-hooks] WSL installPlugins for '${distro}' failed: ${err instanceof Error ? err.message : String(err)}`
     )
     return null

@@ -155,6 +155,9 @@ export class WslHookRelayManager {
       distro,
       phase: 'starting',
       failures: existing?.failures ?? 0,
+      // Why: instance-keyed and on the distro's persistent fs, so it outlives a relay
+      // crash — dropping it would blank status on panes spawned mid-relaunch.
+      opencodeOverlayDir: existing?.opencodeOverlayDir,
       cooldownUntil: 0
     }
     this.states.set(key, state)
@@ -179,7 +182,9 @@ export class WslHookRelayManager {
             { cooldownBaseMs: NO_NODE_COOLDOWN_MS }
           ),
         onFailure: (message) =>
-          this.markFailed(state, message, { cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS }),
+          this.markFailed(state, message, {
+            cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS
+          }),
         connect: (transport, child) => this.connect(state, transport, child, instanceKey)
       })
     } catch (err) {
@@ -279,12 +284,7 @@ export class WslHookRelayManager {
     })
     // Why: ship OpenCode's status plugin and record the guest overlay dir the
     // PTY env points OPENCODE_CONFIG_DIR at; identity-guarded against teardown.
-    const overlayDir = await requestGuestOpenCodeOverlayDir(
-      mux,
-      this.deps.pluginSources(),
-      state.distro,
-      this.deps.warn
-    )
+    const overlayDir = await requestGuestOpenCodeOverlayDir(mux, this.deps, state.distro)
     if (overlayDir && state.mux === mux) {
       state.opencodeOverlayDir = overlayDir
     }
