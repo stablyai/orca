@@ -4,17 +4,15 @@ import {
   loadMobileTerminalThemeSelection,
   subscribeMobileTerminalThemeSelection
 } from '../storage/terminal-theme-preference'
+import { useTheme } from '../theme/theme-context'
 import { selectMobileTerminalTheme } from './terminal-theme-slot-selection'
 import type { MobileTerminalTheme } from './terminal-webview-contract'
-
-// Why the literal: mobile chrome is dark-only on this branch, so this IS the app mode.
-// PR7 replaces this one line with `const { mode } = useTheme()`.
-const APP_MODE = 'dark'
 
 /** Applies the device-local slot choice on top of the host-pushed palette. */
 export function useMobileTerminalTheme(
   hostTheme: MobileTerminalTheme | undefined
 ): MobileTerminalTheme | undefined {
+  const { mode } = useTheme()
   const selection = useSyncExternalStore(
     subscribeMobileTerminalThemeSelection,
     getMobileTerminalThemeSelection
@@ -23,7 +21,7 @@ export function useMobileTerminalTheme(
     void loadMobileTerminalThemeSelection()
   }, [])
   return useMemo(
-    () => selectMobileTerminalTheme(selection, APP_MODE, hostTheme),
-    [hostTheme, selection]
+    () => selectMobileTerminalTheme(selection, mode, hostTheme),
+    [hostTheme, mode, selection]
   )
 }

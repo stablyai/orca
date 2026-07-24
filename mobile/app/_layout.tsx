@@ -5,13 +5,14 @@ import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
 import * as Linking from 'expo-linking'
-import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationPath } from '../src/notifications/notification-routing'
 import { loadHosts } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
+import { ThemeProvider, useTheme, useThemedStyles } from '../src/theme/theme-context'
+import type { ThemeColors } from '../src/theme/mobile-theme'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -33,8 +34,19 @@ Notifications.setNotificationHandler({
 })
 
 export default function RootLayout() {
+  // ThemeProvider outside RpcClientProvider so transport error UI is themed too.
+  return (
+    <ThemeProvider>
+      <RootLayoutContent />
+    </ThemeProvider>
+  )
+}
+
+function RootLayoutContent() {
   const router = useRouter()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
+  const { mode, colors } = useTheme()
+  const styles = useThemedStyles(createStyles)
 
   useEffect(() => {
     // Why: pairing publication is journaled across process death; startup must
@@ -153,7 +165,7 @@ export default function RootLayout() {
   return (
     <RpcClientProvider>
       <View style={styles.root} onLayout={onNavigatorLayout}>
-        <StatusBar style="light" />
+        <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: colors.bgPanel },
@@ -198,9 +210,10 @@ export default function RootLayout() {
   )
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.bgBase
+    }
+  })

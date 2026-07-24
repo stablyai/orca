@@ -7,7 +7,6 @@ import { describe, expect, it } from 'vitest'
 // never add one. Empty list == migration complete.
 const UNTHEMED_COLOR_IMPORTERS: readonly string[] = [
   'src/components/CodexResetCreditAction.tsx',
-  'app/_layout.tsx',
   'app/about.tsx',
   'app/browser-settings.tsx',
   'app/connection-log.tsx',
@@ -22,7 +21,6 @@ const UNTHEMED_COLOR_IMPORTERS: readonly string[] = [
   'app/h/[hostId]/session/mobile-session-reader-styles.ts',
   'app/h/[hostId]/session/mobile-session-review-comment-styles.ts',
   'app/h/[hostId]/tasks.tsx',
-  'app/h/_layout.tsx',
   'app/index.tsx',
   'app/native-chat-settings.tsx',
   'app/notifications.tsx',

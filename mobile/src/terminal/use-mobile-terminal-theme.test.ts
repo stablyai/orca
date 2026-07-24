@@ -13,6 +13,13 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 
+vi.mock('react-native', () => ({
+  useColorScheme: () => 'dark',
+  StyleSheet: {
+    create: <T extends Record<string, unknown>>(sheet: T): T => sheet
+  }
+}))
+
 function suppressReactTestRendererDeprecationWarning(): () => void {
   const originalConsoleError = console.error
   const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
@@ -133,5 +140,76 @@ describe('useMobileTerminalTheme', () => {
     })
 
     expect(harness.rendered).toHaveLength(renderCount)
+  })
+
+  it('falls back to Builtin Tango Light when app mode is light and the host is dark', async () => {
+    // Failing repro first: null light slot + dark host must not paint the host palette
+    // into a light app (the two-slot model exists to prevent that mismatch).
+    vi.resetModules()
+    const storage = (await import('@react-native-async-storage/async-storage')).default
+    vi.mocked(storage.getItem).mockResolvedValue(null)
+    const { ThemeProvider, useTheme } = await import('../theme/theme-context')
+    const { useMobileTerminalTheme } = await import('./use-mobile-terminal-theme')
+    const rendered: (MobileTerminalTheme | undefined)[] = []
+    let setAppTheme: ((next: 'system' | 'dark' | 'light') => void) | null = null
+
+    function Harness() {
+      const theme = useTheme()
+      setAppTheme = theme.setAppTheme
+      rendered.push(useMobileTerminalTheme(hostTheme))
+      return null
+    }
+
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(ThemeProvider, null, createElement(Harness)))
+    })
+    await act(async () => {
+      setAppTheme?.('light')
+    })
+
+    expect(rendered.at(-1)).toEqual({
+      mode: 'light',
+      theme: getBuiltinTerminalThemePalette('Builtin Tango Light')
+    })
+
+    await act(async () => {
+      renderer.unmount()
+    })
+  })
+
+  it('passes a same-mode host theme through by identity under a light app', async () => {
+    vi.resetModules()
+    const storage = (await import('@react-native-async-storage/async-storage')).default
+    vi.mocked(storage.getItem).mockResolvedValue(null)
+    const lightHost: MobileTerminalTheme = {
+      mode: 'light',
+      theme: { background: '#ffffff', foreground: '#111111' }
+    }
+    const { ThemeProvider, useTheme } = await import('../theme/theme-context')
+    const { useMobileTerminalTheme } = await import('./use-mobile-terminal-theme')
+    const rendered: (MobileTerminalTheme | undefined)[] = []
+    let setAppTheme: ((next: 'system' | 'dark' | 'light') => void) | null = null
+
+    function Harness() {
+      const theme = useTheme()
+      setAppTheme = theme.setAppTheme
+      rendered.push(useMobileTerminalTheme(lightHost))
+      return null
+    }
+
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(ThemeProvider, null, createElement(Harness)))
+    })
+    await act(async () => {
+      setAppTheme?.('light')
+    })
+
+    expect(rendered.at(-1)).toBe(lightHost)
+
+    await act(async () => {
+      renderer.unmount()
+    })
   })
 })

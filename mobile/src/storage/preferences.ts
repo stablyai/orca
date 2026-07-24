@@ -210,6 +210,27 @@ export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode)
   await AsyncStorage.setItem(TERMINAL_LINK_OPEN_MODE_KEY, mode)
 }
 
+export type MobileAppTheme = 'system' | 'dark' | 'light'
+
+const APP_THEME_KEY = 'orca:appTheme'
+// Why: dark keeps every existing install pixel-identical when the runtime lands;
+// 'system' would relight the app for anyone whose phone is in light mode, breaking
+// this PR's own "no visible change" contract before any UI exists to opt out.
+export const DEFAULT_APP_THEME: MobileAppTheme = 'dark'
+
+export async function loadAppTheme(): Promise<MobileAppTheme> {
+  try {
+    const raw = await AsyncStorage.getItem(APP_THEME_KEY)
+    return raw === 'system' || raw === 'dark' || raw === 'light' ? raw : DEFAULT_APP_THEME
+  } catch {
+    return DEFAULT_APP_THEME
+  }
+}
+
+export async function saveAppTheme(theme: MobileAppTheme): Promise<void> {
+  await AsyncStorage.setItem(APP_THEME_KEY, theme)
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')

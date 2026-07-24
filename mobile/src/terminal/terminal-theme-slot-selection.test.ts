@@ -63,10 +63,20 @@ describe('selectMobileTerminalTheme', () => {
     ).toEqual({ mode: 'light', theme: getBuiltinTerminalThemePalette('One Dark') })
   })
 
-  it('follows the host in light mode when only the dark slot is chosen', () => {
-    expect(
-      selectMobileTerminalTheme({ ...FOLLOW_DESKTOP, dark: 'One Dark' }, 'light', hostTheme)
-    ).toBe(hostTheme)
+  it('falls back to the desktop light default when the host mode mismatches the app', () => {
+    // Light app + null light slot + dark host: do not paint a dark terminal into a light chrome.
+    expect(selectMobileTerminalTheme(FOLLOW_DESKTOP, 'light', hostTheme)).toEqual({
+      mode: 'light',
+      theme: getBuiltinTerminalThemePalette('Builtin Tango Light')
+    })
+  })
+
+  it('still passes a same-mode host theme through by identity', () => {
+    const lightHost: MobileTerminalTheme = {
+      mode: 'light',
+      theme: { background: '#ffffff', foreground: '#000000' }
+    }
+    expect(selectMobileTerminalTheme(FOLLOW_DESKTOP, 'light', lightHost)).toBe(lightHost)
   })
 })
 
