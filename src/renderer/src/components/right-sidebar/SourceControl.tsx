@@ -108,6 +108,7 @@ import { useSourceControlSubmoduleStatus } from './useSourceControlSubmoduleStat
 import {
   buildSourceControlDisplaySections,
   getSourceControlSectionViewAction,
+  mergeUntrackedIntoChanges,
   resolveSourceControlGroupOrder,
   SOURCE_CONTROL_AREAS,
   type SourceControlDisplaySectionId,
@@ -632,10 +633,20 @@ type BranchSourceControlTreeDirectoryNode = Extract<
   { type: 'directory' }
 >
 
+// Why: an 'unstaged' area can contain untracked rows folded in by the
+// Combine Untracked with Changes setting — widen the discard filter so bulk
+// "discard all" (section, folder, and area-fallback paths) doesn't silently
+// skip them. Single source of truth so the three call sites can't drift.
+function discardAllAreaFilter(area: DiscardAllArea): DiscardAllArea | readonly DiscardAllArea[] {
+  return area === 'unstaged' ? (['unstaged', 'untracked'] as const) : area
+}
+
 type SourceControlDirectoryActionPaths = {
   stagePaths: string[]
   unstagePaths: string[]
   discardPaths: string[]
+  /** True when discardPaths includes untracked rows folded into an 'unstaged' node (Combine Untracked with Changes). Drives the folder-row discard icon/label. */
+  discardHasUntracked: boolean
 }
 
 function getSourceControlDirectoryActionPaths(
@@ -647,8 +658,9 @@ function getSourceControlDirectoryActionPaths(
     unstagePaths: getUnstageAllPaths(entries),
     discardPaths:
       node.area === 'unstaged' || node.area === 'untracked'
-        ? getDiscardAllPaths(entries, node.area)
-        : []
+        ? getDiscardAllPaths(entries, discardAllAreaFilter(node.area))
+        : [],
+    discardHasUntracked: entries.some((entry) => entry.area === 'untracked')
   }
 }
 
@@ -1044,6 +1056,7 @@ function SourceControlInner(): React.JSX.Element {
   )
   const sourceControlViewMode = persistedSourceControlViewMode
   const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
+  const combineUntrackedChanges = settings?.sourceControlCombineUntrackedChanges ?? false
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
@@ -1759,13 +1772,25 @@ function SourceControlInner(): React.JSX.Element {
     [fileFilterState, grouped]
   )
 
+  // Why: shared merge point for "Combine Untracked with Changes" so bulk
+  // discard/stage fallbacks (grouped[area] lookups) see the same folded
+  // groups as the sections rendered on screen.
+  const mergedGrouped = useMemo(
+    () => mergeUntrackedIntoChanges(grouped, combineUntrackedChanges),
+    [grouped, combineUntrackedChanges]
+  )
+  const mergedFilteredGrouped = useMemo(
+    () => mergeUntrackedIntoChanges(filteredGrouped, combineUntrackedChanges),
+    [filteredGrouped, combineUntrackedChanges]
+  )
+
   const displaySections = useMemo(
-    () => buildSourceControlDisplaySections(filteredGrouped, sourceControlGroupOrder),
-    [filteredGrouped, sourceControlGroupOrder]
+    () => buildSourceControlDisplaySections(mergedFilteredGrouped, sourceControlGroupOrder),
+    [mergedFilteredGrouped, sourceControlGroupOrder]
   )
   const unfilteredDisplaySections = useMemo(
-    () => buildSourceControlDisplaySections(grouped, sourceControlGroupOrder),
-    [grouped, sourceControlGroupOrder]
+    () => buildSourceControlDisplaySections(mergedGrouped, sourceControlGroupOrder),
+    [mergedGrouped, sourceControlGroupOrder]
   )
   const unfilteredDisplaySectionsById = useMemo(
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
@@ -5298,7 +5323,9 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
+      const paths = confirmedPaths
+        ? [...confirmedPaths]
+        : getDiscardAllPaths(mergedGrouped[area], discardAllAreaFilter(area))
       if (paths.length === 0) {
         return
       }
@@ -5370,7 +5397,7 @@ function SourceControlInner(): React.JSX.Element {
       activeRepoSettings,
       worktreePath,
       activeWorktreeId,
-      grouped,
+      mergedGrouped,
       isExecutingBulk,
       clearSelection,
       discardMany,
@@ -5384,13 +5411,15 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
+      const paths = confirmedPaths
+        ? [...confirmedPaths]
+        : getDiscardAllPaths(mergedGrouped[area], discardAllAreaFilter(area))
       if (paths.length === 0) {
         return
       }
       setPendingDiscard({ kind: 'area', area, paths })
     },
-    [activeWorktreeId, grouped, isExecutingBulk, worktreePath]
+    [activeWorktreeId, mergedGrouped, isExecutingBulk, worktreePath]
   )
 
   const requestDiscardEntry = useCallback(
@@ -5807,7 +5836,8 @@ function SourceControlInner(): React.JSX.Element {
                   .filter(isStageableStatusEntry)
                   .map((entry) => entry.path)
                 const unstageAllPaths = getUnstageAllPaths(actionItems)
-                const discardAllPaths = getDiscardAllPaths(actionItems, area)
+                const discardAllPaths = getDiscardAllPaths(actionItems, discardAllAreaFilter(area))
+                const discardHasUntracked = actionItems.some((entry) => entry.area === 'untracked')
                 const canStageAll = !normalizedFilter && stageAllPaths.length > 0
                 const canUnstageAll = !normalizedFilter && unstageAllPaths.length > 0
                 const canRevertAll = !normalizedFilter && discardAllPaths.length > 0
@@ -5830,7 +5860,7 @@ function SourceControlInner(): React.JSX.Element {
                           <div className="flex items-center can-hover:opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
                             {canRevertAll && (
                               <ActionButton
-                                icon={area === 'untracked' ? Trash : Undo2}
+                                icon={discardHasUntracked ? Trash : Undo2}
                                 // Why: for untracked files, discard deletes outright (rm -rf), so label the destructive variant explicitly.
                                 title={
                                   area === 'untracked'
@@ -7611,7 +7641,7 @@ function SourceControlTreeDirectoryRow({
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
           {canDiscard && (
             <ActionButton
-              icon={node.area === 'untracked' ? Trash : Undo2}
+              icon={actionPaths.discardHasUntracked ? Trash : Undo2}
               title={
                 node.area === 'untracked'
                   ? translate(

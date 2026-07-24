@@ -30,6 +30,15 @@ describe('getDiscardAllPaths', () => {
     expect(getDiscardAllPaths(entries, 'untracked')).toEqual(['c.ts'])
   })
 
+  it('accepts multiple areas so a combined Changes section can discard both unstaged and untracked rows', () => {
+    const entries: GitStatusEntry[] = [
+      entry({ path: 'a.ts', area: 'staged' }),
+      entry({ path: 'b.ts', area: 'unstaged' }),
+      entry({ path: 'c.ts', area: 'untracked', status: 'untracked' })
+    ]
+    expect(getDiscardAllPaths(entries, ['unstaged', 'untracked'])).toEqual(['b.ts', 'c.ts'])
+  })
+
   it('skips entries with an unresolved conflict', () => {
     const entries: GitStatusEntry[] = [
       entry({ path: 'clean.ts', area: 'unstaged' }),

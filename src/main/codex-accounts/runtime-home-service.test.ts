@@ -113,6 +113,7 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: 'changes-first',
+    sourceControlCombineUntrackedChanges: false,
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
     showTasksButton: true,

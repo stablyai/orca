@@ -72,6 +72,35 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.git.search.combineUntrackedChangesTitle',
+      'Combine Untracked with Changes'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.combineUntrackedChangesDescription',
+      'Show untracked files inside the Changes section instead of their own Untracked Files section.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.combineUntracked',
+        'combine untracked'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.untrackedFiles',
+        'untracked files'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.mergeUntracked',
+        'merge untracked'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.sourceControl',
+        'source control'
+      ),
+      ...translateSearchKeyword('auto.components.settings.git.search.gitChanges', 'git changes')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.git.search.compareAgainstUpstreamTitle',
       'Default Compare Base'
     ),
