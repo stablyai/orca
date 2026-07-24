@@ -59,7 +59,7 @@ import {
 } from './markdown-doc-links'
 import { absolutePathToFileUri, resolveMarkdownLinkTarget } from './markdown-internal-links'
 import { useLocalImageSrc } from './useLocalImageSrc'
-import CodeBlockCopyButton from './CodeBlockCopyButton'
+import CodeBlockCopyButton, { extractText } from './CodeBlockCopyButton'
 import MermaidBlock from './MermaidBlock'
 import {
   applyMarkdownPreviewSearchHighlights,
@@ -1671,11 +1671,11 @@ export default function MarkdownPreview({
         // Why: display uses IPC blob URLs, but Cmd/Ctrl-click opens the original target so local/SSH images use the normal file-link path.
         return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
       },
-      // Why: render language-mermaid blocks as SVG; opt out of Mermaid HTML labels since sanitized foreignObject labels disappear on some platforms.
+      // Why: render language-mermaid blocks as SVG; extract text safely without array commas.
       code: ({ className, children, ...props }) => {
         if (/language-mermaid/.test(className || '')) {
           return (
-            <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
+            <MermaidBlock content={extractText(children).trimEnd()} isDark={isDark} htmlLabels={false} />
           )
         }
         return (

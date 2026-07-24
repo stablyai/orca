@@ -1,5 +1,20 @@
 import type mermaid from 'mermaid'
 
+const MERMAID_SECURE_CONFIG_KEYS = [
+  'securityLevel',
+  'startOnLoad',
+  'maxTextSize',
+  'secure',
+  'suppressErrorRendering',
+  'maxEdges',
+  'themeCSS',
+  'themeVariables',
+  'theme',
+  'fontFamily',
+  'altFontFamily',
+  'htmlLabels'
+]
+
 export function getMermaidConfig(
   isDark: boolean,
   htmlLabels = false
@@ -9,6 +24,8 @@ export function getMermaidConfig(
     securityLevel: 'strict',
     suppressErrorRendering: true,
     theme: isDark ? 'dark' : 'default',
-    htmlLabels
+    htmlLabels,
+    // Why: diagram directives are untrusted and must not re-enable HTML labels or inject theme CSS.
+    secure: MERMAID_SECURE_CONFIG_KEYS
   }
 }

@@ -1,5 +1,6 @@
 import React from 'react'
 import CommentMermaidBlock from './CommentMermaidBlock'
+import { extractText } from '../editor/CodeBlockCopyButton'
 
 // Why: react-markdown sets className="language-mermaid" on the <code> inside a
 // fenced ```mermaid block. Detecting it lets us render a real diagram instead of
@@ -8,11 +9,12 @@ export function isMermaidFence(className: string | undefined): boolean {
   return /\blanguage-mermaid\b/.test(className ?? '')
 }
 
+// Why: extractText flattens array children without adding array commas so multiline mermaid syntax remains valid.
 export function renderMermaidFence(
   children: React.ReactNode,
   className?: string
 ): React.JSX.Element {
-  return <CommentMermaidBlock content={String(children).trimEnd()} className={className} />
+  return <CommentMermaidBlock content={extractText(children).trimEnd()} className={className} />
 }
 
 // Why: MermaidBlock renders a <div> via innerHTML, which is invalid inside a
