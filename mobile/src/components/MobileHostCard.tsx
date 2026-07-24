@@ -5,7 +5,8 @@ import { verdictDisplayLabel } from '../transport/connection-health'
 import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from '../transport/types'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { radii, spacing, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { StatusDot } from './StatusDot'
 
 export function MobileHostCard(props: {
@@ -17,6 +18,8 @@ export function MobileHostCard(props: {
   onPress: () => void
   onLongPress: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileHostCardStyles)
   const connected = props.state === 'connected'
   const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
   const worktreeSummary = props.worktreeCounts
@@ -62,41 +65,42 @@ export function MobileHostCard(props: {
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  cardPressed: { backgroundColor: colors.bgRaised },
-  icon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    marginRight: 14
-  },
-  main: { flex: 1, minWidth: 0, marginRight: spacing.sm },
-  name: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, minWidth: 0 },
-  metaText: { flex: 1, fontSize: 12, color: colors.textSecondary },
-  worktreeMetaText: {
-    marginTop: 2,
-    marginLeft: spacing.xl,
-    fontSize: 12,
-    color: colors.textMuted
-  },
-  discoveryHint: {
-    marginTop: spacing.xs,
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.textMuted
-  }
-})
+export const createMobileHostCardStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.md,
+      paddingVertical: 12,
+      borderRadius: radii.card,
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle
+    },
+    cardPressed: { backgroundColor: colors.bgRaised },
+    icon: {
+      width: 46,
+      height: 46,
+      borderRadius: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgRaised,
+      marginRight: 14
+    },
+    main: { flex: 1, minWidth: 0, marginRight: spacing.sm },
+    name: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 20 },
+    meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, minWidth: 0 },
+    metaText: { flex: 1, fontSize: 12, color: colors.textSecondary },
+    worktreeMetaText: {
+      marginTop: 2,
+      marginLeft: spacing.xl,
+      fontSize: 12,
+      color: colors.textMuted
+    },
+    discoveryHint: {
+      marginTop: spacing.xs,
+      fontSize: 11,
+      lineHeight: 15,
+      color: colors.textMuted
+    }
+  })

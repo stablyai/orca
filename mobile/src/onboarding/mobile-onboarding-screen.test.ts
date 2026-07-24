@@ -49,7 +49,11 @@ vi.mock('../storage/session-view-preferences', () => ({
   saveDefaultSessionView: mocks.saveDefaultSessionView
 }))
 vi.mock('../storage/preferences', () => ({
-  savePushNotificationsEnabled: mocks.savePushNotificationsEnabled
+  savePushNotificationsEnabled: mocks.savePushNotificationsEnabled,
+  // theme-context, now reached through the themed onboarding styles, binds these at import time.
+  DEFAULT_APP_THEME: 'dark',
+  loadAppTheme: async () => 'dark',
+  saveAppTheme: async () => undefined
 }))
 
 describe('MobileOnboardingScreen', () => {

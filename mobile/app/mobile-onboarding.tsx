@@ -17,7 +17,8 @@ import {
   type NotificationOnboardingChoice
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
-import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
+import { createMobileOnboardingStyles } from '../src/onboarding/mobile-onboarding-styles'
+import { useThemedStyles } from '../src/theme/theme-context'
 import {
   saveDefaultSessionView,
   type MobileSessionView
@@ -50,6 +51,7 @@ function MobileOnboardingFlow({
   hostId: string | undefined
   rawSteps: string | undefined
 }) {
+  const styles = useThemedStyles(createMobileOnboardingStyles)
   const router = useRouter()
   const steps = useMemo(() => parseMobileOnboardingSteps(rawSteps), [rawSteps])
   const { width } = useWindowDimensions()

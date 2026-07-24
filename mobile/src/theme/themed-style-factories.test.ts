@@ -29,6 +29,8 @@ vi.mock('react-native', () => ({
 
 vi.mock('lucide-react-native', () => ({
   Check: () => null,
+  ChevronRight: () => null,
+  Monitor: () => null,
   Edit3: () => null,
   Trash2: () => null,
   Download: () => null,
@@ -133,7 +135,9 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/terminal-shortcut-settings-styles'),
     import('../components/custom-key-modal-styles'),
     import('../session/MobileTerminalLiveInputStatus'),
-    import('../components/DragReorderList')
+    import('../components/DragReorderList'),
+    import('../onboarding/mobile-onboarding-styles'),
+    import('../components/MobileHostCard')
   ])
   const [
     bottomDrawer,
@@ -161,7 +165,9 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     shortcutSettings,
     customKeyModal,
     liveInputStatus,
-    dragReorderList
+    dragReorderList,
+    onboarding,
+    hostCard
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -207,7 +213,9 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
       name: 'createMobileTerminalLiveInputStatusStyles',
       factory: liveInputStatus.createMobileTerminalLiveInputStatusStyles
     },
-    { name: 'createDragReorderListStyles', factory: dragReorderList.createDragReorderListStyles }
+    { name: 'createDragReorderListStyles', factory: dragReorderList.createDragReorderListStyles },
+    { name: 'createMobileOnboardingStyles', factory: onboarding.createMobileOnboardingStyles },
+    { name: 'createMobileHostCardStyles', factory: hostCard.createMobileHostCardStyles }
   ]
 }
 
@@ -266,5 +274,14 @@ describe('themed style factories', () => {
     expect(shortcuts.deleteButton.backgroundColor).toBe('rgba(239, 68, 68, 0.1)')
     const customKey = createCustomKeyModalStyles(darkColors)
     expect(customKey.title.color).toBe(darkColors.textPrimary)
+
+    const { createMobileOnboardingStyles } = await import('../onboarding/mobile-onboarding-styles')
+    const { createMobileHostCardStyles } = await import('../components/MobileHostCard')
+    const onboarding = createMobileOnboardingStyles(darkColors)
+    expect(onboarding.container.backgroundColor).toBe(darkColors.bgBase)
+    expect(onboarding.primaryButton.backgroundColor).toBe(darkColors.surfaceBright)
+    const hostCard = createMobileHostCardStyles(darkColors)
+    expect(hostCard.card.backgroundColor).toBe(darkColors.bgPanel)
+    expect(hostCard.cardPressed.backgroundColor).toBe(darkColors.bgRaised)
   })
 })

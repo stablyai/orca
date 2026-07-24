@@ -1,9 +1,9 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { BellRing, MessageSquare } from 'lucide-react-native'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
-import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
+import { createMobileOnboardingStyles } from './mobile-onboarding-styles'
 import type { MobileSessionView } from '../storage/session-view-preferences'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
@@ -27,6 +27,8 @@ export function MobileOnboardingPage({
   onSessionChoice,
   onNotificationChoice
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileOnboardingStyles)
   const busy = busyChoice !== null
   const isSessionView = step === 'session-view'
 
@@ -151,6 +153,8 @@ function ChoiceButton({
   disabled: boolean
   onPress: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileOnboardingStyles)
   return (
     <Pressable
       accessibilityRole="button"
