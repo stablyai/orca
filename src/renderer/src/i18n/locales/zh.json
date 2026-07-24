@@ -2904,7 +2904,8 @@
                   "5a9c83c04b": "打开任何文件、URL、智能体...",
                   "90eb94dc48": "输入 http:// 或 https:// URL。",
                   "5553b283ce": "输入 URL 或文件路径。",
-                  "queryTooLarge": "搜索文本过长。"
+                  "queryTooLarge": "搜索文本过长。",
+                  "absolutePathRemoteBlocked": "绝对路径需要本地工作区。"
                 }
               },
               "menu": {
@@ -5681,6 +5682,11 @@
           "273e7e81fe": "配置",
           "1f744a72f4": "配置"
         },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "前缀不能包含空格或 ~ ^ : ? * [ \\ 等特殊字符",
+          "64d70b156a": "分支将命名为 {{example}}",
+          "808f9a726e": "不会应用前缀"
+        },
         "GitPane": {
           "d2eede4c54": "将 Orca 署名添加到 commits、PR 和议题。",
           "e02ea23a32": "Orca 署名",
@@ -6284,6 +6290,7 @@
           "removeSetup": "移除",
           "hostSetupBlockedVersion": "Orca 服务器版本不兼容",
           "hostSetupMissingCapability": "在此主机上更新 Orca 以设置项目",
+          "hostSetupConnectionRequired": "请先连接此主机，再导入或克隆项目",
           "setupProjectOnHost": "在其他主机上设置",
           "setupProjectOnHostHelp": "选择一台主机，然后导入已有检出、在那里克隆仓库，或跟踪稍后才配置的设置。",
           "setupExistingFolder": "导入现有文件夹",
@@ -6591,8 +6598,8 @@
           "4e11f87ca6": "显示中",
           "fbb428db98": "已选择：",
           "fac59213fc": "搜索内置主题",
-          "cb330ef7f8": "{{value0}} 的",
-          "c822571b2e": "匹配“{{value0}}”",
+          "cb330ef7f8": "/{{value0}}",
+          "c822571b2e": " 匹配“{{value0}}”",
           "3119c012a5": "字符串",
           "builtin_themes": "内置",
           "imported_from": "从 {{value0}} 导入",

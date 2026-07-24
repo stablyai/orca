@@ -3631,7 +3631,7 @@ export default function SessionScreen() {
     nativeChatInputLeaseReady,
     getActiveWorktreeConnectionId,
     beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
-    nativeChatBaseSend: nativeChatController.handleNativeChatSend,
+    nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
     showToast,
     onSuccess: triggerSelection,
     onError: triggerError

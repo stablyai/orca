@@ -24,6 +24,7 @@ import {
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
 import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
+import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 import { useRichMarkdownSuperscriptLinkSetup } from './useRichMarkdownSuperscriptLinkSetup'
 import {
   formatSelectedHtmlSuperscriptLinkStatus,
@@ -79,6 +80,11 @@ export default function RichMarkdownEditor({
   const richMarkdownSpellcheckEnabled = settings?.richMarkdownSpellcheckEnabled ?? true
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
+  const pendingEditorFocusRequest = useAppStore((s) => {
+    const request = s.pendingEditorFocusRequest
+    return request?.fileId === fileId && request.worktreeId === worktreeId ? request : null
+  })
+  const consumeEditorFocusRequest = useAppStore((s) => s.consumeEditorFocusRequest)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -258,6 +264,16 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+
+  useEffect(() => {
+    if (!editor || !pendingEditorFocusRequest) {
+      return
+    }
+    cancelAutoFocusRef.current?.()
+    cancelAutoFocusRef.current = autoFocusRichEditor(editor, rootRef.current, true)
+    consumeEditorFocusRequest(pendingEditorFocusRequest.token)
+  }, [consumeEditorFocusRequest, editor, pendingEditorFocusRequest])
+
   // Why: useEditor defaults shouldRerenderOnTransaction to false, so selection-only
   // citation NodeSelections would leave aria status stale without useEditorState.
   const selectedCitationStatus = useEditorState({

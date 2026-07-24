@@ -4428,7 +4428,27 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           changed = true
         }
       }
-      return changed ? { lastVisitedAtByWorktreeId: next } : {}
+      const patch: { lastVisitedAtByWorktreeId?: Record<string, number>; activeWorktreeId?: null } =
+        {}
+      if (changed) {
+        patch.lastVisitedAtByWorktreeId = next
+      }
+      // Why: the persisted active-worktree pointer is a `${repoId}::${path}` id
+      // that nothing else reconciles here. The main-process Store clears a stale
+      // pointer when a repo is removed (removeWorkspaceSessionOwner nulls
+      // activeWorktreeId), but the web client keeps it in localStorage and gets
+      // no such load-time GC — so a pointer to a worktree the server no longer
+      // reports lingers and can surface a phantom/duplicate workspace. Clear it
+      // once its repo is hydrated and the worktree is confirmed gone (defer while
+      // the repo is unhydrated, mirroring the timestamp rule above).
+      const activeId = s.activeWorktreeId
+      if (activeId) {
+        const activeRepoWorktreeIds = validIdsByRepo.get(getRepoIdFromWorktreeId(activeId))
+        if (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId)) {
+          patch.activeWorktreeId = null
+        }
+      }
+      return Object.keys(patch).length > 0 ? patch : {}
     })
   },
 

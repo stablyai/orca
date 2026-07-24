@@ -2927,7 +2927,8 @@
                   "5a9c83c04b": "Open any file, URL, agent, ...",
                   "90eb94dc48": "Enter an http:// or https:// URL.",
                   "5553b283ce": "Enter a URL or file path.",
-                  "queryTooLarge": "Search text is too large."
+                  "queryTooLarge": "Search text is too large.",
+                  "absolutePathRemoteBlocked": "Absolute paths require a local workspace."
                 }
               },
               "menu": {
@@ -5756,6 +5757,11 @@
         "YamlThemeImportButton": {
           "label": "Import from YAML"
         },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "Prefix cannot contain spaces or special characters like ~ ^ : ? * [ \\",
+          "64d70b156a": "Branches will be named {{example}}",
+          "808f9a726e": "No prefix will be applied"
+        },
         "GitPane": {
           "d2eede4c54": "Add Orca attribution to commits, PRs, and issues.",
           "e02ea23a32": "Orca Attribution",
@@ -6358,6 +6364,7 @@
           "removeSetup": "Remove",
           "hostSetupBlockedVersion": "Orca server version is incompatible",
           "hostSetupMissingCapability": "Update Orca on this host to set up projects",
+          "hostSetupConnectionRequired": "Connect this host before importing or cloning the project",
           "setupProjectOnHost": "Set up on another host",
           "setupProjectOnHostHelp": "Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.",
           "setupExistingFolder": "Import existing folder",

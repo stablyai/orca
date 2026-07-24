@@ -7156,6 +7156,34 @@ describe('markWorktreeVisited', () => {
     })
   })
 
+  it('pruneLastVisitedTimestamps clears a stale activeWorktreeId gone from a hydrated repo', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().activeWorktreeId).toBeNull()
+  })
+
+  it('pruneLastVisitedTimestamps keeps a live activeWorktreeId and defers unhydrated repos', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/a'
+    } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().activeWorktreeId).toBe('repo1::/a')
+
+    // A pointer into a not-yet-hydrated (e.g. SSH pre-connect) repo is deferred.
+    store.setState({ activeWorktreeId: 'ssh-repo::/b' } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().activeWorktreeId).toBe('ssh-repo::/b')
+  })
+
   it('pruneLastVisitedTimestamps defers when the detected list is non-authoritative', () => {
     const store = createTestStore()
     store.setState({

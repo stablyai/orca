@@ -1,6 +1,53 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { useAppStore } from '@/store'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import { collectRetainedAgentsOnDisappear } from './useRetainedAgents'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { Repo, Worktree } from '../../../../shared/types'
+import { collectRetainedAgentsOnDisappear, useRetainedAgentsSync } from './useRetainedAgents'
+
+const initialAppState = useAppStore.getInitialState()
+
+beforeEach(() => {
+  useAppStore.setState(initialAppState, true)
+})
+
+afterEach(() => {
+  useAppStore.setState(initialAppState, true)
+})
+
+function makeRepo(): Repo {
+  return {
+    id: 'repo-1',
+    path: '/repo',
+    displayName: 'Repo',
+    badgeColor: '#000',
+    addedAt: 1
+  }
+}
+
+function makeWorktree(): Worktree {
+  return {
+    id: 'wt-1',
+    repoId: 'repo-1',
+    path: '/repo/wt-1',
+    head: 'abc123',
+    branch: 'feature',
+    isBare: false,
+    isMainWorktree: false,
+    displayName: 'feature',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1
+  }
+}
 
 function makeAgentRow(args: { paneKey: string; state: AgentStatusState; interrupted?: boolean }) {
   const entry: AgentStatusEntry = {
@@ -35,7 +82,7 @@ function makeAgentRow(args: { paneKey: string; state: AgentStatusState; interrup
 }
 
 describe('collectRetainedAgentsOnDisappear', () => {
-  it('retains a clean done row that disappeared naturally', () => {
+  it('retains a clean done row when a different tab closed', () => {
     const previousAgents = new Map([
       ['tab-1:1', { row: makeAgentRow({ paneKey: 'tab-1:1', state: 'done' }), worktreeId: 'wt-1' }]
     ])
@@ -44,7 +91,8 @@ describe('collectRetainedAgentsOnDisappear', () => {
       previousAgents,
       currentAgents: new Map(),
       retainedAgentsByPaneKey: {},
-      retentionSuppressedPaneKeys: {}
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: { 'tab-2': true }
     })
 
     expect(result.toRetain).toHaveLength(1)
@@ -67,7 +115,8 @@ describe('collectRetainedAgentsOnDisappear', () => {
       previousAgents,
       currentAgents: new Map(),
       retainedAgentsByPaneKey: {},
-      retentionSuppressedPaneKeys: {}
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: {}
     })
 
     expect(result.toRetain).toEqual([])
@@ -95,7 +144,8 @@ describe('collectRetainedAgentsOnDisappear', () => {
       previousAgents,
       currentAgents: new Map(),
       retainedAgentsByPaneKey: { 'tab-1:1': staleRetained },
-      retentionSuppressedPaneKeys: {}
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: {}
     })
 
     expect(result.toRetain).toHaveLength(1)
@@ -119,7 +169,8 @@ describe('collectRetainedAgentsOnDisappear', () => {
       previousAgents,
       currentAgents: new Map(),
       retainedAgentsByPaneKey: { 'tab-1:1': sameRunRetained },
-      retentionSuppressedPaneKeys: {}
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: {}
     })
 
     expect(result.toRetain).toEqual([])
@@ -134,10 +185,64 @@ describe('collectRetainedAgentsOnDisappear', () => {
       previousAgents,
       currentAgents: new Map(),
       retainedAgentsByPaneKey: {},
-      retentionSuppressedPaneKeys: { 'tab-1:1': true }
+      retentionSuppressedPaneKeys: { 'tab-1:1': true },
+      recentlyClosedAgentStatusTabIds: {}
     })
 
     expect(result.toRetain).toEqual([])
     expect(result.consumedSuppressedPaneKeys).toEqual(['tab-1:1'])
+  })
+
+  it('does not retain a done row after its tab closed without a live suppressor', () => {
+    const previousAgents = new Map([
+      ['tab-1:1', { row: makeAgentRow({ paneKey: 'tab-1:1', state: 'done' }), worktreeId: 'wt-1' }]
+    ])
+
+    const result = collectRetainedAgentsOnDisappear({
+      previousAgents,
+      currentAgents: new Map(),
+      retainedAgentsByPaneKey: {},
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: { 'tab-1': true }
+    })
+
+    expect(result.toRetain).toEqual([])
+    expect(result.consumedSuppressedPaneKeys).toEqual([])
+  })
+})
+
+describe('useRetainedAgentsSync', () => {
+  it('does not re-retain when status removal and tab closure commit before the next retention effect', async () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const paneKey = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+    const row = makeAgentRow({ paneKey, state: 'done' })
+    useAppStore.setState({
+      repos: [repo],
+      worktreesByRepo: { [repo.id]: [worktree] },
+      tabsByWorktree: { [worktree.id]: [row.tab] },
+      agentStatusByPaneKey: { [row.paneKey]: row.entry },
+      agentStatusEpoch: initialAppState.agentStatusEpoch + 1
+    })
+    const hook = renderHook(() => useRetainedAgentsSync())
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(useAppStore.getState().retentionSuppressedPaneKeys[row.paneKey]).toBeUndefined()
+
+    // Why: model both teardown writes landing before the next retention effect runs.
+    act(() => {
+      useAppStore.setState((state) => ({
+        tabsByWorktree: { [worktree.id]: [] },
+        agentStatusByPaneKey: {},
+        recentlyClosedAgentStatusTabIds: { [row.tab.id]: true },
+        agentStatusEpoch: state.agentStatusEpoch + 1
+      }))
+    })
+
+    const state = useAppStore.getState()
+    expect(state.recentlyClosedAgentStatusTabIds[row.tab.id]).toBe(true)
+    expect(state.retainedAgentsByPaneKey[row.paneKey]).toBeUndefined()
+    hook.unmount()
   })
 })

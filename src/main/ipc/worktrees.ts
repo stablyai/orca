@@ -2067,6 +2067,14 @@ export function registerWorktreeHandlers(
     }
     const now = Date.now()
     for (let i = 0; i < args.orderedIds.length; i++) {
+      // Why: a sidebar-order snapshot must only reorder worktrees that already
+      // exist — it must never create one. Without this guard a stale id the
+      // renderer still lists (e.g. a removed repo's `${repoId}::${path}`) gets a
+      // fresh worktreeMeta entry minted here, resurrecting an orphan/duplicate
+      // workspace on the next launch. setWorktreeMeta has no repo-existence check.
+      if (!store.getWorktreeMeta(args.orderedIds[i])) {
+        continue
+      }
       // Descending timestamps: first item gets highest sortOrder so b - a sorts first-wins on cold start.
       store.setWorktreeMeta(args.orderedIds[i], { sortOrder: now - i * 1000 })
     }

@@ -80,6 +80,12 @@ export function isGitHubBackedRepo(
   return getProjectProviderIdentity(repo) !== null
 }
 
+export function hasProjectRemoteIdentity(
+  repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+): boolean {
+  return getProjectProviderIdentity(repo) !== null || getProjectGitRemoteIdentity(repo) !== null
+}
+
 export function getProjectIdentityKey(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {

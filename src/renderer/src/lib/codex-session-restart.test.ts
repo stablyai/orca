@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { markLiveCodexSessionsForRestart } from './codex-session-restart'
+import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
+import {
+  CODEX_ACCOUNT_RESTART_STARTUP,
+  markLiveCodexSessionsForRestart
+} from './codex-session-restart'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -10,6 +14,16 @@ import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-cl
 const ACCOUNT_A = 'account-a@example.com'
 const ACCOUNT_B = 'account-b@example.com'
 const ACCOUNT_C = 'account-c@example.com'
+
+describe('CODEX_ACCOUNT_RESTART_STARTUP', () => {
+  it('waits for shell readiness before relaunching Codex after an account switch', () => {
+    expect(CODEX_ACCOUNT_RESTART_STARTUP).toEqual({
+      command: 'codex',
+      startupCommandDelivery: 'shell-ready'
+    })
+    expect(shouldUseShellReadyStartupDelivery(CODEX_ACCOUNT_RESTART_STARTUP)).toBe(true)
+  })
+})
 
 describe('markLiveCodexSessionsForRestart', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window

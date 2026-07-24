@@ -2150,4 +2150,51 @@ describe('RateLimitService', () => {
     expect(state.minimax?.error).toBe('MiniMax session cookie could not be decrypted')
     expect(state.claude?.status).toBe('ok')
   })
+
+  describe('refreshAfterClaudeLivePtysDrained', () => {
+    function deferredClaudeResult(): ProviderRateLimits {
+      return {
+        ...errorProvider('claude', 'Waiting for Claude session'),
+        usageMetadata: {
+          failureKind: 'deferred-by-live-session',
+          deferredByLiveClaudeSession: true
+        }
+      }
+    }
+
+    it('refetches Claude usage when the current result was deferred by a live session', async () => {
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(deferredClaudeResult())
+      await service.refresh()
+      expect(service.getState().claude?.usageMetadata?.deferredByLiveClaudeSession).toBe(true)
+      vi.mocked(fetchClaudeRateLimits).mockClear()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+
+      await service.refreshAfterClaudeLivePtysDrained()
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('ok')
+    })
+
+    it('does not refetch when the current Claude result was not deferred', async () => {
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(
+        errorProvider('claude', 'Token expired')
+      )
+      await service.refresh()
+      vi.mocked(fetchClaudeRateLimits).mockClear()
+
+      await service.refreshAfterClaudeLivePtysDrained()
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    })
+
+    it('does not refetch when there is no Claude state yet', async () => {
+      const service = new RateLimitService()
+
+      await service.refreshAfterClaudeLivePtysDrained()
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    })
+  })
 })

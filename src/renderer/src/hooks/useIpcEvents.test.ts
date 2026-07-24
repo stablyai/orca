@@ -6746,6 +6746,290 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
+  it('queues replayed startup snapshots until the pane hydrates', async () => {
+    const setAgentStatus = vi.fn()
+    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+    let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+    const getSnapshot = vi.fn(
+      () =>
+        new Promise<AgentStatusSetData[]>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      repos: [],
+      worktreesByRepo: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn((listener: StoreSubscribeListener) => {
+          subscribeListenerRef.current = listener
+          return () => {
+            subscribeListenerRef.current = null
+          }
+        }),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    resolveSnapshot([
+      {
+        paneKey: FUTURE_PANE_KEY,
+        tabId: 'tab-future',
+        worktreeId: 'wt-1',
+        connectionId: 'ssh-1',
+        state: 'working',
+        prompt: 'PreToolUse: Bash',
+        agentType: 'codex',
+        toolName: 'Bash',
+        toolInput: 'pnpm test',
+        terminalHandle: 'term-future',
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000
+      }
+    ])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+
+    Object.assign(storeState, {
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'SSH Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+    subscribeListenerRef.current?.(storeState, storeState)
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({
+        state: 'working',
+        prompt: 'PreToolUse: Bash',
+        agentType: 'codex',
+        toolName: 'Bash',
+        toolInput: 'pnpm test'
+      }),
+      'SSH Tab',
+      { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
+      expectWorktreeRouting('wt-1'),
+      undefined
+    )
+  })
+
+  it('suppresses notifications for replayed done snapshots after pane hydration', async () => {
+    const setAgentStatus = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+    let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+    const getSnapshot = vi.fn(
+      () =>
+        new Promise<AgentStatusSetData[]>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      repos: [],
+      worktreesByRepo: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn((listener: StoreSubscribeListener) => {
+          subscribeListenerRef.current = listener
+          return () => {
+            subscribeListenerRef.current = null
+          }
+        }),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationSettings: vi.fn(),
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    resolveSnapshot([
+      {
+        paneKey: FUTURE_PANE_KEY,
+        tabId: 'tab-future',
+        worktreeId: 'wt-1',
+        connectionId: 'ssh-1',
+        state: 'done',
+        prompt: 'remote completion',
+        agentType: 'codex',
+        lastAssistantMessage: 'queued completion',
+        terminalHandle: 'term-future',
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000
+      }
+    ])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+
+    Object.assign(storeState, {
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'SSH Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+    subscribeListenerRef.current?.(storeState, storeState)
+
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({
+        state: 'done',
+        prompt: 'remote completion',
+        agentType: 'codex',
+        lastAssistantMessage: 'queued completion'
+      }),
+      'SSH Tab',
+      { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
+      expectWorktreeRouting('wt-1'),
+      undefined
+    )
+    expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
+  })
+
+  it('drops replayed startup snapshots after hydration when connection ownership mismatches', async () => {
+    const setAgentStatus = vi.fn()
+    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+    let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+    const getSnapshot = vi.fn(
+      () =>
+        new Promise<AgentStatusSetData[]>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: 'conn-actual' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn((listener: StoreSubscribeListener) => {
+          subscribeListenerRef.current = listener
+          return () => {
+            subscribeListenerRef.current = null
+          }
+        }),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    resolveSnapshot([
+      {
+        paneKey: FUTURE_PANE_KEY,
+        tabId: 'tab-future',
+        worktreeId: 'wt-1',
+        connectionId: 'ssh-stale',
+        state: 'done',
+        prompt: 'remote completion',
+        agentType: 'codex',
+        terminalHandle: 'term-future',
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000
+      }
+    ])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+
+    Object.assign(storeState, {
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'SSH Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+    subscribeListenerRef.current?.(storeState, storeState)
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
   it('accepts WSL-relayed status events for a local repo (wsl:* is transport provenance, not ownership)', async () => {
     const setAgentStatus = vi.fn()
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {

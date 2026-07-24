@@ -388,6 +388,85 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(setSizeCalls)
   })
 
+  it('runs a full repaint when the renderer relays a genuine window reveal (STA-2383)', () => {
+    vi.useFakeTimers()
+    const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+    let windowSize: [number, number] = [1200, 800]
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        const handlers = windowHandlers.get(event) ?? []
+        handlers.push(handler)
+        windowHandlers.set(event, handlers)
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => windowSize),
+      setSize: vi.fn((width: number, height: number) => {
+        windowSize = [width, height]
+      }),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    withPlatform('darwin', () => createMainWindow(null))
+
+    const revealHandler = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:window-revealed')?.[1]
+    expect(revealHandler).toBeTypeOf('function')
+
+    // Why: a reveal relayed by another window's webContents must not repaint this one.
+    revealHandler?.({ sender: {} } as never)
+    expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
+    expect(webContents.invalidate).not.toHaveBeenCalled()
+
+    // The genuine reveal (matching sender) runs the full repaint: invalidate + the size jiggle
+    // that recomputes the stale dvh layout — the recovery bare focus/invalidate misses.
+    revealHandler?.({ sender: webContents } as never)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(1)
+    // Why: the nudge is deferred off the event dispatch turn.
+    expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(0)
+    expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(1, 1201, 800)
+    vi.advanceTimersByTime(32)
+    expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(2, 1200, 800)
+
+    // Repeated reveal signals while a jiggle is active repaint but do not multiply terminal resizes.
+    revealHandler?.({ sender: webContents } as never)
+    revealHandler?.({ sender: webContents } as never)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(3)
+    vi.advanceTimersByTime(0)
+    expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(3, 1201, 800)
+    expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(3)
+
+    // A user resize that lands during the jiggle must not be rolled back to stale bounds.
+    windowSize = [1400, 900]
+    vi.advanceTimersByTime(32)
+    expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(3)
+
+    windowHandlers.get('closed')?.[0]?.()
+    expect(ipcMain.removeListener).toHaveBeenCalledWith('ui:window-revealed', revealHandler)
+  })
+
   it('repaints without the size nudge on macOS 26+ where re-entrant frame updates can deadlock AppKit', () => {
     vi.useFakeTimers()
     macosTahoeMock.value = true

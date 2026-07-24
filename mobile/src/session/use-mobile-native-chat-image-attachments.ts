@@ -15,6 +15,7 @@ import {
   MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS,
   pasteMobileNativeChatImagePaths
 } from './mobile-native-chat-image-send'
+import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -32,9 +33,14 @@ type Args = {
   /** The native-chat input lease is ready — same gate `handleNativeChatSend` uses. */
   readonly enabled: boolean
   readonly showToast: ShowToast
-  /** The plain text send (controller.handleNativeChatSend); wrapped so images ride
-   *  along. The optional URIs drive the optimistic echo's thumbnails. */
-  readonly baseSend: (text: string, imagePreviewUris?: string[]) => Promise<boolean>
+  /** The plain text send (controller.handleNativeChatSendWithOutcome); wrapped so
+   *  images ride along. The optional URIs drive the optimistic echo's thumbnails.
+   *  Must preserve 'unknown': after a successful paste, an ambiguously-delivered
+   *  text+Enter may have left the image on the input line, which needs healing. */
+  readonly baseSend: (
+    text: string,
+    imagePreviewUris?: string[]
+  ) => Promise<MobileNativeChatSendOutcome>
   readonly onAttachSuccess?: () => void
   readonly onError?: () => void
   // Injected so the settle between image paste and submit is instant in tests.
@@ -238,7 +244,8 @@ export function useMobileNativeChatImageAttachments({
               return false
             }
           }
-          return baseSend(text)
+          // Text-only sends paste nothing first, so 'unknown' leaves no stale input.
+          return (await baseSend(text)) !== 'rejected'
         }
         const handle = activeHandleRef.current
         if (!client || !handle || !enabled || connState !== 'connected') {
@@ -276,17 +283,20 @@ export function useMobileNativeChatImageAttachments({
             showToast('Message not sent', 1500)
             return false
           }
-          const accepted = await baseSend(
+          const outcome = await baseSend(
             text,
             pendingImages.map((attachment) => attachment.previewUri)
           )
-          if (!accepted) {
-            // A rejected submit leaves the successfully pasted image path on this input line.
+          if (outcome !== 'accepted') {
+            // 'rejected' leaves the pasted image path on this input line; 'unknown'
+            // may have lost the text+Enter AFTER the paste landed, orphaning the
+            // image onto whatever is sent next (#10228) — both must heal first.
             markTerminalInputStale(staleInputTerminalsRef.current, handle)
           }
-          if (accepted) {
+          if (outcome !== 'rejected') {
             // Drop only what rode along — a chip attached while this send was in
-            // flight keeps waiting for its own send.
+            // flight keeps waiting for its own send. 'unknown' clears too: the
+            // send usually DID land, and a kept chip would double-send the image.
             const sentIds = new Set(pendingImages.map((attachment) => attachment.id))
             setAttachmentsByScope((prev) =>
               withScopeAttachments(
@@ -296,7 +306,7 @@ export function useMobileNativeChatImageAttachments({
               )
             )
           }
-          return accepted
+          return outcome !== 'rejected'
         } catch {
           // A thrown paste/send (network/RPC) keeps the chips and honors the
           // Promise<boolean> contract instead of rejecting. Retry-safe: the next

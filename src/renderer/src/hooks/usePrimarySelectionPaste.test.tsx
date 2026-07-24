@@ -3,17 +3,22 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readPrimarySelectionText } from '@/lib/primary-selection'
+import {
+  readPrimarySelectionText,
+  shouldSuppressPrimarySelectionNativePaste
+} from '@/lib/primary-selection'
 import { usePrimarySelectionPaste } from './usePrimarySelectionPaste'
 
 vi.mock('@/lib/primary-selection', () => ({
   readPrimarySelectionText: vi.fn(),
   setPrimarySelectionEnabled: vi.fn(),
-  setPrimarySelectionText: vi.fn()
+  setPrimarySelectionText: vi.fn(),
+  shouldSuppressPrimarySelectionNativePaste: vi.fn(() => false)
 }))
 
 const originalUserAgent = navigator.userAgent
 const readPrimarySelectionTextMock = vi.mocked(readPrimarySelectionText)
+const shouldSuppressNativePasteMock = vi.mocked(shouldSuppressPrimarySelectionNativePaste)
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -34,6 +39,17 @@ function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   textarea.value = value
   document.body.appendChild(textarea)
+  return textarea
+}
+
+function appendXtermHelperTextarea(): HTMLTextAreaElement {
+  // Stand-in for xterm's hidden helper textarea inside its `.xterm` container.
+  const terminal = document.createElement('div')
+  terminal.className = 'xterm'
+  const textarea = document.createElement('textarea')
+  textarea.className = 'xterm-helper-textarea'
+  terminal.appendChild(textarea)
+  document.body.appendChild(terminal)
   return textarea
 }
 
@@ -107,6 +123,7 @@ async function renderProbe(): Promise<void> {
 
 beforeEach(() => {
   setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')
+  shouldSuppressNativePasteMock.mockReturnValue(false)
 })
 
 afterEach(async () => {
@@ -190,6 +207,62 @@ describe('usePrimarySelectionPaste', () => {
     expect(auxClick.defaultPrevented).toBe(true)
     expect(readPrimarySelectionTextMock).toHaveBeenCalledTimes(1)
     expect(textarea.value).toBe('alpha beta')
+  })
+
+  it('swallows terminal-armed native paste follow-up even when it has no pending DOM target', async () => {
+    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
+    shouldSuppressNativePasteMock.mockReturnValue(true)
+    await renderProbe()
+    // Stand-in for xterm's helper textarea, which owns its own middle-click
+    // paste and never registers a pending primary-selection DOM target.
+    const terminalTextarea = appendXtermHelperTextarea()
+    let nativeBeforeInput!: Event
+    const nativePaste = new Event('paste', { bubbles: true, cancelable: true })
+
+    await act(async () => {
+      nativeBeforeInput = dispatchNativePasteBeforeInput(terminalTextarea)
+      terminalTextarea.dispatchEvent(nativePaste)
+      await flushPromises()
+    })
+
+    expect(nativeBeforeInput.defaultPrevented).toBe(true)
+    expect(nativePaste.defaultPrevented).toBe(true)
+    expect(readPrimarySelectionTextMock).not.toHaveBeenCalled()
+  })
+
+  it('does not suppress an unrelated document paste while the terminal window is armed', async () => {
+    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
+    // Armed window is active, but the paste targets a control outside the
+    // terminal (e.g. right-click Paste into a form field) and must survive.
+    shouldSuppressNativePasteMock.mockReturnValue(true)
+    await renderProbe()
+    const unrelatedTextarea = appendTextarea()
+    let nativeBeforeInput!: Event
+    const nativePaste = new Event('paste', { bubbles: true, cancelable: true })
+
+    await act(async () => {
+      nativeBeforeInput = dispatchNativePasteBeforeInput(unrelatedTextarea)
+      unrelatedTextarea.dispatchEvent(nativePaste)
+      await flushPromises()
+    })
+
+    expect(nativeBeforeInput.defaultPrevented).toBe(false)
+    expect(nativePaste.defaultPrevented).toBe(false)
+  })
+
+  it('does not suppress native paste when the terminal has not armed the window', async () => {
+    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
+    shouldSuppressNativePasteMock.mockReturnValue(false)
+    await renderProbe()
+    const textarea = appendTextarea()
+
+    let nativeBeforeInput!: Event
+    await act(async () => {
+      nativeBeforeInput = dispatchNativePasteBeforeInput(textarea)
+      await flushPromises()
+    })
+
+    expect(nativeBeforeInput.defaultPrevented).toBe(false)
   })
 
   it('does not keep middle-click ownership after the gesture window expires', async () => {
