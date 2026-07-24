@@ -7,6 +7,11 @@ import type { DirCache } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
 import { useFileExplorerReveal } from './useFileExplorerReveal'
+import {
+  clampFileExplorerFontSize,
+  DEFAULT_FILE_EXPLORER_FONT_SIZE,
+  fileExplorerRowHeightPx
+} from '../../../../shared/file-explorer-font-size'
 
 type UseFileExplorerRowScrollingParams = {
   visibleRowCount: number
@@ -30,6 +35,7 @@ type UseFileExplorerRowScrollingParams = {
 
 type UseFileExplorerRowScrollingResult = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
+  fileExplorerFontSize: number
   scrollToIndex: (index: number) => void
   flashingPath: string | null
   cancelRevealTimers: () => void
@@ -56,6 +62,10 @@ export function useFileExplorerRowScrolling({
   activeFileId,
   openFiles
 }: UseFileExplorerRowScrollingParams): UseFileExplorerRowScrollingResult {
+  const fileExplorerFontSize = useAppStore((s) =>
+    clampFileExplorerFontSize(s.settings?.fileExplorerFontSize ?? DEFAULT_FILE_EXPLORER_FONT_SIZE)
+  )
+  const fileExplorerRowHeight = fileExplorerRowHeightPx(fileExplorerFontSize)
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
@@ -68,7 +78,7 @@ export function useFileExplorerRowScrolling({
   const virtualizer = useVirtualizer({
     count: totalCount,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 26,
+    estimateSize: () => fileExplorerRowHeight,
     overscan: 20,
     getItemKey: (index) => {
       if (inlineInputIndex >= 0) {
@@ -126,6 +136,10 @@ export function useFileExplorerRowScrolling({
   })
 
   useEffect(() => {
+    virtualizer.measure()
+  }, [fileExplorerRowHeight, virtualizer])
+
+  useEffect(() => {
     if (inlineInputIndex >= 0) {
       virtualizer.scrollToIndex(inlineInputIndex, { align: 'auto' })
     }
@@ -140,6 +154,7 @@ export function useFileExplorerRowScrolling({
 
   return {
     virtualizer,
+    fileExplorerFontSize,
     scrollToIndex,
     flashingPath,
     explorerShellRef,
