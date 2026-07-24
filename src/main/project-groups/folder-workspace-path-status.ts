@@ -1,12 +1,17 @@
 import { stat as statLocalPath } from 'node:fs/promises'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../../shared/folder-workspace-path-status'
-import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
+import {
+  inferFolderWorkspacePathConnection,
+  type FolderWorkspacePathConnectionResolution
+} from '../../shared/folder-workspace-path-connection'
 import type { FolderWorkspace, ProjectGroup, Repo } from '../../shared/types'
 import type { IFilesystemProvider } from '../providers/types'
+
+// Why: keep main callers stable while mobile reuses the same route inference.
+export { inferFolderWorkspacePathConnection, type FolderWorkspacePathConnectionResolution }
 
 type FolderWorkspacePathStatusStore = {
   getRepos: () => Repo[]
@@ -14,87 +19,8 @@ type FolderWorkspacePathStatusStore = {
   getFolderWorkspaces?: () => FolderWorkspace[]
 }
 
-export type FolderWorkspacePathConnectionResolution =
-  | { kind: 'local' }
-  | { kind: 'ssh'; connectionId: string }
-  | { kind: 'ambiguous' }
-
 type FolderWorkspacePathStatusDeps = {
   getSshFilesystemProvider: (connectionId: string) => IFilesystemProvider | undefined
-}
-
-function getFolderScopeCandidateRepos(args: {
-  folderPath: string
-  projectGroupId?: string | null
-  connectionId?: string | null
-  projectGroups: readonly ProjectGroup[]
-  repos: readonly Repo[]
-}): Repo[] {
-  const groupIds = args.projectGroupId
-    ? getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
-    : null
-  const groupRepos = groupIds
-    ? args.repos.filter(
-        (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
-      )
-    : []
-  const pathRepos = args.repos.filter(
-    (repo) =>
-      !(groupIds && typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
-      isPathInsideOrEqual(args.folderPath, repo.path)
-  )
-  if (args.connectionId) {
-    return [
-      ...groupRepos,
-      ...pathRepos.filter((repo) => (repo.connectionId ?? null) === args.connectionId)
-    ]
-  }
-  if (groupRepos.length === 0) {
-    return pathRepos
-  }
-  const groupConnectionIds = new Set(groupRepos.map((repo) => repo.connectionId ?? null))
-  return [
-    ...groupRepos,
-    ...pathRepos.filter((repo) => groupConnectionIds.has(repo.connectionId ?? null))
-  ]
-}
-
-export function inferFolderWorkspacePathConnection(args: {
-  folderPath: string
-  projectGroupId?: string | null
-  connectionId?: string | null
-  projectGroups: readonly ProjectGroup[]
-  repos: readonly Repo[]
-}): FolderWorkspacePathConnectionResolution {
-  const candidateRepos = getFolderScopeCandidateRepos(args)
-  let hasLocalRepo = false
-  const connectionIds = new Set<string>()
-  for (const repo of candidateRepos) {
-    if (repo.connectionId) {
-      connectionIds.add(repo.connectionId)
-    } else {
-      hasLocalRepo = true
-    }
-  }
-  if (args.connectionId) {
-    const hasDifferentSshConnection = [...connectionIds].some(
-      (connectionId) => connectionId !== args.connectionId
-    )
-    if (hasLocalRepo || hasDifferentSshConnection) {
-      return { kind: 'ambiguous' }
-    }
-    return { kind: 'ssh', connectionId: args.connectionId }
-  }
-  if (hasLocalRepo && connectionIds.size > 0) {
-    return { kind: 'ambiguous' }
-  }
-  if (connectionIds.size === 0) {
-    return { kind: 'local' }
-  }
-  if (connectionIds.size === 1) {
-    return { kind: 'ssh', connectionId: [...connectionIds][0] }
-  }
-  return { kind: 'ambiguous' }
 }
 
 function pathStatErrorReason(error: unknown): 'missing' | 'unavailable' {

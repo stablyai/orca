@@ -97,7 +97,7 @@ import {
 } from './runtime-mobile-file-path-search'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import { parseExecutionHostId } from '../../shared/execution-host'
 import { assertRasterImagePreviewWithinLimits } from '../../shared/raster-image-preview-limits'
 import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
 import { retainRuntimeTerminalFileGrant } from './runtime-terminal-file-grant-retention'
@@ -118,7 +118,18 @@ const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOF
 const RUNTIME_FILE_MUTATION_UPDATE_REQUIRED =
   'Remote file changes require a newer Orca client. Update the paired client and try again.'
 
+function executionHostMatchesFileRoute(
+  hostId: string | null | undefined,
+  connectionId: string | undefined
+): boolean {
+  const host = parseExecutionHostId(hostId)
+  return connectionId
+    ? host?.kind === 'ssh' && host.targetId === connectionId
+    : host?.kind === 'local'
+}
+
 function assertRuntimeFileMutationExpectation(
+  worktreeHostId: Worktree['hostId'],
   connectionId: string | undefined,
   expectedExecutionHostId: string | undefined,
   expectedSshTargetId: string | undefined,
@@ -127,8 +138,21 @@ function assertRuntimeFileMutationExpectation(
   if (!expectedExecutionHostId) {
     throw new Error(RUNTIME_FILE_MUTATION_UPDATE_REQUIRED)
   }
-  const actualExecutionHostId = connectionId ? toSshExecutionHostId(connectionId) : 'local'
-  if (expectedExecutionHostId !== actualExecutionHostId) {
+  // Why: compare decoded SSH targets for legacy encoding compatibility without admitting runtime:*.
+  const declaredMatchesRoute =
+    worktreeHostId === undefined || executionHostMatchesFileRoute(worktreeHostId, connectionId)
+  if (
+    !declaredMatchesRoute ||
+    !executionHostMatchesFileRoute(expectedExecutionHostId, connectionId)
+  ) {
+    // Why: this is the strict ownership gate; leave an audit trail for stale clients, reconnect
+    // races, and any spoofed-ownership attempt, matching this file's other logged failure paths.
+    console.warn('[runtime-files.mutation] ownership route mismatch', {
+      worktreeHostId,
+      connectionId,
+      expectedExecutionHostId,
+      declaredMatchesRoute
+    })
     throw new Error('Workspace host changed; refresh and try again')
   }
   assertSshMutationExpectation(connectionId, expectedSshTargetId, expectedSshConnectionGeneration)
@@ -1418,6 +1442,7 @@ export class RuntimeFileCommands {
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
+      target.worktree.hostId,
       target.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,
@@ -1457,6 +1482,7 @@ export class RuntimeFileCommands {
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
+      target.worktree.hostId,
       target.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,
@@ -1489,6 +1515,7 @@ export class RuntimeFileCommands {
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
+      target.worktree.hostId,
       target.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,
@@ -1519,6 +1546,7 @@ export class RuntimeFileCommands {
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
+      target.worktree.hostId,
       target.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,
@@ -1552,6 +1580,7 @@ export class RuntimeFileCommands {
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
+      target.worktree.hostId,
       target.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,
@@ -1581,6 +1610,7 @@ export class RuntimeFileCommands {
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
+      target.worktree.hostId,
       target.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,
@@ -1613,6 +1643,7 @@ export class RuntimeFileCommands {
       finalRelativePath
     ])
     assertRuntimeFileMutationExpectation(
+      tempTarget.worktree.hostId,
       tempTarget.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,
@@ -1652,6 +1683,7 @@ export class RuntimeFileCommands {
       newRelativePath
     ])
     assertRuntimeFileMutationExpectation(
+      oldTarget.worktree.hostId,
       oldTarget.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,
@@ -1689,6 +1721,7 @@ export class RuntimeFileCommands {
       [sourceRelativePath, destinationRelativePath]
     )
     assertRuntimeFileMutationExpectation(
+      sourceTarget.worktree.hostId,
       sourceTarget.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,
@@ -1728,6 +1761,7 @@ export class RuntimeFileCommands {
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
+      target.worktree.hostId,
       target.connectionId,
       expectedExecutionHostId,
       expectedSshTargetId,

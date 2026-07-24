@@ -1,11 +1,12 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { SshConnectionState, SshMutationExpectation } from '../../../shared/ssh-types'
+import {
+  buildFileMutationOwnership,
+  type FileMutationOwnership
+} from '../../../shared/file-mutation-ownership'
+import type { SshConnectionState } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/types'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
-
-const SSH_OWNER_CHANGED_MESSAGE =
-  "Couldn't verify the SSH connection. Reconnect the host and try again."
 
 type WebFileMutationMethod = Pick<
   NonNullable<PreloadApi['fs']>,
@@ -28,31 +29,15 @@ type WebFileMutationDependencies = {
   captureSession: () => WebFileMutationSession
 }
 
-type WebFileMutationProvenance = SshMutationExpectation & {
-  expectedExecutionHostId: 'local' | `ssh:${string}`
-}
+type WebFileMutationProvenance = FileMutationOwnership
 
 async function captureWebFileMutationProvenance(
   file: ResolvedWebRuntimeFile,
   getSshState: WebFileMutationSession['getSshState']
 ): Promise<WebFileMutationProvenance> {
   const host = parseExecutionHostId(file.worktree.hostId)
-  if (file.worktree.hostId !== undefined && !host) {
-    throw new Error(SSH_OWNER_CHANGED_MESSAGE)
-  }
-  if (!host || host.kind === 'local' || host.kind === 'runtime') {
-    return { expectedExecutionHostId: 'local' }
-  }
-
-  const state = await getSshState(host.targetId)
-  if (state?.targetId !== host.targetId || state.connectionGeneration === undefined) {
-    throw new Error(SSH_OWNER_CHANGED_MESSAGE)
-  }
-  return {
-    expectedExecutionHostId: host.id,
-    expectedSshTargetId: host.targetId,
-    expectedSshConnectionGeneration: state.connectionGeneration
-  }
+  const state = host?.kind === 'ssh' ? await getSshState(host.targetId) : null
+  return buildFileMutationOwnership(file.worktree.hostId, state)
 }
 
 function assertSameWorktree(

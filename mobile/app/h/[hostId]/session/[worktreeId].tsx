@@ -186,7 +186,7 @@ import { useTerminalLiveInputModePreference } from '../../../../src/session/use-
 import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { resolveMobileFileTabDoc } from '../../../../src/files/mobile-file-tab-doc'
-import { captureMobileFileMutationOwnership } from '../../../../src/files/mobile-file-mutation-ownership'
+import { createAndOpenMobileMarkdownNote } from '../../../../src/files/mobile-markdown-note-create'
 import { openMobileTerminalFileTap } from '../../../../src/session/mobile-terminal-file-tap-open'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
@@ -221,7 +221,6 @@ import { MobileTerminalDiagnostics } from '../../../../src/session/mobile-termin
 import {
   getRepoIdFromMobileWorktreeId,
   getActiveTabIdForHandle,
-  isFileExistsErrorMessage,
   isGestureMouseTrackingMode,
   MOBILE_SESSION_STATUS_LABELS,
   TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
@@ -3895,35 +3894,8 @@ export default function SessionScreen() {
     setCreateError('')
 
     try {
-      const worktree = `id:${worktreeId}`
-      const mutationOwnership = await captureMobileFileMutationOwnership(client, worktree)
-      for (let attempt = 1; attempt <= 100; attempt += 1) {
-        const relativePath = attempt === 1 ? 'untitled.md' : `untitled-${attempt}.md`
-        const createResponse = await client.sendRequest(
-          'files.createFile',
-          { worktree, relativePath, ...mutationOwnership },
-          { timeoutMs: 15_000 }
-        )
-        if (!createResponse.ok) {
-          const message = (createResponse as RpcFailure).error.message
-          if (isFileExistsErrorMessage(message) && attempt < 100) {
-            continue
-          }
-          throw new Error(message || 'Failed to create markdown note')
-        }
-
-        const openResponse = await client.sendRequest(
-          'files.open',
-          { worktree, relativePath },
-          { timeoutMs: 15_000 }
-        )
-        if (!openResponse.ok) {
-          throw new Error((openResponse as RpcFailure).error.message)
-        }
-        scheduleDelayedAction(() => void fetchSessionTabs(), 300)
-        return
-      }
-      throw new Error('Unable to create untitled markdown note')
+      await createAndOpenMobileMarkdownNote(client, `id:${worktreeId}`)
+      scheduleDelayedAction(() => void fetchSessionTabs(), 300)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create markdown note'
       setCreateError(message)

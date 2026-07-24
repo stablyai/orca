@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  FILE_MUTATION_OWNER_UNVERIFIED_MESSAGE,
+  FILE_MUTATION_RUNTIME_UNVERIFIED_MESSAGE,
+  FILE_MUTATION_SSH_UNVERIFIED_MESSAGE
+} from '../../../shared/file-mutation-ownership'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/types'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
@@ -222,19 +227,36 @@ describe('paired web file mutation methods', () => {
 
     await expect(
       methods.writeFile({ filePath: '/ssh/repo/source.md', content: 'unsafe' })
-    ).rejects.toThrow("Couldn't verify the SSH connection")
+    ).rejects.toThrow(FILE_MUTATION_SSH_UNVERIFIED_MESSAGE)
     expect(callRuntimeResult).not.toHaveBeenCalled()
   })
 
-  it('fails closed when the worktree publishes an invalid execution host', async () => {
-    resolveFilePath.mockResolvedValueOnce(
-      resolvedFile('wt-invalid', 'runtime:' as Worktree['hostId'], 'source.md')
-    )
+  it('fails closed before mutation when the SSH connection is not connected', async () => {
+    // Why: a reconnecting connection can still report a stale-but-defined generation; the shared
+    // builder must fence it the same way for web as it does for mobile.
+    getSshState.mockResolvedValueOnce({
+      ...connectedSshState('hub-private-target', 17),
+      status: 'reconnecting'
+    })
+    const methods = createWebFileMutationMethods({ captureSession })
+
+    await expect(
+      methods.writeFile({ filePath: '/ssh/repo/source.md', content: 'unsafe' })
+    ).rejects.toThrow(FILE_MUTATION_SSH_UNVERIFIED_MESSAGE)
+    expect(callRuntimeResult).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['invalid', 'runtime:' as Worktree['hostId']]
+  ])('fails closed when the worktree publishes a %s execution host', async (_name, hostId) => {
+    resolveFilePath.mockResolvedValueOnce(resolvedFile('wt-invalid', hostId, 'source.md'))
     const methods = createWebFileMutationMethods({ captureSession })
 
     await expect(
       methods.writeFile({ filePath: '/invalid/source.md', content: 'unsafe' })
-    ).rejects.toThrow("Couldn't verify the SSH connection")
+    ).rejects.toThrow(FILE_MUTATION_OWNER_UNVERIFIED_MESSAGE)
+    expect(getSshState).not.toHaveBeenCalled()
     expect(callRuntimeResult).not.toHaveBeenCalled()
   })
 
@@ -254,21 +276,17 @@ describe('paired web file mutation methods', () => {
     expect(callRuntimeResult).not.toHaveBeenCalled()
   })
 
-  it('treats the paired runtime transport as HUB-local execution', async () => {
+  it('fails closed before sending a runtime-owned worktree mutation', async () => {
     resolveFilePath.mockResolvedValueOnce(
       resolvedFile('wt-runtime', 'runtime:paired-hub', 'readme.md')
     )
     const methods = createWebFileMutationMethods({ captureSession })
 
-    await methods.writeFile({ filePath: '/runtime/repo/readme.md', content: 'updated' })
-
-    expect(callRuntimeResult).toHaveBeenCalledWith('files.write', {
-      worktree: 'id:wt-runtime',
-      relativePath: 'readme.md',
-      content: 'updated',
-      expectedExecutionHostId: 'local'
-    })
+    await expect(
+      methods.writeFile({ filePath: '/runtime/repo/readme.md', content: 'updated' })
+    ).rejects.toThrow(FILE_MUTATION_RUNTIME_UNVERIFIED_MESSAGE)
     expect(getSshState).not.toHaveBeenCalled()
+    expect(callRuntimeResult).not.toHaveBeenCalled()
   })
 
   it('rejects an old HUB before reading SSH state or sending a mutation', async () => {
