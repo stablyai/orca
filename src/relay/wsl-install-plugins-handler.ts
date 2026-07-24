@@ -6,7 +6,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { PluginOverlayManager } from './plugin-overlay'
+import { getRelayOpenCodePluginPath, type PluginOverlayManager } from './plugin-overlay'
 import { resolveOpenCodeSourceConfigDir } from './plugin-overlay-env'
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import {
@@ -48,7 +48,7 @@ export function createInstallPluginsHandler(
   // re-materializing unconditionally would delete the config root out from
   // under running agents and race panes spawning against the path the host just
   // handed them. Rebuild only when the shipped source actually changed.
-  let materialized: { source: string; dir: string } | null = null
+  let materialized: { source: string; sourceDir: string | undefined; dir: string } | null = null
 
   return (params) => {
     const opencode = params.opencodePluginSource
@@ -67,17 +67,27 @@ export function createInstallPluginsHandler(
     if (pluginOverlay.hasOpenCodeSource()) {
       // An omitted source leaves the manager's cache untouched, so it counts as unchanged.
       const incoming = typeof opencode === 'string' ? opencode : null
+      // Re-resolved every call so a config root created after the first install still
+      // gets mirrored; the rc scan is memoized and the default branch is one existsSync.
+      const sourceDir = resolveGuestOpenCodeConfigDir(env)
       const cached = materialized
-      if (cached && (incoming === null || incoming === cached.source) && existsSync(cached.dir)) {
+      if (
+        cached &&
+        (incoming === null || incoming === cached.source) &&
+        sourceDir === cached.sourceDir &&
+        // Why: the dir surviving a failed rebuild proves nothing — the plugin does.
+        existsSync(getRelayOpenCodePluginPath(cached.dir))
+      ) {
         opencodeDir = cached.dir
       } else {
-        const sourceDir = resolveGuestOpenCodeConfigDir(env)
         const overlayId =
           sanitizeWslHookInstanceKey(env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? 'wsl-opencode'
         // Why: null on write failure — caller falls back to the guest's own config (no status), never crossing a Windows overlay into WSL.
         opencodeDir = pluginOverlay.materializeOpenCode(overlayId, sourceDir) ?? undefined
         materialized =
-          opencodeDir && incoming !== null ? { source: incoming, dir: opencodeDir } : null
+          opencodeDir && incoming !== null
+            ? { source: incoming, sourceDir, dir: opencodeDir }
+            : null
       }
     }
     return {

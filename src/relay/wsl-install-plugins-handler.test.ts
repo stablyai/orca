@@ -63,6 +63,43 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
+  it('rebuilds when a config root appears after the first install', () => {
+    withHome((home) => {
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home,
+        ORCA_WSL_HOOK_INSTANCE: 'inst1'
+      } as NodeJS.ProcessEnv)
+      const source = '// v1\n'
+      install({ opencodePluginSource: source })
+
+      // Why: the user runs opencode outside Orca (or creates the dir by hand) after the
+      // relay connected; keying the cache on the plugin source alone would never mirror it.
+      const userConfig = join(home, '.config', 'opencode')
+      mkdirSync(userConfig, { recursive: true })
+      writeFileSync(join(userConfig, 'opencode.json'), '{"model":"late"}')
+
+      const dir = install({ opencodePluginSource: source }).overlayDirs.opencode as string
+      expect(readFileSync(join(dir, 'opencode.json'), 'utf8')).toBe('{"model":"late"}')
+    })
+  })
+
+  it('rebuilds when the cached overlay lost its plugin file', () => {
+    withHome((home) => {
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home,
+        ORCA_WSL_HOOK_INSTANCE: 'inst1'
+      } as NodeJS.ProcessEnv)
+      const source = '// v1\n'
+      const dir = install({ opencodePluginSource: source }).overlayDirs.opencode as string
+      // Why: a rebuild that failed after the wipe leaves the dir but not the plugin;
+      // an existsSync on the dir alone would call that a cache hit forever.
+      rmSync(join(dir, 'plugins', 'orca-opencode-status.js'))
+
+      expect(install({ opencodePluginSource: source }).overlayDirs.opencode).toBe(dir)
+      expect(existsSync(join(dir, 'plugins', 'orca-opencode-status.js'))).toBe(true)
+    })
+  })
+
   it('re-materializes when the shipped source changes', () => {
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {

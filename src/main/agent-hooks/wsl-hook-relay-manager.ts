@@ -284,9 +284,11 @@ export class WslHookRelayManager {
     })
     // Why: ship OpenCode's status plugin and record the guest overlay dir the
     // PTY env points OPENCODE_CONFIG_DIR at; identity-guarded against teardown.
-    const overlayDir = await requestGuestOpenCodeOverlayDir(mux, this.deps, state.distro)
-    if (overlayDir && state.mux === mux) {
-      state.opencodeOverlayDir = overlayDir
+    const overlay = await requestGuestOpenCodeOverlayDir(mux, this.deps, state.distro)
+    if (state.mux === mux && overlay.kind !== 'unavailable') {
+      // Clearing on 'none' matters: a rebuild that failed after wiping leaves the dir
+      // present but plugin-less, and advertising it would hide the user's own config.
+      state.opencodeOverlayDir = overlay.kind === 'dir' ? overlay.dir : undefined
     }
   }
 
