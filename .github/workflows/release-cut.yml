@@ -73,9 +73,26 @@ jobs:
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
-      # Surfaces workflow_dispatch inputs as a table in the job summary
-      # (kind, ref, dry_run, version_suffix) so runs are easy to audit.
-      - uses: m-s-abeer/update-gha-summary-with-workflow-inputs@v1
+      # Why inlined instead of a third-party action: this job runs with
+      # contents:write and secret scope, so avoid executing any external
+      # (mutable-@v1-tag, retaggable) action here — pinning a SHA only blocks
+      # retagging, not a compromised pinned commit. Surfaces every
+      # workflow_dispatch input (kind, ref, dry_run, version_suffix, plus any
+      # added later) as a table so runs are easy to audit. The whole inputs
+      # object is passed as JSON via env and parsed by jq as data — never
+      # interpolated into the script — to avoid shell injection from
+      # dispatch-controlled values.
+      - name: Summarize workflow inputs
+        env:
+          INPUTS_JSON: ${{ toJSON(inputs) }}
+        run: |
+          {
+            echo "## Workflow inputs"
+            echo ""
+            echo "| Input | Value |"
+            echo "| --- | --- |"
+            jq -r '(. // {}) | to_entries[] | "| \(.key) | `\(.value)` |"' <<<"$INPUTS_JSON"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Checkout ref
         uses: actions/checkout@v6
