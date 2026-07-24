@@ -114,6 +114,16 @@ export function hasWorktreeParentLink(
   )
 }
 
+export function getDetachableContextWorktrees(
+  worktrees: readonly Worktree[],
+  lineageById: AppState['worktreeLineageById'],
+  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
+): Worktree[] {
+  return worktrees.filter((worktree) =>
+    hasWorktreeParentLink(worktree, lineageById, workspaceLineageByChildKey)
+  )
+}
+
 function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
   const maybeElement = target as {
     closest?: (selector: string) => Element | null
@@ -441,8 +451,14 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     [cyclicLineageIds, worktree, worktreeLineageById, worktreeMap]
   )
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
-  const hasAnyContextLineage = activeContextWorktrees.some((item) =>
-    hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
+  const detachableContextWorktrees = useMemo(
+    () =>
+      getDetachableContextWorktrees(
+        activeContextWorktrees,
+        worktreeLineageById,
+        workspaceLineageByChildKey
+      ),
+    [activeContextWorktrees, workspaceLineageByChildKey, worktreeLineageById]
   )
   const eligibleParentCount = useMemo(
     () =>
@@ -669,9 +685,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
 
   const handleRemoveParentLink = useCallback(() => {
     void Promise.all(
-      activeContextWorktrees.map((item) => updateWorktreeLineage(item.id, { noParent: true }))
+      detachableContextWorktrees.map((item) => updateWorktreeLineage(item.id, { noParent: true }))
     )
-  }, [activeContextWorktrees, updateWorktreeLineage])
+  }, [detachableContextWorktrees, updateWorktreeLineage])
 
   const suppressOpeningPointerEvent = useCallback((event: React.SyntheticEvent) => {
     const contextMenuOpenedAt = contextMenuOpenedAtRef.current
@@ -911,7 +927,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               )}
             </>
           )}
-          {isMultiContext && hasAnyContextLineage ? (
+          {isMultiContext && detachableContextWorktrees.length > 0 ? (
             <>
               <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={deletingContext}>
                 <Unlink className="size-3.5" />

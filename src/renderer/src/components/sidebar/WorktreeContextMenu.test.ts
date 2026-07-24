@@ -9,6 +9,7 @@ import {
   shouldContinueDeleteSiblingPositionRestore,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
+  getDetachableContextWorktrees,
   hasWorktreeParentLink,
   isWorktreeParentPickerDisabled,
   planWorkspaceStatusAssignment,
@@ -142,6 +143,44 @@ describe('shouldContinueDeleteSiblingPositionRestore', () => {
 })
 
 describe('parent picker context menu affordance', () => {
+  it('targets every selected worktree with a parent and skips unattached selections', () => {
+    const attached = {
+      id: 'repo::attached',
+      instanceId: 'attached-instance'
+    } as Worktree
+    const alsoAttached = {
+      id: 'repo::also-attached',
+      instanceId: 'also-attached-instance'
+    } as Worktree
+    const unattached = { id: 'repo::unattached', instanceId: 'unattached-instance' } as Worktree
+    const lineageById: Record<string, WorktreeLineage> = {
+      [attached.id]: {
+        worktreeId: attached.id,
+        worktreeInstanceId: 'attached-instance',
+        parentWorktreeId: 'repo::parent',
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+        createdAt: 1
+      },
+      [alsoAttached.id]: {
+        worktreeId: alsoAttached.id,
+        worktreeInstanceId: 'also-attached-instance',
+        parentWorktreeId: 'repo::parent',
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+
+    expect(
+      getDetachableContextWorktrees([attached, unattached, alsoAttached], lineageById, {}).map(
+        (worktree) => worktree.id
+      )
+    ).toEqual([attached.id, alsoAttached.id])
+  })
+
   it('offers unlink for valid inline-only legacy lineage after stable-update hydration', () => {
     const parent = { id: 'repo::parent', instanceId: 'parent-instance' }
     const lineage: WorktreeLineage = {
