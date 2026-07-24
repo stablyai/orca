@@ -119,6 +119,54 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
     }
   })
 
+  it('bounds strings retained behind deferred validation without changing accepted order', async () => {
+    vi.useFakeTimers()
+    try {
+      const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+      const batcher = createRemoteRuntimePtyTextBatcher(1_000, () => {}, {
+        maxPendingBytes: text.length + 10,
+        maxValidationQueuedCodeUnits: text.length + 4,
+        maxValidationQueuedEntries: 3
+      })
+
+      expect(batcher.push(text)).toBe(true)
+      expect(batcher.push('tail')).toBe(true)
+      expect(batcher.push('!')).toBe(false)
+
+      const drained = batcher.drain()
+      await vi.advanceTimersByTimeAsync(0)
+      await drained
+
+      expect(batcher.takePending()).toBe(`${text}tail`)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds tiny entries retained behind deferred validation', async () => {
+    vi.useFakeTimers()
+    try {
+      const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+      const batcher = createRemoteRuntimePtyTextBatcher(1_000, () => {}, {
+        maxPendingBytes: text.length + 10,
+        maxValidationQueuedCodeUnits: text.length + 10,
+        maxValidationQueuedEntries: 2
+      })
+
+      expect(batcher.push(text)).toBe(true)
+      expect(batcher.push('a')).toBe(true)
+      expect(batcher.push('b')).toBe(false)
+
+      const drained = batcher.drain()
+      await vi.advanceTimersByTimeAsync(0)
+      await drained
+
+      expect(batcher.takePending()).toBe(`${text}a`)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('drops asynchronously oversized input without flushing clipboard content', async () => {
     vi.useFakeTimers()
     try {

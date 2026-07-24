@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
@@ -37,6 +37,7 @@ import { spawnSystemSshPortForward } from './system-ssh-forward-process'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SystemSshResolvedConfig } from './ssh-control-socket'
+import { SSH_DIRECTORY_TRANSFER_LIMITS } from './ssh-directory-transfer-budget'
 
 const SYSTEM_SSH_PATH =
   process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
@@ -796,6 +797,24 @@ describe('spawnSystemSsh', () => {
         }
       ])
     )
+  })
+
+  it('rejects an oversized Windows upload file before starting SSH', async () => {
+    const localDir = mkdtempSync(join(tmpdir(), 'orca-system-ssh-upload-'))
+    const oversized = join(localDir, 'oversized.bin')
+    writeFileSync(oversized, '')
+    truncateSync(oversized, SSH_DIRECTORY_TRANSFER_LIMITS.maximumFileBytes + 1)
+
+    try {
+      await expect(
+        uploadDirectoryViaSystemSsh(createTarget(), localDir, 'C:/Users/me/.orca-remote/relay', {
+          hostPlatform: getRemoteHostPlatform('win32-x64')
+        })
+      ).rejects.toMatchObject({ reason: 'file' })
+      expect(spawnMock).not.toHaveBeenCalled()
+    } finally {
+      rmSync(localDir, { recursive: true, force: true })
+    }
   })
 
   it('forces standalone SSH for Windows upload packages when requested', async () => {

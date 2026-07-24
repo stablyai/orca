@@ -32,7 +32,8 @@ import {
   buildCommandLookupSpecs,
   hasAbsoluteCommandPath,
   isCommandOnPathForRelay,
-  PreflightHandler
+  PreflightHandler,
+  RELAY_AGENT_PATH_PROBE_CONCURRENCY
 } from './preflight-handler'
 
 function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
@@ -233,6 +234,54 @@ describe('hasAbsoluteCommandPath', () => {
 })
 
 describe('PreflightHandler', () => {
+  it.each([
+    ['at the limit', RELAY_AGENT_PATH_PROBE_CONCURRENCY],
+    ['above the limit', RELAY_AGENT_PATH_PROBE_CONCURRENCY + 1]
+  ])('bounds relay-supplied command probes %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    const releases: (() => void)[] = []
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      active++
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      active--
+      const command = String(args[1]).match(/command -v '([^']+)'/)?.[1] ?? 'agent'
+      return { stdout: `__ORCA_AGENT_PATH__/relay/path/${command}\n` }
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+    new PreflightHandler(dispatcher as never)
+
+    const detection = requestHandlers.get('preflight.detectAgents')!({
+      commands: Array.from({ length: count }, (_, index) => ({
+        id: `agent-${index}`,
+        cmd: `agent-${index}`
+      }))
+    })
+    await vi.waitFor(() =>
+      expect(execFileAsyncMock).toHaveBeenCalledTimes(
+        Math.min(count, RELAY_AGENT_PATH_PROBE_CONCURRENCY)
+      )
+    )
+    if (count > RELAY_AGENT_PATH_PROBE_CONCURRENCY) {
+      releases.shift()?.()
+      await vi.waitFor(() => expect(execFileAsyncMock).toHaveBeenCalledTimes(count))
+    }
+    releases.splice(0).forEach((release) => release())
+
+    await expect(detection).resolves.toMatchObject({
+      agents: expect.arrayContaining(Array.from({ length: count }, (_, index) => `agent-${index}`))
+    })
+    expect(peak).toBe(Math.min(count, RELAY_AGENT_PATH_PROBE_CONCURRENCY))
+  })
+
   it('honors required commands when reporting detected agents', async () => {
     execFileAsyncMock.mockImplementation(async (_file, args) => {
       const script = String(args[1])

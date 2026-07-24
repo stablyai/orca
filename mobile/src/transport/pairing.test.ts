@@ -1,14 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodePairingUrl, extractPairingCodeFromUrl, parsePairingCode } from './pairing'
+import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PairingOfferSchema,
+  type PairingOffer
+} from './types'
 
-const offer = {
+const offer: PairingOffer = {
   v: 2,
   endpoint: 'ws://100.102.47.57:6768',
   deviceToken: 'token-abc',
   publicKeyB64: 'pubkey-xyz'
-} as const
+}
 
-function encodeOffer(input = offer): string {
+function encodeOffer(input: PairingOffer = offer): string {
   return btoa(JSON.stringify(input)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
@@ -60,5 +66,42 @@ describe('pairing deep links', () => {
 
     expect(parsePairingCode(`orca://pair?code=${code}`)).toEqual(offer)
     expect(parsePairingCode(code)).toEqual(offer)
+  })
+
+  it('preserves a TLS reverse-proxy endpoint with an explicit port and path', () => {
+    const proxiedOffer = {
+      ...offer,
+      endpoint: 'wss://proxy.example:443/orca/runtime'
+    }
+    const code = encodeOffer(proxiedOffer)
+
+    expect(parsePairingCode(code)).toEqual(proxiedOffer)
+  })
+
+  it('rejects an oversized code before base64 decoding', () => {
+    const decode = vi.fn(() => {
+      throw new Error('must not decode')
+    })
+    vi.stubGlobal('atob', decode)
+    const oversized = 'A'.repeat(PAIRING_CODE_MAX_CHARACTERS + 1)
+
+    expect(parsePairingCode(oversized)).toBeNull()
+    expect(decodePairingUrl(`orca://pair?code=${oversized}`)).toBeNull()
+    expect(decode).not.toHaveBeenCalled()
+  })
+
+  it('accepts the device-token limit and rejects one character more', () => {
+    expect(
+      PairingOfferSchema.safeParse({
+        ...offer,
+        deviceToken: 't'.repeat(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS)
+      }).success
+    ).toBe(true)
+    expect(
+      PairingOfferSchema.safeParse({
+        ...offer,
+        deviceToken: 't'.repeat(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS + 1)
+      }).success
+    ).toBe(false)
   })
 })

@@ -43,10 +43,18 @@ export function getMobilePrCreateSuccessWarning(
 }
 
 export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string | null {
+  const copy = hostedReviewCopy(prefill.provider)
   if (prefill.canCreate !== false || shouldPushBeforeMobileHostedReviewCreate(prefill)) {
+    // Fail closed: only an accepted no-review lookup (`not_found`) may open
+    // Create / Push & Create. `unavailable`, `found`, or a missing outcome (an
+    // older host that predates the field) all leave review existence unproven —
+    // mobile has no refresh/review-lookup signal of its own, so it must not
+    // offer create, or the needs_push Push & Create path would slip through.
+    if (prefill.reviewLookupOutcome !== 'not_found') {
+      return `Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Try again in a moment.`
+    }
     return null
   }
-  const copy = hostedReviewCopy(prefill.provider)
   switch (prefill.blockedReason) {
     case 'dirty':
       return `Commit changes before creating a ${copy.reviewLabel}.`

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslModule from '../wsl'
 
@@ -20,14 +21,34 @@ vi.mock('../wsl', async (importOriginal) => ({
 }))
 
 import { ghExecFileAsync, glabExecFileAsync } from './runner'
+import { _resetGhRateLimitBreaker } from './gh-rate-limit-breaker'
+
+const PRIMARY_RATE_LIMIT_STDERR =
+  'gh: API rate limit exceeded for user ID 1775218. Please wait. (HTTP 403)'
+
+type MockChildProcess = EventEmitter & {
+  pid: number
+  kill: ReturnType<typeof vi.fn>
+  unref: ReturnType<typeof vi.fn>
+}
+
+function createMockChildProcess(pid: number): MockChildProcess {
+  const child = new EventEmitter() as MockChildProcess
+  child.pid = pid
+  child.kill = vi.fn()
+  child.unref = vi.fn()
+  return child
+}
 
 describe('ghExecFileAsync WSL fallback', () => {
   const originalPlatform = process.platform
 
   beforeEach(() => {
     execFileMock.mockReset()
+    spawnMock.mockReset()
     getDefaultWslDistroMock.mockReset()
     getDefaultWslDistroMock.mockReturnValue(null)
+    _resetGhRateLimitBreaker()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -35,6 +56,8 @@ describe('ghExecFileAsync WSL fallback', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
+    _resetGhRateLimitBreaker()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -170,6 +193,42 @@ describe('ghExecFileAsync WSL fallback', () => {
     )
   })
 
+  it('falls back for repo view with an explicit positional repository', async () => {
+    execFileMock.mockImplementation((binary, _args, options, callback) => {
+      if (typeof options === 'function') {
+        callback = options
+      }
+      if (binary === 'wsl.exe') {
+        callback(
+          Object.assign(new Error('Command failed: wsl.exe'), {
+            stdout: '',
+            stderr: 'bash: line 1: gh: command not found\n'
+          })
+        )
+        return
+      }
+      callback(null, { stdout: '{"isFork":false}', stderr: '' })
+    })
+
+    await expect(
+      ghExecFileAsync(
+        ['repo', 'view', 'github.acme-corp.com/stablyhq/noqa', '--json', 'isFork,parent'],
+        {
+          cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`,
+          host: 'github.acme-corp.com'
+        }
+      )
+    ).resolves.toEqual({ stdout: '{"isFork":false}', stderr: '' })
+
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'gh',
+      ['repo', 'view', 'github.acme-corp.com/stablyhq/noqa', '--json', 'isFork,parent'],
+      expect.objectContaining({ cwd: undefined }),
+      expect.any(Function)
+    )
+  })
+
   it('does not fall back for gh api calls that depend on repo-context placeholders', async () => {
     execFileMock.mockImplementation((_binary, _args, _options, callback) => {
       callback(
@@ -208,6 +267,43 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).resolves.toEqual({ stdout: '{"data":{}}', stderr: '' })
 
     expect(execFileMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a host-pinned idempotent gh GraphQL query after host injection', async () => {
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(
+          Object.assign(new Error('HTTP 502 Bad Gateway'), {
+            stdout: '',
+            stderr: 'HTTP 502 Bad Gateway'
+          })
+        )
+      })
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(null, { stdout: '{"data":{}}', stderr: '' })
+      })
+
+    await expect(
+      ghExecFileAsync(['api', 'graphql', '-f', 'query=query { viewer { login } }'], {
+        host: 'github.acme-corp.com'
+      })
+    ).resolves.toEqual({ stdout: '{"data":{}}', stderr: '' })
+
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      1,
+      'gh',
+      [
+        'api',
+        '--hostname',
+        'github.acme-corp.com',
+        'graphql',
+        '-f',
+        'query=query { viewer { login } }'
+      ],
+      expect.any(Object),
+      expect.any(Function)
+    )
   })
 
   it('does not retry non-idempotent gh API transient failures', async () => {
@@ -290,6 +386,63 @@ describe('ghExecFileAsync WSL fallback', () => {
     )
   })
 
+  it('checks a blocked WSL scope before repeating a native-to-WSL fallback', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    execFileMock.mockImplementation((binary, _args, _options, callback) => {
+      if (binary === 'gh') {
+        callback(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT', stderr: '' }))
+        return
+      }
+      callback(
+        Object.assign(new Error(PRIMARY_RATE_LIMIT_STDERR), {
+          stdout: '',
+          stderr: PRIMARY_RATE_LIMIT_STDERR
+        })
+      )
+    })
+
+    await expect(ghExecFileAsync(['api', 'repos/acme/widgets/pulls'])).rejects.toThrow('rate limit')
+    await expect(ghExecFileAsync(['api', 'repos/acme/widgets/pulls'])).rejects.toMatchObject({
+      ghRateLimitBlocked: true
+    })
+
+    expect(execFileMock).toHaveBeenCalledTimes(3)
+    expect(execFileMock.mock.calls.map(([binary]) => binary)).toEqual(['gh', 'wsl.exe', 'gh'])
+  })
+
+  it('checks a blocked native scope before repeating a WSL-to-native fallback', async () => {
+    execFileMock.mockImplementation((binary, _args, _options, callback) => {
+      if (binary === 'wsl.exe') {
+        callback(
+          Object.assign(new Error('Command failed: wsl.exe'), {
+            stdout: '',
+            stderr: 'bash: line 1: gh: command not found\n'
+          })
+        )
+        return
+      }
+      callback(
+        Object.assign(new Error(PRIMARY_RATE_LIMIT_STDERR), {
+          stdout: '',
+          stderr: PRIMARY_RATE_LIMIT_STDERR
+        })
+      )
+    })
+
+    const options = {
+      cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`
+    }
+    await expect(ghExecFileAsync(['api', 'repos/acme/widgets/pulls'], options)).rejects.toThrow(
+      'rate limit'
+    )
+    await expect(
+      ghExecFileAsync(['api', 'repos/acme/widgets/pulls'], options)
+    ).rejects.toMatchObject({ ghRateLimitBlocked: true })
+
+    expect(execFileMock).toHaveBeenCalledTimes(3)
+    expect(execFileMock.mock.calls.map(([binary]) => binary)).toEqual(['wsl.exe', 'gh', 'wsl.exe'])
+  })
+
   it('does not retry non-idempotent glab transient failures', async () => {
     execFileMock.mockImplementation((_binary, _args, _options, callback) => {
       callback(
@@ -350,6 +503,80 @@ describe('ghExecFileAsync WSL fallback', () => {
       expect.objectContaining({ cwd: undefined }),
       expect.any(Function)
     )
+  })
+
+  it('times out the default-WSL glab fallback and waits for full tree cleanup', async () => {
+    vi.useFakeTimers()
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    const nativeChild = createMockChildProcess(1200)
+    const wslChild = createMockChildProcess(2400)
+    const taskkill = createMockChildProcess(3600)
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+        return nativeChild
+      })
+      .mockReturnValueOnce(wslChild)
+    spawnMock.mockReturnValue(taskkill)
+
+    const promise = glabExecFileAsync(['auth', 'status'], { timeout: 1000 })
+    const rejection = expect(promise).rejects.toThrow('wsl.exe timed out.')
+    let rejected = false
+    void promise.catch(() => {
+      rejected = true
+    })
+
+    await vi.advanceTimersByTimeAsync(999)
+    expect(spawnMock).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(spawnMock).toHaveBeenCalledWith(
+      'taskkill',
+      ['/pid', '2400', '/t', '/f'],
+      expect.objectContaining({ stdio: 'ignore', windowsHide: true })
+    )
+    await Promise.resolve()
+    expect(rejected).toBe(false)
+
+    taskkill.emit('close', 0)
+    await rejection
+    expect(wslChild.kill).not.toHaveBeenCalled()
+  })
+
+  it('aborts the default-WSL glab fallback with full process-tree cleanup', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    const nativeChild = createMockChildProcess(1200)
+    const wslChild = createMockChildProcess(2400)
+    const taskkill = createMockChildProcess(3600)
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+        return nativeChild
+      })
+      .mockReturnValueOnce(wslChild)
+    spawnMock.mockReturnValue(taskkill)
+    const controller = new AbortController()
+
+    const promise = glabExecFileAsync(['auth', 'status'], { signal: controller.signal })
+    const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(2))
+    controller.abort()
+
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'bash', '-c', "'glab' 'auth' 'status'"],
+      expect.not.objectContaining({ signal: controller.signal }),
+      expect.any(Function)
+    )
+    expect(spawnMock).toHaveBeenCalledWith(
+      'taskkill',
+      ['/pid', '2400', '/t', '/f'],
+      expect.objectContaining({ stdio: 'ignore', windowsHide: true })
+    )
+    taskkill.emit('close', 0)
+
+    await rejection
+    expect(wslChild.kill).not.toHaveBeenCalled()
   })
 
   it('does not wake the default WSL distro for host-only GitLab diagnostics', async () => {

@@ -21,6 +21,8 @@ export type StreamQueueEntry = {
   /** Original PTY characters represented by data. Salvaged query copies are
    * delivered bytes but represent zero new positions in the source stream. */
   sequenceChars?: number
+  seq?: number
+  transformed?: boolean
   control?: DaemonEvent
 }
 

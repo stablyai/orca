@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  MARKDOWN_DOCUMENT_LISTING_ERROR_CODE,
+  MarkdownDocumentListingCapacityError
+} from '../../../shared/markdown-document-listing-limits'
 import { mapRuntimeError } from './errors'
 
 class LineageError extends Error {
@@ -18,6 +22,17 @@ describe('mapRuntimeError', () => {
       })
     }
   )
+
+  it.each([
+    'remote_update_manual_required',
+    'remote_update_not_available',
+    'remote_update_not_downloaded'
+  ])('preserves remote updater failure %s', (code) => {
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
+      ok: false,
+      error: { code, message: code }
+    })
+  })
 
   it.each([
     ['window_not_focused', 'keyboard input requires focus', 'restore-window'],
@@ -132,6 +147,21 @@ describe('mapRuntimeError', () => {
         }
       },
       _meta: { runtimeId: 'runtime-1' }
+    })
+  })
+
+  it('preserves the Markdown listing capacity code across runtime RPC', () => {
+    expect(
+      mapRuntimeError(
+        'req_1',
+        { runtimeId: 'runtime-1' },
+        new MarkdownDocumentListingCapacityError()
+      )
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: MARKDOWN_DOCUMENT_LISTING_ERROR_CODE
+      }
     })
   })
 })

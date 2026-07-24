@@ -6,23 +6,28 @@ import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
 } from '../../../../shared/clipboard-image'
+import { ClipboardImageUploadBuffer } from './clipboard-image-upload-buffer'
 
 const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
 export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 export const CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT = 8
+export const CLIPBOARD_IMAGE_UPLOAD_MAX_RETAINED_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
 const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000
+const CLIPBOARD_IMAGE_UPLOAD_MEMORY_ERROR = 'Too much clipboard image upload data is in progress'
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 type ClipboardImageUpload = {
   expectedBase64Length: number
   connectionId?: string | null
-  chunks: string[]
-  receivedBase64Length: number
+  content: ClipboardImageUploadBuffer
+  reservedBase64Length: number
   expiresAt: number
   ttlTimer: ReturnType<typeof setTimeout>
+  committing: boolean
 }
 
 const clipboardImageUploads = new Map<string, ClipboardImageUpload>()
+let retainedClipboardImageUploadBase64Chars = 0
 
 function isValidBase64(value: string): boolean {
   return value.length % 4 !== 1 && BASE64_PATTERN.test(value)
@@ -38,7 +43,7 @@ function pruneExpiredUploads(now = Date.now()): void {
 
 function scheduleUploadExpiry(uploadId: string): ReturnType<typeof setTimeout> {
   const timer = setTimeout(() => {
-    clipboardImageUploads.delete(uploadId)
+    deleteUpload(uploadId)
   }, CLIPBOARD_IMAGE_UPLOAD_TTL_MS)
   if (typeof timer === 'object' && 'unref' in timer) {
     timer.unref()
@@ -52,12 +57,26 @@ function refreshUploadExpiry(uploadId: string, upload: ClipboardImageUpload): vo
   upload.ttlTimer = scheduleUploadExpiry(uploadId)
 }
 
+function releaseUploadRetention(upload: ClipboardImageUpload): void {
+  retainedClipboardImageUploadBase64Chars -= upload.reservedBase64Length
+  upload.reservedBase64Length = 0
+  upload.content.clear()
+}
+
+function finishUpload(uploadId: string, upload: ClipboardImageUpload): void {
+  clearTimeout(upload.ttlTimer)
+  if (clipboardImageUploads.get(uploadId) === upload) {
+    clipboardImageUploads.delete(uploadId)
+  }
+  releaseUploadRetention(upload)
+}
+
 function deleteUpload(uploadId: string): void {
   const upload = clipboardImageUploads.get(uploadId)
-  if (upload) {
-    clearTimeout(upload.ttlTimer)
+  if (!upload || upload.committing) {
+    return
   }
-  clipboardImageUploads.delete(uploadId)
+  finishUpload(uploadId, upload)
 }
 
 function getUpload(uploadId: string): ClipboardImageUpload {
@@ -66,13 +85,21 @@ function getUpload(uploadId: string): ClipboardImageUpload {
   if (!upload) {
     throw new Error('Clipboard image upload was not found')
   }
+  if (upload.committing) {
+    throw new Error('Clipboard image upload is already committing')
+  }
   return upload
 }
 
-function assertValidBase64Content(value: string): void {
-  if (!isValidBase64(value)) {
-    throw new Error('Clipboard image content must be base64')
+function reserveUploadBase64(chars: number): boolean {
+  if (
+    chars >
+    CLIPBOARD_IMAGE_UPLOAD_MAX_RETAINED_BASE64_CHARS - retainedClipboardImageUploadBase64Chars
+  ) {
+    return false
   }
+  retainedClipboardImageUploadBase64Chars += chars
+  return true
 }
 
 function clipboardImageBase64Payload(maxChars: number, tooLargeMessage: string) {
@@ -148,10 +175,14 @@ export const CLIPBOARD_METHODS: RpcMethod[] = [
       clipboardImageUploads.set(uploadId, {
         expectedBase64Length: params.expectedBase64Length,
         connectionId: params.connectionId,
-        chunks: [],
-        receivedBase64Length: 0,
+        content: new ClipboardImageUploadBuffer(
+          params.expectedBase64Length,
+          CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+        ),
+        reservedBase64Length: 0,
         expiresAt: Date.now() + CLIPBOARD_IMAGE_UPLOAD_TTL_MS,
-        ttlTimer: scheduleUploadExpiry(uploadId)
+        ttlTimer: scheduleUploadExpiry(uploadId),
+        committing: false
       })
       return { uploadId }
     }
@@ -161,17 +192,25 @@ export const CLIPBOARD_METHODS: RpcMethod[] = [
     params: AppendImageUploadChunk,
     handler: (params) => {
       const upload = getUpload(params.uploadId)
-      if (params.offset !== upload.receivedBase64Length) {
+      if (params.offset !== upload.content.length) {
         throw new Error('Clipboard image chunk offset is out of order')
       }
-      const nextLength = upload.receivedBase64Length + params.contentBase64.length
+      const nextLength = upload.content.length + params.contentBase64.length
       if (nextLength > upload.expectedBase64Length) {
         throw new Error('Clipboard image upload exceeded expected size')
       }
-      upload.chunks.push(params.contentBase64)
-      upload.receivedBase64Length = nextLength
+      if (!reserveUploadBase64(params.contentBase64.length)) {
+        throw new Error(CLIPBOARD_IMAGE_UPLOAD_MEMORY_ERROR)
+      }
+      try {
+        upload.content.append(params.contentBase64)
+      } catch (error) {
+        retainedClipboardImageUploadBase64Chars -= params.contentBase64.length
+        throw error
+      }
+      upload.reservedBase64Length += params.contentBase64.length
       refreshUploadExpiry(params.uploadId, upload)
-      return { receivedBase64Length: upload.receivedBase64Length }
+      return { receivedBase64Length: upload.content.length }
     }
   }),
   defineMethod({
@@ -179,19 +218,19 @@ export const CLIPBOARD_METHODS: RpcMethod[] = [
     params: CommitImageUpload,
     handler: async (params) => {
       const upload = getUpload(params.uploadId)
+      upload.committing = true
+      clearTimeout(upload.ttlTimer)
       try {
-        if (upload.receivedBase64Length !== upload.expectedBase64Length) {
+        if (upload.content.length !== upload.expectedBase64Length) {
           throw new Error('Clipboard image upload is incomplete')
         }
-        const contentBase64 = upload.chunks.join('')
-        assertValidBase64Content(contentBase64)
-        return await saveClipboardImageBufferAsTempFile(Buffer.from(contentBase64, 'base64'), {
+        const content = upload.content.decode()
+        upload.content.clear()
+        return await saveClipboardImageBufferAsTempFile(content, {
           connectionId: upload.connectionId
         })
       } finally {
-        // Why: failed SSH or filesystem commits must not leave bounded upload
-        // memory pinned until TTL cleanup.
-        deleteUpload(params.uploadId)
+        finishUpload(params.uploadId, upload)
       }
     }
   }),
@@ -206,7 +245,12 @@ export const CLIPBOARD_METHODS: RpcMethod[] = [
 ]
 
 export function resetClipboardImageUploadsForTest(): void {
-  for (const uploadId of clipboardImageUploads.keys()) {
-    deleteUpload(uploadId)
+  for (const [uploadId, upload] of clipboardImageUploads) {
+    finishUpload(uploadId, upload)
   }
+  retainedClipboardImageUploadBase64Chars = 0
+}
+
+export function getRetainedClipboardImageUploadBase64CharsForTest(): number {
+  return retainedClipboardImageUploadBase64Chars
 }

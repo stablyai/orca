@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
+import type * as MacosTccLoginShell from './macos-tcc-login-shell'
 
 const {
   existsSyncMock,
@@ -9,7 +10,9 @@ const {
   mkdirSyncMock,
   writeFileSyncMock,
   spawnMock,
+  prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
+  readWindowsConptyProcessIdsMock,
   captureDescendantSnapshotMock,
   terminateDescendantSnapshotMock
 } = vi.hoisted(() => ({
@@ -19,7 +22,9 @@ const {
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
+  prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
+  readWindowsConptyProcessIdsMock: vi.fn(),
   captureDescendantSnapshotMock: vi.fn(),
   terminateDescendantSnapshotMock: vi.fn()
 }))
@@ -42,6 +47,11 @@ vi.mock('electron', () => ({
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
+  ...(await importOriginal<typeof MacosTccLoginShell>()),
+  prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
 }))
 
 vi.mock('../pty-descendant-termination', () => ({
@@ -69,6 +79,10 @@ vi.mock('./windows-powershell-executable', () => ({
 vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: (...args: unknown[]) =>
     resolveAgentForegroundProcessMock(...args)
+}))
+
+vi.mock('./windows-conpty-process-membership', () => ({
+  readWindowsConptyProcessIds: (...args: unknown[]) => readWindowsConptyProcessIdsMock(...args)
 }))
 
 vi.mock('../wsl', () => ({
@@ -139,6 +153,8 @@ describe('LocalPtyProvider', () => {
     captureDescendantSnapshotMock.mockReset()
     captureDescendantSnapshotMock.mockResolvedValue(null)
     terminateDescendantSnapshotMock.mockReset()
+    prepareMacosTccLoginShellMock.mockReset()
+    prepareMacosTccLoginShellMock.mockResolvedValue(undefined)
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => ({
@@ -146,6 +162,8 @@ describe('LocalPtyProvider', () => {
         processName: fallbackProcess
       })
     )
+    readWindowsConptyProcessIdsMock.mockReset()
+    readWindowsConptyProcessIdsMock.mockResolvedValue(null)
 
     exitCb = undefined
     mockProc = {
@@ -210,8 +228,59 @@ describe('LocalPtyProvider', () => {
 
       const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
 
-      expect(second).toEqual({ id: 'serve-session-1', pid: 12345, isReattach: true })
+      expect(second).toEqual({
+        id: 'serve-session-1',
+        pid: 12345,
+        isReattach: true
+      })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps a native UNC session native on a conflicting WSL reattach', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const first = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'native-session',
+        cwd: '\\\\server\\share\\repo',
+        shellOverride: 'powershell.exe'
+      })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: first.id,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+
+      expect(first.wslDistro).toBeNull()
+      expect(second.wslDistro).toBeNull()
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps the first WSL distro on a conflicting distro reattach', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const first = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'wsl-session',
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+      })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: first.id,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian'
+      })
+
+      expect(first.wslDistro).toBe('Ubuntu')
+      expect(second.wslDistro).toBe('Ubuntu')
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
@@ -224,6 +293,66 @@ describe('LocalPtyProvider', () => {
       expect(second.id).not.toBe(first.id)
       expect(second.isReattach).toBeUndefined()
       expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
+    it('does not spawn after shutdown cancels a pending stable session id', async () => {
+      let finishPreparation!: () => void
+      spawnMock.mockClear()
+      prepareMacosTccLoginShellMock.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishPreparation = resolve
+          })
+      )
+
+      const spawn = provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'pending-local-session'
+      })
+      const canceledSpawn = expect(spawn).rejects.toThrow(
+        'PTY spawn canceled: pending-local-session'
+      )
+      await vi.waitFor(() => expect(prepareMacosTccLoginShellMock).toHaveBeenCalledOnce())
+
+      await provider.shutdown('pending-local-session', { immediate: true })
+      finishPreparation()
+      await canceledSpawn
+      expect(spawnMock).not.toHaveBeenCalled()
+
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, sessionId: 'pending-local-session' })
+      ).resolves.toMatchObject({ id: 'pending-local-session' })
+      expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
+    it('coalesces a concurrent same-session-id spawn before launching a redundant shell (F3)', async () => {
+      spawnMock.mockClear()
+      const procA = { ...mockProc, pid: 1001 }
+      spawnMock.mockReturnValueOnce(procA)
+
+      // Hold both spawns past the existence check and inside the preflight so they
+      // race to register the same id; release only after both are parked.
+      let releasePreflight!: () => void
+      prepareMacosTccLoginShellMock.mockReturnValue(
+        new Promise<void>((resolve) => {
+          releasePreflight = resolve
+        })
+      )
+
+      const spawnA = provider.spawn({ cols: 80, rows: 24, sessionId: 'race-session' })
+      const spawnB = provider.spawn({ cols: 132, rows: 44, sessionId: 'race-session' })
+      await vi.waitFor(() => expect(prepareMacosTccLoginShellMock).toHaveBeenCalledTimes(2))
+      releasePreflight()
+
+      const [a, b] = await Promise.all([spawnA, spawnB])
+      // The winner owns the tracked PTY; the loser attaches to it, not a second one.
+      expect(a.isReattach).toBeUndefined()
+      expect(b.isReattach).toBe(true)
+      expect(b.pid).toBe(procA.pid)
+      expect(provider.getPtyProcess('race-session')).toBe(procA)
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(procA.resize).toHaveBeenCalledWith(132, 44)
     })
 
     it('calls node-pty spawn with correct args', async () => {
@@ -295,8 +424,24 @@ describe('LocalPtyProvider', () => {
     it('invokes onSpawned callback', async () => {
       const onSpawned = vi.fn()
       provider.configure({ onSpawned })
-      const { id } = await provider.spawn({ cols: 80, rows: 24 })
-      expect(onSpawned).toHaveBeenCalledWith(id)
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
+      expect(onSpawned).toHaveBeenCalledWith(id, incarnationId)
+    })
+
+    it('reports physical commit before post-spawn publication can fail', async () => {
+      spawnMock.mockClear()
+      const committed = vi.fn()
+      provider.configure({
+        onSpawned: () => {
+          throw new Error('post-spawn publication failed')
+        }
+      })
+
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, onPtySpawnCommitted: committed })
+      ).rejects.toThrow('post-spawn publication failed')
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(committed).toHaveBeenCalledOnce()
     })
 
     it('invokes buildSpawnEnv callback to customize environment', async () => {
@@ -309,6 +454,44 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
+    })
+
+    it('does not inherit NODE_ENV from the Orca process env', async () => {
+      // Why: NODE_ENV in Orca's process is Orca's build mode (electron-vite sets
+      // `development` in dev runs); leaking it breaks `next build` and Vitest.
+      const previous = process.env.NODE_ENV
+      process.env.NODE_ENV = 'development'
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.NODE_ENV
+        } else {
+          process.env.NODE_ENV = previous
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.NODE_ENV).toBeUndefined()
+      expect(spawnCall[2].env.PATH).toBe(process.env.PATH)
+    })
+
+    it('keeps an explicitly requested NODE_ENV for spawned terminals', async () => {
+      // Why: only the ambient value is stripped; a caller-supplied NODE_ENV still wins.
+      const previous = process.env.NODE_ENV
+      process.env.NODE_ENV = 'development'
+      try {
+        await provider.spawn({ cols: 80, rows: 24, env: { NODE_ENV: 'production' } })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.NODE_ENV
+        } else {
+          process.env.NODE_ENV = previous
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.NODE_ENV).toBe('production')
     })
 
     it('suppresses the first-run Powerlevel10k wizard for spawned terminals', async () => {
@@ -1018,9 +1201,9 @@ describe('LocalPtyProvider', () => {
     it('invokes onExit callback via the node-pty exit handler', async () => {
       const onExit = vi.fn()
       provider.configure({ onExit })
-      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
       await provider.shutdown(id, { immediate: true })
-      expect(onExit).toHaveBeenCalledWith(id, -1)
+      expect(onExit).toHaveBeenCalledWith(id, -1, incarnationId)
     })
 
     it('does not destroy after an intentional Windows shutdown kill', async () => {
@@ -1386,6 +1569,68 @@ describe('LocalPtyProvider', () => {
 
       await expect(foreground).resolves.toBeNull()
     })
+
+    it('confirms a still-active agent from ConPTY console presence without a whole-table scan', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      mockProc.process = 'powershell.exe'
+      resolveAgentForegroundProcessMock.mockResolvedValue({
+        available: true,
+        processName: 'claude'
+      })
+      // A child beyond the shell is still attached to this console.
+      readWindowsConptyProcessIdsMock.mockResolvedValue(new Set([12345, 999]))
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      // First call establishes the agent identity via the scan.
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      // node-pty still only names the shell, but console presence confirms the
+      // agent — no second whole-table scan.
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('falls through to the scan when the ConPTY console shows only the shell', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      mockProc.process = 'powershell.exe'
+      resolveAgentForegroundProcessMock.mockResolvedValue({
+        available: true,
+        processName: 'claude'
+      })
+      readWindowsConptyProcessIdsMock.mockResolvedValue(new Set([12345]))
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps the cached agent when both the console probe and process snapshot are inconclusive', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      mockProc.process = 'powershell.exe'
+      resolveAgentForegroundProcessMock
+        .mockResolvedValueOnce({ available: true, processName: 'claude' })
+        .mockResolvedValue({ available: true, processName: null })
+      readWindowsConptyProcessIdsMock.mockResolvedValue(null)
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('retires the cached agent after verified shell-only membership and a no-agent scan', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      mockProc.process = 'powershell.exe'
+      resolveAgentForegroundProcessMock
+        .mockResolvedValueOnce({ available: true, processName: 'claude' })
+        .mockResolvedValue({ available: true, processName: null })
+      readWindowsConptyProcessIdsMock.mockResolvedValue(new Set([12345]))
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      await expect(provider.getForegroundProcess(id)).resolves.toBeNull()
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
+    })
   })
 
   describe('confirmForegroundProcess', () => {
@@ -1419,15 +1664,97 @@ describe('LocalPtyProvider', () => {
       expect(dataHandler).toHaveBeenCalledWith({ id, data: 'hello world' })
     })
 
+    it('classifies startup queries before runtime and public data listeners', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const runtimeData = vi.fn()
+      const dataHandler = vi.fn()
+      provider.configure({ onData: runtimeData })
+      provider.onData(dataHandler)
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
+      const onDataCb = mockProc.onData.mock.calls[0][0]
+      const query = '\x1b]10;?\x07'
+      const echo = ']10;rgb:2e2e/3434/3434\\'
+
+      onDataCb(query)
+      onDataCb(echo)
+      onDataCb('prompt')
+
+      expect(mockProc.write).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+      expect(runtimeData.mock.calls.map((call) => call.slice(1))).toEqual([
+        ['', expect.any(Number), query.length, true],
+        ['', expect.any(Number), echo.length, true],
+        ['prompt', expect.any(Number)]
+      ])
+      expect(dataHandler.mock.calls.map(([payload]) => payload)).toEqual([
+        { id, data: '', sequenceChars: query.length, seq: query.length, transformed: true },
+        {
+          id,
+          data: '',
+          sequenceChars: echo.length,
+          seq: query.length + echo.length,
+          transformed: true
+        },
+        { id, data: 'prompt' }
+      ])
+    })
+
+    it('consumes a native Windows OSC color query before renderer delivery', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const dataHandler = vi.fn()
+      provider.onData(dataHandler)
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+      const onDataCb = mockProc.onData.mock.calls[0][0]
+      const query = '\x1b]10;?\x07'
+
+      onDataCb(query)
+
+      expect(dataHandler).toHaveBeenCalledWith({
+        id,
+        data: '',
+        sequenceChars: query.length,
+        seq: query.length,
+        transformed: true
+      })
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('keeps forwarded OSC color replies for a Windows-owned WSL PTY', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+      const onDataCb = mockProc.onData.mock.calls[0][0]
+      const reply = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
+
+      onDataCb('\x1b]11;?\x07')
+      provider.write(id, reply)
+
+      expect(mockProc.write).toHaveBeenCalledWith(reply)
+    })
+
     it('notifies exit listeners when PTY exits', async () => {
       const exitHandler = vi.fn()
       provider.onExit(exitHandler)
-      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
 
       // Simulate node-pty exit event
       exitCb?.({ exitCode: 0 })
 
-      expect(exitHandler).toHaveBeenCalledWith({ id, code: 0 })
+      expect(exitHandler).toHaveBeenCalledWith({ id, code: 0, incarnationId })
     })
 
     it('allows unsubscribing from events', async () => {
@@ -1446,7 +1773,12 @@ describe('LocalPtyProvider', () => {
   describe('listProcesses', () => {
     it('returns spawned PTYs', async () => {
       const before = await provider.listProcesses()
-      await provider.spawn({ cols: 80, rows: 24, cwd: '/tmp/owned-cwd' })
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/owned-cwd',
+        worktreeId: 'repo::/tmp/owned-cwd'
+      })
       await provider.spawn({ cols: 80, rows: 24 })
       const after = await provider.listProcesses()
       expect(after.length - before.length).toBe(2)
@@ -1454,6 +1786,29 @@ describe('LocalPtyProvider', () => {
       expect(newEntries[0]).toHaveProperty('id')
       expect(newEntries[0]).toHaveProperty('title', 'zsh')
       expect(newEntries[0]).toHaveProperty('cwd', '/tmp/owned-cwd')
+      expect(newEntries[0]).toHaveProperty('worktreeId', 'repo::/tmp/owned-cwd')
+      expect(newEntries[0]).not.toHaveProperty('wslDistro')
+      expect(newEntries[1]).not.toHaveProperty('wslDistro')
+    })
+
+    it('reports native and WSL ownership explicitly on Windows', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const native = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe'
+      })
+      const wsl = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+      })
+
+      const processes = await provider.listProcesses()
+
+      expect(processes.find((process) => process.id === native.id)?.wslDistro).toBeNull()
+      expect(processes.find((process) => process.id === wsl.id)?.wslDistro).toBe('Ubuntu')
     })
   })
 

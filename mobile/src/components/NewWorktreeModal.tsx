@@ -14,8 +14,9 @@ import { ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { BottomDrawer, BOTTOM_DRAWER_HIDE_DURATION_MS } from './BottomDrawer'
+import { BottomDrawer } from './BottomDrawer'
 import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
+import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-navigation'
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
@@ -111,12 +112,6 @@ type CreateOptions = {
   approvedSetupContentHash?: string
 }
 
-type NewWorktreeDrawerView = 'form' | 'transition' | 'source' | 'repo' | 'agent' | 'trust'
-
-// Why: iOS cannot reliably present a second native modal until the first drawer's
-// exit commits; one extra frame keeps transitions sequential on slower devices.
-const NEW_WORKTREE_DRAWER_TRANSITION_MS = BOTTOM_DRAWER_HIDE_DURATION_MS + 16
-
 function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
   let hash = 0
@@ -196,8 +191,8 @@ function NewWorktreeModalContent({
   const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
-  const [drawerView, setDrawerView] = useState<NewWorktreeDrawerView>('form')
-  const drawerTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { drawerView, formSheetVisible, formSheetInteractive, transitionDrawer, openSourceDrawer } =
+    useNewWorktreeDrawerNavigation(visible)
   const createInFlightRef = useRef(false)
   const setupTrustActionInFlightRef = useRef(false)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
@@ -232,29 +227,6 @@ function NewWorktreeModalContent({
     [existingWorktrees, selectedRepo]
   )
 
-  useEffect(() => {
-    return () => {
-      if (drawerTransitionTimerRef.current) {
-        clearTimeout(drawerTransitionTimerRef.current)
-      }
-    }
-  }, [])
-
-  function transitionDrawer(nextView: Exclude<NewWorktreeDrawerView, 'transition'>): void {
-    if (drawerTransitionTimerRef.current) {
-      clearTimeout(drawerTransitionTimerRef.current)
-    }
-    setDrawerView('transition')
-    drawerTransitionTimerRef.current = setTimeout(() => {
-      drawerTransitionTimerRef.current = null
-      setDrawerView(nextView)
-    }, NEW_WORKTREE_DRAWER_TRANSITION_MS)
-  }
-
-  // The Smart source picker owns the workspace name AND the linked-source
-  // selection: typing names the workspace and drives source search, and picking
-  // a source resolves the base/branch/push metadata (matching desktop). The
-  // creature-name fallback is only computed lazily at submit for a blank name.
   const composer = useMobileComposerSource({
     client,
     selectedRepoId: selectedRepo?.id ?? null,
@@ -830,7 +802,7 @@ function NewWorktreeModalContent({
         }
       }}
     >
-      <BottomDrawer visible={visible && drawerView === 'form'} onClose={onClose}>
+      <BottomDrawer visible={formSheetVisible} interactive={formSheetInteractive} onClose={onClose}>
         <View style={styles.header}>
           <Text style={styles.title}>Create Workspace</Text>
           <Text style={styles.subtitle}>
@@ -876,8 +848,9 @@ function NewWorktreeModalContent({
               composer={composer}
               label={selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}
               disabled={sshGate.requiresConnection}
+              interactive={formSheetInteractive}
               onBeforeOpen={() => setError('')}
-              onOpenDrawer={() => transitionDrawer('source')}
+              onOpenDrawer={openSourceDrawer}
             />
 
             {composer.forkPushWarning ? (

@@ -79,6 +79,8 @@ type WorkspaceCleanupEnrichmentCacheEntry = {
 
 const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
 const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
+export const MAX_WORKSPACE_CLEANUP_VIEWED_CANDIDATES = 512
+export const WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY = 8
 const WORKSPACE_CLEANUP_PREFLIGHT_CONCURRENCY = 4
 // Why: dirty-files/unpushed-commits are concrete known work at risk; unknown-base
 // and git-status-error only mean "couldn't verify". A row approved while
@@ -236,16 +238,27 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   },
 
   markWorkspaceCleanupCandidateViewed: (candidate) => {
-    set((state) => ({
-      workspaceCleanupViewedCandidates: {
-        ...state.workspaceCleanupViewedCandidates,
-        [candidate.worktreeId]: {
-          viewedAt: Date.now(),
-          fingerprint: candidate.fingerprint,
-          wasSuggested: candidate.tier === 'ready' && canSelectWorkspaceCleanupCandidate(candidate)
+    set((state) => {
+      const now = Date.now()
+      const recentViews = Object.entries(state.workspaceCleanupViewedCandidates)
+        .filter(
+          ([worktreeId, viewed]) =>
+            worktreeId !== candidate.worktreeId && now - viewed.viewedAt <= VIEWED_FROM_CLEANUP_MS
+        )
+        .sort(([, a], [, b]) => b.viewedAt - a.viewedAt)
+        .slice(0, MAX_WORKSPACE_CLEANUP_VIEWED_CANDIDATES - 1)
+      return {
+        workspaceCleanupViewedCandidates: {
+          ...Object.fromEntries(recentViews),
+          [candidate.worktreeId]: {
+            viewedAt: now,
+            fingerprint: candidate.fingerprint,
+            wasSuggested:
+              candidate.tier === 'ready' && canSelectWorkspaceCleanupCandidate(candidate)
+          }
         }
       }
-    }))
+    })
   },
 
   dismissWorkspaceCleanupCandidates: async (candidates) => {
@@ -348,17 +361,25 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     if (removedIds.length > 0) {
       invalidateWorkspaceCleanupScanProgress()
       const removedIdSet = new Set(removedIds)
-      set((state) => ({
-        workspaceCleanupLoading: false,
-        workspaceCleanupScan: state.workspaceCleanupScan
-          ? {
-              ...state.workspaceCleanupScan,
-              candidates: state.workspaceCleanupScan.candidates.filter(
-                (candidate) => !removedIdSet.has(candidate.worktreeId)
-              )
-            }
-          : state.workspaceCleanupScan
-      }))
+      set((state) => {
+        const viewedCandidates = Object.fromEntries(
+          Object.entries(state.workspaceCleanupViewedCandidates).filter(
+            ([worktreeId]) => !removedIdSet.has(worktreeId)
+          )
+        )
+        return {
+          workspaceCleanupLoading: false,
+          workspaceCleanupViewedCandidates: viewedCandidates,
+          workspaceCleanupScan: state.workspaceCleanupScan
+            ? {
+                ...state.workspaceCleanupScan,
+                candidates: state.workspaceCleanupScan.candidates.filter(
+                  (candidate) => !removedIdSet.has(candidate.worktreeId)
+                )
+              }
+            : state.workspaceCleanupScan
+        }
+      })
     }
 
     return { removedIds, failures }
@@ -604,8 +625,10 @@ export async function enrichWorkspaceCleanupCandidates(
   state: AppState,
   options: EnrichOptions = {}
 ): Promise<WorkspaceCleanupCandidate[]> {
-  return Promise.all(
-    candidates.map((candidate) => enrichWorkspaceCleanupCandidate(candidate, state, options))
+  return mapWithConcurrency(
+    candidates,
+    WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY,
+    async (candidate) => enrichWorkspaceCleanupCandidate(candidate, state, options)
   )
 }
 
@@ -615,8 +638,10 @@ async function enrichWorkspaceCleanupCandidatesWithCache(
   cache: Map<string, WorkspaceCleanupEnrichmentCacheEntry>,
   options: EnrichOptions = {}
 ): Promise<WorkspaceCleanupCandidate[]> {
-  return Promise.all(
-    candidates.map(async (candidate) => {
+  return mapWithConcurrency(
+    candidates,
+    WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY,
+    async (candidate) => {
       const inputSignature = getWorkspaceCleanupCandidateInputSignature(candidate)
       const localSignature = getWorkspaceCleanupLocalStateSignature(
         candidate.worktreeId,
@@ -635,7 +660,7 @@ async function enrichWorkspaceCleanupCandidatesWithCache(
         candidate: enriched
       })
       return enriched
-    })
+    }
   )
 }
 

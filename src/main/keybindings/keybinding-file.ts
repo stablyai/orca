@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: parsing, sanitizing, migrating, and writing the keybindings file must stay together so file-format edge cases share one validation path. */
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
   findKeybindingConflicts,
@@ -15,12 +15,18 @@ import {
   type KeybindingOverrides,
   type KeybindingPlatform
 } from '../../shared/keybindings'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
+import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 
 type JsonObject = Record<string, unknown>
 
 const FILE_VERSION = 1
 const PLATFORM_KEYS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
 const ROOT_KEYS = new Set(['$schema', 'version', 'keybindings', 'platforms'])
+export const MAX_KEYBINDING_FILE_BYTES = 1024 * 1024
+export const MAX_KEYBINDING_JSON_STRUCTURAL_TOKENS = 256 * 1024
+export const MAX_KEYBINDING_JSON_NESTING_DEPTH = 64
 
 export function getUserKeybindingsPath(homePath: string): string {
   return join(homePath, '.orca', 'keybindings.json')
@@ -51,7 +57,14 @@ function readJsonDocument(path: string): {
     return { exists: false, document: createEmptyDocument() }
   }
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown
+    const serialized = readNodeFileSyncWithinLimit(path, MAX_KEYBINDING_FILE_BYTES).buffer.toString(
+      'utf8'
+    )
+    assertJsonTextStructureWithinLimits(serialized, {
+      structuralTokens: MAX_KEYBINDING_JSON_STRUCTURAL_TOKENS,
+      nestingDepth: MAX_KEYBINDING_JSON_NESTING_DEPTH
+    })
+    const parsed = JSON.parse(serialized) as unknown
     if (!isJsonObject(parsed)) {
       return { exists: true, document: null, error: 'Keybindings file must contain a JSON object.' }
     }
@@ -69,7 +82,8 @@ function writeJsonDocument(path: string, document: JsonObject): void {
   mkdirSync(dirname(path), { recursive: true })
   const tempPath = `${path}.tmp`
   try {
-    writeFileSync(tempPath, `${JSON.stringify(document, null, 2)}\n`, 'utf8')
+    const { serialized } = stringifyJsonWithinByteLimit(document, MAX_KEYBINDING_FILE_BYTES - 1, 2)
+    writeFileSync(tempPath, `${serialized}\n`, 'utf8')
     renameSync(tempPath, path)
   } catch (error) {
     try {
@@ -353,16 +367,52 @@ export function seedLegacyTabSwitchBindings(
     return { seeded: false, snapshot: current }
   }
 
+  // Why: seed every pin that normalizes, but never freeze the one-shot if any
+  // pin was dropped — throw after writing good pins so the cohort stays pending
+  // and a fixed build retries the failed action without wiping the others.
+  const pins: (readonly [KeybindingActionId, string[]])[] = []
+  const failedActionIds: KeybindingActionId[] = []
+  for (const actionId of toSeed) {
+    const normalized = normalizeKeybindingArrayForAction(actionId, legacyBindings[actionId] ?? [])
+    if (!Array.isArray(normalized)) {
+      failedActionIds.push(actionId)
+      continue
+    }
+    pins.push([actionId, normalized])
+  }
+  const snapshot =
+    pins.length > 0
+      ? writeActivePlatformSection(path, platform, current.commonOverrides, (activePlatform) => {
+          for (const [actionId, normalized] of pins) {
+            activePlatform[actionId] = normalized
+          }
+        })
+      : current
+  if (failedActionIds.length > 0) {
+    throw new Error(`Could not normalize legacy binding for "${failedActionIds.join('", "')}".`)
+  }
+  return { seeded: pins.length > 0, snapshot }
+}
+
+// Why: the one-shot seed migration and Settings writes must produce the same
+// on-disk document shape; a single assembly path keeps them from drifting.
+function writeActivePlatformSection(
+  path: string,
+  platform: NodeJS.Platform,
+  fallbackCommonOverrides: KeybindingOverrides,
+  mutateActivePlatform: (activePlatform: JsonObject) => void
+): KeybindingFileSnapshot {
+  const keybindingPlatform = getKeybindingPlatform(platform)
   const readResult = readJsonDocument(path)
   if (!readResult.document) {
-    // Why: migration must never replace a user-owned file that could not be
-    // parsed; leaving the cohort pending allows a safe retry after repair.
+    // Why: writes must never replace a user-owned file that could not be
+    // parsed; callers surface the error (or retry the migration) after repair.
     throw new Error(readResult.error ?? 'Could not read keybindings file.')
   }
   const document = { ...readResult.document }
   const common = isJsonObject(document.keybindings)
     ? { ...document.keybindings }
-    : { ...current.commonOverrides }
+    : { ...fallbackCommonOverrides }
   for (const rootKey of Object.keys(document)) {
     if (isKeybindingActionId(rootKey)) {
       delete document[rootKey]
@@ -372,12 +422,7 @@ export function seedLegacyTabSwitchBindings(
   const activePlatform = isJsonObject(platforms[keybindingPlatform])
     ? { ...(platforms[keybindingPlatform] as JsonObject) }
     : {}
-  for (const actionId of toSeed) {
-    const normalized = normalizeKeybindingArrayForAction(actionId, legacyBindings[actionId] ?? [])
-    if (Array.isArray(normalized)) {
-      activePlatform[actionId] = normalized
-    }
-  }
+  mutateActivePlatform(activePlatform)
 
   document.version = FILE_VERSION
   document.keybindings = common
@@ -389,7 +434,7 @@ export function seedLegacyTabSwitchBindings(
     [keybindingPlatform]: activePlatform
   }
   writeJsonDocument(path, document)
-  return { seeded: true, snapshot: readKeybindingFile(path, platform) }
+  return readKeybindingFile(path, platform)
 }
 
 export function writeKeybindingOverride(
@@ -420,44 +465,19 @@ export function writeKeybindingOverride(
     )
   }
 
-  const readResult = readJsonDocument(path)
-  if (!readResult.document) {
-    throw new Error(readResult.error ?? 'Could not read keybindings file.')
-  }
-
-  const document = { ...readResult.document }
-  const common = isJsonObject(document.keybindings)
-    ? { ...document.keybindings }
-    : { ...currentSnapshot.commonOverrides }
-  for (const rootKey of Object.keys(document)) {
-    if (isKeybindingActionId(rootKey)) {
-      delete document[rootKey]
+  return writeActivePlatformSection(
+    path,
+    platform,
+    currentSnapshot.commonOverrides,
+    (activePlatform) => {
+      if (normalizedBindings === null) {
+        // Why: Settings edits are scoped to the current platform. A hand-authored
+        // common binding may be intentional for other OSes, so reset only removes
+        // the platform-specific mask instead of deleting the shared value.
+        delete activePlatform[actionId]
+      } else {
+        activePlatform[actionId] = normalizedBindings
+      }
     }
-  }
-  const platforms = isJsonObject(document.platforms) ? { ...document.platforms } : {}
-  const activePlatform = isJsonObject(platforms[keybindingPlatform])
-    ? { ...(platforms[keybindingPlatform] as JsonObject) }
-    : {}
-
-  if (normalizedBindings === null) {
-    // Why: Settings edits are scoped to the current platform. A hand-authored
-    // common binding may be intentional for other OSes, so reset only removes
-    // the platform-specific mask instead of deleting the shared value.
-    delete activePlatform[actionId]
-  } else {
-    activePlatform[actionId] = normalizedBindings
-  }
-
-  document.version = FILE_VERSION
-  document.keybindings = common
-  document.platforms = {
-    ...platforms,
-    darwin: isJsonObject(platforms.darwin) ? platforms.darwin : {},
-    linux: isJsonObject(platforms.linux) ? platforms.linux : {},
-    win32: isJsonObject(platforms.win32) ? platforms.win32 : {},
-    [keybindingPlatform]: activePlatform
-  }
-
-  writeJsonDocument(path, document)
-  return readKeybindingFile(path, platform)
+  )
 }

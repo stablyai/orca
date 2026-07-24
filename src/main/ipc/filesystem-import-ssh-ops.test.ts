@@ -9,6 +9,7 @@ const {
   mkdirMock,
   realpathMock,
   copyFileMock,
+  opendirMock,
   readdirMock,
   getConnMgrMock
 } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const {
   mkdirMock: vi.fn(),
   realpathMock: vi.fn(),
   copyFileMock: vi.fn(),
+  opendirMock: vi.fn(),
   readdirMock: vi.fn(),
   getConnMgrMock: vi.fn()
 }))
@@ -29,11 +31,16 @@ vi.mock('fs/promises', () => ({
   writeFile: vi.fn(),
   realpath: realpathMock,
   copyFile: copyFileMock,
-  readdir: readdirMock
+  opendir: opendirMock
 }))
 vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
+import {
+  advanceSshConnectionGeneration,
+  resetSshConnectionGenerations,
+  setSshConnectionGeneration
+} from '../ssh/ssh-connection-generation'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
@@ -78,6 +85,7 @@ function createProvider(uploadSession: FileUploadSession): IFilesystemProvider {
 }
 
 describe('fs:importExternalPaths — SSH operations', () => {
+  const sessionCounterStride = 2 ** 13
   const destDir = '/home/user/project/src'
   const connId = 'ssh-conn-1'
   let provider: IFilesystemProvider
@@ -112,18 +120,29 @@ describe('fs:importExternalPaths — SSH operations', () => {
     })
   }
   const invoke = (args: Record<string, unknown>) =>
-    handlers.get('fs:importExternalPaths')!(null, args) as Promise<{
+    handlers.get('fs:importExternalPaths')!(null, {
+      ...args,
+      ...(typeof args.connectionId === 'string'
+        ? {
+            expectedSshTargetId: args.expectedSshTargetId ?? args.connectionId,
+            expectedSshConnectionGeneration: args.expectedSshConnectionGeneration ?? 0
+          }
+        : {})
+    }) as Promise<{
       results: Record<string, unknown>[]
     }>
 
   beforeEach(() => {
     handlers.clear()
+    resetSshConnectionGenerations()
+    setSshConnectionGeneration(connId, 0)
     ;[
       handleMock,
       lstatMock,
       mkdirMock,
       realpathMock,
       copyFileMock,
+      opendirMock,
       readdirMock,
       getConnMgrMock
     ].forEach((m) => m.mockReset())
@@ -133,6 +152,12 @@ describe('fs:importExternalPaths — SSH operations', () => {
     realpathMock.mockImplementation(async (p: string) => p)
     lstatMock.mockRejectedValue(enoent())
     readdirMock.mockResolvedValue([])
+    opendirMock.mockImplementation(async (directoryPath: string) => ({
+      async *[Symbol.asyncIterator]() {
+        yield* await readdirMock(directoryPath, { withFileTypes: true })
+      },
+      close: vi.fn().mockResolvedValue(undefined)
+    }))
     getConnMgrMock.mockReturnValue({ getConnection: () => makeConn() })
     uploadSession = {
       uploadFile: vi.fn().mockResolvedValue(undefined),
@@ -145,6 +170,44 @@ describe('fs:importExternalPaths — SSH operations', () => {
 
   afterEach(() => {
     unregisterSshFilesystemProvider(connId)
+    resetSshConnectionGenerations()
+  })
+
+  it('rejects a staged upload when a restarted HUB reaches the same target counter', async () => {
+    resetSshConnectionGenerations(71)
+    setSshConnectionGeneration(connId, 71 * sessionCounterStride)
+    const stagedGeneration = advanceSshConnectionGeneration(connId)
+    const sourcePath = path.resolve('/tmp/dropped/restart.txt')
+    lstatMock.mockImplementation(async (candidate: string) => {
+      if (candidate !== sourcePath) {
+        throw enoent()
+      }
+      resetSshConnectionGenerations(72)
+      setSshConnectionGeneration(connId, 72 * sessionCounterStride)
+      advanceSshConnectionGeneration(connId)
+      return {
+        size: 12,
+        ino: 1,
+        dev: 1,
+        isFile: () => true,
+        isDirectory: () => false,
+        isSymbolicLink: () => false
+      }
+    })
+
+    const { results } = await invoke({
+      sourcePaths: [sourcePath],
+      destDir,
+      connectionId: connId,
+      expectedSshTargetId: connId,
+      expectedSshConnectionGeneration: stagedGeneration
+    })
+
+    expect(results[0]).toMatchObject({
+      status: 'failed',
+      reason: 'SSH connection changed; refresh and try again'
+    })
+    expect(uploadSession.uploadFile).not.toHaveBeenCalled()
   })
 
   it('deconflicts file names via provider stat', async () => {

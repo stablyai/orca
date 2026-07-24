@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
+import { stringifyJsonWithinByteLimit } from '../../../shared/node-bounded-json-stringify'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import {
   RelayConnectionOpenMessageSchema,
@@ -19,6 +20,7 @@ import type { DeviceCredentialInstallAuthorization } from './relay-control-reque
 import { answerRelayHostChallenge } from './relay-host-proof'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
+export const RELAY_CONTROL_MAX_MESSAGE_BYTES = 64 * 1024
 
 type RelayControlClientOptions = {
   cellUrl: string
@@ -74,7 +76,7 @@ export class RelayControlClient {
         new WebSocket(url, {
           headers: { authorization: `Bearer ${token}` },
           perMessageDeflate: false,
-          maxPayload: 64 * 1024
+          maxPayload: RELAY_CONTROL_MAX_MESSAGE_BYTES
         }))
   }
 
@@ -165,7 +167,7 @@ export class RelayControlClient {
     }
     this.state = 'proving'
     this.socket.send(
-      JSON.stringify({
+      serializeRelayControlMessage({
         type: 'host-hello',
         v: 1,
         relayHostId: this.options.relayHostId,
@@ -197,7 +199,7 @@ export class RelayControlClient {
       return
     }
     if (RelayPingMessageSchema.safeParse(message).success) {
-      this.socket?.send(JSON.stringify({ type: 'pong', t: message.t }))
+      this.socket?.send(serializeRelayControlMessage({ type: 'pong', t: message.t }))
       return
     }
     const connection = RelayConnectionOpenMessageSchema.safeParse(message)
@@ -235,7 +237,7 @@ export class RelayControlClient {
         return
       }
       this.socket?.send(
-        JSON.stringify({
+        serializeRelayControlMessage({
           type: 'host-challenge-ack',
           challengeId: challenge.data.challengeId,
           proofB64
@@ -257,7 +259,7 @@ export class RelayControlClient {
     if (!this.socket || (this.state !== 'active' && this.state !== 'draining')) {
       throw new Error('relay_control_not_active')
     }
-    this.socket.send(JSON.stringify(payload))
+    this.socket.send(serializeRelayControlMessage(payload))
   }
 
   private failProtocol(reason: string): void {
@@ -281,4 +283,8 @@ export class RelayControlClient {
     this.connectResolve = null
     this.connectReject = null
   }
+}
+
+export function serializeRelayControlMessage(payload: unknown): string {
+  return stringifyJsonWithinByteLimit(payload, RELAY_CONTROL_MAX_MESSAGE_BYTES).serialized
 }

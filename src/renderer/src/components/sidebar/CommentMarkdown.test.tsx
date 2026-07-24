@@ -2,6 +2,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
 
+const PNG_1X1_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
+
 describe('CommentMarkdown', () => {
   it('marks compact headings so a parent can opt into block flow', () => {
     const markup = renderToStaticMarkup(
@@ -81,12 +84,33 @@ describe('CommentMarkdown', () => {
 
   it('renders trusted compact markdown images inline', () => {
     const markup = renderToStaticMarkup(
-      <CommentMarkdown content="See this: ![Image #1](data:image/png;base64,abc123)" />
+      <CommentMarkdown content={`See this: ![Image #1](data:image/png;base64,${PNG_1X1_BASE64})`} />
     )
 
     expect(markup).toContain('<img')
     expect(markup).toContain('alt="Image #1"')
-    expect(markup).toContain('src="data:image/png;base64,abc123"')
+    expect(markup).toContain(`src="data:image/png;base64,${PNG_1X1_BASE64}"`)
+  })
+
+  it('renders malformed compact raster data as alt text instead of decoding it', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content="See this: ![Image #1](data:image/png;base64,abc123)" />
+    )
+
+    expect(markup).not.toContain('<img')
+    expect(markup).toContain('<span>Image #1</span>')
+  })
+
+  it('renders malformed document raster data as alt text instead of decoding it', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content="See this: ![Image #1](data:image/png;base64,abc123)"
+      />
+    )
+
+    expect(markup).not.toContain('<img')
+    expect(markup).toContain('<span>Image #1</span>')
   })
 
   it('renders bare GitHub user attachment links as document videos', () => {

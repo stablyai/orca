@@ -1,6 +1,7 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow } from './types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parseOrchestrationJson } from './query-retention'
 
 // Why: the tab half can change on pane break-out, while opaque legacy keys
 // have no safe equivalence beyond exact equality.
@@ -53,8 +54,10 @@ function parseObjectPayload(msg: MessageRow, onInvalidJson: () => void): Record<
   }
 
   try {
-    const parsed: unknown = JSON.parse(msg.payload)
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+    const parsed = parseOrchestrationJson(msg.payload)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
   } catch {
     onInvalidJson()
     return {}

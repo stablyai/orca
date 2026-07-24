@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildSnapshot, type CdpCommandSender } from './snapshot-engine'
+import {
+  buildSnapshot,
+  SNAPSHOT_MAX_ENTRIES,
+  SNAPSHOT_MAX_NAME_CODE_UNITS,
+  SNAPSHOT_MAX_RETAINED_NAME_CODE_UNITS,
+  type CdpCommandSender
+} from './snapshot-engine'
 
 type AXNode = {
   nodeId: string
@@ -192,5 +198,47 @@ describe('buildSnapshot', () => {
     expect(result.snapshot).toContain('[Main Content]')
     expect(result.snapshot).toContain('[Footer]')
     expect(result.snapshot).toContain('heading "Dashboard"')
+  })
+
+  it('bounds retained entries and page-controlled accessible names', async () => {
+    const childIds = Array.from({ length: SNAPSHOT_MAX_ENTRIES + 100 }, (_, index) =>
+      String(index + 2)
+    )
+    const nodes: AXNode[] = [node('1', 'WebArea', 'page', { childIds })]
+    for (const childId of childIds) {
+      nodes.push(
+        node(
+          childId,
+          'button',
+          `${childId.padStart(8, '0')}-${'x'.repeat(SNAPSHOT_MAX_NAME_CODE_UNITS + 100)}`
+        )
+      )
+    }
+
+    const result = await buildSnapshot(makeSender(nodes))
+
+    expect(result.refs).toHaveLength(
+      Math.min(
+        SNAPSHOT_MAX_ENTRIES,
+        Math.floor(SNAPSHOT_MAX_RETAINED_NAME_CODE_UNITS / SNAPSHOT_MAX_NAME_CODE_UNITS)
+      )
+    )
+    expect(result.refs[0]?.name).toHaveLength(SNAPSHOT_MAX_NAME_CODE_UNITS)
+    expect(result.refs.reduce((total, ref) => total + ref.name.length, 0)).toBeLessThanOrEqual(
+      SNAPSHOT_MAX_RETAINED_NAME_CODE_UNITS
+    )
+  })
+
+  it('walks malformed cyclic trees without recursive growth', async () => {
+    const nodes: AXNode[] = [
+      node('1', 'WebArea', 'page', { childIds: ['2'] }),
+      node('2', 'generic', '', { childIds: ['3'] }),
+      node('3', 'generic', '', { childIds: ['2', '4'] }),
+      node('4', 'button', 'Reachable', { backendDOMNodeId: 4 })
+    ]
+
+    const result = await buildSnapshot(makeSender(nodes))
+
+    expect(result.refs).toEqual([{ ref: '@e1', role: 'button', name: 'Reachable' }])
   })
 })

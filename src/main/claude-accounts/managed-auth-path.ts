@@ -1,7 +1,9 @@
-import { existsSync, lstatSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, realpathSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { app } from 'electron'
+import { readAgentStateFileSync } from '../agent-state-file-reader'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
 
 const MANAGED_AUTH_MARKER = '.orca-managed-claude-auth'
 
@@ -65,8 +67,11 @@ export function readClaudeManagedAuthFile(
     if (!isOwnedChildFile(managedAuthPath, filePath)) {
       return null
     }
-    return readFileSync(filePath, 'utf-8')
-  } catch {
+    return readAgentStateFileSync(filePath)
+  } catch (error) {
+    if (error instanceof NodeFileReadTooLargeError) {
+      throw error
+    }
     return null
   }
 }
@@ -80,6 +85,9 @@ export function writeClaudeManagedAuthFile(
   if (existsSync(filePath) && !isOwnedChildFile(managedAuthPath, filePath)) {
     throw new Error('Managed Claude auth child file is not owned by Orca.')
   }
+  if (existsSync(filePath)) {
+    readAgentStateFileSync(filePath)
+  }
   writeFileAtomically(filePath, contents, { mode: 0o600 })
 }
 
@@ -92,7 +100,7 @@ function isManagedAuthMarkerValid(markerPath: string, accountId: string): boolea
     ) {
       return false
     }
-    return readFileSync(markerPath, 'utf-8').trim() === accountId
+    return readAgentStateFileSync(markerPath).trim() === accountId
   } catch {
     return false
   }

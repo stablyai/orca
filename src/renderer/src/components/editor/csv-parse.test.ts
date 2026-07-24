@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS, detectCsvDelimiter, parseCsv } from './csv-parse'
+import {
+  CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS,
+  CSV_PARSE_LIMITS,
+  type CsvParseLimits,
+  detectCsvDelimiter,
+  parseCsv
+} from './csv-parse'
+
+function parseLimits(overrides: Partial<CsvParseLimits>): CsvParseLimits {
+  return { ...CSV_PARSE_LIMITS, ...overrides }
+}
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -68,7 +78,81 @@ describe('parseCsv', () => {
     const { rows } = parseCsv('""')
     expect(rows).toEqual([['']])
   })
+
+  it.each([
+    {
+      name: 'source code units',
+      source: 'a,b\n',
+      limits: parseLimits({ sourceCodeUnits: 3 }),
+      reason: 'source-code-units'
+    },
+    {
+      name: 'rows',
+      source: 'a\nb\nc',
+      limits: parseLimits({ rows: 2 }),
+      reason: 'rows'
+    },
+    {
+      name: 'columns per row',
+      source: 'a,b,c',
+      limits: parseLimits({ columnsPerRow: 2 }),
+      reason: 'columns-per-row'
+    },
+    {
+      name: 'total cells',
+      source: 'a,b\nc,d,e',
+      limits: parseLimits({ cells: 4 }),
+      reason: 'cells'
+    },
+    {
+      name: 'retained cell text',
+      source: 'a,bcd',
+      limits: parseLimits({ retainedCellCodeUnits: 3 }),
+      reason: 'retained-cell-code-units'
+    }
+  ])('fails closed when $name exceeds its memory limit', ({ source, limits, reason }) => {
+    expect(parseCsv(source, ',', limits)).toEqual({
+      rows: [],
+      maxColumns: 0,
+      limitExceeded: { reason, limit: limits[reasonToLimitKey(reason)] }
+    })
+  })
+
+  it('preserves exact output at every parser boundary', () => {
+    const source = 'a,b\nc,d'
+    const limits = parseLimits({
+      sourceCodeUnits: source.length,
+      rows: 2,
+      columnsPerRow: 2,
+      cells: 4,
+      retainedCellCodeUnits: 4
+    })
+
+    expect(parseCsv(source, ',', limits)).toEqual({
+      rows: [
+        ['a', 'b'],
+        ['c', 'd']
+      ],
+      maxColumns: 2,
+      limitExceeded: null
+    })
+  })
 })
+
+function reasonToLimitKey(reason: string): keyof CsvParseLimits {
+  switch (reason) {
+    case 'source-code-units':
+      return 'sourceCodeUnits'
+    case 'rows':
+      return 'rows'
+    case 'columns-per-row':
+      return 'columnsPerRow'
+    case 'cells':
+      return 'cells'
+    default:
+      return 'retainedCellCodeUnits'
+  }
+}
 
 describe('detectCsvDelimiter', () => {
   it('uses tab for .tsv files regardless of content', () => {

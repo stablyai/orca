@@ -1,5 +1,6 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { readNodeFileSyncWithinLimit } from '../../../shared/node-bounded-file-reader'
 
 // Why: when the preferred WS port is taken (second Orca instance), the OS
 // assigns a random port. Paired mobile devices store ws://ip:port endpoints,
@@ -10,6 +11,7 @@ import { join } from 'node:path'
 // again.
 
 const FALLBACK_PORT_FILE = 'mobile-ws-fallback-port.json'
+export const MAX_FALLBACK_PORT_FILE_BYTES = 1024
 
 function isValidPort(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 65535
@@ -17,7 +19,10 @@ function isValidPort(value: unknown): value is number {
 
 export function readWsFallbackPort(userDataPath: string): number | undefined {
   try {
-    const raw = readFileSync(join(userDataPath, FALLBACK_PORT_FILE), 'utf8')
+    const raw = readNodeFileSyncWithinLimit(
+      join(userDataPath, FALLBACK_PORT_FILE),
+      MAX_FALLBACK_PORT_FILE_BYTES
+    ).buffer.toString('utf8')
     const parsed: unknown = JSON.parse(raw)
     if (
       typeof parsed === 'object' &&

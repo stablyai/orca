@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetTerminalPaneRecoveryForTests,
   captureTerminalPaneRecoveryGeneration,
+  forgetTerminalPaneRecovery,
   registerTerminalPaneRecoveryInstance,
   requestTerminalPaneRecovery
 } from './terminal-pane-recovery'
@@ -270,6 +271,36 @@ describe('requestTerminalPaneRecovery', () => {
 
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
     healthySuccessor.unregister()
+  })
+
+  it('forgets recovery history and pending work only after authoritative tab retirement', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const instance = registerTerminalPaneRecoveryInstance('tab-1')
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'write-stalled',
+      terminalRecoveryGeneration: captureTerminalPaneRecoveryGeneration('tab-1'),
+      terminalRecoveryInstanceId: instance.id
+    })
+    const recoveredGeneration = captureTerminalPaneRecoveryGeneration('tab-1')
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'replay-wedged',
+      terminalRecoveryGeneration: recoveredGeneration,
+      terminalRecoveryInstanceId: instance.id
+    })
+
+    expect(recoveredGeneration).toBe(1)
+    expect(vi.getTimerCount()).toBe(1)
+    forgetTerminalPaneRecovery('tab-1')
+    expect(captureTerminalPaneRecoveryGeneration('tab-1')).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a sibling pane retry when the first requesting split is disposed', async () => {

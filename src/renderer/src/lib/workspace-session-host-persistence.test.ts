@@ -4,13 +4,58 @@ import type { WorkspaceSessionState } from '../../../shared/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildHostIdByWorktreeId,
+  buildWorkspaceSessionHostSnapshots,
   fetchWorkspaceSessionFromHosts,
   fetchWorkspaceSessionWithRuntimeHostOwners,
   patchWorkspaceSessionByHost,
-  persistWorkspaceSessionByHost
+  persistWorkspaceSessionByHost,
+  persistWorkspaceSessionByHostSync,
+  WORKSPACE_SESSION_HOST_IO_CONCURRENCY,
+  type HostPersistenceState
 } from './workspace-session-host-persistence'
 
 describe('fetchWorkspaceSessionFromHosts', () => {
+  it.each([
+    ['at the limit', WORKSPACE_SESSION_HOST_IO_CONCURRENCY],
+    ['above the limit', WORKSPACE_SESSION_HOST_IO_CONCURRENCY + 1]
+  ])('bounds runtime host partition reads %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    let started = 0
+    const releases: (() => void)[] = []
+    const get = vi.fn((hostId?: string) => {
+      if (!hostId) {
+        return Promise.resolve(getDefaultWorkspaceSession())
+      }
+      started++
+      active++
+      peak = Math.max(peak, active)
+      return new Promise<WorkspaceSessionState>((resolve) => {
+        releases.push(() => {
+          active--
+          resolve(getDefaultWorkspaceSession())
+        })
+      })
+    })
+    const hostIds = Array.from(
+      { length: count },
+      (_, index) => `runtime:env-${index}` as `runtime:${string}`
+    )
+
+    const read = fetchWorkspaceSessionFromHosts({ get }, [], hostIds)
+    await vi.waitFor(() =>
+      expect(started).toBe(Math.min(count, WORKSPACE_SESSION_HOST_IO_CONCURRENCY))
+    )
+    if (count > WORKSPACE_SESSION_HOST_IO_CONCURRENCY) {
+      releases.shift()?.()
+      await vi.waitFor(() => expect(started).toBe(count))
+    }
+    releases.splice(0).forEach((release) => release())
+    await read
+
+    expect(peak).toBe(Math.min(count, WORKSPACE_SESSION_HOST_IO_CONCURRENCY))
+  })
+
   it('reads saved runtime host partitions before runtime repos are loaded', async () => {
     const worktreeId = 'remote-repo::/srv/remote-wt'
     const localSession: WorkspaceSessionState = {
@@ -383,6 +428,82 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     })
 
     expect(owner(worktreeWorkspaceKey(worktreeId))).toBe('runtime:env-1')
+  })
+
+  it('builds local-first host snapshots reused by synchronous persistence', () => {
+    const localWorktreeId = 'local-repo::C:\\src\\local'
+    const remoteWorktreeId = 'remote-repo::/srv/remote'
+    const makeTab = (id: string, worktreeId: string) => ({
+      id,
+      ptyId: null,
+      worktreeId,
+      title: id,
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    })
+    const payload: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [localWorktreeId]: [makeTab('local-tab', localWorktreeId)],
+        [remoteWorktreeId]: [makeTab('remote-tab', remoteWorktreeId)]
+      }
+    }
+    const state = {
+      repos: [
+        { id: 'local-repo', connectionId: null, executionHostId: 'local' },
+        { id: 'remote-repo', connectionId: null, executionHostId: 'runtime:env-1' }
+      ],
+      worktreesByRepo: {
+        'local-repo': [{ id: localWorktreeId, repoId: 'local-repo' }],
+        'remote-repo': [{ id: remoteWorktreeId, repoId: 'remote-repo', hostId: 'runtime:env-1' }]
+      }
+    } satisfies HostPersistenceState
+
+    const snapshots = buildWorkspaceSessionHostSnapshots(payload, state)
+
+    expect(snapshots.map((snapshot) => snapshot.hostId)).toEqual([undefined, 'runtime:env-1'])
+    expect(snapshots[0].state.tabsByWorktree).toEqual({
+      [localWorktreeId]: [expect.objectContaining({ id: 'local-tab' })]
+    })
+    expect(snapshots[1].state.tabsByWorktree).toEqual({
+      [remoteWorktreeId]: [expect.objectContaining({ id: 'remote-tab' })]
+    })
+
+    const setSync = vi.fn()
+    persistWorkspaceSessionByHostSync({ get: vi.fn(), patch: vi.fn(), setSync }, payload, state)
+
+    expect(setSync.mock.calls).toEqual(
+      snapshots.map((snapshot) => [snapshot.state, snapshot.hostId])
+    )
+  })
+})
+
+describe('buildHostIdByWorktreeId nested ownership', () => {
+  it('persists an SSH worktree in its paired HUB session partition', () => {
+    const worktreeId = 'nested-repo::/srv/remote-wt'
+    const owner = buildHostIdByWorktreeId({
+      repos: [
+        {
+          id: 'nested-repo',
+          connectionId: 'hub-private-ssh',
+          executionHostId: 'runtime:owner-hub'
+        }
+      ],
+      worktreesByRepo: {
+        'nested-repo': [
+          {
+            id: worktreeId,
+            repoId: 'nested-repo',
+            hostId: 'ssh:hub-private-ssh',
+            runtimeOwnerEnvironmentId: 'owner-hub'
+          }
+        ]
+      }
+    })
+
+    expect(owner(worktreeId)).toBe('runtime:owner-hub')
   })
 })
 

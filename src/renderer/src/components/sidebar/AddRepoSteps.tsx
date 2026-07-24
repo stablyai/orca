@@ -5,9 +5,12 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
+
+export const SSH_TARGET_STATE_READ_CONCURRENCY = 8
 
 // ── SSH host project hook ───────────────────────────────────────────
 
@@ -73,13 +76,15 @@ export function useRemoteRepo(
         if (gen !== remoteGenRef.current) {
           return
         }
-        const withState = await Promise.all(
-          targets.map(async (t) => {
+        const withState = await mapWithConcurrency(
+          targets,
+          SSH_TARGET_STATE_READ_CONCURRENCY,
+          async (t) => {
             const state = (await window.api.ssh.getState({
               targetId: t.id
             })) as SshConnectionState | null
             return { ...t, state: state ?? undefined }
-          })
+          }
         )
         if (gen !== remoteGenRef.current) {
           return

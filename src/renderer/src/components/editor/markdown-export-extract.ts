@@ -1,5 +1,15 @@
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
+import {
+  assertHtmlToPdfInputWithinMemoryLimit,
+  HTML_TO_PDF_MAX_INPUT_BYTES,
+  HTML_TO_PDF_MEMORY_LIMIT_ERROR
+} from '../../../../shared/html-to-pdf-memory-limit'
+import {
+  FetchResponseBodyTooLargeError,
+  readFetchResponseBytesWithinLimit
+} from '../../../../shared/fetch-response-body'
+import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 import { buildMarkdownExportHtml } from './markdown-export-html'
 
 export type MarkdownExportPayload = {
@@ -65,6 +75,15 @@ export async function getActiveMarkdownExportPayload({
     return null
   }
 
+  const title = basenameWithoutExt(activeFile.relativePath || activeFile.filePath)
+  const wrapper = buildMarkdownExportHtml({ title, renderedHtml: '' })
+  const wrapperBytes = measureUtf8ByteLength(wrapper, {
+    stopAfterBytes: HTML_TO_PDF_MAX_INPUT_BYTES
+  })
+  if (wrapperBytes.exceededLimit) {
+    throw new Error(HTML_TO_PDF_MEMORY_LIMIT_ERROR)
+  }
+
   const clone = subtree.cloneNode(true) as Element
   for (const selector of UI_ONLY_SELECTORS) {
     for (const node of clone.querySelectorAll(selector)) {
@@ -73,51 +92,77 @@ export async function getActiveMarkdownExportPayload({
   }
   // Why: local-image previews use renderer-scoped blob URLs; the hidden PDF
   // window cannot dereference them, so embed the bytes before export.
-  await inlineBlobImageSources(clone)
+  await inlineBlobImageSources(clone, HTML_TO_PDF_MAX_INPUT_BYTES - wrapperBytes.byteLength)
 
   const renderedHtml = clone.innerHTML.trim()
   if (!renderedHtml) {
     return null
   }
 
-  const title = basenameWithoutExt(activeFile.relativePath || activeFile.filePath)
   const html = buildMarkdownExportHtml({ title, renderedHtml })
+  assertHtmlToPdfInputWithinMemoryLimit(html)
   return { title, html }
 }
 
-async function inlineBlobImageSources(root: Element): Promise<void> {
-  const images = Array.from(root.querySelectorAll<HTMLImageElement>('img[src^="blob:"]'))
-  await Promise.all(
-    images.map(async (image) => {
-      const src = image.getAttribute('src')
-      if (!src) {
-        return
-      }
-      image.setAttribute('src', await readBlobImageAsDataUrl(src))
-    })
-  )
+export async function inlineBlobImageSources(
+  root: Element,
+  maxFragmentBytes: number
+): Promise<void> {
+  for (const image of root.querySelectorAll<HTMLImageElement>('img[src^="blob:"]')) {
+    const src = image.getAttribute('src')
+    if (!src) {
+      continue
+    }
+    await inlineBlobImageSource(root, image, src, maxFragmentBytes)
+  }
 }
 
-async function readBlobImageAsDataUrl(src: string): Promise<string> {
+async function inlineBlobImageSource(
+  root: Element,
+  image: HTMLImageElement,
+  src: string,
+  maxFragmentBytes: number
+): Promise<void> {
   try {
     const response = await fetch(src)
     if (!response.ok) {
       throw new Error('Unable to fetch blob image')
     }
-    const blob = await response.blob()
-    const bytes = new Uint8Array(await blob.arrayBuffer())
-    return `data:${blob.type || 'application/octet-stream'};base64,${bytesToBase64(bytes)}`
+    const mediaType = normalizedMediaType(response.headers.get('content-type'))
+    const prefix = `data:${mediaType};base64,`
+    image.setAttribute('src', prefix)
+    const prefixMeasurement = measureUtf8ByteLength(root.innerHTML, {
+      stopAfterBytes: maxFragmentBytes
+    })
+    if (prefixMeasurement.exceededLimit) {
+      throw new Error(HTML_TO_PDF_MEMORY_LIMIT_ERROR)
+    }
+    const availableBase64Characters = maxFragmentBytes - prefixMeasurement.byteLength
+    const maxImageBytes = Math.floor(availableBase64Characters / 4) * 3
+    const bytes = await readFetchResponseBytesWithinLimit(response, maxImageBytes)
+    image.setAttribute('src', `${prefix}${bytesToBase64(bytes)}`)
   } catch (error) {
+    if (
+      error instanceof FetchResponseBodyTooLargeError ||
+      (error instanceof Error && error.message === HTML_TO_PDF_MEMORY_LIMIT_ERROR)
+    ) {
+      throw new Error(HTML_TO_PDF_MEMORY_LIMIT_ERROR)
+    }
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Failed to inline image for PDF export: ${message}`)
   }
 }
 
+function normalizedMediaType(value: string | null): string {
+  return new Blob([], { type: value ?? '' }).type || 'application/octet-stream'
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const chunkSize = 0x8000
+  const chunks: string[] = []
+  const chunkSize = 3 * 8192
   for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
+    const binary = String.fromCharCode(...bytes.subarray(index, index + chunkSize))
+    chunks.push(btoa(binary))
   }
-  return btoa(binary)
+  return chunks.join('')
 }

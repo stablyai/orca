@@ -151,6 +151,13 @@ describe('ExternalAutomationManagers toggle', () => {
     expect(getSwitch().getAttribute('aria-checked')).toBe('false')
   })
 
+  it('marks a capped run count as a lower bound', () => {
+    renderManagers([
+      makeManager({ jobs: [makeJob({ runCount: 10_000, runCountSaturated: true })] })
+    ])
+    expect(container.textContent).toContain('10000+ runs found')
+  })
+
   it('dispatches pause when toggling an enabled job', () => {
     const manager = makeManager({ jobs: [makeJob({ enabled: true })] })
     const { onAction } = renderManagers([manager])

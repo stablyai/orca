@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useRef, useState } from 'react'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import type { DirCache } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
@@ -48,6 +49,8 @@ type RefreshFileExplorerExpandedDirsParams = {
   readDirectory: (dirPath: string) => Promise<FileExplorerDirectoryListing>
 }
 
+export const FILE_EXPLORER_REFRESH_CONCURRENCY = 8
+
 export async function refreshFileExplorerExpandedDirs({
   dirs,
   worktreePath,
@@ -78,8 +81,10 @@ export async function refreshFileExplorerExpandedDirs({
     return next
   })
 
-  const results = await Promise.all(
-    uniqueDirs.map(async ({ dirPath, depth }) => {
+  const results = await mapWithConcurrency(
+    uniqueDirs,
+    FILE_EXPLORER_REFRESH_CONCURRENCY,
+    async ({ dirPath, depth }) => {
       const loadToken = loadTokens.get(dirPath)!
       try {
         const listing = await readDirectory(dirPath)
@@ -97,7 +102,8 @@ export async function refreshFileExplorerExpandedDirs({
               worktreePath,
               listing.operationOwner
             ),
-            loading: false
+            loading: false,
+            operationOwner: listing.operationOwner
           }
         }
       } catch {
@@ -110,7 +116,7 @@ export async function refreshFileExplorerExpandedDirs({
           cache: { children: [], loading: false }
         }
       }
-    })
+    }
   )
 
   // Why: the batch commits only after the slowest read, so a dir can be
@@ -184,7 +190,10 @@ export function useFileExplorerTree(
           worktreePath,
           listing.operationOwner
         )
-        setDirCache((prev) => ({ ...prev, [dirPath]: { children, loading: false } }))
+        setDirCache((prev) => ({
+          ...prev,
+          [dirPath]: { children, loading: false, operationOwner: listing.operationOwner }
+        }))
         return true
       } catch (error) {
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {

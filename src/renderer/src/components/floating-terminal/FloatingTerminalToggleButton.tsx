@@ -195,7 +195,9 @@ export function FloatingTerminalToggleButton({
   return (
     <FloatingTerminalIconContextMenu
       currentLocation="floating-button"
-      className="fixed z-40"
+      // Why: keep the toggle/minimize control above the z-[45] panel so it stays
+      // clickable where the two overlap.
+      className="fixed z-[46]"
       style={{ left: position.left, top: position.top }}
     >
       <Tooltip>

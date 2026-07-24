@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -90,6 +90,11 @@ vi.mock('../tray/system-tray', () => ({
 }))
 
 import {
+  clearActiveNativeNotificationsForTest,
+  getActiveNativeNotificationCountForTest,
+  MAX_ACTIVE_NATIVE_NOTIFICATIONS,
+  MAX_NOTIFICATION_DISMISS_IDS,
+  MAX_NOTIFICATION_ID_BYTES,
   registerNotificationHandlers,
   triggerStartupNotificationRegistration
 } from './notifications'
@@ -105,6 +110,7 @@ describe('registerNotificationHandlers', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
+    clearActiveNativeNotificationsForTest()
     vi.setSystemTime(new Date('2026-03-28T16:00:00Z'))
     tempDir = mkdtempSync(join(tmpdir(), 'orca-notification-test-'))
     removeHandlerMock.mockReset()
@@ -1075,6 +1081,124 @@ describe('registerNotificationHandlers', () => {
     expect(notificationShowMock).toHaveBeenCalledTimes(2)
   })
 
+  it('evicts the oldest retained notification at the process cap and keeps the newest', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+    const dispatch = getDispatchHandler()
+    for (let index = 0; index <= MAX_ACTIVE_NATIVE_NOTIFICATIONS; index++) {
+      await dispatch({}, { source: 'test', notificationId: `notification-${index}` })
+    }
+
+    expect(getActiveNativeNotificationCountForTest()).toBe(MAX_ACTIVE_NATIVE_NOTIFICATIONS)
+    expect(notificationCloseMock).toHaveBeenCalledTimes(1)
+    const dismiss = getDismissHandler()
+    expect(dismiss({}, ['notification-0'])).toEqual({ dismissed: 0 })
+    expect(dismiss({}, [`notification-${MAX_ACTIVE_NATIVE_NOTIFICATIONS}`])).toEqual({
+      dismissed: 1
+    })
+  })
+
+  it('settles display confirmation when retention evicts its notification', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+    const dispatch = getDispatchHandler()
+    const confirmations = Array.from({ length: MAX_ACTIVE_NATIVE_NOTIFICATIONS + 1 }, (_, index) =>
+      Promise.resolve(
+        dispatch(
+          {},
+          {
+            source: 'test',
+            notificationId: `confirmation-${index}`,
+            requireDisplayConfirmation: true
+          }
+        )
+      )
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
+    await expect(confirmations[0]).resolves.toEqual({
+      delivered: false,
+      reason: 'not-displayed'
+    })
+    expect(getActiveNativeNotificationCountForTest()).toBe(MAX_ACTIVE_NATIVE_NOTIFICATIONS)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('show', expect.any(Function))
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('failed', expect.any(Function))
+
+    clearActiveNativeNotificationsForTest()
+    await Promise.all(confirmations)
+  })
+
+  it('rejects oversized dispatch identifiers before native or mobile delivery', async () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const result = await getDispatchHandler()(
+      {},
+      {
+        source: 'agent-task-complete',
+        notificationId: '😀'.repeat(Math.floor(MAX_NOTIFICATION_ID_BYTES / 4) + 1)
+      }
+    )
+
+    expect(result).toEqual({ delivered: false, reason: 'invalid-request' })
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+    expect(setTrayAttentionMock).not.toHaveBeenCalled()
+  })
+
+  it('bounds dismiss deduplication and mobile fanout', () => {
+    const dismissMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dismissMobileNotification } as never
+    )
+    const ids = Array.from(
+      { length: MAX_NOTIFICATION_DISMISS_IDS + 1 },
+      (_, index) => `id-${index}`
+    )
+
+    expect(getDismissHandler()({}, ids)).toEqual({ dismissed: 0 })
+    expect(dismissMobileNotification).toHaveBeenCalledTimes(MAX_NOTIFICATION_DISMISS_IDS)
+    expect(dismissMobileNotification).not.toHaveBeenCalledWith(`id-${MAX_NOTIFICATION_DISMISS_IDS}`)
+  })
+
   it('silences the native notification when a custom sound is configured', async () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -1326,6 +1450,26 @@ describe('registerNotificationHandlers', () => {
     })
   })
 
+  it('rejects a sparse custom sound above the bounded read limit', async () => {
+    const soundPath = join(tempDir, 'oversized.ogg')
+    writeFileSync(soundPath, '')
+    truncateSync(soundPath, 10 * 1024 * 1024 + 1)
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false,
+          customSoundPath: soundPath
+        }
+      })
+    } as never)
+
+    const handler = getLoadSoundHandler()
+    await expect(handler({})).resolves.toEqual({ ok: false, reason: 'too-large' })
+  })
+
   it('rejects unsupported custom sound file types', async () => {
     const soundPath = join(tempDir, 'sound.txt')
     writeFileSync(soundPath, 'not audio')
@@ -1432,6 +1576,7 @@ describe('notifications:probeDelivery', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
+    clearActiveNativeNotificationsForTest()
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     notificationCtorMock.mockClear()
@@ -1594,6 +1739,7 @@ describe('triggerStartupNotificationRegistration', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
+    clearActiveNativeNotificationsForTest()
     vi.clearAllTimers()
     notificationCtorMock.mockClear()
     notificationShowMock.mockClear()

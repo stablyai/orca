@@ -89,4 +89,23 @@ describe('notebook IPC', () => {
       expect(processKillSpy).toHaveBeenCalledWith(-4321, 'SIGKILL')
     }
   })
+
+  it('preserves output delivered as 100,000 one-byte subprocess events', async () => {
+    const proc = createMockProcess()
+    spawnMock.mockReturnValue(proc)
+    registerNotebookHandlers({} as never)
+
+    const resultPromise = handlers.get('notebook:runPythonCell')?.(null, {
+      filePath: '/repo/notebook.ipynb',
+      code: 'print("x")'
+    }) as Promise<{ stdout: string }>
+    await Promise.resolve()
+
+    for (let index = 0; index < 100_000; index += 1) {
+      proc.stdout.emit('data', Buffer.from('x'))
+    }
+    proc.emit('close', 0)
+
+    await expect(resultPromise).resolves.toMatchObject({ stdout: 'x'.repeat(100_000) })
+  })
 })

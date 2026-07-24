@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { opendir } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 
 // Exported so discovery can prune these subtrees using the same literal that
@@ -36,13 +36,23 @@ export function subagentTranscriptsDirFor(transcriptFilePath: string): string {
  * transcripts and are excluded.
  */
 export async function countSubagentTranscripts(transcriptFilePath: string): Promise<number> {
-  let entries
+  let directory
   try {
-    entries = await readdir(subagentTranscriptsDirFor(transcriptFilePath), { withFileTypes: true })
+    directory = await opendir(subagentTranscriptsDirFor(transcriptFilePath))
   } catch {
     return 0
   }
-  return entries.filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile())).length
+  let count = 0
+  try {
+    for await (const entry of directory) {
+      if (isSubagentTranscriptFileName(entry.name, entry.isFile())) {
+        count += 1
+      }
+    }
+  } catch {
+    // A disappearing directory still has the successfully counted prefix.
+  }
+  return count
 }
 
 // Direct child of a subagents dir: `<parent>/<uuid>/subagents/agent-<id>.jsonl`.

@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { IFilesystemProvider } from '../providers/types'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import {
+  AI_VAULT_SESSION_ID_MAX_UTF8_BYTES,
+  AI_VAULT_SESSION_LIST_CACHE_KEY_MAX_JSON_BYTES
+} from '../ai-vault/session-list-retention'
 
 const mocks = vi.hoisted(() => ({
   scanAiVaultSessions: vi.fn(),
@@ -13,12 +17,13 @@ const mocks = vi.hoisted(() => ({
   getAiVaultWslHomeDirs: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
   getActiveSshAiVaultHostInfo: vi.fn(),
-  getActiveSshAiVaultHostInfos: vi.fn()
+  getActiveSshAiVaultHostInfos: vi.fn(),
+  ipcHandle: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: { on: vi.fn() },
-  ipcMain: { handle: vi.fn() }
+  ipcMain: { handle: mocks.ipcHandle }
 }))
 
 vi.mock('../ai-vault/session-scanner', () => ({
@@ -49,7 +54,8 @@ vi.mock('./ssh', () => ({
   getActiveSshAiVaultHostInfos: mocks.getActiveSshAiVaultHostInfos
 }))
 
-const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
+const { AI_VAULT_ALL_HOST_SCAN_CONCURRENCY, _internals, registerAiVaultHandlers } =
+  await import('./ai-vault')
 
 const provider = {} as IFilesystemProvider
 
@@ -135,6 +141,33 @@ describe('listAiVaultSessions host routing', () => {
     ])
   })
 
+  it('bounds concurrent scans across a pathological runtime-host roster', async () => {
+    let active = 0
+    let peak = 0
+    mocks.getActiveSshAiVaultHostInfos.mockReturnValue([])
+    mocks.scanRuntimeAiVaultSessions.mockImplementation(async (environmentId: string) => {
+      active += 1
+      peak = Math.max(peak, active)
+      await Promise.resolve()
+      active -= 1
+      return result([session(`runtime:${environmentId}`, environmentId)])
+    })
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () =>
+        Array.from({ length: 20 }, (_, index) => ({
+          environmentId: `runtime-${index}`,
+          executionHostId: `runtime:runtime-${index}` as const
+        })),
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    const merged = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledTimes(20)
+    expect(peak).toBeLessThanOrEqual(AI_VAULT_ALL_HOST_SCAN_CONCURRENCY)
+    expect(merged.sessions).toHaveLength(21)
+  })
+
   it('keeps local and SSH results when runtime host discovery fails', async () => {
     registerAiVaultHandlers({
       getActiveRuntimeAiVaultHostInfos: () => {
@@ -204,7 +237,103 @@ describe('listAiVaultSessions host routing', () => {
     expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
     expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
   })
+
+  it('bounds a pathological multi-host result before retaining it', async () => {
+    const oversized = session('ssh:dev-box', 'remote-session')
+    oversized.sessionId = 'x'.repeat(AI_VAULT_SESSION_ID_MAX_UTF8_BYTES + 1)
+    mocks.scanRemoteAiVaultSessions.mockResolvedValue(result([oversized]))
+
+    const first = await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
+    const second = await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
+
+    expect(first.sessions).toEqual([])
+    expect(first.issues.at(-1)?.message).toContain('AI Vault omitted')
+    expect(second).toBe(first)
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('bypasses the multi-host cache when its key exceeds the memory limit', async () => {
+    const scopePaths = ['x'.repeat(AI_VAULT_SESSION_LIST_CACHE_KEY_MAX_JSON_BYTES + 1)]
+
+    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box', scopePaths })
+    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box', scopePaths })
+
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(2)
+  })
 })
+
+describe('prepareSessionResume IPC', () => {
+  it('awaits the host-local targeted resume preparation', async () => {
+    const prepareSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+    registerAiVaultHandlers({ prepareSessionResume })
+    const registration = mocks.ipcHandle.mock.calls.find(
+      ([channel]) => channel === 'aiVault:prepareSessionResume'
+    )
+    const handler = registration?.[1] as
+      | ((_event: unknown, args: unknown) => Promise<unknown>)
+      | undefined
+    const args = {
+      agent: 'codex',
+      filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'local'
+    }
+
+    await expect(handler?.({}, args)).resolves.toEqual({ useRealCodexHome: true })
+    expect(prepareSessionResume).toHaveBeenCalledWith(args)
+  })
+
+  it('prepares saved-runtime sessions on the transcript-owning runtime', async () => {
+    const prepareSessionResume = vi.fn()
+    const prepareRuntimeSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+    registerAiVaultHandlers({ prepareSessionResume, prepareRuntimeSessionResume })
+    const args = {
+      agent: 'codex' as const,
+      filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'runtime:env-123' as const
+    }
+
+    await expect(getPrepareSessionResumeHandler()({}, args)).resolves.toEqual({
+      useRealCodexHome: true
+    })
+    expect(prepareRuntimeSessionResume).toHaveBeenCalledWith('env-123', args)
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+
+  it('preserves SSH session homes without reading their paths locally', async () => {
+    const prepareSessionResume = vi.fn()
+    const prepareRuntimeSessionResume = vi.fn()
+    registerAiVaultHandlers({ prepareSessionResume, prepareRuntimeSessionResume })
+
+    await expect(
+      getPrepareSessionResumeHandler()(
+        {},
+        {
+          agent: 'codex',
+          filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+          codexHome: '/managed',
+          executionHostId: 'ssh:dev-box'
+        }
+      )
+    ).resolves.toEqual({ useRealCodexHome: false })
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+    expect(prepareRuntimeSessionResume).not.toHaveBeenCalled()
+  })
+})
+
+function getPrepareSessionResumeHandler(): (
+  event: unknown,
+  args: unknown
+) => Promise<{ useRealCodexHome: boolean }> {
+  const registration = mocks.ipcHandle.mock.calls.find(
+    ([channel]) => channel === 'aiVault:prepareSessionResume'
+  )
+  if (!registration) {
+    throw new Error('aiVault:prepareSessionResume was not registered')
+  }
+  return registration[1]
+}
 
 describe('listAiVaultSubagentSessions gating', () => {
   const claudeRoot = join(homedir(), '.claude', 'projects')

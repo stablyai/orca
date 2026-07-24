@@ -5,6 +5,11 @@ export type CombinedDiffLoadScheduler = {
   dispose: () => void
 }
 
+type PendingLoad = {
+  index: number
+  requestId: number
+}
+
 export function createCombinedDiffLoadScheduler({
   loadSection,
   schedule = (callback) => queueMicrotask(callback),
@@ -16,11 +21,12 @@ export function createCombinedDiffLoadScheduler({
   schedule?: (callback: () => void) => void
   maxConcurrent?: number
 }): CombinedDiffLoadScheduler {
-  const pending: number[] = []
-  const queued = new Set<number>()
+  const pending: PendingLoad[] = []
+  const queuedRequestByIndex = new Map<number, number>()
   let active = 0
   let disposed = false
   let version = 0
+  let nextRequestId = 0
 
   const drain = (drainVersion: number): void => {
     if (disposed || drainVersion !== version) {
@@ -28,29 +34,33 @@ export function createCombinedDiffLoadScheduler({
     }
 
     while (active < maxConcurrent) {
-      const nextIndex = pending.shift()
-      if (nextIndex === undefined) {
+      const next = pending.shift()
+      if (!next) {
         return
       }
 
       active += 1
-      void loadSection(nextIndex).finally(() => {
-        queued.delete(nextIndex)
-        if (disposed || drainVersion !== version) {
+      void loadSection(next.index).finally(() => {
+        active = Math.max(0, active - 1)
+        if (queuedRequestByIndex.get(next.index) === next.requestId) {
+          queuedRequestByIndex.delete(next.index)
+        }
+        if (disposed) {
           return
         }
-        active = Math.max(0, active - 1)
-        schedule(() => drain(drainVersion))
+        const currentVersion = version
+        schedule(() => drain(currentVersion))
       })
     }
   }
 
   const enqueue = (index: number): void => {
-    if (disposed || queued.has(index)) {
+    if (disposed || queuedRequestByIndex.has(index)) {
       return
     }
-    queued.add(index)
-    pending.push(index)
+    const requestId = ++nextRequestId
+    queuedRequestByIndex.set(index, requestId)
+    pending.push({ index, requestId })
     const requestVersion = version
     schedule(() => drain(requestVersion))
   }
@@ -63,8 +73,9 @@ export function createCombinedDiffLoadScheduler({
       if (disposed) {
         return
       }
-      queued.delete(index)
-      const pendingIndex = pending.indexOf(index)
+      const requestId = queuedRequestByIndex.get(index)
+      queuedRequestByIndex.delete(index)
+      const pendingIndex = pending.findIndex((load) => load.requestId === requestId)
       if (pendingIndex !== -1) {
         pending.splice(pendingIndex, 1)
       }
@@ -73,14 +84,14 @@ export function createCombinedDiffLoadScheduler({
     reset() {
       disposed = false
       version += 1
+      // Why: don't reset `active`; stale loads still consume memory and I/O until they settle.
       pending.length = 0
-      queued.clear()
-      active = 0
+      queuedRequestByIndex.clear()
     },
     dispose() {
       disposed = true
       pending.length = 0
-      queued.clear()
+      queuedRequestByIndex.clear()
     }
   }
 }

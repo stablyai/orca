@@ -14,6 +14,7 @@ import type * as GitRunner from '../git/runner'
 const {
   lstatMock,
   openMock,
+  opendirMock,
   readdirMock,
   renameMock,
   resolveAuthorizedPathMock,
@@ -29,6 +30,7 @@ const {
   getLocalGitOptionsForRegisteredWorktreeMock: vi.fn(),
   lstatMock: vi.fn(),
   openMock: vi.fn(),
+  opendirMock: vi.fn(),
   readdirMock: vi.fn(),
   renameMock: vi.fn(),
   resolveAuthorizedPathMock: vi.fn(),
@@ -55,6 +57,10 @@ vi.mock('fs/promises', async () => {
     open: (...args: Parameters<typeof actual.open>) => {
       const impl = openMock.getMockImplementation()
       return impl ? openMock(...args) : actual.open(...args)
+    },
+    opendir: (...args: Parameters<typeof actual.opendir>) => {
+      const impl = opendirMock.getMockImplementation()
+      return impl ? opendirMock(...args) : actual.opendir(...args)
     },
     readdir: readdirMock,
     rename: renameMock,
@@ -97,9 +103,27 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 }))
 
-import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
+import {
+  awaitRuntimeFileWatcherUnsubscribes,
+  classifyRuntimeMobileDirectoryEntries,
+  RuntimeFileCommands
+} from './orca-runtime-files'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import {
+  resetSshConnectionGenerations,
+  setSshConnectionGeneration
+} from '../ssh/ssh-connection-generation'
 import { SEARCH_TIMEOUT_MS } from '../../shared/text-search'
+
+function pngHeader(width = 1, height = 1): Buffer {
+  const bytes = Buffer.alloc(24)
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write('IHDR', 12, 'ascii')
+  bytes.writeUInt32BE(width, 16)
+  bytes.writeUInt32BE(height, 20)
+  return bytes
+}
 
 type MockRuntimeSearchChild = EventEmitter & {
   stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
@@ -198,6 +222,7 @@ describe('RuntimeFileCommands', () => {
     vi.useFakeTimers()
     lstatMock.mockReset()
     openMock.mockReset()
+    opendirMock.mockReset()
     readdirMock.mockReset()
     renameMock.mockReset()
     resolveAuthorizedPathMock.mockReset()
@@ -207,6 +232,8 @@ describe('RuntimeFileCommands', () => {
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
     vi.mocked(getSshFilesystemProvider).mockReset()
+    resetSshConnectionGenerations()
+    setSshConnectionGeneration('ssh-1', 0)
     getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
     wslAwareSpawnMock.mockReset()
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
@@ -293,6 +320,46 @@ describe('RuntimeFileCommands', () => {
     })
   })
 
+  it('validates local file explorer raster dimensions before returning base64', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-runtime-image-preview-'))
+    const filePath = join(dir, 'image.png')
+    const content = pngHeader(640, 480)
+    await writeFile(filePath, content)
+    const { commands } = createRuntimeFileCommands({ path: dir })
+    resolveAuthorizedPathMock.mockImplementation(async (value: string) => value)
+    statMock.mockResolvedValue({ size: content.length })
+
+    try {
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'image.png')).resolves.toEqual({
+        content: content.toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png',
+        imageDimensions: { width: 640, height: 480 }
+      })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a local file explorer raster dimension bomb', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-runtime-image-bomb-'))
+    const filePath = join(dir, 'bomb.png')
+    const content = pngHeader(32_769, 1)
+    await writeFile(filePath, content)
+    const { commands } = createRuntimeFileCommands({ path: dir })
+    resolveAuthorizedPathMock.mockImplementation(async (value: string) => value)
+    statMock.mockResolvedValue({ size: content.length })
+
+    try {
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'bomb.png')).rejects.toThrow(
+        'Image dimensions exceed the preview safety limit'
+      )
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('leaves non-previewable binaries unavailable on mobile', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
@@ -349,10 +416,12 @@ describe('RuntimeFileCommands', () => {
   it('does not follow symlinks when reading runtime-local file explorer dirs', async () => {
     const { commands } = createRuntimeFileCommands()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
-    readdirMock.mockResolvedValue([
-      dirEntry({ name: 'README.md' }),
-      dirEntry({ name: 'linked-docs', directory: true, symlink: true })
-    ])
+    opendirMock.mockResolvedValue({
+      async *[Symbol.asyncIterator]() {
+        yield dirEntry({ name: 'README.md' })
+        yield dirEntry({ name: 'linked-docs', directory: true, symlink: true })
+      }
+    })
 
     const result = await commands.readFileExplorerDir('id:wt-1', '')
 
@@ -363,13 +432,106 @@ describe('RuntimeFileCommands', () => {
     expect(statMock).not.toHaveBeenCalledWith('/repo/linked-docs')
   })
 
+  it('stops runtime-local directory enumeration at the mobile entry limit', async () => {
+    const { commands } = createRuntimeFileCommands()
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    let enumerated = 0
+    opendirMock.mockResolvedValue({
+      async *[Symbol.asyncIterator]() {
+        while (enumerated < 20_000) {
+          enumerated += 1
+          yield dirEntry({ name: 'entry' })
+        }
+      }
+    })
+
+    await expect(commands.readFileExplorerDir('id:wt-1', '')).rejects.toThrow(
+      'This folder is too large to show safely on mobile'
+    )
+    expect(enumerated).toBe(10_001)
+  })
+
+  it('bounds runtime-local directory classification while preserving entry order', async () => {
+    let active = 0
+    let maxActive = 0
+    const classify = vi.fn(async () => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await Promise.resolve()
+      active -= 1
+      return true
+    })
+    const entries = Array.from({ length: 100 }, (_, index) =>
+      dirEntry({ name: `entry-${index}`, symlink: true })
+    )
+
+    const result = await classifyRuntimeMobileDirectoryEntries('/repo', entries, classify)
+
+    expect(maxActive).toBe(32)
+    expect(result.map((entry) => entry.name)).toEqual(entries.map((entry) => entry.name))
+    expect(result.every((entry) => entry.isDirectory && entry.isSymlink)).toBe(true)
+  })
+
   it('renames a runtime-local file when destination does not exist', async () => {
     const { commands } = createRuntimeFileCommands()
     resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
 
-    await commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')
+    await commands.renameFileExplorerPath(
+      'id:wt-1',
+      'old.ts',
+      'new.ts',
+      undefined,
+      undefined,
+      'local'
+    )
 
     expect(renameMock).toHaveBeenCalledWith('/repo/old.ts', '/repo/new.ts')
+  })
+
+  it('rejects legacy paired local mutations before selecting a filesystem provider', async () => {
+    const { commands } = createRuntimeFileCommands()
+
+    await expect(commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')).rejects.toThrow(
+      'newer Orca client'
+    )
+
+    expect(getSshFilesystemProvider).not.toHaveBeenCalled()
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects legacy paired SSH mutations before selecting a filesystem provider', async () => {
+    const { commands, store } = createRuntimeFileCommands()
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+    await expect(
+      commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 0, 'ssh-1')
+    ).rejects.toThrow('newer Orca client')
+
+    expect(getSshFilesystemProvider).not.toHaveBeenCalled()
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a local expectation when the worktree moved to SSH', async () => {
+    const { commands, store } = createRuntimeFileCommands()
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+    await expect(
+      commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', undefined, undefined, 'local')
+    ).rejects.toThrow('Workspace host changed')
+
+    expect(getSshFilesystemProvider).not.toHaveBeenCalled()
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects an SSH expectation when the worktree moved to HUB-local', async () => {
+    const { commands } = createRuntimeFileCommands()
+
+    await expect(
+      commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 0, 'ssh-1', 'ssh:ssh-1')
+    ).rejects.toThrow('Workspace host changed')
+
+    expect(getSshFilesystemProvider).not.toHaveBeenCalled()
+    expect(renameMock).not.toHaveBeenCalled()
   })
 
   it('allows runtime-local case-only rename with IPC parity guard behavior', async () => {
@@ -379,7 +541,14 @@ describe('RuntimeFileCommands', () => {
       '/repo/readme.md': [10, 100]
     })
 
-    await commands.renameFileExplorerPath('id:wt-1', 'README.md', 'readme.md')
+    await commands.renameFileExplorerPath(
+      'id:wt-1',
+      'README.md',
+      'readme.md',
+      undefined,
+      undefined,
+      'local'
+    )
 
     expect(renameMock).toHaveBeenCalledWith('/repo/README.md', '/repo/readme.md')
   })
@@ -391,9 +560,9 @@ describe('RuntimeFileCommands', () => {
       '/repo/new.ts': [11, 111]
     })
 
-    await expect(commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')).rejects.toThrow(
-      "A file or folder named 'new.ts' already exists in this location"
-    )
+    await expect(
+      commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', undefined, undefined, 'local')
+    ).rejects.toThrow("A file or folder named 'new.ts' already exists in this location")
 
     expect(renameMock).not.toHaveBeenCalled()
   })
@@ -406,7 +575,14 @@ describe('RuntimeFileCommands', () => {
     })
 
     await expect(
-      commands.renameFileExplorerPath('id:wt-1', 'README.md', 'README-hardlink.md')
+      commands.renameFileExplorerPath(
+        'id:wt-1',
+        'README.md',
+        'README-hardlink.md',
+        undefined,
+        undefined,
+        'local'
+      )
     ).rejects.toThrow("A file or folder named 'README-hardlink.md' already exists in this location")
 
     expect(renameMock).not.toHaveBeenCalled()
@@ -420,7 +596,14 @@ describe('RuntimeFileCommands', () => {
     })
 
     await expect(
-      commands.renameFileExplorerPath('id:wt-1', 'src/README.md', 'docs/readme.md')
+      commands.renameFileExplorerPath(
+        'id:wt-1',
+        'src/README.md',
+        'docs/readme.md',
+        undefined,
+        undefined,
+        'local'
+      )
     ).rejects.toThrow("A file or folder named 'readme.md' already exists in this location")
 
     expect(renameMock).not.toHaveBeenCalled()
@@ -432,9 +615,64 @@ describe('RuntimeFileCommands', () => {
     const { commands, store } = createRuntimeFileCommands()
     store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
 
-    await commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')
+    await commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 0, 'ssh-1', 'ssh:ssh-1')
 
     expect(renameNoClobber).toHaveBeenCalledWith('/repo/old.ts', '/repo/new.ts')
+    expect(store.getRepo).toHaveBeenCalledTimes(1)
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a mutation captured for an obsolete SSH connection generation', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ renameNoClobber } as never)
+    const { commands, store } = createRuntimeFileCommands()
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+    setSshConnectionGeneration('ssh-1', 8)
+
+    await expect(
+      commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 7, 'ssh-1', 'ssh:ssh-1')
+    ).rejects.toThrow('SSH connection changed')
+    expect(renameNoClobber).not.toHaveBeenCalled()
+  })
+
+  it('rejects nested SSH mutations from clients without generation support', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ renameNoClobber } as never)
+    const { commands, store } = createRuntimeFileCommands()
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+    await expect(
+      commands.renameFileExplorerPath(
+        'id:wt-1',
+        'old.ts',
+        'new.ts',
+        undefined,
+        'ssh-1',
+        'ssh:ssh-1'
+      )
+    ).rejects.toThrow('SSH connection changed')
+    expect(renameNoClobber).not.toHaveBeenCalled()
+  })
+
+  it('rejects an equal-generation mutation captured for another SSH target', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ renameNoClobber } as never)
+    const { commands, store } = createRuntimeFileCommands()
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-b' })
+
+    await expect(
+      commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 0, 'ssh-a', 'ssh:ssh-a')
+    ).rejects.toThrow('Workspace host changed')
+    expect(getSshFilesystemProvider).not.toHaveBeenCalled()
+    expect(renameNoClobber).not.toHaveBeenCalled()
+  })
+
+  it('rejects a stale SSH expectation after the worktree becomes HUB-local', async () => {
+    const { commands } = createRuntimeFileCommands()
+
+    await expect(
+      commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 0, 'ssh-1', 'ssh:ssh-1')
+    ).rejects.toThrow('Workspace host changed')
     expect(renameMock).not.toHaveBeenCalled()
   })
 
@@ -444,9 +682,9 @@ describe('RuntimeFileCommands', () => {
     const { commands, store } = createRuntimeFileCommands()
     store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
 
-    await expect(commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')).rejects.toThrow(
-      'destination exists'
-    )
+    await expect(
+      commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 0, 'ssh-1', 'ssh:ssh-1')
+    ).rejects.toThrow('destination exists')
     expect(renameMock).not.toHaveBeenCalled()
   })
 
@@ -665,7 +903,7 @@ describe('RuntimeFileCommands', () => {
       tempDirs = []
     })
 
-    async function tempFile(name: string, content: string): Promise<string> {
+    async function tempFile(name: string, content: string | Uint8Array): Promise<string> {
       const dir = await mkdtemp(join(tmpdir(), 'orca-terminal-artifact-'))
       tempDirs.push(dir)
       const filePath = join(dir, name)
@@ -1630,6 +1868,49 @@ describe('RuntimeFileCommands', () => {
           'client-a'
         )
       ).rejects.toThrow('terminal_file_grant_stale')
+    })
+
+    it('validates local terminal artifact raster dimensions before returning base64', async () => {
+      const content = pngHeader(320, 240)
+      const artifactPath = await tempFile('result.png', content)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (value: string) => value)
+
+      const result = await resolveTerminalArtifactPath(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).resolves.toEqual({
+        content: content.toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png',
+        imageDimensions: { width: 320, height: 240 }
+      })
+    })
+
+    it('rejects a local terminal artifact raster dimension bomb', async () => {
+      const artifactPath = await tempFile('result.png', pngHeader(32_769, 1))
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (value: string) => value)
+
+      const result = await resolveTerminalArtifactPath(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).rejects.toThrow('Image dimensions exceed the preview safety limit')
     })
 
     it('rejects binary-extension terminal artifacts from the editable text path', async () => {

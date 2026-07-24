@@ -41,6 +41,7 @@ import {
   useAiVaultExecutionHostScope
 } from './ai-vault-host-scope'
 import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
+import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -153,7 +154,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     worktrees: allWorktrees,
     activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null
   })
-  const { buildResumeStartup, copyResumeCommand, handleResume } = useAiVaultSessionLaunchActions({
+  const launchActions = useAiVaultSessionLaunchActions({
     activeWorktree: activeWorktree ?? null,
     activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
     targetState: resumeTargetState,
@@ -349,7 +350,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         filteredSessionsCount={filteredSessions.length}
         error={error}
         vaultScope={scope}
-        buildResumeStartup={buildResumeStartup}
+        buildResumeStartup={launchActions.buildResumeStartup}
         getSessionResumeState={getSessionResumeState}
         getSessionResumeActions={getSessionResumeActions}
         getOriginalPaneTarget={getOriginalPaneTarget}
@@ -358,8 +359,11 @@ export default function AiVaultPanel(): React.JSX.Element {
         onToggleGroup={toggleGroup}
         onJumpToOriginalPane={jumpToOriginalPane}
         onJumpToWorktree={jumpToWorktree}
-        onResume={handleResume}
-        onCopyResume={(session, worktreeId) => void copyResumeCommand(session, worktreeId)}
+        onResume={launchActions.handleResume}
+        onContinueInNewSession={launchActions.handleContinueInNewSession}
+        onCopyResume={(session, worktreeId) =>
+          void launchActions.copyResumeCommand(session, worktreeId)
+        }
         onCopyId={(session) =>
           void copyText(
             session.sessionId,
@@ -380,6 +384,13 @@ export default function AiVaultPanel(): React.JSX.Element {
           }
         }}
       />
+      {launchActions.continuationRequest && (
+        <AgentSessionContinuationDialog
+          open
+          request={launchActions.continuationRequest}
+          onOpenChange={launchActions.handleContinuationDialogOpenChange}
+        />
+      )}
     </div>
   )
 }

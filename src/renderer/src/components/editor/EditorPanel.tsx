@@ -6,7 +6,6 @@ import { openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import { requestEditorFileSave } from './editor-autosave'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
@@ -24,6 +23,7 @@ import {
   selectEditorPanelGitStatusEntries
 } from './editor-panel-git-entry-selector'
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
+import { attemptEditorFileSave } from './editor-file-save-attempt'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -60,7 +60,6 @@ function EditorPanelInner({
   const setMarkdownFrontmatterVisible = useAppStore((s) => s.setMarkdownFrontmatterVisible)
   const markdownTableOfContentsVisible = useAppStore((s) => s.markdownTableOfContentsVisible)
   const setMarkdownTableOfContentsVisible = useAppStore((s) => s.setMarkdownTableOfContentsVisible)
-  const closeFile = useAppStore((s) => s.closeFile)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
   const editorDraftSelector = useMemo(
     () => createEditorPanelDraftSelector(activeFile),
@@ -127,7 +126,7 @@ function EditorPanelInner({
     requestRenameForFile,
     closeRenameDialog,
     handleRenameConfirm
-  } = useUntitledFileRename({ openFiles, closeFile, openFile, clearUntitled })
+  } = useUntitledFileRename({ openFiles, clearUntitled })
 
   useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
@@ -173,9 +172,9 @@ function EditorPanelInner({
   )
 
   const handleSaveForFile = useCallback(
-    async (file: typeof activeFile, content: string) => {
+    async (file: typeof activeFile, content: string): Promise<boolean> => {
       if (!file) {
-        return
+        return false
       }
       const saveTargetFile =
         file.mode === 'markdown-preview'
@@ -185,22 +184,20 @@ function EditorPanelInner({
             ) ?? null)
           : file
       if (!saveTargetFile) {
-        return
+        return false
       }
       if (saveTargetFile.isUntitled) {
         requestRenameForFile(saveTargetFile.id)
-        return
+        return false
       }
-      try {
-        await requestEditorFileSave({ fileId: saveTargetFile.id, fallbackContent: content })
-      } catch {}
+      return attemptEditorFileSave({ fileId: saveTargetFile.id, fallbackContent: content })
     },
     [openFiles, requestRenameForFile]
   )
 
   const handleSave = useCallback(
-    async (content: string) => {
-      await handleSaveForFile(activeFile, content)
+    async (content: string): Promise<boolean> => {
+      return handleSaveForFile(activeFile, content)
     },
     [activeFile, handleSaveForFile]
   )

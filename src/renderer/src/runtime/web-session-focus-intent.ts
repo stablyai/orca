@@ -9,24 +9,46 @@
 // The intent persists until a snapshot matches it (surviving racing/duplicate
 // snapshots, unlike a transient per-snapshot flag).
 
-const pendingFocusByWorktree = new Map<string, string>()
+import { webSessionIntentOwnerKey, type WebSessionIntentOwner } from './web-session-intent-owner'
 
-export function recordWebSessionFocusIntent(worktreeId: string, hostTabId: string): void {
+const pendingFocusByOwnerAndWorktree = new Map<string, string>()
+
+function focusIntentPartitionKey(owner: WebSessionIntentOwner, worktreeId: string): string {
+  return `${webSessionIntentOwnerKey(owner)}\0${worktreeId}`
+}
+
+export function recordWebSessionFocusIntent(
+  owner: WebSessionIntentOwner,
+  worktreeId: string,
+  hostTabId: string
+): void {
   const trimmed = hostTabId.trim()
   if (!worktreeId || !trimmed) {
     return
   }
-  pendingFocusByWorktree.set(worktreeId, trimmed)
+  pendingFocusByOwnerAndWorktree.set(focusIntentPartitionKey(owner, worktreeId), trimmed)
 }
 
-export function peekWebSessionFocusIntent(worktreeId: string): string | null {
-  return pendingFocusByWorktree.get(worktreeId) ?? null
+export function peekWebSessionFocusIntent(
+  owner: WebSessionIntentOwner,
+  worktreeId: string
+): string | null {
+  return pendingFocusByOwnerAndWorktree.get(focusIntentPartitionKey(owner, worktreeId)) ?? null
 }
 
-export function clearWebSessionFocusIntent(worktreeId: string): void {
-  pendingFocusByWorktree.delete(worktreeId)
+export function clearWebSessionFocusIntent(owner: WebSessionIntentOwner, worktreeId: string): void {
+  pendingFocusByOwnerAndWorktree.delete(focusIntentPartitionKey(owner, worktreeId))
+}
+
+export function clearWebSessionFocusIntentsForOwner(owner: WebSessionIntentOwner): void {
+  const prefix = `${webSessionIntentOwnerKey(owner)}\0`
+  for (const key of pendingFocusByOwnerAndWorktree.keys()) {
+    if (key.startsWith(prefix)) {
+      pendingFocusByOwnerAndWorktree.delete(key)
+    }
+  }
 }
 
 export function resetWebSessionFocusIntentForTests(): void {
-  pendingFocusByWorktree.clear()
+  pendingFocusByOwnerAndWorktree.clear()
 }

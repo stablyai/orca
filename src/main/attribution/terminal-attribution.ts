@@ -2,12 +2,18 @@
 scripts for both POSIX shells and Windows shells. Keeping the scripts adjacent
 to the env injection code makes the attribution behavior auditable as one unit
 instead of scattering generated shell fragments across files. */
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, win32 as pathWin32 } from 'node:path'
 import { ORCA_GIT_COMMIT_TRAILER } from '../../shared/orca-attribution'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
 
 const ATTRIBUTION_ROOT_DIR = 'orca-terminal-attribution'
-const ATTRIBUTION_SHIM_VERSION = '6'
+const ATTRIBUTION_SHIM_VERSION = '7'
+export const ATTRIBUTION_SHIM_VERSION_MAX_BYTES = 1024
+export const ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES = 1024 * 1024
+export const ATTRIBUTION_COMMAND_OUTPUT_MAX_BYTES = 1024 * 1024
+export const ATTRIBUTION_BOUND_EXCEEDED_EXIT_CODE = 74
 const ORCA_PRODUCT_URL = 'https://github.com/stablyai/orca'
 const ORCA_GH_FOOTER = `Made with [Orca](${ORCA_PRODUCT_URL}) 🐋`
 const SHELL_DOLLAR = '$'
@@ -23,6 +29,38 @@ const ATTRIBUTION_ENV_KEYS = [
 ] as const
 
 const writtenRoots = new Set<string>()
+export const ATTRIBUTION_WRITTEN_ROOT_MAX_ENTRIES = 64
+export const ATTRIBUTION_WRITTEN_ROOT_MAX_BYTES = 64 * 1024
+
+function hasWrittenRoot(rootDir: string): boolean {
+  if (!writtenRoots.has(rootDir)) {
+    return false
+  }
+  writtenRoots.delete(rootDir)
+  writtenRoots.add(rootDir)
+  return true
+}
+
+function rememberWrittenRoot(rootDir: string): void {
+  if (!isRetainableWrittenRoot(rootDir)) {
+    return
+  }
+  writtenRoots.delete(rootDir)
+  writtenRoots.add(rootDir)
+  while (writtenRoots.size > ATTRIBUTION_WRITTEN_ROOT_MAX_ENTRIES) {
+    const oldest = writtenRoots.values().next().value
+    if (oldest === undefined) {
+      return
+    }
+    writtenRoots.delete(oldest)
+  }
+}
+
+function isRetainableWrittenRoot(rootDir: string): boolean {
+  return !measureUtf8ByteLength(rootDir, {
+    stopAfterBytes: ATTRIBUTION_WRITTEN_ROOT_MAX_BYTES
+  }).exceededLimit
+}
 
 type AttributionShimPaths = {
   posixDir: string
@@ -155,12 +193,12 @@ function ensureAttributionShims(userDataPath: string): AttributionShimPaths {
   const win32Dir = join(rootDir, 'win32')
   const versionFile = join(rootDir, 'VERSION')
 
-  if (writtenRoots.has(rootDir)) {
+  if (hasWrittenRoot(rootDir)) {
     return { posixDir, win32Dir }
   }
 
   if (readShimVersion(versionFile) === ATTRIBUTION_SHIM_VERSION) {
-    writtenRoots.add(rootDir)
+    rememberWrittenRoot(rootDir)
     return { posixDir, win32Dir }
   }
 
@@ -176,14 +214,28 @@ function ensureAttributionShims(userDataPath: string): AttributionShimPaths {
   writeExecutable(join(win32Dir, 'gh-wrapper.ps1'), WIN32_GH_PS_WRAPPER)
   writeFileSync(versionFile, `${ATTRIBUTION_SHIM_VERSION}\n`, 'utf8')
 
-  writtenRoots.add(rootDir)
+  rememberWrittenRoot(rootDir)
 
   return { posixDir, win32Dir }
 }
 
+export function _resetAttributionWrittenRootsForTests(): void {
+  writtenRoots.clear()
+}
+
+export function _getAttributionWrittenRootCountForTests(): number {
+  return writtenRoots.size
+}
+
+export function _isAttributionWrittenRootRetainableForTests(rootDir: string): boolean {
+  return isRetainableWrittenRoot(rootDir)
+}
+
 function readShimVersion(versionFile: string): string | null {
   try {
-    return readFileSync(versionFile, 'utf8').trim()
+    return readNodeFileSyncWithinLimit(versionFile, ATTRIBUTION_SHIM_VERSION_MAX_BYTES)
+      .buffer.toString('utf8')
+      .trim()
   } catch {
     return null
   }
@@ -346,6 +398,60 @@ has_unsupported_commit_message_source() {
   return 1
 }
 
+validate_commit_message_file_sizes() {
+  local arg source_file byte_count
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
+    source_file=""
+    case "$arg" in
+      -F|--file)
+        shift
+        source_file="${SHELL_DOLLAR}{1:-}"
+        ;;
+      --file=*)
+        source_file="${SHELL_DOLLAR}{arg#--file=}"
+        ;;
+      -F?*)
+        source_file="${SHELL_DOLLAR}{arg:2}"
+        ;;
+    esac
+    if [[ -n "$source_file" && -f "$source_file" ]]; then
+      if ! byte_count="$(
+        LC_ALL=C head -c ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES + 1} <"$source_file" |
+          LC_ALL=C wc -c
+      )"; then
+        printf 'Orca attribution wrapper could not inspect commit message file %q.\n' "$source_file" >&2
+        return 1
+      fi
+      if (( byte_count > ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES} )); then
+        printf 'Orca attribution wrapper refused commit message file %q: %s bytes exceeds the ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES}-byte limit.\n' "$source_file" "$byte_count" >&2
+        return 1
+      fi
+    fi
+    shift
+  done
+  return 0
+}
+
+read_bounded_commit_message() {
+  local source_file="$1"
+  local snapshot byte_count
+  snapshot="$(mktemp)"
+  if ! LC_ALL=C head -c ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES + 1} <"$source_file" >"$snapshot"; then
+    rm -f "$snapshot"
+    printf 'Orca attribution wrapper could not read commit message file %q.\n' "$source_file" >&2
+    return 1
+  fi
+  byte_count="$(LC_ALL=C wc -c <"$snapshot")"
+  if (( byte_count > ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES} )); then
+    rm -f "$snapshot"
+    printf 'Orca attribution wrapper refused commit message file %q: more than ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES} bytes.\n' "$source_file" >&2
+    return 1
+  fi
+  cat "$snapshot"
+  rm -f "$snapshot"
+}
+
 message_already_has_trailer() {
   local arg next_arg
   while [[ $# -gt 0 ]]; do
@@ -386,7 +492,13 @@ message_already_has_trailer() {
   return 1
 }
 
-if ! has_explicit_commit_message "$@" || has_unsupported_commit_message_source "$@" || message_already_has_trailer "$@"; then
+if ! has_explicit_commit_message "$@" || has_unsupported_commit_message_source "$@"; then
+  PATH="$real_path" exec "$real_git" "$@"
+fi
+if ! validate_commit_message_file_sizes "$@"; then
+  exit ${ATTRIBUTION_BOUND_EXCEEDED_EXIT_CODE}
+fi
+if message_already_has_trailer "$@"; then
   PATH="$real_path" exec "$real_git" "$@"
 fi
 
@@ -409,7 +521,10 @@ while [[ $# -gt 0 ]]; do
         source_file="${SHELL_DOLLAR}{1:-}"
         tmp_file="$(mktemp)"
         if [[ -n "$source_file" && -f "$source_file" ]]; then
-          printf '%s\n\n%s\n' "$(cat "$source_file")" "$trailer" >"$tmp_file"
+          if ! source_message="$(read_bounded_commit_message "$source_file")"; then
+            exit ${ATTRIBUTION_BOUND_EXCEEDED_EXIT_CODE}
+          fi
+          printf '%s\n\n%s\n' "$source_message" "$trailer" >"$tmp_file"
           attributed_args+=("$arg" "$tmp_file")
           replaced_file_message=1
         else
@@ -424,7 +539,10 @@ while [[ $# -gt 0 ]]; do
         source_file="${SHELL_DOLLAR}{arg#--file=}"
         tmp_file="$(mktemp)"
         if [[ -f "$source_file" ]]; then
-          printf '%s\n\n%s\n' "$(cat "$source_file")" "$trailer" >"$tmp_file"
+          if ! source_message="$(read_bounded_commit_message "$source_file")"; then
+            exit ${ATTRIBUTION_BOUND_EXCEEDED_EXIT_CODE}
+          fi
+          printf '%s\n\n%s\n' "$source_message" "$trailer" >"$tmp_file"
           attributed_args+=("--file=$tmp_file")
           replaced_file_message=1
         else
@@ -439,7 +557,10 @@ while [[ $# -gt 0 ]]; do
         source_file="${SHELL_DOLLAR}{arg:2}"
         tmp_file="$(mktemp)"
         if [[ -f "$source_file" ]]; then
-          printf '%s\n\n%s\n' "$(cat "$source_file")" "$trailer" >"$tmp_file"
+          if ! source_message="$(read_bounded_commit_message "$source_file")"; then
+            exit ${ATTRIBUTION_BOUND_EXCEEDED_EXIT_CODE}
+          fi
+          printf '%s\n\n%s\n' "$source_message" "$trailer" >"$tmp_file"
           attributed_args+=("-F$tmp_file")
           replaced_file_message=1
         else
@@ -473,6 +594,21 @@ if [[ -z "$real_gh" ]]; then
   echo "Orca attribution wrapper could not locate gh on PATH." >&2
   exit 127
 fi
+
+read_bounded_capture() {
+  local capture_path="$1"
+  local stream_name="$2"
+  local byte_count
+  if ! byte_count="$(LC_ALL=C wc -c <"$capture_path")"; then
+    printf 'Orca attribution wrapper could not inspect gh %s capture.\n' "$stream_name" >&2
+    return 1
+  fi
+  if (( byte_count > ${ATTRIBUTION_COMMAND_OUTPUT_MAX_BYTES} )); then
+    printf 'Orca attribution wrapper refused gh %s capture: %s bytes exceeds the ${ATTRIBUTION_COMMAND_OUTPUT_MAX_BYTES}-byte limit.\n' "$stream_name" "$byte_count" >&2
+    return 1
+  fi
+  cat "$capture_path"
+}
 
 append_footer() {
   local kind="$1"
@@ -587,8 +723,15 @@ if [[ "\${1:-}" == "pr" && "\${2:-}" == "create" ]]; then
   else
     status=$?
   fi
-  stdout_capture="$(cat "$stdout_file")"
-  stderr_capture="$(cat "$stderr_file")"
+  capture_overflow=0
+  stdout_capture="$(read_bounded_capture "$stdout_file" stdout)" || capture_overflow=1
+  stderr_capture="$(read_bounded_capture "$stderr_file" stderr)" || capture_overflow=1
+  if [[ $capture_overflow -ne 0 ]]; then
+    cleanup_capture
+    trap - EXIT
+    [[ $status -ne 0 ]] && exit $status
+    exit ${ATTRIBUTION_BOUND_EXCEEDED_EXIT_CODE}
+  fi
   cat "$stderr_file" >&2
   cat "$stdout_file"
   if [[ $status -eq 0 ]]; then
@@ -621,8 +764,15 @@ if [[ "\${1:-}" == "issue" && "\${2:-}" == "create" ]]; then
   else
     status=$?
   fi
-  stdout_capture="$(cat "$stdout_file")"
-  stderr_capture="$(cat "$stderr_file")"
+  capture_overflow=0
+  stdout_capture="$(read_bounded_capture "$stdout_file" stdout)" || capture_overflow=1
+  stderr_capture="$(read_bounded_capture "$stderr_file" stderr)" || capture_overflow=1
+  if [[ $capture_overflow -ne 0 ]]; then
+    cleanup_capture
+    trap - EXIT
+    [[ $status -ne 0 ]] && exit $status
+    exit ${ATTRIBUTION_BOUND_EXCEEDED_EXIT_CODE}
+  fi
   cat "$stderr_file" >&2
   cat "$stdout_file"
   if [[ $status -eq 0 ]]; then
@@ -701,6 +851,23 @@ exit /b %ERRORLEVEL%
 const WIN32_GIT_PS_WRAPPER = String.raw`$ErrorActionPreference = 'Stop'
 $realGit = if ($env:ORCA_REAL_GIT) { $env:ORCA_REAL_GIT } else { 'git' }
 $trailer = if ($env:ORCA_GIT_COMMIT_TRAILER) { $env:ORCA_GIT_COMMIT_TRAILER } else { 'Co-authored-by: Orca <help@stably.ai>' }
+
+function Get-OrcaBoundedFileContent {
+  param([string]$Path, [string]$Description, [long]$MaxBytes)
+  $guard = $null
+  try {
+    $guard = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+    if ($guard.Length -gt $MaxBytes) {
+      [Console]::Error.WriteLine("Orca attribution wrapper refused $($Description): $($guard.Length) bytes exceeds the $MaxBytes-byte limit.")
+      exit ${ATTRIBUTION_BOUND_EXCEEDED_EXIT_CODE}
+    }
+    return (Get-Content -LiteralPath $Path -Raw)
+  } finally {
+    if ($null -ne $guard) {
+      $guard.Dispose()
+    }
+  }
+}
 
 if ($args -contains '--dry-run') {
   & $realGit @args
@@ -807,17 +974,17 @@ function Test-CommitMessageHasTrailer {
       }
     } elseif ($arg -eq '-F' -or $arg -eq '--file') {
       $i++
-      if ($i -lt $CommandArgs.Count -and (Test-Path -LiteralPath $CommandArgs[$i]) -and (Get-Content -LiteralPath $CommandArgs[$i] -Raw) -match [Regex]::Escape($trailer)) {
+      if ($i -lt $CommandArgs.Count -and (Test-Path -LiteralPath $CommandArgs[$i]) -and (Get-OrcaBoundedFileContent $CommandArgs[$i] 'commit message file' ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES}) -match [Regex]::Escape($trailer)) {
         return $true
       }
     } elseif ($arg.StartsWith('--file=')) {
       $path = $arg.Substring('--file='.Length)
-      if ((Test-Path -LiteralPath $path) -and (Get-Content -LiteralPath $path -Raw) -match [Regex]::Escape($trailer)) {
+      if ((Test-Path -LiteralPath $path) -and (Get-OrcaBoundedFileContent $path 'commit message file' ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES}) -match [Regex]::Escape($trailer)) {
         return $true
       }
     } elseif ($arg.StartsWith('-F') -and $arg.Length -gt 2) {
       $path = $arg.Substring(2)
-      if ((Test-Path -LiteralPath $path) -and (Get-Content -LiteralPath $path -Raw) -match [Regex]::Escape($trailer)) {
+      if ((Test-Path -LiteralPath $path) -and (Get-OrcaBoundedFileContent $path 'commit message file' ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES}) -match [Regex]::Escape($trailer)) {
         return $true
       }
     }
@@ -840,7 +1007,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     $sourceFile = if ($i -lt $args.Count) { $args[$i] } else { '' }
     if ($sourceFile -and (Test-Path -LiteralPath $sourceFile)) {
       $tmpFile = [System.IO.Path]::GetTempFileName()
-      Set-Content -LiteralPath $tmpFile -Value ((Get-Content -LiteralPath $sourceFile -Raw).TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n") + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
+      Set-Content -LiteralPath $tmpFile -Value ((Get-OrcaBoundedFileContent $sourceFile 'commit message file' ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES}).TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n") + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
       $attributedArgs.Add($arg)
       $attributedArgs.Add($tmpFile)
       $replacedFileMessage = $true
@@ -852,7 +1019,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     $sourceFile = $arg.Substring('--file='.Length)
     if (Test-Path -LiteralPath $sourceFile) {
       $tmpFile = [System.IO.Path]::GetTempFileName()
-      Set-Content -LiteralPath $tmpFile -Value ((Get-Content -LiteralPath $sourceFile -Raw).TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n") + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
+      Set-Content -LiteralPath $tmpFile -Value ((Get-OrcaBoundedFileContent $sourceFile 'commit message file' ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES}).TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n") + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
       $attributedArgs.Add("--file=$tmpFile")
       $replacedFileMessage = $true
     } else {
@@ -862,7 +1029,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     $sourceFile = $arg.Substring(2)
     if (Test-Path -LiteralPath $sourceFile) {
       $tmpFile = [System.IO.Path]::GetTempFileName()
-      Set-Content -LiteralPath $tmpFile -Value ((Get-Content -LiteralPath $sourceFile -Raw).TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n") + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
+      Set-Content -LiteralPath $tmpFile -Value ((Get-OrcaBoundedFileContent $sourceFile 'commit message file' ${ATTRIBUTION_COMMIT_MESSAGE_MAX_BYTES}).TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n") + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
       $attributedArgs.Add("-F$tmpFile")
       $replacedFileMessage = $true
     } else {
@@ -951,6 +1118,21 @@ $stdoutFile = [System.IO.Path]::GetTempFileName()
 $stderrFile = [System.IO.Path]::GetTempFileName()
 & $realGh @args > $stdoutFile 2> $stderrFile
 $status = $LASTEXITCODE
+$stdoutBytes = if (Test-Path -LiteralPath $stdoutFile) { (Get-Item -LiteralPath $stdoutFile).Length } else { 0 }
+$stderrBytes = if (Test-Path -LiteralPath $stderrFile) { (Get-Item -LiteralPath $stderrFile).Length } else { 0 }
+if ($stdoutBytes -gt ${ATTRIBUTION_COMMAND_OUTPUT_MAX_BYTES} -or $stderrBytes -gt ${ATTRIBUTION_COMMAND_OUTPUT_MAX_BYTES}) {
+  if ($stdoutBytes -gt ${ATTRIBUTION_COMMAND_OUTPUT_MAX_BYTES}) {
+    [Console]::Error.WriteLine("Orca attribution wrapper refused gh stdout capture: $stdoutBytes bytes exceeds the ${ATTRIBUTION_COMMAND_OUTPUT_MAX_BYTES}-byte limit.")
+  }
+  if ($stderrBytes -gt ${ATTRIBUTION_COMMAND_OUTPUT_MAX_BYTES}) {
+    [Console]::Error.WriteLine("Orca attribution wrapper refused gh stderr capture: $stderrBytes bytes exceeds the ${ATTRIBUTION_COMMAND_OUTPUT_MAX_BYTES}-byte limit.")
+  }
+  Remove-Item -LiteralPath $stdoutFile, $stderrFile -Force -ErrorAction SilentlyContinue
+  if ($status -ne 0) {
+    exit $status
+  }
+  exit ${ATTRIBUTION_BOUND_EXCEEDED_EXIT_CODE}
+}
 $stdoutCapture = if (Test-Path -LiteralPath $stdoutFile) { Get-Content -LiteralPath $stdoutFile -Raw } else { '' }
 $stderrCapture = if (Test-Path -LiteralPath $stderrFile) { Get-Content -LiteralPath $stderrFile -Raw } else { '' }
 if ($stderrCapture) {

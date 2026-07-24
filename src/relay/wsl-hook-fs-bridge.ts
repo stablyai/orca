@@ -8,14 +8,51 @@ import { posix } from 'node:path'
 
 import type { RelayDispatcher } from './dispatcher'
 import {
+  createFilesystemDirectoryLimitState,
+  trackFilesystemDirectoryEntry
+} from '../shared/filesystem-directory-listing-limit'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileWithinLimit
+} from '../shared/node-bounded-file-reader'
+import {
   WSL_HOOK_FS_METHODS,
+  WSL_HOOK_FS_MAX_DIRECTORY_ENTRIES,
+  WSL_HOOK_FS_MAX_DIRECTORY_RETAINED_BYTES,
+  WSL_HOOK_FS_MAX_READ_BYTES,
   type WslFsFailure,
   type WslFsResult
 } from '../shared/wsl-hook-relay-contract'
 
 function failure(err: unknown): WslFsFailure {
+  if (err instanceof NodeFileReadTooLargeError) {
+    return {
+      ok: false,
+      errno: 'EFBIG',
+      message: err.message,
+      fileCapacity: { observedBytes: err.observedBytes, maxBytes: err.maxBytes }
+    }
+  }
   const e = err as NodeJS.ErrnoException
   return { ok: false, errno: e?.code ?? 'EUNKNOWN', message: e?.message ?? String(err) }
+}
+
+function requestedLimit(value: unknown, maximum: number): number {
+  if (value === undefined) {
+    return maximum
+  }
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw Object.assign(new Error('invalid capacity limit'), { code: 'EINVAL' })
+  }
+  return Math.min(value, maximum)
+}
+
+function requestedDirectoryLimit(value: unknown, maximum: number): number {
+  const limit = requestedLimit(value, maximum)
+  if (limit === 0) {
+    throw Object.assign(new Error('directory capacity limit must be positive'), { code: 'EINVAL' })
+  }
+  return limit
 }
 
 export function registerWslHookFsHandlers(
@@ -46,7 +83,7 @@ export function registerWslHookFsHandlers(
     return resolved
   }
   // Why: the installers' mkdir-p walks top-down from `/`, probing every
-  // ancestor of home with readdir before it ever creates a dir. Allow
+  // ancestor of home before it ever creates a dir. Allow
   // read-only existence probes on those ancestors; everything else stays
   // home-scoped.
   const scopedProbe = (rawPath: unknown): string => {
@@ -68,7 +105,10 @@ export function registerWslHookFsHandlers(
     WSL_HOOK_FS_METHODS.readFile,
     async (params): Promise<WslFsResult<{ content: string }>> => {
       try {
-        const content = await fs.readFile(scoped(params.path), 'utf8')
+        const maxBytes = requestedLimit(params.maxBytes, WSL_HOOK_FS_MAX_READ_BYTES)
+        const content = (
+          await readNodeFileWithinLimit(scoped(params.path), maxBytes)
+        ).buffer.toString('utf8')
         return { ok: true, content }
       } catch (err) {
         return failure(err)
@@ -93,7 +133,7 @@ export function registerWslHookFsHandlers(
     WSL_HOOK_FS_METHODS.stat,
     async (params): Promise<WslFsResult<{ mode: number }>> => {
       try {
-        const stats = await fs.stat(scoped(params.path))
+        const stats = await fs.stat(scopedProbe(params.path))
         return { ok: true, mode: stats.mode }
       } catch (err) {
         return failure(err)
@@ -133,11 +173,39 @@ export function registerWslHookFsHandlers(
   dispatcher.onRequest(
     WSL_HOOK_FS_METHODS.readdir,
     async (params): Promise<WslFsResult<{ entries: { filename: string }[] }>> => {
+      let directory: Awaited<ReturnType<typeof fs.opendir>> | undefined
       try {
-        const names = await fs.readdir(scopedProbe(params.path))
-        return { ok: true, entries: names.map((filename) => ({ filename })) }
+        const limits = {
+          maxEntries: requestedDirectoryLimit(params.maxEntries, WSL_HOOK_FS_MAX_DIRECTORY_ENTRIES),
+          maxRetainedBytes: requestedDirectoryLimit(
+            params.maxRetainedBytes,
+            WSL_HOOK_FS_MAX_DIRECTORY_RETAINED_BYTES
+          )
+        }
+        const limit = createFilesystemDirectoryLimitState(limits)
+        const entries: { filename: string }[] = []
+        const directoryPath = scopedProbe(params.path)
+        directory = await fs.opendir(directoryPath, { bufferSize: 32 })
+        // Ancestors outside home are authorized only as existence probes.
+        if (
+          directoryPath !== homeRoot &&
+          (directoryPath === '/' || homeRoot.startsWith(`${directoryPath}/`))
+        ) {
+          return { ok: true, entries }
+        }
+        for (;;) {
+          const entry = await directory.read()
+          if (entry === null) {
+            break
+          }
+          trackFilesystemDirectoryEntry(limit, { name: entry.name })
+          entries.push({ filename: entry.name })
+        }
+        return { ok: true, entries }
       } catch (err) {
         return failure(err)
+      } finally {
+        await directory?.close().catch(() => undefined)
       }
     }
   )

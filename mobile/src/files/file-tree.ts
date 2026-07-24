@@ -22,6 +22,7 @@ export type DirectoryState = {
   entries: MobileDirEntry[]
   loading?: boolean
   error?: string
+  lastAccess?: number
 }
 
 export type DirectoryCache = Record<string, DirectoryState | undefined>

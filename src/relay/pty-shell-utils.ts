@@ -1,8 +1,9 @@
 import { execFile as execFileCb } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { win32 as pathWin32 } from 'node:path'
 import { promisify } from 'node:util'
+import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -11,6 +12,10 @@ import {
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
 import { getProcessTableSnapshot, type ProcessTableRow } from '../shared/process-table-snapshot'
+import {
+  resolveOuterWrapperForegroundProcess,
+  shouldInspectOuterWrapperForegroundProcess
+} from '../shared/foreground-wrapper-agent'
 import { isShellProcess } from '../shared/shell-process-detection'
 import {
   resolveWindowsAgentForegroundProcess,
@@ -18,6 +23,7 @@ import {
 } from '../main/providers/windows-agent-foreground-process'
 
 const execFile = promisify(execFileCb)
+const MAX_ETC_SHELLS_BYTES = 64 * 1024
 
 export function resolveWindowsDefaultShell(
   env: NodeJS.ProcessEnv = process.env,
@@ -232,7 +238,9 @@ async function getRecognizedForegroundDescendant(
     for (const candidate of inspectionCandidates) {
       const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
       if (recognized) {
-        return recognized.processName
+        // Why: return the outer wrapper (omp) rather than the deeper wrapped child
+        // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
+        return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
       }
     }
   } catch {
@@ -251,6 +259,20 @@ export async function getForegroundProcessName(
   if (fallbackProcess) {
     const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
     if (fallbackRecognition) {
+      // Why: node-pty can report OMP's wrapped Pi; enrich only that ambiguous
+      // fallback so authoritative OMP reads keep the zero-subprocess fast path.
+      if (shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) {
+        if (process.platform === 'win32') {
+          return (
+            (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ??
+            fallbackRecognition.processName
+          )
+        }
+        return (
+          (await getRecognizedForegroundDescendant(pid, fallbackProcess)) ??
+          fallbackRecognition.processName
+        )
+      }
       return fallbackRecognition.processName
     }
     if (process.platform === 'win32') {
@@ -291,7 +313,10 @@ export function listShellProfiles(): { name: string; path: string }[] {
   const seen = new Set<string>()
 
   try {
-    const content = readFileSync('/etc/shells', 'utf-8')
+    const content = readNodeFileSyncWithinLimit(
+      '/etc/shells',
+      MAX_ETC_SHELLS_BYTES
+    ).buffer.toString('utf8')
     for (const line of content.split('\n')) {
       const trimmed = line.trim()
       if (!trimmed || trimmed.startsWith('#')) {

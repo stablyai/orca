@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentType } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
 import type { AskPrompt } from './mobile-native-chat-ask'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
@@ -185,12 +186,45 @@ describe('useMobileNativeChatAnswerSend', () => {
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '2', enter: false })
   })
 
-  it('submits a non-Claude answer as pasted label text with a single Enter', async () => {
+  it('submits a Codex answer by option-number keystroke like Claude', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
     await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'codex')
 
     await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(true)
-    // Codex's question tool commits the pasted answer: label text + one Enter.
+    // Codex's request_user_input card ignores pasted labels; the digit selects AND commits.
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '2', enter: false })
+  })
+
+  it('does not send a trailing Enter after Codex submits a multi-question answer', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'codex')
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
+      ]
+    }
+
+    let result: Promise<boolean> | undefined
+    await act(async () => {
+      result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
+    })
+    await act(async () => vi.runAllTimersAsync())
+
+    await expect(result).resolves.toBe(true)
+    expect(sendRequest.mock.calls.map((call) => call[1])).toEqual([
+      expect.objectContaining({ text: '2', enter: false }),
+      expect.objectContaining({ text: '1', enter: false })
+    ])
+  })
+
+  it('submits a non-selector answer as pasted label text with a single Enter', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'grok')
+
+    await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(true)
+    // Grok's question tool commits the pasted answer: label text + one Enter.
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: 'Spaces', enter: true })
   })
@@ -208,6 +242,17 @@ describe('useMobileNativeChatAnswerSend', () => {
     await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(false)
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledWith('Answer not sent')
+  })
+
+  it('reports an ambiguous write as unconfirmed instead of a definite failure', async () => {
+    const onSendError = vi.fn()
+    const sendRequest = vi
+      .fn()
+      .mockRejectedValue(markRpcDeliveryUnknown(new Error('Connection closed')))
+    await mount({ sendRequest } as unknown as RpcClient, onSendError)
+
+    await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(false)
+    expect(onSendError).toHaveBeenCalledWith('Answer unconfirmed — check chat before retrying')
   })
 
   it('rejects an empty selection without writing anything', async () => {

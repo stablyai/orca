@@ -1,8 +1,9 @@
 /* eslint-disable max-lines -- Why: CLI parser tests share one mocked runtime client and fixture queue; splitting this file would duplicate setup and make command coverage harder to audit. */
 import path from 'node:path'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, truncateSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MAX_ORCA_YAML_BYTES } from '../shared/orca-yaml-file-limit'
 
 const {
   callMock,
@@ -191,7 +192,10 @@ describe('command aliases dispatch to the canonical handler', () => {
 
     await main(['terminal', 'focus', '--terminal', 'term_abc', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith('terminal.focus', expect.objectContaining({}))
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.focus',
+      expect.objectContaining({ navigation: 'host' })
+    )
   })
 
   it('serves `agent-context --json` without contacting the runtime', async () => {
@@ -381,6 +385,7 @@ describe('orca root help', () => {
     expect(issueHelp).toContain('orca linear issue [<id>]')
     expect(issueHelp).toContain('--comments             Include threaded Linear comments')
     expect(issueHelp).toContain('--attachments          Include attachment metadata and URLs')
+    expect(issueHelp).toContain('--activity             Include issue field-change history')
     expect(issueHelp).toContain('--workspace <id>      Connected Linear workspace id')
     expect(issueHelp).toContain('--id <id>             Linear issue key, id, or URL')
 
@@ -391,6 +396,16 @@ describe('orca root help', () => {
     expect(searchHelp).toContain('orca linear search <query>')
     expect(searchHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
     expect(searchHelp).toContain('--query <text>        Text to search across Linear issues')
+
+    logSpy.mockClear()
+    await main(['linear', 'list-issues', '--help'], '/tmp/repo')
+
+    const listIssuesHelp = String(logSpy.mock.calls[0][0])
+    expect(listIssuesHelp).toContain(
+      '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+    )
+    expect(listIssuesHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
+    expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -2115,6 +2130,24 @@ describe('orca cli worktree awareness', () => {
           expect.objectContaining({ id: 'recipe.destroy', status: 'pass' })
         ])
       )
+      expect(callMock).not.toHaveBeenCalled()
+    } finally {
+      rmSync(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects an oversized sparse orca.yaml during vm recipe doctor', async () => {
+    const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-vm-doctor-bounds-'))
+    try {
+      const yamlPath = path.join(repoPath, 'orca.yaml')
+      writeFileSync(yamlPath, '')
+      truncateSync(yamlPath, MAX_ORCA_YAML_BYTES + 1)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(['vm', 'recipe', 'doctor', 'bounded', '--repo-path', repoPath, '--json'])
+
+      expect(process.exitCode).toBe(1)
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('File too large'))
       expect(callMock).not.toHaveBeenCalled()
     } finally {
       rmSync(repoPath, { recursive: true, force: true })

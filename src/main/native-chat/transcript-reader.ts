@@ -28,13 +28,7 @@ export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   filePath?: string
 }
 
-/**
- * Read the ENTIRE Claude/Codex JSONL transcript for an agent + session id into
- * the NativeChatMessage model. Unlike the AI-Vault preview scan, this applies
- * NO message cap. Unknown record types are skipped rather than throwing, so a
- * single malformed/unrecognized line cannot fail the whole read. The per-line
- * record-to-message mapping is shared with the live tailer.
- */
+/** Reads the newest bounded transcript window; malformed records are skipped. */
 export async function readNativeChatTranscript(
   agent: AgentType,
   sessionId: string,
@@ -55,7 +49,7 @@ export async function readNativeChatTranscript(
     if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
     }
-    return { error: `Unsupported agent for native chat transcript: ${agent}` }
+    return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
     // Why: ENOENT after a successful resolve is the same first-flush/rotation
     // race as an unresolved path — keep it retry-worthy (#8401).

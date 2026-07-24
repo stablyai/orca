@@ -21,6 +21,7 @@ import {
   type NativeChatPendingSend
 } from './native-chat-pending'
 import { stripNoiseMessages } from './native-chat-noise'
+import { NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES } from './native-chat-composer-scope-cache'
 
 function userMessage(id: string, text: string): NativeChatMessage {
   return {
@@ -132,6 +133,16 @@ describe('prunePendingSends', () => {
     const pending = [{ ...pendingOf('new-send', 'run tests'), afterMessageId: oldAnswer.id }]
 
     expect(prunePendingSends(pending, [oldUser, oldAnswer])).toEqual(pending)
+  })
+
+  it('prunes a first send against a timestampless transcript turn (grok)', () => {
+    const pending = [{ ...pendingOf('p1', 'rename it'), afterMessageId: null }]
+    const transcript = [
+      { ...userMessage('u1', 'rename it'), timestamp: null },
+      { ...assistantMessage('a1', 'done'), timestamp: null }
+    ]
+
+    expect(prunePendingSends(pending, transcript)).toEqual([])
   })
 
   it('prunes only one of two identical pending sends for one completed turn', () => {
@@ -246,6 +257,14 @@ describe('pendingSendsAsMessages', () => {
     expect(prunePendingSends(pending, remoteTranscript)).toEqual([])
   })
 
+  it('hides a first send while its timestampless transcript turn is visible (grok)', () => {
+    const pending = [{ ...pendingOf('p1', 'rename it'), afterMessageId: null }]
+
+    expect(
+      pendingSendsAsMessages(pending, [{ ...userMessage('u1', 'rename it'), timestamp: null }])
+    ).toEqual([])
+  })
+
   it('hides only one of two identical pending sends for one real user turn', () => {
     const pending = [pendingOf('p1', 'repeat'), pendingOf('p2', 'repeat')]
     expect(pendingSendsAsMessages(pending, [userMessage('u1', 'repeat')]).map((m) => m.id)).toEqual(
@@ -340,6 +359,20 @@ describe('launchPromptAsMessage', () => {
     ).toBe(true)
   })
 
+  // Grok transcripts carry no timestamps; before the null-matchable rule the
+  // seeded bubble was never hidden or pruned and sat rank-pinned at the list
+  // tail forever, reading as the conversation reordering.
+  it('hides and prunes the launch prompt against a timestampless transcript (grok)', () => {
+    const entry = { tabId: 'tab-1', agent: 'grok' as const, text: 'rename it', createdAt: 42 }
+    const transcript = [
+      { ...userMessage('u1', 'rename it'), timestamp: null },
+      { ...assistantMessage('a1', 'done'), timestamp: null }
+    ]
+
+    expect(launchPromptAsMessage(entry, transcript)).toBeNull()
+    expect(shouldPruneLaunchPrompt(entry, transcript)).toBe(true)
+  })
+
   it('does not bind a launch prompt to an older identical completed turn', () => {
     const entry = {
       tabId: 'tab-1',
@@ -384,6 +417,36 @@ describe('pending send cache', () => {
     writePendingSendCache(scope, [])
 
     expect(readPendingSendCache(scope)).toEqual([])
+  })
+
+  it('returns an oversized pending send for the mounted view without retaining it', () => {
+    clearPendingSendCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex' }
+    const entry = pendingOf('p1', 'x'.repeat(NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES))
+
+    const current = writePendingSendCache(scope, [entry])
+
+    expect(current).toEqual([entry])
+    expect(readPendingSendCache(scope)).toEqual([])
+  })
+
+  it('still caps an admissible pending-send list to the latest eight', () => {
+    clearPendingSendCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex' }
+    const pending = Array.from({ length: 10 }, (_, index) =>
+      pendingOf(`p${index}`, `prompt ${index}`)
+    )
+
+    expect(writePendingSendCache(scope, pending).map(({ id }) => id)).toEqual([
+      'p2',
+      'p3',
+      'p4',
+      'p5',
+      'p6',
+      'p7',
+      'p8',
+      'p9'
+    ])
   })
 })
 
@@ -455,6 +518,17 @@ describe('command marker cache', () => {
       '/cmd-8',
       '/cmd-9'
     ])
+  })
+
+  it('returns an oversized marker for the mounted view without retaining it', () => {
+    clearCommandMarkerCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex', sessionId: 'session-1' }
+    const command = 'x'.repeat(NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES)
+
+    const current = appendCommandMarkerCache(scope, command, 10)
+
+    expect(current).toEqual([{ id: '10-1', command, sentAt: 10 }])
+    expect(readCommandMarkerCache(scope)).toEqual([])
   })
 })
 

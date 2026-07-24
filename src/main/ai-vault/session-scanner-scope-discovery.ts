@@ -1,6 +1,4 @@
-import { createReadStream } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
-import { createInterface } from 'node:readline'
+import { opendir, stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import {
   isPathInsideOrEqual,
@@ -8,6 +6,8 @@ import {
 } from '../../shared/cross-platform-path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
+import { AiVaultScopeCwdCache } from './session-scope-cwd-cache'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage, extractString, parseJsonObject } from './session-scanner-values'
 
@@ -19,8 +19,7 @@ const CLAUDE_EXTENSIONS = new Set(['.jsonl'])
 
 // A Claude project dir encodes exactly one cwd, so a resolved cwd never
 // changes; caching it spares each rescan the transcript-head reads.
-const PROJECT_DIR_CWD_CACHE_MAX = 2048
-const projectDirCwdCache = new Map<string, string>()
+const projectDirCwdCache = new AiVaultScopeCwdCache()
 
 export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
@@ -29,19 +28,10 @@ export function resetProjectDirCwdCacheForTests(): void {
 async function cachedProjectDirCwd(projectDir: string): Promise<string | null> {
   const cached = projectDirCwdCache.get(projectDir)
   if (cached !== undefined) {
-    // Refresh recency so hot in-scope dirs outlive one-off ones at the cap.
-    projectDirCwdCache.delete(projectDir)
-    projectDirCwdCache.set(projectDir, cached)
     return cached
   }
   const cwd = await readProjectDirCwd(projectDir)
   if (cwd) {
-    if (projectDirCwdCache.size >= PROJECT_DIR_CWD_CACHE_MAX) {
-      const oldest = projectDirCwdCache.keys().next()
-      if (!oldest.done) {
-        projectDirCwdCache.delete(oldest.value)
-      }
-    }
     projectDirCwdCache.set(projectDir, cwd)
   }
   return cwd
@@ -70,7 +60,7 @@ export async function discoverInScopeClaudeFiles(args: {
   const scopeProjectPrefixes = claudeProjectScopePrefixes(args.scopePaths)
   const collected = new Map<string, FileWithMtime>()
   for (const rootDir of args.rootDirs) {
-    for (const projectDir of await listProjectDirs(rootDir, scopeProjectPrefixes)) {
+    for await (const projectDir of iterateProjectDirs(rootDir, scopeProjectPrefixes)) {
       const cwd = await cachedProjectDirCwd(projectDir)
       if (!cwd || !args.scopePaths.some((scopePath) => isCwdInsideScopePath(scopePath, cwd))) {
         continue
@@ -130,21 +120,20 @@ function isCwdInsideScopePath(scopePath: string, cwd: string): boolean {
   return isPathInsideOrEqual(wslScopePath.linuxPath, cwd)
 }
 
-async function listProjectDirs(
+async function* iterateProjectDirs(
   rootDir: string,
   scopeProjectPrefixes: ReadonlySet<string>
-): Promise<string[]> {
-  let entries
+): AsyncGenerator<string> {
   try {
-    entries = await readdir(rootDir, { withFileTypes: true })
+    const directory = await opendir(rootDir)
+    for await (const entry of directory) {
+      if (entry.isDirectory() && isClaudeProjectDirInScope(entry.name, scopeProjectPrefixes)) {
+        yield join(rootDir, entry.name)
+      }
+    }
   } catch {
-    return []
+    // Missing or unreadable roots have no project directories to yield.
   }
-  return entries
-    .filter(
-      (entry) => entry.isDirectory() && isClaudeProjectDirInScope(entry.name, scopeProjectPrefixes)
-    )
-    .map((entry) => join(rootDir, entry.name))
 }
 
 async function readProjectDirCwd(projectDir: string): Promise<string | null> {
@@ -159,34 +148,31 @@ async function readProjectDirCwd(projectDir: string): Promise<string | null> {
 }
 
 async function newestClaudeFilesInDir(projectDir: string): Promise<string[]> {
-  let entries
+  const newest: { path: string; mtimeMs: number }[] = []
   try {
-    entries = await readdir(projectDir, { withFileTypes: true })
+    const directory = await opendir(projectDir)
+    for await (const entry of directory) {
+      if (!entry.isFile() || !CLAUDE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+        continue
+      }
+      const path = join(projectDir, entry.name)
+      try {
+        addBoundedPath(newest, REPRESENTATIVE_FILE_LIMIT, {
+          path,
+          mtimeMs: (await stat(path)).mtimeMs
+        })
+      } catch {
+        // Best effort: unreadable candidates are ignored here and reported during full collection.
+      }
+    }
   } catch {
     return []
-  }
-  const newest: { path: string; mtimeMs: number }[] = []
-  for (const entry of entries) {
-    if (!entry.isFile() || !CLAUDE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
-      continue
-    }
-    const path = join(projectDir, entry.name)
-    try {
-      addBoundedPath(newest, REPRESENTATIVE_FILE_LIMIT, {
-        path,
-        mtimeMs: (await stat(path)).mtimeMs
-      })
-    } catch {
-      // Best effort: unreadable candidates are ignored here and reported during
-      // full collection if the project directory proves in-scope.
-    }
   }
   return newest.sort((left, right) => right.mtimeMs - left.mtimeMs).map((value) => value.path)
 }
 
 async function readFirstCwd(filePath: string): Promise<string | null> {
-  const input = createReadStream(filePath, { encoding: 'utf-8' })
-  const lines = createInterface({ input, crlfDelay: Infinity })
+  const lines = iterateAiVaultJsonlLines(filePath)
   let read = 0
   try {
     for await (const line of lines) {
@@ -200,11 +186,6 @@ async function readFirstCwd(filePath: string): Promise<string | null> {
     }
   } catch {
     return null
-  } finally {
-    // readline.close() leaves the underlying stream open; destroy it so the early
-    // break/catch paths don't leak a file descriptor (this runs per project dir).
-    lines.close()
-    input.destroy()
   }
   return null
 }
@@ -216,31 +197,30 @@ async function collectClaudeFiles(args: {
   limit: number
   excludedFilePaths: ReadonlySet<string>
 }): Promise<void> {
-  let entries
   try {
-    entries = await readdir(args.projectDir, { withFileTypes: true })
+    const directory = await opendir(args.projectDir)
+    for await (const entry of directory) {
+      if (!entry.isFile() || !CLAUDE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+        continue
+      }
+      const path = join(args.projectDir, entry.name)
+      if (args.collected.has(path) || args.excludedFilePaths.has(path)) {
+        continue
+      }
+      try {
+        const fileStat = await stat(path)
+        addBoundedFile(args.collected, args.limit, {
+          path,
+          mtimeMs: fileStat.mtimeMs,
+          modifiedAt: fileStat.mtime.toISOString(),
+          sizeBytes: fileStat.size
+        })
+      } catch (err) {
+        args.issues.push({ agent: 'claude', path, message: errorMessage(err) })
+      }
+    }
   } catch {
-    return
-  }
-  for (const entry of entries) {
-    if (!entry.isFile() || !CLAUDE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
-      continue
-    }
-    const path = join(args.projectDir, entry.name)
-    if (args.collected.has(path) || args.excludedFilePaths.has(path)) {
-      continue
-    }
-    try {
-      const fileStat = await stat(path)
-      addBoundedFile(args.collected, args.limit, {
-        path,
-        mtimeMs: fileStat.mtimeMs,
-        modifiedAt: fileStat.mtime.toISOString(),
-        sizeBytes: fileStat.size
-      })
-    } catch (err) {
-      args.issues.push({ agent: 'claude', path, message: errorMessage(err) })
-    }
+    // Missing or unreadable project directories contribute no sessions.
   }
 }
 

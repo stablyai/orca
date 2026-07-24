@@ -13,7 +13,7 @@ const SPLIT_SEARCH_SECONDS = 5
 const SPLIT_ENERGY_WINDOW_SECONDS = 0.1
 
 export class OfflineAudioChunker {
-  private buffered: Float32Array[] = []
+  private buffered = new Float32Array(0)
   private bufferedSamples = 0
   private readonly chunkSampleLimit: number
   private readonly splitSearchSamples: number
@@ -30,18 +30,16 @@ export class OfflineAudioChunker {
     if (samples.length === 0) {
       return []
     }
-    this.buffered.push(samples)
-    this.bufferedSamples += samples.length
+    this.append(samples)
 
     const ready: Float32Array[] = []
     while (this.bufferedSamples >= this.chunkSampleLimit) {
-      const combined = this.combineBuffered()
-      const splitIndex = this.findQuietSplitIndex(combined)
-      ready.push(combined.slice(0, splitIndex))
-      const tail = combined.slice(splitIndex)
-      this.buffered = tail.length > 0 ? [tail] : []
-      this.bufferedSamples = tail.length
+      const splitIndex = this.findQuietSplitIndex(this.buffered.subarray(0, this.bufferedSamples))
+      ready.push(this.buffered.slice(0, splitIndex))
+      this.buffered.copyWithin(0, splitIndex, this.bufferedSamples)
+      this.bufferedSamples -= splitIndex
     }
+    this.releaseOversizedCapacity()
     return ready
   }
 
@@ -50,23 +48,32 @@ export class OfflineAudioChunker {
     if (this.bufferedSamples === 0) {
       return null
     }
-    const combined = this.combineBuffered()
-    this.buffered = []
+    const combined = this.buffered.slice(0, this.bufferedSamples)
+    this.buffered = new Float32Array(0)
     this.bufferedSamples = 0
     return combined
   }
 
-  private combineBuffered(): Float32Array {
-    if (this.buffered.length === 1) {
-      return this.buffered[0]
+  private append(samples: Float32Array): void {
+    const required = this.bufferedSamples + samples.length
+    if (required > this.buffered.length) {
+      const capacity = Math.max(required, Math.max(1_024, this.buffered.length * 2))
+      const next = new Float32Array(capacity)
+      next.set(this.buffered.subarray(0, this.bufferedSamples))
+      this.buffered = next
     }
-    const combined = new Float32Array(this.bufferedSamples)
-    let offset = 0
-    for (const chunk of this.buffered) {
-      combined.set(chunk, offset)
-      offset += chunk.length
+    this.buffered.set(samples, this.bufferedSamples)
+    this.bufferedSamples = required
+  }
+
+  private releaseOversizedCapacity(): void {
+    const retainedCapacity = Math.max(this.chunkSampleLimit, this.bufferedSamples)
+    if (this.buffered.length <= retainedCapacity * 2) {
+      return
     }
-    return combined
+    const compacted = new Float32Array(retainedCapacity)
+    compacted.set(this.buffered.subarray(0, this.bufferedSamples))
+    this.buffered = compacted
   }
 
   private findQuietSplitIndex(samples: Float32Array): number {

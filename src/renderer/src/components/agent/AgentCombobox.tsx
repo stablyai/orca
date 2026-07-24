@@ -51,6 +51,8 @@ type AgentComboboxProps = {
    *  field as the last keyboard-submit step. */
   onTriggerEnter?: () => void
   allowNarrowTrigger?: boolean
+  allowBlankTerminal?: boolean
+  emptyLabel?: string
 }
 
 const BLANK_VALUE = '__none__'
@@ -121,7 +123,9 @@ export default function AgentCombobox({
   onSetDefault,
   triggerClassName,
   onTriggerEnter,
-  allowNarrowTrigger = false
+  allowNarrowTrigger = false,
+  allowBlankTerminal = true,
+  emptyLabel
 }: AgentComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -138,7 +142,10 @@ export default function AgentCombobox({
     [agents, value]
   )
   const filteredAgents = useMemo(() => searchAgentPickerEntries(agents, query), [agents, query])
-  const blankMatchesQuery = useMemo(() => agentPickerBlankTerminalMatches(query), [query])
+  const blankMatchesQuery = useMemo(
+    () => allowBlankTerminal && agentPickerBlankTerminalMatches(query),
+    [allowBlankTerminal, query]
+  )
   const activeCommandValue = getAgentPickerCommandValue({
     blankValue: BLANK_VALUE,
     blankMatchesQuery,
@@ -289,7 +296,8 @@ export default function AgentCombobox({
               <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                 <Terminal className="size-3.5" />
                 <span className="truncate">
-                  {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+                  {emptyLabel ??
+                    translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
                 </span>
               </span>
             )}

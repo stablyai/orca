@@ -1232,7 +1232,13 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.delete',
-        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
+        params: {
+          worktree: 'id:wt-1',
+          relativePath: 'untitled.md',
+          recursive: undefined,
+          expectedExecutionHostId: 'local'
+        },
+        expectedEnvironmentPairingRevision: undefined,
         timeoutMs: 15_000
       })
     })
@@ -1257,14 +1263,20 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.delete',
-        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
+        params: {
+          worktree: 'id:wt-1',
+          relativePath: 'untitled.md',
+          recursive: undefined,
+          expectedExecutionHostId: 'local'
+        },
+        expectedEnvironmentPairingRevision: undefined,
         timeoutMs: 15_000
       })
     })
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
-  it('closeFile uses relative remote delete when worktree metadata is missing', async () => {
+  it('closeFile does not delete when worktree ownership metadata is missing', async () => {
     const store = createEditorStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
@@ -1282,14 +1294,9 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeFile('/remote/wt/untitled.md')
 
-    await vi.waitFor(() => {
-      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'files.delete',
-        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
-        timeoutMs: 15_000
-      })
-    })
+    await flushAsyncRemoteRefresh()
+
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
@@ -1312,7 +1319,13 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.delete',
-        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
+        params: {
+          worktree: 'id:wt-1',
+          relativePath: 'untitled.md',
+          recursive: undefined,
+          expectedExecutionHostId: 'local'
+        },
+        expectedEnvironmentPairingRevision: undefined,
         timeoutMs: 15_000
       })
     })
@@ -1338,7 +1351,13 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.delete',
-        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
+        params: {
+          worktree: 'id:wt-1',
+          relativePath: 'untitled.md',
+          recursive: undefined,
+          expectedExecutionHostId: 'local'
+        },
+        expectedEnvironmentPairingRevision: undefined,
         timeoutMs: 15_000
       })
     })
@@ -2232,6 +2251,69 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
     expect(store.getState().gitStatusByWorktree).toHaveProperty('wt-clean')
     expect(store.getState().gitStatusByWorktree['wt-clean']).toEqual([])
+  })
+
+  it('keeps the capped state sticky until a complete result recovers', () => {
+    const store = createEditorStore()
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      didHitLimit: true,
+      statusLength: 2
+    })
+
+    expect(store.getState().gitStatusHugeByWorktree['wt-huge']).toEqual({ limit: 1 })
+
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'src/index.ts', status: 'modified', area: 'unstaged' }]
+    })
+
+    expect(store.getState().gitStatusHugeByWorktree['wt-huge']).toBeUndefined()
+  })
+
+  it('preserves omitted conflict state when a capped result is incomplete', () => {
+    const store = createEditorStore()
+    const conflict = {
+      path: 'src/conflict.ts',
+      status: 'modified' as const,
+      area: 'unstaged' as const,
+      conflictKind: 'both_modified' as const,
+      conflictStatus: 'unresolved' as const,
+      conflictStatusSource: 'git' as const
+    }
+    store.getState().trackConflictPath('wt-huge', conflict.path, conflict.conflictKind)
+    store.getState().openConflictFile('wt-huge', '/repo', conflict, 'typescript')
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'merge',
+      entries: [conflict]
+    })
+
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      didHitLimit: true,
+      statusLength: 2
+    })
+
+    expect(store.getState().trackedConflictPathsByWorktree['wt-huge']).toEqual({
+      'src/conflict.ts': 'both_modified'
+    })
+    expect(store.getState().gitConflictOperationByWorktree['wt-huge']).toBe('merge')
+    expect(
+      store.getState().openFiles.find((file) => file.relativePath === 'src/conflict.ts')?.conflict
+    ).toMatchObject({
+      conflictKind: 'both_modified',
+      conflictStatus: 'unresolved'
+    })
+
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().trackedConflictPathsByWorktree['wt-huge']).toEqual({})
+    expect(store.getState().gitConflictOperationByWorktree['wt-huge']).toBe('unknown')
   })
 
   it('treats a blank git status HEAD as unknown without invalidating branch compare', () => {

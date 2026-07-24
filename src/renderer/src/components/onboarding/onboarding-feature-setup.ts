@@ -225,7 +225,13 @@ export async function runOnboardingFeatureSetup(
         featureId: 'cli',
         message: status.detail ?? 'Orca CLI registration is not available on this platform.'
       })
-    } else if (status.state !== 'installed' || !status.pathConfigured) {
+    } else if (status.pathConfigured === null) {
+      // Why: an unknown registry read cannot safely drive a PATH read-modify-write.
+      warnings.push({
+        featureId: 'cli',
+        message: status.detail ?? 'Orca could not check your Windows user PATH.'
+      })
+    } else if (status.state !== 'installed' || status.pathConfigured === false) {
       await deps.showCliRegistrationPrompt?.()
       const next = await deps.installCli()
       cliTouched = true
@@ -234,7 +240,7 @@ export async function runOnboardingFeatureSetup(
           featureId: 'cli',
           message: next.detail ?? 'Orca CLI registration needs attention.'
         })
-      } else if (!next.pathConfigured && next.detail) {
+      } else if (next.pathConfigured !== true && next.detail) {
         warnings.push({ featureId: 'cli', message: next.detail })
       }
     }

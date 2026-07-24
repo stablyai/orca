@@ -1,4 +1,7 @@
 import type { SshConnectionState } from '../../../shared/ssh-types'
+import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+
+const SSH_STARTUP_RECONNECT_CONCURRENCY = 4
 
 export type SshStartupReconnectResult = {
   timedOut: boolean
@@ -34,4 +37,36 @@ export async function reconnectSshTargetForRendererStartup(args: {
       clearTimeout(timeoutId)
     }
   }
+}
+
+export async function reconnectSshTargetsForRendererStartup(args: {
+  targetIds: readonly string[]
+  timeoutMs: number
+  connect: (targetId: string) => Promise<SshConnectionState | null>
+  publishState: (targetId: string, state: SshConnectionState) => void
+  onFailure: (targetId: string, error: unknown) => void
+}): Promise<string[]> {
+  const { targetIds, timeoutMs, connect, publishState, onFailure } = args
+  // Why: batching must not multiply the existing startup wait ceiling.
+  const deadline = Date.now() + timeoutMs
+  const results = await mapWithConcurrency(
+    targetIds,
+    SSH_STARTUP_RECONNECT_CONCURRENCY,
+    async (targetId) => {
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) {
+        onFailure(targetId, new Error('SSH reconnect timeout'))
+        return targetId
+      }
+      const result = await reconnectSshTargetForRendererStartup({
+        targetId,
+        timeoutMs: remainingMs,
+        connect,
+        publishState,
+        onFailure
+      })
+      return result.timedOut ? targetId : null
+    }
+  )
+  return results.filter((targetId): targetId is string => targetId !== null)
 }

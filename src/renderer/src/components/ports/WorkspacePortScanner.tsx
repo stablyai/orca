@@ -15,9 +15,11 @@ import {
 } from '@/lib/workspace-port-scan-debounce'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000
 const WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS = 1_000
+export const WORKSPACE_PORT_SCAN_CONCURRENCY = 4
 type WorkspacePortScannerRefreshOptions = {
   force?: boolean
   targets?: readonly RuntimeClientTarget[]
@@ -32,6 +34,21 @@ function makeUnavailableScan(reason: string): WorkspacePortScanResult {
     ports: [],
     unavailableReason: reason
   }
+}
+
+export function scanWorkspacePortTargets(
+  targets: readonly RuntimeClientTarget[],
+  scanTarget = scanWorkspacePortsForTarget
+): Promise<{ key: string; result: WorkspacePortScanResult }[]> {
+  return mapWithConcurrency(targets, WORKSPACE_PORT_SCAN_CONCURRENCY, async (target) => {
+    const key = workspacePortScanKeyForTarget(target)
+    try {
+      return { key, result: await scanTarget(target) }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { key, result: makeUnavailableScan(message || 'Workspace port scan failed.') }
+    }
+  })
 }
 
 export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }): null {
@@ -107,18 +124,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
 
       const generation = generationRef.current
       setWorkspacePortScanRefreshing(true)
-      const promise = Promise.all(
-        targets.map(async (target) => {
-          const key = workspacePortScanKeyForTarget(target)
-          try {
-            const result = await scanWorkspacePortsForTarget(target)
-            return { key, result }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            return { key, result: makeUnavailableScan(message || 'Workspace port scan failed.') }
-          }
-        })
-      )
+      const promise = scanWorkspacePortTargets(targets)
         .then((results) => {
           if (generation === generationRef.current) {
             const activeTargetKeys = new Set(

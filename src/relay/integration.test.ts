@@ -23,6 +23,7 @@ import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
+import { SshFilesystemProvider } from '../main/providers/ssh-filesystem-provider'
 
 function gitInit(dir: string): void {
   execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
@@ -108,6 +109,17 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
       expect(names).toEqual(['hello.txt', 'readme.md'])
     })
 
+    it('routes SSH provider directory reads through the bounded relay handler', async () => {
+      writeFileSync(path.join(tmpDir, 'hello.txt'), 'world')
+      const provider = new SshFilesystemProvider('test-connection', mux)
+
+      await expect(provider.readDir(tmpDir)).resolves.toEqual([
+        { name: 'hello.txt', isDirectory: false, isSymlink: false }
+      ])
+
+      provider.dispose()
+    })
+
     it('readFile returns text content', async () => {
       writeFileSync(path.join(tmpDir, 'data.txt'), 'some content')
 
@@ -122,6 +134,11 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
     it('readFileStream round-trip preserves a 12 MB binary file', async () => {
       const filePath = path.join(tmpDir, 'big.png')
       const original = randomBytes(12 * 1024 * 1024)
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(original)
+      original.writeUInt32BE(13, 8)
+      original.write('IHDR', 12, 'ascii')
+      original.writeUInt32BE(1, 16)
+      original.writeUInt32BE(1, 20)
       writeFileSync(filePath, original)
       const { readFileViaStream } = await import('../main/ssh/ssh-filesystem-stream-reader')
       const { content } = await readFileViaStream(mux, filePath)

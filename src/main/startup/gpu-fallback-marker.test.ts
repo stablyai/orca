@@ -1,9 +1,10 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   GPU_FALLBACK_MARKER_FILE,
+  MAX_GPU_FALLBACK_MARKER_FILE_BYTES,
   clearGpuFallbackMarker,
   readActiveGpuFallbackMarker,
   readGpuFallbackMarker,
@@ -98,5 +99,14 @@ describe('gpu-fallback-marker', () => {
     writeGpuFallbackMarker(userDataPath, { engagedAt: 1, crashesInWindow: 4 }, environment)
     clearGpuFallbackMarker(userDataPath)
     expect(readGpuFallbackMarker(userDataPath)).toBeNull()
+  })
+
+  it('clears an oversized sparse marker without loading it', () => {
+    const path = join(userDataPath, GPU_FALLBACK_MARKER_FILE)
+    writeFileSync(path, '{"schemeVersion":2}')
+    truncateSync(path, MAX_GPU_FALLBACK_MARKER_FILE_BYTES + 1)
+
+    expect(readActiveGpuFallbackMarker(userDataPath, environment)).toBeNull()
+    expect(existsSync(path)).toBe(false)
   })
 })

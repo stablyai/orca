@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
@@ -13,6 +13,10 @@ import type {
   SparsePreset,
   WorkspaceSessionState
 } from '../../shared/types'
+import {
+  readPersistedStateJsonFileSync,
+  stringifyPersistedStateWithinLimit
+} from '../../shared/persisted-state-file-bounds'
 import { getOrcaProfileDataFile } from './profile-index-store'
 
 export type TransferProfileState = PersistedState
@@ -29,13 +33,20 @@ function recordOrEmpty<T>(value: unknown): Record<string, T> {
   return isRecord(value) ? (value as Record<string, T>) : {}
 }
 
-export function readProfileState(profileId: string, userDataPath: string): TransferProfileState {
+export function readProfileState(
+  profileId: string,
+  userDataPath: string,
+  maxBytes?: number
+): TransferProfileState {
   const defaults = getDefaultPersistedState(homedir())
   const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
   if (!existsSync(dataFile)) {
     return structuredClone(defaults)
   }
-  const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as Partial<PersistedState>
+  const { value: parsed } = readPersistedStateJsonFileSync<Partial<PersistedState>>(
+    dataFile,
+    maxBytes
+  )
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,
@@ -84,13 +95,20 @@ export function readProfileState(profileId: string, userDataPath: string): Trans
 export function writeProfileState(
   profileId: string,
   userDataPath: string,
-  state: TransferProfileState
+  state: TransferProfileState,
+  maxBytes?: number
 ): void {
   const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
   mkdirSync(dirname(dataFile), { recursive: true })
   const tmpPath = `${dataFile}.${process.pid}.${randomUUID()}.tmp`
-  writeFileSync(tmpPath, JSON.stringify(state, null, 2), 'utf-8')
-  renameSync(tmpPath, dataFile)
+  const { serialized } = stringifyPersistedStateWithinLimit(state, maxBytes)
+  try {
+    writeFileSync(tmpPath, serialized, 'utf-8')
+    renameSync(tmpPath, dataFile)
+  } catch (error) {
+    rmSync(tmpPath, { force: true })
+    throw error
+  }
 }
 
 function isRepoBackedProjectHostSetup(

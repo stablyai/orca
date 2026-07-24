@@ -142,6 +142,26 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     expect(shutdownResolved).toBe(true)
   })
 
+  it('releases watcher admission after repeated subscription errors', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    let watcherCallback: (err: Error | null, events: []) => void = () => {}
+    vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
+      watcherCallback = callback as typeof watcherCallback
+      return { unsubscribe: vi.fn() } as never
+    })
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    for (let index = 0; index < 257; index += 1) {
+      await expect(
+        handlers['fs:watchWorktree']({ sender }, { worktreePath: `/tmp/erroring-repo-${index}` })
+      ).resolves.toBeUndefined()
+      watcherCallback(new Error('root disappeared'), [])
+    }
+
+    errorSpy.mockRestore()
+  })
+
   it('unsubscribes if the sender is destroyed while the local watcher is opening', async () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     const destroyedCallbacks: (() => void)[] = []

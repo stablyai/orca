@@ -7,12 +7,26 @@ import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { sessionSortTime } from './session-scanner-accumulator'
-import { createAntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
-import { errorMessage } from './session-scanner-values'
+import {
+  codexRolloutHardlinkIdentity,
+  dedupeCodexRolloutFileAliases,
+  dedupeCodexSessionsBySessionId
+} from './codex-session-root-dedup'
 import { discoverRemoteSourceCandidates } from './remote-session-scanner-discovery'
 import { remoteSessionSources } from './remote-session-scanner-sources'
 import type { RemoteScannerContext, RemoteSessionCandidate } from './remote-session-scanner-types'
+import { sessionSortTime } from './session-scanner-accumulator'
+import { createAntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+import { errorMessage } from './session-scanner-values'
+import {
+  AiVaultSessionDiscoveryBudget,
+  type AiVaultSessionDiscoveryLimits
+} from './session-discovery-budget'
+import {
+  boundAiVaultListResult,
+  retainAiVaultSession,
+  retainAiVaultSessionsWithinAggregate
+} from './session-list-retention'
 
 const DEFAULT_REMOTE_SCAN_LIMIT = 1000
 const REMOTE_SCAN_CONCURRENCY = 8
@@ -25,6 +39,7 @@ export async function scanRemoteAiVaultSessions(args: {
   hostPlatform: RemoteHostPlatform
   limit?: number
   scopePaths?: readonly string[]
+  discoveryLimits?: Partial<AiVaultSessionDiscoveryLimits>
 }): Promise<AiVaultListResult> {
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DEFAULT_REMOTE_SCAN_LIMIT
   const issues: AiVaultScanIssue[] = []
@@ -33,6 +48,7 @@ export async function scanRemoteAiVaultSessions(args: {
     executionHostId: args.executionHostId,
     hostPlatform: args.hostPlatform,
     titleCaches: new Map(),
+    discoveryBudget: new AiVaultSessionDiscoveryBudget(args.discoveryLimits),
     antigravityWorkspaceResolver: createAntigravityWorkspaceResolver(async (historyPath) => {
       try {
         const read = await args.provider.readFile(historyPath)
@@ -42,21 +58,30 @@ export async function scanRemoteAiVaultSessions(args: {
       }
     })
   }
-  const candidates = (
-    await mapRemoteScanConcurrently(
-      remoteSessionSources(args.remoteHome, args.hostPlatform),
-      (source) => discoverRemoteSourceCandidates({ source, context, issues })
+  const candidates = dedupeCodexRolloutFileAliases(
+    (
+      await mapRemoteScanConcurrently(
+        remoteSessionSources(args.remoteHome, args.hostPlatform),
+        (source) => discoverRemoteSourceCandidates({ source, context, issues })
+      )
     )
+      .flat()
+      .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs),
+    {
+      isCodex: (candidate) => candidate.source.agent === 'codex',
+      getFilePath: (candidate) => candidate.file.path,
+      getCodexHome: (candidate) => candidate.source.codexHome ?? null,
+      getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
+    }
   )
-    .flat()
-    .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
 
   const parsed = await parseRemoteSessionCandidates({ candidates, context, issues, limit })
-  const cappedSessions = parsed.sessions
+  const parsedSessions = dedupeCodexSessionsBySessionId(parsed.sessions)
+  const cappedSessions = parsedSessions
     .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
     .slice(0, limit)
   const scopePaths = normalizeRemoteScopePaths(args.scopePaths ?? [])
-  const parsedScopeSessions = parsed.sessions.filter((session) =>
+  const parsedScopeSessions = parsedSessions.filter((session) =>
     isRemoteSessionInScope(session, scopePaths)
   )
   const extraScopeSessions = await scanRemoteInScopeSessions({
@@ -66,12 +91,16 @@ export async function scanRemoteAiVaultSessions(args: {
     scopePaths,
     alreadyParsedFilePaths: parsed.parsedFilePaths
   })
+  const scopeSessions = dedupeCodexSessionsBySessionId([
+    ...parsedScopeSessions,
+    ...extraScopeSessions
+  ])
 
-  return {
-    sessions: mergeRemoteSessions(cappedSessions, [...parsedScopeSessions, ...extraScopeSessions]),
+  return boundAiVaultListResult({
+    sessions: mergeRemoteSessions(cappedSessions, scopeSessions),
     issues,
     scannedAt: new Date().toISOString()
-  }
+  })
 }
 
 async function parseRemoteSessionCandidates(args: {
@@ -97,6 +126,13 @@ async function parseRemoteSessionCandidates(args: {
       batch.map((candidate) => parseRemoteSessionCandidate(candidate, args.context, args.issues))
     )
     sessions.push(...results.filter(isAiVaultSession))
+    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
+    const retained = retainAiVaultSessionsWithinAggregate(uniqueSessions)
+    sessions.splice(0, sessions.length, ...retained.sessions)
+    if (retained.omitted > 0) {
+      addRemoteSessionCapacityIssue(args.issues, args.context.executionHostId, retained.omitted)
+      break
+    }
     index += batch.length
   }
 
@@ -130,6 +166,12 @@ async function scanRemoteInScopeSessions(args: {
           isAiVaultSession(session) && isRemoteSessionInScope(session, args.scopePaths)
       )
     )
+    const retained = retainAiVaultSessionsWithinAggregate(sessions)
+    sessions.splice(0, sessions.length, ...retained.sessions)
+    if (retained.omitted > 0) {
+      addRemoteSessionCapacityIssue(args.issues, args.context.executionHostId, retained.omitted)
+      break
+    }
   }
 
   return sessions
@@ -150,10 +192,9 @@ async function parseRemoteSessionCandidate(
     // transcript count (row badge; recoverable signal at zero turns). The
     // walk listing supplies it — the parser can't readdir a remote disk.
     const subagentTranscriptCount = candidate.subagentTranscriptCount ?? 0
-    if (session && subagentTranscriptCount > 0) {
-      return { ...session, subagentTranscriptCount }
-    }
-    return session
+    const enriched =
+      session && subagentTranscriptCount > 0 ? { ...session, subagentTranscriptCount } : session
+    return enriched ? retainAiVaultSession(enriched) : null
   } catch (err) {
     issues.push({
       executionHostId: context.executionHostId,
@@ -211,6 +252,19 @@ function canStopParsingRemoteSessions(
 
 function isAiVaultSession(session: AiVaultSession | null): session is AiVaultSession {
   return Boolean(session)
+}
+
+function addRemoteSessionCapacityIssue(
+  issues: AiVaultScanIssue[],
+  executionHostId: ExecutionHostId,
+  omitted: number
+): void {
+  issues.push({
+    executionHostId,
+    agent: 'codex',
+    path: 'AI Vault session list',
+    message: `AI Vault stopped after omitting ${omitted} sessions at its memory limit.`
+  })
 }
 
 async function mapRemoteScanConcurrently<T, U>(

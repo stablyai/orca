@@ -167,7 +167,10 @@ function TableBlock({
   block: Extract<MarkdownBlock, { kind: 'table' }>
   base: number
 }) {
-  const columnCount = Math.max(block.headers.length, ...block.rows.map((r) => r.length), 1)
+  let columnCount = Math.max(block.headers.length, 1)
+  for (const row of block.rows) {
+    columnCount = Math.max(columnCount, row.length)
+  }
   const columns = Array.from({ length: columnCount }, (_, c) => c)
   return (
     <ScrollView

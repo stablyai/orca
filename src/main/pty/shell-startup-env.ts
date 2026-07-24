@@ -1,5 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs'
 import { posix } from 'node:path'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+
+export const MAX_SHELL_STARTUP_FILE_BYTES = 1024 * 1024
+export const MAX_SHELL_STARTUP_CACHE_ENTRIES = 128
+export const MAX_SHELL_STARTUP_CACHE_BYTES = 8 * 1024 * 1024
+export const MAX_SHELL_STARTUP_ENV_VALUE_CODE_UNITS = 64 * 1024
+const MAX_SHELL_STARTUP_NAME_CODE_UNITS = 256
+const MAX_SHELL_STARTUP_PATH_CODE_UNITS = 16 * 1024
 
 // Why: only files the user's actual shell would source. Mixing zsh and bash
 // files breaks the "last assignment wins matches the live shell" guarantee —
@@ -29,7 +36,7 @@ function parseExportedValue(content: string, name: string, home: string): string
     // Why: $HOME / ${HOME} / ~ expansion mimics what the live shell would
     // do for double-quoted and unquoted values; single-quoted is literal.
     const expanded = quoted === "'" ? text : expandHome(text, home)
-    if (expanded.length > 0) {
+    if (expanded.length > 0 && expanded.length <= MAX_SHELL_STARTUP_ENV_VALUE_CODE_UNITS) {
       lastMatch = expanded
     }
   }
@@ -38,11 +45,8 @@ function parseExportedValue(content: string, name: string, home: string): string
 }
 
 function readStartupFile(path: string): string | null {
-  if (!existsSync(path)) {
-    return null
-  }
   try {
-    return readFileSync(path, 'utf8')
+    return readNodeFileSyncWithinLimit(path, MAX_SHELL_STARTUP_FILE_BYTES).buffer.toString('utf8')
   } catch {
     return null
   }
@@ -121,7 +125,8 @@ function expandHome(value: string, home: string): string {
     .replace(/\$HOME(?![A-Za-z0-9_])/g, home)
 }
 
-const cache = new Map<string, string | undefined>()
+const cache = new Map<string, { retainedBytes: number; value: string | undefined }>()
+let cacheRetainedBytes = 0
 
 /**
  * Best-effort static read of a single env-var assignment from the user's
@@ -151,18 +156,26 @@ export function readShellStartupEnvVar(
   home = process.env.HOME,
   shell = process.env.SHELL
 ): string | undefined {
-  if (!home || process.platform === 'win32') {
+  if (
+    !home ||
+    home.length > MAX_SHELL_STARTUP_PATH_CODE_UNITS ||
+    (shell?.length ?? 0) > MAX_SHELL_STARTUP_PATH_CODE_UNITS ||
+    process.platform === 'win32'
+  ) {
     return undefined
   }
   // Why: the regex above is fixed; rejecting unsafe names is cheap defense
   // for the day a future caller passes something with regex metacharacters.
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+  if (name.length > MAX_SHELL_STARTUP_NAME_CODE_UNITS || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     return undefined
   }
 
   const cacheKey = `${name}\0${home}\0${shell ?? ''}`
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    cache.delete(cacheKey)
+    cache.set(cacheKey, cached)
+    return cached.value
   }
 
   let lastMatch: string | undefined
@@ -179,8 +192,26 @@ export function readShellStartupEnvVar(
     }
   }
 
-  cache.set(cacheKey, lastMatch)
+  cacheShellStartupValue(cacheKey, lastMatch)
   return lastMatch
+}
+
+function cacheShellStartupValue(key: string, value: string | undefined): void {
+  const retainedBytes = (key.length + (value?.length ?? 0)) * 2
+  while (
+    cache.size >= MAX_SHELL_STARTUP_CACHE_ENTRIES ||
+    cacheRetainedBytes + retainedBytes > MAX_SHELL_STARTUP_CACHE_BYTES
+  ) {
+    const oldestKey = cache.keys().next().value as string | undefined
+    if (oldestKey === undefined) {
+      return
+    }
+    const oldest = cache.get(oldestKey)
+    cache.delete(oldestKey)
+    cacheRetainedBytes -= oldest?.retainedBytes ?? 0
+  }
+  cache.set(key, { retainedBytes, value })
+  cacheRetainedBytes += retainedBytes
 }
 
 /**
@@ -190,4 +221,5 @@ export function readShellStartupEnvVar(
  */
 export function __resetShellStartupEnvCache(): void {
   cache.clear()
+  cacheRetainedBytes = 0
 }

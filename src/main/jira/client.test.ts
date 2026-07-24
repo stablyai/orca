@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  MAX_INTEGRATION_ACCOUNTS,
+  MAX_INTEGRATION_CREDENTIAL_BYTES
+} from '../integration-account-persistence-limits'
 
 const OLD_FETCH = globalThis.fetch
 const { closeAllConnectionsMock, netFetchMock, resolveProxyMock, setProxyMock } = vi.hoisted(
@@ -649,5 +653,74 @@ describe('Jira client credential storage', () => {
     const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
     expect(headers.get('User-Agent')).toBe('Orca')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('admits the exact saved-site boundary without changing order', async () => {
+    const sites = Array.from({ length: MAX_INTEGRATION_ACCOUNTS }, (_, index) => ({
+      id: `site-${index}`,
+      token: `token-${index}`
+    }))
+    writeMultiSiteFiles(sites, 'all')
+    const jira = await loadClientModule()
+
+    const status = jira.getStatus()
+    expect(status.sites).toHaveLength(MAX_INTEGRATION_ACCOUNTS)
+    expect(status.sites?.map((site) => site.id)).toEqual(sites.map((site) => site.id))
+  })
+
+  it('preserves an over-limit saved-site file and refuses to overwrite it', async () => {
+    const sites = Array.from({ length: MAX_INTEGRATION_ACCOUNTS + 1 }, (_, index) => ({
+      id: `site-${index}`,
+      token: `token-${index}`
+    }))
+    writeMultiSiteFiles(sites, 'all')
+    const path = join(tempHome, '.orca', 'jira-sites.json')
+    const before = readFileSync(path, 'utf8')
+    const jira = await loadClientModule()
+
+    expect(jira.getStatus()).toMatchObject({ connected: false, sites: [] })
+    await expect(
+      jira.connect({
+        siteUrl: 'example.atlassian.net',
+        email: 'ada@example.com',
+        apiToken: 'token-alpha'
+      })
+    ).resolves.toMatchObject({ ok: false, error: expect.stringContaining('left unchanged') })
+    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(readFileSync(path, 'utf8')).toBe(before)
+  })
+
+  it('admits an exact-size Jira credential and rejects credential byte +1 before fetch', async () => {
+    const exactToken = 't'.repeat(MAX_INTEGRATION_CREDENTIAL_BYTES)
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          accountId: 'account-alpha',
+          displayName: 'Ada',
+          emailAddress: 'ada@example.com'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        siteUrl: 'example.atlassian.net',
+        email: 'ada@example.com',
+        apiToken: exactToken
+      })
+    ).resolves.toMatchObject({ ok: true })
+    await expect(
+      jira.connect({
+        siteUrl: 'another.atlassian.net',
+        email: 'ada@example.com',
+        apiToken: `${exactToken}t`
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining(`${MAX_INTEGRATION_CREDENTIAL_BYTES} UTF-8 bytes`)
+    })
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 })

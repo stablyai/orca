@@ -372,6 +372,247 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
   })
 
+  it('maps Pi tool_call ask_user_question to blocked with interactivePrompt', () => {
+    const questions = {
+      questions: [
+        {
+          question: 'What is your priority?',
+          options: ['A', 'B', 'C']
+        }
+      ]
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user_question'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+  })
+
+  it('maps Pi tool_execution_start ask_user_question to blocked with interactivePrompt', () => {
+    const questions = {
+      questions: [
+        {
+          question: 'Pick a path',
+          options: ['path-1', 'path-2']
+        }
+      ]
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_execution_start',
+          tool_name: 'ask_user_question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user_question'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+  })
+
+  it('keeps Pi regular tool_call notifications as working', () => {
+    const working = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'bash',
+          tool_input: { command: 'git status' }
+        }
+      },
+      'production'
+    )
+    expect(working?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'pi',
+      toolName: 'bash',
+      toolInput: 'git status'
+    })
+    expect(working?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('keeps Pi ask_user_question blocked when tool_input is missing', () => {
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question'
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user_question'
+    })
+    expect(blocked?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('clears Pi ask_user_question blocked once the tool_execution_end arrives', () => {
+    const questions = {
+      questions: [{ question: 'Ship it?', options: ['yes', 'no'] }]
+    }
+    const base = {
+      paneKey: PANE_KEY,
+      tabId: 'tab-1',
+      worktreeId: 'wt',
+      env: 'production' as const,
+      version: '1'
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload.state).toBe('blocked')
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+
+    // Why: the answered question must leave the blocked/needs-attention state so
+    // the notification and attention sort clear; tool_execution_end is working.
+    const cleared = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_execution_end',
+          tool_name: 'ask_user_question'
+        }
+      },
+      'production'
+    )
+    expect(cleared?.payload.state).toBe('working')
+    expect(cleared?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('marks Pi done when agent_end follows an ask_user_question block', () => {
+    const base = {
+      paneKey: PANE_KEY,
+      tabId: 'tab-1',
+      worktreeId: 'wt',
+      env: 'production' as const,
+      version: '1'
+    }
+    normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+        }
+      },
+      'production'
+    )
+    const done = normalizeHookPayload(
+      state,
+      'pi',
+      { ...base, payload: { hook_event_name: 'agent_end' } },
+      'production'
+    )
+    expect(done?.payload.state).toBe('done')
+    expect(done?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('clears the ask_user_question interactivePrompt when a regular Pi tool runs next', () => {
+    const base = {
+      paneKey: PANE_KEY,
+      tabId: 'tab-1',
+      worktreeId: 'wt',
+      env: 'production' as const,
+      version: '1'
+    }
+    normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+        }
+      },
+      'production'
+    )
+    // Why: a follow-up regular tool must not inherit the prior question's blocked
+    // state or its live interactivePrompt card.
+    const working = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'bash',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(working?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'pi',
+      toolName: 'bash',
+      toolInput: 'ls'
+    })
+    expect(working?.payload.interactivePrompt).toBeUndefined()
+  })
+
   it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
     const event = normalizeHookPayload(
       state,
@@ -419,6 +660,40 @@ describe('shared agent-hook-listener', () => {
       toolName: 'bash',
       toolInput: 'pnpm test'
     })
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('keeps OMP ask_user_question behavior on Pi-compatible events', () => {
+    const tool = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: {
+            questions: [
+              {
+                question: 'Choose',
+                options: ['x', 'y']
+              }
+            ]
+          }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'omp',
+      toolName: 'ask_user_question'
+    })
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
   it('captures Pi session ids on Pi-compatible status events', () => {
@@ -2244,6 +2519,82 @@ describe('shared agent-hook-listener', () => {
     expect(next?.payload.toolInput).toBeUndefined()
   })
 
+  it('maps Codex request_user_input PreToolUse to waiting with the question card, then clears on the answer', () => {
+    // Real Codex 0.145 shapes: PreToolUse fires while blocked on the answer (no Stop),
+    // PostToolUse carries the answers, Stop ends the turn.
+    const questions = {
+      questions: [
+        {
+          id: 'color_preference',
+          header: 'Color',
+          question: 'Which color do you prefer: red or blue?',
+          options: [{ label: 'Blue', description: 'Choose blue.' }]
+        }
+      ]
+    }
+    const waiting = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'request_user_input',
+          tool_input: questions,
+          tool_use_id: 'call_1'
+        }
+      },
+      'production'
+    )
+    expect(waiting?.payload.state).toBe('waiting')
+    expect(waiting?.payload.toolName).toBe('request_user_input')
+    expect(waiting?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+
+    const answered = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'request_user_input',
+          tool_input: questions,
+          tool_response: '{"answers":{"color_preference":{"answers":["Blue"]}}}',
+          tool_use_id: 'call_1'
+        }
+      },
+      'production'
+    )
+    expect(answered?.payload.state).toBe('working')
+    expect(answered?.payload.interactivePrompt).toBeUndefined()
+
+    const stop = normalizeHookPayload(
+      state,
+      'codex',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'Stop' } },
+      'production'
+    )
+    expect(stop?.payload.state).toBe('done')
+  })
+
+  it('keeps ordinary Codex PreToolUse mapped to working', () => {
+    const working = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'shell',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(working?.payload.state).toBe('working')
+    expect(working?.payload.interactivePrompt).toBeUndefined()
+  })
+
   it('clears stale Droid tool input when a same-tool update has explicit unpreviewable input', () => {
     normalizeHookPayload(
       state,
@@ -2423,12 +2774,12 @@ describe('shared agent-hook-listener', () => {
       expect(stopped?.payload.state).toBe('done')
     })
 
-    it('removes a finished teammate/named agent on SubagentStop despite its task reading running', () => {
-      // Why: the interactive agent-teams / orchestration shape observed live —
+    it('parks a teammate as a persistent idle row across its stop/idle/lead-Stop cycle', () => {
+      // Why: the interactive agent-teams shape observed live on 2.1.217 —
       // lifecycle events use `a<name>-<hex>` agent ids while background_tasks
-      // uses unrelated `type: "teammate"` task ids that report "running"
-      // forever, even after the named agent finished. The finished row must
-      // leave the sidebar at once (the reported "long idle list" symptom).
+      // uses unrelated `type: "teammate"` task ids. SubagentStop + TeammateIdle
+      // fire at every TURN end while the teammate stays alive awaiting mail,
+      // so the row must park idle and survive lead Stops, not vanish.
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn probe' })
       claudeEvent({
         hook_event_name: 'SubagentStart',
@@ -2450,15 +2801,16 @@ describe('shared agent-hook-listener', () => {
         expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'working' })
       ])
 
-      // SubagentStop is the reliable finish signal — the row goes even though
-      // its teammate task is still listed "running".
+      // Turn boundary: the row parks idle instead of leaving the sidebar.
       const stopped = claudeEvent({
         hook_event_name: 'SubagentStop',
         agent_id: 'aprobe1-6d3cb5b52120b7bf',
         agent_type: 'probe1',
         background_tasks: [teammateTask]
       })
-      expect(stopped?.payload.subagents).toBeUndefined()
+      expect(stopped?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
+      ])
 
       claudeEvent({
         hook_event_name: 'TeammateIdle',
@@ -2466,15 +2818,19 @@ describe('shared agent-hook-listener', () => {
         team_name: 'session-56c87269'
       })
 
+      // The confirmed idle row survives the lead Stop (its teammate task is
+      // still listed) without pinning the pane working.
       const wakeStop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [teammateTask]
       })
       expect(wakeStop?.payload.state).toBe('done')
-      expect(wakeStop?.payload.subagents).toBeUndefined()
+      expect(wakeStop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
+      ])
     })
 
-    it('removes a working teammate via TeammateIdle when its id prefix matches the name', () => {
+    it('parks a working teammate via TeammateIdle when its id prefix matches the name', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn reviewer' })
       claudeEvent({
         hook_event_name: 'SubagentStart',
@@ -2490,15 +2846,17 @@ describe('shared agent-hook-listener', () => {
 
       // Why: teammate name and agent type are separate Agent-tool inputs; the
       // lifecycle id embeds the former while the hook reports the latter.
-      // TeammateIdle keyed by name reaps it via the id prefix (fallback when
-      // its SubagentStop was lost), so the finished row leaves and the pane
-      // can settle back to the lead's done state.
+      // TeammateIdle keyed by name parks it via the id prefix (fallback when
+      // its SubagentStop was lost), so the pane settles back to the lead's
+      // done state while the row stays visible as idle.
       const idled = claudeEvent({
         hook_event_name: 'TeammateIdle',
         teammate_name: 'reviewer',
         team_name: 'session-x'
       })
-      expect(idled?.payload.subagents).toBeUndefined()
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
+      ])
       expect(idled?.payload.state).toBe('done')
     })
 
@@ -2743,8 +3101,10 @@ describe('shared agent-hook-listener', () => {
         teammate_name: 'lane-hooks',
         team_name: 'session-x'
       })
-      // Why: idle means finished — the exact-name match reaps the row.
-      expect(idled?.payload.subagents).toBeUndefined()
+      // Why: the exact-name match parks the row idle (turn over, still alive).
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'alane-hooks-6d3cb5b5', state: 'idle' })
+      ])
     })
 
     it('keeps an inferred interrupt terminal across later child lifecycle events', () => {

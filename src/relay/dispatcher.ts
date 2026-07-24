@@ -1,5 +1,4 @@
-/* eslint-disable max-lines -- Why: the relay protocol dispatcher keeps client
-   routing, request cancellation, and framing state together. */
+/* eslint-disable max-lines -- dispatcher keeps client routing, cancellation, and framing state together */
 import {
   FrameDecoder,
   MessageType,
@@ -12,7 +11,7 @@ import {
   type JsonRpcNotification,
   type JsonRpcResponse
 } from './protocol'
-import { ClientRequestAborts } from './client-request-aborts'
+import { ClientRequestAborts, RelayRequestAdmissionError } from './client-request-aborts'
 
 export type RequestContext = {
   clientId: number
@@ -27,15 +26,21 @@ export type MethodHandler = (
 
 export type NotificationHandler = (params: Record<string, unknown>, context: RequestContext) => void
 
-/** Sink write. Returning literal `false` signals saturation (Node stream
- * semantics); `void`/`true` mean the frame was accepted. */
+/** Sink write: `false` signals saturation (Node stream semantics); `void`/`true` mean accepted. */
 export type RelayClientWrite = (data: Buffer) => boolean | void
 
 export type RelayClientSinkOptions = {
-  /** One-shot: invoke `cb` once when the sink can accept more data again
-   * (stream 'drain'), or when the sink is permanently dead (error/close) so
-   * bulk senders waiting on it never hang. */
+  /** One-shot: invoke `cb` when the sink can accept more data (drain) or is permanently dead, so waiters never hang. */
   waitWriteDrain?: (cb: () => void) => void
+  /** Close only this transport when bounded per-client delivery can no longer retain its backlog. */
+  disconnect?: () => void
+}
+
+export type RelayNotificationWriteResult = {
+  delivered: boolean
+  saturated: boolean
+  drained: Promise<void>
+  cancelDrain?: () => void
 }
 
 type RelayClient = {
@@ -43,11 +48,10 @@ type RelayClient = {
   decoder: FrameDecoder
   write: RelayClientWrite
   waitWriteDrain?: (cb: () => void) => void
-  /** Pending resolvers for bulk sends stalled on sink saturation. Flushed on
-   * drain, write failure, detach, setWrite, and dispose so no pump hangs. */
+  disconnect?: () => void
+  /** Resolvers for bulk sends stalled on sink saturation; flushed so no pump hangs. */
   drainWaiters: Set<() => void>
-  /** Serializes bulk-lane sends per client so at most one bulk frame is
-   * admitted past the sink's high-water mark at a time. */
+  /** Serializes bulk-lane sends so only one bulk frame is admitted past the sink high-water mark at a time. */
   bulkChain: Promise<void>
   nextOutgoingSeq: number
   highestReceivedSeq: number
@@ -56,12 +60,16 @@ type RelayClient = {
 }
 
 type PendingRelayRequest = {
+  clientId: number
   resolve: (result: unknown) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
 }
 
 const RELAY_TO_CLIENT_REQUEST_TIMEOUT_MS = 30_000
+export const MAX_RELAY_DISPATCHER_CLIENTS = 16
+export const MAX_RELAY_SOCKET_CONNECTIONS = MAX_RELAY_DISPATCHER_CLIENTS - 1
+export const MAX_PENDING_RELAY_REQUESTS = 256
 
 export class RelayDispatcher {
   private readonly primaryClient: RelayClient
@@ -82,43 +90,38 @@ export class RelayDispatcher {
     this.startKeepalive()
   }
 
-  // Why: when a client reconnects via Unix socket, the relay must redirect
-  // all outgoing frames (pty.data, keepalives, responses) to the new socket
-  // instead of the original stdout. Swapping the write callback avoids
-  // tearing down and reconstructing the entire dispatcher + handler tree.
-  //
-  // Why: sequence counters and decoder state must also reset because the new
-  // client's SshChannelMultiplexer starts at seq=1. Without resetting, the
-  // relay's highestReceivedSeq stays at the old client's last value, so it
-  // never acks the new client's frames until the new client's seq catches
-  // up - causing the client's unacked-timeout checker to accumulate stale
-  // timestamps that could eventually fire a false connection-dead signal.
+  // Why: redirect outgoing frames to the reconnected socket without rebuilding the dispatcher + handler tree.
+  // Why: the new client's multiplexer restarts at seq=1, so reset seq/decoder state or acks stall and fire a false connection-dead signal.
   setWrite(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): void {
     this.requestAborts.abortClient(this.primaryClient.id)
+    this.rejectPendingRequestsForClient(this.primaryClient.id, 'Relay client reconnected')
     this.primaryClient.write = write
     this.primaryClient.waitWriteDrain = sinkOptions?.waitWriteDrain
+    this.primaryClient.disconnect = sinkOptions?.disconnect
     this.primaryClient.closed = false
-    // Why: the saturated sink the waiters were parked on no longer exists;
-    // wake stalled bulk senders so they re-evaluate against the new sink.
+    // Why: the old sink is gone; wake stalled bulk senders to re-evaluate against the new one.
     this.flushDrainWaiters(this.primaryClient)
     this.resetClient(this.primaryClient)
   }
 
-  // Why: in-flight mutating requests must become stale when the active client
-  // disconnects even if no replacement has connected yet. Otherwise a late
-  // pty.spawn/fs.watch completion can create remote state nobody can own.
+  // Why: mark in-flight requests stale on disconnect so a late pty.spawn/fs.watch can't create unowned remote state.
   invalidateClient(): void {
     this.requestAborts.abortClient(this.primaryClient.id)
+    this.rejectPendingRequestsForClient(this.primaryClient.id, 'Relay client disconnected')
     this.primaryClient.generation++
     this.primaryClient.closed = true
     this.flushDrainWaiters(this.primaryClient)
     this.notifyClientDetached(this.primaryClient.id)
   }
 
-  // Why: synced remote workspaces can have more than one Orca client attached
-  // to the same relay. Frame sequence numbers and JSON-RPC request ids are per
-  // SSH channel, so each socket client needs independent protocol state.
+  // Why: seq numbers and request ids are per SSH channel, so each attached client needs independent protocol state.
   attachClient(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): number {
+    if (this.disposed) {
+      throw new Error('Relay dispatcher is disposed')
+    }
+    if (this.clients.size >= MAX_RELAY_DISPATCHER_CLIENTS) {
+      throw new Error(`Relay client limit of ${MAX_RELAY_DISPATCHER_CLIENTS} reached`)
+    }
     const client = this.createClient(write, sinkOptions)
     this.clients.set(client.id, client)
     return client.id
@@ -130,11 +133,39 @@ export class RelayDispatcher {
       return
     }
     this.requestAborts.abortClient(clientId)
+    this.rejectPendingRequestsForClient(clientId, 'Relay client disconnected')
     client.generation++
     client.closed = true
     this.flushDrainWaiters(client)
     this.clients.delete(clientId)
     this.notifyClientDetached(clientId)
+  }
+
+  connectedClientIds(): number[] {
+    if (this.disposed) {
+      return []
+    }
+    return Array.from(this.clients.values(), (client) => client)
+      .filter((client) => !client.closed)
+      .map((client) => client.id)
+  }
+
+  evictClient(clientId: number): void {
+    const client = this.clients.get(clientId)
+    if (!client || client.closed) {
+      return
+    }
+    const disconnect = client.disconnect
+    if (client === this.primaryClient) {
+      this.invalidateClient()
+    } else {
+      this.detachClient(clientId)
+    }
+    try {
+      disconnect?.()
+    } catch {
+      // Why: disconnect failures cannot restore an already-detached dispatcher.
+    }
   }
 
   feedClient(clientId: number, data: Buffer): void {
@@ -204,17 +235,40 @@ export class RelayDispatcher {
     })
   }
 
+  notifyClientWithBackpressure(
+    clientId: number,
+    method: string,
+    params?: Record<string, unknown>
+  ): RelayNotificationWriteResult {
+    const client = this.clients.get(clientId)
+    if (this.disposed || !client || client.closed) {
+      return { delivered: false, saturated: false, drained: Promise.resolve() }
+    }
+    const accepted = this.sendFrame(client, {
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined ? { params } : {})
+    })
+    if (client.closed || !this.clients.has(clientId)) {
+      return { delivered: false, saturated: false, drained: Promise.resolve() }
+    }
+    if (accepted !== false) {
+      return { delivered: true, saturated: false, drained: Promise.resolve() }
+    }
+    const drain = this.waitForClientDrainCancelable(client)
+    return {
+      delivered: true,
+      saturated: true,
+      drained: drain.drained,
+      cancelDrain: drain.cancel
+    }
+  }
+
   /**
-   * Bulk-lane notification. Sends are serialized per client and the returned
-   * promise resolves only after the sink accepted the frame without reporting
-   * saturation (or the client went away). Bulk producers (file streams) await
-   * this between frames so interactive frames (pty.data echo) never queue
-   * behind an unbounded backlog on the shared SSH channel.
-   *
-   * With `clientId`, the frame goes only to that client — stream chunks have
-   * exactly one consumer, and broadcasting them would let one slow secondary
-   * client stall everyone. A missing/closed target resolves immediately; the
-   * caller's staleness check owns aborting the stream.
+   * Bulk-lane notification: sends are serialized per client and the promise
+   * resolves only after the sink accepted the frame (backpressure), so bulk
+   * producers await between frames and never starve interactive frames.
+   * With `clientId`, targets only that client — broadcasting would let one slow secondary stall everyone.
    */
   notifyBulk(
     method: string,
@@ -238,8 +292,7 @@ export class RelayDispatcher {
       if (client.closed) {
         continue
       }
-      // Why: the frame is encoded inside the chain step, not at call time —
-      // sequence numbers must be assigned in actual write order.
+      // Why: encode inside the chain step, not at call time, so sequence numbers match actual write order.
       const step = client.bulkChain.then(() => {
         if (this.disposed || client.closed) {
           return
@@ -260,10 +313,18 @@ export class RelayDispatcher {
   }
 
   private waitForClientDrain(client: RelayClient): Promise<void> {
+    return this.waitForClientDrainCancelable(client).drained
+  }
+
+  private waitForClientDrainCancelable(client: RelayClient): {
+    drained: Promise<void>
+    cancel: () => void
+  } {
     if (this.disposed || client.closed || !client.waitWriteDrain) {
-      return Promise.resolve()
+      return { drained: Promise.resolve(), cancel: () => {} }
     }
-    return new Promise<void>((resolve) => {
+    let cancel = (): void => {}
+    const drained = new Promise<void>((resolve) => {
       let settled = false
       const finish = (): void => {
         if (settled) {
@@ -273,6 +334,7 @@ export class RelayDispatcher {
         client.drainWaiters.delete(finish)
         resolve()
       }
+      cancel = finish
       client.drainWaiters.add(finish)
       try {
         client.waitWriteDrain!(finish)
@@ -280,6 +342,7 @@ export class RelayDispatcher {
         finish()
       }
     })
+    return { drained, cancel }
   }
 
   private flushDrainWaiters(client: RelayClient): void {
@@ -304,9 +367,7 @@ export class RelayDispatcher {
     const candidates = Array.from(this.clients.values()).filter(
       (client) => !client.closed && client.id !== options?.excludeClientId
     )
-    // Why: detached relays keep the synthetic primary client object around even
-    // though the owning Orca is attached through a Unix-socket client. Prefer a
-    // real attached client so remote `orca` shims do not forward to dead stdout.
+    // Why: prefer a real socket client over the synthetic primary so requests don't forward to a dead stdout.
     const target = candidates.find((client) => client !== this.primaryClient) ?? candidates[0]
     if (!target) {
       return Promise.reject(new Error('No owning Orca client is connected to the relay'))
@@ -324,6 +385,11 @@ export class RelayDispatcher {
     if (this.disposed || !client || client.closed) {
       return Promise.reject(new Error('Relay client is not connected'))
     }
+    if (this.pendingRelayRequests.size >= MAX_PENDING_RELAY_REQUESTS) {
+      return Promise.reject(
+        new Error(`Relay pending request limit of ${MAX_PENDING_RELAY_REQUESTS} reached`)
+      )
+    }
     const id = this.nextRequestId++
     const msg: JsonRpcRequest = {
       jsonrpc: '2.0',
@@ -337,9 +403,25 @@ export class RelayDispatcher {
         this.pendingRelayRequests.delete(id)
         reject(new Error(`Request "${method}" timed out after ${timeoutMs}ms`))
       }, timeoutMs)
-      this.pendingRelayRequests.set(id, { resolve, reject, timer })
+      this.pendingRelayRequests.set(id, { clientId, resolve, reject, timer })
       this.sendFrame(client, msg)
+      if (client.closed) {
+        clearTimeout(timer)
+        this.pendingRelayRequests.delete(id)
+        reject(new Error('Relay client disconnected'))
+      }
     })
+  }
+
+  private rejectPendingRequestsForClient(clientId: number, message: string): void {
+    for (const [id, pending] of this.pendingRelayRequests) {
+      if (pending.clientId !== clientId) {
+        continue
+      }
+      clearTimeout(pending.timer)
+      this.pendingRelayRequests.delete(id)
+      pending.reject(new Error(message))
+    }
   }
 
   dispose(): void {
@@ -356,8 +438,7 @@ export class RelayDispatcher {
       pending.reject(new Error('Relay dispatcher disposed'))
       this.pendingRelayRequests.delete(id)
     }
-    // Why: dispose means this relay instance cannot send responses anymore;
-    // abort in-flight request work so stale SSH-side scans/watchers release.
+    // Why: can't send responses after dispose; abort in-flight work so SSH-side scans/watchers release.
     this.requestAborts.abortAll()
     for (const client of this.clients.values()) {
       this.flushDrainWaiters(client)
@@ -371,6 +452,7 @@ export class RelayDispatcher {
       decoder: new FrameDecoder((frame) => this.handleFrame(client, frame)),
       write,
       waitWriteDrain: sinkOptions?.waitWriteDrain,
+      disconnect: sinkOptions?.disconnect,
       drainWaiters: new Set(),
       bulkChain: Promise.resolve(),
       nextOutgoingSeq: 1,
@@ -401,7 +483,7 @@ export class RelayDispatcher {
     if (frame.type === MessageType.Regular) {
       try {
         const msg = parseJsonRpcMessage(frame.payload)
-        this.handleMessage(client, msg)
+        this.handleMessage(client, msg, frame.payload.byteLength)
       } catch (err) {
         process.stderr.write(
           `[relay] Parse error: ${err instanceof Error ? err.message : String(err)}\n`
@@ -412,10 +494,11 @@ export class RelayDispatcher {
 
   private handleMessage(
     client: RelayClient,
-    msg: JsonRpcRequest | JsonRpcNotification | JsonRpcResponse
+    msg: JsonRpcRequest | JsonRpcNotification | JsonRpcResponse,
+    retainedBytes: number
   ): void {
     if ('id' in msg && 'method' in msg) {
-      void this.handleRequest(client, msg as JsonRpcRequest)
+      void this.handleRequest(client, msg as JsonRpcRequest, retainedBytes)
     } else if ('id' in msg && ('result' in msg || 'error' in msg)) {
       this.handleResponse(msg as JsonRpcResponse)
     } else if ('method' in msg && !('id' in msg)) {
@@ -440,7 +523,11 @@ export class RelayDispatcher {
     pending.resolve(msg.result)
   }
 
-  private async handleRequest(client: RelayClient, req: JsonRpcRequest): Promise<void> {
+  private async handleRequest(
+    client: RelayClient,
+    req: JsonRpcRequest,
+    retainedBytes: number
+  ): Promise<void> {
     const handler = this.requestHandlers.get(req.method)
     if (!handler) {
       this.sendResponse(client, req.id, undefined, {
@@ -450,14 +537,19 @@ export class RelayDispatcher {
       return
     }
 
-    // Why: capture this client's generation before the async handler runs.
-    // If that client disconnects while the handler is in flight, the response
-    // belongs to a dead request-id space and mutating work may need cleanup.
+    // Why: snapshot generation before the await to detect if the client disconnected mid-flight.
     const gen = client.generation
-    const { key: abortKey, controller: abortController } = this.requestAborts.create(
-      client.id,
-      req.id
-    )
+    let registration: ReturnType<ClientRequestAborts['create']>
+    try {
+      registration = this.requestAborts.create(client.id, req.id, retainedBytes)
+    } catch (error) {
+      if (error instanceof RelayRequestAdmissionError) {
+        this.sendResponse(client, req.id, undefined, { code: -32000, message: error.message })
+        return
+      }
+      throw error
+    }
+    const { key: abortKey, controller: abortController } = registration
     const context: RequestContext = {
       clientId: client.id,
       isStale: () =>
@@ -539,9 +631,7 @@ export class RelayDispatcher {
         this.writeFrame(client, frame)
       }
     }, KEEPALIVE_SEND_MS)
-    // Why: without unref, the keepalive interval keeps the event loop alive
-    // even when the relay should be winding down (e.g. after stdin ends and
-    // all PTYs have exited). unref lets the process exit naturally.
+    // Why: unref so the keepalive interval doesn't pin the event loop and block process exit.
     this.keepaliveTimer.unref()
   }
 
@@ -552,16 +642,9 @@ export class RelayDispatcher {
       client.closed = true
       client.generation++
       this.requestAborts.abortClient(client.id)
+      this.rejectPendingRequestsForClient(client.id, 'Relay client disconnected')
       this.flushDrainWaiters(client)
-      // Why: a write throw means this frame (possibly pty.data or pty.exit) was
-      // lost with no resend — the framing carries seq/ack but no retransmit
-      // buffer. Detach so the owning Orca's reconnect + PTY-reattach path runs
-      // promptly (regenerating dropped pty.data from the replay buffer and pane
-      // death via reattach-not-found), instead of silently dropping frames until
-      // the ~20s keepalive timeout notices. The primary client stays in the map
-      // (its object is reused across setWrite reconnects) but detach listeners
-      // must still fire, exactly as invalidateClient() does for stdin/stdout
-      // death — this makes the socket-write-throw path consistent with those.
+      // Why: frames have no retransmit buffer; detach now so reconnect/PTY-reattach runs instead of waiting the ~20s keepalive timeout.
       if (client !== this.primaryClient) {
         this.clients.delete(client.id)
       }

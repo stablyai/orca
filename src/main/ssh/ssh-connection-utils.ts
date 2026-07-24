@@ -311,7 +311,9 @@ export function spawnProxyCommand(
     proc.off('error', onProcessError)
   }
   const onStdoutData = (data: Buffer): void => {
-    stream.push(data)
+    if (!stream.push(data)) {
+      proc.stdout!.pause()
+    }
   }
   const onStdoutEnd = (): void => {
     stream.push(null)
@@ -323,7 +325,9 @@ export function spawnProxyCommand(
     stream.destroy(err)
   }
   const stream = new Duplex({
-    read() {},
+    read() {
+      proc.stdout!.resume()
+    },
     write(chunk, _encoding, cb) {
       proc.stdin!.write(chunk, cb)
     },

@@ -20,6 +20,9 @@ import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-envi
 import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
+import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
+
+export const RUNTIME_HOST_CATALOG_FETCH_CONCURRENCY = 4
 
 function isConnecting(status: SshConnectionStatus): boolean {
   return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
@@ -147,6 +150,24 @@ export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): 
   return state === 'connected'
 }
 
+export async function connectRuntimeHostForNavigation(args: {
+  environmentId: string
+  refreshStatus: (environmentId: string, timeoutMs: number) => Promise<boolean>
+  fetchRepos: (environmentId: string) => Promise<{ id: string }[]>
+  fetchWorktrees: (repoId: string) => Promise<unknown>
+  fetchLineage: () => Promise<unknown>
+}): Promise<boolean> {
+  if (!(await args.refreshStatus(args.environmentId, 5_000))) {
+    return false
+  }
+  const repos = await args.fetchRepos(args.environmentId)
+  await forEachWithConcurrency(repos, RUNTIME_HOST_CATALOG_FETCH_CONCURRENCY, async (repo) => {
+    await args.fetchWorktrees(repo.id)
+  })
+  await args.fetchLineage()
+  return true
+}
+
 export function SshStatusSegment({
   compact,
   iconOnly
@@ -159,7 +180,6 @@ export function SshStatusSegment({
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
   const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
   const refreshRuntimeEnvironmentStatus = useAppStore((s) => s.refreshRuntimeEnvironmentStatus)
@@ -214,7 +234,14 @@ export function SshStatusSegment({
   const disconnectedTargets = targets.filter((target) => target.status !== 'connected')
   const connectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
-      const reachable = await refreshRuntimeEnvironmentStatus(environmentId, 5_000)
+      const store = useAppStore.getState()
+      const reachable = await connectRuntimeHostForNavigation({
+        environmentId,
+        refreshStatus: refreshRuntimeEnvironmentStatus,
+        fetchRepos: store.fetchRuntimeEnvironmentRepos,
+        fetchWorktrees: store.fetchWorktrees,
+        fetchLineage: store.fetchWorktreeLineage
+      })
       if (!reachable) {
         toast.error(
           translate(
@@ -224,22 +251,13 @@ export function SshStatusSegment({
         )
         return
       }
-      const switched = await switchRuntimeEnvironment(environmentId)
-      if (switched) {
-        recordFeatureInteraction('ssh')
-      }
+      recordFeatureInteraction('ssh')
     },
-    [recordFeatureInteraction, refreshRuntimeEnvironmentStatus, switchRuntimeEnvironment]
+    [recordFeatureInteraction, refreshRuntimeEnvironmentStatus]
   )
   const disconnectRuntimeHost = useCallback(
-    async (environmentId: string, isActive: boolean): Promise<void> => {
+    async (environmentId: string): Promise<void> => {
       try {
-        if (isActive) {
-          const switched = await switchRuntimeEnvironment(null)
-          if (!switched) {
-            return
-          }
-        }
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
         setRuntimeEnvironmentStatus(environmentId, { status: null, checkedAt: Date.now() })
         recordFeatureInteraction('ssh')
@@ -254,7 +272,7 @@ export function SshStatusSegment({
         )
       }
     },
-    [recordFeatureInteraction, setRuntimeEnvironmentStatus, switchRuntimeEnvironment]
+    [recordFeatureInteraction, setRuntimeEnvironmentStatus]
   )
 
   if (targets.length === 0 && runtimeHosts.length === 0) {
@@ -355,7 +373,7 @@ export function SshStatusSegment({
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl)}
             onConnect={() => connectRuntimeHost(host.id)}
-            onDisconnect={() => disconnectRuntimeHost(host.id, host.active)}
+            onDisconnect={() => disconnectRuntimeHost(host.id)}
           />
         ))}
         {connectedTargets.map((t) => (
@@ -374,7 +392,7 @@ export function SshStatusSegment({
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl)}
             onConnect={() => connectRuntimeHost(host.id)}
-            onDisconnect={() => disconnectRuntimeHost(host.id, host.active)}
+            onDisconnect={() => disconnectRuntimeHost(host.id)}
           />
         ))}
         {disconnectedTargets.map((t) => (

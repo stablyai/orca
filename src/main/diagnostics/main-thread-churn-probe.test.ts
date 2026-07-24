@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MAIN_THREAD_DIAGNOSTICS_ENV,
+  SUBPROCESS_SPAWN_STATS_MAX_ENTRIES,
   classifySubprocessCommand,
   drainSubprocessSpawnStats,
   isMainThreadDiagnosticsEnabled,
@@ -70,5 +71,23 @@ describe('recordSubprocessSpawn', () => {
       'git rev-list': { count: 1, blockMsTotal: 1.5, blockMsMax: 1.5 }
     })
     expect(drainSubprocessSpawnStats()).toEqual({})
+  })
+
+  it('bounds unique diagnostic buckets and aggregates overflow', () => {
+    vi.stubEnv(MAIN_THREAD_DIAGNOSTICS_ENV, '1')
+    for (let index = 0; index < 200; index += 1) {
+      recordSubprocessSpawn(`tool-${index}`, [], 1)
+    }
+
+    const drained = drainSubprocessSpawnStats()
+    expect(Object.keys(drained)).toHaveLength(SUBPROCESS_SPAWN_STATS_MAX_ENTRIES)
+    expect(drained.other).toEqual({ count: 73, blockMsTotal: 73, blockMsMax: 1 })
+  })
+
+  it('materializes a bounded binary bucket from an oversized command path', () => {
+    const command = `/tmp/${'x'.repeat(1024 * 1024)}`
+    const classified = classifySubprocessCommand(command, [])
+    expect(classified).toHaveLength(64)
+    expect(classified).toBe('x'.repeat(64))
   })
 })

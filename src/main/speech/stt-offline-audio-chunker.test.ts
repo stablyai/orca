@@ -97,4 +97,17 @@ describe('OfflineAudioChunker', () => {
     expect(chunker.push(new Float32Array(0))).toEqual([])
     expect(chunker.flush()).toBeNull()
   })
+
+  it('preserves 100,000 one-sample fragments without retaining one object per push', () => {
+    const chunker = new OfflineAudioChunker(10_000)
+    const expected = new Float32Array(100_000)
+
+    for (let index = 0; index < expected.length; index += 1) {
+      const value = (index % 251) / 251
+      expected[index] = value
+      expect(chunker.push(Float32Array.of(value))).toEqual([])
+    }
+
+    expect(chunker.flush()).toEqual(expected)
+  })
 })

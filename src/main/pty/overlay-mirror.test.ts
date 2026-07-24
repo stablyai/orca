@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os'
 import type * as NodePath from 'node:path'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { safeRemoveOverlay } from './overlay-mirror'
+import {
+  OVERLAY_REMOVE_MAX_DEPTH,
+  OVERLAY_REMOVE_MAX_ENTRIES,
+  safeRemoveOverlay,
+  safeRemoveTree
+} from './overlay-mirror'
 
 const tempRoots: string[] = []
 
@@ -19,6 +24,50 @@ afterEach(() => {
 })
 
 describe('safeRemoveOverlay', () => {
+  it('publishes finite production cleanup limits', () => {
+    expect(OVERLAY_REMOVE_MAX_ENTRIES).toBe(100_000)
+    expect(OVERLAY_REMOVE_MAX_DEPTH).toBe(256)
+  })
+
+  it('removes a tree at the exact entry limit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-overlay-entry-limit-'))
+    tempRoots.push(root)
+    writeFileSync(join(root, 'one'), '')
+    writeFileSync(join(root, 'two'), '')
+
+    expect(safeRemoveTree(root, { maxEntries: 2 })).toBe(true)
+    expect(existsSync(root)).toBe(false)
+  })
+
+  it('stops before visiting an entry beyond the limit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-overlay-entry-limit-'))
+    tempRoots.push(root)
+    writeFileSync(join(root, 'one'), '')
+    writeFileSync(join(root, 'two'), '')
+    writeFileSync(join(root, 'three'), '')
+
+    expect(safeRemoveTree(root, { maxEntries: 2 })).toBe(false)
+    expect(existsSync(root)).toBe(true)
+  })
+
+  it('accepts the exact directory depth and stops before descending one level deeper', async () => {
+    const acceptedRoot = await mkdtemp(join(tmpdir(), 'orca-overlay-depth-limit-'))
+    tempRoots.push(acceptedRoot)
+    mkdirSync(join(acceptedRoot, 'one', 'two'), { recursive: true })
+    writeFileSync(join(acceptedRoot, 'one', 'two', 'leaf'), '')
+
+    expect(safeRemoveTree(acceptedRoot, { maxDepth: 2 })).toBe(true)
+    expect(existsSync(acceptedRoot)).toBe(false)
+
+    const rejectedRoot = await mkdtemp(join(tmpdir(), 'orca-overlay-depth-limit-'))
+    tempRoots.push(rejectedRoot)
+    mkdirSync(join(rejectedRoot, 'one', 'two'), { recursive: true })
+    writeFileSync(join(rejectedRoot, 'one', 'two', 'leaf'), '')
+
+    expect(safeRemoveTree(rejectedRoot, { maxDepth: 1 })).toBe(false)
+    expect(existsSync(rejectedRoot)).toBe(true)
+  })
+
   it('removes valid overlay children whose names start with dot-dot', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-overlay-root-'))
     tempRoots.push(root)

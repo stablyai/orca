@@ -100,6 +100,17 @@ describe('createWslWatcher', () => {
     )
   })
 
+  it('parses a snapshot delivered as 100,000 one-byte fragments', async () => {
+    const { child, promise } = startWatcher()
+    const frame = Buffer.from(snapshotFrame([['f', '1.0', `/home/me/repo/${'x'.repeat(99_950)}`]]))
+
+    for (let index = 0; index < frame.byteLength; index += 1) {
+      child.stdout.write(frame.subarray(index, index + 1))
+    }
+
+    await expect(promise).resolves.toBeDefined()
+  })
+
   it('counts WSL watcher processes against the global physical child cap', async () => {
     const releases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () =>
       reserveWatcherChild()

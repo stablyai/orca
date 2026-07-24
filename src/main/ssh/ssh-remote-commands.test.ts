@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { GENERATED_NODE_MANAGED_FILE_MAX_BYTES } from '../generated-node-bounded-file-reader'
 import {
   lockAgeSecondsCommand,
   tryCreateInstallLockCommand,
@@ -108,7 +109,9 @@ describe('ssh remote command builders', () => {
   it('keeps POSIX deploy commands POSIX-native', () => {
     expect(readRemoteHomeCommand(posix)).toBe('echo $HOME')
     expect(makeRemoteDirectoryCommand(posix, '/home/me/.orca-remote')).toContain('mkdir -p')
-    expect(probeRelayInstalledCommand(posix, '/home/me/relay')).toContain('test -d')
+    const probe = probeRelayInstalledCommand(posix, '/home/me/relay')
+    expect(probe).toContain('test -d')
+    expect(probe).toContain('managed-hook-runtime.js')
   })
 
   it('uses encoded PowerShell for Windows deploy commands', () => {
@@ -116,7 +119,9 @@ describe('ssh remote command builders', () => {
     expect(makeRemoteDirectoryCommand(windows, 'C:/Users/me/.orca-remote')).toContain(
       '-EncodedCommand'
     )
-    expect(probeRelayInstalledCommand(windows, 'C:/Users/me/relay')).toContain('-EncodedCommand')
+    const probe = probeRelayInstalledCommand(windows, 'C:/Users/me/relay')
+    expect(probe).toContain('-EncodedCommand')
+    expect(decodePowerShellCommand(probe)).toContain('managed-hook-runtime.js')
   })
 
   it('uses a legacy-visible Windows lock directory with an exclusive owner file', () => {
@@ -168,6 +173,11 @@ describe('ssh remote command builders', () => {
     expect(script).toContain('markerCount===0&&pipes.length===0')
     expect(script).toContain('C:\\Program Files\\nodejs')
     expect(script).not.toContain('Win32_Process')
+    expect(script).toContain(
+      `readOrcaManagedFileWithinLimit(fs, path, maxBytes = ${GENERATED_NODE_MANAGED_FILE_MAX_BYTES})`
+    )
+    expect(script).toContain('readOrcaManagedFileWithinLimit(fs,path.join(dir,name)).trim()')
+    expect(script).not.toContain('readFileSync')
     expect(listRelayBaseDirsCommand(windows, 'C:/Users/me/.orca-remote')).toContain(
       '-EncodedCommand'
     )
@@ -239,6 +249,9 @@ describe('ssh remote command builders', () => {
     expect(posixCommand).toContain('steal_generation + 1')
     expect(posixCommand).not.toContain('.next.')
     expect(posixCommand).toContain('trap')
+    expect(posixCommand).toContain('find "$steal_parent" -mindepth 1 -maxdepth 1')
+    expect(posixCommand).toContain('-exec rm -rf {} +')
+    expect(posixCommand).not.toContain('rm -rf "$steal_root".*')
     expect(windowsScript).toContain('$lock.steal')
     expect(windowsScript).toContain('$stealGeneration++')
     expect(windowsScript).toContain('-gt 1200')

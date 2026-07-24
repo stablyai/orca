@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileFileExplorerPanel } from './MobileFileExplorerPanel'
+import { LEGACY_MOBILE_FILE_PATH_MAX_BYTES } from './file-list-fallback'
 import type { MobileDirEntry } from './file-tree'
 import type { RpcResponse } from '../transport/types'
 
@@ -206,6 +207,18 @@ describe('MobileFileExplorerPanel', () => {
     expect(client.sendRequest).toHaveBeenCalledTimes(2)
   })
 
+  it('rejects an extreme directory listing instead of silently truncating it', async () => {
+    const client = createMockClient({
+      '': Array.from({ length: 10_001 }, (_, index) => entry(`file-${index}.txt`))
+    })
+    mockTransport.client = client
+
+    const renderer = await renderExplorer()
+
+    expect(renderedText(renderer)).toContain('This folder is too large to show safely on mobile')
+    expect(renderedText(renderer)).toContain('10,000 items')
+  })
+
   it('keeps the loaded tree visible during a transient disconnect', async () => {
     const client = createMockClient({
       '': [entry('src', true), entry('README.md')]
@@ -364,6 +377,43 @@ describe('MobileFileExplorerPanel', () => {
 
     expect(renderedText(renderer)).toContain('README.md')
     expect(renderedText(renderer)).toContain('Showing first 5000')
+  })
+
+  it('reports a bounded-memory error when a legacy path exceeds the fallback cap', async () => {
+    const legacyClient: MockClient = {
+      sendRequest: vi.fn(async (method: string): Promise<RpcResponse> => {
+        if (method === 'files.readDir') {
+          return {
+            id: 'response-id',
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-id' }
+          }
+        }
+        return {
+          id: 'response-id',
+          ok: true,
+          result: {
+            files: [
+              {
+                relativePath: 'x'.repeat(LEGACY_MOBILE_FILE_PATH_MAX_BYTES + 1),
+                basename: 'oversized',
+                kind: 'text'
+              }
+            ],
+            totalCount: 1,
+            truncated: false
+          },
+          _meta: { runtimeId: 'runtime-id' }
+        }
+      })
+    }
+    mockTransport.client = legacyClient
+
+    const renderer = await renderExplorer()
+
+    expect(renderedText(renderer)).toContain('legacy file list is too large')
+    expect(renderedText(renderer)).toContain('Update Orca Desktop')
   })
 
   it('reports the files.list failure when the fallback itself fails', async () => {

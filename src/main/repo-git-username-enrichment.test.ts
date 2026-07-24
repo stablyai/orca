@@ -11,6 +11,9 @@ vi.mock('./git/git-username', () => ({
 import {
   enrichRepoGitUsernames,
   flushRepoGitUsernameEnrichmentForTests,
+  getRepoGitUsernameAttemptCountForTests,
+  REPO_LOCATION_CACHE_KEY_MAX_BYTES,
+  REPO_GIT_USERNAME_ATTEMPT_MAX_ENTRIES,
   resetRepoGitUsernameEnrichmentForTests
 } from './repo-git-username-enrichment'
 
@@ -80,6 +83,37 @@ describe('enrichRepoGitUsernames', () => {
     await flushRepoGitUsernameEnrichmentForTests()
 
     expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds remembered attempts across churned repo locations', async () => {
+    const repos = Array.from({ length: REPO_GIT_USERNAME_ATTEMPT_MAX_ENTRIES + 1 }, (_, index) =>
+      makeRepo({ id: `r${index}`, path: `C:/repos/${index}` })
+    )
+    const store = makeStore(repos)
+
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+
+    expect(getRepoGitUsernameAttemptCountForTests()).toBe(REPO_GIT_USERNAME_ATTEMPT_MAX_ENTRIES)
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+    expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(
+      REPO_GIT_USERNAME_ATTEMPT_MAX_ENTRIES + 2
+    )
+  })
+
+  it('does not retain oversized repo-location keys', async () => {
+    const store = makeStore([
+      makeRepo({ path: `C:/${'x'.repeat(REPO_LOCATION_CACHE_KEY_MAX_BYTES)}` })
+    ])
+
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+
+    expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(2)
+    expect(getRepoGitUsernameAttemptCountForTests()).toBe(0)
   })
 
   it('keeps persisted usernames on a non-authoritative empty resolution', async () => {

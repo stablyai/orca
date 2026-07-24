@@ -1,12 +1,51 @@
 // Why: stdin ownership is a cross-agent process contract; one executable
 // matrix catches an unread early exit without duplicating template assertions.
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type * as osModule from 'node:os'
+
+let isolatedUserDataDir = ''
+let previousUserDataPath: string | undefined
+
+beforeEach(() => {
+  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+  isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-user-data-'))
+  // Why: Orca-managed Codex hooks resolve through ORCA_USER_DATA_PATH before
+  // the mocked home; an inherited live path would let this test rewrite them.
+  process.env.ORCA_USER_DATA_PATH = isolatedUserDataDir
+})
+
+afterEach(() => {
+  if (previousUserDataPath === undefined) {
+    delete process.env.ORCA_USER_DATA_PATH
+  } else {
+    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+  }
+  rmSync(isolatedUserDataDir, { recursive: true, force: true })
+})
+
+function findGitBash(): string {
+  if (process.env.KIMI_SHELL_PATH) {
+    return process.env.KIMI_SHELL_PATH
+  }
+  const candidates = [
+    process.env.ProgramFiles && join(process.env.ProgramFiles, 'Git', 'bin', 'bash.exe'),
+    process.env['ProgramFiles(x86)'] &&
+      join(process.env['ProgramFiles(x86)'], 'Git', 'bin', 'bash.exe'),
+    process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'bin', 'bash.exe')
+  ]
+  const bash = candidates.find((candidate): candidate is string =>
+    Boolean(candidate && existsSync(candidate))
+  )
+  if (!bash) {
+    throw new Error('Git Bash is required for the Windows Kimi hook lifecycle test')
+  }
+  return bash
+}
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -168,8 +207,11 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
     const generated = [...memory.fs.files.entries()].filter(
       ([path]) => path.includes('/.orca/agent-hooks/') && path.endsWith('.sh')
     )
-    expect(generated, `${entry.agent} generated scripts`).toHaveLength(1)
-    scripts.set(entry.agent, generated[0][1])
+    // Why: Claude ships a second managed script (the statusline usage feed); the stdin lifecycle contract applies to every generated script.
+    expect(generated.length, `${entry.agent} generated scripts`).toBeGreaterThan(0)
+    for (const [path, script] of generated) {
+      scripts.set(`${entry.agent} ${path.split('/').pop()}`, script)
+    }
   }
   return scripts
 }
@@ -255,6 +297,7 @@ describe('Windows managed hook stdin structure', () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
       homedirMock.mockReturnValue(home)
       try {
+        const gitBash = findGitBash()
         for (const entry of LOCAL_INSTALLERS) {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
@@ -279,7 +322,7 @@ describe('Windows managed hook stdin structure', () => {
                   'v1.0',
                   'powershell.exe'
                 )
-              : process.env.KIMI_SHELL_PATH || 'bash.exe'
+              : gitBash
           const args = fileName.endsWith('.cmd')
             ? ['/d', '/c', scriptPath]
             : fileName.endsWith('.ps1')
@@ -306,7 +349,7 @@ describe('Windows managed hook stdin structure', () => {
           },
           {
             name: 'Git Bash fast path',
-            executable: process.env.KIMI_SHELL_PATH || 'bash.exe',
+            executable: gitBash,
             args: ['-lc', wrapWindowsGitBashHookCommand(missingScript)]
           }
         ]
@@ -337,14 +380,13 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('accepts a large payload without Orca environment or a broken writer', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const extraEnv =
-        agent === 'command-code'
-          ? {
-              ORCA_AGENT_HOOK_PORT: '1',
-              ORCA_AGENT_HOOK_TOKEN: 'test-token',
-              ORCA_PANE_KEY: 'test-pane'
-            }
-          : {}
+      const extraEnv = agent.startsWith('command-code')
+        ? {
+            ORCA_AGENT_HOOK_PORT: '1',
+            ORCA_AGENT_HOOK_TOKEN: 'test-token',
+            ORCA_PANE_KEY: 'test-pane'
+          }
+        : {}
       const result = await runPosixHook(script, extraEnv)
       expect(result.exitCode, `${agent} exit code`).toBe(0)
       expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
@@ -352,7 +394,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   })
 
   it('drains before Claude skips hooks imported by Devin', async () => {
-    const script = (await generatePosixScripts()).get('claude')
+    const script = (await generatePosixScripts()).get('claude claude-hook.sh')
     expect(script).toBeDefined()
     const result = await runPosixHook(script!, { DEVIN_PROJECT_DIR: '/tmp/devin-project' })
     expect(result.exitCode).toBe(0)

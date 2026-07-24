@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type {
   OrcaOrgMember,
   OrcaOrgMembersRoster,
@@ -8,6 +9,7 @@ import type {
   OrcaProfileOrgMemberRemoveArgs,
   OrcaProfileOrgInviteRevokeArgs
 } from '../../shared/orca-profiles'
+import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
 
 // Why: dev-auth mode has no server, so the whole teammate UI is exercised
 // against this in-memory per-org roster. It mirrors the shape the real client
@@ -19,10 +21,17 @@ type DevOrgRoster = {
 }
 
 const devRostersByOrg = new Map<string, DevOrgRoster>()
+export const DEV_ORG_ROSTER_MAX_ENTRIES = 64
+export const DEV_ORG_PENDING_INVITE_MAX_ENTRIES = 256
+const DEV_ORG_ENV_FIELD_MAX_BYTES = 4 * 1024
+const DEV_ORG_INVITE_EMAIL_MAX_BYTES = 320
 
 function cleanEnvString(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim()
-  return trimmed || fallback
+  return trimmed &&
+    !measureUtf8ByteLength(trimmed, { stopAfterBytes: DEV_ORG_ENV_FIELD_MAX_BYTES }).exceededLimit
+    ? trimmed
+    : fallback
 }
 
 function devSelf(): OrcaOrgMember {
@@ -52,12 +61,22 @@ function seedDevRoster(): DevOrgRoster {
 }
 
 function getDevRoster(orgId: string): DevOrgRoster {
-  const existing = devRostersByOrg.get(orgId)
+  const cacheKey = createHash('sha256').update(orgId).digest('base64url')
+  const existing = devRostersByOrg.get(cacheKey)
   if (existing) {
+    devRostersByOrg.delete(cacheKey)
+    devRostersByOrg.set(cacheKey, existing)
     return existing
   }
   const seeded = seedDevRoster()
-  devRostersByOrg.set(orgId, seeded)
+  devRostersByOrg.set(cacheKey, seeded)
+  while (devRostersByOrg.size > DEV_ORG_ROSTER_MAX_ENTRIES) {
+    const oldest = devRostersByOrg.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    devRostersByOrg.delete(oldest)
+  }
   return seeded
 }
 
@@ -81,6 +100,14 @@ export function inviteDevOrcaCloudOrgMember(
   }
   if (roster.pendingInvites.some((invite) => invite.email.toLowerCase() === email)) {
     return { status: 'conflict', reason: 'already_invited' }
+  }
+  if (
+    roster.pendingInvites.length >= DEV_ORG_PENDING_INVITE_MAX_ENTRIES ||
+    measureUtf8ByteLength(args.email, {
+      stopAfterBytes: DEV_ORG_INVITE_EMAIL_MAX_BYTES
+    }).exceededLimit
+  ) {
+    return { status: 'failed', error: 'The dev organization invite roster is full.' }
   }
   roster.pendingInvites.push({ email: args.email, role: args.role, createdAt: Date.now() })
   return { status: 'ok' }
@@ -127,4 +154,12 @@ export function removeDevOrcaCloudOrgMember(
   }
   roster.members.splice(index, 1)
   return { status: 'ok' }
+}
+
+export function _resetDevOrcaCloudOrgRostersForTests(): void {
+  devRostersByOrg.clear()
+}
+
+export function _getDevOrcaCloudOrgRosterCountForTests(): number {
+  return devRostersByOrg.size
 }

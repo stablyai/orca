@@ -1,44 +1,57 @@
 import { describe, expect, it } from 'vitest'
 import { mobileDiffImageDataUri } from './mobile-diff-image-preview'
 
+function pngBase64(width = 1): string {
+  const bytes = Buffer.alloc(24)
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write('IHDR', 12, 'ascii')
+  bytes.writeUInt32BE(width, 16)
+  bytes.writeUInt32BE(1, 20)
+  return bytes.toString('base64')
+}
+
 describe('mobileDiffImageDataUri', () => {
   it('renders a modified image diff from the post-change bytes', () => {
+    const modifiedContent = pngBase64(2)
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
         originalContent: 'b2xk',
-        modifiedContent: 'bmV3',
+        modifiedContent,
         isImage: true,
         mimeType: 'image/png'
       })
-    ).toBe('data:image/png;base64,bmV3')
+    ).toBe(`data:image/png;base64,${modifiedContent}`)
   })
 
   it('renders an added image diff (no original) from the modified bytes', () => {
+    const modifiedContent = pngBase64()
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
         originalContent: '',
-        modifiedContent: 'bmV3',
+        modifiedContent,
         isImage: true,
         mimeType: 'image/png'
       })
-    ).toBe('data:image/png;base64,bmV3')
+    ).toBe(`data:image/png;base64,${modifiedContent}`)
   })
 
   it('falls back to the original bytes for a proven deletion (modifiedDeleted)', () => {
+    const originalContent = pngBase64()
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
-        originalContent: 'b2xk',
+        originalContent,
         originalIsBinary: true,
         modifiedContent: '',
         modifiedIsBinary: false,
         modifiedDeleted: true,
         isImage: true,
-        mimeType: 'image/jpeg'
+        mimeType: 'image/png'
       })
-    ).toBe('data:image/jpeg;base64,b2xk')
+    ).toBe(`data:image/png;base64,${originalContent}`)
   })
 
   // The reviewer's read-failure case: a relay/SSH read returns an empty modified

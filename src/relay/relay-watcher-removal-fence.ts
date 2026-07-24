@@ -6,6 +6,9 @@ import type { RelayDispatcher } from './dispatcher'
 import { emitRelayWatcherTerminalFailure } from './relay-watcher-terminal-notifier'
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import type { RelayWatcherPendingSetup } from './relay-watcher-setup-tracking'
+import { forEachWithConcurrency, mapSettledWithConcurrency } from '../shared/map-with-concurrency'
+
+const RELAY_WATCH_CLOSE_CONCURRENCY = 8
 
 export class RelayWatcherRemovalFence {
   private readonly roots = new Set<string>()
@@ -102,7 +105,9 @@ export class RelayWatcherRemovalFence {
     const pending = [...this.pendingSetups.entries()].filter(([setupRoot]) =>
       isPathInsideOrEqual(rootKey, setupRoot)
     )
-    await Promise.all(pending.map(([, setup]) => setup.promise.catch(() => undefined)))
+    await forEachWithConcurrency(pending, RELAY_WATCH_CLOSE_CONCURRENCY, async ([, setup]) => {
+      await setup.promise.catch(() => undefined)
+    })
     const states = [...this.watches.entries()]
       .filter(([watchRoot]) => isPathInsideOrEqual(rootKey, watchRoot))
       .map(([, state]) => state)
@@ -111,7 +116,15 @@ export class RelayWatcherRemovalFence {
       state.clients.clear()
       state.clientWatchIds.clear()
     }
-    await Promise.all(states.map((state) => this.closeWatch(state)))
+    const closes = await mapSettledWithConcurrency(states, RELAY_WATCH_CLOSE_CONCURRENCY, (state) =>
+      this.closeWatch(state)
+    )
+    const failedClose = closes.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected'
+    )
+    if (failedClose) {
+      throw failedClose.reason
+    }
     const trackedRoots = this.teardownTracker
       .rootPaths()
       .filter((trackedRoot) => isPathInsideOrEqual(rootKey, trackedRoot))

@@ -1,5 +1,9 @@
 import { gitExecFileAsync } from '../git/runner'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  buildRepositoryRefCacheKey,
+  RepositoryRefCache
+} from '../source-control/repository-ref-cache'
 
 export type BitbucketRepoRef = {
   workspace: string
@@ -10,8 +14,7 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-const REPO_REF_CACHE_MAX_ENTRIES = 512
-const repoRefCache = new Map<string, BitbucketRepoRef | null>()
+const repoRefCache = new RepositoryRefCache<BitbucketRepoRef>()
 
 /** @internal - exposed for tests only */
 export function _resetBitbucketRepoRefCache(): void {
@@ -21,17 +24,6 @@ export function _resetBitbucketRepoRefCache(): void {
 /** @internal - exposed for tests only */
 export function _getBitbucketRepoRefCacheSize(): number {
   return repoRefCache.size
-}
-
-function rememberRepoRefCacheEntry(cacheKey: string, value: BitbucketRepoRef | null): void {
-  repoRefCache.set(cacheKey, value)
-  while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
-    const oldestKey = repoRefCache.keys().next().value
-    if (oldestKey === undefined) {
-      return
-    }
-    repoRefCache.delete(oldestKey)
-  }
 }
 
 function decodeSegment(value: string): string {
@@ -87,9 +79,10 @@ export async function getBitbucketRepoRefForRemote(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<BitbucketRepoRef | null> {
   const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
-  const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}`
-  if (repoRefCache.has(cacheKey)) {
-    return repoRefCache.get(cacheKey)!
+  const cacheKey = buildRepositoryRefCacheKey([runtimeKey, repoPath, remoteName])
+  const cached = repoRefCache.get(cacheKey)
+  if (cached.found) {
+    return cached.value
   }
   try {
     const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
@@ -103,7 +96,7 @@ export async function getBitbucketRepoRefForRemote(
           ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
         })
     const result = parseBitbucketRepoRef(stdout)
-    rememberRepoRefCacheEntry(cacheKey, result)
+    repoRefCache.remember(cacheKey, result, result ? [result.workspace, result.repoSlug] : [])
     return result
   } catch {
     if (connectionId) {
@@ -111,7 +104,7 @@ export async function getBitbucketRepoRefForRemote(
       // caching them as "not Bitbucket" would poison the repo for the session.
       return null
     }
-    rememberRepoRefCacheEntry(cacheKey, null)
+    repoRefCache.remember(cacheKey, null, [])
     return null
   }
 }

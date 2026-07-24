@@ -4,10 +4,11 @@
 // MultiplexerTransport. Kept separate from the manager so the state machine
 // stays readable. See docs/agent-status-over-wsl.md (STA-1515).
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import {
   decodeWslText,
@@ -27,6 +28,8 @@ import {
 } from '../../shared/wsl-hook-relay-contract'
 
 const INSTALL_TIMEOUT_MS = 30_000
+export const WSL_HOOK_RELAY_MAX_VERSION_FILE_BYTES = 4 * 1024
+export const WSL_HOOK_RELAY_MAX_BUNDLE_BYTES = 8 * 1024 * 1024
 
 export type WslHookRelayBundle = { jsPath: string; version: string }
 
@@ -52,7 +55,12 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
     const jsPath = join(dir, WSL_HOOK_RELAY_BUNDLE_NAME)
     const versionPath = join(dir, WSL_HOOK_RELAY_VERSION_FILE)
     if (existsSync(jsPath) && existsSync(versionPath)) {
-      const version = readFileSync(versionPath, 'utf8').trim()
+      let version: string
+      try {
+        version = readWslHookRelayBundleVersion(versionPath)
+      } catch {
+        continue
+      }
       // Why: the version lands inside single-quoted guest shell text and in
       // a guest path segment — refuse anything outside the safe alphabet.
       if (/^[A-Za-z0-9+.-]+$/.test(version)) {
@@ -61,6 +69,16 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
     }
   }
   return null
+}
+
+export function readWslHookRelayBundleVersion(versionPath: string): string {
+  return readNodeFileSyncWithinLimit(versionPath, WSL_HOOK_RELAY_MAX_VERSION_FILE_BYTES)
+    .buffer.toString('utf8')
+    .trim()
+}
+
+export function readWslHookRelayBundle(jsPath: string): Buffer {
+  return readNodeFileSyncWithinLimit(jsPath, WSL_HOOK_RELAY_MAX_BUNDLE_BYTES).buffer
 }
 
 // Why: the install dir is namespaced by bundle version so concurrent Orca

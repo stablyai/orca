@@ -14,7 +14,11 @@ vi.mock('./ipc/filesystem-auth', () => ({
   authorizeExternalPath: authorizeExternalPathMock
 }))
 
-import { prepareLocalWorktreeRootForRepo } from './worktree-root-preparation'
+import {
+  LOCAL_WORKTREE_ROOT_PREPARATION_CONCURRENCY,
+  prepareLocalWorktreeRootForRepo,
+  prepareLocalWorktreeRootsForRepos
+} from './worktree-root-preparation'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -75,5 +79,29 @@ describe('prepareLocalWorktreeRootForRepo', () => {
 
     await expect(prepareLocalWorktreeRootForRepo(store as never, repo)).resolves.toBeUndefined()
     expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+  })
+
+  it('prepares every repo with a fixed-size worker pool', async () => {
+    const repos = Array.from({ length: 10_000 }, (_, index) => ({
+      ...repo,
+      id: `repo-${index}`,
+      path: `/projects/repo-${index}`
+    }))
+    let inFlight = 0
+    let peak = 0
+    mkdirMock.mockImplementation(async () => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await Promise.resolve()
+      inFlight -= 1
+    })
+
+    await prepareLocalWorktreeRootsForRepos({
+      ...store,
+      getRepos: () => repos
+    } as never)
+
+    expect(mkdirMock).toHaveBeenCalledTimes(repos.length)
+    expect(peak).toBe(LOCAL_WORKTREE_ROOT_PREPARATION_CONCURRENCY)
   })
 })

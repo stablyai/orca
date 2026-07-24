@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -8,11 +7,25 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/exec
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
 import {
+  boundAiVaultListResult,
+  retainAiVaultSession,
+  retainAiVaultSessionsWithinAggregate
+} from './session-list-retention'
+import {
+  codexRolloutHardlinkIdentity,
+  dedupeCodexRolloutFileAliases,
+  dedupeCodexSessionsBySessionId
+} from './codex-session-root-dedup'
+import {
   createAntigravityWorkspaceResolver,
   type AntigravityWorkspaceResolver
 } from './session-scanner-antigravity-history'
 import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
+import {
+  ensureSessionParseCacheLoaded,
+  scheduleSessionParseCachePersist
+} from './session-parse-cache-persistence'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
@@ -30,6 +43,7 @@ import type {
   SessionParseResult
 } from './session-scanner-types'
 import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
 
 const DEFAULT_LIMIT = 1000
 const DEFAULT_SCAN_LIMIT_PER_AGENT = 1000
@@ -61,26 +75,40 @@ export async function scanAiVaultSessions(
     const issues: AiVaultScanIssue[] = []
     const parseStats = createSessionParseStats()
     const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver(readOptionalTextFile)
+    // Why: persisted entries must be seeded before any candidate is parsed, or
+    // the cold scan gains nothing from the cache file (#9210).
+    await ensureSessionParseCacheLoaded()
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
 
-    const candidates = discoveries
-      .flatMap((discovery) =>
-        discovery.files.map(
-          (file): SessionFileCandidate => ({
-            agent: discovery.agent,
-            file,
-            codexHome:
-              discovery.agent === 'codex'
-                ? codexHomeForSessionsDir(discovery.rootDir, DEFAULT_CODEX_HOME_DIR)
-                : null,
-            antigravityHistoryPath:
-              discovery.agent === 'antigravity'
-                ? antigravityHistoryPathForBrainDir(discovery.rootDir)
-                : undefined
-          })
+    const candidates = dedupeCodexRolloutFileAliases(
+      discoveries
+        .flatMap((discovery) =>
+          discovery.files.map(
+            (file): SessionFileCandidate => ({
+              agent: discovery.agent,
+              file,
+              codexHome:
+                discovery.agent === 'codex'
+                  ? codexHomeForSessionsDir(
+                      discovery.rootDir,
+                      options.defaultCodexHomeDir ?? DEFAULT_CODEX_HOME_DIR
+                    )
+                  : null,
+              antigravityHistoryPath:
+                discovery.agent === 'antigravity'
+                  ? antigravityHistoryPathForBrainDir(discovery.rootDir)
+                  : undefined
+            })
+          )
         )
-      )
-      .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
+        .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs),
+      {
+        isCodex: (candidate) => candidate.agent === 'codex',
+        getFilePath: (candidate) => candidate.file.path,
+        getCodexHome: (candidate) => candidate.codexHome,
+        getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
+      }
+    )
 
     const parsedSessions = await parseSessionCandidates({
       candidates,
@@ -92,7 +120,7 @@ export async function scanAiVaultSessions(
       antigravityWorkspaceResolver
     })
 
-    const cappedSessions = parsedSessions
+    const cappedSessions = dedupeCodexSessionsBySessionId(parsedSessions)
       .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
       .slice(0, limit)
 
@@ -113,11 +141,13 @@ export async function scanAiVaultSessions(
     span.setAttribute('bytesRead', parseStats.bytesRead)
     span.setAttribute('issues', issues.length)
 
-    return {
+    scheduleSessionParseCachePersist(parseStats)
+
+    return boundAiVaultListResult({
       sessions: mergeSessions(cappedSessions, scopeSessions),
       issues: issues.map((issue) => ({ executionHostId, ...issue })),
       scannedAt: new Date().toISOString()
-    }
+    })
   })
 }
 
@@ -222,6 +252,21 @@ async function parseSessionCandidates(args: {
       }
     }
 
+    // Why: cross-volume backfill copies have no shared inode, so collapse
+    // parsed aliases before they can crowd the unique-session parse budget.
+    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
+    const retained = retainAiVaultSessionsWithinAggregate(uniqueSessions)
+    sessions.splice(0, sessions.length, ...retained.sessions)
+    if (retained.omitted > 0) {
+      args.issues.push({
+        executionHostId: args.executionHostId,
+        agent: 'codex',
+        path: 'AI Vault session list',
+        message: `AI Vault stopped after omitting ${retained.omitted} sessions at its memory limit.`
+      })
+      break
+    }
+
     index += batchSize
   }
 
@@ -240,8 +285,9 @@ async function parseSessionCandidate(
     if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
       session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
     }
+    const stamped = session ? withSessionExecutionHost(session, executionHostId) : null
     return {
-      session: session ? withSessionExecutionHost(session, executionHostId) : null,
+      session: stamped ? retainAiVaultSession(stamped) : null,
       issue: null
     }
   } catch (err) {
@@ -259,7 +305,7 @@ async function parseSessionCandidate(
 
 async function readOptionalTextFile(path: string): Promise<string | null> {
   try {
-    return await readFile(path, 'utf-8')
+    return await withAiVaultWholeJsonFile(path, (content) => content)
   } catch {
     return null
   }

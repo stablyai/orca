@@ -1,8 +1,6 @@
-/* eslint-disable max-lines -- Why: the collector's platform-specific
-   enumeration paths (`ps` on Unix, `wmic` on Windows) plus the history
-   ring buffer plus the Electron bucketing live together to keep one
-   snapshot's worth of code in one place. Splitting them produces extra
-   modules whose only consumer is this file. */
+/* eslint-disable max-lines -- Why: the collector's host-process index,
+   history ring buffer, Electron bucketing, and worktree attribution live
+   together to keep one snapshot's orchestration in one place. */
 /**
  * Memory dashboard collector.
  *
@@ -10,7 +8,7 @@
  *   - Orca's own Electron processes, via `app.getAppMetrics()`, bucketed
  *     into main / renderer / other.
  *   - Each registered PTY's process subtree, enumerated once from a host-
- *     wide `ps` sweep (`wmic` on Windows).
+ *     wide process sweep (PowerShell CIM with a Typeperf fallback on Windows).
  *
  * Memory samples are held in a per-key ring (one key per worktree, plus
  * a reserved app-total key) so the UI can draw a trend sparkline.
@@ -39,6 +37,7 @@ import type {
 import type { Store } from '../persistence'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'
+import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
 
@@ -77,13 +76,13 @@ const PS_MAX_BUFFER = 10 * 1024 * 1024
 type ProcRow = {
   pid: number
   ppid: number
-  /** Percent of one core (may exceed 100 on multi-core). 0 on Windows. */
+  /** Percent of one core (may exceed 100 on multi-core). */
   cpu: number
   /** Resident memory in bytes. */
   memory: number
 }
 
-/** Indexed view of a single `ps`/`wmic` sweep. */
+/** Indexed view of a single host process sweep. */
 type ProcIndex = {
   byPid: Map<number, ProcRow>
   childrenOf: Map<number, number[]>
@@ -127,6 +126,7 @@ function emptySnapshot(): MemorySnapshot {
 const APP_HISTORY_KEY = '__app__'
 const HISTORY_CAPACITY = 60
 const HISTORY_STALE_MS = 10 * 60 * 1000
+export const MEMORY_HISTORY_MAX_WORKTREES = 1024
 
 type HistoryRing = {
   samples: number[]
@@ -139,18 +139,39 @@ function pushHistorySample(key: string, memoryBytes: number, now: number): void 
   let ring = historyByKey.get(key)
   if (!ring) {
     ring = { samples: [], touchedAt: now }
-    historyByKey.set(key, ring)
   }
   ring.samples.push(memoryBytes)
   if (ring.samples.length > HISTORY_CAPACITY) {
     ring.samples.shift()
   }
   ring.touchedAt = now
+  // Why: worktree ids can churn faster than the stale TTL in a long-lived
+  // main process; recency ordering gives the history cache a hard ceiling.
+  historyByKey.delete(key)
+  historyByKey.set(key, ring)
+  trimWorktreeHistory()
 }
 
-function readHistory(key: string): number[] {
+function trimWorktreeHistory(): void {
+  const appEntryCount = historyByKey.has(APP_HISTORY_KEY) ? 1 : 0
+  while (historyByKey.size - appEntryCount > MEMORY_HISTORY_MAX_WORKTREES) {
+    let oldestWorktreeKey: string | undefined
+    for (const key of historyByKey.keys()) {
+      if (key !== APP_HISTORY_KEY) {
+        oldestWorktreeKey = key
+        break
+      }
+    }
+    if (oldestWorktreeKey === undefined) {
+      break
+    }
+    historyByKey.delete(oldestWorktreeKey)
+  }
+}
+
+function readHistory(key: string, currentSample?: number): number[] {
   const ring = historyByKey.get(key)
-  return ring ? [...ring.samples] : []
+  return ring ? [...ring.samples] : currentSample === undefined ? [] : [currentSample]
 }
 
 function sweepStaleHistory(now: number): void {
@@ -159,6 +180,11 @@ function sweepStaleHistory(now: number): void {
       historyByKey.delete(key)
     }
   }
+}
+
+/** @internal — test-only */
+export function getMemoryHistoryWorktreeCountForTests(): number {
+  return historyByKey.size - (historyByKey.has(APP_HISTORY_KEY) ? 1 : 0)
 }
 
 // ─── Host process enumeration ───────────────────────────────────────
@@ -226,69 +252,8 @@ export function parsePsOutput(stdout: string): ProcRow[] {
 }
 
 async function enumerateWindows(): Promise<ProcRow[]> {
-  // Why: `wmic` ships with stock Windows and emits a plain, tab-separated
-  // table without the CSV-quoting edge cases PowerShell's ConvertTo-Csv
-  // introduces. CPU% would require delta sampling between two queries; for
-  // v1 we report 0% on Windows — memory attribution is the primary signal.
-  try {
-    const { stdout } = await execAsync(
-      'wmic process get ProcessId,ParentProcessId,WorkingSetSize /format:value',
-      { maxBuffer: PS_MAX_BUFFER, timeout: PS_EXEC_TIMEOUT_MS }
-    )
-    return parseWmicOutput(stdout)
-  } catch (err) {
-    console.warn('[memory] wmic enumeration failed', err)
-    return []
-  }
+  return enumerateWindowsProcessResources()
 }
-
-/** Exported for tests: parses `wmic /format:value` stanza output. */
-export function parseWmicOutput(stdout: string): ProcRow[] {
-  // wmic /format:value emits stanzas of `Key=Value` lines separated by blank
-  // lines. We accumulate a record until a blank line, then flush.
-  const rows: ProcRow[] = []
-  let pid = Number.NaN
-  let ppid = Number.NaN
-  let ws = Number.NaN
-
-  const flush = (): void => {
-    if (!Number.isNaN(pid) && !Number.isNaN(ppid)) {
-      rows.push({
-        pid,
-        ppid,
-        cpu: 0,
-        memory: Number.isFinite(ws) && ws > 0 ? ws : 0
-      })
-    }
-    pid = Number.NaN
-    ppid = Number.NaN
-    ws = Number.NaN
-  }
-
-  for (const raw of stdout.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (line.length === 0) {
-      flush()
-      continue
-    }
-    const eq = line.indexOf('=')
-    if (eq < 0) {
-      continue
-    }
-    const key = line.slice(0, eq)
-    const value = line.slice(eq + 1)
-    if (key === 'ProcessId') {
-      pid = Number.parseInt(value, 10)
-    } else if (key === 'ParentProcessId') {
-      ppid = Number.parseInt(value, 10)
-    } else if (key === 'WorkingSetSize') {
-      ws = Number.parseInt(value, 10)
-    }
-  }
-  flush()
-  return rows
-}
-
 /** Walk every descendant PID of `root`, inclusive. Exported for tests. */
 export function collectSubtree(index: ProcIndex, root: number): number[] {
   const result: number[] = []
@@ -495,7 +460,9 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
 
   const worktrees: WorktreeMemory[] = bucketList.map((b) => ({
     ...b,
-    history: readHistory(b.worktreeId)
+    // Why: an over-cap active worktree still gets its current point even when
+    // an older retained ring had to be evicted during this same snapshot.
+    history: readHistory(b.worktreeId, b.memory)
   }))
 
   let sessionCpuTotal = 0

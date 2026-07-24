@@ -143,6 +143,43 @@ describe('rich markdown key handler', () => {
     }
   })
 
+  it('ignores OS key-repeat for the add-review-note shortcut', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA', repeat: true })
+
+      // Why: leave the repeat unconsumed here; open drafts are consumed by the
+      // mounted composer guard (product B) instead of this editor key path.
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).not.toHaveBeenCalled()
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('delegates a fresh add-review-note chord to openAnnotationPopover and consumes it', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      // Why: the ProseMirror-selection flush moved into openAnnotationPopover
+      // (which reads the selection), so the handler now only delegates the open
+      // with requireLiveSelection and consumes the chord when it succeeds.
+      ctx.openAnnotationPopoverRef.current = vi.fn(() => true)
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledWith(true)
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('preserves a typed empty ordered-list shortcut on Enter', () => {
     const editor = createEditor(emptyTopLevelOrderedList())
 

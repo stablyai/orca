@@ -54,6 +54,9 @@ describe('repos folder pickers', () => {
     getRepo: vi.fn(),
     updateRepo: vi.fn()
   }
+  const mockRuntime = {
+    notifyRepoStoreChanged: vi.fn()
+  }
 
   const callPickFolders = (): Promise<string[]> => {
     const handler = handlers.get('repos:pickFolders')
@@ -79,8 +82,10 @@ describe('repos folder pickers', () => {
     })
     removeHandlerMock.mockReset()
     showOpenDialogMock.mockReset()
+    mockStore.removeProject.mockReset()
+    mockRuntime.notifyRepoStoreChanged.mockReset()
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, mockRuntime as never)
   })
 
   it('registers the multi-folder picker with handler cleanup', () => {
@@ -107,6 +112,13 @@ describe('repos folder pickers', () => {
     showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
 
     await expect(callPickFolders()).resolves.toEqual([])
+  })
+
+  it('releases runtime repo caches when local IPC removes a project', async () => {
+    await handlers.get('repos:remove')?.(null, { repoId: 'repo-1' })
+
+    expect(mockStore.removeProject).toHaveBeenCalledWith('repo-1')
+    expect(mockRuntime.notifyRepoStoreChanged).toHaveBeenCalledWith('repo-1')
   })
 
   it('picks an existing directory without enabling native directory creation', async () => {

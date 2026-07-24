@@ -70,8 +70,16 @@ describe('runRemoteOrcaCli', () => {
       getUnreadMessages: vi.fn((handle: string) =>
         messages.filter((message) => message.to_handle === handle && message.read_at === null)
       ),
+      countUnreadMessages: vi.fn(
+        (handle: string) =>
+          messages.filter((message) => message.to_handle === handle && message.read_at === null)
+            .length
+      ),
       getAllMessagesForHandle: vi.fn((handle: string) =>
         messages.filter((message) => message.to_handle === handle)
+      ),
+      countAllMessagesForHandle: vi.fn(
+        (handle: string) => messages.filter((message) => message.to_handle === handle).length
       ),
       markAsRead: vi.fn((ids: string[]) => {
         for (const message of messages) {
@@ -107,7 +115,13 @@ describe('runRemoteOrcaCli', () => {
         meta: {
           requested: {
             current: true,
-            include: { comments: true, children: true, attachments: true, relations: true },
+            include: {
+              comments: true,
+              children: true,
+              attachments: true,
+              relations: true,
+              activity: true
+            },
             depth: 2
           },
           resolved: {
@@ -477,5 +491,25 @@ describe('runRemoteOrcaCli', () => {
     expect(result.exitCode).toBe(1)
     expect(result.stderr).toContain('Unsupported SSH Orca CLI command: worktree list')
     expect(result.stderr).toContain('full Orca CLI bridge unavailable')
+  })
+
+  it('does not parse Android --activity values as Linear boolean flags', async () => {
+    const { runtime } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: ['emulator', 'launch', 'com.acme.app', '--activity', '.MainActivity'],
+        cwd: '/home/alice',
+        env: {}
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr).toContain(
+      'Unsupported SSH Orca CLI command: emulator launch com.acme.app'
+    )
+    expect(result.stderr).not.toContain('com.acme.app .MainActivity')
   })
 })

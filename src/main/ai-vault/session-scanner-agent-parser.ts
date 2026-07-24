@@ -6,7 +6,7 @@ import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
-import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import { parseOpenCodeSqliteSessionViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
@@ -50,7 +50,7 @@ export async function parseAgentSessionFile(
       // real filesystem paths and fall through to the JSON parser.
       const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
       if (sqliteCandidate) {
-        return parseOpenCodeSqliteSession({
+        return parseOpenCodeSqliteSessionViaWorker({
           dbPath: sqliteCandidate.dbPath,
           sessionId: sqliteCandidate.sessionId,
           platform

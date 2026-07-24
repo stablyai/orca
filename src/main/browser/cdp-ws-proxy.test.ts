@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import WebSocket from 'ws'
-import { CdpWsProxy } from './cdp-ws-proxy'
+import {
+  CDP_PROXY_MAX_MESSAGE_BYTES,
+  CDP_PROXY_MAX_TCP_CONNECTIONS,
+  CdpWsProxy
+} from './cdp-ws-proxy'
 import {
   connect,
   createMockWebContents,
@@ -50,6 +54,16 @@ describe('CdpWsProxy', () => {
     ).httpServer
 
     expect(server.listenerCount('error')).toBeLessThanOrEqual(1)
+  })
+
+  it('caps pre-upgrade sockets and WebSocket message materialization', () => {
+    const internals = proxy as unknown as {
+      httpServer: { maxConnections: number }
+      wss: { options: { maxPayload: number } }
+    }
+
+    expect(internals.httpServer.maxConnections).toBe(CDP_PROXY_MAX_TCP_CONNECTIONS)
+    expect(internals.wss.options.maxPayload).toBe(CDP_PROXY_MAX_MESSAGE_BYTES)
   })
 
   it('attaches debugger on start', () => {
@@ -742,6 +756,37 @@ describe('CdpWsProxy', () => {
 
     expect(createSpy).not.toHaveBeenCalled()
     createSpy.mockRestore()
+  })
+
+  it('rejects PDF print overload instead of retaining unlimited native promises', async () => {
+    const resolvePrints: ((buffer: Buffer<ArrayBuffer>) => void)[] = []
+    mock.webContents.printToPDF.mockImplementation(
+      () =>
+        new Promise<Buffer<ArrayBuffer>>((resolve) => {
+          resolvePrints.push(resolve)
+        })
+    )
+    const client = await connect(endpoint)
+    const responses: Record<string, unknown>[] = []
+    client.on('message', (data) => responses.push(JSON.parse(data.toString())))
+
+    for (let id = 31; id <= 33; id += 1) {
+      client.send(JSON.stringify({ id, method: 'Page.printToPDF' }))
+    }
+
+    await vi.waitFor(() =>
+      expect(responses.find((response) => response.id === 33)).toEqual({
+        id: 33,
+        error: { code: -32000, message: 'Too many PDF print requests are already running' }
+      })
+    )
+    expect(mock.webContents.printToPDF).toHaveBeenCalledTimes(2)
+
+    for (const resolve of resolvePrints) {
+      resolve(Buffer.from('%PDF-bounded'))
+    }
+    await vi.waitFor(() => expect(responses).toHaveLength(3))
+    client.close()
   })
 
   it('forwards non-PDF IO streams to the debugger', async () => {

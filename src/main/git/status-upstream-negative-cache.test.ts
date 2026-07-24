@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
 
 const { existsSyncMock, gitExecFileAsyncMock, readFileMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -29,6 +30,21 @@ vi.mock('fs/promises', () => ({
 vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
+
+vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => {
+  const actual = await importOriginal<typeof BoundedFileReader>()
+  return {
+    ...actual,
+    readNodeFileWithinLimit: async (filePath: string, maxBytes: number) => {
+      const value = await readFileMock(filePath)
+      const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
+      if (buffer.length > maxBytes) {
+        throw new actual.NodeFileReadTooLargeError(buffer.length, maxBytes)
+      }
+      return { buffer, stats: { isFile: () => true, size: buffer.length } }
+    }
+  }
+})
 
 function isConfigListSnapshotCommand(args: string[]): boolean {
   return args[0] === 'config' && args[1] === '--list' && args[2] === '-z'

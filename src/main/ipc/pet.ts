@@ -1,22 +1,21 @@
 /* eslint-disable max-lines */
-import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron'
-import { copyFile, mkdir, open, readFile, rename, rm, stat, lstat } from 'node:fs/promises'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { copyFile, mkdir, open, rename, rm, stat, lstat } from 'node:fs/promises'
 import { constants as fsConstants, createWriteStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import type { CustomPet } from '../../shared/types'
+import { applyCodexPetDefaults, type PetManifestLike, type ResolvedPetManifest } from './pet-bundle'
 import {
-  applyCodexPetDefaults,
-  readWebpDimensionsFromBuffer,
-  type PetManifestLike,
-  type ResolvedPetManifest
-} from './pet-bundle'
+  MAX_CUSTOM_PET_FILE_BYTES,
+  isCustomPetSheetSizeSafe
+} from '../../shared/custom-pet-media-limits'
+import { readCustomPetFile } from './custom-pet-file-reader'
+import { readRasterImageDimensions } from '../../shared/raster-image-dimensions'
 
-// Why: image-only pet uploads. Static + animated variants render natively
-// via <img>, so no 3D engine is needed. Main owns the accepted-format table as
-// the single source of truth for what the renderer will try to display.
+// Why: pets are image-only — render natively via <img> (no 3D engine); main owns this format allowlist.
 const IMAGE_FORMATS: Record<string, string> = {
   '.png': 'image/png',
   '.apng': 'image/apng',
@@ -36,20 +35,15 @@ function classifyFile(src: string): { mimeType: string; ext: string } | null {
   return { mimeType: mime, ext }
 }
 
-// Why: keep using the legacy sidekicks folder so existing user-uploaded pets
-// keep rendering after the product rename. The renderer only knows CustomPet.id;
-// main resolves it to an absolute path inside this folder.
+// Why: keep the legacy `sidekicks` folder so existing user-uploaded pets keep rendering after the product rename.
 function getPetsDir(): string {
   return join(app.getPath('userData'), 'sidekicks', 'custom')
 }
 
-const MAX_BYTES = 64 * 1024 * 1024 // 64 MB — generous but bounded so a user can't point at a multi-GB file and OOM the renderer when it builds a Blob URL.
 const MAX_MANIFEST_BYTES = 64 * 1024 // pet.json is tiny by spec; cap to defend against a malicious bundle stuffing megabytes into the manifest.
 
 function isSafeId(id: string): boolean {
-  // UUIDs only; blocks path traversal and unexpected characters. Storage ids
-  // are always generated in main (never sourced from the bundle's manifest.id),
-  // so this regex is the canonical gate for any fs path that includes the id.
+  // UUIDs only — canonical path-traversal gate; storage ids are always main-generated, never from manifest.id.
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 }
 
@@ -61,9 +55,7 @@ function resolvePetFile(id: string, fileName: string, kind: 'image' | 'bundle'):
   const root = normalize(getPetsDir())
   let filePath: string
   if (kind === 'bundle') {
-    // Bundle layout: custom/<id>/<fileName>. fileName is just the spritesheet
-    // basename (e.g. "spritesheet.webp"); pet.json is read by main only and
-    // never served to the renderer.
+    // Bundle layout custom/<id>/<fileName>; fileName is the spritesheet basename — pet.json is main-only, never served.
     filePath = normalize(join(root, id, safeName))
     const bundleDir = normalize(join(root, id)) + sep
     if (!filePath.startsWith(bundleDir)) {
@@ -71,8 +63,7 @@ function resolvePetFile(id: string, fileName: string, kind: 'image' | 'bundle'):
     }
     return filePath
   }
-  // Legacy image layout: custom/<id>.<ext>. Filename must start with the id
-  // so the prefix check catches any edge case that slipped the regex.
+  // Legacy image layout custom/<id>.<ext>; filename must start with the id so the prefix check backstops the regex.
   if (!safeName.startsWith(`${id}.`)) {
     return null
   }
@@ -92,8 +83,7 @@ const PetManifestSchema = z
       .string()
       .min(1)
       .max(255)
-      // Why: belt-and-suspenders against malicious manifests — downstream
-      // resolve+prefix check still runs as defense in depth.
+      // Why: belt-and-suspenders vs malicious manifests — downstream resolve+prefix check still runs as defense in depth.
       .refine(
         (p) => !p.includes('\0') && !p.startsWith('/') && !p.startsWith('\\') && !p.includes('..'),
         'invalid spritesheetPath'
@@ -119,53 +109,39 @@ const PetManifestSchema = z
       )
       .optional()
   })
-  // Why: tolerate unknown top-level fields. Pet-bundle generators may emit
-  // descriptive metadata (e.g. "kind": "person") we don't consume yet, and
-  // strict mode would reject those imports with a confusing "unrecognized
-  // key" error instead of just ignoring the extras.
+  // Why: .loose() ignores unknown manifest fields — generators emit metadata we don't consume; strict would reject imports.
   .loose()
 
 type PetManifest = z.infer<typeof PetManifestSchema> & PetManifestLike
 
-// Why: renderer-supplied IPC inputs are untrusted — validate shape before any
-// path resolution. resolvePetFile still gates the actual filesystem path.
+// Why: renderer IPC inputs are untrusted — validate shape here; resolvePetFile still gates the actual filesystem path.
 const PetFileRequestSchema = z.object({
   id: z.string(),
   fileName: z.string(),
   kind: z.enum(['image', 'bundle']).optional()
 })
 
-async function readSheetDimensions(
-  buffer: Buffer
-): Promise<{ width: number; height: number } | null> {
-  // Why: Electron's nativeImage can fail to decode some valid WebP variants
-  // even though Chromium can render them. Sprite sheets only need the canvas
-  // size, so read WebP dimensions from the container header before falling
-  // back to native decoding.
-  const webpDims = readWebpDimensionsFromBuffer(buffer)
-  if (webpDims) {
-    return webpDims
-  }
-
-  // Why: nativeImage decodes PNG/JPEG/GIF/WebP/BMP. SVG isn't supported here
-  // (vector → no integer pixel grid), so pet bundles must use a raster sheet.
-  const image = nativeImage.createFromBuffer(buffer)
-  if (image.isEmpty()) {
+function assertCustomPetRasterDimensions(
+  data: ArrayBuffer,
+  extension: string,
+  label: 'Pet image' | 'Spritesheet'
+): { width: number; height: number } | null {
+  if (extension === '.svg') {
     return null
   }
-  const size = image.getSize()
-  if (size.width <= 0 || size.height <= 0) {
-    return null
+  const dimensions = readRasterImageDimensions(new Uint8Array(data))
+  if (!dimensions) {
+    throw new Error(`Could not decode the ${label.toLowerCase()}.`)
   }
-  return { width: size.width, height: size.height }
+  if (!isCustomPetSheetSizeSafe(dimensions.width, dimensions.height)) {
+    throw new Error(
+      `${label} dimensions ${dimensions.width}×${dimensions.height} exceed the safe limit.`
+    )
+  }
+  return dimensions
 }
 
-// Why: TOCTOU defense — between the `isSymlink` check and `copyFile`, a local
-// attacker with write access to the bundle dir could swap the file with a
-// symlink (copyFile follows symlinks). Open with O_NOFOLLOW so the open fails
-// outright if the path is a symlink at the moment of open, then stream from
-// the fd. On platforms without O_NOFOLLOW (Windows), the constant is undefined
-// and we fall back to copyFile — symlinks aren't a meaningful threat there.
+// Why: TOCTOU symlink-swap defense — O_NOFOLLOW makes open() fail on a symlink; Windows lacks it, so fall back to copyFile.
 async function copyFileNoFollow(src: string, dest: string): Promise<void> {
   const noFollow = typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0
   if (noFollow === 0) {
@@ -196,11 +172,7 @@ export function registerPetHandlers(): void {
     const options: Electron.OpenDialogOptions = {
       title: 'Pick pet',
       properties: ['openFile'],
-      // Why: single filter and no `apng` extension. macOS file dialogs map
-      // filter extensions to UTIs; `apng` has no registered UTI, so including
-      // it can drop sibling extensions (notably `webp`) from the allowed set.
-      // APNG files carry the `.png` extension and are detected from magic
-      // bytes by the browser.
+      // Why: omit `apng` — macOS maps dialog extensions to UTIs, and apng's missing UTI can drop siblings like webp (APNG uses .png anyway).
       filters: [
         {
           name: 'Pet image',
@@ -228,18 +200,21 @@ export function registerPetHandlers(): void {
     if (!srcStat.isFile()) {
       throw new Error('Selected path is not a file')
     }
-    if (srcStat.size > MAX_BYTES) {
+    if (srcStat.size > MAX_CUSTOM_PET_FILE_BYTES) {
       throw new Error(
-        `File is too large (${(srcStat.size / (1024 * 1024)).toFixed(1)} MB). Max is ${MAX_BYTES / (1024 * 1024)} MB.`
+        `File is too large (${(srcStat.size / (1024 * 1024)).toFixed(1)} MB). Max is ${MAX_CUSTOM_PET_FILE_BYTES / (1024 * 1024)} MB.`
       )
+    }
+    if (classified.ext !== '.svg') {
+      const sourceBytes = await readCustomPetFile(src)
+      // Why: renderer delivery would otherwise let Chromium decode a compressed dimension bomb first.
+      assertCustomPetRasterDimensions(sourceBytes, classified.ext, 'Pet image')
     }
 
     const dir = getPetsDir()
     await mkdir(dir, { recursive: true })
     const id = randomUUID()
-    // Why: preserve original extension in the on-disk name so pet:read can
-    // rebuild the right Blob MIME via resolvePetFile without a separate
-    // lookup. The extension is only ever written by main (never the renderer).
+    // Why: keep the original extension in the on-disk name so pet:read can rebuild the Blob MIME without a separate lookup.
     const fileName = `${id}${classified.ext}`
     const dest = join(dir, fileName)
     try {
@@ -263,9 +238,7 @@ export function registerPetHandlers(): void {
   ipcMain.handle('pet:importPetBundle', async (event): Promise<CustomPet | null> => {
     const senderWindow =
       BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
-    // Why: the bundle is a folder. macOS users may also pick `pet.json` itself
-    // when Finder is set to show package contents — the post-pick logic walks
-    // up to the parent directory in that case.
+    // Why: the bundle is a folder, but Finder may let users pick `pet.json` inside it — post-pick logic walks up to the parent.
     const options: Electron.OpenDialogOptions = {
       title: 'Pick a .codex-pet bundle',
       properties: ['openFile', 'openDirectory', 'treatPackageAsDirectory']
@@ -301,22 +274,15 @@ export function registerPetHandlers(): void {
 
     let manifest: ResolvedPetManifest<PetManifest>
     try {
-      const raw = await readFile(manifestPath, 'utf8')
-      // Why: defend against TOCTOU between stat and read — the file could have
-      // grown after the stat check.
-      if (Buffer.byteLength(raw, 'utf8') > MAX_MANIFEST_BYTES) {
-        throw new Error('pet.json exceeded the manifest size limit.')
-      }
+      const raw = Buffer.from(await readCustomPetFile(manifestPath, MAX_MANIFEST_BYTES)).toString(
+        'utf8'
+      )
       manifest = applyCodexPetDefaults(PetManifestSchema.parse(JSON.parse(raw)))
     } catch (error) {
       throw new Error(`Invalid pet.json: ${error instanceof Error ? error.message : 'parse error'}`)
     }
 
-    // Why: spritesheetPath is bundle-relative. Codex pet.json files omit this
-    // path and use a fixed `spritesheet.webp`; applyCodexPetDefaults fills
-    // that shape before path validation. Reject absolute paths and any resolved
-    // path that escapes the bundle directory. Also reject symlinks so a
-    // malicious bundle can't reach outside via a sibling link.
+    // Why: spritesheetPath is bundle-relative and attacker-controlled — reject absolute/escaping paths (and symlinks) so a bundle can't reach outside.
     const normalizedSpritePath = manifest.spritesheetPath.replace(/[\\/]+/g, sep)
     if (
       isAbsolute(manifest.spritesheetPath) ||
@@ -325,17 +291,14 @@ export function registerPetHandlers(): void {
     ) {
       throw new Error('spritesheetPath must be relative to the bundle.')
     }
-    // Why: pet bundles may be exported on Windows and imported on macOS/Linux;
-    // normalize manifest separators before Node resolves the bundle-relative path.
+    // Why: bundles exported on Windows may be imported on macOS/Linux; normalize separators before resolving.
     const sheetSrc = resolve(bundleDir, normalizedSpritePath)
     const bundleResolved = resolve(bundleDir)
     if (sheetSrc === bundleResolved) {
       throw new Error('spritesheetPath must point to a file, not the bundle root.')
     }
     const bundleRoot = bundleResolved + sep
-    // Why: NTFS/macOS HFS+ default volumes are case-insensitive — a path like
-    // `BUNDLE\sheet.png` is still inside `bundle\`. Compare lowercased on
-    // Windows so the prefix check isn't bypassed by case differences.
+    // Why: Windows volumes are case-insensitive; lowercase the prefix compare so case differences can't bypass the escape check.
     const cmp = process.platform === 'win32' ? (s: string) => s.toLowerCase() : (s: string) => s
     if (!cmp(sheetSrc + sep).startsWith(cmp(bundleRoot))) {
       throw new Error('spritesheetPath escapes the bundle.')
@@ -357,27 +320,23 @@ export function registerPetHandlers(): void {
     if (!sheetStat.isFile()) {
       throw new Error('Spritesheet path is not a file.')
     }
-    if (sheetStat.size > MAX_BYTES) {
+    if (sheetStat.size > MAX_CUSTOM_PET_FILE_BYTES) {
       throw new Error(
         `Spritesheet is too large (${(sheetStat.size / (1024 * 1024)).toFixed(1)} MB).`
       )
     }
 
+    const sheetBytes = await readCustomPetFile(sheetSrc)
+    // Why: metadata-free bundles also reach the renderer image decoder, so every raster needs the same pre-decode gate.
+    const sheetDimensions = assertCustomPetRasterDimensions(
+      sheetBytes,
+      sheetClass.ext,
+      'Spritesheet'
+    )
+
     let sprite: NonNullable<CustomPet['sprite']> | undefined
     if (manifest.frame) {
-      // Why: only decode the sheet when we need to validate frame layout.
-      // nativeImage may fail on some WebP variants in headless contexts, and
-      // bundles without `frame` render as a static image where dimensions
-      // don't matter.
-      const sheetBuf = await readFile(sheetSrc)
-      // Why: defend against TOCTOU — file may have grown between stat and read.
-      if (sheetBuf.byteLength > MAX_BYTES) {
-        throw new Error('Spritesheet exceeded the size limit.')
-      }
-      const dims = await readSheetDimensions(sheetBuf)
-      if (!dims) {
-        throw new Error('Could not decode the spritesheet image.')
-      }
+      const dims = sheetDimensions!
       const { width: fw, height: fh } = manifest.frame
       if (dims.width % fw !== 0 || dims.height % fh !== 0) {
         throw new Error(
@@ -419,19 +378,14 @@ export function registerPetHandlers(): void {
       }
     }
 
-    // Why: storage id is always a fresh UUID — the manifest's `id` is purely
-    // a display hint. This guards against (a) collisions with bundled
-    // pet ids, (b) failing isSafeId, and (c) re-import clobbering an
-    // earlier copy of the same bundle.
+    // Why: always a fresh UUID (not the manifest's display-hint id) to avoid collisions, unsafe ids, and re-import clobbering.
     const id = randomUUID()
     const root = getPetsDir()
     await mkdir(root, { recursive: true })
     const destDir = join(root, id)
     const sheetExt = sheetClass.ext
     const sheetFileName = `spritesheet${sheetExt}`
-    // Why: stage the bundle into a sibling .tmp directory and atomically rename
-    // into place so destDir only appears once both files are written. Avoids
-    // half-imported bundles if a copy fails midway.
+    // Why: stage into a sibling .tmp then atomically rename, so a mid-copy failure can't leave a half-imported bundle.
     const tmpDir = `${destDir}.tmp`
     try {
       await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
@@ -453,8 +407,7 @@ export function registerPetHandlers(): void {
       mimeType: sheetClass.mimeType,
       kind: 'bundle',
       sprite,
-      // Why: carries manifest.fps for detected-frame bundles where `sprite`
-      // is undefined — renderer falls back to this when sprite is absent.
+      // Why: renderer falls back to spriteFps when sprite is undefined (detected-frame bundles).
       ...(manifest.fps !== undefined ? { spriteFps: manifest.fps } : {})
     }
   })
@@ -467,23 +420,29 @@ export function registerPetHandlers(): void {
       fileName: string,
       kind?: 'image' | 'bundle'
     ): Promise<ArrayBuffer | null> => {
-      // Why: validate IPC inputs before any path logic — renderer is not
-      // trusted to send strings of the right shape.
+      // Why: renderer inputs are untrusted; validate shape before any path logic.
       let parsed: z.infer<typeof PetFileRequestSchema>
       try {
         parsed = PetFileRequestSchema.parse({ id, fileName, kind })
       } catch {
         throw new Error('Invalid pet:read arguments')
       }
-      // Why: missing kind defaults to 'image' for backwards compatibility with
-      // pre-bundle persisted state.
+      // Why: default 'image' for backwards compat with pre-bundle persisted state.
       const filePath = resolvePetFile(parsed.id, parsed.fileName, parsed.kind ?? 'image')
       if (!filePath) {
         return null
       }
       try {
-        const buf = await readFile(filePath)
-        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+        // Why: stored pet files can be replaced after import; the reader keeps
+        // one handle and never allocates beyond the same 64 MiB import limit.
+        const data = await readCustomPetFile(filePath)
+        const classified = classifyFile(filePath)
+        if (!classified) {
+          return null
+        }
+        // Why: this gates legacy image pets and metadata-free bundles before renderer decode.
+        assertCustomPetRasterDimensions(data, classified.ext, 'Pet image')
+        return data
       } catch (error) {
         console.warn('[pet-overlay] pet:read failed', error)
         return null
@@ -505,9 +464,7 @@ export function registerPetHandlers(): void {
         return
       }
       if ((parsed.kind ?? 'image') === 'bundle') {
-        // Why: bundle imports own a whole directory. isSafeId already gates id;
-        // we still build the path under the pets root and verify the
-        // prefix before recursive removal as defense in depth.
+        // Why: defense in depth — verify path stays under pets root before recursive removal.
         const root = normalize(getPetsDir())
         const target = normalize(join(root, parsed.id))
         if (!target.startsWith(root + sep)) {

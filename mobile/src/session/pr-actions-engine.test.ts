@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { PrActionsEngine, type PrActionMutations } from './pr-actions-engine'
+import {
+  MOBILE_PR_ACTIONS_MAX_REVIEWER_FIELDS,
+  PrActionsEngine,
+  type PrActionMutations
+} from './pr-actions-engine'
 import type { GitHubPrMutationOutcome } from './github-pr-mutations'
 
 function deferred<T>() {
@@ -197,5 +201,73 @@ describe('PrActionsEngine — PR identity changes', () => {
     slow.resolve({ ok: true })
     await action
     expect(refetch).not.toHaveBeenCalled()
+  })
+
+  it('clears in-flight state when only the GitHub host changes', async () => {
+    const slow = deferred<GitHubPrMutationOutcome>()
+    const mutations: PrActionMutations = {
+      mergePR: async () => ({ ok: true }),
+      setPRAutoMerge: async () => slow.promise,
+      updatePRState: async () => ({ ok: true }),
+      requestReviewers: async () => ({ ok: true }),
+      removeReviewers: async () => ({ ok: true }),
+      rerunChecks: async () => ({ ok: true })
+    }
+    const refetch = vi.fn()
+    const onChange = vi.fn()
+    const baseConfig = {
+      mutations,
+      prNumber: 1,
+      refetch,
+      onChange
+    }
+    const engine = new PrActionsEngine({
+      ...baseConfig,
+      prRepo: { owner: 'acme', repo: 'widgets' }
+    })
+
+    const action = engine.setAutoMerge(true)
+    expect(engine.resolveAutoMerge(false)).toBe(true)
+    expect(engine.isBusy({ kind: 'autoMerge' })).toBe(true)
+
+    engine.updateConfig({
+      ...baseConfig,
+      prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
+    })
+    expect(engine.resolveAutoMerge(false)).toBe(false)
+    expect(engine.busy).toBeNull()
+
+    slow.resolve({ ok: true })
+    await action
+    expect(refetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('PrActionsEngine — reviewer retention', () => {
+  it('releases settled reviewer fields so sequential reviewer actions do not accumulate', async () => {
+    const engine = makeEngine({})
+
+    for (let index = 0; index < MOBILE_PR_ACTIONS_MAX_REVIEWER_FIELDS + 1; index += 1) {
+      await engine.requestReviewer(`reviewer-${index}`)
+    }
+
+    expect(engine.retainedReviewerFieldCountForTests()).toBe(0)
+  })
+
+  it('accepts the exact concurrent reviewer cap and rejects one over', async () => {
+    const pending = deferred<GitHubPrMutationOutcome>()
+    const engine = makeEngine({ requestReviewers: () => pending.promise })
+    const actions = Array.from({ length: MOBILE_PR_ACTIONS_MAX_REVIEWER_FIELDS }, (_, index) =>
+      engine.requestReviewer(`reviewer-${index}`)
+    )
+    expect(engine.retainedReviewerFieldCountForTests()).toBe(MOBILE_PR_ACTIONS_MAX_REVIEWER_FIELDS)
+
+    await expect(engine.requestReviewer('one-over')).rejects.toThrow(
+      'Too many reviewer actions are pending'
+    )
+
+    pending.resolve({ ok: true })
+    await Promise.all(actions)
+    expect(engine.retainedReviewerFieldCountForTests()).toBe(0)
   })
 })

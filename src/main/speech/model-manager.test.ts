@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
+import { SPEECH_MODEL_EXTRACTION_STDERR_MAX_RETAINED_BYTES } from './speech-model-extraction-stderr'
 
 const { hasOpenAiSpeechApiKeyMock, netRequestMock, spawnMock } = vi.hoisted(() => ({
   hasOpenAiSpeechApiKeyMock: vi.fn(),
@@ -449,6 +450,61 @@ describe('ModelManager', () => {
       expect(child.kill).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('surfaces bounded prefix and tail evidence when tar stderr is oversized', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+        close: [],
+        error: []
+      }
+      const stderrHandlers: ((chunk: Buffer) => void)[] = []
+      const child = {
+        stderr: {
+          on: vi.fn((_event: string, cb: (chunk: Buffer) => void) => {
+            stderrHandlers.push(cb)
+            return child.stderr
+          }),
+          off: vi.fn((_event: string, cb: (chunk: Buffer) => void) => {
+            const index = stderrHandlers.indexOf(cb)
+            if (index !== -1) {
+              stderrHandlers.splice(index, 1)
+            }
+            return child.stderr
+          })
+        },
+        kill: vi.fn(),
+        on: vi.fn((event: string, cb: (arg?: unknown) => void) => {
+          handlers[event]?.push(cb)
+          return child
+        }),
+        off: vi.fn((event: string, cb: (arg?: unknown) => void) => {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return child
+        })
+      }
+      spawnMock.mockReturnValue(child)
+      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const extraction = manager.extractArchive(join(dir, 'model.tar.bz2'), dir, 'm', () => false)
+      stderrHandlers[0](
+        Buffer.concat([
+          Buffer.from('PREFIX'),
+          Buffer.alloc(SPEECH_MODEL_EXTRACTION_STDERR_MAX_RETAINED_BYTES * 2, 0x78),
+          Buffer.from('TAIL')
+        ])
+      )
+      handlers.close[0](2)
+
+      await expect(extraction).rejects.toThrow(
+        /tar exited with code 2: PREFIX[\s\S]+stderr bytes omitted[\s\S]+TAIL$/
+      )
+      expect(stderrHandlers).toHaveLength(0)
+      expect(handlers.close).toHaveLength(0)
+      expect(handlers.error).toHaveLength(0)
+    } finally {
       rmSync(dir, { recursive: true, force: true })
     }
   })

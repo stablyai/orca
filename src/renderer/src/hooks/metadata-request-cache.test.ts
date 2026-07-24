@@ -3,7 +3,11 @@ import {
   clearMetadataRequestStore,
   createMetadataRequestStore,
   getFreshMetadata,
-  loadMetadata
+  loadMetadata,
+  MAX_METADATA_ERROR_SUMMARY_BYTES,
+  MAX_METADATA_INFLIGHT_ENTRIES,
+  MAX_METADATA_KEY_BYTES,
+  MAX_METADATA_VALUE_BYTES
 } from './metadata-request-cache'
 
 describe('metadata-request-cache', () => {
@@ -88,7 +92,7 @@ describe('metadata-request-cache', () => {
     expect(store.failures.has('repo:labels')).toBe(false)
   })
 
-  it('keeps failure entries isolated per key and bounded', async () => {
+  it('keeps failure entries isolated per key', async () => {
     const store = createMetadataRequestStore<string[]>()
     await expect(
       loadMetadata(
@@ -104,6 +108,25 @@ describe('metadata-request-cache', () => {
       'ok'
     ])
     expect(fetcherB).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds retained failure entries', async () => {
+    const store = createMetadataRequestStore<string[]>()
+
+    for (let index = 0; index <= 200; index += 1) {
+      await expect(
+        loadMetadata(
+          store,
+          `repo-${index}:labels`,
+          () => Promise.reject(new Error(`down-${index}`)),
+          () => index
+        )
+      ).rejects.toThrow(`down-${index}`)
+    }
+
+    expect(store.failures.size).toBe(200)
+    expect(store.failures.has('repo-0:labels')).toBe(false)
+    expect(store.failures.has('repo-200:labels')).toBe(true)
   })
 
   it('does not record failures from a cleared generation', async () => {
@@ -123,6 +146,7 @@ describe('metadata-request-cache', () => {
     rejectRequest(new Error('stale failure'))
     await expect(pending).rejects.toThrow('stale failure')
     expect(store.failures.size).toBe(0)
+    expect(store.retainedBytes).toBe(0)
 
     const fetcher = vi.fn(() => Promise.resolve(['fresh']))
     await expect(loadMetadata(store, 'repo:labels', fetcher, () => 1_500)).resolves.toEqual([
@@ -150,6 +174,41 @@ describe('metadata-request-cache', () => {
 
     await expect(pending).resolves.toEqual(['old-user'])
     expect(getFreshMetadata(store, 'team:members', 1_100)).toBeNull()
+    expect(store.retainedBytes).toBe(0)
+  })
+
+  it('does not let a cleared request release a newer request for the same key', async () => {
+    const store = createMetadataRequestStore<string>()
+    let resolveStale: (value: string) => void = () => {}
+    let resolveCurrent: (value: string) => void = () => {}
+    const stale = loadMetadata(
+      store,
+      'same',
+      () =>
+        new Promise<string>((resolve) => {
+          resolveStale = resolve
+        })
+    )
+
+    clearMetadataRequestStore(store)
+    const current = loadMetadata(
+      store,
+      'same',
+      () =>
+        new Promise<string>((resolve) => {
+          resolveCurrent = resolve
+        })
+    )
+
+    resolveStale('stale')
+    await expect(stale).resolves.toBe('stale')
+    expect(store.inflight.has('same')).toBe(true)
+    expect(store.retainedBytes).toBe(4)
+
+    resolveCurrent('current')
+    await expect(current).resolves.toBe('current')
+    expect(store.cache.get('same')?.data).toBe('current')
+    expect(store.retainedBytes).toBe(11)
   })
 
   it('prunes stale cache entries when they age past the metadata ttl', async () => {
@@ -182,5 +241,141 @@ describe('metadata-request-cache', () => {
     expect(store.cache.size).toBe(500)
     expect(store.cache.has('repo-0:labels')).toBe(false)
     expect(store.cache.get('repo-500:labels')?.data).toEqual(['label-500'])
+  })
+
+  it('rejects distinct hung fetches beyond the in-flight bound', async () => {
+    const store = createMetadataRequestStore<string[]>()
+    const pending = Array.from({ length: MAX_METADATA_INFLIGHT_ENTRIES }, (_, index) =>
+      loadMetadata(store, `repo-${index}:labels`, () => new Promise<string[]>(() => {}))
+    )
+
+    await expect(
+      loadMetadata(store, 'overflow:labels', () => Promise.resolve(['unexpected']))
+    ).rejects.toThrow('queue is full')
+    expect(store.inflight.size).toBe(MAX_METADATA_INFLIGHT_ENTRIES)
+
+    clearMetadataRequestStore(store)
+    void pending
+  })
+
+  it('accepts an exact-limit key and rejects an oversized key before fetching', async () => {
+    const store = createMetadataRequestStore<string>()
+    const exactKey = '🙂'.repeat(MAX_METADATA_KEY_BYTES / 4)
+    await expect(loadMetadata(store, exactKey, () => Promise.resolve(''))).resolves.toBe('')
+    expect(store.cache.has(exactKey)).toBe(true)
+
+    const fetcher = vi.fn(() => Promise.resolve('unexpected'))
+    await expect(loadMetadata(store, `${exactKey}x`, fetcher)).rejects.toThrow(
+      `exceeds ${MAX_METADATA_KEY_BYTES} bytes`
+    )
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('retains an exact-limit value and lets an oversized value recover without retention', async () => {
+    const exactStore = createMetadataRequestStore<string>()
+    const exactValue = 'v'.repeat(MAX_METADATA_VALUE_BYTES)
+    await expect(
+      loadMetadata(exactStore, 'exact', () => Promise.resolve(exactValue))
+    ).resolves.toBe(exactValue)
+    expect(exactStore.cache.get('exact')?.data).toBe(exactValue)
+
+    const oversizedStore = createMetadataRequestStore<string>()
+    const oversizedValue = `${exactValue}x`
+    await expect(
+      loadMetadata(oversizedStore, 'recoverable', () => Promise.resolve(oversizedValue))
+    ).resolves.toBe(oversizedValue)
+    expect(oversizedStore.cache.has('recoverable')).toBe(false)
+
+    await expect(
+      loadMetadata(oversizedStore, 'recoverable', () => Promise.resolve('small'))
+    ).resolves.toBe('small')
+    expect(oversizedStore.cache.get('recoverable')?.data).toBe('small')
+  })
+
+  it('stores only an exact bounded error summary and reuses that summary', async () => {
+    const store = createMetadataRequestStore<string>()
+    const error = new Error('oversized remote failure')
+    error.name = 'RemoteError'
+    error.message = 'x'.repeat(MAX_METADATA_ERROR_SUMMARY_BYTES - error.name.length + 1_000)
+
+    await expect(
+      loadMetadata(
+        store,
+        'failure',
+        () => Promise.reject(error),
+        () => 1_000
+      )
+    ).rejects.toBe(error)
+
+    const cached = store.failures.get('failure')
+    expect((cached?.error.name.length ?? 0) + (cached?.error.message.length ?? 0)).toBe(
+      MAX_METADATA_ERROR_SUMMARY_BYTES
+    )
+    expect(cached?.error.stack).toBeUndefined()
+    await expect(
+      loadMetadata(
+        store,
+        'failure',
+        () => Promise.resolve('unexpected'),
+        () => 1_001
+      )
+    ).rejects.toThrow(cached?.error.message)
+  })
+
+  it('fills the aggregate budget exactly and evicts oldest retained data for recovery', async () => {
+    const store = createMetadataRequestStore<string>({ maxRetainedBytes: 20 })
+
+    await loadMetadata(
+      store,
+      'a',
+      () => Promise.resolve('x'.repeat(9)),
+      () => 1
+    )
+    await loadMetadata(
+      store,
+      'b',
+      () => Promise.resolve('y'.repeat(9)),
+      () => 2
+    )
+    expect(store.retainedBytes).toBe(20)
+
+    await loadMetadata(
+      store,
+      'c',
+      () => Promise.resolve('z'.repeat(9)),
+      () => 3
+    )
+    expect(store.retainedBytes).toBe(20)
+    expect(store.cache.has('a')).toBe(false)
+    expect(store.cache.has('b')).toBe(true)
+    expect(store.cache.has('c')).toBe(true)
+  })
+
+  it('rejects in-flight aggregate overload and accepts work after memory is released', async () => {
+    const store = createMetadataRequestStore<string>({ maxRetainedBytes: 4 })
+    let resolveFirst: (value: string) => void = () => {}
+    const first = loadMetadata(
+      store,
+      'aa',
+      () =>
+        new Promise<string>((resolve) => {
+          resolveFirst = resolve
+        })
+    )
+    const second = loadMetadata(store, 'bb', () => new Promise<string>(() => {}))
+
+    expect(store.retainedBytes).toBe(4)
+    await expect(loadMetadata(store, 'c', () => Promise.resolve(''))).rejects.toThrow(
+      'memory budget is full'
+    )
+
+    resolveFirst('')
+    await expect(first).resolves.toBe('')
+    await expect(loadMetadata(store, 'c', () => Promise.resolve(''))).resolves.toBe('')
+    expect(store.retainedBytes).toBeLessThanOrEqual(4)
+
+    clearMetadataRequestStore(store)
+    expect(store.retainedBytes).toBe(0)
+    void second
   })
 })

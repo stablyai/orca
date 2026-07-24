@@ -9,6 +9,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStor
 
 import {
   loadMobileRelayHostOverlays,
+  MOBILE_RELAY_HOST_OVERLAY_MAX_ENTRIES,
+  MOBILE_RELAY_HOST_OVERLAY_MAX_STORAGE_CHARACTERS,
   removeMobileRelayHostOverlays,
   resetMobileRelayHostOverlayStoreForTests,
   saveMobileRelayHostOverlay
@@ -96,6 +98,29 @@ describe('mobile relay host overlay store', () => {
     await expect(removeMobileRelayHostOverlays(['host-missing'])).resolves.toBeUndefined()
 
     expect(asyncStorage.getItem).toHaveBeenCalledOnce()
+    expect(asyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('accepts the exact overlay count and refuses to overwrite one over', async () => {
+    const exact = Array.from({ length: MOBILE_RELAY_HOST_OVERLAY_MAX_ENTRIES }, (_, index) => ({
+      ...OVERLAY,
+      hostId: `host-${index}`
+    }))
+    stored = JSON.stringify(exact)
+    const hostIds = new Set(exact.map(({ hostId }) => hostId))
+    expect((await loadMobileRelayHostOverlays(hostIds)).size).toBe(
+      MOBILE_RELAY_HOST_OVERLAY_MAX_ENTRIES
+    )
+
+    stored = JSON.stringify([...exact, { ...OVERLAY, hostId: 'one-over' }])
+    await expect(saveMobileRelayHostOverlay(OVERLAY)).rejects.toThrow(/unreadable/)
+    expect(asyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('rejects an oversized overlay payload before parsing', async () => {
+    stored = 'x'.repeat(MOBILE_RELAY_HOST_OVERLAY_MAX_STORAGE_CHARACTERS + 1)
+
+    await expect(saveMobileRelayHostOverlay(OVERLAY)).rejects.toThrow(/unreadable/)
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
   })
 })

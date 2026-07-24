@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import type { RmOptions } from 'node:fs'
-import { lstat, readFile, rm } from 'node:fs/promises'
+import { lstat, rm } from 'node:fs/promises'
 import { win32 } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import {
@@ -9,7 +9,12 @@ import {
   quotePosixShell
 } from '../shared/wsl-login-shell-command'
 import { toLinuxPath } from './wsl'
-import type { ReadPath, StatPath } from './worktree-orphan-gitdir-proof'
+import {
+  MAX_WORKTREE_GIT_POINTER_BYTES,
+  type ReadPath,
+  type StatPath
+} from './worktree-orphan-gitdir-proof'
+import { readNodeFileWithinLimit } from '../shared/node-bounded-file-reader'
 
 export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string
@@ -37,13 +42,13 @@ function shouldUseWslFilesystem(options: LocalWorktreeFilesystemOptions): boolea
 function execFileText(
   file: string,
   args: string[],
-  options: { timeout: number }
+  options: { maxBuffer?: number; timeout: number }
 ): Promise<ExecFileTextResult> {
   return new Promise((resolve, reject) => {
     execFile(
       file,
       args,
-      { encoding: 'utf8', timeout: options.timeout },
+      { encoding: 'utf8', timeout: options.timeout, maxBuffer: options.maxBuffer },
       (error, stdout, stderr) => {
         if (error) {
           reject(error)
@@ -97,7 +102,10 @@ export function getLocalWorktreePathAccess(
   if (!shouldUseWslFilesystem(options) || !distro) {
     return {
       statPath: lstat,
-      readPath: (path) => readFile(path, 'utf8')
+      readPath: async (path) =>
+        (await readNodeFileWithinLimit(path, MAX_WORKTREE_GIT_POINTER_BYTES)).buffer.toString(
+          'utf8'
+        )
     }
   }
 
@@ -120,7 +128,26 @@ export function getLocalWorktreePathAccess(
     },
     readPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
-      const { stdout } = await runWslLoginShellCommand(distro, `cat -- ${target}`)
+      const { stdout } = await execFileText(
+        'wsl.exe',
+        [
+          '-d',
+          distro,
+          '--',
+          'sh',
+          '-lc',
+          escapeWslShCommandForWindows(
+            buildWslLoginShellCommand(`head -c ${MAX_WORKTREE_GIT_POINTER_BYTES + 1} -- ${target}`)
+          )
+        ],
+        {
+          timeout: WSL_FILE_OPERATION_TIMEOUT_MS,
+          maxBuffer: (MAX_WORKTREE_GIT_POINTER_BYTES + 1) * 2
+        }
+      )
+      if (Buffer.byteLength(stdout, 'utf8') > MAX_WORKTREE_GIT_POINTER_BYTES) {
+        throw new Error('Worktree Git pointer exceeds the safe read limit')
+      }
       return stdout
     }
   }

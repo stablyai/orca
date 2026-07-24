@@ -10,7 +10,8 @@ const { netConnectMock } = vi.hoisted(() => ({
 
 vi.mock('net', () => ({ connect: netConnectMock }))
 
-import { healthCheckDaemon, killStaleDaemon } from './daemon-health'
+import { checkDaemonHealth, healthCheckDaemon, killStaleDaemon } from './daemon-health'
+import { DAEMON_HANDSHAKE_MAX_LINE_BYTES } from './ndjson'
 
 class FakeSocket extends EventEmitter {
   destroy = vi.fn()
@@ -69,6 +70,21 @@ describe('daemon health socket listener cleanup', () => {
     expect(socket.listenerCount('error')).toBe(0)
     expect(socket.listenerCount('data')).toBe(0)
     expect(socket.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects and releases a newline-free oversized health response', async () => {
+    const socket = new FakeSocket()
+    netConnectMock.mockReturnValueOnce(socket)
+
+    const result = checkDaemonHealth(socketPath, tokenPath)
+    socket.emit('connect')
+    socket.emit('data', Buffer.alloc(DAEMON_HANDSHAKE_MAX_LINE_BYTES + 1, 0x78))
+
+    await expect(result).resolves.toBe('rejected')
+    expect(socket.listenerCount('connect')).toBe(0)
+    expect(socket.listenerCount('error')).toBe(0)
+    expect(socket.listenerCount('data')).toBe(0)
+    expect(socket.destroy).toHaveBeenCalledOnce()
   })
 
   it('removes stale-socket probe listeners after a timeout', async () => {

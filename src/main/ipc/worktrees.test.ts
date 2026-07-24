@@ -8,6 +8,8 @@ import type { CreateWorktreeResult, GitWorktreeInfo, Worktree } from '../../shar
 import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 
 const ORIGINAL_PLATFORM = process.platform
+const TEST_MAX_HOOK_GITIGNORE_BYTES = 4 * 1024 * 1024
+const TEST_MAX_ISSUE_COMMAND_BYTES = 1024 * 1024
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
 const findExistingWorktreeSymlinkPathsMock = vi.hoisted(() => vi.fn())
 
@@ -193,6 +195,8 @@ vi.mock('../hooks', () => ({
   getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
   getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   getSetupRunnerEnvVars: getSetupRunnerEnvVarsMock,
+  MAX_HOOK_GITIGNORE_BYTES: 4 * 1024 * 1024,
+  MAX_ISSUE_COMMAND_BYTES: 1024 * 1024,
   loadHooks: loadHooksMock,
   parseOrcaYaml: parseOrcaYamlMock,
   runHook: runHookMock,
@@ -432,9 +436,7 @@ describe('registerWorktreeHandlers', () => {
     getHostedReviewForBranchMock.mockResolvedValue(null)
     getWorkItemMock.mockResolvedValue(null)
     getPullRequestPushTargetMock.mockResolvedValue(null)
-    // Why: createLocalWorktree can still hit legacy git fetch fallback in
-    // narrow unit harnesses. Return a resolved promise so catch/then chains
-    // don't trip on undefined.
+    // Why: createLocalWorktree can still hit the legacy git fetch fallback here; resolve so catch/then chains don't trip on undefined.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     getEffectiveHooksMock.mockReturnValue(null)
     getEffectiveHooksFromConfigMock.mockImplementation(() => getEffectiveHooksMock())
@@ -489,10 +491,7 @@ describe('registerWorktreeHandlers', () => {
     listWorktreesMock.mockResolvedValue([])
     forceDeleteLocalBranchMock.mockResolvedValue(undefined)
 
-    // Why: createLocalWorktree routes `git fetch` through
-    // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). A minimal stub
-    // keeps these tests focused on create-flow semantics; the full
-    // cache behavior is covered by fetch-remote-cache.test.ts.
+    // Why: minimal stub keeps these tests on create-flow semantics; full fetchRemoteWithCache behavior is covered by fetch-remote-cache.test.ts.
     runtimeStub = {
       resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
       hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
@@ -795,8 +794,7 @@ describe('registerWorktreeHandlers', () => {
       worktreeId: 'repo-1::/workspace/feature-wt',
       updates: { isUnread: false }
     })
-    // Why: per-click isUnread writes must stay event-free (PR #209), while a
-    // rename must reach paired remote clients that no longer poll for titles.
+    // Why: per-click isUnread writes must stay event-free (PR #209), while a rename must reach paired remote clients that no longer poll for titles.
     expect(runtimeStub.notifyWorktreesChangedForRemoteClients).not.toHaveBeenCalled()
 
     handlers['worktrees:updateMeta'](null, {
@@ -842,8 +840,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {
-    // Why: new-workspace flow should silently try improve-dashboard-2, -3, ...
-    // rather than failing and forcing the user back to the name picker.
+    // Why: new-workspace flow should silently try improve-dashboard-2, -3, … rather than failing back to the name picker.
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
       branch === 'improve-dashboard' ? 'remote' : null
     )
@@ -1236,9 +1233,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('reuses an existing local branch when the worktree folder is renamed (#5181)', async () => {
-    // Why: the reuse checkbox keeps branchNameOverride pinned to the selected
-    // branch while the worktree folder is named independently. The backend must
-    // still check out that exact branch (no -b) into the renamed folder.
+    // Why: reuse keeps branchNameOverride on the selected branch though the folder is renamed; backend must check out that branch (no -b).
     listWorktreesMock
       .mockResolvedValueOnce([
         {
@@ -2313,6 +2308,169 @@ describe('registerWorktreeHandlers', () => {
       source: 'git',
       worktrees: [expect.objectContaining({ path: '/workspace/repo' })]
     })
+  })
+
+  it('hydrates detected worktrees with instance-validated legacy lineage after an update', async () => {
+    const parentPath = '/workspace/assigned-issues'
+    const childPath = '/workspace/issue-9276-nested-ssh-runtime-routing'
+    const parentId = `repo-1::${parentPath}`
+    const childId = `repo-1::${childPath}`
+    const metaById: Record<string, { instanceId: string }> = {
+      [parentId]: { instanceId: 'parent-instance' },
+      [childId]: { instanceId: 'child-instance' }
+    }
+    store.getWorktreeMeta.mockImplementation((id: string) => metaById[id])
+    store.setWorktreeMeta.mockImplementation((id: string, updates: object) => ({
+      ...metaById[id],
+      ...updates
+    }))
+    store.getAllWorktreeLineage.mockReturnValue({
+      [childId]: {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+        createdAt: 1
+      }
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: childPath,
+        head: 'child-head',
+        branch: 'refs/heads/child',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: parentPath,
+        head: 'parent-head',
+        branch: 'refs/heads/parent',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = (await handlers['worktrees:listDetected'](null, {
+      repoId: 'repo-1'
+    })) as { worktrees: (Worktree & { lineage?: unknown; parentWorktreeId?: string | null })[] }
+
+    expect(result.worktrees).toEqual([
+      expect.objectContaining({
+        id: childId,
+        parentWorktreeId: parentId,
+        lineage: expect.objectContaining({ parentWorktreeInstanceId: 'parent-instance' })
+      }),
+      expect.objectContaining({
+        id: parentId,
+        parentWorktreeId: null,
+        childWorktreeIds: [childId],
+        lineage: null
+      })
+    ])
+  })
+
+  it('hydrates folder-repo detected rows with instance-validated legacy lineage', async () => {
+    const folderRepo = {
+      id: 'repo-1',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const
+    }
+    const parentId = `${folderRepo.id}::${folderRepo.path}`
+    const childId = `${parentId}::workspace:child-instance`
+    const metaById: Record<string, Record<string, unknown>> = {
+      [parentId]: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        projectId: 'repo:repo-1',
+        hostId: 'local',
+        projectHostSetupId: 'repo-1'
+      }),
+      [childId]: makeWorktreeMeta({
+        instanceId: 'child-instance',
+        projectId: 'repo:repo-1',
+        hostId: 'local',
+        projectHostSetupId: 'repo-1'
+      })
+    }
+    store.getRepos.mockReturnValue([folderRepo])
+    store.getRepo.mockReturnValue(folderRepo)
+    store.getAllWorktreeMeta.mockReturnValue(metaById)
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) => metaById[worktreeId])
+    store.getAllWorktreeLineage.mockReturnValue({
+      [childId]: {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+        createdAt: 1
+      }
+    })
+
+    const result = (await handlers['worktrees:listDetected'](null, {
+      repoId: folderRepo.id
+    })) as { worktrees: (Worktree & { lineage?: unknown; parentWorktreeId?: string | null })[] }
+
+    expect(result.worktrees).toEqual([
+      expect.objectContaining({
+        id: parentId,
+        parentWorktreeId: null,
+        childWorktreeIds: [childId],
+        lineage: null
+      }),
+      expect.objectContaining({
+        id: childId,
+        parentWorktreeId: parentId,
+        lineage: expect.objectContaining({ parentWorktreeInstanceId: 'parent-instance' })
+      })
+    ])
+  })
+
+  it('hides agent scratch created inside a linked checkout from desktop listings', async () => {
+    const linkedCheckoutPath = '/workspace/feature-x'
+    const scratchPath = `${linkedCheckoutPath}/.claude/worktrees/agent-a04ccaaa`
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: linkedCheckoutPath,
+        head: 'feature-head',
+        branch: 'refs/heads/feature-x',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: scratchPath,
+        head: 'scratch-head',
+        branch: 'refs/heads/worktree-agent-a04ccaaa',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const detected = (await handlers['worktrees:listDetected'](null, {
+      repoId: 'repo-1'
+    })) as { worktrees: (Worktree & { ownership: string; visible: boolean })[] }
+    const visible = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as Worktree[]
+
+    expect(detected.worktrees.find((worktree) => worktree.path === scratchPath)).toMatchObject({
+      ownership: 'agent-scratch',
+      visible: false
+    })
+    expect(visible.map((worktree) => worktree.path)).toEqual([
+      '/workspace/repo',
+      linkedCheckoutPath
+    ])
   })
 
   it('does not reuse host detected worktree scans for a selected WSL runtime', async () => {
@@ -3543,6 +3701,12 @@ describe('registerWorktreeHandlers', () => {
       ])
     }
     const fsProvider = {
+      stat: vi.fn(async (filePath: string) => {
+        if (filePath.endsWith('orca.yaml')) {
+          return { size: 32, type: 'file', mtime: 0 }
+        }
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  setup: pnpm install\n',
         isBinary: false
@@ -4026,8 +4190,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('creates an SSH worktree from the detected default base when the persisted base is stale', async () => {
-    // Regression: a stale persisted repo base must fall back to the detected
-    // primary default instead of blocking creation.
+    // Regression: a stale persisted repo base must fall back to the detected primary default instead of blocking creation.
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -4901,8 +5064,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('creates from the detected default base when the persisted base is stale', async () => {
-    // Regression: a stale persisted repo base must fall back to the detected
-    // primary default instead of blocking creation.
+    // Regression: a stale persisted repo base must fall back to the detected primary default instead of blocking creation.
     const remoteBase = {
       remote: 'origin',
       branch: 'main',
@@ -5206,11 +5368,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('throws a clear error when no default base ref can be resolved', async () => {
-    // Why: guard against regressing to a silent 'origin/main' fallback. When
-    // default-base resolution returns null (e.g. a fresh repo with no origin/HEAD,
-    // no origin/main, no origin/master, and no local main/master), we must
-    // fail loudly with a message that prompts the user to pick a base
-    // branch, not hand a non-existent ref to `git worktree add`.
+    // Why: guard against regressing to a silent 'origin/main' fallback; an unresolved default base must fail loudly, not hand a non-existent ref to `git worktree add`.
     resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue(null)
     store.getRepo.mockReturnValue({
       id: 'repo-1',
@@ -5588,10 +5746,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery so newly-added worktrees sort to the top of Recent', async () => {
-    // Why: a worktree that exists on disk but has no persisted WorktreeMeta
-    // (e.g. a folder repo just added, or a pre-existing worktree in a
-    // newly-added git repo) would otherwise fall back to `lastActivityAt: 0`
-    // and rank dead last in the Recent sort.
+    // Why: a worktree on disk with no persisted WorktreeMeta would otherwise fall back to lastActivityAt: 0 and rank dead last in Recent.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/discovered-wt',
@@ -5631,9 +5786,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('backfills project-host ownership without re-stamping lastActivityAt for existing meta', async () => {
-    // Why: only the *first* discovery should stamp. Re-stamping on every list
-    // would overwrite real activity and reshuffle the sidebar on refresh. Host
-    // ownership can still be filled because it is derived from the repo setup.
+    // Why: only first discovery stamps (re-stamping would reshuffle the sidebar); host ownership is still backfilled since it derives from repo setup.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/existing-wt',
@@ -5685,9 +5838,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('repairs legacy project ids when discovery now resolves the same host setup to a logical project', async () => {
-    // Why: provider identity can become available after metadata was written.
-    // Existing workspaces should move from repo-scoped IDs to the logical
-    // project ID without losing activity ordering.
+    // Why: provider identity can arrive after metadata was written; existing workspaces must move to the logical project ID without losing activity ordering.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/existing-wt',
@@ -5948,9 +6099,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery for folder-mode repos', async () => {
-    // Why: folder repos produce a synthetic worktree that flows through the
-    // same list path. Without the stamp, adding a folder puts its card at the
-    // bottom of Recent even though the user just added it.
+    // Why: folder repos produce a synthetic worktree; without the stamp a just-added folder sorts to the bottom of Recent.
     store.getRepos.mockReturnValue([
       {
         id: 'repo-1',
@@ -5991,9 +6140,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery via worktrees:listAll', async () => {
-    // Why: the stamping logic lives in both worktrees:list and worktrees:listAll.
-    // Without a dedicated test, a regression in the listAll loop would silently
-    // bury newly-discovered worktrees from the multi-repo sidebar view.
+    // Why: stamping logic is duplicated in worktrees:list and worktrees:listAll; a listAll regression would silently bury newly-discovered worktrees.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/discovered-wt',
@@ -6022,9 +6169,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('omits prunable worktrees from worktrees:listAll', async () => {
-    // Why: a prunable registration has no working directory (issue #8389), so
-    // surfacing it as a workspace yields repeated pty:spawn/fs:readDir
-    // failures and a blank pane.
+    // Why: a prunable registration has no working directory (issue #8389), so surfacing it yields repeated pty/fs failures and a blank pane.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/repo',
@@ -6138,13 +6283,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('skips past a suffix that already belongs to a PR after an initial branch conflict', async () => {
-    // Why: `gh pr list` is network-bound and previously fired on every single
-    // create, adding 1–3s to the happy path. We now only probe PR conflicts
-    // from suffix=2 onward — once a local/remote branch collision has already
-    // forced us past the first candidate and uniqueness matters enough to
-    // justify the GitHub round-trip. This test covers that delayed path:
-    // suffix=1 is a branch conflict, suffix=2 is owned by an old PR, so the
-    // loop lands on suffix=3.
+    // Why: the PR-conflict probe (network-bound, 1–3s) only runs from suffix=2 onward, after a branch collision already forced past the first candidate.
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
       branch === 'improve-dashboard' ? 'remote' : null
     )
@@ -6192,10 +6331,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('does not call `gh pr list` on the happy path (no branch conflict)', async () => {
-    // Why: guards the speed optimization. If a future refactor accidentally
-    // reintroduces the PR probe on the first iteration, the happy path will
-    // silently regain a 1–3s GitHub round-trip per click; this test fails
-    // loudly instead.
+    // Why: guard against a refactor reintroducing the PR probe on the happy path (1–3s GitHub round-trip per click).
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -6317,10 +6453,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('launches setup even when primary and worktree orca.yaml scripts diverge', async () => {
-    // Why: regression for a silent skip introduced by the #1280 content-equality
-    // gate. Benign divergence (whitespace, comments, or any setup edit that
-    // landed on the base branch but not yet in the primary checkout) must not
-    // disable setup — repo-level trust already gates execution.
+    // Why: benign orca.yaml divergence must not disable setup (regression from #1280 content-equality gate); repo trust already gates execution.
     listWorktreesMock.mockResolvedValue(createdWorktreeList)
     getEffectiveHooksMock.mockImplementation((_repo, worktreePath?: string) => ({
       scripts: {
@@ -6963,6 +7096,7 @@ describe('registerWorktreeHandlers', () => {
       })
     }
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 36, type: 'file', mtime: 0 }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  archive: echo archived\n',
         isBinary: false
@@ -7040,6 +7174,7 @@ describe('registerWorktreeHandlers', () => {
       })
     }
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 36, type: 'file', mtime: 0 }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  archive: echo archived\n',
         isBinary: false
@@ -7099,6 +7234,7 @@ describe('registerWorktreeHandlers', () => {
       })
     }
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 36, type: 'file', mtime: 0 }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  archive: echo archived\n',
         isBinary: false
@@ -7157,6 +7293,7 @@ describe('registerWorktreeHandlers', () => {
       })
     }
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 30, type: 'file', mtime: 0 }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  archive: exit 7\n',
         isBinary: false
@@ -7215,6 +7352,7 @@ describe('registerWorktreeHandlers', () => {
       execNonInteractive: vi.fn().mockRejectedValue(new Error('relay disconnected'))
     }
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 36, type: 'file', mtime: 0 }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  archive: echo archived\n',
         isBinary: false
@@ -7277,6 +7415,7 @@ describe('registerWorktreeHandlers', () => {
       })
     }
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 36, type: 'file', mtime: 0 }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  archive: echo archived\n',
         isBinary: false
@@ -7437,6 +7576,7 @@ describe('registerWorktreeHandlers', () => {
     }
     const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
     const fsProvider = {
+      stat: vi.fn().mockResolvedValue({ size: 35, type: 'file', mtime: 0 }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  archive: remote-cleanup',
         isBinary: false
@@ -8566,6 +8706,12 @@ describe('registerWorktreeHandlers', () => {
       worktreeBaseRef: null
     }
     const fsProvider = {
+      stat: vi.fn(async (filePath: string) => {
+        if (filePath.endsWith('/.orca/issue-command')) {
+          return { size: 14, type: 'file', mtime: 0 }
+        }
+        throw new Error('shared read failed')
+      }),
       readFile: vi.fn(async (filePath: string) => {
         if (filePath.endsWith('/.orca/issue-command')) {
           return { content: 'local command\n', isBinary: false }
@@ -8589,6 +8735,46 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('admits an exact-size SSH issue command and rejects +1 before reading', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    let issueCommandSize = TEST_MAX_ISSUE_COMMAND_BYTES
+    const exactContent = 'x'.repeat(TEST_MAX_ISSUE_COMMAND_BYTES)
+    const fsProvider = {
+      stat: vi.fn(async (filePath: string) => {
+        if (filePath.endsWith('/.orca/issue-command')) {
+          return { size: issueCommandSize, type: 'file', mtime: 0 }
+        }
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }),
+      readFile: vi.fn().mockResolvedValue({ content: exactContent, isBinary: false })
+    }
+    store.getRepo.mockReturnValue(repo)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+
+    const exactResult = (await handlers['hooks:readIssueCommand'](null, {
+      repoId: 'repo-ssh'
+    })) as { localContent: string | null }
+    expect(exactResult.localContent).toHaveLength(TEST_MAX_ISSUE_COMMAND_BYTES)
+    expect(fsProvider.readFile).toHaveBeenCalledOnce()
+
+    issueCommandSize += 1
+    fsProvider.readFile.mockClear()
+    await expect(
+      handlers['hooks:readIssueCommand'](null, {
+        repoId: 'repo-ssh'
+      })
+    ).resolves.toMatchObject({ localContent: null, effectiveContent: null, source: 'none' })
+    expect(fsProvider.readFile).not.toHaveBeenCalled()
+  })
+
   it('writes SSH issue-command overrides without clobbering .gitignore on read failure', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -8601,6 +8787,7 @@ describe('registerWorktreeHandlers', () => {
     }
     const fsProvider = {
       createDir: vi.fn().mockResolvedValue(undefined),
+      stat: vi.fn().mockRejectedValue(new Error('ssh read failed')),
       readFile: vi.fn().mockRejectedValue(new Error('ssh read failed')),
       writeFile: vi.fn().mockResolvedValue(undefined),
       deletePath: vi.fn().mockResolvedValue(undefined)
@@ -8633,6 +8820,12 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1'
     }
     const fsProvider = {
+      stat: vi.fn(async (filePath: string) => {
+        if (filePath.endsWith('/.orca/issue-command')) {
+          return { size: 15, type: 'file', mtime: 0 }
+        }
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }),
       readFile: vi.fn(async (filePath: string) => {
         if (filePath.endsWith('/.orca/issue-command')) {
           return { content: 'remote command\n', isBinary: false }
@@ -8670,6 +8863,7 @@ describe('registerWorktreeHandlers', () => {
     const enoent = Object.assign(new Error('missing'), { code: 'ENOENT' })
     const fsProvider = {
       createDir: vi.fn().mockResolvedValue(undefined),
+      stat: vi.fn().mockRejectedValue(enoent),
       readFile: vi.fn().mockRejectedValue(enoent),
       writeFile: vi.fn().mockResolvedValue(undefined),
       deletePath: vi.fn().mockResolvedValue(undefined)
@@ -8688,6 +8882,56 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo/.orca/issue-command',
       'orca issue command\n'
     )
+  })
+
+  it('admits an exact-size SSH .gitignore and rejects +1 before reading', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    let gitignoreSize = TEST_MAX_HOOK_GITIGNORE_BYTES
+    const exactContent = 'x'.repeat(TEST_MAX_HOOK_GITIGNORE_BYTES)
+    const fsProvider = {
+      createDir: vi.fn().mockResolvedValue(undefined),
+      stat: vi.fn().mockImplementation(async () => ({
+        size: gitignoreSize,
+        type: 'file',
+        mtime: 0
+      })),
+      readFile: vi.fn().mockResolvedValue({ content: exactContent, isBinary: false }),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      deletePath: vi.fn().mockResolvedValue(undefined)
+    }
+    store.getRepo.mockReturnValue(repo)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+
+    await handlers['hooks:writeIssueCommand'](null, {
+      repoId: 'repo-ssh',
+      content: 'orca issue command'
+    })
+    const gitignoreWrite = fsProvider.writeFile.mock.calls.find(([filePath]) =>
+      filePath.endsWith('/.gitignore')
+    )
+    expect(gitignoreWrite?.[1]).toHaveLength(TEST_MAX_HOOK_GITIGNORE_BYTES + 7)
+    expect(gitignoreWrite?.[1]).toMatch(/\n\.orca\n$/)
+    expect(fsProvider.readFile).toHaveBeenCalledOnce()
+
+    gitignoreSize += 1
+    fsProvider.readFile.mockClear()
+    fsProvider.writeFile.mockClear()
+    await expect(
+      handlers['hooks:writeIssueCommand'](null, {
+        repoId: 'repo-ssh',
+        content: 'orca issue command'
+      })
+    ).rejects.toThrow('Remote .gitignore exceeds the supported size limit')
+    expect(fsProvider.readFile).not.toHaveBeenCalled()
+    expect(fsProvider.writeFile).not.toHaveBeenCalled()
   })
 
   it('rejects SSH issue-command writes when the remote filesystem provider is unavailable', async () => {
@@ -8748,8 +8992,7 @@ describe('registerWorktreeHandlers', () => {
       const worktreeId = 'repo-1::/workspace/feature-wt'
       store.getRepo.mockReturnValue(repo)
       getLocalPtyProviderMock.mockReturnValue(ptyProvider)
-      // Why: a removed/disconnected SSH target has no live provider; forgetLocal
-      // must not reach for one.
+      // Why: a removed/disconnected SSH target has no live provider; forgetLocal must not reach for one.
       getSshGitProviderMock.mockReturnValue(undefined)
 
       const result = await handlers['worktrees:forgetLocal'](null, { worktreeId })

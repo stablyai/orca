@@ -3,6 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { TERMINAL_ACCESSORY_KEYS, type TerminalAccessoryKey } from './terminal-accessory-keys'
 
 export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-layout'
+export const TERMINAL_ACCESSORY_LAYOUT_MAX_STORAGE_CHARACTERS = 64 * 1024
+export const TERMINAL_ACCESSORY_LAYOUT_MAX_IDS = 256
+export const TERMINAL_ACCESSORY_LAYOUT_MAX_ID_CHARACTERS = 256
 
 export type TerminalAccessoryLayout = {
   orderedBuiltInIds: string[]
@@ -26,17 +29,28 @@ function defaultPreference(ids = builtInIds()): TerminalAccessoryLayoutPreferenc
 }
 
 function stringArray(value: unknown): string[] | null {
-  if (!Array.isArray(value)) {
+  if (!Array.isArray(value) || value.length > TERMINAL_ACCESSORY_LAYOUT_MAX_IDS) {
     return null
   }
-  return value.every((item): item is string => typeof item === 'string') ? value : null
+  return value.every(
+    (item): item is string =>
+      typeof item === 'string' && item.length <= TERMINAL_ACCESSORY_LAYOUT_MAX_ID_CHARACTERS
+  )
+    ? value
+    : null
 }
 
 function dedupeKnownIds(ids: string[], builtInSet: Set<string>): string[] {
   const seen = new Set<string>()
   const out: string[] = []
-  for (const id of ids) {
-    if (!builtInSet.has(id) || seen.has(id)) {
+  const count = Math.min(ids.length, TERMINAL_ACCESSORY_LAYOUT_MAX_IDS)
+  for (let index = 0; index < count; index++) {
+    const id = ids[index]!
+    if (
+      id.length > TERMINAL_ACCESSORY_LAYOUT_MAX_ID_CHARACTERS ||
+      !builtInSet.has(id) ||
+      seen.has(id)
+    ) {
       continue
     }
     seen.add(id)
@@ -218,6 +232,9 @@ export async function loadTerminalAccessoryLayout(): Promise<TerminalAccessoryLa
     if (!raw) {
       return defaultPreference()
     }
+    if (raw.length > TERMINAL_ACCESSORY_LAYOUT_MAX_STORAGE_CHARACTERS) {
+      return defaultPreference()
+    }
     return normalizeTerminalAccessoryLayoutPreference(JSON.parse(raw))
   } catch {
     return defaultPreference()
@@ -226,5 +243,9 @@ export async function loadTerminalAccessoryLayout(): Promise<TerminalAccessoryLa
 
 export async function saveTerminalAccessoryLayout(layout: TerminalAccessoryLayout): Promise<void> {
   const preference = createTerminalAccessoryLayoutPreference(layout)
-  await AsyncStorage.setItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, JSON.stringify(preference))
+  const serialized = JSON.stringify(preference)
+  if (serialized.length > TERMINAL_ACCESSORY_LAYOUT_MAX_STORAGE_CHARACTERS) {
+    throw new Error('terminal accessory layout exceeds storage limit')
+  }
+  await AsyncStorage.setItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, serialized)
 }

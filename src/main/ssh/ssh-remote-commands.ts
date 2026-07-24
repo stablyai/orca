@@ -1,4 +1,6 @@
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import { getRelayBaseDirectoryListingCommand } from './ssh-relay-base-directory-listing'
+import { getWindowsRelayLivenessProbeSource } from './ssh-relay-liveness-probe-source'
 import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { shellEscape } from './ssh-connection-utils'
@@ -78,12 +80,14 @@ export function probeRelayInstalledCommand(
 ): string {
   const relayJs = joinRemotePath(host, remoteRelayDir, 'relay.js')
   const relayWatcherJs = joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')
+  const managedHookRuntimeJs = joinRemotePath(host, remoteRelayDir, 'managed-hook-runtime.js')
   const installComplete = joinRemotePath(host, remoteRelayDir, '.install-complete')
   if (!isWindowsRemoteHost(host)) {
     return (
       `test -d ${shellEscape(remoteRelayDir)} ` +
       `&& test -f ${shellEscape(relayJs)} ` +
       `&& test -f ${shellEscape(relayWatcherJs)} ` +
+      `&& test -f ${shellEscape(managedHookRuntimeJs)} ` +
       `&& test -f ${shellEscape(installComplete)} ` +
       `&& echo OK || echo MISSING`
     )
@@ -93,24 +97,15 @@ export function probeRelayInstalledCommand(
       `$dir = ${powerShellLiteral(remoteRelayDir)}`,
       `$relay = ${powerShellLiteral(relayJs)}`,
       `$watcher = ${powerShellLiteral(relayWatcherJs)}`,
+      `$managedHooks = ${powerShellLiteral(managedHookRuntimeJs)}`,
       `$complete = ${powerShellLiteral(installComplete)}`,
-      "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $watcher -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
+      "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $watcher -PathType Leaf) -and (Test-Path -LiteralPath $managedHooks -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
     ].join('; ')
   )
 }
 
 export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: string): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `ls -1 ${shellEscape(baseDir)} 2>/dev/null || true`
-  }
-  return powerShellCommand(
-    [
-      `$base = ${powerShellLiteral(baseDir)}`,
-      'if (Test-Path -LiteralPath $base -PathType Container) {',
-      'Get-ChildItem -LiteralPath $base -Directory | ForEach-Object { $_.Name }',
-      '}'
-    ].join(' ')
-  )
+  return getRelayBaseDirectoryListingCommand(host, baseDir)
 }
 
 export function probeDirectoryExistsCommand(host: RemoteHostPlatform, remotePath: string): string {
@@ -151,35 +146,7 @@ export function relayLivenessProbeCommand(
   if (!windowsOptions) {
     return powerShellCommand("'ALIVE'")
   }
-  const js = [
-    'const fs=require("fs"),path=require("path"),net=require("net");',
-    'const [dir,...seed]=process.argv.slice(1);',
-    'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\orca-relay-[0-9a-f]{20}$/i;',
-    'const pipes=[];',
-    'let markerCount=0;',
-    'for(const p of seed){if(valid.test(p)&&!pipes.includes(p))pipes.push(p)}',
-    'try{for(const name of fs.readdirSync(dir)){',
-    'if(!name.startsWith(".windows-active-pipe-"))continue;',
-    'markerCount++;',
-    'const p=fs.readFileSync(path.join(dir,name),"utf8").trim();',
-    'if(valid.test(p)&&!pipes.includes(p))pipes.push(p)',
-    '}}catch{}',
-    'if(markerCount===0&&pipes.length===0){process.stdout.write("ALIVE");process.exit(0)}',
-    'let i=0;',
-    'function done(ok){process.stdout.write(ok?"ALIVE":"WAITING")}',
-    'function next(){',
-    'const pipe=pipes[i++];',
-    'if(!pipe)return done(false);',
-    'const s=net.connect(pipe);',
-    'let settled=false;',
-    'function finish(ok){if(settled)return;settled=true;s.destroy();if(ok)done(true);else next()}',
-    's.setTimeout(200);',
-    's.on("connect",()=>finish(true));',
-    's.on("timeout",()=>finish(false));',
-    's.on("error",()=>finish(false));',
-    '}',
-    'next();'
-  ].join('')
+  const js = getWindowsRelayLivenessProbeSource()
   return commandWithNodePath(
     host,
     windowsOptions.nodePath,

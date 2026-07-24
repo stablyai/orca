@@ -1,8 +1,9 @@
 import { safeStorage } from 'electron'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
+import { readIntegrationCredentialFileSync } from '../integration-credential-file'
 
 const MINIMAX_COOKIE_FILE = 'minimax-session-cookie.enc'
 const COOKIE_ENVELOPE_PREFIX = 'orca-minimax-cookie:v1:'
@@ -149,7 +150,7 @@ export function readMiniMaxSessionCookie(): string | null {
     console.warn('[minimax] Failed to harden MiniMax cookie file while reading', error)
   }
   try {
-    const raw = readFileSync(keyPath)
+    const raw = readIntegrationCredentialFileSync(keyPath)
     const envelope = decodeCookieEnvelope(raw)
     cachedMiniMaxCookie = envelope ? readEnvelope(envelope) : readLegacyCookie(raw)
     return cachedMiniMaxCookie

@@ -1,21 +1,72 @@
-import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
 import { startGitCommonWatch } from './worktree-git-common-watch'
+import type { WorktreePollingScanLimits } from './worktree-polling-scan-budget'
+import {
+  collectWorktreeBaseDirectorySignatures,
+  hasWorktreeGitMarker,
+  takeWorktreeBaseDirectorySnapshot,
+  type WorktreeBaseDirectorySnapshot
+} from './worktree-base-directory-snapshot'
 
 export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path: string }
 
 export type WorktreeBaseSubscription = { unsubscribe: () => Promise<void> }
 
+export type WorktreePollerWindowVisibility = {
+  isWindowVisible: () => boolean
+  onWindowBecameVisible: (listener: () => void) => () => void
+}
+
+type WorktreePollerWindow = {
+  isDestroyed: () => boolean
+  isVisible?: () => boolean
+  isMinimized?: () => boolean
+}
+
+const alwaysVisible: WorktreePollerWindowVisibility = {
+  isWindowVisible: () => true,
+  onWindowBecameVisible: () => () => {}
+}
+
+export function createWorktreePollerWindowVisibility(
+  getWindow: () => WorktreePollerWindow | null
+): WorktreePollerWindowVisibility {
+  // Why: only park a window that has actually been shown and is now hidden. A window
+  // that has NEVER been shown is either headless (ORCA_E2E_HEADLESS keeps a live but
+  // never-shown BrowserWindow) or still starting up — no show/restore signal is coming
+  // to resume it, so parking it would starve worktree freshness forever. Treat
+  // never-shown as visible and keep polling; only start parking once we've observed the
+  // window visible at least once. null/destroyed (serve/headless, macOS window-recreation
+  // gap) stay always-visible so a torn-down window never permanently parks the poller.
+  let hasBeenVisible = false
+  return {
+    isWindowVisible: () => {
+      const window = getWindow()
+      if (window === null || window.isDestroyed()) {
+        return true
+      }
+      if (isMainWindowVisible(window)) {
+        hasBeenVisible = true
+        return true
+      }
+      return !hasBeenVisible
+    },
+    onWindowBecameVisible: onMainWindowBecameVisible
+  }
+}
+
 export type WorktreeBasePollerOptions = {
   pollIntervalMs?: number
   platform?: NodeJS.Platform
+  visibility?: WorktreePollerWindowVisibility
   /** Test hook: called whenever a full snapshot scan runs (vs. a gated skip). */
   onFullScan?: () => void
+  scanLimits?: Partial<WorktreePollingScanLimits>
 }
 
 // Why: these targets used to be recursive FSEvents subscriptions spanning the
@@ -39,93 +90,10 @@ export const WORKTREE_BASE_BACKSTOP_TICKS = 15
 // backstop scan cover the pathological case.
 const PENDING_MARKER_MAX_TICKS = 300
 
-function statSignature(s: { mtimeMs: number; ctimeMs: number; ino: number }): string {
-  return `${s.mtimeMs}:${s.ctimeMs}:${s.ino}`
-}
-
-async function dirSignature(path: string): Promise<string> {
-  try {
-    return statSignature(await stat(path))
-  } catch {
-    return 'missing'
-  }
-}
-
-async function hasGitMarker(dir: string): Promise<boolean> {
-  try {
-    await stat(join(dir, '.git'))
-    return true
-  } catch {
-    return false
-  }
-}
-
-type BaseSnapshot = {
-  // worktree-candidate dir → whether its `.git` completion marker exists
-  markers: Map<string, boolean>
-  // dirs whose listing determines the candidate set: the root plus any
-  // nested repo containers. Their stat signatures gate the next full scan.
-  gateDirs: string[]
-}
-
-// Depth-1 worktree dirs (flat layout), plus depth-2 dirs under each nested
-// repo's container, mirroring what worktree-base-directory-event-filter
-// matches: `<wt>/.git` completion markers and `<wt>` deletions.
-async function snapshotBase(
-  rootPath: string,
-  repos: ReadonlyMap<string, WorktreeBaseRepoWatchConfig>
-): Promise<BaseSnapshot> {
-  const markers = new Map<string, boolean>()
-  const gateDirs = [rootPath]
-  const configs = [...repos.values()]
-  const includeFlat = configs.some((config) => !config.nestWorkspaces)
-  const nestedRepoNames = new Set(
-    configs
-      .filter((config) => config.nestWorkspaces)
-      .map((config) => normalizeRuntimePathForComparison(config.repoName))
-  )
-
-  let rootEntries
-  try {
-    rootEntries = await readdir(rootPath, { withFileTypes: true })
-  } catch {
-    // Root vanished: an empty snapshot diffs into delete events for every
-    // previously-known worktree dir, matching the old watcher's error path.
-    return { markers, gateDirs }
-  }
-
-  const candidates: string[] = []
-  for (const entry of rootEntries) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) {
-      continue
-    }
-    const entryPath = join(rootPath, entry.name)
-    if (includeFlat) {
-      candidates.push(entryPath)
-    }
-    if (nestedRepoNames.has(normalizeRuntimePathForComparison(entry.name))) {
-      gateDirs.push(entryPath)
-      let subEntries
-      try {
-        subEntries = await readdir(entryPath, { withFileTypes: true })
-      } catch {
-        subEntries = []
-      }
-      for (const sub of subEntries) {
-        if (sub.isDirectory() || sub.isSymbolicLink()) {
-          candidates.push(join(entryPath, sub.name))
-        }
-      }
-    }
-  }
-
-  for (const dir of candidates) {
-    markers.set(dir, await hasGitMarker(dir))
-  }
-  return { markers, gateDirs }
-}
-
-function diffBase(prev: BaseSnapshot, next: BaseSnapshot): WorktreeBasePollEvent[] {
+function diffBase(
+  prev: WorktreeBaseDirectorySnapshot,
+  next: WorktreeBaseDirectorySnapshot
+): WorktreeBasePollEvent[] {
   const events: WorktreeBasePollEvent[] = []
   for (const [dir, marker] of next.markers) {
     if (marker && prev.markers.get(dir) !== true) {
@@ -145,13 +113,17 @@ async function startBasePoller(
   getRepos: () => ReadonlyMap<string, WorktreeBaseRepoWatchConfig>,
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
-  onFullScan?: () => void
+  visibility: WorktreePollerWindowVisibility,
+  onFullScan: (() => void) | undefined,
+  scanLimits: Partial<WorktreePollingScanLimits>
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
   let tickCount = 0
-  let snapshot = await snapshotBase(target.path, getRepos())
-  let gateSignatures = await Promise.all(snapshot.gateDirs.map(dirSignature))
+  let snapshot = await takeWorktreeBaseDirectorySnapshot(target.path, getRepos(), scanLimits)
+  let gateSignatures = await collectWorktreeBaseDirectorySignatures(snapshot.gateDirs)
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let parkedWhileHidden = false
   // dir → tick when first seen without a `.git` marker
   const pendingMarkers = new Map<string, number>()
   for (const [dir, marker] of snapshot.markers) {
@@ -162,8 +134,8 @@ async function startBasePoller(
 
   const fullScan = async (): Promise<void> => {
     onFullScan?.()
-    const next = await snapshotBase(target.path, getRepos())
-    const nextSignatures = await Promise.all(next.gateDirs.map(dirSignature))
+    const next = await takeWorktreeBaseDirectorySnapshot(target.path, getRepos(), scanLimits)
+    const nextSignatures = await collectWorktreeBaseDirectorySignatures(next.gateDirs)
     if (disposed) {
       return
     }
@@ -190,7 +162,7 @@ async function startBasePoller(
   const checkPendingMarkers = async (): Promise<void> => {
     const events: WorktreeBasePollEvent[] = []
     for (const dir of pendingMarkers.keys()) {
-      if (await hasGitMarker(dir)) {
+      if (await hasWorktreeGitMarker(dir)) {
         pendingMarkers.delete(dir)
         snapshot.markers.set(dir, true)
         events.push({ type: 'create', path: join(dir, '.git') })
@@ -201,15 +173,15 @@ async function startBasePoller(
     }
   }
 
-  const tick = async (): Promise<void> => {
+  const poll = async (forceFullScan = false): Promise<void> => {
     tickCount++
-    if (tickCount % WORKTREE_BASE_BACKSTOP_TICKS === 0) {
+    if (forceFullScan || tickCount % WORKTREE_BASE_BACKSTOP_TICKS === 0) {
       await fullScan()
       return
     }
     // Idle fast path: when the dirs whose listings define the candidate set
     // are untouched, skip the readdir + per-candidate stat fan-out entirely.
-    const signatures = await Promise.all(snapshot.gateDirs.map(dirSignature))
+    const signatures = await collectWorktreeBaseDirectorySignatures(snapshot.gateDirs)
     const gateChanged =
       signatures.length !== gateSignatures.length ||
       signatures.some((sig, index) => sig !== gateSignatures[index])
@@ -222,25 +194,62 @@ async function startBasePoller(
     }
   }
 
-  const timer = setInterval(() => {
-    if (disposed || ticking) {
+  const tick = async (forceFullScan = false): Promise<void> => {
+    timer = null
+    if (disposed) {
+      return
+    }
+    if (!visibility.isWindowVisible()) {
+      parkedWhileHidden = true
+      return
+    }
+    if (ticking) {
       return
     }
     ticking = true
-    void tick()
-      .catch(() => {
-        // Transient fs error: keep the previous snapshot and retry next tick.
-      })
-      .finally(() => {
-        ticking = false
-      })
-  }, pollIntervalMs)
+    // Why: measure from tick start so the cadence is start-to-start (like the old setInterval), not
+    // gap-after-completion — otherwise each visible refresh lands a full scan-duration late every tick.
+    const startedAt = Date.now()
+    try {
+      await poll(forceFullScan)
+    } catch {
+      // Transient fs error: keep the previous snapshot and retry next tick.
+    } finally {
+      ticking = false
+    }
+    if (!disposed) {
+      // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
+      // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
+      // minutes); the upper clamp caps the wait at one interval, the lower clamp keeps a long scan from going negative.
+      const nextDelay = Math.max(
+        0,
+        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
+      )
+      timer = setTimeout(() => void tick(), nextDelay)
+      timer.unref?.()
+    }
+  }
+
+  const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
+    if (disposed || !parkedWhileHidden) {
+      return
+    }
+    parkedWhileHidden = false
+    // Why: the ordinary dir-signature gate can miss same-granule changes made
+    // while hidden; resume must diff a fresh full snapshot against the baseline.
+    void tick(true)
+  })
+
+  timer = setTimeout(() => void tick(), pollIntervalMs)
   timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
-      clearInterval(timer)
+      if (timer) {
+        clearTimeout(timer)
+      }
+      unsubscribeVisibility()
     }
   }
 }
@@ -256,8 +265,25 @@ export async function startWorktreeBaseDirectoryPoller(
 ): Promise<WorktreeBaseSubscription> {
   const pollIntervalMs = options.pollIntervalMs ?? WORKTREE_BASE_POLL_INTERVAL_MS
   const platform = options.platform ?? process.platform
+  const visibility = options.visibility ?? alwaysVisible
   if (target.kind === 'git-common') {
-    return startGitCommonWatch(target, onEvents, pollIntervalMs, platform, options.onFullScan)
+    return startGitCommonWatch(
+      target,
+      onEvents,
+      pollIntervalMs,
+      platform,
+      visibility,
+      options.onFullScan,
+      options.scanLimits
+    )
   }
-  return startBasePoller(target, getRepos, onEvents, pollIntervalMs, options.onFullScan)
+  return startBasePoller(
+    target,
+    getRepos,
+    onEvents,
+    pollIntervalMs,
+    visibility,
+    options.onFullScan,
+    options.scanLimits ?? {}
+  )
 }

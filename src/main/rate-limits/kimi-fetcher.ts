@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { net } from 'electron'
@@ -7,6 +7,8 @@ import type {
   RateLimitWindow,
   UsageRateLimitMetadata
 } from '../../shared/rate-limit-types'
+import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
+import { readIntegrationCredentialFileSyncText } from '../integration-credential-file'
 
 // Why: Kimi Code's managed coding plan exposes subscription usage at
 // `${base}/usages` (see packages/oauth/src/managed-usage.ts in the CLI bundle).
@@ -58,7 +60,7 @@ function readCredentials(): CredentialsReadResult {
     return { status: 'missing' }
   }
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    const parsed: unknown = JSON.parse(readIntegrationCredentialFileSyncText(path))
     const credentials = parseCredentials(parsed)
     return credentials
       ? { status: 'ok', credentials }
@@ -275,7 +277,7 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     if (!res.ok) {
       return result('error', `Kimi usage request failed (HTTP ${res.status})`)
     }
-    const data: unknown = await res.json()
+    const data = await readFetchResponseJsonWithinLimit<unknown>(res)
     return mapUsageResponse(typeof data === 'object' && data !== null ? data : {})
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Kimi usage request failed')

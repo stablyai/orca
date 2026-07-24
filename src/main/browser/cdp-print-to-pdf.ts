@@ -5,6 +5,9 @@ const PDF_DEFAULT_MARGIN_INCHES = 1 / 2.54
 const PDF_STREAM_CHUNK_BYTES = 1024 * 1024
 const PDF_STREAM_HANDLE_PREFIX = 'orca-pdf-'
 const PDF_STREAM_TTL_MS = 5 * 60 * 1000
+export const CDP_PDF_MAX_RETAINED_STREAMS = 8
+export const CDP_PDF_MAX_RETAINED_BYTES = 64 * 1024 * 1024
+export const CDP_PDF_MEMORY_LIMIT_ERROR = 'PDF exceeds the browser automation memory limit'
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -80,12 +83,64 @@ type PdfStream = {
   data: Buffer
   offset: number
   cleanupTimer: ReturnType<typeof setTimeout>
+  releaseRetention: () => void
 }
 
 export type PdfStreamChunk = {
   data: string
   eof: boolean
 }
+
+export type CdpPdfStreamStoreOptions = {
+  maxStreams?: number
+  maxRetainedBytes?: number
+  maxReadChunkBytes?: number
+  retentionBudget?: CdpPdfRetentionBudget
+}
+
+export function assertCdpPdfWithinMemoryLimit(data: Buffer): void {
+  if (data.length > CDP_PDF_MAX_RETAINED_BYTES) {
+    throw new Error(CDP_PDF_MEMORY_LIMIT_ERROR)
+  }
+}
+
+export class CdpPdfRetentionBudget {
+  private retainedBytes = 0
+  private retainedStreams = 0
+
+  constructor(
+    private readonly maxStreams = CDP_PDF_MAX_RETAINED_STREAMS,
+    private readonly maxRetainedBytes = CDP_PDF_MAX_RETAINED_BYTES
+  ) {}
+
+  retain(bytes: number): (() => void) | null {
+    if (
+      !Number.isSafeInteger(bytes) ||
+      bytes < 0 ||
+      this.retainedStreams >= this.maxStreams ||
+      this.retainedBytes + bytes > this.maxRetainedBytes
+    ) {
+      return null
+    }
+    this.retainedStreams += 1
+    this.retainedBytes += bytes
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      this.retainedStreams = Math.max(0, this.retainedStreams - 1)
+      this.retainedBytes = Math.max(0, this.retainedBytes - bytes)
+    }
+  }
+
+  inspect(): { retainedBytes: number; retainedStreams: number } {
+    return { retainedBytes: this.retainedBytes, retainedStreams: this.retainedStreams }
+  }
+}
+
+const processPdfRetentionBudget = new CdpPdfRetentionBudget()
 
 /**
  * Holds the PDF buffers produced for CDP `transferMode: "ReturnAsStream"` and
@@ -97,7 +152,25 @@ export type PdfStreamChunk = {
 export class CdpPdfStreamStore {
   private readonly streams = new Map<string, PdfStream>()
   private readonly handlePrefix = `${PDF_STREAM_HANDLE_PREFIX}${randomUUID()}-`
+  private readonly maxStreams: number
+  private readonly maxRetainedBytes: number
+  private readonly maxReadChunkBytes: number
+  private readonly retentionBudget: CdpPdfRetentionBudget
   private nextId = 0
+  private retainedBytes = 0
+
+  constructor(options: CdpPdfStreamStoreOptions = {}) {
+    this.maxStreams = Math.max(0, Math.floor(options.maxStreams ?? CDP_PDF_MAX_RETAINED_STREAMS))
+    this.maxRetainedBytes = Math.max(
+      0,
+      Math.floor(options.maxRetainedBytes ?? CDP_PDF_MAX_RETAINED_BYTES)
+    )
+    this.maxReadChunkBytes = Math.max(
+      1,
+      Math.floor(options.maxReadChunkBytes ?? PDF_STREAM_CHUNK_BYTES)
+    )
+    this.retentionBudget = options.retentionBudget ?? processPdfRetentionBudget
+  }
 
   /** True when `params.handle` names one of this store's streams. */
   ownsHandle(params: Record<string, unknown>): boolean {
@@ -105,12 +178,30 @@ export class CdpPdfStreamStore {
   }
 
   create(data: Buffer): string {
+    if (
+      data.length > this.maxRetainedBytes ||
+      this.streams.size >= this.maxStreams ||
+      this.retainedBytes + data.length > this.maxRetainedBytes
+    ) {
+      throw new Error(CDP_PDF_MEMORY_LIMIT_ERROR)
+    }
+    const releaseRetention = this.retentionBudget.retain(data.length)
+    if (!releaseRetention) {
+      throw new Error(CDP_PDF_MEMORY_LIMIT_ERROR)
+    }
     const handle = `${this.handlePrefix}${++this.nextId}`
-    this.streams.set(handle, {
-      data,
-      offset: 0,
-      cleanupTimer: this.scheduleCleanup(handle)
-    })
+    let cleanupTimer: ReturnType<typeof setTimeout> | null = null
+    try {
+      cleanupTimer = this.scheduleCleanup(handle)
+      this.streams.set(handle, { data, offset: 0, cleanupTimer, releaseRetention })
+    } catch (error) {
+      if (cleanupTimer) {
+        clearTimeout(cleanupTimer)
+      }
+      releaseRetention()
+      throw error
+    }
+    this.retainedBytes += data.length
     return handle
   }
 
@@ -130,8 +221,8 @@ export class CdpPdfStreamStore {
     const requestedSize = finiteNumber(params.size)
     const size =
       requestedSize !== null && requestedSize > 0
-        ? Math.floor(requestedSize)
-        : PDF_STREAM_CHUNK_BYTES
+        ? Math.min(Math.floor(requestedSize), this.maxReadChunkBytes)
+        : this.maxReadChunkBytes
     const start = Math.min(stream.offset, stream.data.length)
     const end = Math.min(start + size, stream.data.length)
     const chunk = stream.data.subarray(start, end)
@@ -146,10 +237,9 @@ export class CdpPdfStreamStore {
   }
 
   clear(): void {
-    for (const stream of this.streams.values()) {
-      clearTimeout(stream.cleanupTimer)
+    for (const handle of this.streams.keys()) {
+      this.delete(handle)
     }
-    this.streams.clear()
   }
 
   private scheduleCleanup(handle: string): ReturnType<typeof setTimeout> {
@@ -173,5 +263,7 @@ export class CdpPdfStreamStore {
     }
     clearTimeout(stream.cleanupTimer)
     this.streams.delete(handle)
+    this.retainedBytes = Math.max(0, this.retainedBytes - stream.data.length)
+    stream.releaseRetention()
   }
 }

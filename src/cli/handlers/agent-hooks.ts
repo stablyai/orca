@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -13,6 +13,11 @@ import {
   getManagedAgentHookStatuses
 } from '../../main/agent-hooks/managed-agent-hook-controls'
 import { getDefaultUserDataPath } from '../runtime-client'
+import {
+  ORCA_PERSISTED_STATE_MAX_BYTES,
+  readPersistedStateJsonFileSync,
+  stringifyPrettyPersistedStateWithinLimit
+} from '../../shared/persisted-state-file-bounds'
 
 type AgentHookCommandResult = {
   enabled: boolean
@@ -34,7 +39,7 @@ function readPersistedState(dataPath: string): PersistedState {
     return getDefaultPersistedState(homedir())
   }
   try {
-    const parsed = JSON.parse(readFileSync(dataPath, 'utf-8'))
+    const { value: parsed } = readPersistedStateJsonFileSync<unknown>(dataPath)
     if (!isRecord(parsed)) {
       throw new Error('file does not contain a JSON object')
     }
@@ -52,7 +57,11 @@ function writePersistedState(dataPath: string, state: PersistedState): void {
   const tmpPath = join(dirname(dataPath), `.${Date.now()}-${randomUUID()}.tmp`)
   let renamed = false
   try {
-    writeFileSync(tmpPath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8')
+    const { serialized } = stringifyPrettyPersistedStateWithinLimit(
+      state,
+      ORCA_PERSISTED_STATE_MAX_BYTES - 1
+    )
+    writeFileSync(tmpPath, `${serialized}\n`, 'utf-8')
     renameSync(tmpPath, dataPath)
     renamed = true
   } finally {

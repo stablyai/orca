@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: this store is the single main-process owner for Claude usage persistence, scan gating, and query semantics. Keeping those policy decisions together avoids split-brain range/scope logic across multiple files. */
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
@@ -15,6 +14,10 @@ import type {
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
+import {
+  readUsageProjectionStateFile,
+  writeUsageProjectionStateFileWithRecovery
+} from '../usage-projection-state-file'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { ClaudeUsagePersistedState } from './types'
 import { createWorktreeRefs, getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
@@ -326,10 +329,11 @@ export class ClaudeUsageStore {
   private load(): ClaudeUsagePersistedState {
     try {
       const usageFile = getClaudeUsageFile()
-      if (!existsSync(usageFile)) {
+      const raw = readUsageProjectionStateFile(usageFile)
+      if (raw === null) {
         return getDefaultState()
       }
-      const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as ClaudeUsagePersistedState
+      const parsed = JSON.parse(raw) as ClaudeUsagePersistedState
       if (parsed.schemaVersion !== SCHEMA_VERSION) {
         // Why: scanner semantics affect persisted totals, so old Claude caches
         // must be rebuilt after parser/source changes instead of reused briefly.
@@ -363,16 +367,12 @@ export class ClaudeUsageStore {
 
   private writeToDisk(): void {
     const usageFile = getClaudeUsageFile()
-    const dir = dirname(usageFile)
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-    // Why: scans can refresh while the app is in active use. Use the same
-    // atomic temp-file pattern as the main store so a crash or concurrent write
-    // cannot leave a truncated analytics file as the common failure mode.
-    const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
-    renameSync(tmpFile, usageFile)
+    this.state = writeUsageProjectionStateFileWithRecovery(usageFile, this.state, (error) => {
+      const reset = getDefaultState()
+      reset.scanState.enabled = this.state.scanState.enabled
+      reset.scanState.lastScanError = error.message
+      return reset
+    })
   }
 
   async setEnabled(enabled: boolean): Promise<ClaudeUsageScanState> {

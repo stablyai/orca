@@ -2,12 +2,12 @@
 // production wiring. Tests construct the manager with fakes for everything
 // that spawns wsl.exe or touches the live agentHookServer.
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
 
 import { agentHookServer } from './server'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import {
   isWslDistroRunning,
+  readWslHookRelayBundle,
   resolveWslHookRelayBundle,
   runWslInstallProcess,
   spawnWslRelayProcess
@@ -73,7 +73,7 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     return source ? createHash('sha256').update(source).digest('hex').slice(0, 12) : null
   },
   resolveBundle: resolveWslHookRelayBundle,
-  readBundle: (jsPath) => readFileSync(jsPath),
+  readBundle: readWslHookRelayBundle,
   listDistros: () => listWslDistrosAsync(),
   isDistroRunning: isWslDistroRunning,
   spawnRelay: spawnWslRelayProcess,

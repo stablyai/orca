@@ -1,9 +1,4 @@
-import type {
-  Repo,
-  Worktree,
-  WorkspaceSessionPatch,
-  WorkspaceSessionState
-} from '../../../shared/types'
+import type { Repo, WorkspaceSessionPatch, WorkspaceSessionState } from '../../../shared/types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -13,17 +8,26 @@ import {
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import {
+  forEachWithConcurrency,
+  mapSettledWithConcurrency,
+  mapWithConcurrency
+} from '../../../shared/map-with-concurrency'
+import {
   mergeWorkspaceSessionsFromHosts,
   splitWorkspaceSessionByHost,
   type HostSessionSlices,
   type HostIdByWorktreeId
 } from './workspace-session-host-split'
+import {
+  indexWorkspaceRuntimeHostOwnership,
+  type WorkspaceRuntimeOwnerProjection
+} from './workspace-runtime-host-ownership'
 
 export type HostPersistenceState = {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   projectGroups?: readonly { id: string; executionHostId?: string | null }[]
   folderWorkspaces?: readonly { id: string; projectGroupId: string }[]
-  worktreesByRepo: Record<string, readonly Pick<Worktree, 'id' | 'repoId' | 'hostId'>[]>
+  worktreesByRepo: Record<string, readonly WorkspaceRuntimeOwnerProjection[]>
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
 }
 
@@ -42,6 +46,13 @@ export type WorkspaceSessionHostRead = {
   session: WorkspaceSessionState
   runtimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
 }
+
+export type WorkspaceSessionHostSnapshot = {
+  state: WorkspaceSessionState
+  hostId?: ExecutionHostId
+}
+
+export const WORKSPACE_SESSION_HOST_IO_CONCURRENCY = 4
 
 const WORKSPACE_SESSION_KEYED_FIELDS = [
   'tabsByWorktree',
@@ -107,9 +118,15 @@ function buildRuntimeHostIdByWorkspaceSessionKey(
   slices: HostSessionSlices
 ): Record<string, ExecutionHostId> {
   const owners: Record<string, ExecutionHostId> = {}
+  const ambiguous = new Set<string>()
   for (const [hostId, slice] of nonLocalEntries(slices)) {
     for (const worktreeId of collectWorkspaceSessionKeysFromHostSession(slice)) {
-      owners[worktreeId] = hostId
+      if (owners[worktreeId] && owners[worktreeId] !== hostId) {
+        ambiguous.add(worktreeId)
+        delete owners[worktreeId]
+      } else if (!ambiguous.has(worktreeId)) {
+        owners[worktreeId] = hostId
+      }
     }
   }
   return owners
@@ -166,17 +183,9 @@ export function buildHostIdByWorktreeId(state: HostPersistenceState): HostIdByWo
     // must not let a runtime placeholder steal local session state.
     repoHostById.set(repo.id, existing === undefined ? hostId : existing === hostId ? hostId : null)
   }
-  const repoIdByWorktreeId = new Map<string, string>()
-  const runtimeHostIdByWorktreeId = new Map<string, ExecutionHostId>()
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    for (const worktree of worktrees) {
-      repoIdByWorktreeId.set(worktree.id, worktree.repoId)
-      const parsedWorktreeHost = parseExecutionHostId(worktree.hostId)
-      if (parsedWorktreeHost?.kind === 'runtime') {
-        runtimeHostIdByWorktreeId.set(worktree.id, parsedWorktreeHost.id)
-      }
-    }
-  }
+  const { repoIdByWorktreeId, runtimeHostIdByWorktreeId } = indexWorkspaceRuntimeHostOwnership(
+    state.worktreesByRepo
+  )
 
   return (worktreeId: string): ExecutionHostId => {
     const workspaceScope = parseWorkspaceKey(worktreeId)
@@ -186,6 +195,10 @@ export function buildHostIdByWorktreeId(state: HostPersistenceState): HostIdByWo
     const rawWorktreeId =
       workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
     const worktreeHostId = runtimeHostIdByWorktreeId.get(rawWorktreeId)
+    if (runtimeHostIdByWorktreeId.has(rawWorktreeId) && !worktreeHostId) {
+      // Why: a bare worktree id cannot safely select between two HUB partitions.
+      return LOCAL_EXECUTION_HOST_ID
+    }
     if (worktreeHostId) {
       return worktreeHostId
     }
@@ -219,12 +232,16 @@ export function patchWorkspaceSessionByHost(
   )
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
   const localWrite = api.patch(local)
-  for (const [hostId, slice] of nonLocalEntries(slices)) {
-    // Why: a failed runtime-partition write must not reject the local chain.
-    void api.patch(slice as WorkspaceSessionPatch, hostId).catch((err) => {
-      console.warn(`[session] host partition patch failed for ${hostId}:`, err)
-    })
-  }
+  void forEachWithConcurrency(
+    nonLocalEntries(slices),
+    WORKSPACE_SESSION_HOST_IO_CONCURRENCY,
+    async ([hostId, slice]) => {
+      // Why: a failed runtime-partition write must not reject the local chain.
+      await api.patch(slice as WorkspaceSessionPatch, hostId).catch((err) => {
+        console.warn(`[session] host partition patch failed for ${hostId}:`, err)
+      })
+    }
+  )
   return localWrite
 }
 
@@ -236,13 +253,32 @@ export async function persistWorkspaceSessionByHost(
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): Promise<void> {
-  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
-  const writes: Promise<void>[] = [api.set(slices[LOCAL_EXECUTION_HOST_ID] ?? payload)]
-  for (const [hostId, slice] of nonLocalEntries(slices)) {
-    writes.push(api.set(slice, hostId))
+  const snapshots = buildWorkspaceSessionHostSnapshots(payload, state)
+  const writes = await mapSettledWithConcurrency(
+    snapshots,
+    WORKSPACE_SESSION_HOST_IO_CONCURRENCY,
+    ({ state: snapshot, hostId }) =>
+      hostId === undefined ? api.set(snapshot) : api.set(snapshot, hostId)
+  )
+  const failedWrite = writes.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  )
+  if (failedWrite) {
+    throw failedWrite.reason
   }
-  await Promise.all(writes)
   await api.flush()
+}
+
+/** Build local-first full-session snapshots for the beforeunload / quit paths. */
+export function buildWorkspaceSessionHostSnapshots(
+  payload: WorkspaceSessionState,
+  state: HostPersistenceState
+): WorkspaceSessionHostSnapshot[] {
+  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
+  return [
+    { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },
+    ...nonLocalEntries(slices).map(([hostId, hostState]) => ({ state: hostState, hostId }))
+  ]
 }
 
 /** Synchronous full-session split for the beforeunload / quit paths. */
@@ -251,10 +287,8 @@ export function persistWorkspaceSessionByHostSync(
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): void {
-  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
-  api.setSync(slices[LOCAL_EXECUTION_HOST_ID] ?? payload)
-  for (const [hostId, slice] of nonLocalEntries(slices)) {
-    api.setSync(slice, hostId)
+  for (const snapshot of buildWorkspaceSessionHostSnapshots(payload, state)) {
+    api.setSync(snapshot.state, snapshot.hostId)
   }
 }
 
@@ -302,14 +336,16 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
     ...listKnownRuntimeHostIds(repos),
     ...additionalRuntimeHostIds
   ])
-  await Promise.all(
-    [...runtimeHostIds].map(async (hostId) => {
+  await mapWithConcurrency(
+    [...runtimeHostIds],
+    WORKSPACE_SESSION_HOST_IO_CONCURRENCY,
+    async (hostId) => {
       try {
         slices[hostId] = await api.get(hostId)
       } catch (err) {
         console.warn(`[session] skipping unreadable host partition ${hostId}:`, err)
       }
-    })
+    }
   )
   return {
     session: mergeWorkspaceSessionsFromHosts(slices),

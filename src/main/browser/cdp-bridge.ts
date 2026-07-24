@@ -48,8 +48,16 @@ import {
 import { insertTextThroughCdp } from './browser-text-insertion'
 import type { BrowserManager } from './browser-manager'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
-
-const CAPTURE_LOG_LIMIT = 1000
+import { CdpCommandQueue } from './cdp-command-queue'
+import {
+  buildBoundedCdpConsoleEntry,
+  buildBoundedCdpInterceptedRequest,
+  buildBoundedCdpNetworkEntry,
+  CDP_CAPTURE_LOG_LIMIT,
+  CDP_MAX_IFRAME_SESSIONS,
+  CDP_MAX_PAUSED_REQUESTS,
+  isBoundedCdpIframeSession
+} from './cdp-event-memory-bounds'
 
 export class BrowserError extends Error {
   constructor(
@@ -67,36 +75,33 @@ type TabState = {
   debuggerDetachListener: (() => void) | null
   debuggerMessageListener: ((_event: unknown, method: string, params: unknown) => void) | null
   iframeSessions: Map<string, string>
-  // Why: capture state is per-tab so console/network events from one tab
-  // don't pollute another's capture buffer.
+  // Why: capture state is per-tab so one tab's console/network events don't pollute another's buffer.
   capturing: boolean
   consoleLog: BrowserConsoleEntry[]
   networkLog: BrowserNetworkEntry[]
-  // Why: interception state tracks patterns and paused requests so the
-  // agent can selectively continue or block individual requests.
+  // Why: interception state lets the agent selectively continue or block individual requests.
   intercepting: boolean
   interceptPatterns: string[]
   pausedRequests: Map<string, BrowserInterceptedRequest>
-  // Why: maps CDP requestId to the networkLog entry so loadingFinished
-  // can attribute size to the correct response when requests overlap.
+  // Why: maps CDP requestId → networkLog entry so loadingFinished attributes size to the right overlapping response.
   networkRequestMap: Map<string, BrowserNetworkEntry>
-}
-
-type QueuedCommand = {
-  execute: () => Promise<unknown>
-  resolve: (value: unknown) => void
-  reject: (reason: unknown) => void
 }
 
 export class CdpBridge {
   private activeWebContentsId: number | null = null
   private readonly tabState = new Map<string, TabState>()
-  private readonly commandQueues = new Map<string, QueuedCommand[]>()
-  private readonly processingQueues = new Set<string>()
+  private readonly commandQueue: CdpCommandQueue
   private readonly browserManager: BrowserManager
 
   constructor(browserManager: BrowserManager) {
     this.browserManager = browserManager
+    this.commandQueue = new CdpCommandQueue(
+      () =>
+        new BrowserError(
+          'browser_busy',
+          'Browser command queue is full; retry after the current commands finish'
+        )
+    )
   }
 
   setActiveTab(webContentsId: number): void {
@@ -123,9 +128,7 @@ export class CdpBridge {
     _worktreeId?: string,
     browserPageId?: string
   ): { browserPageId: string; url: string; title: string } | null {
-    // Why: OrcaRuntimeService pushes navigation/title updates after commands
-    // using a bridge-agnostic contract. The CDP bridge only routes one active
-    // tab at a time, but it still needs to expose the same metadata lookup.
+    // Why: expose the same metadata lookup as other bridges, though the CDP bridge routes only one active tab.
     const resolvedPageId = browserPageId ?? this.getActivePageId()
     if (!resolvedPageId) {
       return null
@@ -185,10 +188,7 @@ export class CdpBridge {
       const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
       const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
 
-      // Why: mouseMoved fires mouseenter/mouseover which some sites need to
-      // reveal hover-dependent menus or clickable areas before the click lands.
-      // Input events go to the parent session — Chrome routes them to the
-      // correct frame based on coordinates.
+      // Why: mouseMoved fires mouseenter/mouseover so sites reveal hover-dependent menus/targets before the click lands.
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
       await sender('Input.dispatchMouseEvent', {
         type: 'mousePressed',
@@ -244,9 +244,7 @@ export class CdpBridge {
       const toLocal = await this.getElementCenter(toSender, toNode.backendDOMNodeId)
       const to = await this.getPageCoordinates(guest, toNode, toLocal.cx, toLocal.cy)
 
-      // Why: 10-step interpolation with delays simulates human-like drag and
-      // triggers dragenter/dragover events on intermediate elements, which many
-      // drag-and-drop libraries rely on.
+      // Why: interpolate the drag so intermediate elements fire dragenter/dragover, which many drag-and-drop libs require.
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.cx, y: from.cy })
       await sender('Input.dispatchMouseEvent', {
         type: 'mousePressed',
@@ -323,8 +321,7 @@ export class CdpBridge {
 
       await refSender('DOM.focus', { backendNodeId: node.backendDOMNodeId })
 
-      // Why: select-all then delete clears any existing value before typing,
-      // matching the behavior of Playwright's fill() and agent-browser's fill.
+      // Why: select-all + delete clears the existing value before typing, matching Playwright/agent-browser fill().
       await sender('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: 'a',
@@ -340,11 +337,8 @@ export class CdpBridge {
 
       await insertTextThroughCdp(sender, value)
 
-      // Why: React and other frameworks use synthetic event listeners that may not
-      // detect native keyboard events. Explicitly dispatching input/change ensures
-      // controlled components update their state. Uses refSender so that in iframe
-      // contexts, document.activeElement resolves to the iframe's focused element
-      // rather than the <iframe> element on the parent page.
+      // Why: React's synthetic listeners ignore native key events, so dispatch input/change so controlled components update.
+      // Why: use refSender for iframe sessions so document.activeElement is the focused element inside the iframe, not the parent <iframe>.
       const eventSender = node.sessionId ? refSender : sender
       await eventSender('Runtime.evaluate', {
         expression: `(() => {
@@ -388,11 +382,7 @@ export class CdpBridge {
         object: { objectId: string }
       }
 
-      // Why: agent-browser matches by both .value AND .textContent.trim() so
-      // the agent can select options by their displayed label, not just the
-      // underlying value attribute which may be an opaque ID.
-      // Also handles custom combobox elements (role="combobox" on non-<select>)
-      // by falling back to click-based selection on child options.
+      // Why: match on label (textContent) and value so opaque option IDs still select; also handles combobox via click.
       await refSender('Runtime.callFunctionOn', {
         objectId: object.objectId,
         functionDeclaration: `function(val) {
@@ -433,9 +423,7 @@ export class CdpBridge {
       const sender = this.makeCdpSender(guest)
       await this.ensureDebuggerAttached(guest)
 
-      // Why: JS scrollBy is deterministic and doesn't require page focus,
-      // unlike Input.dispatchMouseEvent mouseWheel which is unreliable in
-      // Electron webviews and can timeout.
+      // Why: JS scrollBy needs no focus and is deterministic, unlike mouseWheel which is unreliable in Electron webviews.
       const expr = amount
         ? `window.scrollBy(0, ${direction === 'down' ? amount : -amount})`
         : `window.scrollBy(0, ${direction === 'down' ? 'window.innerHeight' : '-window.innerHeight'})`
@@ -501,10 +489,7 @@ export class CdpBridge {
           clickCount: 1
         })
 
-        // Why: custom checkbox patterns (label wrapping hidden input, overlays)
-        // may not toggle from coordinate-based clicking. Verify state changed
-        // and fall back to programmatic .click() if needed. Wrapped in try/catch
-        // because the click may have triggered a re-render that invalidated objectId.
+        // Why: custom checkboxes may not toggle from a coordinate click; verify state and fall back to programmatic .click().
         try {
           const { result: afterState } = (await refSender('Runtime.callFunctionOn', {
             objectId: object.objectId,
@@ -639,10 +624,7 @@ export class CdpBridge {
         cssContentSize?: { width: number; height: number }
         contentSize?: { width: number; height: number }
       }
-      // Why: Page.captureScreenshot clip coordinates are CSS pixels. On HiDPI
-      // displays, Electron can report device-pixel `contentSize`, which causes
-      // Chromium to tile the page into duplicated quadrants. Prefer
-      // `cssContentSize` so the clip matches the page's CSS layout size.
+      // Why: screenshot clip uses CSS pixels; on HiDPI, device-pixel contentSize tiles duplicates, so prefer cssContentSize.
       const contentSize = metrics.cssContentSize ?? metrics.contentSize
       if (!contentSize) {
         throw new BrowserError('browser_error', 'Unable to determine full-page screenshot bounds')
@@ -699,10 +681,7 @@ export class CdpBridge {
       const sender = this.makeCdpSender(guest)
       await this.ensureDebuggerAttached(guest)
 
-      // Why: Network.setCookie requires either domain or url to scope the cookie.
-      // If the caller doesn't provide a domain, infer it from the current page URL
-      // so the cookie is usable on the active page without forcing callers to
-      // know the domain upfront.
+      // Why: Network.setCookie needs a domain or url to scope the cookie; infer the domain from the current page when omitted.
       let domain = cookie.domain
       if (!domain) {
         const { result: urlResult } = (await sender('Runtime.evaluate', {
@@ -747,8 +726,7 @@ export class CdpBridge {
       if (url) {
         params.url = url
       }
-      // Why: Network.deleteCookies requires at least one of domain or url.
-      // Infer from current page if neither was provided.
+      // Why: Network.deleteCookies needs a domain or url; infer from the current page if neither was given.
       if (!domain && !url) {
         const { result: urlResult } = (await sender('Runtime.evaluate', {
           expression: 'location.href',
@@ -781,8 +759,7 @@ export class CdpBridge {
         deviceScaleFactor,
         mobile
       })
-      // Why: BrowserView's compositor surface can keep the previous host size
-      // after metrics-only resize, which crops remote screencast clients.
+      // Why: metrics-only resize can leave the compositor surface at the old size, cropping remote screencast clients.
       await Promise.resolve(sender('Emulation.setVisibleSize', { width, height })).catch(() => {})
 
       return { width, height, deviceScaleFactor, mobile }
@@ -852,9 +829,7 @@ export class CdpBridge {
     return { requests: [...state.pausedRequests.values()] }
   }
 
-  // TODO: Add interceptContinue/interceptBlock once agent-browser supports per-request
-  // interception decisions. The CDP Fetch domain supports it, but the agent-browser CLI
-  // only operates on URL pattern-level routing, creating a design mismatch.
+  // TODO: Add interceptContinue/interceptBlock once agent-browser supports per-request decisions (CLI is URL-pattern-only).
 
   // ── Console/network capture ──
 
@@ -975,8 +950,7 @@ export class CdpBridge {
 
       const valueStr =
         result.value !== undefined ? String(result.value) : (result.description ?? '')
-      // Why: agent-browser returns { result, origin } — match that shape so both
-      // bridges satisfy the same BrowserEvalResult contract.
+      // Why: include origin to match agent-browser's BrowserEvalResult shape across both bridges.
       const { result: urlResult } = (await sender('Runtime.evaluate', {
         expression: 'location.origin',
         returnByValue: true
@@ -1011,8 +985,7 @@ export class CdpBridge {
   }
 
   async tabSwitch(index: number): Promise<BrowserTabSwitchResult> {
-    // Why: filter to live tabs so indices match what tabList() presents.
-    // Destroyed-but-not-yet-cleaned entries must be skipped.
+    // Why: filter to live tabs so indices match tabList(), skipping destroyed-but-uncleaned entries.
     const liveEntries = [...this.getRegisteredTabs()].filter(([_, wcId]) => {
       const guest = webContents.fromId(wcId)
       return guest && !guest.isDestroyed()
@@ -1045,7 +1018,13 @@ export class CdpBridge {
         this.removeDebuggerListeners(guest, state)
       }
       this.tabState.delete(tabId)
-      this.commandQueues.delete(tabId)
+      this.commandQueue.closeTab(
+        tabId,
+        new BrowserError(
+          'browser_debugger_detached',
+          'Browser tab closed before command execution.'
+        )
+      )
     }
   }
 
@@ -1061,10 +1040,7 @@ export class CdpBridge {
       if (guest && !guest.isDestroyed()) {
         return guest
       }
-      // Why: the stored webContentsId may be stale after a Chromium process swap
-      // (navigation to a different-origin page, crash recovery). Fall through to
-      // the auto-select logic rather than immediately failing, since the tab may
-      // still be alive under a new webContentsId.
+      // Why: webContentsId goes stale after a process swap; fall through to auto-select since the tab may have a new id.
       this.activeWebContentsId = null
     }
 
@@ -1096,11 +1072,7 @@ export class CdpBridge {
   }
 
   private getRegisteredTabs(): Map<string, number> {
-    // Why: BrowserManager's tab maps are private. We access the singleton's
-    // state via the public getGuestWebContentsId method by iterating known tabs.
-    // This method provides the tab enumeration the CDP bridge needs without
-    // modifying BrowserManager's encapsulation. In the future a public
-    // listTabs() method on BrowserManager would be cleaner.
+    // Why: reach into BrowserManager's private tab map since it exposes no public listTabs().
     return (this.browserManager as unknown as { webContentsIdByTabId: Map<string, number> })
       .webContentsIdByTabId
   }
@@ -1176,9 +1148,7 @@ export class CdpBridge {
     }
 
     try {
-      // Why: browser tabs are already debugger-attached by BrowserManager's
-      // anti-detection injection. Reusing that attachment lets CDP commands
-      // run instead of failing with "another debugger is already attached."
+      // Why: BrowserManager already attached the debugger; reuse it to avoid "another debugger is already attached."
       if (!guest.debugger.isAttached()) {
         guest.debugger.attach('1.3')
       }
@@ -1194,24 +1164,19 @@ export class CdpBridge {
     await sender('DOM.enable')
     await sender('Network.enable')
 
-    // Why: cross-origin iframes run in separate renderer processes (OOPIFs) and
-    // are invisible to the parent's CDP session. setAutoAttach with flatten:true
-    // gives each OOPIF its own sessionId that we can target with sendCommand.
+    // Why: OOPIF iframes are invisible to the parent CDP session; flatten:true gives each a targetable sessionId.
     await sender('Target.setAutoAttach', {
       autoAttach: true,
       waitForDebuggerOnStart: false,
       flatten: true
     })
 
-    // Why: attaching the CDP debugger sets navigator.webdriver = true and
-    // exposes other automation signals that Cloudflare Turnstile checks.
-    // Override them on every new document load so challenges succeed.
+    // Why: CDP attach exposes automation signals (navigator.webdriver) that Cloudflare checks; override per new document.
     await sender('Page.addScriptToEvaluateOnNewDocument', {
       source: ANTI_DETECTION_SCRIPT
     })
 
-    // Why: only remove CDP bridge listeners from the previous attach cycle.
-    // Screencast/proxy sessions share this debugger and own their teardown hooks.
+    // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.
     this.removeDebuggerListeners(guest, state)
 
     const detachListener = (): void => {
@@ -1226,8 +1191,7 @@ export class CdpBridge {
         state.snapshotResult = null
         state.navigationId = null
       }
-      // Why: an unhandled alert/confirm/prompt blocks ALL subsequent CDP commands.
-      // Auto-dismissing prevents the session from hanging indefinitely.
+      // Why: an unhandled JS dialog blocks all subsequent CDP commands; auto-dismiss to avoid hanging.
       if (method === 'Page.javascriptDialogOpening') {
         const dialog = params as { type: string; message: string } | undefined
         guest.debugger
@@ -1236,8 +1200,7 @@ export class CdpBridge {
           })
           .catch(() => {})
       }
-      // Why: track cross-origin iframe sessions so we can route CDP commands
-      // and accessibility tree queries to the correct session.
+      // Why: track iframe sessions so CDP commands and AX queries route to the correct session.
       if (method === 'Target.attachedToTarget') {
         const p = params as
           | {
@@ -1246,11 +1209,21 @@ export class CdpBridge {
             }
           | undefined
         if (p?.sessionId && p.targetInfo?.type === 'iframe' && p.targetInfo.targetId) {
-          state.iframeSessions.set(p.targetInfo.targetId, p.sessionId)
-          // Enable domains on iframe session
-          guest.debugger.sendCommand('DOM.enable', {}, p.sessionId).catch(() => {})
-          guest.debugger.sendCommand('Accessibility.enable', {}, p.sessionId).catch(() => {})
-          guest.debugger.sendCommand('Runtime.enable', {}, p.sessionId).catch(() => {})
+          const frameId = p.targetInfo.targetId
+          const canRetainSession =
+            isBoundedCdpIframeSession(frameId, p.sessionId) &&
+            (state.iframeSessions.has(frameId) ||
+              state.iframeSessions.size < CDP_MAX_IFRAME_SESSIONS)
+          if (canRetainSession) {
+            state.iframeSessions.set(frameId, p.sessionId)
+            guest.debugger.sendCommand('DOM.enable', {}, p.sessionId).catch(() => {})
+            guest.debugger.sendCommand('Accessibility.enable', {}, p.sessionId).catch(() => {})
+            guest.debugger.sendCommand('Runtime.enable', {}, p.sessionId).catch(() => {})
+          } else {
+            guest.debugger
+              .sendCommand('Target.detachFromTarget', { sessionId: p.sessionId })
+              .catch(() => {})
+          }
         }
       }
       if (method === 'Target.detachedFromTarget') {
@@ -1264,8 +1237,7 @@ export class CdpBridge {
           }
         }
       }
-      // Why: console and network events are buffered per-tab so the agent can
-      // retrieve them on demand via the capture commands.
+      // Why: buffer console/network events per-tab so the agent can retrieve them on demand.
       if (state.capturing) {
         if (method === 'Runtime.consoleAPICalled') {
           const p = params as
@@ -1277,15 +1249,8 @@ export class CdpBridge {
               }
             | undefined
           if (p) {
-            const text = (p.args ?? []).map((a) => a.value ?? a.description ?? '').join(' ')
-            state.consoleLog.push({
-              level: p.type ?? 'log',
-              text,
-              timestamp: p.timestamp ?? Date.now(),
-              url: p.stackTrace?.callFrames?.[0]?.url,
-              line: p.stackTrace?.callFrames?.[0]?.lineNumber
-            })
-            if (state.consoleLog.length > CAPTURE_LOG_LIMIT) {
+            state.consoleLog.push(buildBoundedCdpConsoleEntry(p))
+            if (state.consoleLog.length > CDP_CAPTURE_LOG_LIMIT) {
               state.consoleLog.shift()
             }
           }
@@ -1305,21 +1270,13 @@ export class CdpBridge {
               }
             | undefined
           if (p?.response) {
-            const entry: BrowserNetworkEntry = {
-              url: p.response.url ?? '',
-              method: '',
-              status: p.response.status ?? 0,
-              mimeType: p.response.mimeType ?? '',
-              size: 0,
-              timestamp: p.timestamp ?? Date.now()
-            }
+            const entry = buildBoundedCdpNetworkEntry(p.response, p.timestamp)
             state.networkLog.push(entry)
-            // Why: track requestId→entry so loadingFinished can attribute
-            // size to the correct response, not just the most recent one.
+            // Why: map requestId→entry so loadingFinished attributes size to the right response, not the latest one.
             if (p.requestId) {
               state.networkRequestMap.set(p.requestId, entry)
             }
-            if (state.networkLog.length > CAPTURE_LOG_LIMIT) {
+            if (state.networkLog.length > CDP_CAPTURE_LOG_LIMIT) {
               const evicted = state.networkLog.shift()
               if (evicted) {
                 for (const [requestId, requestEntry] of state.networkRequestMap) {
@@ -1343,8 +1300,7 @@ export class CdpBridge {
           }
         }
       }
-      // Why: request interception buffers paused requests so the agent can
-      // inspect and decide to continue or block them.
+      // Why: buffer paused requests so the agent can later inspect and continue or block them.
       if (state.intercepting && method === 'Fetch.requestPaused') {
         const p = params as
           | {
@@ -1354,13 +1310,23 @@ export class CdpBridge {
             }
           | undefined
         if (p?.requestId && p.request) {
-          state.pausedRequests.set(p.requestId, {
-            id: p.requestId,
-            url: p.request.url ?? '',
-            method: p.request.method ?? 'GET',
-            headers: (p.request.headers ?? {}) as Record<string, string>,
-            resourceType: p.resourceType ?? 'Other'
+          const boundedRequest = buildBoundedCdpInterceptedRequest({
+            requestId: p.requestId,
+            request: p.request,
+            resourceType: p.resourceType
           })
+          if (
+            boundedRequest &&
+            (state.pausedRequests.has(p.requestId) ||
+              state.pausedRequests.size < CDP_MAX_PAUSED_REQUESTS)
+          ) {
+            state.pausedRequests.set(p.requestId, boundedRequest)
+          } else {
+            state.pausedRequests.delete(p.requestId)
+            guest.debugger
+              .sendCommand('Fetch.continueRequest', { requestId: p.requestId })
+              .catch(() => {})
+          }
         }
       }
     }
@@ -1376,10 +1342,7 @@ export class CdpBridge {
   private makeCdpSender(guest: Electron.WebContents, sessionId?: string): CdpCommandSender {
     return (method: string, params?: Record<string, unknown>) => {
       const command = guest.debugger.sendCommand(method, params, sessionId) as Promise<unknown>
-      // Why: Electron's CDP sendCommand can hang indefinitely if the debugger
-      // session is stale (e.g. after a renderer process swap that wasn't detected).
-      // A 10s timeout prevents the RPC from blocking until the CLI's socket timeout.
-      // The timer is cancelled on success/failure to avoid dangling timer accumulation.
+      // Why: Electron's CDP sendCommand can hang on a stale debugger session, so a 10s timeout bounds the RPC.
       let timer: ReturnType<typeof setTimeout>
       return Promise.race([
         command.finally(() => clearTimeout(timer)),
@@ -1421,9 +1384,7 @@ export class CdpBridge {
       )
     }
 
-    // Why: iframe refs use a child session whose navigation history is independent
-    // of the parent page. Checking the parent's navId against an iframe session
-    // would always mismatch and falsely reject valid refs.
+    // Why: iframe refs use a child session with independent nav history, so a parent-navId check would falsely reject them.
     if (!entry.sessionId) {
       const currentNavId = await this.getNavigationId(sender)
       if (state.navigationId && currentNavId !== state.navigationId) {
@@ -1441,10 +1402,7 @@ export class CdpBridge {
       await refSender('DOM.describeNode', { backendNodeId: entry.backendDOMNodeId })
       return entry
     } catch {
-      // Why: dynamic pages (React, Vue) re-render DOM nodes frequently. A ref
-      // from a snapshot taken seconds ago may point to a detached node even though
-      // an identical element exists. Re-query the AX tree to find the fresh node
-      // by matching role + name, avoiding a wasted retry for the agent.
+      // Why: dynamic pages re-render nodes, detaching snapshot refs; re-query the AX tree by role+name for the fresh node.
       const recovered = await this.tryRecoverRef(refSender, entry)
       if (recovered) {
         entry.backendDOMNodeId = recovered
@@ -1480,10 +1438,7 @@ export class CdpBridge {
     return { cx: (x1 + x3) / 2, cy: (y1 + y3) / 2 }
   }
 
-  // Why: elements inside cross-origin iframes report coordinates relative to
-  // the iframe viewport, but Input.dispatchMouseEvent operates on the parent
-  // page's coordinate space. We find the iframe element on the parent page and
-  // add its top-left offset to translate iframe-local coords to page coords.
+  // Why: cross-origin iframes report iframe-local coords, but Input events use parent-page space; add the iframe offset.
   private async getIframeOffset(
     guest: Electron.WebContents,
     sessionId: string
@@ -1495,9 +1450,7 @@ export class CdpBridge {
     for (const [targetId, sid] of state.iframeSessions) {
       if (sid === sessionId) {
         try {
-          // Why: use Target.getTargetInfo to get the iframe's URL, then match it
-          // against DOM iframe src attributes to find the correct element's position.
-          // This correctly handles pages with multiple iframes.
+          // Why: match the iframe's target URL against DOM iframe src to pick the right element on multi-iframe pages.
           const { targetInfo } = (await parentSender('Target.getTargetInfo', {
             targetId
           })) as { targetInfo: { url?: string } }
@@ -1526,8 +1479,7 @@ export class CdpBridge {
                 return { offsetX: rect.x, offsetY: rect.y }
               }
             }
-            // Why: iframe may have redirected after load, making src differ
-            // from the actual target URL. Match by origin as a fallback.
+            // Why: iframe may redirect after load so src differs from target URL; match by origin as a fallback.
             try {
               const targetOrigin = new URL(targetUrl).origin
               for (const rect of rects) {
@@ -1554,8 +1506,7 @@ export class CdpBridge {
     return { offsetX: 0, offsetY: 0 }
   }
 
-  // Why: for elements inside iframes, translates iframe-local coordinates to
-  // page-level coordinates that Input.dispatchMouseEvent expects.
+  // Why: Input.dispatchMouseEvent uses parent-page coords, so translate iframe-local coords for iframe elements.
   private async getPageCoordinates(
     guest: Electron.WebContents,
     refEntry: RefEntry,
@@ -1569,9 +1520,7 @@ export class CdpBridge {
     return { cx: localCx + offsetX, cy: localCy + offsetY }
   }
 
-  // Why: uses nth-index to pick the correct duplicate when multiple elements
-  // share the same role+name. Without this, recovery always returns the first
-  // match which may not be the element the ref originally pointed to.
+  // Why: nth-index disambiguates duplicate role+name matches so recovery hits the original element, not the first match.
   private async tryRecoverRef(sender: CdpCommandSender, entry: RefEntry): Promise<number | null> {
     try {
       const { nodes } = (await sender('Accessibility.getFullAXTree')) as {
@@ -1626,9 +1575,7 @@ export class CdpBridge {
   }
 
   private async waitForLoad(sender: CdpCommandSender, guest: Electron.WebContents): Promise<void> {
-    // Why: wait for document.readyState=complete first, then wait for network
-    // idle (no pending requests for 500ms). This handles SPAs that fire 'load'
-    // before async content is rendered.
+    // Why: SPAs fire 'load' before async content renders, so also wait for 500ms of network idle.
     const TIMEOUT_MS = 25_000
     const IDLE_MS = 500
     const startedAt = Date.now()
@@ -1755,46 +1702,11 @@ export class CdpBridge {
   private async enqueueCommand<T>(execute: () => Promise<T>): Promise<T> {
     const guest = this.getActiveGuest()
     const tabId = this.resolveTabId(guest.id)
-
-    return new Promise<T>((resolve, reject) => {
-      let queue = this.commandQueues.get(tabId)
-      if (!queue) {
-        queue = []
-        this.commandQueues.set(tabId, queue)
-      }
-      queue.push({
-        execute: execute as () => Promise<unknown>,
-        resolve: resolve as (value: unknown) => void,
-        reject
-      })
-      this.processQueue(tabId)
-    })
-  }
-
-  private async processQueue(tabId: string): Promise<void> {
-    if (this.processingQueues.has(tabId)) {
-      return
-    }
-    this.processingQueues.add(tabId)
-
-    const queue = this.commandQueues.get(tabId)
-    while (queue && queue.length > 0) {
-      const cmd = queue.shift()!
-      try {
-        const result = await cmd.execute()
-        cmd.resolve(result)
-      } catch (error) {
-        cmd.reject(error)
-      }
-    }
-
-    this.processingQueues.delete(tabId)
+    return this.commandQueue.enqueue(tabId, execute)
   }
 }
 
-// Why: CDP's Input.dispatchKeyEvent requires `windowsVirtualKeyCode` (not `keyCode`)
-// and `text` for keys that produce default browser actions (Enter submits forms,
-// Tab moves focus). Without `text`, Chrome fires the event but doesn't perform the action.
+// Why: Input.dispatchKeyEvent needs `text` for keys with default actions (Enter/Tab), or Chrome skips the action.
 type KeyDefinition = {
   key: string
   code: string
@@ -1823,10 +1735,7 @@ function resolveKeyDefinition(key: string): KeyDefinition {
   if (KEY_DEFINITIONS[key]) {
     return KEY_DEFINITIONS[key]
   }
-  // Why: single characters need proper code values — digits use "DigitN",
-  // letters use "KeyX", and other characters use their char code for the
-  // windowsVirtualKeyCode. Invalid codes cause events to be dropped by sites
-  // that check event.code.
+  // Why: sites that check event.code drop events with invalid code values.
   if (key.length === 1) {
     const charCode = key.charCodeAt(0)
     if (charCode >= 48 && charCode <= 57) {

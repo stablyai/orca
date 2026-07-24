@@ -1,8 +1,10 @@
 import WebSocket from 'ws'
+import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
 
 const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
+const RELAY_SOCKET_CLOSE_WAIT_CONCURRENCY = 32
 
 type RelayMessagePayload = string | Uint8Array<ArrayBufferLike>
 
@@ -117,7 +119,9 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     for (const socket of sockets) {
       socket.terminate()
     }
-    await Promise.all(sockets.map((socket) => this.waitForClose(socket)))
+    await forEachWithConcurrency(sockets, RELAY_SOCKET_CLOSE_WAIT_CONCURRENCY, (socket) =>
+      this.waitForClose(socket)
+    )
   }
 
   async openConnection(connection: RelayConnectionOpen): Promise<void> {

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
+import {
+  API_RESPONSE_MAX_BYTES,
+  FetchResponseBodyTooLargeError
+} from '../../lib/fetch-response-body'
 import { cancelTrackingResponse } from '../../lib/unread-response-body.test-fixtures'
 import { exchangeRelayAuthorization, requestRelayAssignment } from './relay-http-client'
 
@@ -103,5 +107,31 @@ describe('relay HTTP client', () => {
       })
     ).rejects.toThrow()
     expect(cancelledBodies).toBe(2)
+  })
+
+  it('rejects oversized successful responses from injected standard fetch clients', async () => {
+    let cancelled = false
+    const response = new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([123]))
+        },
+        cancel() {
+          cancelled = true
+        }
+      }),
+      { headers: { 'content-length': String(API_RESPONSE_MAX_BYTES + 1) } }
+    )
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => response)
+
+    await expect(
+      requestRelayAssignment({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        fetch
+      })
+    ).rejects.toBeInstanceOf(FetchResponseBodyTooLargeError)
+    expect(cancelled).toBe(true)
   })
 })

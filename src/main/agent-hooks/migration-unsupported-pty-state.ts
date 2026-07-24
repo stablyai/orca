@@ -1,10 +1,13 @@
 import type { MigrationUnsupportedPtyEntry } from '../../shared/agent-status-types'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 
 type MigrationUnsupportedPtyEvent =
   | { type: 'set'; entry: MigrationUnsupportedPtyEntry }
   | { type: 'clear'; ptyId: string }
 
 const entriesByPtyId = new Map<string, MigrationUnsupportedPtyEntry>()
+export const MIGRATION_UNSUPPORTED_PTY_MAX_ENTRIES = 500
+export const MIGRATION_UNSUPPORTED_PTY_MAX_ENTRY_BYTES = 16 * 1024
 let listener: ((event: MigrationUnsupportedPtyEvent) => void) | null = null
 let persistenceListener: ((entries: MigrationUnsupportedPtyEntry[]) => void) | null = null
 
@@ -25,7 +28,21 @@ export function setMigrationUnsupportedPtyPersistenceListener(
 }
 
 export function setMigrationUnsupportedPty(entry: MigrationUnsupportedPtyEntry): void {
+  try {
+    stringifyJsonWithinByteLimit(entry, MIGRATION_UNSUPPORTED_PTY_MAX_ENTRY_BYTES)
+  } catch {
+    clearMigrationUnsupportedPty(entry.ptyId)
+    return
+  }
   entriesByPtyId.set(entry.ptyId, entry)
+  while (entriesByPtyId.size > MIGRATION_UNSUPPORTED_PTY_MAX_ENTRIES) {
+    const oldestPtyId = entriesByPtyId.keys().next().value
+    if (oldestPtyId === undefined) {
+      break
+    }
+    entriesByPtyId.delete(oldestPtyId)
+    listener?.({ type: 'clear', ptyId: oldestPtyId })
+  }
   listener?.({ type: 'set', entry })
   persistenceListener?.(getMigrationUnsupportedPtySnapshot())
 }

@@ -4,6 +4,7 @@ import {
   isUnsupportedMergeTreeWriteTreeError
 } from '../../shared/git-merge-tree-capability'
 import { gitExecFileAsync } from '../git/runner'
+import { iterateNulDelimitedFields } from '../../shared/nul-delimited-fields'
 import {
   clearGitCapabilityStateForTests,
   getLocalGitCapabilityCache
@@ -20,10 +21,14 @@ import {
   storeResolvedBaseTip,
   storeCachedSummary
 } from './conflict-summary-cache'
+import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
 
 type LocalGitExecOptions = {
   wslDistro?: string
 }
+
+export const PR_CONFLICT_FILES_MAX_ENTRIES = 512
+export const PR_CONFLICT_FILES_MAX_BYTES = 256 * 1024
 
 export function __resetPRConflictSummaryCachesForTests(): void {
   clearGitCapabilityStateForTests()
@@ -301,13 +306,27 @@ async function loadConflictingFilesWithLegacyMergeTree(
   }
 }
 
-function parseMergeTreeNameOnlyOutput(stdout: string): string[] {
-  const entries = stdout.split('\0').filter(Boolean)
-  if (entries.length === 0) {
-    return []
+export function parseMergeTreeNameOnlyOutput(stdout: string): string[] {
+  const files: string[] = []
+  let skippedTreeId = false
+  let retainedBytes = 0
+  for (const entry of iterateNulDelimitedFields(stdout)) {
+    if (!entry) {
+      continue
+    }
+    if (!skippedTreeId) {
+      skippedTreeId = true
+      continue
+    }
+    const measured = measureUtf8ByteLength(entry, {
+      stopAfterBytes: PR_CONFLICT_FILES_MAX_BYTES - retainedBytes
+    })
+    if (measured.exceededLimit || files.length >= PR_CONFLICT_FILES_MAX_ENTRIES) {
+      break
+    }
+    files.push(entry.replace(/$/u, ''))
+    retainedBytes += measured.byteLength
   }
-
-  const [, ...files] = entries
   return files
 }
 

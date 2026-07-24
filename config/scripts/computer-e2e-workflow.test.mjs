@@ -177,7 +177,7 @@ describe('computer-use e2e workflow', () => {
     )
   })
 
-  it('builds Electron main output before every computer-use e2e run', () => {
+  it('builds Electron main output and verifies the CLI before every computer-use e2e run', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
@@ -187,6 +187,7 @@ describe('computer-use e2e workflow', () => {
         .map((step) => step.run)
         .filter((run) => typeof run === 'string')
       const buildIndex = runs.indexOf('pnpm build:electron-vite')
+      const cliVerifyIndex = runs.indexOf('pnpm verify:cli-runtime')
       const e2eIndexes = runs
         .map((run, index) => (run.includes('test:e2e:computer') ? index : -1))
         .filter((index) => index >= 0)
@@ -195,8 +196,15 @@ describe('computer-use e2e workflow', () => {
         buildIndex,
         `${jobName} should build out/main before computer e2e`
       ).toBeGreaterThanOrEqual(0)
+      expect(
+        cliVerifyIndex,
+        `${jobName} should verify the CLI after the main build`
+      ).toBeGreaterThan(buildIndex)
       for (const e2eIndex of e2eIndexes) {
         expect(buildIndex, `${jobName} should build out/main before computer e2e`).toBeLessThan(
+          e2eIndex
+        )
+        expect(cliVerifyIndex, `${jobName} should verify the CLI before computer e2e`).toBeLessThan(
           e2eIndex
         )
       }

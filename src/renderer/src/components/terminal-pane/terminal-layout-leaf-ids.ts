@@ -217,6 +217,32 @@ export function collectLeafIdsInOrder(node: TerminalPaneLayoutNode | null | unde
   return [...collectLeafIdsInOrder(node.first), ...collectLeafIdsInOrder(node.second)]
 }
 
+export function collectTerminalLayoutLeafIds(
+  snapshot: TerminalLayoutSnapshot | null | undefined
+): string[] {
+  if (!snapshot) {
+    return []
+  }
+  const ids = new Set(collectLeafIdsInOrder(snapshot.root))
+  if (snapshot.activeLeafId) {
+    ids.add(snapshot.activeLeafId)
+  }
+  if (snapshot.expandedLeafId) {
+    ids.add(snapshot.expandedLeafId)
+  }
+  for (const record of [
+    snapshot.ptyIdsByLeafId,
+    snapshot.buffersByLeafId,
+    snapshot.scrollbackRefsByLeafId,
+    snapshot.titlesByLeafId
+  ]) {
+    for (const leafId of Object.keys(record ?? {})) {
+      ids.add(leafId)
+    }
+  }
+  return [...ids]
+}
+
 export function resolvePtyBoundActiveLeafId(args: {
   root: TerminalPaneLayoutNode | null | undefined
   activeLeafId: string | null | undefined

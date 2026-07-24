@@ -1,5 +1,6 @@
 import { net, session } from 'electron'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
 
 // Why: the OAuth client id and token endpoint are the public Claude Code
 // values, verified against the installed `claude` binary (2.1.177) and the
@@ -158,7 +159,7 @@ export async function refreshClaudeOauthCredentials(
       console.warn(`[claude-oauth-refresh] token endpoint returned ${res.status}`)
       return null
     }
-    const data = (await res.json()) as TokenEndpointResponse
+    const data = await readFetchResponseJsonWithinLimit<TokenEndpointResponse>(res)
     return applyRefreshedToken(credentialsJson, data, now)
   } catch (error) {
     console.warn(

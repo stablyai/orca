@@ -5,6 +5,9 @@ import { detectGitRemoteIdentity } from './repo-git-remote-identity'
 import {
   enrichMissingRepoGitRemoteIdentities,
   flushRepoGitRemoteIdentityEnrichmentForTests,
+  getRepoGitRemoteIdentityNegativeCacheSizeForTests,
+  REPO_LOCATION_CACHE_KEY_MAX_BYTES,
+  REPO_IDENTITY_NEGATIVE_CACHE_MAX_ENTRIES,
   resetRepoGitRemoteIdentityEnrichmentForTests
 } from './repo-git-remote-identity-enrichment'
 
@@ -118,6 +121,44 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
     expect(detectGitRemoteIdentity).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds negative results across churned repo locations', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(detectGitRemoteIdentity).mockResolvedValue(null)
+    const repo = makeRepo()
+    const store = makeStore(repo)
+
+    for (let index = 0; index <= REPO_IDENTITY_NEGATIVE_CACHE_MAX_ENTRIES; index++) {
+      repo.path = `/workspace/repo-${index}`
+      enrichMissingRepoGitRemoteIdentities(store)
+      await flushRepoGitRemoteIdentityEnrichmentForTests()
+    }
+
+    expect(getRepoGitRemoteIdentityNegativeCacheSizeForTests()).toBe(
+      REPO_IDENTITY_NEGATIVE_CACHE_MAX_ENTRIES
+    )
+    repo.path = '/workspace/repo-0'
+    enrichMissingRepoGitRemoteIdentities(store)
+    await flushRepoGitRemoteIdentityEnrichmentForTests()
+    expect(detectGitRemoteIdentity).toHaveBeenCalledTimes(
+      REPO_IDENTITY_NEGATIVE_CACHE_MAX_ENTRIES + 2
+    )
+  })
+
+  it('does not retain oversized repo-location keys', async () => {
+    vi.mocked(detectGitRemoteIdentity).mockResolvedValue(null)
+    const repo = makeRepo({ path: `/${'x'.repeat(REPO_LOCATION_CACHE_KEY_MAX_BYTES)}` })
+    const store = makeStore(repo)
+
+    enrichMissingRepoGitRemoteIdentities(store)
+    await flushRepoGitRemoteIdentityEnrichmentForTests()
+    enrichMissingRepoGitRemoteIdentities(store)
+    await flushRepoGitRemoteIdentityEnrichmentForTests()
+
+    expect(detectGitRemoteIdentity).toHaveBeenCalledTimes(2)
+    expect(getRepoGitRemoteIdentityNegativeCacheSizeForTests()).toBe(0)
   })
 
   it('does not write stale identity data after the repo path changes', async () => {

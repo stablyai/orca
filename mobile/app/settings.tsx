@@ -120,7 +120,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/native-chat-settings')}
           >
             <MessageSquare size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>Native chat</Text>
+            <Text style={styles.rowLabel}>Chat UI</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />

@@ -4,11 +4,11 @@ import { join } from 'node:path'
 const mocks = vi.hoisted(() => ({
   createAgent: vi.fn(),
   parseKey: vi.fn(),
-  readFileSync: vi.fn()
+  readSshKeyFile: vi.fn()
 }))
 
-vi.mock('fs', () => ({
-  readFileSync: (...args: unknown[]) => mocks.readFileSync(...args)
+vi.mock('./ssh-key-file', () => ({
+  readSshKeyFile: (...args: unknown[]) => mocks.readSshKeyFile(...args)
 }))
 
 vi.mock('os', () => ({
@@ -50,13 +50,13 @@ describe('createIdentityFilteredAgent', () => {
   beforeEach(() => {
     mocks.createAgent.mockReset()
     mocks.parseKey.mockReset()
-    mocks.readFileSync.mockReset()
+    mocks.readSshKeyFile.mockReset()
   })
 
   it('offers only agent identities matching configured identity files', async () => {
     const allowedKey = makeKey('allowed')
     const otherKey = makeKey('other')
-    mocks.readFileSync.mockReturnValue('ssh-ed25519 AAAA allowed')
+    mocks.readSshKeyFile.mockReturnValue('ssh-ed25519 AAAA allowed')
     mocks.parseKey.mockReturnValue(allowedKey)
     mocks.createAgent.mockReturnValue({
       getIdentities: vi.fn((callback) => callback(undefined, [allowedKey, otherKey])),
@@ -75,12 +75,12 @@ describe('createIdentityFilteredAgent', () => {
     })
 
     expect(identities).toEqual([allowedKey])
-    expect(mocks.readFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'work_key.pub'))
+    expect(mocks.readSshKeyFile).toHaveBeenCalledWith(testHomePath('.ssh', 'work_key.pub'))
   })
 
   it('expands Windows-style configured identity file paths before filtering', async () => {
     const allowedKey = makeKey('allowed')
-    mocks.readFileSync.mockReturnValue('ssh-ed25519 AAAA allowed')
+    mocks.readSshKeyFile.mockReturnValue('ssh-ed25519 AAAA allowed')
     mocks.parseKey.mockReturnValue(allowedKey)
     mocks.createAgent.mockReturnValue({
       getIdentities: vi.fn((callback) => callback(undefined, [allowedKey])),
@@ -99,7 +99,7 @@ describe('createIdentityFilteredAgent', () => {
     })
 
     expect(identities).toEqual([allowedKey])
-    expect(mocks.readFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'work_key.pub'))
+    expect(mocks.readSshKeyFile).toHaveBeenCalledWith(testHomePath('.ssh', 'work_key.pub'))
   })
 
   it('filters nested public key entries returned by ssh2 agents', async () => {
@@ -107,7 +107,7 @@ describe('createIdentityFilteredAgent', () => {
     const otherKey = makeKey('other')
     const allowedEntry = { pubKey: { pubKey: allowedKey, comment: 'allowed' } }
     const otherEntry = { pubKey: { pubKey: otherKey, comment: 'other' } }
-    mocks.readFileSync.mockReturnValue('ssh-ed25519 AAAA allowed')
+    mocks.readSshKeyFile.mockReturnValue('ssh-ed25519 AAAA allowed')
     mocks.parseKey.mockReturnValue(allowedKey)
     mocks.createAgent.mockReturnValue({
       getIdentities: vi.fn((callback) => callback(undefined, [allowedEntry, otherEntry])),
@@ -129,7 +129,7 @@ describe('createIdentityFilteredAgent', () => {
   })
 
   it('does not create a broad agent when configured identity keys cannot be parsed', () => {
-    mocks.readFileSync.mockReturnValue('not-a-key')
+    mocks.readSshKeyFile.mockReturnValue('not-a-key')
     mocks.parseKey.mockReturnValue(new Error('parse failed'))
 
     expect(createIdentityFilteredAgent('/tmp/agent.sock', ['~/.ssh/work_key'])).toBeUndefined()
@@ -141,7 +141,7 @@ describe('createIdentityFilteredAgent', () => {
     const sign = vi.fn()
     const options = { hash: 'sha256' as const }
     const callback = vi.fn()
-    mocks.readFileSync.mockReturnValue('ssh-ed25519 AAAA allowed')
+    mocks.readSshKeyFile.mockReturnValue('ssh-ed25519 AAAA allowed')
     mocks.parseKey.mockReturnValue(allowedKey)
     mocks.createAgent.mockReturnValue({
       getIdentities: vi.fn(),

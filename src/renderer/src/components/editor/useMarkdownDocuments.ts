@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import type { MarkdownDocument } from '../../../../shared/types'
+import {
+  isMarkdownDocumentListingCapacityError,
+  MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE
+} from '../../../../shared/markdown-document-listing-limits'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
@@ -12,9 +17,26 @@ import {
 } from './markdown-doc-links'
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 import { requestSharedMarkdownDocumentList } from './markdown-document-list-request'
+import {
+  retainMarkdownDocumentWorktreeSnapshot,
+  type MarkdownDocumentWorktreeSnapshot
+} from './markdown-document-worktree-retention'
 
 type OpenMarkdownDocumentOptions = {
   anchor?: string | null
+}
+
+export async function saveMarkdownAndRefreshDocuments(
+  content: string,
+  save: (content: string) => Promise<boolean>,
+  refresh: () => Promise<void>
+): Promise<boolean> {
+  const didSave = await save(content)
+  if (!didSave) {
+    return false
+  }
+  await refresh()
+  return true
 }
 
 type UseMarkdownDocumentsResult = {
@@ -31,14 +53,14 @@ type UseMarkdownDocumentsResult = {
       options?: OpenMarkdownDocumentOptions
     ) => Promise<void>
   }
-  mdSave: (content: string) => Promise<void>
+  mdSave: (content: string) => Promise<boolean>
 }
 
 export function useMarkdownDocuments(
   activeFile: OpenFile,
   isMarkdown: boolean,
   viewMode: MarkdownViewMode,
-  onSave: (content: string) => Promise<void>
+  onSave: (content: string) => Promise<boolean>
 ): UseMarkdownDocumentsResult {
   const worktreeId = activeFile.worktreeId
   // Why: PTY activity replaces worktree metadata; only a routing-path change
@@ -47,8 +69,8 @@ export function useMarkdownDocuments(
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const [markdownDocumentsByWorktree, setMarkdownDocumentsByWorktree] = useState<
-    Record<string, MarkdownDocument[]>
-  >({})
+    Map<string, MarkdownDocumentWorktreeSnapshot>
+  >(() => new Map())
   const requestRef = useRef(0)
 
   const connectionId = getConnectionId(worktreeId)
@@ -78,17 +100,20 @@ export function useMarkdownDocuments(
         if (requestRef.current !== requestId) {
           return
         }
-        setMarkdownDocumentsByWorktree((prev) => ({
-          ...prev,
-          [worktreeId]: documents
-        }))
+        setMarkdownDocumentsByWorktree((prev) =>
+          retainMarkdownDocumentWorktreeSnapshot(prev, worktreeId, documents)
+        )
       } catch (err) {
         console.error('Failed to list markdown documents:', err)
         if (requestRef.current === requestId) {
-          setMarkdownDocumentsByWorktree((prev) => ({
-            ...prev,
-            [worktreeId]: []
-          }))
+          if (isMarkdownDocumentListingCapacityError(err)) {
+            toast.error(MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE, {
+              id: `markdown-document-listing-capacity:${worktreeId}`
+            })
+          }
+          setMarkdownDocumentsByWorktree((prev) =>
+            retainMarkdownDocumentWorktreeSnapshot(prev, worktreeId, [])
+          )
         }
       }
     },
@@ -169,7 +194,7 @@ export function useMarkdownDocuments(
   }, [activeFile.id, isMarkdown, viewMode, refreshMarkdownDocuments])
 
   const markdownDocuments = useMemo(
-    () => (worktreeId ? (markdownDocumentsByWorktree[worktreeId] ?? []) : []),
+    () => (worktreeId ? (markdownDocumentsByWorktree.get(worktreeId)?.documents ?? []) : []),
     [worktreeId, markdownDocumentsByWorktree]
   )
 
@@ -179,7 +204,8 @@ export function useMarkdownDocuments(
   )
 
   const mdSave = useCallback(
-    (content: string) => onSave(content).then(() => refreshMarkdownDocuments(true)),
+    (content: string) =>
+      saveMarkdownAndRefreshDocuments(content, onSave, () => refreshMarkdownDocuments(true)),
     [onSave, refreshMarkdownDocuments]
   )
 

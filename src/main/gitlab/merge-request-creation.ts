@@ -1,12 +1,8 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import {
   getHostedReviewLocalGitOptions,
   hasHostedReviewLocalGitOptions,
@@ -21,6 +17,7 @@ import {
   release
 } from './gl-utils'
 import { findOpenMRByHeadBase, parseMergeRequestPayload } from './merge-request-creation-lookup'
+import { readGitLabMergeRequestTemplate } from '../source-control/pull-request-template'
 
 function execErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -88,39 +85,6 @@ function hostedReviewExecutionOptionArgs(
   return hasHostedReviewLocalGitOptions(options) ? [options] : []
 }
 
-async function readMergeRequestTemplate(
-  repoPath: string,
-  connectionId?: string | null
-): Promise<string> {
-  const relativeCandidates = [
-    '.gitlab/merge_request_templates/Default.md',
-    '.gitlab/merge_request_templates/default.md',
-    '.gitlab/merge_request_template.md',
-    '.gitlab/MERGE_REQUEST_TEMPLATE.md'
-  ]
-  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-  if (connectionId && !remoteProvider) {
-    return ''
-  }
-  for (const relativeCandidate of relativeCandidates) {
-    try {
-      if (remoteProvider) {
-        const result = await remoteProvider.readFile(
-          joinWorktreeRelativePath(repoPath, relativeCandidate)
-        )
-        if (result.isBinary) {
-          continue
-        }
-        return result.content
-      }
-      return await readFile(join(repoPath, relativeCandidate), 'utf8')
-    } catch {
-      // Try the next conventional GitLab merge-request template path.
-    }
-  }
-  return ''
-}
-
 export async function createGitLabMergeRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
@@ -170,7 +134,7 @@ export async function createGitLabMergeRequest(
   try {
     const body =
       input.useTemplate && !input.body?.trim()
-        ? await readMergeRequestTemplate(repoPath, connectionId)
+        ? await readGitLabMergeRequestTemplate(repoPath, connectionId)
         : (input.body ?? '')
     const createArgs = [
       'mr',

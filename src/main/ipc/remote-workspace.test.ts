@@ -36,6 +36,7 @@ vi.mock('./remote-workspace-events', () => ({
 
 import {
   _resetRemoteWorkspaceCachesForTests,
+  REMOTE_WORKSPACE_PATCH_CONCURRENCY,
   registerRemoteWorkspaceHandlers,
   remoteWorkspaceSessionMatchesSnapshot
 } from './remote-workspace'
@@ -262,6 +263,66 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
       })
     )
     expect(requestByTargetId.get('target-2')).toBeUndefined()
+  })
+
+  it.each([
+    ['at the limit', REMOTE_WORKSPACE_PATCH_CONCURRENCY],
+    ['above the limit', REMOTE_WORKSPACE_PATCH_CONCURRENCY + 1]
+  ])('bounds per-target workspace patches %s', async (_, count) => {
+    const manyTargets: SshTarget[] = Array.from({ length: count }, (_, index) => ({
+      id: `target-${index}`,
+      label: `Target ${index}`,
+      host: `${index}.example.com`,
+      port: 22,
+      username: 'alice'
+    }))
+    getSshConnectionStoreMock.mockReturnValue({ listTargets: () => manyTargets })
+    let active = 0
+    let peak = 0
+    let started = 0
+    const releases: (() => void)[] = []
+    getActiveMultiplexerMock.mockImplementation(() => ({
+      request: async (method: string) => {
+        if (method === 'workspace.get') {
+          started++
+          active++
+          peak = Math.max(peak, active)
+          await new Promise<void>((resolve) => releases.push(resolve))
+          active--
+          return snapshot({
+            activeWorktreePath: '/previous',
+            activeTabId: null,
+            tabsByWorktreePath: {},
+            terminalLayoutsByTabId: {}
+          })
+        }
+        return {
+          ok: true,
+          snapshot: snapshot({
+            activeWorktreePath: null,
+            activeTabId: null,
+            tabsByWorktreePath: {},
+            terminalLayoutsByTabId: {}
+          })
+        }
+      }
+    }))
+
+    const patches = callSetForConnectedTargets({
+      session: baseSession,
+      hydratedTargetIds: manyTargets.map((target) => target.id)
+    })
+    await vi.waitFor(() =>
+      expect(started).toBe(Math.min(count, REMOTE_WORKSPACE_PATCH_CONCURRENCY))
+    )
+    if (count > REMOTE_WORKSPACE_PATCH_CONCURRENCY) {
+      releases.shift()?.()
+      await vi.waitFor(() => expect(started).toBe(count))
+    }
+    releases.splice(0).forEach((release) => release())
+
+    await expect(patches).resolves.toHaveLength(count)
+    expect(peak).toBe(Math.min(count, REMOTE_WORKSPACE_PATCH_CONCURRENCY))
   })
 
   it('can export from the persisted store session when no session argument is provided', async () => {

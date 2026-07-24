@@ -2,6 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
+export const MOBILE_STORED_ID_SET_MAX_ENTRIES = 10_000
+export const MOBILE_STORED_ID_SET_MAX_STORAGE_CHARACTERS = 1024 * 1024
+export const MOBILE_STORED_ID_MAX_CHARACTERS = 4_096
 
 export type PushNotificationsPreference = {
   readonly value: boolean | null
@@ -101,7 +104,10 @@ export async function readDisabledTerminalLiveInputHandlesPreference(
     if (!raw) {
       return { handles: new Set(), loaded: true }
     }
-    return { handles: new Set(stringArray(JSON.parse(raw))), loaded: true }
+    if (raw.length > MOBILE_STORED_ID_SET_MAX_STORAGE_CHARACTERS) {
+      return { handles: new Set(), loaded: false }
+    }
+    return { handles: new Set(retainStoredPreferenceIds(JSON.parse(raw)).ids), loaded: true }
   } catch {
     return { handles: new Set(), loaded: false }
   }
@@ -122,7 +128,7 @@ export async function saveDisabledTerminalLiveInputHandles(
 ): Promise<void> {
   await AsyncStorage.setItem(
     terminalLiveInputDisabledKey(hostId, worktreeId),
-    JSON.stringify([...handles])
+    retainStoredPreferenceIds(handles).serialized
   )
 }
 
@@ -210,24 +216,59 @@ export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode)
   await AsyncStorage.setItem(TERMINAL_LINK_OPEN_MODE_KEY, mode)
 }
 
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : []
-}
-
 export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
   try {
     const raw = await AsyncStorage.getItem(PINS_PREFIX + hostId)
     if (!raw) {
       return new Set()
     }
-    return new Set(stringArray(JSON.parse(raw)))
+    if (raw.length > MOBILE_STORED_ID_SET_MAX_STORAGE_CHARACTERS) {
+      return new Set()
+    }
+    return new Set(retainStoredPreferenceIds(JSON.parse(raw)).ids)
   } catch {
     return new Set()
   }
 }
 
 export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<void> {
-  await AsyncStorage.setItem(PINS_PREFIX + hostId, JSON.stringify([...ids]))
+  await AsyncStorage.setItem(PINS_PREFIX + hostId, retainStoredPreferenceIds(ids).serialized)
+}
+
+function retainStoredPreferenceIds(value: unknown): { ids: string[]; serialized: string } {
+  const values = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object' && Symbol.iterator in value
+      ? (value as Iterable<unknown>)
+      : []
+  const retained = new Map<string, string>()
+  let entryCharacters = 0
+  for (const candidate of values) {
+    if (
+      typeof candidate !== 'string' ||
+      candidate.length > MOBILE_STORED_ID_MAX_CHARACTERS ||
+      retained.has(candidate)
+    ) {
+      continue
+    }
+    const serialized = JSON.stringify(candidate)
+    retained.set(candidate, serialized)
+    entryCharacters += serialized.length
+    while (
+      retained.size > MOBILE_STORED_ID_SET_MAX_ENTRIES ||
+      2 + entryCharacters + Math.max(0, retained.size - 1) >
+        MOBILE_STORED_ID_SET_MAX_STORAGE_CHARACTERS
+    ) {
+      const oldestId = retained.keys().next().value
+      if (typeof oldestId !== 'string') {
+        break
+      }
+      entryCharacters -= retained.get(oldestId)?.length ?? 0
+      retained.delete(oldestId)
+    }
+  }
+  return {
+    ids: [...retained.keys()],
+    serialized: `[${[...retained.values()].join(',')}]`
+  }
 }

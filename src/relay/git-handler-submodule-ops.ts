@@ -11,6 +11,7 @@ import * as path from 'node:path'
 import { buildDiffResult } from './git-diff-result'
 import { parseBranchDiff } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
+import { iterateProcessOutputLines } from '../shared/process-output-field-scanner'
 import { readBlobAtOid, type GitBufferExec, type GitExec } from './git-handler-ops'
 
 /**
@@ -20,18 +21,26 @@ import { readBlobAtOid, type GitBufferExec, type GitExec } from './git-handler-o
  */
 export const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
 export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
-type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
+export const MAX_SUBMODULE_PATHS_OUTPUT_BYTES = 10 * 1024 * 1024
+export const MAX_SUBMODULE_PATHS_PER_REPO = 10_000
+export const MAX_SUBMODULE_PATH_CODE_UNITS = 64 * 1024
+export const MAX_SUBMODULE_PATHS_PER_REPO_CODE_UNITS = 4 * 1024 * 1024
+export const MAX_SUBMODULE_PATHS_CACHE_CODE_UNITS = 16 * 1024 * 1024
+export const MAX_SUBMODULE_PATHS_CACHE_KEY_BYTES = 64 * 1024
+type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number; retainedCodeUnits: number }
 export type SubmodulePathsCache = {
   entries: Map<string, SubmodulePathsCacheEntry>
   generation: number
+  retainedCodeUnits: number
 }
 
 export function createSubmodulePathsCache(): SubmodulePathsCache {
-  return { entries: new Map(), generation: 0 }
+  return { entries: new Map(), generation: 0, retainedCodeUnits: 0 }
 }
 
 export function clearSubmodulePathsCache(cache: SubmodulePathsCache): void {
   cache.entries.clear()
+  cache.retainedCodeUnits = 0
   // Why: a pre-mutation SSH read must not restore stale .gitmodules paths
   // after the mutation invalidated them.
   cache.generation += 1
@@ -39,6 +48,19 @@ export function clearSubmodulePathsCache(cache: SubmodulePathsCache): void {
 
 export function getSubmodulePathsCacheCount(cache: SubmodulePathsCache): number {
   return cache.entries.size
+}
+
+export function getSubmodulePathsCacheCodeUnits(cache: SubmodulePathsCache): number {
+  return cache.retainedCodeUnits
+}
+
+function deleteSubmodulePathsCacheEntry(cache: SubmodulePathsCache, worktreePath: string): void {
+  const entry = cache.entries.get(worktreePath)
+  if (!entry) {
+    return
+  }
+  cache.entries.delete(worktreePath)
+  cache.retainedCodeUnits -= entry.retainedCodeUnits
 }
 
 function getCachedSubmodulePaths(
@@ -51,7 +73,7 @@ function getCachedSubmodulePaths(
     return null
   }
   if (cached.expiresAt <= now) {
-    cache.entries.delete(worktreePath)
+    deleteSubmodulePathsCacheEntry(cache, worktreePath)
     return null
   }
   cache.entries.delete(worktreePath)
@@ -62,7 +84,7 @@ function getCachedSubmodulePaths(
 function pruneExpiredSubmodulePaths(cache: SubmodulePathsCache, now: number): void {
   for (const [worktreePath, entry] of cache.entries) {
     if (entry.expiresAt <= now) {
-      cache.entries.delete(worktreePath)
+      deleteSubmodulePathsCacheEntry(cache, worktreePath)
     }
   }
 }
@@ -73,14 +95,31 @@ function rememberSubmodulePaths(
   paths: string[],
   now: number
 ): void {
-  cache.entries.delete(worktreePath)
-  cache.entries.set(worktreePath, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
-  while (cache.entries.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES) {
+  deleteSubmodulePathsCacheEntry(cache, worktreePath)
+  if (Buffer.byteLength(worktreePath, 'utf8') > MAX_SUBMODULE_PATHS_CACHE_KEY_BYTES) {
+    return
+  }
+  // Why: JS strings retain UTF-16 code units, so byte counts understate non-ASCII heap use.
+  const retainedCodeUnits =
+    worktreePath.length + paths.reduce((total, submodulePath) => total + submodulePath.length, 0)
+  if (retainedCodeUnits > MAX_SUBMODULE_PATHS_CACHE_CODE_UNITS) {
+    return
+  }
+  cache.entries.set(worktreePath, {
+    paths,
+    expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS,
+    retainedCodeUnits
+  })
+  cache.retainedCodeUnits += retainedCodeUnits
+  while (
+    cache.entries.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES ||
+    cache.retainedCodeUnits > MAX_SUBMODULE_PATHS_CACHE_CODE_UNITS
+  ) {
     const oldestPath = cache.entries.keys().next().value
     if (oldestPath === undefined) {
       break
     }
-    cache.entries.delete(oldestPath)
+    deleteSubmodulePathsCacheEntry(cache, oldestPath)
   }
 }
 
@@ -119,20 +158,37 @@ export async function listSubmodulePaths(git: GitExec, worktreePath: string): Pr
   try {
     const { stdout } = await git(
       ['config', '--file', '.gitmodules', '--get-regexp', '^submodule\\..*\\.path$'],
-      worktreePath
+      worktreePath,
+      { maxBuffer: MAX_SUBMODULE_PATHS_OUTPUT_BYTES }
     )
-    return stdout
-      .split(/\r?\n/)
-      .map((line) => {
-        const spaceIndex = line.indexOf(' ')
-        return spaceIndex === -1
+    const paths: string[] = []
+    let retainedCodeUnits = 0
+    for (const line of iterateProcessOutputLines(stdout)) {
+      if (line.length > MAX_SUBMODULE_PATH_CODE_UNITS + 4_096) {
+        return []
+      }
+      const spaceIndex = line.indexOf(' ')
+      const submodulePath =
+        spaceIndex === -1
           ? ''
           : line
               .slice(spaceIndex + 1)
               .trim()
               .replace(/\/+$/, '')
-      })
-      .filter((value) => value.length > 0)
+      if (!submodulePath) {
+        continue
+      }
+      if (
+        paths.length >= MAX_SUBMODULE_PATHS_PER_REPO ||
+        submodulePath.length > MAX_SUBMODULE_PATH_CODE_UNITS ||
+        submodulePath.length > MAX_SUBMODULE_PATHS_PER_REPO_CODE_UNITS - retainedCodeUnits
+      ) {
+        return []
+      }
+      paths.push(submodulePath)
+      retainedCodeUnits += submodulePath.length
+    }
+    return paths
   } catch {
     return []
   }

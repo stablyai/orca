@@ -1,13 +1,15 @@
 import { existsSync } from 'node:fs'
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import { buildAppImageCliWrapper, quoteShell } from './appimage-cli-wrapper'
 import { getBundledLauncherPath } from './cli-installer'
 
 // Why: marks a dispatcher this function wrote so repeat serve starts overwrite
 // our own file idempotently but never clobber a user's own ~/.local/bin/orca.
 const DISPATCHER_MARKER = '# orca-serve-bare-orca-dispatcher'
+export const LINUX_BARE_ORCA_DISPATCHER_MAX_BYTES = 64 * 1024
 
 export type LinuxBareOrcaDispatcherOptions = {
   /** Packaged app resources root; the bundled `orca-ide` launcher lives under it. */
@@ -106,7 +108,9 @@ function withMarker(script: string): string {
 
 async function isOwnedDispatcher(dispatcherPath: string): Promise<boolean> {
   try {
-    return (await readFile(dispatcherPath, 'utf8')).includes(DISPATCHER_MARKER)
+    return (
+      await readNodeFileWithinLimit(dispatcherPath, LINUX_BARE_ORCA_DISPATCHER_MAX_BYTES)
+    ).buffer.includes(DISPATCHER_MARKER)
   } catch {
     return false
   }

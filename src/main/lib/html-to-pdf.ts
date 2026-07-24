@@ -2,6 +2,12 @@ import { app, BrowserWindow } from 'electron'
 import { writeFile, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import {
+  acquireBrowserPdfAdmission,
+  BROWSER_PDF_BUSY_ERROR
+} from '../browser/browser-pdf-admission'
+import { assertCdpPdfWithinMemoryLimit } from '../browser/cdp-print-to-pdf'
+import { assertHtmlToPdfInputWithinMemoryLimit } from './html-to-pdf-memory-limit'
 
 export class ExportTimeoutError extends Error {
   constructor(message = 'Export timed out') {
@@ -31,40 +37,42 @@ new Promise((resolve) => {
 `
 
 export async function htmlToPdf(html: string): Promise<Buffer> {
+  assertHtmlToPdfInputWithinMemoryLimit(html)
   const tempDir = app.getPath('temp')
   const tempPath = path.join(tempDir, `orca-export-${randomUUID()}.html`)
-  await writeFile(tempPath, html, 'utf-8')
-
-  const win = new BrowserWindow({
-    show: false,
-    webPreferences: {
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-      // Why: image-wait needs to run a short script inside the export page, and
-      // the exported renderer DOM may already embed scripts/SVGs (e.g. Mermaid)
-      // that need JS to paint correctly. The window stays sandboxed and
-      // isolated so this is safe.
-      javascript: true
-    }
-  })
-
+  const pdfAdmission = acquireBrowserPdfAdmission()
+  if (!pdfAdmission) {
+    throw new Error(BROWSER_PDF_BUSY_ERROR)
+  }
+  let win: BrowserWindow | null = null
   let timer: NodeJS.Timeout | undefined
 
   try {
+    await writeFile(tempPath, html, 'utf-8')
+    win = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        // Why: image-wait needs script execution to finish remote images and rendered SVGs.
+        javascript: true
+      }
+    })
+    const exportWindow = win
     const loadPromise = new Promise<void>((resolve, reject) => {
-      win.webContents.once('did-finish-load', () => resolve())
-      win.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
+      exportWindow.webContents.once('did-finish-load', () => resolve())
+      exportWindow.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
         reject(new Error(`Failed to load export document: ${errorDescription} (${errorCode})`))
       })
     })
 
-    await win.loadFile(tempPath)
+    await exportWindow.loadFile(tempPath)
     await loadPromise
 
     const renderAndPrint = (async (): Promise<Buffer> => {
-      await win.webContents.executeJavaScript(WAIT_FOR_IMAGES_SCRIPT, true)
-      return win.webContents.printToPDF({
+      await exportWindow.webContents.executeJavaScript(WAIT_FOR_IMAGES_SCRIPT, true)
+      return pdfAdmission.print(exportWindow.webContents, {
         printBackground: true,
         pageSize: 'A4',
         margins: {
@@ -80,12 +88,15 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
       timer = setTimeout(() => reject(new ExportTimeoutError()), EXPORT_TIMEOUT_MS)
     })
 
-    return await Promise.race([renderAndPrint, timeoutPromise])
+    const pdf = await Promise.race([renderAndPrint, timeoutPromise])
+    assertCdpPdfWithinMemoryLimit(pdf)
+    return pdf
   } finally {
+    pdfAdmission.releaseIfIdle()
     if (timer) {
       clearTimeout(timer)
     }
-    if (!win.isDestroyed()) {
+    if (win && !win.isDestroyed()) {
       win.destroy()
     }
     try {

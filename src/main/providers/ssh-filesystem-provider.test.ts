@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -61,20 +61,6 @@ describe('SshFilesystemProvider', () => {
 
   it('returns the connectionId', () => {
     expect(provider.getConnectionId()).toBe('conn-1')
-  })
-
-  describe('readDir', () => {
-    it('sends fs.readDir request', async () => {
-      const entries = [
-        { name: 'src', isDirectory: true, isSymlink: false },
-        { name: 'README.md', isDirectory: false, isSymlink: false }
-      ]
-      mux.request.mockResolvedValue(entries)
-
-      const result = await provider.readDir('/home/user/project')
-      expect(mux.request).toHaveBeenCalledWith('fs.readDir', { dirPath: '/home/user/project' })
-      expect(result).toEqual(entries)
-    })
   })
 
   describe('readFile', () => {

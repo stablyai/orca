@@ -1,8 +1,12 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { readWsFallbackPort, writeWsFallbackPort } from './ws-fallback-port-store'
+import {
+  MAX_FALLBACK_PORT_FILE_BYTES,
+  readWsFallbackPort,
+  writeWsFallbackPort
+} from './ws-fallback-port-store'
 
 function makeUserDataPath(): string {
   return mkdtempSync(join(tmpdir(), 'ws-fallback-port-test-'))
@@ -30,6 +34,15 @@ describe('ws-fallback-port-store', () => {
     const userDataPath = makeUserDataPath()
     writeWsFallbackPort(userDataPath, 0)
     writeWsFallbackPort(userDataPath, 70000)
+    expect(readWsFallbackPort(userDataPath)).toBeUndefined()
+  })
+
+  it('ignores an oversized sparse fallback-port file', () => {
+    const userDataPath = makeUserDataPath()
+    const path = join(userDataPath, 'mobile-ws-fallback-port.json')
+    writeFileSync(path, '{"port":54321}', 'utf8')
+    truncateSync(path, MAX_FALLBACK_PORT_FILE_BYTES + 1)
+
     expect(readWsFallbackPort(userDataPath)).toBeUndefined()
   })
 })

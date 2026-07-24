@@ -8,6 +8,7 @@ import type {
   SshPortForwardProvider,
   StartedPortForward
 } from './ssh-port-forward-provider'
+import { SystemSshOutputTail } from './system-ssh-output-tail'
 
 export class SystemSshPortForwardProvider implements SshPortForwardProvider {
   canHandle(conn: SshConnection): boolean {
@@ -33,17 +34,9 @@ export class SystemSshPortForwardProvider implements SshPortForwardProvider {
         )
 
     await forward.waitForStartup()
-    // Why: this stderr stays attached for the forward's whole lifetime but is
-    // only used to build the exit-error detail, so keep a bounded tail — a chatty
-    // remote sshd could otherwise grow it unbounded on a long-lived forward
-    // (mirrors MAX_RELAY_STARTUP_BUFFER_BYTES in ssh-relay-deploy-helpers).
-    const MAX_STDERR_TAIL_BYTES = 64 * 1024
-    let stderr = ''
+    const stderr = new SystemSshOutputTail()
     const onStderr = (chunk: Buffer): void => {
-      stderr += chunk.toString('utf-8')
-      if (stderr.length > MAX_STDERR_TAIL_BYTES) {
-        stderr = stderr.slice(-MAX_STDERR_TAIL_BYTES)
-      }
+      stderr.push(chunk)
     }
     forward.process.stderr?.on('data', onStderr)
 
@@ -60,7 +53,7 @@ export class SystemSshPortForwardProvider implements SshPortForwardProvider {
       forward.process.stderr?.off('data', onStderr)
       options.onUnexpectedClose?.(entry, {
         kind: 'unexpected-exit',
-        detail: systemSshForwardError(code, stderr).message
+        detail: systemSshForwardError(code, stderr.toString()).message
       })
     })
 

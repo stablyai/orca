@@ -1,27 +1,28 @@
-import { exec, spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
 import { createFakeChild, createHandlers, requestContext } from './agent-exec-handler-test-harness'
+import { MAX_CONCURRENT_AGENT_EXECS } from './agent-exec-handler'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git-credential-guard'
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
   return {
     ...actual,
-    exec: vi.fn(),
+    execFile: vi.fn(),
     spawn: vi.fn()
   }
 })
 
 const spawnMock = vi.mocked(spawn)
-const execMock = vi.mocked(exec)
+const execFileMock = vi.mocked(execFile)
 
-type AgentExecResult = { exitCode: number | null; timedOut: boolean }
+type AgentExecResult = { stdout: string; exitCode: number | null; timedOut: boolean }
 
 describe('AgentExecHandler', () => {
   beforeEach(() => {
     spawnMock.mockReset()
-    execMock.mockReset()
+    execFileMock.mockReset()
   })
 
   it('executes a non-interactive command with captured output and stdin', async () => {
@@ -62,6 +63,68 @@ describe('AgentExecHandler', () => {
       windowsHide: true
     })
     expect(child.stdin.end).toHaveBeenCalledWith('PROMPT')
+  })
+
+  it('preserves output delivered as 100,000 one-byte fragments', async () => {
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child as never)
+    const handlers = createHandlers()
+    const pending = handlers.get('agent.execNonInteractive')!(
+      { binary: 'agent', cwd: '/repo', timeoutMs: 5_000 },
+      requestContext()
+    ) as Promise<AgentExecResult>
+
+    for (let index = 0; index < 100_000; index += 1) {
+      child.stdout.emit('data', Buffer.from(index % 2 === 0 ? 'a' : 'b'))
+    }
+    child.emit('close', 0)
+
+    const result = await pending
+    expect(result.stdout).toHaveLength(100_000)
+    expect(result.stdout.slice(0, 4)).toBe('abab')
+    expect(result.stdout.slice(-4)).toBe('abab')
+  })
+
+  it('caps physical agent children until close confirms release', async () => {
+    const children = Array.from({ length: MAX_CONCURRENT_AGENT_EXECS + 1 }, (_, index) => {
+      const child = createFakeChild()
+      child.pid += index
+      return child
+    })
+    let spawnIndex = 0
+    spawnMock.mockImplementation(() => children[spawnIndex++] as never)
+    const handlers = createHandlers()
+    const active = children
+      .slice(0, MAX_CONCURRENT_AGENT_EXECS)
+      .map((_, index) =>
+        handlers.get('agent.execNonInteractive')!(
+          { binary: 'agent', cwd: `/repo-${index}`, timeoutMs: 5_000 },
+          requestContext()
+        )
+      )
+
+    await expect(
+      handlers.get('agent.execNonInteractive')!(
+        { binary: 'agent', cwd: '/overflow', timeoutMs: 5_000 },
+        requestContext()
+      )
+    ).resolves.toMatchObject({ spawnError: 'Remote agent execution capacity reached' })
+    expect(spawnMock).toHaveBeenCalledTimes(MAX_CONCURRENT_AGENT_EXECS)
+
+    children[0]!.emit('close', 0)
+    await active[0]
+    const retry = handlers.get('agent.execNonInteractive')!(
+      { binary: 'agent', cwd: '/retry', timeoutMs: 5_000 },
+      requestContext()
+    )
+    expect(spawnMock).toHaveBeenCalledTimes(MAX_CONCURRENT_AGENT_EXECS + 1)
+
+    for (const child of children.slice(1)) {
+      child.emit('close', 0)
+    }
+    await expect(Promise.all([...active.slice(1), retry])).resolves.toHaveLength(
+      MAX_CONCURRENT_AGENT_EXECS
+    )
   })
 
   it('merges caller-supplied provider environment into the spawned command environment', async () => {
@@ -204,7 +267,11 @@ describe('AgentExecHandler', () => {
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     }
@@ -257,8 +324,16 @@ describe('AgentExecHandler', () => {
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
-      expect(execMock).not.toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
+      expect(execFileMock).not.toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12346', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(commitChild.kill).toHaveBeenCalledWith('SIGKILL')
       expect(pullRequestChild.kill).not.toHaveBeenCalled()
@@ -303,7 +378,11 @@ describe('AgentExecHandler', () => {
     controller.abort()
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     }
@@ -351,8 +430,16 @@ describe('AgentExecHandler', () => {
     )
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
-      expect(execMock).not.toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
+      expect(execFileMock).not.toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12346', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(firstChild.kill).toHaveBeenCalledWith('SIGKILL')
       expect(secondChild.kill).not.toHaveBeenCalled()
@@ -366,7 +453,11 @@ describe('AgentExecHandler', () => {
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12346', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(secondChild.kill).toHaveBeenCalledWith('SIGKILL')
     }
@@ -411,13 +502,19 @@ describe('AgentExecHandler', () => {
 
       expect(outcome).toBe('timed-out:null')
       if (process.platform === 'win32') {
-        expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+        expect(execFileMock).toHaveBeenCalledWith(
+          'taskkill',
+          ['/pid', '12345', '/T', '/F'],
+          expect.any(Function)
+        )
       } else {
         expect(child.kill).toHaveBeenCalledWith('SIGKILL')
       }
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(1)
+      child.emit('close', null)
       expect(child.listenerCount('close')).toBe(0)
     } finally {
       vi.useRealTimers()

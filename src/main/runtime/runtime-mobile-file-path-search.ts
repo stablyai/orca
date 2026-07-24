@@ -34,6 +34,9 @@ export class RuntimeMobileFilePathSearchCache {
     if (pending) {
       return pending
     }
+    if (this.inFlight.size >= this.maxEntries) {
+      throw new Error('Mobile file path search is busy; retry after current searches finish.')
+    }
     const next = load()
       .then((loaded) => {
         // Why: a slow SSH scan should receive a full TTL after it becomes usable,

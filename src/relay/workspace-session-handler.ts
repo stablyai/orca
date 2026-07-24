@@ -1,6 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { assertJsonTextStructureWithinLimits } from '../shared/json-text-structure-limit'
+import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
+import { stringifyJsonWithinByteLimit } from '../shared/node-bounded-json-stringify'
 import type { RelayDispatcher } from './dispatcher'
 
 type RemoteWorkspaceSnapshot = {
@@ -28,6 +31,11 @@ type PatchResult =
 
 const SNAPSHOT_SCHEMA_VERSION = 1
 const PRESENCE_TTL_MS = 45_000
+export const MAX_PRESENCE_NAMESPACES = 256
+export const MAX_PRESENCE_CLIENTS_PER_NAMESPACE = 64
+export const MAX_WORKSPACE_SESSION_SNAPSHOT_BYTES = 16 * 1024 * 1024
+export const MAX_WORKSPACE_SESSION_SNAPSHOT_STRUCTURAL_TOKENS = 1_000_000
+export const MAX_WORKSPACE_SESSION_SNAPSHOT_NESTING_DEPTH = 128
 
 function emptySession(): Record<string, unknown> {
   return {
@@ -81,7 +89,15 @@ export class WorkspaceSessionHandler {
     }
 
     try {
-      const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<RemoteWorkspaceSnapshot>
+      const content = readNodeFileSyncWithinLimit(
+        path,
+        MAX_WORKSPACE_SESSION_SNAPSHOT_BYTES
+      ).buffer.toString('utf8')
+      assertJsonTextStructureWithinLimits(content, {
+        structuralTokens: MAX_WORKSPACE_SESSION_SNAPSHOT_STRUCTURAL_TOKENS,
+        nestingDepth: MAX_WORKSPACE_SESSION_SNAPSHOT_NESTING_DEPTH
+      })
+      const parsed = JSON.parse(content) as Partial<RemoteWorkspaceSnapshot>
       return {
         namespace,
         revision:
@@ -116,7 +132,11 @@ export class WorkspaceSessionHandler {
     const path = this.snapshotPath(snapshot.namespace)
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     const tmpPath = `${path}.tmp`
-    writeFileSync(tmpPath, JSON.stringify(snapshot, null, 2), { mode: 0o600 })
+    const serialized = stringifyJsonWithinByteLimit(
+      snapshot,
+      MAX_WORKSPACE_SESSION_SNAPSHOT_BYTES
+    ).serialized
+    writeFileSync(tmpPath, serialized, { mode: 0o600 })
     renameSync(tmpPath, path)
   }
 
@@ -163,25 +183,72 @@ export class WorkspaceSessionHandler {
     const namespace = sanitizeNamespace(params.namespace)
     const clientId = typeof params.clientId === 'string' ? sanitizeClientId(params.clientId) : ''
     const name = typeof params.clientName === 'string' ? sanitizeClientName(params.clientName) : ''
-    const clients = this.clientsByNamespace.get(namespace) ?? new Map<string, ConnectedClient>()
-    this.clientsByNamespace.set(namespace, clients)
-
     const now = Date.now()
-    for (const [id, client] of clients) {
-      if (now - client.lastSeenAt > PRESENCE_TTL_MS) {
-        clients.delete(id)
+    this.sweepPresence(now)
+
+    let clients = this.clientsByNamespace.get(namespace)
+    if (!clientId) {
+      return { clients: this.sortedClients(clients) }
+    }
+    if (!clients) {
+      if (this.clientsByNamespace.size >= MAX_PRESENCE_NAMESPACES) {
+        this.evictOldestNamespace()
+      }
+      clients = new Map<string, ConnectedClient>()
+      this.clientsByNamespace.set(namespace, clients)
+    }
+    if (!clients.has(clientId) && clients.size >= MAX_PRESENCE_CLIENTS_PER_NAMESPACE) {
+      this.evictOldestClient(clients)
+    }
+    clients.set(clientId, {
+      clientId,
+      name: name || 'Unknown device',
+      lastSeenAt: now
+    })
+
+    return { clients: this.sortedClients(clients) }
+  }
+
+  private sweepPresence(now: number): void {
+    for (const [namespace, clients] of this.clientsByNamespace) {
+      for (const [id, client] of clients) {
+        if (now - client.lastSeenAt > PRESENCE_TTL_MS) {
+          clients.delete(id)
+        }
+      }
+      if (clients.size === 0) {
+        this.clientsByNamespace.delete(namespace)
       }
     }
-    if (clientId) {
-      clients.set(clientId, {
-        clientId,
-        name: name || 'Unknown device',
-        lastSeenAt: now
-      })
-    }
+  }
 
-    return {
-      clients: Array.from(clients.values()).sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+  private evictOldestNamespace(): void {
+    let oldest: { namespace: string; lastSeenAt: number } | undefined
+    for (const [namespace, clients] of this.clientsByNamespace) {
+      const lastSeenAt = Math.max(...Array.from(clients.values(), (client) => client.lastSeenAt))
+      if (
+        !oldest ||
+        lastSeenAt < oldest.lastSeenAt ||
+        (lastSeenAt === oldest.lastSeenAt && namespace < oldest.namespace)
+      ) {
+        oldest = { namespace, lastSeenAt }
+      }
     }
+    if (oldest) {
+      this.clientsByNamespace.delete(oldest.namespace)
+    }
+  }
+
+  private evictOldestClient(clients: Map<string, ConnectedClient>): void {
+    const oldest = Array.from(clients.values()).sort(
+      (a, b) => a.lastSeenAt - b.lastSeenAt || a.clientId.localeCompare(b.clientId)
+    )[0]
+    if (oldest) {
+      clients.delete(oldest.clientId)
+    }
+  }
+
+  private sortedClients(clients: Map<string, ConnectedClient> | undefined): ConnectedClient[] {
+    return Array.from(clients?.values() ?? []).sort((a, b) => b.lastSeenAt - a.lastSeenAt)
   }
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mapLinearIssue } from './mappers'
 
 describe('mapLinearIssue', () => {
@@ -46,5 +46,45 @@ describe('mapLinearIssue', () => {
       assignee: undefined,
       project: undefined
     })
+  })
+
+  it('retains only requested lazy-relation rows when the SDK returns extra nodes', async () => {
+    const labels = vi.fn().mockResolvedValue({
+      nodes: Array.from({ length: 51 }, (_, index) => ({
+        id: `label-${index}`,
+        name: `Label ${index}`
+      }))
+    })
+    const children = vi.fn().mockResolvedValue({
+      nodes: Array.from({ length: 26 }, (_, index) => ({
+        id: `child-${index}`,
+        identifier: `LIN-${index}`,
+        title: `Child ${index}`,
+        url: `https://linear.app/child-${index}`
+      }))
+    })
+    const issue = {
+      id: 'issue-1',
+      identifier: 'LIN-1',
+      title: 'Bound relations',
+      description: null,
+      url: 'https://linear.app/LIN-1',
+      estimate: null,
+      priority: 0,
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      state: null,
+      team: null,
+      assignee: null,
+      labels,
+      children
+    }
+
+    const mapped = await mapLinearIssue(issue as never, { includeChildren: true })
+
+    expect(mapped.labels).toHaveLength(50)
+    expect(mapped.labelIds).toHaveLength(50)
+    expect(mapped.subIssues).toHaveLength(25)
+    expect(labels).toHaveBeenCalledWith({ first: 50 })
+    expect(children).toHaveBeenCalledWith({ first: 25 })
   })
 })

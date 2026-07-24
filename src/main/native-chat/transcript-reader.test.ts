@@ -2,8 +2,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { readNativeChatTranscript } from './transcript-reader'
 import {
+  MAX_NATIVE_CHAT_TRANSCRIPT_PAGE_RETAINED_BYTES,
   nativeChatLineDecoderForAgent,
   readNativeChatTranscriptTail,
   readNativeChatTranscriptTailFile
@@ -331,5 +333,42 @@ describe('readNativeChatTranscriptTailFile', () => {
 
     expect(result.messages).toEqual([])
     expect(result.hasMore).toBe(false)
+  })
+
+  it('preserves the newest messages and a correct pagination boundary at the page byte cap', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-tail-page-bytes-'))
+    tempRoots.push(root)
+    const filePath = join(root, 'transcript.jsonl')
+    const payload = 'x'.repeat(1024 * 1024)
+    const ids = Array.from({ length: 10 }, (_unused, index) => `message-${index}`)
+    await writeFile(filePath, ids.map((id) => `${id}:${payload}\n`).join(''))
+    const decode = (line: string): NativeChatMessage => {
+      const id = line.slice(0, line.indexOf(':'))
+      return {
+        id,
+        role: 'user',
+        blocks: [{ type: 'text', text: line }],
+        timestamp: null,
+        source: 'transcript'
+      }
+    }
+
+    const newest = await readNativeChatTranscriptTailFile(filePath, 100, decode, true)
+    const older = await readNativeChatTranscriptTailFile(
+      filePath,
+      100,
+      decode,
+      true,
+      newest.beforeOffset
+    )
+
+    expect(newest.hasMore).toBe(true)
+    expect(newest.messages.length).toBeGreaterThan(0)
+    expect(newest.messages.length).toBeLessThan(ids.length)
+    expect(newest.messages.at(-1)?.id).toBe(ids.at(-1))
+    expect([...older.messages, ...newest.messages].map((message) => message.id)).toEqual(ids)
+    expect(newest.messages.length * (payload.length * 2 + 256)).toBeLessThanOrEqual(
+      MAX_NATIVE_CHAT_TRANSCRIPT_PAGE_RETAINED_BYTES
+    )
   })
 })

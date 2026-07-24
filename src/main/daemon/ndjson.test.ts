@@ -1,7 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encodeNdjson, createNdjsonParser, NDJSON_MAX_LINE_BYTES } from './ndjson'
+import {
+  encodeBoundedNdjson,
+  encodeNdjson,
+  createNdjsonParser,
+  NDJSON_MAX_LINE_BYTES,
+  NDJSON_MAX_STRUCTURAL_TOKENS
+} from './ndjson'
 
 describe('encodeNdjson', () => {
+  it('bounds response serialization while preserving admitted wire bytes', () => {
+    expect(encodeBoundedNdjson({ ok: true }, 12)).toBe('{"ok":true}\n')
+    expect(() => encodeBoundedNdjson({ value: 'x'.repeat(100) }, 32)).toThrow(
+      'JSON output exceeds 31 bytes'
+    )
+  })
+
   it('encodes an object as a JSON line ending with newline', () => {
     const result = encodeNdjson({ type: 'hello', version: 1 })
     expect(result).toBe('{"type":"hello","version":1}\n')
@@ -32,6 +45,32 @@ describe('createNdjsonParser', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
+  it('optionally reports each parsed line byte length without re-serializing it', () => {
+    const onMessage = vi.fn()
+    const parser = createNdjsonParser(onMessage, undefined, { includeLineBytes: true })
+
+    parser.feed('{"text":"é"}\n')
+
+    expect(onMessage).toHaveBeenCalledWith({ text: 'é' }, Buffer.byteLength('{"text":"é"}'))
+  })
+
+  it('rejects structurally amplified lines before parsing', () => {
+    const onMessage = vi.fn()
+    const onError = vi.fn()
+    const parser = createNdjsonParser(onMessage, onError)
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    try {
+      parser.feed(`{"values":[${'0,'.repeat(NDJSON_MAX_STRUCTURAL_TOKENS)}0]}\n`)
+      expect(onMessage).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('JSON structure exceeds') })
+      )
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
+  })
+
   it('parses multiple messages in a single chunk', () => {
     const onMessage = vi.fn()
     const parser = createNdjsonParser(onMessage)
@@ -54,6 +93,20 @@ describe('createNdjsonParser', () => {
     parser.feed('lo","version":1}\n')
     expect(onMessage).toHaveBeenCalledOnce()
     expect(onMessage).toHaveBeenCalledWith({ type: 'hello', version: 1 })
+  })
+
+  it('parses a line delivered in more than 100,000 one-character fragments', () => {
+    const onMessage = vi.fn()
+    const parser = createNdjsonParser(onMessage, undefined, { includeLineBytes: true })
+    const message = { value: 'x'.repeat(100_000) }
+    const line = JSON.stringify(message)
+
+    for (const character of line) {
+      parser.feed(character)
+    }
+    parser.feed('\n')
+
+    expect(onMessage).toHaveBeenCalledWith(message, Buffer.byteLength(line))
   })
 
   it('handles a chunk that ends mid-line followed by more data', () => {

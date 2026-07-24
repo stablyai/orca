@@ -7,7 +7,7 @@ import {
   lstat,
   mkdir,
   open,
-  readdir,
+  opendir,
   realpath,
   rename,
   rm,
@@ -22,6 +22,21 @@ import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispat
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
 import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
+import type { SshMutationExpectation } from '../../shared/ssh-types'
+import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
+import { readStableRuntimeUploadFile } from './filesystem-runtime-upload-file-reader'
+import {
+  admitExternalImportTreeEntry,
+  assertExternalImportSourcePaths,
+  assertExternalImportTreeDepth,
+  assertRuntimeUploadFileFits,
+  captureRuntimeUploadRetentionCheckpoint,
+  createExternalImportTreeBudget,
+  createRuntimeUploadRetentionBudget,
+  restoreRuntimeUploadRetentionCheckpoint,
+  retainRuntimeUploadFileBytes,
+  type RuntimeUploadRetentionBudget
+} from './filesystem-external-import-limits'
 
 /**
  * Re-throw filesystem errors with user-friendly messages.
@@ -70,7 +85,16 @@ async function assertNotExists(targetPath: string): Promise<void> {
 export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
     'fs:createFile',
-    async (_event, args: { filePath: string; connectionId?: string }): Promise<void> => {
+    async (
+      _event,
+      args: { filePath: string; connectionId?: string } & SshMutationExpectation
+    ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createFile(args.filePath)
@@ -88,7 +112,16 @@ export function registerFilesystemMutationHandlers(store: Store): void {
 
   ipcMain.handle(
     'fs:createDir',
-    async (_event, args: { dirPath: string; connectionId?: string }): Promise<void> => {
+    async (
+      _event,
+      args: { dirPath: string; connectionId?: string } & SshMutationExpectation
+    ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createDir(args.dirPath)
@@ -106,8 +139,14 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:rename',
     async (
       _event,
-      args: { oldPath: string; newPath: string; connectionId?: string }
+      args: { oldPath: string; newPath: string; connectionId?: string } & SshMutationExpectation
     ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.renameNoClobber(args.oldPath, args.newPath)
@@ -129,8 +168,18 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:copy',
     async (
       _event,
-      args: { sourcePath: string; destinationPath: string; connectionId?: string }
+      args: {
+        sourcePath: string
+        destinationPath: string
+        connectionId?: string
+      } & SshMutationExpectation
     ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.copy(args.sourcePath, args.destinationPath)
@@ -152,11 +201,30 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:importExternalPaths',
     async (
       _event,
-      args: { sourcePaths: string[]; destDir: string; connectionId?: string; ensureDir?: boolean }
+      args: {
+        sourcePaths: string[]
+        destDir: string
+        connectionId?: string
+        ensureDir?: boolean
+      } & SshMutationExpectation
     ): Promise<{ results: ImportItemResult[] }> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
+      assertExternalImportSourcePaths(args.sourcePaths)
       if (args.connectionId) {
         return importExternalPathsSsh(args.sourcePaths, args.destDir, args.connectionId, {
-          ensureDir: args.ensureDir
+          ensureDir: args.ensureDir,
+          assertCurrent: () =>
+            assertSshMutationExpectation(
+              args.connectionId,
+              args.expectedSshTargetId,
+              args.expectedSshConnectionGeneration,
+              args.expectedExecutionHostId
+            )
         })
       }
 
@@ -188,8 +256,10 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       args: { sourcePaths: string[] }
     ): Promise<{ sources: StagedExternalImportSource[] }> => {
       const sources: StagedExternalImportSource[] = []
+      assertExternalImportSourcePaths(args.sourcePaths)
+      const retentionBudget = createRuntimeUploadRetentionBudget()
       for (const sourcePath of args.sourcePaths) {
-        sources.push(await stageOneSourceForRuntimeUpload(sourcePath))
+        sources.push(await stageOneSourceForRuntimeUpload(sourcePath, retentionBudget))
       }
       return { sources }
     }
@@ -205,8 +275,19 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:resolveDroppedPathsForAgent',
     async (
       _event,
-      args: { paths: string[]; worktreePath: string; connectionId?: string }
+      args: {
+        paths: string[]
+        worktreePath: string
+        connectionId?: string
+      } & SshMutationExpectation
     ): Promise<ResolveDroppedPathsResult> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
+      assertExternalImportSourcePaths(args.paths)
       // Why: `== null` (not `!args.connectionId`) so an empty string is
       // treated as a renderer error, not silently routed to the local branch.
       if (args.connectionId == null) {
@@ -219,7 +300,14 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       const worktreePath = args.worktreePath.replace(/\/+$/, '')
       const destDir = `${worktreePath}/.orca/drops`
       const { results } = await importExternalPathsSsh(args.paths, destDir, args.connectionId, {
-        ensureDir: true
+        ensureDir: true,
+        assertCurrent: () =>
+          assertSshMutationExpectation(
+            args.connectionId,
+            args.expectedSshTargetId,
+            args.expectedSshConnectionGeneration,
+            args.expectedExecutionHostId
+          )
       })
       const resolvedPaths: string[] = []
       const skipped: { sourcePath: string; reason: ImportSkipReason }[] = []
@@ -291,9 +379,6 @@ export type StagedExternalImportEntry =
   | { relativePath: string; kind: 'directory' }
   | { relativePath: string; kind: 'file'; contentBase64: string }
 
-const REMOTE_IMPORT_MAX_FILE_BYTES = 25 * 1024 * 1024
-const REMOTE_IMPORT_MAX_TOTAL_BYTES = 100 * 1024 * 1024
-
 class RuntimeUploadSymlinkError extends Error {}
 
 // ─── External Import Implementation ─────────────────────────────────
@@ -354,9 +439,17 @@ async function importOneSource(
   // creating any destination files. This prevents partially imported
   // trees when a symlink is discovered halfway through recursive copy.
   if (isDir) {
-    const hasSymlink = await preScanForSymlinks(resolvedSource)
-    if (hasSymlink) {
-      return { sourcePath, status: 'skipped', reason: 'symlink' }
+    try {
+      const hasSymlink = await preScanForSymlinks(resolvedSource)
+      if (hasSymlink) {
+        return { sourcePath, status: 'skipped', reason: 'symlink' }
+      }
+    } catch (error) {
+      return {
+        sourcePath,
+        status: 'failed',
+        reason: error instanceof Error ? error.message : String(error)
+      }
     }
   }
 
@@ -391,7 +484,8 @@ async function importOneSource(
 }
 
 async function stageOneSourceForRuntimeUpload(
-  sourcePath: string
+  sourcePath: string,
+  retentionBudget: RuntimeUploadRetentionBudget
 ): Promise<StagedExternalImportSource> {
   const resolvedSource = resolve(sourcePath)
 
@@ -427,10 +521,15 @@ async function stageOneSourceForRuntimeUpload(
   if (!sourceStat.isFile() && !sourceStat.isDirectory()) {
     return { sourcePath, status: 'skipped', reason: 'unsupported' }
   }
+  const checkpoint = captureRuntimeUploadRetentionCheckpoint(retentionBudget)
   try {
-    const entries = sourceStat.isDirectory()
-      ? await stageDirectoryEntries(resolvedSource)
-      : [(await stageFileEntry(resolvedSource, '')).entry]
+    let entries: StagedExternalImportEntry[]
+    if (sourceStat.isDirectory()) {
+      entries = await stageDirectoryEntries(resolvedSource, retentionBudget)
+    } else {
+      admitExternalImportTreeEntry(retentionBudget.tree, '', true)
+      entries = [await stageFileEntry(resolvedSource, '', { retentionBudget })]
+    }
     return {
       sourcePath,
       status: 'staged',
@@ -439,6 +538,7 @@ async function stageOneSourceForRuntimeUpload(
       entries
     }
   } catch (error) {
+    restoreRuntimeUploadRetentionCheckpoint(retentionBudget, checkpoint)
     if (error instanceof RuntimeUploadSymlinkError) {
       return { sourcePath, status: 'skipped', reason: 'symlink' }
     }
@@ -450,61 +550,61 @@ async function stageOneSourceForRuntimeUpload(
   }
 }
 
-async function stageDirectoryEntries(rootPath: string): Promise<StagedExternalImportEntry[]> {
+async function stageDirectoryEntries(
+  rootPath: string,
+  retentionBudget: RuntimeUploadRetentionBudget
+): Promise<StagedExternalImportEntry[]> {
+  admitExternalImportTreeEntry(retentionBudget.tree, '', true)
   const entries: StagedExternalImportEntry[] = [{ relativePath: '', kind: 'directory' }]
-  let totalBytes = 0
   const rootRealPath = await realpath(rootPath)
 
-  async function visit(dirPath: string): Promise<void> {
+  async function visit(dirPath: string, depth: number): Promise<void> {
+    assertExternalImportTreeDepth(depth)
     const dirStat = await lstat(dirPath)
+    const dirRelativePath = normalizeRelativeUploadPath(relative(rootPath, dirPath))
     if (dirStat.isSymbolicLink()) {
-      throw new RuntimeUploadSymlinkError(
-        `Symlink not allowed in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
-      )
+      throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${dirRelativePath}'`)
     }
     if (!dirStat.isDirectory()) {
-      throw new Error(
-        `Unsupported file type in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
-      )
+      throw new Error(`Unsupported file type in '${dirRelativePath}'`)
     }
-    await assertRealPathInsideRoot(
-      rootRealPath,
-      dirPath,
-      normalizeRelativeUploadPath(relative(rootPath, dirPath))
-    )
-    const dirEntries = await readdir(dirPath, { withFileTypes: true })
-    for (const entry of dirEntries) {
+    await assertRealPathInsideRoot(rootRealPath, dirPath, dirRelativePath)
+    const directory = await opendir(dirPath)
+    for await (const entry of directory) {
       const childPath = join(dirPath, entry.name)
       const childRelativePath = normalizeRelativeUploadPath(relative(rootPath, childPath))
       if (entry.isSymbolicLink()) {
         throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${childRelativePath}'`)
       }
       if (entry.isDirectory()) {
+        assertExternalImportTreeDepth(depth + 1)
+        admitExternalImportTreeEntry(retentionBudget.tree, childRelativePath, true)
         entries.push({ relativePath: childRelativePath, kind: 'directory' })
-        await visit(childPath)
+        await visit(childPath, depth + 1)
         continue
       }
       if (!entry.isFile()) {
         throw new Error(`Unsupported file type in '${childRelativePath}'`)
       }
-      const stagedFile = await stageFileEntry(childPath, childRelativePath, {
-        rootRealPath,
-        totalBytesBefore: totalBytes
-      })
-      totalBytes += stagedFile.byteLength
-      entries.push(stagedFile.entry)
+      admitExternalImportTreeEntry(retentionBudget.tree, childRelativePath, true)
+      entries.push(
+        await stageFileEntry(childPath, childRelativePath, {
+          rootRealPath,
+          retentionBudget
+        })
+      )
     }
   }
 
-  await visit(rootPath)
+  await visit(rootPath, 0)
   return entries
 }
 
 async function stageFileEntry(
   filePath: string,
   relativePath: string,
-  options?: { rootRealPath?: string; totalBytesBefore?: number }
-): Promise<{ entry: StagedExternalImportEntry; byteLength: number }> {
+  options: { retentionBudget: RuntimeUploadRetentionBudget; rootRealPath?: string }
+): Promise<StagedExternalImportEntry> {
   const statResult = await lstat(filePath)
   const displayPath = normalizeRelativeUploadPath(relativePath)
   if (statResult.isSymbolicLink()) {
@@ -516,11 +616,7 @@ async function stageFileEntry(
   if (options?.rootRealPath) {
     await assertRealPathInsideRoot(options.rootRealPath, filePath, displayPath)
   }
-  const initialTotalBytes =
-    options?.totalBytesBefore === undefined
-      ? statResult.size
-      : options.totalBytesBefore + statResult.size
-  assertRemoteUploadBudget(relativePath, statResult.size, initialTotalBytes)
+  assertRuntimeUploadFileFits(options.retentionBudget, displayPath, statResult.size)
   const fileHandle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
     const openedStat = await fileHandle.stat()
@@ -534,23 +630,17 @@ async function stageFileEntry(
     ) {
       throw new Error(`File changed during upload staging: '${displayPath}'`)
     }
-    const totalBytes =
-      options?.totalBytesBefore === undefined
-        ? openedStat.size
-        : options.totalBytesBefore + openedStat.size
-    assertRemoteUploadBudget(relativePath, openedStat.size, totalBytes)
-    const buffer = await fileHandle.readFile()
+    assertRuntimeUploadFileFits(options.retentionBudget, displayPath, openedStat.size)
+    const buffer = await readStableRuntimeUploadFile(fileHandle, openedStat.size, displayPath)
     const afterReadStat = await fileHandle.stat()
     if (afterReadStat.size !== openedStat.size) {
       throw new Error(`File changed during upload staging: '${displayPath}'`)
     }
+    retainRuntimeUploadFileBytes(options.retentionBudget, displayPath, buffer.byteLength)
     return {
-      entry: {
-        relativePath: displayPath,
-        kind: 'file',
-        contentBase64: buffer.toString('base64')
-      },
-      byteLength: openedStat.size
+      relativePath: displayPath,
+      kind: 'file',
+      contentBase64: buffer.toString('base64')
     }
   } finally {
     await fileHandle.close()
@@ -573,19 +663,6 @@ async function assertRealPathInsideRoot(
   }
 }
 
-function assertRemoteUploadBudget(
-  relativePath: string,
-  fileBytes: number,
-  totalBytes: number
-): void {
-  if (fileBytes > REMOTE_IMPORT_MAX_FILE_BYTES) {
-    throw new Error(`'${relativePath}' is too large for remote import`)
-  }
-  if (totalBytes > REMOTE_IMPORT_MAX_TOTAL_BYTES) {
-    throw new Error('Remote import is too large')
-  }
-}
-
 function normalizeRelativeUploadPath(path: string): string {
   return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
 }
@@ -595,19 +672,40 @@ function normalizeRelativeUploadPath(path: string): string {
  * is found anywhere in the subtree.
  */
 async function preScanForSymlinks(dirPath: string): Promise<boolean> {
-  const entries = await readdir(dirPath, { withFileTypes: true })
-  for (const entry of entries) {
-    if (entry.isSymbolicLink()) {
+  const budget = createExternalImportTreeBudget()
+
+  async function visit(
+    currentDirPath: string,
+    relativeDirPath: string,
+    depth: number
+  ): Promise<boolean> {
+    assertExternalImportTreeDepth(depth)
+    const currentStat = await lstat(currentDirPath)
+    if (currentStat.isSymbolicLink()) {
       return true
     }
-    if (entry.isDirectory()) {
-      const childPath = join(dirPath, entry.name)
-      if (await preScanForSymlinks(childPath)) {
+    if (!currentStat.isDirectory()) {
+      throw new Error(`Unsupported file type in '${relativeDirPath}'`)
+    }
+
+    const directory = await opendir(currentDirPath)
+    for await (const entry of directory) {
+      const childRelativePath = join(relativeDirPath, entry.name)
+      admitExternalImportTreeEntry(budget, childRelativePath, false)
+      if (entry.isSymbolicLink()) {
         return true
       }
+      if (entry.isDirectory()) {
+        assertExternalImportTreeDepth(depth + 1)
+        if (await visit(join(currentDirPath, entry.name), childRelativePath, depth + 1)) {
+          return true
+        }
+      }
     }
+    return false
   }
-  return false
+
+  return visit(dirPath, '', 0)
 }
 
 /**
@@ -616,24 +714,47 @@ async function preScanForSymlinks(dirPath: string): Promise<boolean> {
  * buffering entire files into memory.
  */
 async function recursiveCopyDir(srcDir: string, destDir: string): Promise<void> {
-  await mkdir(destDir, { recursive: false })
-  const entries = await readdir(srcDir, { withFileTypes: true })
-  for (const entry of entries) {
-    const srcPath = join(srcDir, entry.name)
-    const dstPath = join(destDir, entry.name)
-    const statResult = await lstat(srcPath)
-    if (statResult.isSymbolicLink()) {
-      throw new Error(`Symlink not allowed in '${entry.name}'`)
+  const budget = createExternalImportTreeBudget()
+
+  async function copyDirectory(
+    currentSrcDir: string,
+    currentDestDir: string,
+    relativeDirPath: string,
+    depth: number
+  ): Promise<void> {
+    assertExternalImportTreeDepth(depth)
+    const dirStat = await lstat(currentSrcDir)
+    if (dirStat.isSymbolicLink()) {
+      throw new Error(`Symlink not allowed in '${relativeDirPath}'`)
     }
-    if (statResult.isDirectory()) {
-      await recursiveCopyDir(srcPath, dstPath)
-      continue
+    if (!dirStat.isDirectory()) {
+      throw new Error(`Unsupported file type in '${relativeDirPath}'`)
     }
-    if (!statResult.isFile()) {
-      throw new Error(`Unsupported file type in '${entry.name}'`)
+    await mkdir(currentDestDir, { recursive: false })
+
+    const directory = await opendir(currentSrcDir)
+    for await (const entry of directory) {
+      const srcPath = join(currentSrcDir, entry.name)
+      const dstPath = join(currentDestDir, entry.name)
+      const childRelativePath = join(relativeDirPath, entry.name)
+      admitExternalImportTreeEntry(budget, childRelativePath, false)
+      const statResult = await lstat(srcPath)
+      if (statResult.isSymbolicLink()) {
+        throw new Error(`Symlink not allowed in '${childRelativePath}'`)
+      }
+      if (statResult.isDirectory()) {
+        assertExternalImportTreeDepth(depth + 1)
+        await copyDirectory(srcPath, dstPath, childRelativePath, depth + 1)
+        continue
+      }
+      if (!statResult.isFile()) {
+        throw new Error(`Unsupported file type in '${childRelativePath}'`)
+      }
+      await copyLocalFileNoFollow(srcPath, dstPath, statResult)
     }
-    await copyLocalFileNoFollow(srcPath, dstPath, statResult)
   }
+
+  await copyDirectory(srcDir, destDir, '', 0)
 }
 
 async function copyLocalFileNoFollow(

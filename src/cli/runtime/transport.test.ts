@@ -2,9 +2,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import { sendRequest } from './transport'
+import { CLI_RUNTIME_JSON_STRUCTURE_LIMITS, sendRequest } from './transport'
 
 const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
@@ -113,5 +113,37 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
       code: 'runtime_unavailable'
     })
     expect(Date.now() - start).toBeLessThan(5000)
+  })
+
+  it('rejects excessive response nesting before JSON.parse', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', () => {
+        const depth = CLI_RUNTIME_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+        socket.write(`${'['.repeat(depth)}0${']'.repeat(depth)}\n`)
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const metadata: RuntimeMetadata = {
+      runtimeId: 'runtime-1',
+      pid: 123,
+      transports: [{ kind: 'unix', endpoint }],
+      authToken: 'token',
+      startedAt: 1
+    }
+
+    try {
+      await expect(sendRequest(metadata, 'status.get', undefined, 1000)).rejects.toMatchObject({
+        code: 'invalid_runtime_response'
+      })
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
   })
 })

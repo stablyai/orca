@@ -1,11 +1,12 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, truncateSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   ensureWindowsUserDataAclGrant,
   WINDOWS_ACL_GRANT_MARKER_FILE,
+  WINDOWS_ACL_GRANT_MARKER_MAX_BYTES,
   WINDOWS_ACL_GRANT_SCHEME_VERSION,
   type WindowsAclGrantResult
 } from './windows-user-data-acl'
@@ -83,6 +84,43 @@ describe('ensureWindowsUserDataAclGrant', () => {
     })
     expect(result).toEqual({ mode: 'marker-hit' })
     expect(fake.calls).toHaveLength(0)
+  })
+
+  it('accepts a matching ACL marker at the exact byte boundary', async () => {
+    const marker = JSON.stringify({
+      schemeVersion: WINDOWS_ACL_GRANT_SCHEME_VERSION,
+      identity: 'testuser',
+      grantedAt: 1
+    })
+    writeFileSync(
+      join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE),
+      marker + ' '.repeat(WINDOWS_ACL_GRANT_MARKER_MAX_BYTES - Buffer.byteLength(marker))
+    )
+    const fake = createFakeSpawn(0)
+
+    expect(
+      await awaitResult(userDataPath, {
+        identity: 'testuser',
+        spawnFn: fake.spawnFn as never
+      })
+    ).toEqual({ mode: 'marker-hit' })
+    expect(fake.calls).toHaveLength(0)
+  })
+
+  it('re-grants and replaces a sparse ACL marker one byte over the boundary', async () => {
+    const markerPath = join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE)
+    writeFileSync(markerPath, '{"schemeVersion":1,"identity":"testuser","grantedAt":1}')
+    truncateSync(markerPath, WINDOWS_ACL_GRANT_MARKER_MAX_BYTES + 1)
+    const fake = createFakeSpawn(0)
+
+    expect(
+      await awaitResult(userDataPath, {
+        identity: 'testuser',
+        spawnFn: fake.spawnFn as never
+      })
+    ).toEqual({ mode: 'granted' })
+    expect(fake.calls).toHaveLength(2)
+    expect(statSync(markerPath).size).toBeLessThan(WINDOWS_ACL_GRANT_MARKER_MAX_BYTES)
   })
 
   it('re-grants when the marker belongs to a different identity', async () => {

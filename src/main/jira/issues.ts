@@ -22,6 +22,16 @@ import type {
   JiraUser
 } from '../../shared/types'
 import {
+  boundedIntegrationErrorLog,
+  boundedIntegrationErrorMessage
+} from '../integration-error-message'
+import {
+  INTEGRATION_PAGINATION_MAX_ITEMS,
+  IntegrationPaginationBudget,
+  INTEGRATION_PAGINATION_MAX_PAGES
+} from '../integration-pagination-budget'
+import { runBoundedIntegrationFanout } from '../integration-fanout'
+import {
   acquire,
   apiBasePath,
   clearToken,
@@ -83,16 +93,13 @@ function getErrorStatus(error: unknown): number | null {
   return typeof status === 'number' && Number.isFinite(status) ? status : null
 }
 
-function toIssueSearchFailureError(error: unknown): unknown {
+function toIssueSearchFailureError(error: unknown): Error {
   const status = getErrorStatus(error)
-  if (
-    status === null ||
-    !(error instanceof Error) ||
-    error.message.startsWith(`Error ${status}:`)
-  ) {
-    return error
+  const message = boundedIntegrationErrorMessage(error)
+  if (status === null || message.startsWith(`Error ${status}:`)) {
+    return new Error(message)
   }
-  return new Error(`Error ${status}: ${error.message}`)
+  return new Error(boundedIntegrationErrorMessage(`Error ${status}: ${message}`))
 }
 
 function shouldSurfaceSiteFailure(
@@ -164,15 +171,26 @@ async function fetchPagedRecords(
   maxResults = 100
 ): Promise<JiraRecord[]> {
   const records: JiraRecord[] = []
+  const budget = new IntegrationPaginationBudget()
   let startAt = 0
-  for (let guard = 0; guard < 100; guard += 1) {
+  for (let guard = 0; guard < INTEGRATION_PAGINATION_MAX_PAGES; guard += 1) {
     const response = await jiraRequest<JiraPagedResponse<JiraRecord>>(
       entry,
       pathForPage(startAt, maxResults)
     )
     const items = getPageItems(response, key)
-    records.push(...items)
+    if (!budget.admitPage(items)) {
+      console.warn('[jira] Paginated result exceeded its retained result budget; truncating.')
+      break
+    }
+    for (const item of items) {
+      records.push(item)
+    }
     if (!shouldFetchNextPage(response, startAt, items, maxResults)) {
+      break
+    }
+    if (!budget.canRequestPage) {
+      console.warn('[jira] Paginated result reached its retained result budget; truncating.')
       break
     }
     startAt += asFiniteNumber(response.maxResults) ?? maxResults
@@ -374,7 +392,7 @@ async function searchIssuesForClient(
       fields: ISSUE_FIELDS
     })
   })
-  return (result.issues ?? []).map((issue) => mapJiraIssue(entry.site, issue))
+  return (result.issues ?? []).slice(0, limit).map((issue) => mapJiraIssue(entry.site, issue))
 }
 
 export async function listIssues(
@@ -397,8 +415,9 @@ export async function searchIssues(
   const safeLimit = clampLimit(limit)
   const failures: (JiraIssueSearchFailure | undefined)[] = Array.from({ length: entries.length })
   const surfaceSiteFailure = shouldSurfaceSiteFailure(siteId, entries.length)
-  const results = await Promise.all(
-    entries.map(async (entry, index) => {
+  const fanout = await runBoundedIntegrationFanout(
+    entries,
+    async (entry, index) => {
       await acquire()
       try {
         return await searchIssuesForClient(entry, jql.trim(), safeLimit)
@@ -410,13 +429,14 @@ export async function searchIssues(
         if (surfaceSiteFailure) {
           throw toIssueSearchFailureError(error)
         }
-        console.warn('[jira] searchIssues failed:', error)
+        console.warn('[jira] searchIssues failed:', boundedIntegrationErrorLog(error))
         failures[index] = { error: toIssueSearchFailureError(error), auth: authFailure }
         return [] as JiraIssue[]
       } finally {
         release()
       }
-    })
+    },
+    (issues) => issues
   )
   // 'all' fan-out: only surface an error when every connected site failed, so a
   // partial success (or a genuinely empty result) is not reported as an error.
@@ -426,9 +446,11 @@ export async function searchIssues(
   if (recordedFailures.length === entries.length) {
     throw (recordedFailures.find((failure) => !failure.auth) ?? recordedFailures[0]).error
   }
-  return entries.length === 1
-    ? results.flat().slice(0, safeLimit)
-    : sortAndLimitIssues(results.flat(), safeLimit)
+  if (fanout.truncated) {
+    console.warn('[jira] Cross-site search exceeded its aggregate result budget; truncating.')
+  }
+  const results = fanout.results.flat()
+  return entries.length === 1 ? results.slice(0, safeLimit) : sortAndLimitIssues(results, safeLimit)
 }
 
 export async function getIssue(
@@ -453,7 +475,7 @@ export async function getIssue(
           throw error
         }
       } else {
-        console.warn('[jira] getIssue failed:', error)
+        console.warn('[jira] getIssue failed:', boundedIntegrationErrorLog(error))
       }
     } finally {
       release()
@@ -631,7 +653,7 @@ export async function getIssueComments(
       clearToken(entry.site.id)
       throw error
     }
-    console.warn('[jira] getIssueComments failed:', error)
+    console.warn('[jira] getIssueComments failed:', boundedIntegrationErrorLog(error))
     return []
   } finally {
     release()
@@ -643,8 +665,9 @@ export async function listProjects(siteId?: JiraSiteSelection | null): Promise<J
   if (entries.length === 0) {
     return []
   }
-  const results = await Promise.all(
-    entries.map(async (entry) => {
+  const fanout = await runBoundedIntegrationFanout(
+    entries,
+    async (entry) => {
       await acquire()
       try {
         // Server/DC has no /project/search resource; /project returns the
@@ -659,7 +682,11 @@ export async function listProjects(siteId?: JiraSiteSelection | null): Promise<J
                 })
                 return `/rest/api/3/project/search?${params.toString()}`
               })
-        return projects.map((project) => mapProject(project, entry.site))
+        const retainedProjects = projects.slice(0, INTEGRATION_PAGINATION_MAX_ITEMS)
+        if (projects.length > retainedProjects.length) {
+          console.warn('[jira] Projects returned more rows than supported; truncating.')
+        }
+        return retainedProjects.map((project) => mapProject(project, entry.site))
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.site.id)
@@ -667,15 +694,19 @@ export async function listProjects(siteId?: JiraSiteSelection | null): Promise<J
             throw error
           }
         } else {
-          console.warn('[jira] listProjects failed:', error)
+          console.warn('[jira] listProjects failed:', boundedIntegrationErrorLog(error))
         }
         return []
       } finally {
         release()
       }
-    })
+    },
+    (projects) => projects
   )
-  return results.flat().sort((a, b) => a.name.localeCompare(b.name))
+  if (fanout.truncated) {
+    console.warn('[jira] Cross-site projects exceeded their aggregate result budget; truncating.')
+  }
+  return fanout.results.flat().sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export async function listIssueTypes(
@@ -704,7 +735,7 @@ export async function listIssueTypes(
       clearToken(entry.site.id)
       throw error
     }
-    console.warn('[jira] listIssueTypes failed:', error)
+    console.warn('[jira] listIssueTypes failed:', boundedIntegrationErrorLog(error))
     return []
   } finally {
     release()
@@ -723,9 +754,10 @@ export async function listCreateFields(
   await acquire()
   try {
     const fields: JiraCreateField[] = []
+    const budget = new IntegrationPaginationBudget()
     let startAt = 0
     const maxResults = 100
-    for (let guard = 0; guard < 100; guard += 1) {
+    for (let guard = 0; guard < INTEGRATION_PAGINATION_MAX_PAGES; guard += 1) {
       const params = new URLSearchParams({
         maxResults: String(maxResults),
         startAt: String(startAt)
@@ -737,12 +769,21 @@ export async function listCreateFields(
         )}/issuetypes/${encodeURIComponent(issueTypeId)}?${params.toString()}`
       )
       const records = getCreateFieldRecords(response)
-      fields.push(
-        ...records
-          .map((record) => mapCreateField(record))
-          .filter((field): field is JiraCreateField => field !== null)
-      )
+      if (!budget.admitPage(records)) {
+        console.warn('[jira] Create fields exceeded their retained result budget; truncating.')
+        break
+      }
+      for (const record of records) {
+        const field = mapCreateField(record)
+        if (field) {
+          fields.push(field)
+        }
+      }
       if (!shouldFetchNextPage(response, startAt, records, maxResults)) {
+        break
+      }
+      if (!budget.canRequestPage) {
+        console.warn('[jira] Create fields reached their retained result budget; truncating.')
         break
       }
       startAt += asFiniteNumber(response.maxResults) ?? maxResults
@@ -753,7 +794,7 @@ export async function listCreateFields(
       clearToken(entry.site.id)
       throw error
     }
-    console.warn('[jira] listCreateFields failed:', error)
+    console.warn('[jira] listCreateFields failed:', boundedIntegrationErrorLog(error))
     return []
   } finally {
     release()
@@ -768,13 +809,16 @@ export async function listPriorities(siteId?: string | null): Promise<JiraPriori
   await acquire()
   try {
     const response = await jiraRequest<JiraRecord[]>(entry, `${apiBasePath(entry.site)}/priority`)
-    return response.map(mapPriority).filter((priority): priority is JiraPriority => !!priority)
+    return response
+      .slice(0, INTEGRATION_PAGINATION_MAX_ITEMS)
+      .map(mapPriority)
+      .filter((priority): priority is JiraPriority => !!priority)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
       throw error
     }
-    console.warn('[jira] listPriorities failed:', error)
+    console.warn('[jira] listPriorities failed:', boundedIntegrationErrorLog(error))
     return []
   } finally {
     release()
@@ -802,13 +846,16 @@ export async function listAssignableUsers(
       entry,
       `${apiBasePath(entry.site)}/user/assignable/search?${params.toString()}`
     )
-    return response.map(mapUser).filter((user): user is JiraUser => !!user)
+    return response
+      .slice(0, 50)
+      .map(mapUser)
+      .filter((user): user is JiraUser => !!user)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
       throw error
     }
-    console.warn('[jira] listAssignableUsers failed:', error)
+    console.warn('[jira] listAssignableUsers failed:', boundedIntegrationErrorLog(error))
     return []
   } finally {
     release()
@@ -829,17 +876,19 @@ export async function listTransitions(
       entry,
       `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/transitions`
     )
-    return (response.transitions ?? []).map((transition) => ({
-      id: asString(transition.id),
-      name: asString(transition.name),
-      to: mapStatus(transition.to)
-    }))
+    return (response.transitions ?? [])
+      .slice(0, INTEGRATION_PAGINATION_MAX_ITEMS)
+      .map((transition) => ({
+        id: asString(transition.id),
+        name: asString(transition.name),
+        to: mapStatus(transition.to)
+      }))
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
       throw error
     }
-    console.warn('[jira] listTransitions failed:', error)
+    console.warn('[jira] listTransitions failed:', boundedIntegrationErrorLog(error))
     return []
   } finally {
     release()
@@ -891,12 +940,18 @@ export async function getProjectStatusOrder(
     const seenStatusIds = new Set<string>()
     const statusIdsByColumn: string[][] = []
     for (const column of columns) {
+      if (seenStatusIds.size >= INTEGRATION_PAGINATION_MAX_ITEMS) {
+        break
+      }
       const statuses = asRecord(column).statuses
       if (!Array.isArray(statuses)) {
         continue
       }
       const columnStatusIds: string[] = []
       for (const status of statuses) {
+        if (seenStatusIds.size >= INTEGRATION_PAGINATION_MAX_ITEMS) {
+          break
+        }
         const statusId = asIdentifier(asRecord(status).id)
         if (statusId && !seenStatusIds.has(statusId)) {
           seenStatusIds.add(statusId)
@@ -913,7 +968,7 @@ export async function getProjectStatusOrder(
       clearToken(entry.site.id)
       throw error
     }
-    console.warn('[jira] getProjectStatusOrder failed:', error)
+    console.warn('[jira] getProjectStatusOrder failed:', boundedIntegrationErrorLog(error))
     return { statusIdsByColumn: [] }
   } finally {
     release()

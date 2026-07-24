@@ -1,19 +1,19 @@
-import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
+import type {
+  ClipboardEventHandler,
+  CompositionEventHandler,
+  KeyboardEventHandler,
+  RefObject
+} from 'react'
 import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { basename } from '@/lib/path'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
-import type { ComposerAutocomplete, SlashCommandSuggestion } from './native-chat-composer-state'
-import {
-  NativeChatMentionHint,
-  NativeChatSkillMenu,
-  NativeChatSlashMenu
-} from './NativeChatAutocompleteMenus'
+import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import { NativeChatMentionHint, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import { nativeChatComposerPlaceholder } from './native-chat-composer-target'
-import type { DiscoveredSkill } from '../../../../shared/skills'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -38,10 +38,13 @@ export type NativeChatComposerFieldProps = {
   onDraftChange: (value: string, element: HTMLTextAreaElement) => void
   onTextareaSelect: (element: HTMLTextAreaElement) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
+  onCompositionStart: CompositionEventHandler<HTMLTextAreaElement>
+  onCompositionEnd: CompositionEventHandler<HTMLTextAreaElement>
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>
-  onChooseSlash: (command: SlashCommandSuggestion) => void
+  pickerListboxId: string
+  onChoosePickerItem: (item: NativeChatPickerItem) => void
+  onRetrySkills: () => void
   onAcceptMention: () => void
-  onChooseSkill: (skill: DiscoveredSkill) => void
   onRemoveImageAttachment: (id: string) => void
   onAttach: () => void
   onDictationToggle: () => void
@@ -77,10 +80,13 @@ export function NativeChatComposerField({
   onDraftChange,
   onTextareaSelect,
   onKeyDown,
+  onCompositionStart,
+  onCompositionEnd,
   onPaste,
-  onChooseSlash,
+  pickerListboxId,
+  onChoosePickerItem,
+  onRetrySkills,
   onAcceptMention,
-  onChooseSkill,
   onRemoveImageAttachment,
   onAttach,
   onDictationToggle,
@@ -96,22 +102,17 @@ export function NativeChatComposerField({
       {/* Extra bottom padding keeps the input box off the window rim. */}
       <div className="px-3 pt-2 pb-4 sm:px-4">
         <div className="relative mx-auto w-full max-w-4xl">
-          {autocomplete.mode === 'slash' && autocomplete.suggestions.length > 0 ? (
-            <NativeChatSlashMenu
-              suggestions={autocomplete.suggestions}
+          {autocomplete.mode === 'slash' || autocomplete.mode === 'skill' ? (
+            <NativeChatPickerMenu
+              autocomplete={autocomplete}
               activeIndex={activeSuggestion}
-              onChoose={onChooseSlash}
+              listboxId={pickerListboxId}
+              onChoose={onChoosePickerItem}
+              onRetry={onRetrySkills}
             />
           ) : null}
           {autocomplete.mode === 'mention' ? (
             <NativeChatMentionHint query={autocomplete.query} onAccept={onAcceptMention} />
-          ) : null}
-          {autocomplete.mode === 'skill' ? (
-            <NativeChatSkillMenu
-              suggestions={autocomplete.suggestions}
-              activeIndex={activeSuggestion}
-              onChoose={onChooseSkill}
-            />
           ) : null}
           {notice ? (
             <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -168,8 +169,22 @@ export function NativeChatComposerField({
               rows={2}
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
               onKeyDown={onKeyDown}
+              onCompositionStart={onCompositionStart}
+              onCompositionEnd={onCompositionEnd}
               onPaste={onPaste}
               onSelect={(e) => onTextareaSelect(e.currentTarget)}
+              aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}
+              aria-controls={
+                autocomplete.mode === 'slash' || autocomplete.mode === 'skill'
+                  ? pickerListboxId
+                  : undefined
+              }
+              aria-activedescendant={
+                (autocomplete.mode === 'slash' || autocomplete.mode === 'skill') &&
+                autocomplete.items.length > 0
+                  ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
+                  : undefined
+              }
               placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
               // scrollbar-sleek keeps the overflow gutter from showing the heavy

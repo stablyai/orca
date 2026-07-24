@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as childProcessModule from 'node:child_process'
 import type * as fsModule from 'node:fs'
+import type * as boundedFileReaderModule from '../../shared/node-bounded-file-reader'
 
-const { sessionFromPartitionMock, dialogShowOpenDialogMock } = vi.hoisted(() => ({
-  sessionFromPartitionMock: vi.fn(),
-  dialogShowOpenDialogMock: vi.fn()
-}))
+const { sessionFromPartitionMock, dialogShowOpenDialogMock, boundedLocalStateReadMock } =
+  vi.hoisted(() => ({
+    sessionFromPartitionMock: vi.fn(),
+    dialogShowOpenDialogMock: vi.fn(),
+    boundedLocalStateReadMock: vi.fn<(filePath: string) => string>()
+  }))
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: vi.fn() },
@@ -13,10 +16,30 @@ vi.mock('electron', () => ({
   session: { fromPartition: sessionFromPartitionMock }
 }))
 
+vi.mock('../../shared/node-bounded-file-reader', async () => {
+  const actual = await vi.importActual<typeof boundedFileReaderModule>(
+    '../../shared/node-bounded-file-reader'
+  )
+  return {
+    ...actual,
+    readNodeFileSyncWithinLimit: (filePath: string, maxBytes: number) => {
+      const buffer = Buffer.from(boundedLocalStateReadMock(filePath))
+      if (buffer.byteLength > maxBytes) {
+        throw new actual.NodeFileReadTooLargeError(buffer.byteLength, maxBytes)
+      }
+      return { buffer, stats: { size: buffer.byteLength } }
+    }
+  }
+})
+
 import { BROWSER_FAMILY_LABELS } from '../../shared/constants'
 
 function slashPath(pathValue: string): string {
   return pathValue.replaceAll('\\', '/')
+}
+
+function mockLocalState(value: unknown): void {
+  boundedLocalStateReadMock.mockReturnValue(JSON.stringify(value))
 }
 
 describe('detectInstalledBrowsers — Comet', () => {
@@ -32,6 +55,10 @@ describe('detectInstalledBrowsers — Comet', () => {
     vi.resetModules()
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     process.env.HOME = '/Users/test'
+    boundedLocalStateReadMock.mockReset()
+    boundedLocalStateReadMock.mockImplementation(() => {
+      throw new Error('ENOENT')
+    })
   })
 
   afterEach(() => {
@@ -41,6 +68,7 @@ describe('detectInstalledBrowsers — Comet', () => {
   })
 
   it('detects Comet when its data directory and Cookies DB exist', async () => {
+    mockLocalState({ profile: { info_cache: { Default: { name: 'Default' } } } })
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
       return {
@@ -88,6 +116,15 @@ describe('detectInstalledBrowsers — Comet', () => {
   })
 
   it('enumerates all Comet profiles from Local State info_cache', async () => {
+    mockLocalState({
+      profile: {
+        info_cache: {
+          Default: { name: 'Personal' },
+          'Profile 1': { name: 'Work' },
+          'Profile 2': { name: 'Research' }
+        }
+      }
+    })
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
       return {
@@ -130,6 +167,13 @@ describe('detectInstalledBrowsers — Comet', () => {
   })
 
   it('ignores Comet profile directories that escape the browser root', async () => {
+    mockLocalState({
+      profile: {
+        info_cache: {
+          '../Outside': { name: 'Outside' }
+        }
+      }
+    })
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
       return {
@@ -195,6 +239,7 @@ describe('detectInstalledBrowsers — Comet', () => {
   })
 
   it('skips Comet when the data directory exists but no Cookies DB is present', async () => {
+    mockLocalState({ profile: { info_cache: { Default: { name: 'Default' } } } })
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
       return {

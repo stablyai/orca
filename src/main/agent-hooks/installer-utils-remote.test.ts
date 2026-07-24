@@ -1,8 +1,11 @@
+import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { SFTPWrapper } from 'ssh2'
 
+import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
 import {
   readHooksJsonRemote,
+  readTextFileRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote,
   writeTextFileRemoteAtomic
@@ -13,6 +16,7 @@ type FakeFs = {
   dirs: Set<string>
   modes: Map<string, number>
   openSshRenameCount: number
+  readdirCount: number
 }
 
 function createFakeSftp(
@@ -30,7 +34,8 @@ function createFakeSftp(
     files: new Map(),
     dirs: new Set(['/']),
     modes: new Map(),
-    openSshRenameCount: 0
+    openSshRenameCount: 0,
+    readdirCount: 0
   }
   const noEntryError = (path: string): { code: number; message: string } => ({
     code: 2,
@@ -96,6 +101,10 @@ function createFakeSftp(
       cb(null)
     },
     stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
+      if (fs.dirs.has(path)) {
+        cb(null, fakeStats(0o040755))
+        return
+      }
       if (!fs.files.has(path)) {
         cb(noEntryError(path))
         return
@@ -103,6 +112,7 @@ function createFakeSftp(
       cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
     },
     readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
+      fs.readdirCount += 1
       if (fs.dirs.has(path)) {
         cb(null, [])
         return
@@ -201,6 +211,14 @@ describe('installer-utils-remote', () => {
     expect(fs.modes.get('/home/u/.claude/settings.json')).toBe(0o600)
   })
 
+  it('probes mkdir ancestors with stat instead of materializing directory listings', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    await writeHooksJsonRemote(sftp, '/home/u/.claude/settings.json', { hooks: {} })
+
+    expect(fs.readdirCount).toBe(0)
+  })
+
   it('preserves existing config file mode across atomic replacement', async () => {
     const { sftp, fs } = createFakeSftp()
     const path = '/home/u/.codex/config.toml'
@@ -286,5 +304,45 @@ describe('installer-utils-remote', () => {
     // identical file body.
     await writeHooksJsonRemote(sftp, path, { hooks: {} })
     expect(fs.files.get(path)).toBe(beforeKey)
+  })
+
+  it('preserves ordinary UTF-8 contents through the bounded remote stream', async () => {
+    const { sftp } = createFakeSftp()
+    const content = 'stable 🐋 config'
+    sftp.createReadStream = (() => Readable.from([Buffer.from(content)])) as never
+
+    await expect(readTextFileRemote(sftp, '/home/u/config.toml', 1024)).resolves.toBe(content)
+  })
+
+  it('accepts a streamed remote file at the exact byte cap', async () => {
+    const { sftp } = createFakeSftp()
+    sftp.createReadStream = (() => Readable.from([Buffer.alloc(1024, 0x61)])) as never
+
+    await expect(readTextFileRemote(sftp, '/home/u/config.toml', 1024)).resolves.toHaveLength(1024)
+  })
+
+  it('bounds metadata when a remote emits one byte per stream event', async () => {
+    const { sftp } = createFakeSftp()
+    const byte = Buffer.from('x')
+    sftp.createReadStream = (() =>
+      Readable.from(Array.from({ length: 100_000 }, () => byte))) as never
+
+    await expect(readTextFileRemote(sftp, '/home/u/config.toml', 100_000)).resolves.toBe(
+      'x'.repeat(100_000)
+    )
+  })
+
+  it('stops streamed remote reads at the byte cap and leaves the existing file intact', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.config/agent/config.toml'
+    fs.files.set(path, 'original')
+    sftp.createReadStream = (() => Readable.from([Buffer.alloc(1025)])) as never
+
+    await expect(readTextFileRemote(sftp, path, 1024)).rejects.toThrow(NodeFileReadTooLargeError)
+    await expect(writeTextFileRemoteAtomic(sftp, path, 'replacement', 1024)).rejects.toThrow(
+      NodeFileReadTooLargeError
+    )
+    expect(fs.files.get(path)).toBe('original')
+    expect(Array.from(fs.files.keys()).some((key) => key.includes('.tmp'))).toBe(false)
   })
 })

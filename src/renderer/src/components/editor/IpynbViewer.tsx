@@ -32,7 +32,11 @@ import {
   Trash2
 } from 'lucide-react'
 import { monaco } from '@/lib/monaco-setup'
-import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import {
+  computeEditorFontSize,
+  resolveEditorFontFamily,
+  resolveEditorFontFamilyOrInherit
+} from '@/lib/editor-font-zoom'
 import { getConnectionId } from '@/lib/connection-context'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
@@ -71,6 +75,7 @@ import {
   type IpynbOutputItem
 } from './ipynb-parse'
 import { translate } from '@/i18n/i18n'
+import { buildImageDataUri } from '../../../../shared/image-data-uri'
 
 type IpynbViewerProps = {
   content: string
@@ -80,7 +85,7 @@ type IpynbViewerProps = {
   scrollCacheKey: string
   onContentChange: (content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
-  onSave: (content: string) => Promise<void>
+  onSave: (content: string) => Promise<boolean>
 }
 
 const NOTEBOOK_SOURCE_COMMIT_DELAY_MS = 400
@@ -145,7 +150,7 @@ function dataUriForImage(item: IpynbOutputItem): string | null {
   if (item.mime === 'image/svg+xml') {
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(valueToText(item.value))}`
   }
-  return `data:${item.mime};base64,${value}`
+  return buildImageDataUri(item.mime, value)
 }
 
 function NotebookCellHeader({
@@ -409,7 +414,7 @@ function CodeCell({
         onChange={(value) => onChange(value ?? '')}
         options={{
           automaticLayout: true,
-          fontFamily: settings?.terminalFontFamily || 'monospace',
+          fontFamily: resolveEditorFontFamily(settings),
           fontSize,
           glyphMargin: false,
           lineNumbersMinChars: 3,
@@ -843,7 +848,10 @@ export default function IpynbViewer({
     setRunError(null)
     setRunningCellIndex(index)
     try {
-      await onSave(latestContent)
+      const didSave = await onSave(latestContent)
+      if (!didSave) {
+        return
+      }
       const result = await window.api.notebook.runPythonCell({
         filePath,
         code: cell.source,
@@ -874,7 +882,7 @@ export default function IpynbViewer({
     <div
       ref={setRootRef}
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
-      style={{ fontSize, fontFamily: settings?.terminalFontFamily || undefined }}
+      style={{ fontSize, fontFamily: resolveEditorFontFamilyOrInherit(settings) }}
       onKeyDownCapture={handleNotebookKeyDownCapture}
       onPointerDownCapture={handleNotebookPointerDownCapture}
     >
@@ -899,7 +907,7 @@ export default function IpynbViewer({
             {translate('auto.components.editor.IpynbViewer.329764e9fc', 'BETA')}
           </span>
           <span className="font-mono">
-            {translate('auto.components.editor.IpynbViewer.8c3b21369a', 'nbformat')}
+            {translate('auto.components.editor.IpynbViewer.8c3b21369a', 'nbformat')}{' '}
             {notebook.nbformat}
           </span>
         </div>

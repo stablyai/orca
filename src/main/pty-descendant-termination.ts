@@ -162,6 +162,13 @@ export function collectDescendantRows(
       childrenByPpid.set(row.ppid, [row])
     }
   }
+  // Why: a ppid walk is only meaningful while the root is alive in this snapshot.
+  // An absent root has already exited — its real descendants reparent to pid 1 and
+  // become unreachable by ppid, so any rows still pointing at the vacated PID are a
+  // PID-reuse coincidence. Sweeping them could signal an unrelated process, so bail.
+  if (!rootRow) {
+    return { rootPgid: null, descendants: [], capturedAtMs }
+  }
   const descendants: ProcessTableRow[] = []
   const queue = [rootPid]
   const visited = new Set(queue)
@@ -178,7 +185,7 @@ export function collectDescendantRows(
       queue.push(child.pid)
     }
   }
-  return { rootPgid: rootRow?.pgid ?? null, descendants, capturedAtMs }
+  return { rootPgid: rootRow.pgid, descendants, capturedAtMs }
 }
 
 type SnapshotDeps = {

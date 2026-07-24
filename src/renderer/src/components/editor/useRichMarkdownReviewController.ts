@@ -11,6 +11,7 @@ import {
   type RichMarkdownAnnotationTarget
 } from './rich-markdown-review-annotations'
 import { shouldExpandRichMarkdownReviewRail } from './rich-markdown-review-note-layout'
+import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
 import { useRichMarkdownReviewData } from './useRichMarkdownReviewData'
 import { useRichMarkdownReviewCopyFeedback } from './useRichMarkdownReviewCopyFeedback'
 import { useRichMarkdownReviewRailController } from './useRichMarkdownReviewRailController'
@@ -201,15 +202,26 @@ export function useRichMarkdownReviewController({
     ]
   )
 
-  // Why: reports whether a composer actually opened so keyboard callers can
-  // leave the chord unconsumed when this no-ops (mouse callers ignore it).
+  // Why: reports whether a composer actually opened (or an open draft was kept)
+  // so keyboard callers can leave the chord unconsumed only on true no-ops.
   const openAnnotationPopover = useCallback(
     (requireLiveSelection = false): boolean => {
       if (!canAnnotateRichMarkdown) {
         return false
       }
+      // Why: product B — second chord while drafting must consume the key without
+      // remounting the composer and silently discarding the in-progress note.
+      if (annotationPopoverRef.current) {
+        return true
+      }
       const editor = editorRef.current
       const root = rootRef.current
+      // Why: an immediate chord after a mouse-drag can run before ProseMirror
+      // copies the native selection into editor.state; flush it before reading
+      // the target so the composer opens on the live selection, not stale state.
+      if (editor) {
+        flushPendingProseMirrorSelection(editor)
+      }
       // Why: keyboard callers require the live selection to avoid stale-target
       // races; the mouse button may use the target from the render that exposed it.
       const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
@@ -230,6 +242,9 @@ export function useRichMarkdownReviewController({
           activeRange: { from: target.from, to: target.to }
         })
       )
+      // Why: claim the draft ref before setState so a same-tick second chord
+      // (or OS key-repeat racing the open) cannot remount and discard text.
+      annotationPopoverRef.current = target
       // Why: opening a draft should reserve the notes rail immediately; saved notes stay visible.
       setReviewRailOpen(true)
       setAnnotationPopover(target)

@@ -105,6 +105,19 @@ function installModuleMocks(
       fsState.present.add(key)
     })
   }))
+  vi.doMock('../../shared/node-bounded-file-reader', () => ({
+    readNodeFileSyncWithinLimit: vi.fn((p: string, maxBytes: number) => {
+      const value = fsState.files.get(fsKey(p))
+      if (value === undefined) {
+        throw new Error('ENOENT')
+      }
+      const buffer = Buffer.from(value)
+      if (buffer.byteLength > maxBytes) {
+        throw new Error('File too large')
+      }
+      return { buffer, stats: {} }
+    })
+  }))
 
   vi.doMock('./browser-manager', () => ({
     browserManager: {
@@ -205,6 +218,73 @@ describe('BrowserSessionRegistry persistence', () => {
       partition: profile!.partition,
       label: 'Work Browser'
     })
+  })
+
+  it('ignores oversized browser-session metadata', async () => {
+    const fsState = createFsState()
+    fsState.files.set(META_PATH, ' '.repeat(1024 * 1024 + 1))
+    fsState.present.add(META_PATH)
+
+    installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+    browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
+
+    expect(browserSessionRegistry.listProfiles()).toHaveLength(1)
+    expect(browserSessionRegistry.listProfiles()[0]?.id).toBe('default')
+  })
+
+  it('rejects an oversized profile label without retaining or persisting it', async () => {
+    const fsState = createFsState()
+    installModuleMocks(fsState)
+    const { browserSessionRegistry, MAX_BROWSER_SESSION_LABEL_BYTES } =
+      await import('./browser-session-registry')
+
+    expect(
+      browserSessionRegistry.createProfile(
+        'isolated',
+        'x'.repeat(MAX_BROWSER_SESSION_LABEL_BYTES + 1)
+      )
+    ).toBeNull()
+    expect(browserSessionRegistry.listProfiles()).toHaveLength(1)
+    expect(fsState.files.has(META_PATH)).toBe(false)
+  })
+
+  it('keeps profile creation bounded while preserving the last readable metadata snapshot', async () => {
+    const fsState = createFsState()
+    installModuleMocks(fsState)
+    const { browserSessionRegistry, MAX_BROWSER_SESSION_LABEL_BYTES } =
+      await import('./browser-session-registry')
+    const label = 'x'.repeat(MAX_BROWSER_SESSION_LABEL_BYTES - 8)
+    for (let index = 0; index < 256; index += 1) {
+      browserSessionRegistry.createProfile('isolated', `${index}-${label}`)
+    }
+
+    const durableProfiles = JSON.parse(fsState.files.get(META_PATH) ?? '{}').profiles
+    expect(browserSessionRegistry.listProfiles().length).toBeGreaterThan(durableProfiles.length + 1)
+    expect(Buffer.byteLength(fsState.files.get(META_PATH) ?? '')).toBeLessThanOrEqual(1024 * 1024)
+  })
+
+  it('preserves metadata when a pending import path would exceed the byte limit', async () => {
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: null,
+      userAgent: null,
+      userAgentByPartition: {},
+      pendingCookieDbPath: null,
+      pendingCookieImports: {},
+      profiles: []
+    })
+    const before = fsState.files.get(META_PATH)
+    installModuleMocks(fsState)
+    const { browserSessionRegistry, MAX_BROWSER_SESSION_META_FILE_BYTES } =
+      await import('./browser-session-registry')
+
+    browserSessionRegistry.setPendingCookieImport(
+      'persist:orca-browser',
+      'x'.repeat(MAX_BROWSER_SESSION_META_FILE_BYTES)
+    )
+
+    expect(fsState.files.get(META_PATH)).toBe(before)
   })
 
   it('merges partition-keyed pending entries without clobbering unrelated entries', async () => {

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getActiveMarkdownExportPayload } from './markdown-export-extract'
+import { getActiveMarkdownExportPayload, inlineBlobImageSources } from './markdown-export-extract'
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -14,10 +14,11 @@ describe('getActiveMarkdownExportPayload', () => {
     vi.clearAllMocks()
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
-      })
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } })
+        )
     )
     const { useAppStore } = await import('@/store')
     vi.mocked(useAppStore.getState).mockReturnValue({
@@ -65,5 +66,31 @@ describe('getActiveMarkdownExportPayload', () => {
         root
       })
     ).rejects.toThrow('Failed to inline image for PDF export')
+  })
+
+  it('rejects streamed image bytes before the rendered fragment can exceed its cap', async () => {
+    let cancelled = false
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array(12))
+            controller.enqueue(new Uint8Array(12))
+          },
+          cancel() {
+            cancelled = true
+          }
+        }),
+        { headers: { 'content-type': 'image/png' } }
+      )
+    )
+    const root = document.createElement('div')
+    root.innerHTML = '<img src="blob:large">'
+    const prefixOnly = '<img src="data:image/png;base64,">'.length
+
+    await expect(inlineBlobImageSources(root, prefixOnly + 16)).rejects.toThrow(
+      'HTML export exceeds the PDF memory limit'
+    )
+    expect(cancelled).toBe(true)
   })
 })

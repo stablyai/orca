@@ -75,7 +75,11 @@ function writeIntentSnapshot(
   nextTerminalScrollIntentRevision += 1
   terminalScrollIntentByTerminal.set(terminal, intent)
   const key = terminalScrollIntentKeyByTerminal.get(terminal)
-  if (key) {
+  if (
+    key &&
+    terminalScrollIntentKeyBindingByTerminal.get(terminal) ===
+      terminalScrollIntentBindingByKey.get(key)
+  ) {
     terminalScrollIntentByKey.set(key, intent)
   }
   return intent
@@ -120,6 +124,13 @@ export function isTerminalScrollIntentKeyBindingCurrent(
     terminalScrollIntentKeyBindingByTerminal.get(terminal) ===
     terminalScrollIntentBindingByKey.get(key)
   )
+}
+
+export function releaseTerminalScrollIntentKeys(keys: Iterable<TerminalScrollIntentKey>): void {
+  for (const key of keys) {
+    terminalScrollIntentByKey.delete(key)
+    terminalScrollIntentBindingByKey.delete(key)
+  }
 }
 
 export function markTerminalFollowOutput(terminal: TerminalScrollIntentTarget): void {

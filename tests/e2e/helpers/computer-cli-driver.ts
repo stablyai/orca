@@ -3,6 +3,7 @@ import { access, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { createElectronHomeIsolation } from './electron-home-isolation'
 
 const execFileAsync = promisify(execFile)
 const RUNTIME_METADATA_FILE = 'orca-runtime.json'
@@ -44,10 +45,9 @@ async function runOrcaCliOnce(args: string[]): Promise<CliResult> {
   const devCli = join(process.cwd(), 'config/scripts/orca-dev.mjs')
   const command = process.env.ORCA_COMPUTER_CLI ?? process.execPath
   const cliArgs = process.env.ORCA_COMPUTER_CLI ? args : [devCli, ...args]
-  const env = { ...process.env }
-  if (!process.env.ORCA_COMPUTER_CLI && !env.ORCA_DEV_USER_DATA_PATH) {
-    env.ORCA_DEV_USER_DATA_PATH = await getComputerE2eOrcaDevUserDataPath()
-  }
+  const env = process.env.ORCA_COMPUTER_CLI
+    ? { ...process.env }
+    : await createComputerE2ERuntimeEnv()
   try {
     const result = await execFileAsync(command, cliArgs, {
       env,
@@ -140,10 +140,7 @@ function delay(ms: number): Promise<void> {
 async function ensureOrcaRuntimeServed(): Promise<void> {
   if (!orcaServeProcess || orcaServeProcess.exitCode !== null) {
     const devCli = join(process.cwd(), 'config/scripts/orca-dev.mjs')
-    const env = {
-      ...process.env,
-      ORCA_DEV_USER_DATA_PATH: await getComputerE2eOrcaDevUserDataPath()
-    }
+    const env = await createComputerE2ERuntimeEnv()
     orcaServeStdout = ''
     orcaServeStderr = ''
     orcaServeProcess = spawn(process.execPath, [devCli, 'serve', '--no-pairing', '--json'], {
@@ -164,6 +161,28 @@ async function ensureOrcaRuntimeServed(): Promise<void> {
     })
   }
   await waitForOrcaRuntimeReady()
+}
+
+async function createComputerE2ERuntimeEnv(): Promise<NodeJS.ProcessEnv> {
+  const userDataDir =
+    process.env.ORCA_DEV_USER_DATA_PATH ?? (await getComputerE2eOrcaDevUserDataPath())
+  // Why: agent runtimes export ELECTRON_RUN_AS_NODE, which would make the
+  // spawned Electron behave as plain Node; strip it like every other caller.
+  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...inheritedEnv } = process.env
+  void _electronRunAsNode
+  const isolation = createElectronHomeIsolation({
+    inheritedEnv,
+    launchEnv: {},
+    extraEnv: {},
+    userDataDir,
+    codexRealHomeEnabled: false
+  })
+  return {
+    ...isolation.env,
+    // Why: the Node CLI and the Electron child must resolve the same runtime
+    // metadata while the E2E boundary owns their home and Codex paths.
+    ORCA_DEV_USER_DATA_PATH: userDataDir
+  }
 }
 
 function isMissingRuntimeMetadataError(args: string[], error: unknown): boolean {

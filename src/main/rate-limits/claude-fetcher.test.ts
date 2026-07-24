@@ -15,18 +15,25 @@ import {
 } from '../claude-accounts/keychain'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 
-const { netFetchMock, readFileMock, resolveProxyMock, setProxyMock, appGetPathMock } = vi.hoisted(
-  () => ({
-    netFetchMock: vi.fn(),
-    readFileMock: vi.fn(),
-    resolveProxyMock: vi.fn(),
-    setProxyMock: vi.fn(),
-    appGetPathMock: vi.fn()
-  })
-)
+const {
+  netFetchMock,
+  readFileMock,
+  readFileSyncMock,
+  resolveProxyMock,
+  setProxyMock,
+  appGetPathMock
+} = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
+  readFileMock: vi.fn(),
+  readFileSyncMock: vi.fn(),
+  resolveProxyMock: vi.fn(),
+  setProxyMock: vi.fn(),
+  appGetPathMock: vi.fn()
+}))
 
-vi.mock('node:fs/promises', () => ({
-  readFile: readFileMock
+vi.mock('../integration-credential-file', () => ({
+  readIntegrationCredentialFileSyncText: readFileSyncMock,
+  readIntegrationCredentialFileText: readFileMock
 }))
 
 vi.mock('electron', () => ({
@@ -74,6 +81,7 @@ describe('fetchClaudeRateLimits', () => {
     tempDir = null
     vi.clearAllMocks()
     readFileMock.mockRejectedValue(new Error('missing file'))
+    readFileSyncMock.mockImplementation((filePath: string) => readFileSync(filePath, 'utf8'))
     vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(null)
     vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValue(null)
@@ -423,7 +431,7 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
-  it('ignores inactive scoped Fable usage and retains the legacy OAuth fallback', async () => {
+  it('surfaces inactive scoped Fable usage over the legacy OAuth fallback', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
@@ -454,7 +462,47 @@ describe('fetchClaudeRateLimits', () => {
     )
 
     await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
-      fableWeekly: { usedPercent: 33 }
+      fableWeekly: { usedPercent: 90 }
+    })
+  })
+
+  it('surfaces an inactive scoped Fable entry when no legacy Fable field exists (#8979)', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-token' } })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          five_hour: { utilization: 11 },
+          seven_day: { utilization: 22 },
+          limits: [
+            {
+              kind: 'weekly_scoped',
+              percent: 64,
+              resets_at: '2026-07-24T20:00:00+00:00',
+              is_active: false,
+              scope: { model: { display_name: 'Fable' } }
+            }
+          ]
+        }),
+        { status: 200 }
+      )
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      fableWeekly: {
+        usedPercent: 64,
+        resetsAt: Date.parse('2026-07-24T20:00:00+00:00')
+      }
     })
   })
 
@@ -704,10 +752,7 @@ describe('fetchClaudeRateLimits', () => {
       status: 'ok'
     })
 
-    expect(readFileMock).toHaveBeenCalledWith(
-      join('/Users/test/.claude', '.credentials.json'),
-      'utf-8'
-    )
+    expect(readFileMock).toHaveBeenCalledWith(join('/Users/test/.claude', '.credentials.json'))
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://api.anthropic.com/api/oauth/usage',
       expect.objectContaining({
@@ -816,15 +861,20 @@ describe('fetchClaudeRateLimits', () => {
             message: 'Rate limited. Please try again later.'
           }
         }),
-        { status: 429 }
+        { status: 429, headers: { 'retry-after': '3000' } }
       )
     )
 
-    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+    const before = Date.now()
+    const result = await fetchClaudeRateLimits({ authPreparation })
+    expect(result).toMatchObject({
       provider: 'claude',
       status: 'error',
-      error: 'Claude usage is rate limited right now.'
+      error: 'Claude usage is rate limited right now.',
+      usageMetadata: expect.objectContaining({ failureKind: 'rate-limited' })
     })
+    expect(result.usageMetadata?.retryAtMs).toBeGreaterThanOrEqual(before + 3000 * 1000)
+    expect(result.usageMetadata?.retryAtMs).toBeLessThanOrEqual(Date.now() + 3000 * 1000)
 
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://api.anthropic.com/api/oauth/usage',
@@ -834,6 +884,41 @@ describe('fetchClaudeRateLimits', () => {
         })
       })
     )
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('omits retryAtMs when a 429 has no Retry-After header', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'expired-oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'rate_limit_error',
+            message: 'Rate limited. Please try again later.'
+          }
+        }),
+        { status: 429 }
+      )
+    )
+
+    const result = await fetchClaudeRateLimits({ authPreparation })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.retryAtMs).toBeUndefined()
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 

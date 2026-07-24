@@ -1,5 +1,6 @@
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import type { DetectedPort } from '../../shared/ssh-types'
+import { admitSshDetectedPorts } from '../../shared/ssh-retained-payload-admission'
 
 // Why: every tick walks /proc/*/fd on the remote relay, so cadence is remote
 // CPU, not just a local timer. 12s cuts steady-state request volume 4x vs the
@@ -75,8 +76,10 @@ export class PortScanner {
           return
         }
 
+        // Why: relay responses cross a provider boundary and are retained between scans.
+        const admittedPorts = admitSshDetectedPorts(result.ports)
         const currentPorts = new Map<string, DetectedPort>()
-        for (const p of result.ports) {
+        for (const p of admittedPorts) {
           currentPorts.set(`${p.host}:${p.port}`, p)
         }
 
@@ -87,7 +90,7 @@ export class PortScanner {
         if (!portsEqual(handle.previousPorts, currentPorts)) {
           handle.previousPorts = currentPorts
           handle.intervalMs = SSH_PORT_SCAN_BASE_INTERVAL_MS
-          onChanged(targetId, result.ports, result.platform)
+          onChanged(targetId, admittedPorts, result.platform)
         } else {
           handle.intervalMs = Math.min(handle.intervalMs * 2, SSH_PORT_SCAN_MAX_INTERVAL_MS)
         }

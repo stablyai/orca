@@ -2,10 +2,28 @@ import {
   createWsOutboundBackpressureQueue,
   type WsOutboundBackpressureQueue
 } from '../../../src/shared/ws-outbound-backpressure-queue'
+import { getUtf8ByteLength } from '../../../src/shared/utf8-byte-limits'
 import type { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
+import {
+  createMobileInboundFrameQueue,
+  MOBILE_INBOUND_MAX_FRAME_BYTES,
+  type MobileInboundFrameQueue
+} from './mobile-inbound-frame-queue'
+import {
+  processMobileOutboundMemoryBudget,
+  MOBILE_OUTBOUND_MAX_FRAME_BYTES,
+  type MobileOutboundMemoryBudget
+} from './mobile-outbound-memory-budget'
+import { stringifyMobileOutboundJson } from './mobile-outbound-json'
+import { createMobileOutboundSocketLedger } from './mobile-outbound-socket-ledger'
+import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
 
 type ChannelState = 'awaiting-ready' | 'awaiting-authenticated' | 'ready'
-type OutboundItem = { kind: 'text'; plaintext: string } | { kind: 'binary'; plaintext: Uint8Array }
+type OutboundItem =
+  | { kind: 'text'; plaintext: string; acknowledgementKey?: string }
+  | { kind: 'binary'; plaintext: Uint8Array }
+const E2EE_V2_FRAME_OVERHEAD_BYTES = 82
+const AUTHENTICATION_ACKNOWLEDGEMENT_KEY = 'mobile-e2ee-v2-authentication'
 
 export class MobileE2EEAuthenticationError extends Error {
   constructor() {
@@ -23,8 +41,10 @@ export type MobileE2EEV2Socket = {
 export class MobileE2EEV2PhysicalChannel {
   private state: ChannelState = 'awaiting-ready'
   private generation = 0
-  private inboundChain: Promise<void> = Promise.resolve()
+  private readonly inboundQueue: MobileInboundFrameQueue
   private readonly outboundQueue: WsOutboundBackpressureQueue<OutboundItem>
+  private readonly outboundSocketLedger
+  private outboundOverflowed = false
 
   constructor(
     private readonly args: {
@@ -36,25 +56,50 @@ export class MobileE2EEV2PhysicalChannel {
       onText: (plaintext: string) => void
       onBinary: (plaintext: Uint8Array) => void
       onError: (error: Error) => void
+      outboundMemoryBudget?: MobileOutboundMemoryBudget
     }
   ) {
+    this.inboundQueue = createMobileInboundFrameQueue({
+      process: (raw) => this.processMessage(raw, this.generation),
+      onError: args.onError,
+      overflowMessage: 'E2EE v2 inbound buffer overflow',
+      frameTooLargeMessage: 'E2EE v2 inbound frame too large'
+    })
+    const outboundMemoryBudget = args.outboundMemoryBudget ?? processMobileOutboundMemoryBudget
+    this.outboundSocketLedger = createMobileOutboundSocketLedger({
+      memoryBudget: outboundMemoryBudget,
+      readBufferedAmount: () => args.socket.bufferedAmount
+    })
     this.outboundQueue = createWsOutboundBackpressureQueue<OutboundItem>({
       // Why: encryption happens only when an admitted item reaches the wire,
       // so a bounded-queue rejection cannot burn an ordered v2 counter.
       send: (item) => {
-        args.socket.send(
-          item.kind === 'text'
-            ? args.session.sealText(item.plaintext)
-            : args.session.sealBinary(item.plaintext)
+        const cancelClaim = this.outboundSocketLedger.claimSentBytes(
+          outboundItemRetainedBytes(item),
+          item.kind === 'text' ? item.acknowledgementKey : undefined
         )
+        if (!cancelClaim) {
+          this.failOutboundOverflow()
+          return
+        }
+        try {
+          args.socket.send(
+            item.kind === 'text'
+              ? args.session.sealText(item.plaintext)
+              : args.session.sealBinary(item.plaintext)
+          )
+        } catch {
+          cancelClaim()
+          this.failOutboundOverflow()
+        }
       },
-      byteLengthOf: (item) =>
-        (item.kind === 'text'
-          ? new TextEncoder().encode(item.plaintext).length
-          : item.plaintext.length) + 82,
+      byteLengthOf: outboundItemRetainedBytes,
       getBufferedAmount: () => args.socket.bufferedAmount,
       isWritable: () => args.socket.readyState === args.socket.OPEN,
-      onOverflow: () => args.onError(new Error('E2EE v2 outbound buffer overflow'))
+      canSend: (bytes) => this.outboundSocketLedger.canSend(bytes),
+      claimQueuedBytes: (bytes) => outboundMemoryBudget.claimQueuedBytes(bytes),
+      maxFrameBytes: MOBILE_OUTBOUND_MAX_FRAME_BYTES,
+      onOverflow: () => this.failOutboundOverflow()
     })
   }
 
@@ -63,19 +108,15 @@ export class MobileE2EEV2PhysicalChannel {
   }
 
   handleMessage(raw: unknown): Promise<void> {
-    const generation = this.generation
-    this.inboundChain = this.inboundChain
-      .then(() => this.processMessage(raw, generation))
-      .catch((error: unknown) => {
-        if (generation === this.generation) {
-          this.args.onError(error instanceof Error ? error : new Error(String(error)))
-        }
-      })
-    return this.inboundChain
+    return this.inboundQueue.enqueue(raw)
   }
 
   sendText(plaintext: string): boolean {
-    return this.enqueueReady({ kind: 'text', plaintext })
+    return this.enqueueReady({
+      kind: 'text',
+      plaintext,
+      acknowledgementKey: outboundTextAcknowledgementKey(plaintext)
+    })
   }
 
   sendBinary(plaintext: Uint8Array): boolean {
@@ -84,7 +125,14 @@ export class MobileE2EEV2PhysicalChannel {
 
   dispose(): void {
     this.generation++
+    this.inboundQueue.dispose()
     this.outboundQueue.dispose()
+    this.outboundSocketLedger.retire()
+  }
+
+  socketClosed(): void {
+    this.dispose()
+    this.outboundSocketLedger.socketClosed()
   }
 
   private async processMessage(raw: unknown, generation: number): Promise<void> {
@@ -104,6 +152,7 @@ export class MobileE2EEV2PhysicalChannel {
       return
     }
     if (this.state === 'awaiting-authenticated') {
+      this.outboundSocketLedger.acknowledge(AUTHENTICATION_ACKNOWLEDGEMENT_KEY)
       if (typeof plaintext === 'string' && isAuthenticationRejection(plaintext)) {
         throw new MobileE2EEAuthenticationError()
       }
@@ -113,6 +162,10 @@ export class MobileE2EEV2PhysicalChannel {
       this.state = 'ready'
       this.args.onAuthenticated()
     } else if (typeof plaintext === 'string') {
+      const acknowledgementKey = outboundTextAcknowledgementKey(plaintext)
+      if (acknowledgementKey) {
+        this.outboundSocketLedger.acknowledge(acknowledgementKey)
+      }
       this.args.onText(plaintext)
     } else {
       this.args.onBinary(plaintext)
@@ -125,7 +178,7 @@ export class MobileE2EEV2PhysicalChannel {
     }
     let ready: unknown
     try {
-      ready = JSON.parse(raw)
+      ready = parseMobileJsonTextWithinLimits(raw)
     } catch {
       throw new Error('Invalid E2EE v2 ready JSON')
     }
@@ -135,7 +188,8 @@ export class MobileE2EEV2PhysicalChannel {
     this.state = 'awaiting-authenticated'
     this.outboundQueue.enqueue({
       kind: 'text',
-      plaintext: JSON.stringify({
+      acknowledgementKey: AUTHENTICATION_ACKNOWLEDGEMENT_KEY,
+      plaintext: stringifyMobileOutboundJson({
         type: 'e2ee_auth',
         v: 2,
         transcriptHashB64: this.args.session.transcriptHashB64,
@@ -149,12 +203,15 @@ export class MobileE2EEV2PhysicalChannel {
     if (!bytes || generation !== this.generation) {
       return null
     }
+    if (bytes.byteLength > MOBILE_INBOUND_MAX_FRAME_BYTES) {
+      throw new Error('E2EE v2 inbound frame too large')
+    }
     return this.args.session.openBinary(bytes)
   }
 
   private isAuthenticated(plaintext: string): boolean {
     try {
-      const message = JSON.parse(plaintext) as Record<string, unknown>
+      const message = parseMobileJsonTextWithinLimits<Record<string, unknown>>(plaintext)
       return (
         Object.keys(message).sort().join(',') === 'transcriptHashB64,type,v' &&
         message.type === 'e2ee_authenticated' &&
@@ -170,16 +227,41 @@ export class MobileE2EEV2PhysicalChannel {
     if (this.state !== 'ready') {
       return false
     }
-    this.outboundQueue.enqueue(item)
-    return true
+    return this.outboundQueue.enqueue(item) && !this.outboundOverflowed
+  }
+
+  private failOutboundOverflow(): void {
+    if (this.outboundOverflowed) {
+      return
+    }
+    this.outboundOverflowed = true
+    this.args.onError(new Error('E2EE v2 outbound buffer overflow'))
   }
 }
 
 function isAuthenticationRejection(plaintext: string): boolean {
   try {
-    const message = JSON.parse(plaintext) as Record<string, unknown>
+    const message = parseMobileJsonTextWithinLimits<Record<string, unknown>>(plaintext)
     return message.type === 'e2ee_error'
   } catch {
     return false
+  }
+}
+
+function outboundItemRetainedBytes(item: OutboundItem): number {
+  if (item.kind === 'binary') {
+    return item.plaintext.byteLength + E2EE_V2_FRAME_OVERHEAD_BYTES
+  }
+  const encryptedBytes = getUtf8ByteLength(item.plaintext) + E2EE_V2_FRAME_OVERHEAD_BYTES
+  const wireBytes = Math.ceil(encryptedBytes / 3) * 4
+  return Math.max(wireBytes, item.plaintext.length * 2)
+}
+
+function outboundTextAcknowledgementKey(plaintext: string): string | undefined {
+  try {
+    const value = parseMobileJsonTextWithinLimits<{ id?: unknown }>(plaintext)
+    return typeof value.id === 'string' ? value.id : undefined
+  } catch {
+    return undefined
   }
 }

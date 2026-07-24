@@ -40,6 +40,21 @@ describe('buildAiVaultResumeCommand', () => {
     )
   })
 
+  it('emits no CODEX_HOME stamp for real-home canonical sessions', () => {
+    // Backfilled sessions dedupe to the real-home row (codexHome null); their
+    // resume must run against the user's own ~/.codex, never the frozen
+    // managed home whose auth.json stops refreshing after the flip.
+    const command = buildAiVaultResumeCommand({
+      agent: 'codex',
+      sessionId: 'session-1',
+      cwd: '/repo/app',
+      platform: 'darwin',
+      codexHome: null
+    })
+    expect(command).toBe("cd '/repo/app' && codex resume 'session-1'")
+    expect(command).not.toContain('CODEX_HOME')
+  })
+
   it('carries non-default Codex homes in copied resume commands', () => {
     expect(
       buildAiVaultResumeCommand({

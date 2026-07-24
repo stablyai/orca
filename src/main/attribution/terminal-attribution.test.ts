@@ -6,12 +6,18 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
+  truncateSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyTerminalAttributionEnv, resolveAttributionShellFamily } from './terminal-attribution'
+import {
+  ATTRIBUTION_SHIM_VERSION_MAX_BYTES,
+  applyTerminalAttributionEnv,
+  resolveAttributionShellFamily
+} from './terminal-attribution'
 
 describe('applyTerminalAttributionEnv', () => {
   let tmpRoot: string | null = null
@@ -78,6 +84,42 @@ describe('applyTerminalAttributionEnv', () => {
     expect(resolveAttributionShellFamily({ platform: 'win32', isWsl: true })).toBe('posix')
     expect(resolveAttributionShellFamily({ platform: 'darwin', shellPath: '/bin/zsh' })).toBe(
       undefined
+    )
+  })
+
+  it('accepts an attribution version marker at the exact byte boundary', () => {
+    const root = makeTmpRoot()
+    const userDataPath = join(root, 'user-data')
+    const shimRoot = join(userDataPath, 'orca-terminal-attribution')
+    const sentinelPath = join(shimRoot, 'posix', 'git')
+    mkdirSync(join(shimRoot, 'posix'), { recursive: true })
+    mkdirSync(join(shimRoot, 'win32'), { recursive: true })
+    writeFileSync(sentinelPath, 'leave-existing-wrapper')
+    writeFileSync(
+      join(shimRoot, 'VERSION'),
+      `7${' '.repeat(ATTRIBUTION_SHIM_VERSION_MAX_BYTES - 1)}`
+    )
+
+    applyTerminalAttributionEnv({}, { enabled: true, userDataPath })
+
+    expect(readFileSync(sentinelPath, 'utf8')).toBe('leave-existing-wrapper')
+    expect(statSync(join(shimRoot, 'VERSION')).size).toBe(ATTRIBUTION_SHIM_VERSION_MAX_BYTES)
+  })
+
+  it('rebuilds attribution shims for a sparse version marker over the boundary', () => {
+    const root = makeTmpRoot()
+    const userDataPath = join(root, 'user-data')
+    const shimRoot = join(userDataPath, 'orca-terminal-attribution')
+    const versionPath = join(shimRoot, 'VERSION')
+    mkdirSync(shimRoot, { recursive: true })
+    writeFileSync(versionPath, '7')
+    truncateSync(versionPath, ATTRIBUTION_SHIM_VERSION_MAX_BYTES + 1)
+
+    applyTerminalAttributionEnv({}, { enabled: true, userDataPath })
+
+    expect(readFileSync(versionPath, 'utf8')).toBe('7\n')
+    expect(readFileSync(join(shimRoot, 'posix', 'git'), 'utf8')).toContain(
+      'ORCA_GIT_COMMIT_TRAILER'
     )
   })
 

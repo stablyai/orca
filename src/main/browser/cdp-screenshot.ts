@@ -1,83 +1,20 @@
 import type { WebContents } from 'electron'
+import {
+  assertBrowserScreenshotBase64,
+  assertBrowserScreenshotGeometry,
+  BROWSER_SCREENSHOT_BUSY_ERROR,
+  BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR
+} from './browser-screenshot-limits'
+import {
+  startBrowserFallbackCapture,
+  startBrowserScreenshotCommand
+} from './browser-screenshot-admission'
+import { encodeNativeImageScreenshot } from './native-image-screenshot-encoder'
 
 const SCREENSHOT_TIMEOUT_MS = 8000
 const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
 const SCREENSHOT_TIMEOUT_MESSAGE =
   'Screenshot timed out — the browser tab may not be visible or the window may not have focus.'
-
-function applyFallbackClip(
-  image: Electron.NativeImage,
-  params: Record<string, unknown> | undefined
-): Electron.NativeImage | null {
-  if (params?.captureBeyondViewport) {
-    // Why: capturePage() can only see the currently painted viewport. If the
-    // caller asked for beyond-viewport pixels, returning a viewport-sized image
-    // would silently lie about what was captured.
-    return null
-  }
-
-  const clip = params?.clip
-  if (!clip || typeof clip !== 'object') {
-    return image
-  }
-  const clipRect = clip as Record<string, unknown>
-
-  const x = typeof clipRect.x === 'number' ? clipRect.x : Number.NaN
-  const y = typeof clipRect.y === 'number' ? clipRect.y : Number.NaN
-  const width = typeof clipRect.width === 'number' ? clipRect.width : Number.NaN
-  const height = typeof clipRect.height === 'number' ? clipRect.height : Number.NaN
-  const scale =
-    typeof clipRect.scale === 'number' && Number.isFinite(clipRect.scale) && clipRect.scale > 0
-      ? clipRect.scale
-      : 1
-
-  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
-    return null
-  }
-
-  const cropRect = {
-    x: Math.round(x * scale),
-    y: Math.round(y * scale),
-    width: Math.round(width * scale),
-    height: Math.round(height * scale)
-  }
-  const imageSize = image.getSize()
-  if (
-    cropRect.x < 0 ||
-    cropRect.y < 0 ||
-    cropRect.width <= 0 ||
-    cropRect.height <= 0 ||
-    cropRect.x + cropRect.width > imageSize.width ||
-    cropRect.y + cropRect.height > imageSize.height
-  ) {
-    return null
-  }
-
-  return image.crop(cropRect)
-}
-
-function encodeNativeImageScreenshot(
-  image: Electron.NativeImage,
-  params: Record<string, unknown> | undefined
-): { data: string } | null {
-  if (image.isEmpty()) {
-    return null
-  }
-
-  const clippedImage = applyFallbackClip(image, params)
-  if (!clippedImage || clippedImage.isEmpty()) {
-    return null
-  }
-
-  const format = params?.format === 'jpeg' ? 'jpeg' : 'png'
-  const quality =
-    typeof params?.quality === 'number' && Number.isFinite(params.quality)
-      ? Math.max(0, Math.min(100, Math.round(params.quality)))
-      : undefined
-  const buffer = format === 'jpeg' ? clippedImage.toJPEG(quality ?? 90) : clippedImage.toPNG()
-  return { data: buffer.toString('base64') }
-}
-
 function getLayoutClip(metrics: {
   cssContentSize?: { width?: number; height?: number }
   contentSize?: { width?: number; height?: number }
@@ -100,25 +37,31 @@ function getLayoutClip(metrics: {
     return null
   }
 
-  return {
+  const clip = {
     x: 0,
     y: 0,
     width: Math.ceil(width),
     height: Math.ceil(height),
     scale: 1
   }
+  assertBrowserScreenshotGeometry(clip.width, clip.height)
+  return clip
 }
 
 async function sendCommandWithTimeout<T>(
   webContents: WebContents,
-  method: string,
+  method: 'Page.captureScreenshot' | 'Page.getLayoutMetrics',
   params: Record<string, unknown> | undefined,
   timeoutMessage: string
 ): Promise<T> {
+  const command = startBrowserScreenshotCommand<T>(webContents, method, params ?? {})
+  if (!command) {
+    throw new Error(BROWSER_SCREENSHOT_BUSY_ERROR)
+  }
   let timer: NodeJS.Timeout | null = null
   try {
     return await Promise.race([
-      webContents.debugger.sendCommand(method, params ?? {}) as Promise<T>,
+      command,
       new Promise<T>((_, reject) => {
         timer = setTimeout(() => reject(new Error(timeoutMessage)), SCREENSHOT_TIMEOUT_MS)
       })
@@ -160,15 +103,25 @@ export async function captureFullPageScreenshot(
   const { data } = await sendCommandWithTimeout<{ data: string }>(
     webContents,
     'Page.captureScreenshot',
-    {
-      format,
-      captureBeyondViewport: true,
-      clip
-    },
+    { format, captureBeyondViewport: true, clip },
     SCREENSHOT_TIMEOUT_MESSAGE
   )
+  assertBrowserScreenshotBase64(data)
 
   return { data, format }
+}
+
+function assertCaptureClipWithinLimit(params: Record<string, unknown> | undefined): void {
+  const clip = params?.clip
+  if (!clip || typeof clip !== 'object') {
+    return
+  }
+  const values = clip as Record<string, unknown>
+  if (typeof values.width !== 'number' || typeof values.height !== 'number') {
+    return
+  }
+  const scale = typeof values.scale === 'number' ? values.scale : 1
+  assertBrowserScreenshotGeometry(values.width, values.height, scale)
 }
 
 // Why: Electron's capturePage() is unreliable on webview guests — the compositor
@@ -192,7 +145,12 @@ export function captureScreenshot(
     onError('Debugger not attached')
     return
   }
-
+  try {
+    assertCaptureClipWithinLimit(params)
+  } catch (error) {
+    onError(error instanceof Error ? error.message : BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR)
+    return
+  }
   const screenshotParams: Record<string, unknown> = {}
   if (params?.format) {
     screenshotParams.format = params.format
@@ -208,6 +166,15 @@ export function captureScreenshot(
   }
   if (params?.fromSurface != null) {
     screenshotParams.fromSurface = params.fromSurface
+  }
+  const capture = startBrowserScreenshotCommand(
+    webContents,
+    'Page.captureScreenshot',
+    screenshotParams
+  )
+  if (!capture) {
+    onError(BROWSER_SCREENSHOT_BUSY_ERROR)
+    return
   }
 
   let settled = false
@@ -225,6 +192,16 @@ export function captureScreenshot(
   }
   const settleResult = (result: unknown): void => {
     if (settled) {
+      return
+    }
+    const data =
+      result && typeof result === 'object' ? (result as { data?: unknown }).data : undefined
+    try {
+      if (typeof data === 'string') {
+        assertBrowserScreenshotBase64(data)
+      }
+    } catch (error) {
+      settleError(error instanceof Error ? error.message : BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR)
       return
     }
     settled = true
@@ -257,42 +234,48 @@ export function captureScreenshot(
       () => settleError(SCREENSHOT_TIMEOUT_MESSAGE),
       FALLBACK_CAPTURE_TIMEOUT_MS
     )
-    void Promise.resolve()
-      .then(() => webContents.capturePage())
-      .then(
-        (image) => {
-          if (settled) {
-            return
-          }
-          if (fallbackTimer) {
-            clearTimeout(fallbackTimer)
-            fallbackTimer = null
-          }
-          let fallback: { data: string } | null = null
-          try {
-            fallback = encodeNativeImageScreenshot(image, params)
-          } catch {
-            settleError(SCREENSHOT_TIMEOUT_MESSAGE)
-            return
-          }
-          if (fallback) {
-            settleResult(fallback)
-            return
-          }
-          settleError(SCREENSHOT_TIMEOUT_MESSAGE)
-        },
-        () => {
-          if (fallbackTimer) {
-            clearTimeout(fallbackTimer)
-            fallbackTimer = null
-          }
-          settleError(SCREENSHOT_TIMEOUT_MESSAGE)
+    const fallbackCapture = startBrowserFallbackCapture(webContents)
+    if (!fallbackCapture) {
+      settleError(BROWSER_SCREENSHOT_BUSY_ERROR)
+      return
+    }
+    void fallbackCapture.then(
+      (image) => {
+        if (settled) {
+          return
         }
-      )
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer)
+          fallbackTimer = null
+        }
+        let fallback: { data: string } | null = null
+        try {
+          fallback = encodeNativeImageScreenshot(image, params)
+        } catch (error) {
+          settleError(
+            error instanceof Error && error.message === BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR
+              ? error.message
+              : SCREENSHOT_TIMEOUT_MESSAGE
+          )
+          return
+        }
+        if (fallback) {
+          settleResult(fallback)
+          return
+        }
+        settleError(SCREENSHOT_TIMEOUT_MESSAGE)
+      },
+      () => {
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer)
+          fallbackTimer = null
+        }
+        settleError(SCREENSHOT_TIMEOUT_MESSAGE)
+      }
+    )
   }, SCREENSHOT_TIMEOUT_MS)
 
-  dbg
-    .sendCommand('Page.captureScreenshot', screenshotParams)
+  void capture
     .then((result) => settleResult(result))
     .catch((err) => settleError((err as Error).message))
 }

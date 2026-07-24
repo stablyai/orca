@@ -3,15 +3,28 @@
 // compromising one device doesn't expose others. The registry is a simple
 // JSON file with hardened permissions matching the runtime metadata pattern.
 import { randomBytes, randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
+import { JsonStringifyByteLimitError } from '../../shared/node-bounded-json-stringify'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { writeSecureJsonFileWithinLimit } from '../../shared/bounded-secure-json-file'
+import { hardenExistingSecureFile } from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 
 export type { DeviceScope }
+
+export const MAX_DEVICE_REGISTRY_FILE_BYTES = 1024 * 1024
+export const MAX_DEVICE_REGISTRY_ENTRIES = 4096
+
+export class DeviceRegistryCapacityError extends Error {
+  constructor() {
+    super('Device registry exceeds its durable capacity')
+    this.name = 'DeviceRegistryCapacityError'
+  }
+}
 
 export type DeviceEntry = {
   deviceId: string
@@ -53,6 +66,17 @@ export class DeviceRegistry {
   }
 
   addDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
+    return this.createAndPersistDevice(this.devices, name, scope)
+  }
+
+  private createAndPersistDevice(
+    existingDevices: DeviceEntry[],
+    name: string,
+    scope: DeviceScope
+  ): DeviceEntry {
+    if (existingDevices.length >= MAX_DEVICE_REGISTRY_ENTRIES) {
+      throw new DeviceRegistryCapacityError()
+    }
     const entry: DeviceEntry = {
       deviceId: randomUUID(),
       name,
@@ -61,8 +85,10 @@ export class DeviceRegistry {
       pairedAt: Date.now(),
       lastSeenAt: 0
     }
-    this.devices.push(entry)
-    this.save()
+    const nextDevices = [...existingDevices, entry]
+    // Why: a credential is not valid until its durable registry write succeeds.
+    this.save(nextDevices)
+    this.devices = nextDevices
     return entry
   }
 
@@ -87,18 +113,18 @@ export class DeviceRegistry {
   // until a phone actually pairs, so users have no way to revoke a leaked
   // pre-pairing token.
   rotatePendingDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
-    this.devices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
-    return this.addDevice(name, scope)
+    const retainedDevices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
+    return this.createAndPersistDevice(retainedDevices, name, scope)
   }
 
   removeDevice(deviceId: string): boolean {
-    const before = this.devices.length
-    this.devices = this.devices.filter((d) => d.deviceId !== deviceId)
-    if (this.devices.length < before) {
-      this.save()
-      return true
+    const nextDevices = this.devices.filter((device) => device.deviceId !== deviceId)
+    if (nextDevices.length === this.devices.length) {
+      return false
     }
-    return false
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return true
   }
 
   getDevice(deviceId: string): DeviceEntry | null {
@@ -114,8 +140,12 @@ export class DeviceRegistry {
     if (!device || binding.relayDeviceId !== deviceId) {
       return false
     }
+    this.save(
+      this.devices.map((candidate) =>
+        candidate === device ? { ...candidate, relayBinding: binding } : candidate
+      )
+    )
     device.relayBinding = binding
-    this.save()
     return true
   }
 
@@ -124,8 +154,12 @@ export class DeviceRegistry {
     if (!device || device.scope !== 'mobile') {
       return false
     }
+    this.save(
+      this.devices.map((candidate) =>
+        candidate === device ? { ...candidate, mobilePairingConnectionMode: mode } : candidate
+      )
+    )
     device.mobilePairingConnectionMode = mode
-    this.save()
     return true
   }
 
@@ -150,8 +184,13 @@ export class DeviceRegistry {
   updateLastSeen(deviceId: string): void {
     const device = this.devices.find((d) => d.deviceId === deviceId)
     if (device) {
-      device.lastSeenAt = Date.now()
-      this.save()
+      const lastSeenAt = Date.now()
+      this.save(
+        this.devices.map((candidate) =>
+          candidate === device ? { ...candidate, lastSeenAt } : candidate
+        )
+      )
+      device.lastSeenAt = lastSeenAt
     }
   }
 
@@ -162,8 +201,16 @@ export class DeviceRegistry {
     }
     try {
       hardenExistingSecureFile(this.registryPath)
-      const parsed = JSON.parse(readFileSync(this.registryPath, 'utf-8')) as DeviceEntry[]
-      this.devices = parsed.map((device) => ({
+      const parsed: unknown = JSON.parse(
+        readNodeFileSyncWithinLimit(
+          this.registryPath,
+          MAX_DEVICE_REGISTRY_FILE_BYTES
+        ).buffer.toString('utf8')
+      )
+      if (!Array.isArray(parsed) || parsed.length > MAX_DEVICE_REGISTRY_ENTRIES) {
+        throw new DeviceRegistryCapacityError()
+      }
+      this.devices = (parsed as DeviceEntry[]).map((device) => ({
         ...device,
         // Why: older registries only existed for phone pairing. Treat missing
         // scope as mobile so legacy device tokens do not gain new CLI powers.
@@ -177,7 +224,14 @@ export class DeviceRegistry {
     }
   }
 
-  private save(): void {
-    writeSecureJsonFile(this.registryPath, this.devices)
+  private save(devices: DeviceEntry[] = this.devices): void {
+    try {
+      writeSecureJsonFileWithinLimit(this.registryPath, devices, MAX_DEVICE_REGISTRY_FILE_BYTES)
+    } catch (error) {
+      if (error instanceof JsonStringifyByteLimitError) {
+        throw new DeviceRegistryCapacityError()
+      }
+      throw error
+    }
   }
 }

@@ -1,12 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  AI_VAULT_JSON_STRUCTURE_LIMITS,
   extractPreviewContentText,
   normalizeAgentSessionsDir,
   normalizePreviewText,
-  normalizeTitleText
+  normalizeTitleText,
+  parseJsonObject
 } from './session-scanner-values'
 
 describe('AI Vault session scanner text values', () => {
+  it('rejects structurally amplified JSON before parsing', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const amplified = `[${'0,'.repeat(AI_VAULT_JSON_STRUCTURE_LIMITS.structuralTokens)}0]`
+
+    expect(parseJsonObject(amplified)).toBeNull()
+    expect(parseSpy).not.toHaveBeenCalled()
+  })
+
   it('normalizes compact title text without surfacing hidden context blocks', () => {
     expect(
       normalizeTitleText(

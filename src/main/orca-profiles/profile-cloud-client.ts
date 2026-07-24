@@ -7,6 +7,7 @@ import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
 
 type ExchangeCodeArgs = {
   code: string
@@ -177,7 +178,7 @@ async function postJson<T>(url: string, body: unknown, accessToken?: string): Pr
     await cancelUnreadResponseBody(response)
     throw new OrcaCloudRequestError(response.status)
   }
-  return (await response.json()) as T
+  return await readFetchResponseJsonWithinLimit<T>(response)
 }
 
 export async function exchangeOrcaCloudAuthCode(

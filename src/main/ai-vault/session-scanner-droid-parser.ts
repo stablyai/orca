@@ -1,7 +1,6 @@
-import { createReadStream } from 'node:fs'
-import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -33,10 +32,7 @@ export async function parseDroidSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
+  const lines = iterateAiVaultJsonlLines(file.path)
   return parseDroidSessionLines({ file, lines, platform })
 }
 

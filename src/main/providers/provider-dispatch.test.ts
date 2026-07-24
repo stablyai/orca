@@ -56,6 +56,7 @@ vi.mock('../pi/titlebar-extension-service', () => ({
 
 import {
   deletePtyOwnership,
+  MAX_REGISTERED_SSH_PTY_PROVIDERS,
   registerPtyHandlers,
   registerSshPtyProvider,
   setPtyOwnership,
@@ -176,6 +177,28 @@ describe('PTY provider dispatch', () => {
         connectionId: 'conn-456'
       })
     ).rejects.toThrow('No PTY provider for connection "conn-456"')
+  })
+
+  it('fails closed when the process-wide SSH provider registry is saturated', () => {
+    const ids = Array.from(
+      { length: MAX_REGISTERED_SSH_PTY_PROVIDERS },
+      (_, index) => `capacity-${index}`
+    )
+    try {
+      for (const id of ids) {
+        registerSshPtyProvider(id, createMockProvider(id))
+      }
+
+      expect(() =>
+        registerSshPtyProvider('capacity-overflow', createMockProvider('overflow'))
+      ).toThrow('ssh_pty_provider_capacity')
+      expect(() => registerSshPtyProvider(ids[0], createMockProvider('replacement'))).not.toThrow()
+    } finally {
+      for (const id of ids) {
+        unregisterSshPtyProvider(id)
+      }
+      unregisterSshPtyProvider('capacity-overflow')
+    }
   })
 
   it('keeps same relay PTY ids distinct across SSH targets', () => {

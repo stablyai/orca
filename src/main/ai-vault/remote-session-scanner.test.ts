@@ -3,6 +3,7 @@ import type { DirEntry } from '../../shared/types'
 import type { FileReadResult, FileStat, IFilesystemProvider } from '../providers/types'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { scanRemoteAiVaultSessions } from './remote-session-scanner'
+import { AI_VAULT_SESSION_ID_MAX_UTF8_BYTES } from './session-list-retention'
 
 class MemoryRemoteProvider implements IFilesystemProvider {
   private readonly files = new Map<string, { content: string; mtimeMs: number }>()
@@ -177,6 +178,40 @@ describe('scanRemoteAiVaultSessions', () => {
       codexHome: '/home/ada/.local/share/orca/codex-runtime-home/home',
       resumeCommand:
         "cd '/home/ada/runtime-repo' && CODEX_HOME='/home/ada/.local/share/orca/codex-runtime-home/home' codex resume 'runtime-session'"
+    })
+  })
+
+  it('collapses a bridged rollout present in both remote Codex homes to one row', async () => {
+    const provider = new MemoryRemoteProvider()
+    const rolloutName = 'rollout-2026-07-04T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
+    const transcript = codexTranscript({
+      sessionId: '019f0000-1111-7222-8333-444444444444',
+      title: 'Bridged both-homes session',
+      cwd: '/home/ada/repo',
+      timestamp: '2026-07-04T10:00:00.000Z'
+    })
+    // Same rollout name in both homes — the in-distro bridge/backfill hardlink.
+    provider.addFile(`/home/ada/.codex/sessions/2026/07/04/${rolloutName}`, transcript, 3_000)
+    provider.addFile(
+      `/home/ada/.local/share/orca/codex-runtime-home/home/sessions/2026/07/04/${rolloutName}`,
+      transcript,
+      3_000
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:build-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    // Remote lanes have not flipped to the real home: the managed runtime-home
+    // row stays canonical so resume keeps Orca-refreshed auth, as today.
+    expect(result.sessions[0]).toMatchObject({
+      sessionId: '019f0000-1111-7222-8333-444444444444',
+      codexHome: '/home/ada/.local/share/orca/codex-runtime-home/home'
     })
   })
 
@@ -634,6 +669,35 @@ describe('scanRemoteAiVaultSessions', () => {
     expect(result.sessions.map((session) => session.sessionId)).toEqual(['user-session'])
   })
 
+  it('omits remote resume-critical overflow with a bounded issue', async () => {
+    const provider = new MemoryRemoteProvider()
+    provider.addFile(
+      '/home/ada/.codex/sessions/oversized.jsonl',
+      codexTranscript({
+        sessionId: 'x'.repeat(AI_VAULT_SESSION_ID_MAX_UTF8_BYTES + 1),
+        title: 'Oversized remote identity',
+        cwd: '/home/ada/repo',
+        timestamp: '2026-07-04T04:00:00.000Z'
+      }),
+      40
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.sessions).toEqual([])
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        path: '/home/ada/.codex/sessions/oversized.jsonl',
+        message: expect.stringContaining('session id exceeds the 65536 byte limit')
+      })
+    ])
+  })
+
   it('keeps scoped remote sessions even when they are older than the recency cap', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(
@@ -670,6 +734,62 @@ describe('scanRemoteAiVaultSessions', () => {
     expect(result.sessions.map((session) => session.sessionId)).toEqual([
       'other-session',
       'scoped-session'
+    ])
+  })
+
+  it('accepts the aggregate discovery cap and reports cross-source overflow', async () => {
+    const exactProvider = new MemoryRemoteProvider()
+    exactProvider.addFile(
+      '/home/ada/.codex/sessions/exact.jsonl',
+      codexTranscript({
+        sessionId: 'exact-session',
+        title: 'Exact capacity',
+        cwd: '/home/ada/repo',
+        timestamp: '2026-07-04T06:00:00.000Z'
+      }),
+      60
+    )
+    const exact = await scanRemoteAiVaultSessions({
+      provider: exactProvider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      discoveryLimits: { maxEntries: 1 }
+    })
+
+    expect(exact.sessions.map((session) => session.sessionId)).toEqual(['exact-session'])
+    expect(exact.issues).toEqual([])
+
+    const overflowProvider = new MemoryRemoteProvider()
+    for (const [path, sessionId] of [
+      ['/home/ada/.codex/sessions/default.jsonl', 'default-session'],
+      [
+        '/home/ada/.local/share/orca/codex-runtime-home/home/sessions/managed.jsonl',
+        'managed-session'
+      ]
+    ] as const) {
+      overflowProvider.addFile(
+        path,
+        codexTranscript({
+          sessionId,
+          title: sessionId,
+          cwd: '/home/ada/repo',
+          timestamp: '2026-07-04T06:00:00.000Z'
+        }),
+        60
+      )
+    }
+    const overflow = await scanRemoteAiVaultSessions({
+      provider: overflowProvider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      discoveryLimits: { maxEntries: 1 }
+    })
+
+    expect(overflow.sessions).toHaveLength(1)
+    expect(overflow.issues).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('safety limit') })
     ])
   })
 })

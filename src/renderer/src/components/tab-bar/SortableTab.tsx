@@ -50,8 +50,7 @@ type SortableTabProps = {
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
-  /** True when this tab is an agent terminal that can switch to the native chat
-   *  view. Surfaces the "Switch view" item in the tab context menu. */
+  /** True when this agent terminal can switch to native chat view; surfaces the "Switch view" context-menu item. */
   canToggleViewMode?: boolean
   /** True when the tab is currently showing the native chat view. */
   isChatView?: boolean
@@ -85,17 +84,13 @@ export default function SortableTab({
   isChatView = false,
   onToggleViewMode
 }: SortableTabProps): React.JSX.Element {
-  // Why: agent-completion unread is pane-keyed and exists even when the
-  // experimental generic terminal-attention setting is off. Collapse both
-  // sources to one per-tab primitive so unrelated tabs do not re-render.
+  // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore(
     (s) =>
       s.unreadTerminalTabs[tab.id] === true ||
       hasUnreadAgentCompletionForTerminalTab(s.unreadAgentCompletionPanes, tab.id)
   )
-  // Why: the resolver returns a WorktreeStatus primitive, so unrelated agent
-  // updates can't repaint this tab. The per-tab pane bucketing it reads is
-  // memoized once per store snapshot, so this stays O(1) per tab per write.
+  // Why: resolver returns a primitive so unrelated agent updates can't repaint this tab (pane bucketing memoized per snapshot).
   const activityStatus = useAppStore((s) =>
     resolveTerminalTabActivityStatus({
       tab,
@@ -109,54 +104,37 @@ export default function SortableTab({
   const renamingTabId = useAppStore((s) => s.renamingTabId)
   const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
 
-  // Why: createTab stamps the shell used at creation time, so changing the
-  // default shell later does not repaint existing tabs as a different shell.
-  // Older persisted tabs without this field fall back to the generic icon.
+  // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
 
-  // Why: hook status and title evidence make the tab icon reflect the
-  // coding harness currently running in the pane, not just the launch command.
+  // Why: use hook status + title evidence so the icon reflects the harness running now, not just the launch command.
   const tabAgent = useTabAgent(tab)
 
-  // Why: when a provider icon is already shown, stripping the agent's own
-  // leading status glyph keeps the tab from presenting two icons for one agent.
+  // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
   const displayTitle =
     tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
 
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
-    // Why: carry the resolved agent into the drag overlay so dragged tabs keep
-    // the same provider glyph as the tab strip without another store lookup.
+    // Why: carry the resolved agent into the drag overlay so dragged tabs keep the same glyph without another store lookup.
     data: { ...dragData, agent: tabAgent }
   })
 
-  // Why: intentionally no transform/transition/opacity here. The PR's
-  // design is that tabs stay visually anchored during a drag — only the
-  // blue insertion bar moves. Siblings also don't shift (see
-  // SortableContext in TabBar.tsx, which omits a strategy for that reason).
+  // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isEditing, setIsEditing] = useState(false)
-  // Why: a live working/needs-input state is newer and more specific than an
-  // unread event from the prior turn. It owns the icon until the turn ends;
-  // the unread completion bell then returns if the tab is still unvisited.
+  // Why: a live working/needs-input state is newer than a prior-turn unread, so it owns the icon until the turn ends.
   const showUnreadActivity =
     hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
   const [renameValue, setRenameValue] = useState('')
   const renameFocusFrameRef = useRef<number | null>(null)
-  // Why: React's synthetic onBlur fires during the Input's unmount when isEditing flips
-  // to false. Without this guard, pressing Escape (or committing via Enter) would cause
-  // the blur handler to run commitRename a second time and overwrite the title with the
-  // uncommitted edits the user just discarded. This ref lets cancelRename/commitRename
-  // mark the rename as already resolved so the unmount-driven blur is a no-op.
+  // Why: onBlur fires during Input unmount; mark rename resolved so it can't re-commit and overwrite discarded edits.
   const committedOrCancelledRef = useRef(false)
 
   const handleRenameOpen = useCallback(() => {
     committedOrCancelledRef.current = false
-    // Why: snapshot the current title once on open. If the underlying tab.title
-    // changes mid-edit (e.g., a shell writes a new title via OSC escape), we
-    // intentionally do NOT refresh renameValue — the user's in-progress edit
-    // takes precedence so their keystrokes are never silently overwritten.
+    // Why: snapshot title once; don't refresh if tab.title changes mid-edit (e.g. OSC) so the user's edits aren't overwritten.
     setRenameValue(tab.customTitle ?? tab.title)
     setIsEditing(true)
   }, [tab.customTitle, tab.title])
@@ -184,8 +162,7 @@ export default function SortableTab({
     if (!input) {
       return
     }
-    // Why: defer past Radix menu teardown/focus restore while still keying off
-    // input mount only; terminal title updates must not re-select in-progress text.
+    // Why: defer past Radix menu teardown/focus restore; key off input mount so title updates don't re-select edited text.
     renameFocusFrameRef.current = requestAnimationFrame(() => {
       renameFocusFrameRef.current = null
       input.focus()
@@ -193,9 +170,7 @@ export default function SortableTab({
     })
   }, [])
 
-  // Why: the tab.rename shortcut can't reach this component's local editing
-  // state directly, so it sets renamingTabId in the store; the matching tab
-  // opens its editor and immediately clears the flag so it fires once.
+  // Why: the tab.rename shortcut routes through store renamingTabId; open the editor and clear it so it fires once.
   useEffect(() => {
     if (renamingTabId !== tab.id) {
       return
@@ -210,11 +185,7 @@ export default function SortableTab({
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
-  // Why: Electron <webview> elements run in a separate process, so clicking
-  // inside one never dispatches a pointerdown on the renderer document. Radix
-  // DropdownMenu relies on document pointerdown for outside-click detection,
-  // so it misses webview clicks. Listening for window blur catches the moment
-  // focus leaves the renderer (including into a webview).
+  // Why: webview clicks miss the renderer pointerdown Radix uses for outside-click, so dismiss on window blur instead.
   useEffect(() => {
     if (!menuOpen) {
       return
@@ -224,18 +195,12 @@ export default function SortableTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
-  // Why: while editing, suppress dnd-kit drag listeners and tab-activation/double-click
-  // handlers so typing/clicking inside the inline input doesn't start a drag, re-open the
-  // editor, or steal focus away from the input. We still spread `attributes` unconditionally
-  // so dnd-kit's a11y attributes (aria-roledescription, etc.) remain on the element — only
-  // the pointer listeners are gated so a drag can't start while typing.
+  // Why: while editing, drop drag listeners so typing can't start a drag; attributes stay spread to keep dnd-kit a11y.
   const dragListeners = isEditing ? undefined : listeners
   const handleActivate = useCallback(() => {
     onActivate(tab.id)
   }, [onActivate, tab.id])
-  // Why: defer activation to pointer-up so pressing a tab to drag it (reorder /
-  // move into another pane / split) does not switch the active tab or steal
-  // terminal focus mid-gesture. See tab-strip-pointer-activation.
+  // Why: defer activation to pointer-up so a drag doesn't switch tabs or steal focus mid-gesture (tab-strip-pointer-activation).
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
     onActivate: handleActivate,
     disabled: isEditing
@@ -249,22 +214,12 @@ export default function SortableTab({
       data-tab-id={tab.id}
       data-tab-title={tabTitle}
       data-pinned={isPinned ? 'true' : 'false'}
-      // Why: expose the active/inactive flag as a DOM attribute so E2E specs
-      // can assert on user-observable selection state without reading the
-      // Zustand store. A store-only "is this tab active?" round-trip would
-      // pass even if the tab-bar render path had silently broken (the same
-      // tautology that let PR #1186's render crash ship past E2E in #1193).
+      // Why: DOM attribute lets E2E assert real selection state; a store-only check would miss render breaks (PR #1186 shipped in #1193).
       data-active={isActive ? 'true' : 'false'}
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
-      // Why: on unread activity, tint the whole tab with a subtle amber
-      // wash so the signal is visible at a glance even when the small
-      // bell icon is easy to miss in a long tab bar. Active tabs keep
-      // their existing highlight — the amber wash layers on top so the
-      // tab still reads as "selected + has activity". The wash is
-      // rendered as an absolutely-positioned child below so the ::after
-      // pseudo-element stays free for the drop indicator.
+      // Why: subtle amber wash flags unread activity at a glance, layered over the active highlight so it still reads selected.
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
@@ -280,10 +235,7 @@ export default function SortableTab({
         )
       }}
       onMouseDown={(e) => {
-        // Why: prevent default browser middle-click behavior (auto-scroll)
-        // but do NOT close here — closing removes the element before mouseup,
-        // causing the mouseup to fall through to the terminal and trigger
-        // an X11 primary selection paste on Linux.
+        // Why: block middle-click auto-scroll; don't close here — removing the element pre-mouseup triggers a Linux X11 paste.
         if (e.button === 1) {
           e.preventDefault()
         }
@@ -305,8 +257,7 @@ export default function SortableTab({
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {showUnreadActivity && (
-        // Why: a real DOM child leaves both drop-indicator pseudo-elements
-        // available and keeps pointer events reaching the tab beneath it.
+        // Why: a real DOM child keeps both drop-indicator pseudo-elements free and pointer events reaching the tab.
         <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
       )}
       <TerminalTabLeadingIcon
@@ -332,8 +283,7 @@ export default function SortableTab({
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={(event) => {
-            // Why: an Enter that only confirms a CJK IME candidate must not
-            // commit the rename; wait for a non-composition Enter.
+            // Why: an Enter confirming a CJK IME candidate must not commit the rename; wait for a non-composition Enter.
             if (isImeCompositionKeyDown(event)) {
               return
             }
@@ -345,15 +295,10 @@ export default function SortableTab({
               cancelRename()
             }
           }}
-          // Why: stop pointer/mouse events from bubbling to the outer div, which
-          // would otherwise trigger tab activation or start a dnd-kit drag while
-          // the user is trying to click inside the input.
+          // Why: stop bubbling so clicking inside the input doesn't activate the tab or start a dnd-kit drag.
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => {
-            // Why: stop propagation so the outer tab's activation/drag handlers
-            // don't fire on clicks inside the input. Also preventDefault on middle
-            // click (button 1) to block Linux X11 primary-selection paste into the
-            // rename field, matching the outer tab's behavior.
+            // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
             event.stopPropagation()
             if (event.button === 1) {
               event.preventDefault()
@@ -362,10 +307,7 @@ export default function SortableTab({
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
           onAuxClick={(event) => event.stopPropagation()}
-          // Why: the base Input applies w-full min-w-0, which lets flex
-          // shrink it to ~0 when many tabs compete for horizontal space.
-          // Force a minimum width that matches the normal title box so the
-          // rename input stays usable even when the tab bar is saturated.
+          // Why: base Input's min-w-0 lets flex shrink it to ~0 in a saturated tab bar; force a usable minimum width.
           className="mr-1 h-5 min-w-[72px] flex-1 px-1 py-0 text-xs"
           spellCheck={false}
         />
@@ -418,10 +360,7 @@ export default function SortableTab({
                   ? 'text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:text-foreground focus-visible:bg-muted'
                   : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted focus-visible:!text-foreground focus-visible:!bg-muted'
               }`}
-              // Why: per-tab close affordance needs a stable accessible name so
-              // E2E specs can drive the same path a user takes (hover, then X)
-              // instead of bypassing the render layer by calling closeTab() on
-              // the store. A store-only assertion would miss an unmounted button.
+              // Why: stable accessible name lets E2E drive the real close path (hover, then X) instead of calling the store.
               aria-label={translate(
                 'auto.components.tab.bar.SortableTab.6df69d9388',
                 'Close tab {{value0}}',

@@ -165,7 +165,7 @@ describe('validate', () => {
     expect(result.ok).toBe(true)
   })
 
-  // ── repo_added.is_git_repo (docs/reference/telemetry-availability.md)
+  // ── repo_added.is_git_repo
   // The git-vs-folder signal moved here from onboarding_completed once project
   // selection left onboarding. Optional so SSH/remote edges can omit it.
 

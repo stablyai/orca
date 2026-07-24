@@ -1,6 +1,7 @@
 import { homedir, platform } from 'node:os'
 import path from 'node:path'
-import { readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import { parseGhosttyConfig } from './parser'
 
 // Why: theme files ship a few dozen short lines; anything larger is not a
@@ -86,7 +87,11 @@ async function readThemeColors(themePath: string): Promise<ThemeReadResult> {
     if (!info.isFile() || info.size > MAX_THEME_BYTES) {
       return { status: 'invalid' }
     }
-    content = await readFile(themePath, 'utf-8')
+    const result = await readNodeFileWithinLimit(themePath, MAX_THEME_BYTES)
+    if (!result.stats.isFile()) {
+      return { status: 'invalid' }
+    }
+    content = result.buffer.toString('utf8')
   } catch (err) {
     return { status: isMissingThemeError(err) ? 'missing' : 'invalid' }
   }

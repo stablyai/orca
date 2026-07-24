@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GhUtils from './gh-utils'
 
 const {
@@ -7,6 +8,7 @@ const {
   getOwnerRepoMock,
   getIssueOwnerRepoMock,
   getOwnerRepoForRemoteMock,
+  resolvePRRepositoryCandidatesMock,
   resolveIssueSourceMock,
   rateLimitGuardMock,
   noteRateLimitSpendMock,
@@ -18,6 +20,7 @@ const {
   getOwnerRepoMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
   getOwnerRepoForRemoteMock: vi.fn(),
+  resolvePRRepositoryCandidatesMock: vi.fn(),
   resolveIssueSourceMock: vi.fn(),
   rateLimitGuardMock: vi.fn(() => ({ blocked: false })),
   noteRateLimitSpendMock: vi.fn(),
@@ -44,8 +47,47 @@ vi.mock('./gh-utils', async () => {
 vi.mock('./rate-limit', () => ({
   rateLimitGuard: rateLimitGuardMock,
   noteRateLimitSpend: noteRateLimitSpendMock,
-  getRateLimit: vi.fn(async () => ({ ok: false, error: 'not probed in tests' }))
+  getRateLimit: vi.fn(async () => ({ ok: false, error: 'not probed in tests' })),
+  repositoryRateLimitGuard: vi.fn(() => ({ blocked: false })),
+  noteRepositoryRateLimitSpend: vi.fn(),
+  spendsSharedGitHubComQuota: () => true
 }))
+
+vi.mock('./github-api-repository', async (importOriginal) => {
+  const actual = await importOriginal<typeof GithubApiRepositoryModule>()
+  return {
+    ...actual,
+    // Why: these suites drive source resolution through the legacy gh-utils
+    // mocks; bridge the hosted seams onto the same mocks.
+    resolveIssueGitHubApiRepositorySource: (
+      repoPath: string,
+      preference: unknown,
+      connectionId?: string | null,
+      localGitOptions?: unknown
+    ) => resolveIssueSourceMock(repoPath, preference, connectionId, localGitOptions),
+    getIssueGitHubApiRepository: (repoPath: string, connectionId?: string | null) =>
+      getIssueOwnerRepoMock(repoPath, connectionId),
+    getOriginGitHubApiRepository: (
+      repoPath: string,
+      connectionId?: string | null,
+      localGitOptions?: unknown
+    ) => getOwnerRepoMock(repoPath, connectionId, localGitOptions),
+    getGitHubApiRepositoryForRemote: (
+      repoPath: string,
+      remoteName: string,
+      connectionId?: string | null,
+      localGitOptions?: unknown
+    ) =>
+      remoteName === 'origin'
+        ? getOwnerRepoMock(repoPath, connectionId, localGitOptions)
+        : getOwnerRepoForRemoteMock(repoPath, remoteName, connectionId, localGitOptions),
+    resolveGitHubApiRepositoryCandidates: (
+      repoPath: string,
+      connectionId?: string | null,
+      localGitOptions?: unknown
+    ) => resolvePRRepositoryCandidatesMock(repoPath, connectionId, localGitOptions)
+  }
+})
 
 import { countWorkItems, getWorkItem, listWorkItems, _resetOwnerRepoCache } from './client'
 
@@ -90,6 +132,16 @@ function decodedIssueSearchPath(callIndex: number): string {
   return decodeURIComponent(apiPath ?? '')
 }
 
+// Route resolvePrWorkItemSource's per-remote probes: origin delegates to
+// getOwnerRepoMock (so existing tests keep defining origin through it) and
+// upstream returns the given candidate.
+function mockUpstreamCandidate(upstream: { owner: string; repo: string } | null): void {
+  getOwnerRepoForRemoteMock.mockImplementation(
+    async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+      remoteName === 'upstream' ? upstream : getOwnerRepoMock(repoPath, connectionId, opts)
+  )
+}
+
 describe('GitHub issue source split', () => {
   beforeEach(() => {
     execFileAsyncMock.mockReset()
@@ -97,6 +149,7 @@ describe('GitHub issue source split', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
+    resolvePRRepositoryCandidatesMock.mockReset()
     resolveIssueSourceMock.mockReset()
     rateLimitGuardMock.mockReset()
     rateLimitGuardMock.mockReturnValue({ blocked: false })
@@ -113,10 +166,17 @@ describe('GitHub issue source split', () => {
       source: await getIssueOwnerRepoMock(),
       fellBack: false
     }))
-    // Default the upstream-candidate lookup to null so existing tests that
-    // only mock `getIssueOwnerRepo` + `getOwnerRepo` don't need to think
-    // about it. Tests that care set it explicitly.
-    getOwnerRepoForRemoteMock.mockResolvedValue(null)
+    // Why: keep origin on the legacy mock while hosted candidate tests opt in
+    // to upstream behavior explicitly.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
+    resolvePRRepositoryCandidatesMock.mockImplementation(async (repoPath, connectionId) => {
+      const origin = await getOwnerRepoMock(repoPath, connectionId)
+      const repository = origin ? { host: 'github.com', ...origin } : null
+      return { candidates: repository ? [repository] : [], headRepo: repository }
+    })
     _resetOwnerRepoCache()
   })
 
@@ -265,7 +325,7 @@ describe('GitHub issue source split', () => {
       fellBack: false
     })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
       stdout: '[]'
     })
@@ -283,7 +343,7 @@ describe('GitHub issue source split', () => {
       fellBack: false
     })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
     await listWorkItems('/repo-root', 10, 'is:pr is:open', undefined, 'upstream')
@@ -300,7 +360,7 @@ describe('GitHub issue source split', () => {
       fellBack: false
     })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '9\n' })
 
     const count = await countWorkItems('/repo-root', 'is:pr is:open', 'upstream')
@@ -326,7 +386,8 @@ describe('GitHub issue source split', () => {
       fellBack: true
     })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+    // beforeEach default: upstream probe resolves null, origin delegates to
+    // getOwnerRepoMock.
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
     const result = await listWorkItems('/repo-root', 10, 'is:pr', undefined, 'upstream')
@@ -410,9 +471,78 @@ describe('GitHub issue source split', () => {
         '--json',
         expect.stringContaining('reviewDecision')
       ],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
     expect(item?.type).toBe('pr')
+  })
+
+  it('probes the upstream repository for a typed fork PR before origin', async () => {
+    const upstream = { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+    const origin = { owner: 'fork', repo: 'orca', host: 'github.com' }
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [upstream, origin],
+      headRepo: origin
+    })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 42,
+        title: 'Upstream PR',
+        state: 'open',
+        url: 'https://github.com/stablyai/orca/pull/42',
+        labels: [],
+        updatedAt: '2026-04-02T00:00:00Z',
+        author: { login: 'octocat' },
+        isDraft: false
+      })
+    })
+
+    const item = await getWorkItem('/repo-root', 42, 'pr')
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'pr',
+        'view',
+        '42',
+        '--repo',
+        'stablyai/orca',
+        '--json',
+        expect.stringContaining('reviewDecision')
+      ],
+      { cwd: '/repo-root', host: 'github.com' }
+    )
+    expect(item?.prRepo).toEqual(upstream)
+  })
+
+  it('does not run a bare gh lookup for an SSH repo without candidates', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({ candidates: [], headRepo: null })
+
+    await expect(getWorkItem('/remote/repo', 42, 'pr', 'ssh-1')).resolves.toBeNull()
+
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('does not probe a second PR repository after a non-not-found failure', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [
+        { owner: 'stablyai', repo: 'orca', host: 'github.com' },
+        { owner: 'fork', repo: 'orca', host: 'github.com' }
+      ],
+      headRepo: { owner: 'fork', repo: 'orca', host: 'github.com' }
+    })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 500: server error'))
+      .mockRejectedValueOnce(new Error('HTTP 500: server error'))
+
+    await expect(getWorkItem('/repo-root', 42, 'pr')).resolves.toBeNull()
+
+    // The first candidate uses `pr view` and its REST compatibility fallback;
+    // neither failure is a 404, so a same-number PR on origin is never queried.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(
+      ghExecFileAsyncMock.mock.calls.some(([args]) =>
+        (args as string[]).some((arg) => arg.includes('fork/orca'))
+      )
+    ).toBe(false)
   })
 
   it('raw number lookup tries upstream issue before origin PR', async () => {
@@ -453,7 +583,7 @@ describe('GitHub issue source split', () => {
         '--json',
         expect.stringContaining('reviewDecision')
       ],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
     expect(item?.type).toBe('pr')
   })
@@ -637,7 +767,7 @@ describe('GitHub issue source split', () => {
         fellBack: false
       })
       getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-      getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
       ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
         stdout: '[]'
       })
@@ -658,7 +788,7 @@ describe('GitHub issue source split', () => {
         fellBack: false
       })
       getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-      getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
       ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
         stdout: '[]'
       })

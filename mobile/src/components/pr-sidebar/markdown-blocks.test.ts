@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseInline, parseMarkdownBlocks } from './markdown-blocks'
+import { COMMENT_MARKDOWN_LIMITS, parseInline, parseMarkdownBlocks } from './markdown-blocks'
 
 describe('parseMarkdownBlocks', () => {
   it('classifies headings, fenced code, quotes, lists, hr, and paragraphs', () => {
@@ -98,6 +98,42 @@ describe('parseMarkdownBlocks tables', () => {
         ]
       }
     ])
+  })
+
+  it('accepts the exact table column limit and falls back one column later', () => {
+    const header = Array.from({ length: COMMENT_MARKDOWN_LIMITS.tableColumns }, (_, index) =>
+      String(index)
+    ).join('|')
+    const delimiter = Array.from(
+      { length: COMMENT_MARKDOWN_LIMITS.tableColumns },
+      () => '---'
+    ).join('|')
+
+    expect(parseMarkdownBlocks(`${header}\n${delimiter}`)[0]).toMatchObject({
+      kind: 'table',
+      headers: { length: COMMENT_MARKDOWN_LIMITS.tableColumns }
+    })
+    expect(parseMarkdownBlocks(`${header}|extra\n${delimiter}|---`)[0]).toMatchObject({
+      kind: 'paragraph'
+    })
+  })
+
+  it('falls back to a bounded preview before splitting oversized input', () => {
+    const exact = 'x'.repeat(COMMENT_MARKDOWN_LIMITS.sourceCodeUnits)
+    const content = 'x'.repeat(COMMENT_MARKDOWN_LIMITS.sourceCodeUnits + 1)
+    const [block] = parseMarkdownBlocks(content)
+
+    expect(parseMarkdownBlocks(exact)).toEqual([{ kind: 'paragraph', text: exact }])
+    expect(block).toMatchObject({ kind: 'paragraph' })
+    expect(block?.kind === 'paragraph' ? block.text.length : 0).toBeLessThan(
+      COMMENT_MARKDOWN_LIMITS.fallbackCodeUnits + 100
+    )
+  })
+
+  it('checks normalized break tags before allocating line arrays', () => {
+    const content = '<br>'.repeat(COMMENT_MARKDOWN_LIMITS.lines + 1)
+
+    expect(parseMarkdownBlocks(content)[0]).toMatchObject({ kind: 'paragraph' })
   })
 
   it('reads per-column alignment from the delimiter row', () => {

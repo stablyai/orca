@@ -368,6 +368,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
+  const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -1051,10 +1052,22 @@ export default function AutomationsPage(): React.JSX.Element {
     useAppStore.getState().hydratePersistedUI(await window.api.ui.get(), 'sync')
   }, [])
 
+  const mountedBeforeStartupWorktreeRefreshRef = useRef(!startupWorktreeRefreshCompleted)
   useEffect(() => {
+    if (!startupWorktreeRefreshCompleted) {
+      return
+    }
+    if (mountedBeforeStartupWorktreeRefreshRef.current) {
+      // Why: App just supplied this mount's initial worktrees; a second full scan would duplicate every repo probe.
+      mountedBeforeStartupWorktreeRefreshRef.current = false
+      return
+    }
     void fetchAllWorktrees()
+  }, [fetchAllWorktrees, startupWorktreeRefreshCompleted])
+
+  useEffect(() => {
     void refresh()
-  }, [fetchAllWorktrees, refresh])
+  }, [refresh])
 
   useEffect(() => {
     // Pause the relative-time clock while the window is hidden.
@@ -1913,7 +1926,8 @@ export default function AutomationsPage(): React.JSX.Element {
     async ({ manager, job, page, pageSize }) => {
       const fallbackRunsPage = {
         runs: job.runs.slice(page * pageSize, page * pageSize + pageSize),
-        totalCount: job.runCount
+        totalCount: job.runCount,
+        totalCountSaturated: job.runCountSaturated === true
       }
       const listExternalRuns = (
         window.api.automations as Partial<Pick<typeof window.api.automations, 'listExternalRuns'>>
@@ -1932,7 +1946,8 @@ export default function AutomationsPage(): React.JSX.Element {
         })
         return {
           runs: result.runs,
-          totalCount: result.total
+          totalCount: result.total,
+          totalCountSaturated: result.totalSaturated === true
         }
       } catch (error) {
         if (isMissingExternalRunsApiError(error)) {
@@ -2653,7 +2668,7 @@ export default function AutomationsPage(): React.JSX.Element {
                           <span className="shrink-0">·</span>
                           <span className="truncate">
                             {entry.manager.provider === 'hermes'
-                              ? `${entry.job.runCount} ${entry.job.runCount === 1 ? 'run' : 'runs'}`
+                              ? `${entry.job.runCount}${entry.job.runCountSaturated ? '+' : ''} ${entry.job.runCount === 1 ? 'run' : 'runs'}`
                               : entry.manager.canManage
                                 ? translate(
                                     'auto.components.automations.AutomationsPage.aecdc3681f',
@@ -2877,7 +2892,7 @@ export default function AutomationsPage(): React.JSX.Element {
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="runs" disabled={!selected}>
-                    {translate('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}
+                    {translate('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}{' '}
                     <span className="text-xs text-muted-foreground">{selectedRuns.length}</span>
                   </TabsTrigger>
                 </TabsList>

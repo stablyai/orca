@@ -1,6 +1,6 @@
 /**
- * Phase 5 slice 2 (docs/reference/terminal-query-authority.md §View-attribute
- * bridge): renderer→main `pty:terminalViewAttributes` publication. Composes
+ * Phase 5 slice 2 (View-attribute bridge): renderer→main
+ * `pty:terminalViewAttributes` publication. Composes
  * the reply-relevant slots of the active terminal theme exactly the way
  * xterm's browser ThemeService resolves an ITheme (defaults, cursor blend,
  * 256-entry palette), so main's hidden-PTY responder replies byte-identically

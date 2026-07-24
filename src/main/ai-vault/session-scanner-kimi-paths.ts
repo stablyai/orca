@@ -1,16 +1,21 @@
 import { stat } from 'node:fs/promises'
-import { createReadStream } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { createInterface } from 'node:readline'
-import { asRecord, extractString } from './session-scanner-values'
+import { asRecord, extractString, parseJsonObject } from './session-scanner-values'
+import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
 import {
   KimiSessionIndexCache,
   KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
-  KIMI_WORK_DIR_CACHE_TTL_MS
+  KIMI_WORK_DIR_CACHE_MAX_SESSIONS_PER_INDEX,
+  KIMI_WORK_DIR_CACHE_TTL_MS,
+  retainKimiWorkDir
 } from './session-scanner-kimi-index-cache'
 
-export { KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS, KIMI_WORK_DIR_CACHE_TTL_MS }
+export {
+  KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
+  KIMI_WORK_DIR_CACHE_MAX_SESSIONS_PER_INDEX,
+  KIMI_WORK_DIR_CACHE_TTL_MS
+}
 
 // Why: Kimi Code stores sessions under <KIMI_CODE_HOME>/sessions/, mirroring the
 // CLI's own `KIMI_CODE_HOME ?? ~/.kimi-code` resolution (see kimi-fetcher.ts).
@@ -99,35 +104,70 @@ export async function readKimiWorkDirBySessionId(indexPath: string): Promise<Map
   )
 }
 
+export async function readKimiWorkDirForSessionId(
+  indexPath: string,
+  sessionId: string
+): Promise<string | null> {
+  const workDirs = await readKimiWorkDirBySessionId(indexPath)
+  const cached = workDirs.get(sessionId)
+  if (cached) {
+    return cached
+  }
+  const workDir = await readKimiWorkDirFromIndex(indexPath, sessionId)
+  if (workDir) {
+    retainKimiWorkDir(workDirs, sessionId, workDir)
+  }
+  return workDir
+}
+
 async function parseKimiSessionIndex(indexPath: string): Promise<Map<string, string>> {
   const map = new Map<string, string>()
   // Why: never reject. This promise is memoized and shared by every session
   // under one Kimi home; a mid-read failure (file deleted after stat, EACCES)
   // must degrade to whatever was parsed so the other sessions still list.
   try {
-    const lines = createInterface({
-      input: createReadStream(indexPath, { encoding: 'utf-8' }),
-      crlfDelay: Infinity
-    })
+    const lines = iterateAiVaultJsonlLines(indexPath)
     for await (const line of lines) {
-      if (!line.trim()) {
-        continue
-      }
-      let record: Record<string, unknown> | null
-      try {
-        record = asRecord(JSON.parse(line) as unknown)
-      } catch {
-        continue
-      }
-      const sessionId = extractString(record?.sessionId)
-      const workDir = extractString(record?.workDir)
-      if (sessionId && workDir) {
+      const entry = parseKimiSessionIndexEntry(line)
+      if (entry) {
         // Later lines win so a resumed session reflects its most recent workDir.
-        map.set(sessionId, workDir)
+        retainKimiWorkDir(map, entry.sessionId, entry.workDir)
       }
     }
   } catch {
     // Return the partial map gathered before the read error.
   }
   return map
+}
+
+async function readKimiWorkDirFromIndex(
+  indexPath: string,
+  requestedSessionId: string
+): Promise<string | null> {
+  let requestedWorkDir: string | null = null
+  try {
+    for await (const line of iterateAiVaultJsonlLines(indexPath)) {
+      const entry = parseKimiSessionIndexEntry(line)
+      if (entry?.sessionId === requestedSessionId) {
+        requestedWorkDir = entry.workDir
+      }
+    }
+  } catch {
+    // Match the partial, best-effort full-index read.
+  }
+  return requestedWorkDir
+}
+
+function parseKimiSessionIndexEntry(line: string): { sessionId: string; workDir: string } | null {
+  if (!line.trim()) {
+    return null
+  }
+  try {
+    const record = parseJsonObject(line)
+    const sessionId = extractString(record?.sessionId)
+    const workDir = extractString(record?.workDir)
+    return sessionId && workDir ? { sessionId, workDir } : null
+  } catch {
+    return null
+  }
 }

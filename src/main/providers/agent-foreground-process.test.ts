@@ -109,6 +109,97 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(resolveAgentForegroundProcess(100, 'node')).resolves.toBe('codex')
   })
 
+  // Why: OMP embeds Pi, but the outer process is the user-visible identity (#6364).
+  it('reports the outer omp wrapper, not the wrapped pi child', async () => {
+    mockPs(['101 100 S+   omp', '102 101 S+   pi'].join('\n'))
+
+    await expect(resolveAgentForegroundProcess(100, 'omp')).resolves.toBe('omp')
+  })
+
+  it('reports omp even when the wrapped pi child holds the foreground alone', async () => {
+    // Why: across command boundaries only the deeper `pi` carries `+`; the
+    // wrapper identity must stay omp regardless of which frame we sampled.
+    mockPs(['101 100 S    omp', '102 101 S+   pi'].join('\n'))
+
+    await expect(resolveAgentForegroundProcess(100, 'omp')).resolves.toBe('omp')
+  })
+
+  it('reports bare pi when no omp wrapper is present', async () => {
+    mockPs(['101 100 S+   pi'].join('\n'))
+
+    await expect(resolveAgentForegroundProcess(100, 'pi')).resolves.toBe('pi')
+  })
+
+  it('reports the outer omp wrapper on Windows', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: windowsProcessJsonRows([
+            {
+              CommandLine: 'powershell.exe',
+              Name: 'powershell.exe',
+              ParentProcessId: 99,
+              ProcessId: 100
+            },
+            {
+              CommandLine: 'omp.exe',
+              Name: 'omp.exe',
+              ParentProcessId: 100,
+              ProcessId: 101
+            },
+            {
+              CommandLine: 'pi.exe',
+              Name: 'pi.exe',
+              ParentProcessId: 101,
+              ProcessId: 102
+            }
+          ]),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'pi.exe')).resolves.toBe('omp')
+  })
+
+  it('keeps the Windows omp ancestor when context selects one of multiple pi descendants', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockPs(
+      windowsProcessJsonRows([
+        {
+          CommandLine: 'powershell.exe',
+          Name: 'powershell.exe',
+          ParentProcessId: 99,
+          ProcessId: 100
+        },
+        {
+          CommandLine: 'omp.exe',
+          Name: 'omp.exe',
+          ParentProcessId: 100,
+          ProcessId: 101
+        },
+        {
+          CommandLine: 'pi.exe --cwd C:\\repo\\orca',
+          Name: 'pi.exe',
+          ParentProcessId: 101,
+          ProcessId: 102
+        },
+        {
+          CommandLine: 'pi.exe --cwd C:\\repo\\other',
+          Name: 'pi.exe',
+          ParentProcessId: 100,
+          ProcessId: 103
+        }
+      ])
+    )
+
+    await expect(
+      resolveAgentForegroundProcess(100, 'pi.exe', { contextPaths: ['C:\\repo\\orca'] })
+    ).resolves.toBe('omp')
+  })
+
   it('treats a fresh POSIX snapshot missing the PTY root as unavailable', async () => {
     mockPs('101 999 S+ node /Users/dev/.nvm/versions/node/bin/codex')
 
@@ -117,7 +208,7 @@ describe('resolveAgentForegroundProcess', () => {
     ).resolves.toEqual({ available: false, processName: 'zsh' })
   })
 
-  it('treats a failed fresh POSIX scan as unavailable', async () => {
+  it('treats failed POSIX scans as unavailable', async () => {
     execFileMock.mockImplementation(
       (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
         const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
@@ -128,6 +219,10 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(
       resolveAgentForegroundProcessWithAvailability(100, 'zsh', { fresh: true })
     ).resolves.toEqual({ available: false, processName: 'zsh' })
+    await expect(resolveAgentForegroundProcessWithAvailability(100, 'zsh')).resolves.toEqual({
+      available: false,
+      processName: 'zsh'
+    })
     await expect(resolveAgentForegroundProcess(100, 'zsh')).resolves.toBe('zsh')
   })
 

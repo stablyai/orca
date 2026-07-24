@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { connect, createServer } from 'node:net'
 import { buildSshArgs, findSystemSsh, type SystemSshBuildArgsOptions } from './ssh-system-fallback'
 import type { SshTarget } from '../../shared/ssh-types'
+import { SystemSshOutputTail } from './system-ssh-output-tail'
 
 export const SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS = 750
 export const SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS = 50
@@ -103,7 +104,7 @@ export function waitForSystemSshForwardStartup(
   localPort: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    let stderr = ''
+    const stderr = new SystemSshOutputTail()
     let settled = false
     let probeTimer: ReturnType<typeof setTimeout> | null = null
     let graceTimer: ReturnType<typeof setTimeout> | null = null
@@ -127,13 +128,13 @@ export function waitForSystemSshForwardStartup(
       callback()
     }
     const onStderr = (chunk: Buffer): void => {
-      stderr += chunk.toString('utf-8')
+      stderr.push(chunk)
     }
     const onError = (error: Error): void => {
       finish(() => reject(error))
     }
     const onExit = (code: number | null): void => {
-      finish(() => reject(systemSshForwardError(code, stderr)))
+      finish(() => reject(systemSshForwardError(code, stderr.toString())))
     }
     const scheduleProbe = (): void => {
       probeTimer = setTimeout(() => {

@@ -1,7 +1,6 @@
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
+import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
 import type {
   FileWithMtime,
   ResumableParseFinalizeOptions,
@@ -33,7 +32,9 @@ export async function parseGeminiSessionFile(
     return parseGeminiJsonlSessionFile(file, platform)
   }
 
-  return parseGeminiJsonSessionContent(file, await readFile(file.path, 'utf-8'), platform)
+  return withAiVaultWholeJsonFile(file.path, (content) =>
+    parseGeminiJsonSessionContent(file, content, platform)
+  )
 }
 
 export async function parseGeminiSessionContent(
@@ -59,7 +60,7 @@ function parseGeminiJsonSessionContent(
   platform: NodeJS.Platform,
   options: ResumableParseFinalizeOptions = {}
 ): AiVaultSession | null {
-  const record = asRecord(JSON.parse(content) as unknown)
+  const record = parseJsonObject(content)
   if (!record) {
     return null
   }
@@ -80,10 +81,7 @@ export async function parseGeminiJsonlSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
+  const lines = iterateAiVaultJsonlLines(file.path)
   return parseGeminiJsonlSessionLines({ file, lines, platform })
 }
 

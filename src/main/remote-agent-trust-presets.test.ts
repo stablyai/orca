@@ -14,6 +14,7 @@ vi.mock('./providers/ssh-filesystem-dispatch', () => ({
 }))
 
 const { markRemoteAgentWorkspaceTrusted } = await import('./remote-agent-trust-presets')
+const { MAX_AGENT_STATE_FILE_BYTES } = await import('./agent-state-file-reader')
 
 function makeFsProvider(overrides: Record<string, unknown> = {}) {
   return {
@@ -142,6 +143,27 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
       firstLaunchAt: '2026-01-01',
       trustedFolders: ['/old', '/real/repo/worktree']
     })
+  })
+
+  it('rejects oversized remote config without overwriting it', async () => {
+    const fsProvider = makeFsProvider({
+      readFile: vi.fn(async () => ({
+        content: 'x'.repeat(MAX_AGENT_STATE_FILE_BYTES + 1),
+        isBinary: false
+      }))
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await expect(
+      markRemoteAgentWorkspaceTrusted({
+        preset: 'codex',
+        connectionId: 'ssh-1',
+        workspacePath: '/repo/worktree'
+      })
+    ).rejects.toThrow('Remote agent state exceeds')
+
+    expect(fsProvider.createDir).not.toHaveBeenCalled()
+    expect(fsProvider.writeFile).not.toHaveBeenCalled()
   })
 
   it('does nothing when the SSH home cannot be resolved safely', async () => {

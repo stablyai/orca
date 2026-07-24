@@ -86,6 +86,18 @@ describe('automation run output snapshot buffer', () => {
     expect(snapshot?.truncated).toBe(true)
   })
 
+  it('preserves output delivered as 100,000 one-character chunks', () => {
+    const buffer = createAutomationRunOutputSnapshotBuffer()
+
+    for (let index = 0; index < 100_000; index += 1) {
+      buffer.append(String.fromCharCode(97 + (index % 26)))
+    }
+
+    const snapshot = buffer.snapshot()
+    expect(snapshot?.content).toHaveLength(100_000)
+    expect(snapshot?.truncated).toBe(false)
+  })
+
   it('creates a saved snapshot from agent transcript text', () => {
     expect(createAutomationRunOutputSnapshotFromText('\nFinal summary.\n')).toEqual({
       format: 'plain_text',

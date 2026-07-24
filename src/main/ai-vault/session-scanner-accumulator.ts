@@ -41,6 +41,7 @@ export function createAccumulator(args: {
     messageCount: 0,
     totalTokens: 0,
     previewMessages: [],
+    lastUserPrompt: null,
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
     latestTimestampMs: 0
@@ -49,6 +50,31 @@ export function createAccumulator(args: {
 
 export function cloneSessionAccumulator(accumulator: SessionAccumulator): SessionAccumulator {
   return { ...accumulator, previewMessages: [...accumulator.previewMessages] }
+}
+
+export function sessionAccumulatorRetainedUtf8Bytes(accumulator: SessionAccumulator): number {
+  let bytes = stringBytes(
+    accumulator.agent,
+    accumulator.sessionId,
+    accumulator.title,
+    accumulator.fallbackTitle,
+    accumulator.cwd,
+    accumulator.branch,
+    accumulator.model,
+    accumulator.filePath,
+    accumulator.createdAt,
+    accumulator.updatedAt,
+    accumulator.modifiedAt,
+    accumulator.lastUserPrompt
+  )
+  for (const preview of accumulator.previewMessages) {
+    bytes += stringBytes(preview.role, preview.text, preview.timestamp)
+  }
+  return bytes
+}
+
+function stringBytes(...values: (string | null)[]): number {
+  return values.reduce((total, value) => total + Buffer.byteLength(value ?? '', 'utf8'), 0)
 }
 
 // Resumable fold for parsers whose only parse state is the accumulator itself
@@ -62,6 +88,7 @@ export function accumulatorFoldResumeState(
     consumeLine: (line) => consumeRecordLine(accumulator, line),
     clone: () =>
       accumulatorFoldResumeState(cloneSessionAccumulator(accumulator), consumeRecordLine),
+    retainedUtf8Bytes: () => sessionAccumulatorRetainedUtf8Bytes(accumulator),
     touchFile: (file) => {
       accumulator.modifiedAt = file.modifiedAt
     },
@@ -112,6 +139,7 @@ export function finalizeSession(
     messageCount: accumulator.messageCount,
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
+    ...(accumulator.lastUserPrompt ? { lastUserPrompt: accumulator.lastUserPrompt } : {}),
     queuedMessageCount: accumulator.queuedMessageCount,
     subagentTranscriptCount: accumulator.subagentTranscriptCount,
     resumeCommand: buildAiVaultResumeCommand({

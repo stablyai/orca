@@ -4,7 +4,6 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   renameSync,
   rmSync,
   unlinkSync,
@@ -16,6 +15,14 @@ import type { SFTPWrapper } from 'ssh2'
 import { parse, stringify } from 'yaml'
 
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileSyncWithinLimit
+} from '../../shared/node-bounded-file-reader'
+import {
+  AGENT_HOOK_CONFIG_MAX_BYTES,
+  AGENT_HOOK_PLUGIN_MAX_BYTES
+} from '../agent-hooks/agent-hook-file-limits'
 import {
   readTextFileRemote,
   writeTextFileRemoteAtomic
@@ -137,7 +144,18 @@ function readConfigFile(configPath: string): ConfigParseResult {
   if (!existsSync(configPath)) {
     return { ok: true, config: {} }
   }
-  return parseHermesConfig(readFileSync(configPath, 'utf-8'))
+  try {
+    const content = readNodeFileSyncWithinLimit(
+      configPath,
+      AGENT_HOOK_CONFIG_MAX_BYTES
+    ).buffer.toString('utf8')
+    return parseHermesConfig(content)
+  } catch (error) {
+    return {
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error)
+    }
+  }
 }
 
 function writeConfigFile(configPath: string, config: HermesConfig): void {
@@ -146,10 +164,17 @@ function writeConfigFile(configPath: string, config: HermesConfig): void {
   const serialized = serializeHermesConfig(config)
   if (existsSync(configPath)) {
     try {
-      if (readFileSync(configPath, 'utf-8') === serialized) {
+      const existing = readNodeFileSyncWithinLimit(
+        configPath,
+        AGENT_HOOK_CONFIG_MAX_BYTES
+      ).buffer.toString('utf8')
+      if (existing === serialized) {
         return
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof NodeFileReadTooLargeError) {
+        throw error
+      }
       // Fall through to the atomic write path.
     }
   }
@@ -186,27 +211,56 @@ function updateConfigContent(
 function getPluginFilesState(pluginDir = getPluginDir()): {
   present: boolean
   managed: boolean
+  blocked: boolean
   detail: string | null
 } {
   const manifestPath = getManifestPath(pluginDir)
   const initPath = getInitPath(pluginDir)
-  if (!existsSync(manifestPath) || !existsSync(initPath)) {
-    return { present: false, managed: false, detail: 'Managed Hermes plugin files are missing' }
+  const manifest = readPluginFile(manifestPath, 'plugin.yaml')
+  const init = readPluginFile(initPath, '__init__.py')
+  if (manifest.kind === 'error') {
+    return { present: true, managed: false, blocked: manifest.blocked, detail: manifest.detail }
+  }
+  if (init.kind === 'error') {
+    return { present: true, managed: false, blocked: init.blocked, detail: init.detail }
+  }
+  if (manifest.kind === 'absent' || init.kind === 'absent') {
+    return {
+      present: false,
+      managed: false,
+      blocked: false,
+      detail: 'Managed Hermes plugin files are missing'
+    }
+  }
+  const managed =
+    manifest.content.includes(HERMES_PLUGIN_MARKER) && init.content.includes(HERMES_PLUGIN_MARKER)
+  return {
+    present: true,
+    managed,
+    blocked: false,
+    detail: managed ? null : 'Hermes orca-status plugin exists but is not Orca-managed'
+  }
+}
+
+type PluginFileRead =
+  | { kind: 'absent' }
+  | { kind: 'content'; content: string }
+  | { kind: 'error'; blocked: boolean; detail: string }
+
+function readPluginFile(path: string, name: string): PluginFileRead {
+  if (!existsSync(path)) {
+    return { kind: 'absent' }
   }
   try {
-    const manifest = readFileSync(manifestPath, 'utf-8')
-    const init = readFileSync(initPath, 'utf-8')
-    const managed = manifest.includes(HERMES_PLUGIN_MARKER) && init.includes(HERMES_PLUGIN_MARKER)
-    return {
-      present: true,
-      managed,
-      detail: managed ? null : 'Hermes orca-status plugin exists but is not Orca-managed'
-    }
+    const content = readNodeFileSyncWithinLimit(path, AGENT_HOOK_PLUGIN_MAX_BYTES).buffer.toString(
+      'utf8'
+    )
+    return { kind: 'content', content }
   } catch (error) {
     return {
-      present: true,
-      managed: false,
-      detail: error instanceof Error ? error.message : String(error)
+      kind: 'error',
+      blocked: error instanceof NodeFileReadTooLargeError,
+      detail: `Could not read Hermes ${name}: ${error instanceof Error ? error.message : String(error)}`
     }
   }
 }
@@ -234,8 +288,11 @@ function getConfigEnablement(config: HermesConfig): {
   }
 }
 
-function buildStatus(configPath: string, config: HermesConfig): AgentHookInstallStatus {
-  const pluginFiles = getPluginFilesState()
+function buildStatus(
+  configPath: string,
+  config: HermesConfig,
+  pluginFiles = getPluginFilesState()
+): AgentHookInstallStatus {
   const enablement = getConfigEnablement(config)
   const details = [
     pluginFiles.detail,
@@ -245,7 +302,9 @@ function buildStatus(configPath: string, config: HermesConfig): AgentHookInstall
   ].filter((detail): detail is string => Boolean(detail))
 
   let state: AgentHookInstallState
-  if (!pluginFiles.present && !enablement.enabled) {
+  if (pluginFiles.blocked) {
+    state = 'error'
+  } else if (!pluginFiles.present && !enablement.enabled) {
     state = 'not_installed'
   } else if (
     pluginFiles.present &&
@@ -438,12 +497,41 @@ def register(ctx: Any) -> None:
 
 function writePluginFiles(pluginDir = getPluginDir()): void {
   mkdirSync(pluginDir, { recursive: true })
-  writeFileSync(getManifestPath(pluginDir), getPluginManifest(), 'utf-8')
-  writeFileSync(getInitPath(pluginDir), getPluginInitSource(), 'utf-8')
+  writePluginFile(getManifestPath(pluginDir), getPluginManifest())
+  writePluginFile(getInitPath(pluginDir), getPluginInitSource())
+}
+
+function writePluginFile(path: string, content: string): void {
+  if (existsSync(path)) {
+    try {
+      const existing = readNodeFileSyncWithinLimit(
+        path,
+        AGENT_HOOK_PLUGIN_MAX_BYTES
+      ).buffer.toString('utf8')
+      if (existing === content) {
+        return
+      }
+    } catch (error) {
+      if (error instanceof NodeFileReadTooLargeError) {
+        throw error
+      }
+    }
+  }
+  writeFileSync(path, content, 'utf-8')
 }
 
 function stripTrailingSlash(path: string): string {
   return path.replace(/\/+$/, '')
+}
+
+async function guardRemotePluginFileSize(sftp: SFTPWrapper, path: string): Promise<void> {
+  try {
+    await readTextFileRemote(sftp, path, AGENT_HOOK_PLUGIN_MAX_BYTES)
+  } catch (error) {
+    if (error instanceof NodeFileReadTooLargeError) {
+      throw error
+    }
+  }
 }
 
 export class HermesHookService {
@@ -474,6 +562,10 @@ export class HermesHookService {
         detail: `Could not parse Hermes config.yaml: ${parsed.detail}`
       }
     }
+    const pluginFiles = getPluginFilesState()
+    if (pluginFiles.blocked) {
+      return buildStatus(configPath, parsed.config, pluginFiles)
+    }
 
     writePluginFiles()
     writeConfigFile(configPath, enablePlugin(parsed.config))
@@ -486,6 +578,12 @@ export class HermesHookService {
     const remotePluginDir = `${remoteRoot}/.hermes/plugins/${HERMES_PLUGIN_NAME}`
     try {
       const existing = await readTextFileRemote(sftp, remoteConfigPath)
+      const remoteManifestPath = `${remotePluginDir}/plugin.yaml`
+      const remoteInitPath = `${remotePluginDir}/__init__.py`
+      await Promise.all([
+        guardRemotePluginFileSize(sftp, remoteManifestPath),
+        guardRemotePluginFileSize(sftp, remoteInitPath)
+      ])
       const next = updateConfigContent(existing, enablePlugin)
       if (next.content === null) {
         return {
@@ -496,8 +594,18 @@ export class HermesHookService {
           detail: `Could not parse remote Hermes config.yaml: ${next.detail ?? 'unknown error'}`
         }
       }
-      await writeTextFileRemoteAtomic(sftp, `${remotePluginDir}/plugin.yaml`, getPluginManifest())
-      await writeTextFileRemoteAtomic(sftp, `${remotePluginDir}/__init__.py`, getPluginInitSource())
+      await writeTextFileRemoteAtomic(
+        sftp,
+        remoteManifestPath,
+        getPluginManifest(),
+        AGENT_HOOK_PLUGIN_MAX_BYTES
+      )
+      await writeTextFileRemoteAtomic(
+        sftp,
+        remoteInitPath,
+        getPluginInitSource(),
+        AGENT_HOOK_PLUGIN_MAX_BYTES
+      )
       await writeTextFileRemoteAtomic(sftp, remoteConfigPath, next.content)
       return {
         agent: 'hermes',
@@ -530,7 +638,11 @@ export class HermesHookService {
       }
     }
     const pluginDir = getPluginDir()
-    if (getPluginFilesState(pluginDir).managed) {
+    const pluginFiles = getPluginFilesState(pluginDir)
+    if (pluginFiles.blocked) {
+      return buildStatus(configPath, parsed.config, pluginFiles)
+    }
+    if (pluginFiles.managed) {
       rmSync(pluginDir, { recursive: true, force: true })
     }
     writeConfigFile(configPath, disablePlugin(parsed.config))

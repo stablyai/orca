@@ -88,14 +88,21 @@ export type RawAttachmentsResponse = {
   } | null
 }
 
+export type RawRelationNode = {
+  id: string
+  type?: string | null
+  issue?: RawIssue | null
+  relatedIssue?: RawIssue | null
+}
+
 export type RawRelationsResponse = {
   issue?: {
     relations?: {
-      nodes?: {
-        id: string
-        type?: string | null
-        relatedIssue?: RawIssue | null
-      }[]
+      nodes?: RawRelationNode[]
+      pageInfo?: RawPageInfo
+    } | null
+    inverseRelations?: {
+      nodes?: RawRelationNode[]
       pageInfo?: RawPageInfo
     } | null
   } | null
@@ -196,6 +203,22 @@ export const RELATIONS_QUERY = `
   }
 `
 
+export const INVERSE_RELATIONS_QUERY = `
+  query OrcaAgentLinearIssueInverseRelations($id: String!, $first: Int, $after: String) {
+    issue(id: $id) {
+      inverseRelations(first: $first, after: $after) {
+        nodes {
+          id
+          type
+          issue { id identifier title url }
+          relatedIssue { id identifier title url }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+`
+
 export function mapIssue(issue: RawIssue): LinearIssueSummary {
   return {
     id: issue.id,
@@ -208,7 +231,7 @@ export function mapIssue(issue: RawIssue): LinearIssueSummary {
     project: issue.project ?? null,
     cycle: issue.cycle ?? null,
     assignee: issue.assignee ?? null,
-    labels: issue.labels?.nodes ?? [],
+    labels: (issue.labels?.nodes ?? []).slice(0, 50),
     priority: issue.priority,
     estimate: issue.estimate,
     dueDate: issue.dueDate,

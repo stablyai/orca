@@ -12,8 +12,14 @@ import {
   type CrashReportRecord,
   type CrashReportStatus
 } from '../../shared/crash-reporting'
+import * as boundedFileReader from '../../shared/node-bounded-file-reader'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
+import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 
 const MAX_REPORTS = 5
+export const MAX_CRASH_REPORT_FILE_BYTES = 4 * 1024 * 1024
+export const MAX_CRASH_REPORT_JSON_STRUCTURAL_TOKENS = 1_000_000
+export const MAX_CRASH_REPORT_JSON_NESTING_DEPTH = 128
 const RELATED_CRASH_WINDOW_MS = 5_000
 const WINDOWS_FILE_OPERATION_RETRY_DELAYS_MS = [50, 100, 150, 200, 250]
 
@@ -202,8 +208,18 @@ export class CrashReportStore {
     try {
       const raw = await runCrashReportFileOperationWithWindowsRecovery(
         path.dirname(this.filePath),
-        () => fs.readFile(this.filePath, 'utf8')
+        async () =>
+          (
+            await boundedFileReader.readNodeFileWithinLimit(
+              this.filePath,
+              MAX_CRASH_REPORT_FILE_BYTES
+            )
+          ).buffer.toString('utf8')
       )
+      assertJsonTextStructureWithinLimits(raw, {
+        structuralTokens: MAX_CRASH_REPORT_JSON_STRUCTURAL_TOKENS,
+        nestingDepth: MAX_CRASH_REPORT_JSON_NESTING_DEPTH
+      })
       const parsed = JSON.parse(raw) as Partial<CrashReportFile>
       return Array.isArray(parsed.reports) ? parsed.reports.slice(0, MAX_REPORTS) : []
     } catch (error) {
@@ -219,8 +235,13 @@ export class CrashReportStore {
     const tmpPath = `${this.filePath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`
     try {
       await runCrashReportFileOperationWithWindowsRecovery(directory, async () => {
+        const { serialized } = stringifyJsonWithinByteLimit(
+          { reports },
+          MAX_CRASH_REPORT_FILE_BYTES - Buffer.byteLength(os.EOL),
+          2
+        )
         await fs.mkdir(directory, { recursive: true })
-        await fs.writeFile(tmpPath, `${JSON.stringify({ reports }, null, 2)}${os.EOL}`, 'utf8')
+        await fs.writeFile(tmpPath, `${serialized}${os.EOL}`, 'utf8')
         await fs.rename(tmpPath, this.filePath)
       })
     } finally {

@@ -6,9 +6,15 @@ import {
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
+import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { stringifyMobileOutboundJson } from './mobile-outbound-json'
 import { isRpcResponse } from './rpc-response-shape'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, RpcResponse } from './types'
+import {
+  isMobileJsonStructureCapacityError,
+  parseMobileJsonTextWithinLimits
+} from './mobile-json-text-admission'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -148,7 +154,8 @@ export function connectMobileRelayRpcSession(args: {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id)
-        reject(new Error(`relay RPC timed out: ${method}`))
+        // Why: the frame was written long ago — the desktop may have processed it.
+        reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
       pending.set(id, { resolve, reject, timer })
       if (!sendFrame({ id, method, params })) {
@@ -160,14 +167,23 @@ export function connectMobileRelayRpcSession(args: {
   }
 
   function sendFrame(request: { id: string; method: string; params?: unknown }): boolean {
-    return link.sendText(JSON.stringify({ ...request, deviceToken: args.deviceToken }))
+    try {
+      return link.sendText(
+        stringifyMobileOutboundJson({ ...request, deviceToken: args.deviceToken })
+      )
+    } catch {
+      return false
+    }
   }
 
   function handleText(plaintext: string): void {
     let value: unknown
     try {
-      value = JSON.parse(plaintext)
-    } catch {
+      value = parseMobileJsonTextWithinLimits(plaintext)
+    } catch (error) {
+      if (isMobileJsonStructureCapacityError(error)) {
+        throw error
+      }
       return
     }
     if (!isRpcResponse(value)) {
@@ -237,6 +253,13 @@ export function connectMobileRelayRpcSession(args: {
   }
 
   function rejectPending(error: Error): void {
+    if (pending.size === 0) {
+      return
+    }
+    // Why: pending entries only exist after their frame reached the authenticated
+    // link (sendFrame failures delete them synchronously), so the desktop may
+    // have processed them — mark the ambiguity for callers.
+    markRpcDeliveryUnknown(error)
     for (const request of pending.values()) {
       clearTimeout(request.timer)
       request.reject(error)

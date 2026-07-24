@@ -1,5 +1,9 @@
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import { RelayMovedSchema } from '../../../src/shared/mobile-relay-phone-protocol'
+import { assertMobileInboundFrameSize } from './mobile-inbound-frame-queue'
+import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
+
+export const MOBILE_RELAY_DIRECTOR_MAX_FRAME_BYTES = 64 * 1024
 
 export function resolvePairingInviteThroughDirector(args: {
   relay: PairingRelay
@@ -32,7 +36,12 @@ export function resolvePairingInviteThroughDirector(args: {
       }
       let value: unknown
       try {
-        value = JSON.parse(event.data)
+        assertMobileInboundFrameSize(
+          event.data,
+          'relay director move frame too large',
+          MOBILE_RELAY_DIRECTOR_MAX_FRAME_BYTES
+        )
+        value = parseMobileJsonTextWithinLimits(event.data)
       } catch {
         finish(new Error('invalid relay director move'))
         return

@@ -75,6 +75,18 @@ const HEADING_PATTERN = /^heading$/
 
 const SKIP_ROLES = new Set(['none', 'presentation', 'generic'])
 
+export const SNAPSHOT_MAX_AX_NODES = 50_000
+export const SNAPSHOT_MAX_ENTRIES = 4096
+export const SNAPSHOT_MAX_NAME_CODE_UNITS = 1024
+export const SNAPSHOT_MAX_RETAINED_NAME_CODE_UNITS = 1024 * 1024
+const SNAPSHOT_MAX_VISUAL_DEPTH = 64
+
+type SnapshotWalkBudget = {
+  remainingNodes: number
+  remainingEntries: number
+  remainingNameCodeUnits: number
+}
+
 export async function buildSnapshot(
   sendCommand: CdpCommandSender,
   iframeSessions?: Map<string, string>,
@@ -84,37 +96,50 @@ export async function buildSnapshot(
   const { nodes } = (await sendCommand('Accessibility.getFullAXTree')) as { nodes: AXNode[] }
 
   const nodeById = new Map<string, AXNode>()
-  for (const node of nodes) {
+  for (const node of nodes.slice(0, SNAPSHOT_MAX_AX_NODES)) {
     nodeById.set(node.nodeId, node)
   }
 
   const entries: SnapshotEntry[] = []
   let refCounter = 1
+  const budget: SnapshotWalkBudget = {
+    remainingNodes: SNAPSHOT_MAX_AX_NODES,
+    remainingEntries: SNAPSHOT_MAX_ENTRIES,
+    remainingNameCodeUnits: SNAPSHOT_MAX_RETAINED_NAME_CODE_UNITS
+  }
 
   const root = nodes[0]
   if (!root) {
     return { snapshot: '', refs: [], refMap: new Map() }
   }
 
-  walkTree(root, nodeById, 0, entries, () => refCounter++)
+  walkTree(root, nodeById, 0, entries, () => refCounter++, budget)
 
   // Why: many modern SPAs use styled <div>s, <span>s, and custom elements as
   // interactive controls without proper ARIA roles. These elements are invisible
   // to the accessibility tree walk above but are clearly interactive (cursor:pointer,
   // onclick, tabindex, contenteditable). This DOM query pass discovers them and
   // promotes them to interactive refs so the agent can interact with them.
-  const cursorInteractiveEntries = await findCursorInteractiveElements(sendCommand, entries)
+  const cursorInteractiveEntries =
+    budget.remainingEntries > 0 ? await findCursorInteractiveElements(sendCommand, entries) : []
   for (const cie of cursorInteractiveEntries) {
+    const name = reserveSnapshotName(cie.name, budget)
+    if (name === null || !reserveSnapshotEntry(budget)) {
+      break
+    }
     cie.ref = `@e${refCounter++}`
-    entries.push(cie)
+    entries.push({ ...cie, name })
   }
 
   // Why: cross-origin iframes have their own AX trees accessible only through
   // their dedicated CDP session. Append their elements after the parent tree
   // so the agent can see and interact with iframe content.
-  const iframeRefSessions: { ref: string; sessionId: string }[] = []
+  const iframeRefSessions = new Map<string, string>()
   if (iframeSessions && makeIframeSender && iframeSessions.size > 0) {
     for (const [_frameId, sessionId] of iframeSessions) {
+      if (budget.remainingEntries <= 0 || budget.remainingNodes <= 0) {
+        break
+      }
       try {
         const iframeSender = makeIframeSender(sessionId)
         await iframeSender('Accessibility.enable')
@@ -125,15 +150,15 @@ export async function buildSnapshot(
           continue
         }
         const iframeNodeById = new Map<string, AXNode>()
-        for (const n of iframeNodes) {
+        for (const n of iframeNodes.slice(0, budget.remainingNodes)) {
           iframeNodeById.set(n.nodeId, n)
         }
         const iframeRoot = iframeNodes[0]
         if (iframeRoot) {
           const startRef = refCounter
-          walkTree(iframeRoot, iframeNodeById, 1, entries, () => refCounter++)
+          walkTree(iframeRoot, iframeNodeById, 1, entries, () => refCounter++, budget)
           for (let i = startRef; i < refCounter; i++) {
-            iframeRefSessions.push({ ref: `@e${i}`, sessionId })
+            iframeRefSessions.set(`@e${i}`, sessionId)
           }
         }
       } catch {
@@ -171,12 +196,11 @@ export async function buildSnapshot(
       }
       lines.push(`${indent}[${entry.ref}] ${entry.role} "${displayName}"`)
       refs.push({ ref: entry.ref, role: entry.role, name: displayName })
-      const iframeSession = iframeRefSessions.find((s) => s.ref === entry.ref)
       refMap.set(entry.ref, {
         backendDOMNodeId: entry.backendDOMNodeId,
         role: entry.role,
         name: entry.name,
-        sessionId: iframeSession?.sessionId,
+        sessionId: iframeRefSessions.get(entry.ref),
         nth: total > 1 ? nth : undefined
       })
     } else {
@@ -188,107 +212,159 @@ export async function buildSnapshot(
 }
 
 function walkTree(
-  node: AXNode,
+  root: AXNode,
   nodeById: Map<string, AXNode>,
   depth: number,
   entries: SnapshotEntry[],
-  nextRef: () => number
+  nextRef: () => number,
+  budget: SnapshotWalkBudget
 ): void {
-  if (node.ignored) {
-    walkChildren(node, nodeById, depth, entries, nextRef)
-    return
-  }
+  const stack: { node: AXNode; depth: number }[] = [{ node: root, depth }]
+  const visited = new Set<string>()
+  while (stack.length > 0 && budget.remainingNodes > 0 && budget.remainingEntries > 0) {
+    const current = stack.pop()!
+    const node = current.node
+    if (visited.has(node.nodeId)) {
+      continue
+    }
+    visited.add(node.nodeId)
+    budget.remainingNodes -= 1
 
-  const role = node.role?.value ?? ''
-  const name = node.name?.value ?? ''
+    const role = node.role?.value ?? ''
+    const rawName = node.name?.value ?? ''
+    const isInteractive = INTERACTIVE_ROLES.has(role)
+    const isHeading = HEADING_PATTERN.test(role)
+    const isLandmark = LANDMARK_ROLES.has(role)
+    const isStaticText = role === 'staticText' || role === 'StaticText'
+    const shouldWalkChildren =
+      node.ignored === true ||
+      SKIP_ROLES.has(role) ||
+      (!isInteractive && !isHeading && !isLandmark && !isStaticText) ||
+      (!rawName && !isLandmark)
 
-  if (SKIP_ROLES.has(role)) {
-    walkChildren(node, nodeById, depth, entries, nextRef)
-    return
-  }
+    if (shouldWalkChildren) {
+      pushSnapshotChildren(stack, node, nodeById, current.depth, budget.remainingNodes)
+      continue
+    }
 
-  const isInteractive = INTERACTIVE_ROLES.has(role)
-  const isHeading = HEADING_PATTERN.test(role)
-  const isLandmark = LANDMARK_ROLES.has(role)
-  const isStaticText = role === 'staticText' || role === 'StaticText'
+    if (isLandmark) {
+      const name = reserveSnapshotName(rawName || role, budget)
+      if (name !== null && reserveSnapshotEntry(budget)) {
+        entries.push({
+          ref: '',
+          role: formatLandmarkRole(role, rawName ? name : ''),
+          name,
+          backendDOMNodeId: node.backendDOMNodeId ?? 0,
+          depth: current.depth
+        })
+      }
+      pushSnapshotChildren(
+        stack,
+        node,
+        nodeById,
+        Math.min(current.depth + 1, SNAPSHOT_MAX_VISUAL_DEPTH),
+        budget.remainingNodes
+      )
+      continue
+    }
 
-  if (!isInteractive && !isHeading && !isLandmark && !isStaticText) {
-    walkChildren(node, nodeById, depth, entries, nextRef)
-    return
-  }
+    if (isHeading) {
+      appendSnapshotEntry(entries, budget, {
+        ref: '',
+        role: 'heading',
+        rawName,
+        backendDOMNodeId: node.backendDOMNodeId ?? 0,
+        depth: current.depth
+      })
+      continue
+    }
 
-  if (!name && !isLandmark) {
-    walkChildren(node, nodeById, depth, entries, nextRef)
-    return
-  }
+    if (isStaticText) {
+      const name = trimSnapshotName(rawName)
+      if (name) {
+        appendSnapshotEntry(entries, budget, {
+          ref: '',
+          role: 'text',
+          rawName: name,
+          backendDOMNodeId: node.backendDOMNodeId ?? 0,
+          depth: current.depth
+        })
+      }
+      continue
+    }
 
-  const hasFocusable = isInteractive && isFocusable(node)
-
-  if (isLandmark) {
-    entries.push({
-      ref: '',
-      role: formatLandmarkRole(role, name),
-      name: name || role,
-      backendDOMNodeId: node.backendDOMNodeId ?? 0,
-      depth
-    })
-    walkChildren(node, nodeById, depth + 1, entries, nextRef)
-    return
-  }
-
-  if (isHeading) {
-    entries.push({
-      ref: '',
-      role: 'heading',
-      name,
-      backendDOMNodeId: node.backendDOMNodeId ?? 0,
-      depth
-    })
-    return
-  }
-
-  if (isStaticText && name.trim().length > 0) {
-    entries.push({
-      ref: '',
-      role: 'text',
-      name: name.trim(),
-      backendDOMNodeId: node.backendDOMNodeId ?? 0,
-      depth
-    })
-    return
-  }
-
-  if (isInteractive && (hasFocusable || node.backendDOMNodeId)) {
-    const ref = `@e${nextRef()}`
-    entries.push({
-      ref,
-      role: formatInteractiveRole(role),
-      name: name || '(unlabeled)',
-      backendDOMNodeId: node.backendDOMNodeId ?? 0,
-      depth
-    })
-    return
-  }
-
-  walkChildren(node, nodeById, depth, entries, nextRef)
-}
-
-function walkChildren(
-  node: AXNode,
-  nodeById: Map<string, AXNode>,
-  depth: number,
-  entries: SnapshotEntry[],
-  nextRef: () => number
-): void {
-  if (!node.childIds) {
-    return
-  }
-  for (const childId of node.childIds) {
-    const child = nodeById.get(childId)
-    if (child) {
-      walkTree(child, nodeById, depth, entries, nextRef)
+    if (isInteractive && (isFocusable(node) || node.backendDOMNodeId)) {
+      appendSnapshotEntry(entries, budget, {
+        ref: `@e${nextRef()}`,
+        role: formatInteractiveRole(role),
+        rawName,
+        backendDOMNodeId: node.backendDOMNodeId ?? 0,
+        depth: current.depth
+      })
     }
   }
+}
+
+function pushSnapshotChildren(
+  stack: { node: AXNode; depth: number }[],
+  node: AXNode,
+  nodeById: Map<string, AXNode>,
+  depth: number,
+  maxChildren: number
+): void {
+  const childCount = Math.min(node.childIds?.length ?? 0, maxChildren)
+  for (let index = childCount - 1; index >= 0; index--) {
+    const child = nodeById.get(node.childIds![index])
+    if (child) {
+      stack.push({ node: child, depth })
+    }
+  }
+}
+
+function appendSnapshotEntry(
+  entries: SnapshotEntry[],
+  budget: SnapshotWalkBudget,
+  entry: Omit<SnapshotEntry, 'name'> & { rawName: string }
+): void {
+  const name = reserveSnapshotName(entry.rawName, budget)
+  if (name === null || !reserveSnapshotEntry(budget)) {
+    return
+  }
+  const { rawName: _rawName, ...rest } = entry
+  entries.push({ ...rest, name })
+}
+
+function reserveSnapshotEntry(budget: SnapshotWalkBudget): boolean {
+  if (budget.remainingEntries <= 0) {
+    return false
+  }
+  budget.remainingEntries -= 1
+  return true
+}
+
+function reserveSnapshotName(rawName: string, budget: SnapshotWalkBudget): string | null {
+  const maxLength = Math.min(SNAPSHOT_MAX_NAME_CODE_UNITS, budget.remainingNameCodeUnits)
+  if (maxLength <= 0) {
+    return null
+  }
+  const name = rawName.slice(0, maxLength)
+  budget.remainingNameCodeUnits -= name.length
+  return name
+}
+
+function trimSnapshotName(rawName: string): string {
+  let start = 0
+  while (start < rawName.length && /\s/.test(rawName[start])) {
+    start += 1
+  }
+  if (start === rawName.length) {
+    return ''
+  }
+  let end = rawName.length
+  while (end > start && /\s/.test(rawName[end - 1])) {
+    end -= 1
+  }
+  return rawName.slice(start, Math.min(end, start + SNAPSHOT_MAX_NAME_CODE_UNITS))
 }
 
 function isFocusable(node: AXNode): boolean {

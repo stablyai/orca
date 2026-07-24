@@ -1,44 +1,20 @@
 import type { GitHubPRMergeMethod, PRState } from '../../../src/shared/types'
+import { githubRepoIdentityKey } from '../../../src/shared/github-repository-identity-key'
 import { classifyPrSidebarFailure } from './mobile-pr-sidebar-state'
 import { createOptimisticField, type OptimisticField } from './optimistic-write-sequence'
 import type { GitHubPrMutationOutcome } from './github-pr-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
+import type { PrActionMutations } from './pr-action-mutation-contract'
+
+export type { PrActionMutations } from './pr-action-mutation-contract'
+
+export const MOBILE_PR_ACTIONS_MAX_REVIEWER_FIELDS = 64
+const MOBILE_PR_ACTIONS_MAX_REVIEWER_LOGIN_CHARACTERS = 256
 
 // Pure (React-free) engine for the PR mutation actions: owns optimistic fields,
 // busy/error/blocked state, and the success/transient/permanent routing. The hook
 // is a thin adapter that subscribes to `onChange` and exposes these methods. Kept
 // React-free so the U6 action logic is unit-testable with injected fakes.
-
-export type PrActionMutations = {
-  mergePR: (args: {
-    prNumber: number
-    method?: GitHubPRMergeMethod
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  setPRAutoMerge: (args: {
-    prNumber: number
-    enabled: boolean
-    method?: GitHubPRMergeMethod
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  updatePRState: (args: {
-    prNumber: number
-    state: 'open' | 'closed'
-  }) => Promise<GitHubPrMutationOutcome>
-  requestReviewers: (args: {
-    prNumber: number
-    reviewers: string[]
-  }) => Promise<GitHubPrMutationOutcome>
-  removeReviewers: (args: {
-    prNumber: number
-    reviewers: string[]
-  }) => Promise<GitHubPrMutationOutcome>
-  rerunChecks: (args: {
-    prNumber: number
-    headSha?: string | null
-    failedOnly?: boolean
-  }) => Promise<GitHubPrMutationOutcome>
-}
 
 export type PrActionBusyKey =
   | { kind: 'merge' }
@@ -68,7 +44,7 @@ export type PrActionsEngineConfig = {
 }
 
 function prActionsIdentity(cfg: PrActionsEngineConfig): string {
-  const repo = cfg.prRepo ? `${cfg.prRepo.owner}/${cfg.prRepo.repo}` : ''
+  const repo = cfg.prRepo ? githubRepoIdentityKey(cfg.prRepo) : ''
   return `${cfg.prNumber}:${repo}`
 }
 
@@ -123,10 +99,23 @@ export class PrActionsEngine {
   private reviewerField(login: string): OptimisticField<boolean> {
     let f = this.reviewerFields.get(login)
     if (!f) {
+      if (
+        login.length === 0 ||
+        login.length > MOBILE_PR_ACTIONS_MAX_REVIEWER_LOGIN_CHARACTERS ||
+        this.reviewerFields.size >= MOBILE_PR_ACTIONS_MAX_REVIEWER_FIELDS
+      ) {
+        throw new Error('Too many reviewer actions are pending')
+      }
       f = createOptimisticField<boolean>(this.cfg.onChange)
       this.reviewerFields.set(login, f)
     }
     return f
+  }
+
+  private releaseReviewerFieldIfIdle(login: string, field: OptimisticField<boolean>): void {
+    if (field.peek() === undefined && this.reviewerFields.get(login) === field) {
+      this.reviewerFields.delete(login)
+    }
   }
 
   // Why: action start pairs setBusy + setError(null); skip notify when unchanged
@@ -260,7 +249,8 @@ export class PrActionsEngine {
     try {
       const outcome = await cfg.mutations.updatePRState({
         prNumber: cfg.prNumber,
-        state
+        state,
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, {
         onSuccess: () => this.stateField.settleSuccess(seq),
@@ -281,7 +271,8 @@ export class PrActionsEngine {
     try {
       const outcome = await cfg.mutations.requestReviewers({
         prNumber: cfg.prNumber,
-        reviewers: [login]
+        reviewers: [login],
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
@@ -289,6 +280,7 @@ export class PrActionsEngine {
       })
     } finally {
       this.clearBusyIfOwned(identity, { kind: 'reviewer', login })
+      this.releaseReviewerFieldIfIdle(login, field)
     }
   }
 
@@ -302,7 +294,8 @@ export class PrActionsEngine {
     try {
       const outcome = await cfg.mutations.removeReviewers({
         prNumber: cfg.prNumber,
-        reviewers: [login]
+        reviewers: [login],
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
@@ -310,6 +303,7 @@ export class PrActionsEngine {
       })
     } finally {
       this.clearBusyIfOwned(identity, { kind: 'reviewer', login })
+      this.releaseReviewerFieldIfIdle(login, field)
     }
   }
 
@@ -322,7 +316,8 @@ export class PrActionsEngine {
       const outcome = await cfg.mutations.rerunChecks({
         prNumber: cfg.prNumber,
         headSha: cfg.headSha,
-        failedOnly: true
+        failedOnly: true,
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
     } finally {
@@ -341,5 +336,10 @@ export class PrActionsEngine {
   resolveReviewerRequested(login: string, authoritative: boolean): boolean {
     const f = this.reviewerFields.get(login)
     return f ? f.resolve(authoritative) : authoritative
+  }
+
+  /** Test-only evidence for retained optimistic reviewer state. */
+  retainedReviewerFieldCountForTests(): number {
+    return this.reviewerFields.size
   }
 }

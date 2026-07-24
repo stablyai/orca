@@ -2,59 +2,39 @@ import { join } from 'node:path'
 import {
   mkdirSync,
   writeFileSync,
-  readFileSync,
   existsSync,
   rmSync,
   unlinkSync,
-  openSync,
-  closeSync,
-  readSync,
-  fstatSync,
   promises as fsPromises
 } from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
 import {
-  decodeLogHeader,
-  encodeLogBatch,
+  encodeLogBatchWithinLimit,
   encodeLogHeader,
   LOG_HEADER_BYTES
 } from './terminal-history-log'
 import type { PendingOutputRecord, TerminalCheckpointFile, TerminalSnapshot } from './types'
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
+import {
+  TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+  TERMINAL_HISTORY_LOG_MAX_BYTES
+} from './terminal-history-file-limits'
+import {
+  readTerminalHistorySessionMeta,
+  stringifyTerminalHistorySessionMeta,
+  type HistoryManagerOptions,
+  type OpenSessionOptions,
+  type SessionMeta
+} from './terminal-history-session-metadata'
+import {
+  resolveTerminalHistoryLogState,
+  type TerminalHistoryLogState
+} from './terminal-history-log-state'
 
-// Why 5MB: bounds both cold-restore replay time and disk usage per session.
-// Reaching the cap triggers one full snapshot checkpoint (which subsumes and
-// resets the log) — one O(buffer) serialize per ~5MB of output instead of one
-// per 5-second tick.
-const LOG_MAX_BYTES = 5 * 1024 * 1024
+export type { HistoryManagerOptions, OpenSessionOptions, SessionMeta }
 
-export type SessionMeta = {
-  cwd: string
-  cols: number
-  rows: number
-  startedAt: string
-  endedAt: string | null
-  exitCode: number | null
-}
-
-export type OpenSessionOptions = {
-  cwd: string
-  cols: number
-  rows: number
-}
-
-type SessionWriter = {
+type SessionWriter = TerminalHistoryLogState & {
   dir: string
-  checkpointPath: string
-  logPath: string
-  /** Generation of the on-disk log header. Null until lazily resolved on the
-   *  first append after a warm registerWriter (the file may predate us). */
-  logGeneration: number | null
-  /** Current log file size. Null until lazily resolved alongside generation. */
-  logBytes: number | null
-}
-
-export type HistoryManagerOptions = {
-  onWriteError?: (sessionId: string, error: Error) => void
 }
 
 export class HistoryManager {
@@ -82,15 +62,9 @@ export class HistoryManager {
         endedAt: null,
         exitCode: null
       }
-      writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
+      writeFileSync(join(dir, 'meta.json'), stringifyTerminalHistorySessionMeta(meta))
 
-      // Why: if a session ID is reused after a previous clean exit, stale
-      // recovery files may still be on disk. Without removing them, a crash
-      // before the first 5s checkpoint tick would cause detectColdRestore to
-      // replay stale terminal content from the previous session. Both
-      // checkpoint.json and scrollback.bin (legacy) must be cleaned up
-      // because the reader falls back to scrollback.bin when no checkpoint
-      // exists.
+      // Why: clear stale recovery files (incl. legacy scrollback.bin) so a crash before the first checkpoint can't replay a prior session's content.
       const checkpointPath = join(dir, 'checkpoint.json')
       const logPath = join(dir, 'output.log')
       for (const staleFile of [checkpointPath, join(dir, 'scrollback.bin'), logPath]) {
@@ -113,11 +87,7 @@ export class HistoryManager {
     }
   }
 
-  // Why: on warm reattach after app relaunch, the HistoryManager is a fresh
-  // instance with no in-memory writers. This registers the writer so
-  // checkpoint() calls work, without overwriting meta.json or deleting the
-  // existing checkpoint.json (which is the only valid recovery data until
-  // the next checkpoint tick writes a fresh one).
+  // Why: warm reattach has no in-memory writers; re-register without touching meta.json or checkpoint.json (only recovery data until the next tick).
   registerWriter(sessionId: string): void {
     if (this.writers.has(sessionId)) {
       return
@@ -132,10 +102,7 @@ export class HistoryManager {
     })
   }
 
-  // Why: wake after sleep re-spawns a session whose history was closed by the
-  // sleep-time kill. Re-register the writer without deleting checkpoint.json
-  // (still the only recovery data until the next tick) and clear endedAt so
-  // the next sleep can cold-restore this session again.
+  // Why: wake re-spawns a sleep-killed session; re-register without deleting checkpoint.json, clear endedAt so it can cold-restore again.
   reopenSession(sessionId: string): void {
     this.disabledSessions.delete(sessionId)
     this.registerWriter(sessionId)
@@ -151,16 +118,12 @@ export class HistoryManager {
   }
 
   suspendSession(sessionId: string): void {
-    // Why: if a fresh daemon cannot accept recovered scrollback, leaving its
-    // writer active would let the next checkpoint overwrite the only good copy.
+    // Why: leaving the writer active would let the next checkpoint overwrite the only good recovered-scrollback copy.
     this.writers.delete(sessionId)
     this.disabledSessions.delete(sessionId)
   }
 
-  /** Appends one take batch to the incremental log. Returns 'needs-checkpoint'
-   *  when the log is at capacity — the caller must take a full snapshot, which
-   *  subsumes the un-appended records (they were already applied to the live
-   *  emulator) and resets the log via checkpoint(). */
+  /** Appends one batch to the incremental log; returns 'needs-checkpoint' at capacity, signalling the caller to checkpoint() (which resets the log). */
   async appendIncrements(
     sessionId: string,
     seq: number,
@@ -174,18 +137,19 @@ export class HistoryManager {
       return 'ok'
     }
     try {
-      this.resolveLogState(writer)
-      const batch = encodeLogBatch(seq, records)
-      // Why max(..., header): a fresh log gets its header written below, so
-      // the projected size must include it or the cap can be overshot.
-      const projectedBytes = Math.max(writer.logBytes ?? 0, LOG_HEADER_BYTES) + batch.length
-      if (projectedBytes > LOG_MAX_BYTES) {
+      resolveTerminalHistoryLogState(writer)
+      // Why max(..., header): a fresh log's header (written below) must count toward the projected size or the cap overshoots.
+      const existingBytes = Math.max(writer.logBytes ?? 0, LOG_HEADER_BYTES)
+      const batch = encodeLogBatchWithinLimit(
+        seq,
+        records,
+        TERMINAL_HISTORY_LOG_MAX_BYTES - existingBytes
+      )
+      if (!batch) {
         return 'needs-checkpoint'
       }
       if (writer.logBytes === 0) {
-        // Why: header carries the generation that ties this log to its base
-        // checkpoint; written lazily so warm reattaches never clobber a log
-        // that already has appended batches.
+        // Why: header ties this log to its base checkpoint; written lazily so warm reattaches don't clobber an appended log.
         await fsPromises.writeFile(writer.logPath, encodeLogHeader(writer.logGeneration ?? 0))
         writer.logBytes = LOG_HEADER_BYTES
       }
@@ -198,9 +162,7 @@ export class HistoryManager {
     }
   }
 
-  // Why: replaces the old appendData (which wrote every PTY chunk to disk).
-  // Full checkpoints are now rare (clean disconnect, pending-buffer overflow,
-  // log cap); the 5s tick appends increments via appendIncrements instead.
+  // Full checkpoints are rare (clean disconnect, pending-buffer overflow, log cap); the 5s tick appends increments instead.
   async checkpoint(sessionId: string, snapshot: TerminalSnapshot): Promise<void> {
     if (this.disabledSessions.has(sessionId)) {
       return
@@ -211,17 +173,14 @@ export class HistoryManager {
     }
 
     try {
-      // Why: shells that haven't emitted OSC-7 have snapshot.cwd = null.
-      // Persisting null would overwrite the usable cwd from meta.json,
-      // breaking cold restore cwd recovery. Fall back to the meta cwd
-      // so the revived shell inherits the original working directory.
+      // Why: snapshot.cwd is null until OSC-7; persisting null would clobber meta.json's usable cwd and break cold-restore recovery.
       let effectiveCwd = snapshot.cwd
       if (effectiveCwd === null) {
         const meta = this.readMetaFromDir(writer.dir)
         effectiveCwd = meta?.cwd ?? null
       }
 
-      this.resolveLogState(writer)
+      resolveTerminalHistoryLogState(writer)
       const generation = (writer.logGeneration ?? 0) + 1
       const checkpointFile: TerminalCheckpointFile = {
         snapshotAnsi: snapshot.snapshotAnsi,
@@ -236,70 +195,21 @@ export class HistoryManager {
         generation,
         checkpointedAt: new Date().toISOString()
       }
-      const data = JSON.stringify(checkpointFile)
-      // Why: atomic write via tmp+rename prevents half-written checkpoints
-      // on crash. Reading a corrupt checkpoint is worse than reading a
-      // slightly stale one. Async IO — a sync ~MB write (worse under
-      // antivirus scanning on Windows) would stall input/IPC for its
-      // duration. Overlap is prevented by the adapter's checkpointInFlight
-      // guard, which awaits this promise before the next tick.
+      const data = stringifyJsonWithinByteLimit(
+        checkpointFile,
+        TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+      ).serialized
+      // Why: tmp+rename is atomic (corrupt checkpoint > stale); async so a sync ~MB write can't stall IPC (worse under Windows AV).
+      // The adapter's checkpointInFlight guard serializes checkpoints, so concurrent async writes can't collide on the fixed .tmp path.
       const tmpPath = `${writer.checkpointPath}.tmp`
       await fsPromises.writeFile(tmpPath, data)
       await fsPromises.rename(tmpPath, writer.checkpointPath)
-      // Why: the snapshot subsumes every logged record, so the log resets to
-      // the new generation. Crash between rename and this reset is safe: the
-      // stale log's generation no longer matches the checkpoint's, so the
-      // restore reader ignores it.
+      // Why: snapshot subsumes logged records, so reset the log to the new generation; a stale-generation log is ignored on restore.
       await fsPromises.writeFile(writer.logPath, encodeLogHeader(generation))
       writer.logGeneration = generation
       writer.logBytes = LOG_HEADER_BYTES
     } catch (err) {
       this.handleWriteError(sessionId, err)
-    }
-  }
-
-  // Why: a warm registerWriter may attach to a session dir that already has a
-  // log (app relaunch while the daemon kept running). Generation and size are
-  // read from disk once so appends continue the existing stream instead of
-  // clobbering it.
-  private resolveLogState(writer: SessionWriter): void {
-    if (writer.logBytes !== null && writer.logGeneration !== null) {
-      return
-    }
-    let headerGeneration: number | null = null
-    let size = 0
-    try {
-      const fd = openSync(writer.logPath, 'r')
-      try {
-        size = fstatSync(fd).size
-        const header = Buffer.alloc(LOG_HEADER_BYTES)
-        if (readSync(fd, header, 0, LOG_HEADER_BYTES, 0) === LOG_HEADER_BYTES) {
-          headerGeneration = decodeLogHeader(header)
-        }
-      } finally {
-        closeSync(fd)
-      }
-    } catch {
-      // Missing log file — fresh state below.
-    }
-    if (headerGeneration !== null) {
-      writer.logGeneration = headerGeneration
-      writer.logBytes = size
-      return
-    }
-    // Missing or unreadable header: logBytes = 0 makes the next append rewrite
-    // the file from scratch (writeFile truncates), so a garbage file cannot be
-    // extended.
-    writer.logBytes = 0
-    writer.logGeneration = this.readCheckpointGeneration(writer) ?? 0
-  }
-
-  private readCheckpointGeneration(writer: SessionWriter): number | null {
-    try {
-      const checkpoint = JSON.parse(readFileSync(writer.checkpointPath, 'utf-8'))
-      return typeof checkpoint.generation === 'number' ? checkpoint.generation : null
-    } catch {
-      return null
     }
   }
 
@@ -310,16 +220,12 @@ export class HistoryManager {
     }
 
     this.writers.delete(sessionId)
-    // Why: the session is dead, so its disabled flag is dead state. Without this
-    // a session poisoned by a transient mid-life write error leaks its id in
-    // disabledSessions forever (sessionIds are fresh per PTY, never reused).
+    // Why: session is dead; without this a transient-error-poisoned id leaks forever (sessionIds never reused).
     this.disabledSessions.delete(sessionId)
     try {
       this.updateMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode })
     } catch (err) {
-      // Why: if endedAt can't be written, the session looks like an unclean
-      // shutdown and triggers a false cold restore on next launch. Disable
-      // further writes and report, but don't crash the app.
+      // Why: an unwritten endedAt looks like an unclean shutdown → false cold restore next launch.
       this.handleWriteError(sessionId, err)
     }
   }
@@ -351,15 +257,14 @@ export class HistoryManager {
       return null
     }
     try {
-      return JSON.parse(readFileSync(metaPath, 'utf-8'))
+      return readTerminalHistorySessionMeta(metaPath)
     } catch {
       return null
     }
   }
 
   async dispose(): Promise<void> {
-    // Why: mark all open sessions as cleanly ended so they don't trigger
-    // false cold-restores on next launch.
+    // Why: mark open sessions cleanly ended so they don't trigger false cold-restores next launch.
     for (const [sessionId, writer] of this.writers) {
       try {
         this.updateMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode: null })
@@ -370,9 +275,7 @@ export class HistoryManager {
     this.writers.clear()
   }
 
-  // Why: history is best-effort — any error should disable the session
-  // rather than crash the app. Callers use fire-and-forget `void` promises,
-  // so a re-thrown error would become an unhandled rejection.
+  // Why: history is best-effort; callers fire-and-forget so a throw would be an unhandled rejection — disable instead.
   private handleWriteError(sessionId: string, err: unknown): void {
     this.disabledSessions.add(sessionId)
     this.onWriteError?.(sessionId, err as Error)
@@ -381,7 +284,7 @@ export class HistoryManager {
   private readMetaFromDir(dir: string): SessionMeta | null {
     const metaPath = join(dir, 'meta.json')
     try {
-      return JSON.parse(readFileSync(metaPath, 'utf-8'))
+      return readTerminalHistorySessionMeta(metaPath)
     } catch {
       return null
     }
@@ -391,11 +294,11 @@ export class HistoryManager {
     const metaPath = join(dir, 'meta.json')
     let meta: SessionMeta
     try {
-      meta = JSON.parse(readFileSync(metaPath, 'utf-8'))
+      meta = readTerminalHistorySessionMeta(metaPath)
     } catch {
       return
     }
     Object.assign(meta, updates)
-    writeFileSync(metaPath, JSON.stringify(meta, null, 2))
+    writeFileSync(metaPath, stringifyTerminalHistorySessionMeta(meta))
   }
 }

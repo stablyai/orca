@@ -1,13 +1,15 @@
 /* eslint-disable max-lines -- Why: OpenCode usage analytics need to normalize multiple local DB schema generations, attribute worktrees, and build persisted projections in one auditable pipeline. */
 import { existsSync } from 'node:fs'
-import { readdir, realpath, stat } from 'node:fs/promises'
+import { realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, isAbsolute, join, posix, win32 } from 'node:path'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import Database from '../sqlite/sync-database'
-import { columnExists, tableExists } from './schema-helpers'
+import { listOpenCodeDatabaseFiles } from '../opencode/opencode-database-files'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
+import { getUsageHistoryRetainedBytes, UsageHistoryScanBudget } from '../usage-history-scan-budget'
+import { iterateOpenCodeUsageRows, type OpenCodeUsageRow } from './sqlite-usage-row-stream'
 import type {
   OpenCodeUsageAttributedEvent,
   OpenCodeUsageDailyAggregate,
@@ -25,34 +27,6 @@ export type OpenCodeUsageWorktreeRef = {
   worktreeId: string
   path: string
   displayName: string
-}
-
-type OpenCodeUsageRow = {
-  id: string
-  session_id: string
-  time_created: number
-  time_updated: number | null
-  data: string
-  directory: string | null
-  title: string | null
-  worktree: string | null
-  session_model: string | null
-}
-
-type OpenCodeSessionUsageRow = {
-  id: string
-  session_id: string
-  time_created: number
-  time_updated: number | null
-  directory: string | null
-  title: string | null
-  worktree: string | null
-  session_model: string | null
-  cost: number
-  tokens_input: number
-  tokens_output: number
-  tokens_reasoning: number
-  tokens_cache_read: number
 }
 
 const YIELD_EVERY_DATABASES = 2
@@ -111,11 +85,7 @@ export async function listOpenCodeDatabases(): Promise<string[]> {
   }
 
   try {
-    const entries = await readdir(getOpenCodeDataDirectory(), { withFileTypes: true })
-    return entries
-      .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
-      .map((entry) => join(getOpenCodeDataDirectory(), entry.name))
-      .sort()
+    return (await listOpenCodeDatabaseFiles(getOpenCodeDataDirectory())).paths
   } catch {
     return []
   }
@@ -146,140 +116,6 @@ export async function getProcessedDatabaseInfo(
 
 async function yieldToEventLoop(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
-}
-
-function getProjectJoin(db: Database.Database): string {
-  return tableExists(db, 'project') && columnExists(db, 'session', 'project_id')
-    ? 'LEFT JOIN project p ON p.id = s.project_id'
-    : 'LEFT JOIN (SELECT NULL AS id, NULL AS worktree) p ON 1 = 0'
-}
-
-function getSessionModelSelect(db: Database.Database): string {
-  return columnExists(db, 'session', 'model') ? 's.model AS session_model' : 'NULL AS session_model'
-}
-
-function getAssistantSessionMessageCount(db: Database.Database): number {
-  if (!tableExists(db, 'session_message')) {
-    return 0
-  }
-  const assistantPredicate = columnExists(db, 'session_message', 'type')
-    ? "type = 'assistant' AND json_extract(data, '$.tokens.input') IS NOT NULL"
-    : "json_extract(data, '$.tokens.input') IS NOT NULL"
-  const row = db
-    .prepare(`SELECT COUNT(*) AS count FROM session_message WHERE ${assistantPredicate}`)
-    .get() as { count?: number } | undefined
-  return row?.count ?? 0
-}
-
-function canReadSessionUsageRows(db: Database.Database): boolean {
-  if (!tableExists(db, 'session')) {
-    return false
-  }
-  return ['cost', 'tokens_input', 'tokens_output', 'tokens_reasoning', 'tokens_cache_read'].every(
-    (columnName) => columnExists(db, 'session', columnName)
-  )
-}
-
-function getSessionUsageRowCount(db: Database.Database): number {
-  if (!canReadSessionUsageRows(db)) {
-    return 0
-  }
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) AS count
-       FROM session
-       WHERE tokens_input + tokens_output + tokens_reasoning + tokens_cache_read > 0`
-    )
-    .get() as { count?: number } | undefined
-  return row?.count ?? 0
-}
-
-function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
-  const projectJoin = getProjectJoin(db)
-  const sessionModelSelect = getSessionModelSelect(db)
-  const rows = db
-    .prepare(
-      `SELECT s.id, s.id AS session_id, s.time_created, s.time_updated,
-              s.directory, s.title, p.worktree, ${sessionModelSelect},
-              s.cost, s.tokens_input, s.tokens_output, s.tokens_reasoning, s.tokens_cache_read
-       FROM session s
-       ${projectJoin}
-       WHERE s.tokens_input + s.tokens_output + s.tokens_reasoning + s.tokens_cache_read > 0
-       ORDER BY s.time_created, s.id`
-    )
-    .all() as OpenCodeSessionUsageRow[]
-
-  return rows.map((row) => ({
-    id: row.id,
-    session_id: row.session_id,
-    time_created: row.time_created,
-    time_updated: row.time_updated,
-    directory: row.directory,
-    title: row.title,
-    worktree: row.worktree,
-    session_model: row.session_model,
-    data: JSON.stringify({
-      cost: row.cost,
-      tokens: {
-        input: row.tokens_input,
-        output: row.tokens_output,
-        reasoning: row.tokens_reasoning,
-        total: row.tokens_input + row.tokens_output + row.tokens_reasoning,
-        cache: {
-          read: row.tokens_cache_read,
-          write: 0
-        }
-      }
-    })
-  }))
-}
-
-function selectUsageRows(db: Database.Database): OpenCodeUsageRow[] {
-  if (!tableExists(db, 'session')) {
-    return []
-  }
-
-  // Why: newer OpenCode DBs maintain session-level token/cost totals. Reading
-  // one aggregate row per session is faster than parsing every message blob.
-  if (getSessionUsageRowCount(db) > 0) {
-    return selectSessionUsageRows(db)
-  }
-
-  const projectJoin = getProjectJoin(db)
-  const sessionModelSelect = getSessionModelSelect(db)
-
-  if (getAssistantSessionMessageCount(db) > 0) {
-    const assistantPredicate = columnExists(db, 'session_message', 'type')
-      ? "sm.type = 'assistant'"
-      : "json_extract(sm.data, '$.tokens.input') IS NOT NULL"
-    return db
-      .prepare(
-        `SELECT sm.id, sm.session_id, sm.time_created, sm.time_updated, sm.data,
-                s.directory, s.title, p.worktree, ${sessionModelSelect}
-         FROM session_message sm
-         JOIN session s ON s.id = sm.session_id
-         ${projectJoin}
-         WHERE ${assistantPredicate}
-         ORDER BY sm.time_created, sm.id`
-      )
-      .all() as OpenCodeUsageRow[]
-  }
-
-  if (!tableExists(db, 'message')) {
-    return []
-  }
-
-  return db
-    .prepare(
-      `SELECT m.id, m.session_id, m.time_created, m.time_updated, m.data,
-              s.directory, s.title, p.worktree, ${sessionModelSelect}
-       FROM message m
-       JOIN session s ON s.id = m.session_id
-       ${projectJoin}
-       WHERE json_extract(m.data, '$.role') = 'assistant'
-       ORDER BY m.time_created, m.id`
-    )
-    .all() as OpenCodeUsageRow[]
 }
 
 function parseJsonObject(value: unknown): Record<string, unknown> | null {
@@ -841,11 +677,71 @@ function mergeDailyAggregates(
   }
 }
 
+function claimOpenCodeUsageProjection(
+  budget: UsageHistoryScanBudget,
+  sessions: readonly OpenCodeUsageSession[],
+  dailyAggregates: readonly OpenCodeUsageDailyAggregate[]
+): void {
+  for (const session of sessions) {
+    budget.claimProjection(
+      getUsageHistoryRetainedBytes([
+        session.sessionId,
+        session.firstTimestamp,
+        session.lastTimestamp,
+        session.primaryModel,
+        session.primaryProjectLabel,
+        session.primaryWorktreeId,
+        session.primaryRepoId
+      ])
+    )
+    for (const location of session.locationBreakdown) {
+      budget.claimProjection(
+        getUsageHistoryRetainedBytes([
+          location.locationKey,
+          location.projectLabel,
+          location.repoId,
+          location.worktreeId
+        ])
+      )
+    }
+    for (const model of session.modelBreakdown) {
+      budget.claimProjection(getUsageHistoryRetainedBytes([model.modelKey, model.modelLabel]))
+    }
+    for (const locationModel of session.locationModelBreakdown) {
+      budget.claimProjection(
+        getUsageHistoryRetainedBytes([
+          locationModel.locationKey,
+          locationModel.modelKey,
+          locationModel.modelLabel,
+          locationModel.repoId,
+          locationModel.worktreeId
+        ])
+      )
+    }
+  }
+  for (const daily of dailyAggregates) {
+    budget.claimProjection(
+      getUsageHistoryRetainedBytes([
+        daily.day,
+        daily.model,
+        daily.projectKey,
+        daily.projectLabel,
+        daily.repoId,
+        daily.worktreeId
+      ])
+    )
+  }
+}
+
 export async function parseOpenCodeUsageDatabase(
   dbPath: string,
   worktrees: (OpenCodeUsageWorktreeRef & { canonicalPath: string })[],
-  options: { claimSession?: (sessionId: string) => boolean } = {}
+  options: {
+    claimSession?: (sessionId: string) => boolean
+    budget?: UsageHistoryScanBudget
+  } = {}
 ): Promise<OpenCodeUsagePersistedDatabase> {
+  const budget = options.budget ?? new UsageHistoryScanBudget()
   const processedDatabase = await getProcessedDatabaseInfo(dbPath)
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
   try {
@@ -853,7 +749,7 @@ export async function parseOpenCodeUsageDatabase(
     const events: OpenCodeUsageAttributedEvent[] = []
     const claimedBySessionId = new Map<string, boolean>()
     let hasDeferredClaims = false
-    for (const row of selectUsageRows(db)) {
+    for (const row of iterateOpenCodeUsageRows(db)) {
       const parsed = parseOpenCodeUsageRow(row)
       if (!parsed) {
         continue
@@ -862,6 +758,7 @@ export async function parseOpenCodeUsageDatabase(
       // each session must be counted from exactly one database (#8006).
       let owned = claimedBySessionId.get(parsed.sessionId)
       if (owned === undefined) {
+        budget.claimOwnershipKey(parsed.sessionId)
         owned = options.claimSession ? options.claimSession(parsed.sessionId) : true
         claimedBySessionId.set(parsed.sessionId, owned)
       }
@@ -871,12 +768,27 @@ export async function parseOpenCodeUsageDatabase(
       }
       const attributed = await attributeOpenCodeUsageEvent(parsed, worktrees)
       if (attributed) {
+        budget.claimRecord(
+          getUsageHistoryRetainedBytes([
+            attributed.sessionId,
+            attributed.timestamp,
+            attributed.cwd,
+            attributed.model,
+            attributed.day,
+            attributed.projectKey,
+            attributed.projectLabel,
+            attributed.repoId,
+            attributed.worktreeId
+          ])
+        )
         events.push(attributed)
       }
     }
+    const aggregates = aggregateOpenCodeUsage(events)
+    claimOpenCodeUsageProjection(budget, aggregates.sessions, aggregates.dailyAggregates)
     return {
       ...processedDatabase,
-      ...aggregateOpenCodeUsage(events),
+      ...aggregates,
       ownedSessionIds: [...claimedBySessionId.entries()]
         .filter(([, owned]) => owned)
         .map(([sessionId]) => sessionId),
@@ -889,12 +801,14 @@ export async function parseOpenCodeUsageDatabase(
 
 export async function scanOpenCodeUsageDatabases(
   worktrees: OpenCodeUsageWorktreeRef[],
-  previousProcessedDatabases: OpenCodeUsagePersistedDatabase[]
+  previousProcessedDatabases: OpenCodeUsagePersistedDatabase[],
+  options: { budget?: UsageHistoryScanBudget } = {}
 ): Promise<{
   processedDatabases: OpenCodeUsagePersistedDatabase[]
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
+  const budget = options.budget ?? new UsageHistoryScanBudget()
   const dbPaths = await listOpenCodeDatabases()
   const previousByPath = new Map(
     previousProcessedDatabases.map((database) => [database.path, database])
@@ -965,7 +879,12 @@ export async function scanOpenCodeUsageDatabases(
   const sessionOwnerById = new Map<string, string>()
   for (const dbPath of [...reusedByPath.keys()].sort(compareOpenCodeClaimPriority)) {
     const previous = reusedByPath.get(dbPath)
+    for (const session of previous?.sessions ?? []) {
+      budget.claimRecords(session.eventCount)
+    }
+    claimOpenCodeUsageProjection(budget, previous?.sessions ?? [], previous?.dailyAggregates ?? [])
     for (const sessionId of previous?.ownedSessionIds ?? []) {
+      budget.claimOwnershipKey(sessionId)
       if (!sessionOwnerById.has(sessionId)) {
         sessionOwnerById.set(sessionId, dbPath)
       }
@@ -976,6 +895,7 @@ export async function scanOpenCodeUsageDatabases(
   const orderedPathsToParse = [...pathsToParse].sort(compareOpenCodeClaimPriority)
   for (const [index, dbPath] of orderedPathsToParse.entries()) {
     const processed = await parseOpenCodeUsageDatabase(dbPath, worktreesWithCanonicalPaths, {
+      budget,
       claimSession: (sessionId) => {
         const owner = sessionOwnerById.get(sessionId)
         if (owner !== undefined && owner !== dbPath) {

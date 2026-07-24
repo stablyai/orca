@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: the coordinator keeps queueing, pacing, and
-renderer broadcast rules together so freshness and rate-limit invariants are
-reviewable in one place. */
+/* eslint-disable max-lines -- Why: queueing, pacing, and broadcast rules stay together so freshness and rate-limit invariants are reviewable in one place. */
 import { webContents } from 'electron'
 import type {
   GitHubPRRefreshAlias,
@@ -11,7 +9,22 @@ import type {
   PRRefreshOutcome
 } from '../../shared/types'
 import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './client'
-import { getRateLimit, noteRateLimitSpend, rateLimitGuard } from './rate-limit'
+import { getOriginGitHubApiRepository } from './github-api-repository'
+import { ghRepoExecOptions, githubRepoContext } from './gh-utils'
+import {
+  boundedVisiblePRRefreshCandidates,
+  PR_REFRESH_ACTIVE_SCOPE_LIMIT,
+  PR_REFRESH_QUEUE_ENTRY_LIMIT,
+  PR_REFRESH_RETRY_STATE_LIMIT,
+  retainPRRefreshAlias,
+  retainPRRefreshState
+} from './pr-refresh-memory-bounds'
+import {
+  getRateLimit,
+  noteRepositoryRateLimitSpend,
+  repositoryRateLimitGuard,
+  spendsSharedGitHubComQuota
+} from './rate-limit'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 
@@ -83,7 +96,38 @@ const queue = new Map<string, QueueEntry>()
 const backgroundStarts: number[] = []
 const activeStartsByScope = new Map<string, number[]>()
 const errorBackoff = new Map<string, { failures: number; retryAt: number }>()
+// Per-key manual-retry cooldown (secondary rate-limit Retry-After); refreshPRNow refuses manual retry until this time so a stale renderer can't bypass it.
+const manualRetryGates = new Map<string, number>()
 let lastBackgroundStartAt = 0
+
+/**
+ * Track (or clear) the manual-retry cooldown for a key from a broadcast outcome.
+ * Only a rate-limit outcome carrying `retryDisabledUntil` sets a gate; any other settled outcome clears it.
+ */
+function noteManualRetryGate(key: string, outcome: PRRefreshOutcome): void {
+  const now = Date.now()
+  for (const [gateKey, retryAt] of manualRetryGates) {
+    if (retryAt <= now) {
+      manualRetryGates.delete(gateKey)
+    }
+  }
+  if (outcome.kind === 'upstream-error' && outcome.retryDisabledUntil !== undefined) {
+    retainPRRefreshState(
+      manualRetryGates,
+      key,
+      outcome.retryDisabledUntil,
+      PR_REFRESH_RETRY_STATE_LIMIT
+    )
+  } else {
+    manualRetryGates.delete(key)
+  }
+}
+
+/** Reset all per-key retry state (backoff + manual cooldown) when a key resets. */
+function resetKeyRetryState(key: string): void {
+  errorBackoff.delete(key)
+  manualRetryGates.delete(key)
+}
 const visibleByWindow = new Map<number, { generation: number; keys: Set<string> }>()
 let outcomeObserver: PRRefreshOutcomeObserver | null = null
 const diagnosticsCounters = {
@@ -91,6 +135,14 @@ const diagnosticsCounters = {
   coalesced: 0,
   skipped: 0,
   backgroundPauses: 0
+}
+
+function setBoundedQueueEntry(entry: QueueEntry): boolean {
+  if (!queue.has(entry.key) && queue.size >= PR_REFRESH_QUEUE_ENTRY_LIMIT) {
+    return false
+  }
+  queue.set(entry.key, entry)
+  return true
 }
 
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
@@ -101,7 +153,7 @@ function removeInvisibleVisibleRefreshes(): void {
   for (const [key, entry] of queue) {
     if (entry.reason === 'visible' && !isVisibleKey(key)) {
       queue.delete(key)
-      errorBackoff.delete(key)
+      resetKeyRetryState(key)
       broadcast({
         aliases: Array.from(entry.aliases.values()),
         reason: 'visible',
@@ -133,6 +185,26 @@ function recordPRRefreshQueueDiagnostic(
   })
 }
 
+function broadcastCapacitySkip(
+  aliases: GitHubPRRefreshAlias[],
+  reason: GitHubPRRefreshReason
+): void {
+  diagnosticsCounters.skipped += 1
+  recordPRRefreshQueueDiagnostic('skipped', reason, 'capacity')
+  broadcast({ aliases, reason, status: 'skipped', skippedReason: 'capacity' })
+}
+
+function addBoundedQueueAlias(
+  entry: QueueEntry,
+  alias: GitHubPRRefreshAlias,
+  reason: GitHubPRRefreshReason
+): void {
+  const evicted = retainPRRefreshAlias(entry.aliases, alias, entry.candidate.cacheKey)
+  if (evicted) {
+    broadcastCapacitySkip([evicted], reason)
+  }
+}
+
 function clearActiveBurstWindow(windowId: number): void {
   const windowPrefix = `${windowId}::`
   for (const scope of Array.from(activeStartsByScope.keys())) {
@@ -146,8 +218,7 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
   const hadVisibleRefreshes = visibleByWindow.delete(windowId)
   clearActiveBurstWindow(windowId)
   if (hadVisibleRefreshes) {
-    // Why: visible follow-ups are owned by the renderer that reported them.
-    // If that WebContents is destroyed, no later visibility report may arrive.
+    // Why: visible follow-ups are owned by the reporting renderer; if its WebContents is destroyed, no later visibility report arrives.
     removeInvisibleVisibleRefreshes()
   }
 }
@@ -155,12 +226,7 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
 /**
  * Drop a removed worktree's aliases from every queue entry.
  *
- * Why: many local branches/worktrees that resolve to the same PR coalesce into
- * one queue entry whose `aliases` map keeps one entry per worktree. Aliases are
- * only pruned when a candidate is re-enqueued as invalid — never when a worktree
- * is simply removed. Over a long session with churning worktrees these maps grow
- * unbounded, contributing to the renderer/process memory creep behind the OOM
- * reports. Called from worktree removal so stale aliases are released promptly.
+ * Why: aliases are otherwise only pruned when a candidate is re-enqueued as invalid, so churning worktrees grow these maps unbounded (OOM creep).
  */
 export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
   for (const [key, entry] of queue) {
@@ -177,11 +243,10 @@ export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
     // No aliases left means no worktree still cares about this refresh.
     if (entry.aliases.size === 0) {
       queue.delete(key)
-      errorBackoff.delete(key)
+      resetKeyRetryState(key)
       continue
     }
-    // Keep the entry alive but ensure its representative candidate is not a
-    // dangling reference to the removed worktree.
+    // Keep the entry alive but replace its representative so it isn't a dangling reference to the removed worktree.
     if (entry.candidate.worktreeId === worktreeId) {
       const replacementAlias = entry.aliases.values().next().value
       if (replacementAlias) {
@@ -190,9 +255,7 @@ export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
           cacheKey: replacementAlias.cacheKey,
           branch: replacementAlias.branch,
           worktreeId: replacementAlias.worktreeId,
-          // Why: the probe now represents the replacement worktree, so it must
-          // use that worktree's head — otherwise divergence is stamped for the
-          // removed worktree's head and the survivor's link is never cleared.
+          // Why: the probe now represents the replacement worktree, so use its head — else the removed worktree's link never clears.
           currentHeadOid: replacementAlias.currentHeadOid ?? null
         }
       }
@@ -348,31 +411,34 @@ function visibleCandidateAfterOutcome(
   }
 }
 
-function setVisibleFollowUp(entry: QueueEntry): void {
+function setVisibleFollowUp(entry: QueueEntry): boolean {
   const existing = queue.get(entry.key)
   if (!existing) {
-    queue.set(entry.key, entry)
-    return
+    if (!setBoundedQueueEntry(entry)) {
+      broadcastCapacitySkip(Array.from(entry.aliases.values()), entry.reason)
+      return false
+    }
+    return true
   }
 
   for (const alias of entry.aliases.values()) {
-    existing.aliases.set(alias.cacheKey, alias)
+    addBoundedQueueAlias(existing, alias, entry.reason)
   }
 
-  // Why: a user activation can arrive while a background refresh is awaiting gh.
-  // The background follow-up must not overwrite that pending active/manual work.
+  // Why: a user activation can arrive while a background refresh awaits gh; the follow-up must not overwrite that pending active/manual work.
   if (
     bypassesFreshnessDelay(existing.reason) ||
     existing.priority > entry.priority ||
     existing.dueAt <= entry.dueAt
   ) {
-    return
+    return true
   }
 
-  queue.set(entry.key, {
+  setBoundedQueueEntry({
     ...entry,
     aliases: existing.aliases
   })
+  return true
 }
 
 function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefreshAlias): void {
@@ -385,7 +451,7 @@ function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefres
   const replacementAlias = existing.aliases.values().next().value
   if (!replacementAlias) {
     queue.delete(key)
-    errorBackoff.delete(key)
+    resetKeyRetryState(key)
     return
   }
 
@@ -395,13 +461,39 @@ function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefres
       cacheKey: replacementAlias.cacheKey,
       branch: replacementAlias.branch,
       worktreeId: replacementAlias.worktreeId,
-      // Why: the probe now represents the replacement worktree, so it must use
-      // that worktree's head — otherwise divergence is stamped for the pruned
-      // candidate's head and the survivor's link is never cleared.
+      // Why: the probe now represents the replacement worktree, so use its head — else the survivor's link never clears.
       currentHeadOid: replacementAlias.currentHeadOid ?? null,
       isArchived: false,
       isBare: false
     }
+  }
+}
+
+/**
+ * Advances the visible-key error backoff and returns the earliest retry time.
+ * Why: only visible keys auto-retry, so callers must gate on `isVisibleKey` first.
+ */
+function nextVisibleErrorRetryAt(key: string): number {
+  const failures = (errorBackoff.get(key)?.failures ?? 0) + 1
+  const retryAt =
+    Date.now() + Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.min(failures - 1, 4))
+  retainPRRefreshState(errorBackoff, key, { failures, retryAt }, PR_REFRESH_RETRY_STATE_LIMIT)
+  return retryAt
+}
+
+/**
+ * Stamps the auto-retry time onto an error outcome before broadcast.
+ * Why: sets only `nextAutoRetryAt`, never `retryDisabledUntil` — that disables *manual* Retry and is reserved for a real rate-limit gate.
+ */
+function withErrorSchedule(outcome: PRRefreshOutcome, retryAt: number): PRRefreshOutcome {
+  if (outcome.kind !== 'upstream-error') {
+    return outcome
+  }
+  // Why: honor a real Retry-After cooldown the client stamped (`retryDisabledUntil`) so we don't auto-retry into an active secondary rate limit.
+  const cooldownUntil = outcome.retryDisabledUntil
+  return {
+    ...outcome,
+    nextAutoRetryAt: cooldownUntil !== undefined ? Math.max(retryAt, cooldownUntil) : retryAt
   }
 }
 
@@ -412,20 +504,17 @@ function scheduleVisibleFollowUp(
   priority: number,
   aliases: GitHubPRRefreshAlias[],
   windowId?: number,
-  options?: { pendingMergeabilityDelayMs?: number }
+  options?: { pendingMergeabilityDelayMs?: number; plannedRetryAt?: number }
 ): void {
   if (!isVisibleKey(key)) {
-    // Why: manual/active refreshes can remove the queued visible retry after
-    // its owner window is gone, leaving the retry backoff without an owner.
-    errorBackoff.delete(key)
+    // Why: manual/active refreshes can remove the queued visible retry after its owner window is gone, orphaning the backoff.
+    resetKeyRetryState(key)
     return
   }
   if (outcome.kind === 'upstream-error') {
-    const failures = (errorBackoff.get(key)?.failures ?? 0) + 1
-    const retryAt =
-      Date.now() + Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.min(failures - 1, 4))
-    errorBackoff.set(key, { failures, retryAt })
-    setVisibleFollowUp({
+    // Why: reuse the retry time already computed for the broadcast so the same failure isn't counted twice against the backoff.
+    const retryAt = options?.plannedRetryAt ?? nextVisibleErrorRetryAt(key)
+    const retained = setVisibleFollowUp({
       key,
       candidate,
       aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
@@ -435,12 +524,15 @@ function scheduleVisibleFollowUp(
       queuedAt: nextQueueOrder(),
       windowId
     })
-    // Why: this is a delayed retry, not active work; showing it as a spinner
-    // makes visible worktrees look stuck until the backoff expires.
+    if (!retained) {
+      resetKeyRetryState(key)
+      return
+    }
+    // Why: this is a delayed retry, not active work; a spinner would make visible worktrees look stuck until backoff expires.
     scheduleDrain(retryAt - Date.now())
     return
   }
-  errorBackoff.delete(key)
+  resetKeyRetryState(key)
   const followUpCandidate = visibleCandidateAfterOutcome(candidate, outcome)
   const regularDueAt = freshRetryAt(followUpCandidate) ?? Date.now()
   const pendingMergeabilityDueAt =
@@ -451,10 +543,8 @@ function scheduleVisibleFollowUp(
     pendingMergeabilityDueAt === null
       ? regularDueAt
       : Math.min(regularDueAt, pendingMergeabilityDueAt)
-  // Why: coalesced linked-PR refreshes may represent several local branches.
-  // Preserve every alias for the next visible follow-up so all cache entries
-  // keep receiving periodic updates.
-  setVisibleFollowUp({
+  // Why: a coalesced linked-PR refresh may represent several branches; preserve every alias so all cache entries keep getting updates.
+  const retained = setVisibleFollowUp({
     key,
     candidate: followUpCandidate,
     aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
@@ -462,11 +552,14 @@ function scheduleVisibleFollowUp(
     priority,
     dueAt,
     queuedAt: nextQueueOrder(),
-    // Why: this manual one-shot fixes GitHub's transient UNKNOWN state; visible
-    // spacing would otherwise delay it past the intended prompt retry window.
+    // Why: this manual one-shot fixes GitHub's transient UNKNOWN state; visible spacing would delay it past the prompt retry window.
     bypassBackgroundBudget: pendingMergeabilityDueAt !== null,
     windowId
   })
+  if (!retained) {
+    resetKeyRetryState(key)
+    return
+  }
   scheduleDrain(Math.max(0, dueAt - Date.now()))
 }
 
@@ -483,8 +576,7 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
     candidate.cachedMergeable === 'UNKNOWN' &&
     !hasResolvedMergeStateStatus(candidate.cachedMergeStateStatus)
   ) {
-    // Why: GitHub can return transient UNKNOWN mergeability while it computes
-    // the PR test merge; visible merge buttons need a prompt follow-up.
+    // Why: GitHub returns transient UNKNOWN mergeability while computing the test merge; visible merge buttons need a prompt follow-up.
     return MERGEABILITY_PENDING_REFRESH_MS
   }
   if (candidate.cachedChecksStatus === 'success') {
@@ -513,9 +605,7 @@ function isMergeabilityPendingOutcome(outcome: PRRefreshOutcome): boolean {
 }
 
 function backgroundRefreshBuckets(): ('core' | 'graphql')[] {
-  // Why: branch refreshes prefer REST but can still fall back to `gh pr list`
-  // when local head-owner metadata is unavailable. Guard both buckets until the
-  // client exposes an exact per-lookup cost plan.
+  // Why: branch refreshes prefer REST but can fall back to `gh pr list`, so guard both buckets until the client exposes a per-lookup cost plan.
   return ['core', 'graphql']
 }
 
@@ -564,6 +654,12 @@ function pruneActiveStarts(scope: string, now: number): number[] {
   return activeStarts
 }
 
+function pruneExpiredActiveScopes(now: number): void {
+  for (const scope of Array.from(activeStartsByScope.keys())) {
+    pruneActiveStarts(scope, now)
+  }
+}
+
 function nextActiveBurstDelay(entry: QueueEntry): number {
   const now = Date.now()
   const activeStarts = pruneActiveStarts(activeBurstScope(entry), now)
@@ -576,9 +672,10 @@ function nextActiveBurstDelay(entry: QueueEntry): number {
 function noteActiveStart(entry: QueueEntry): void {
   const now = Date.now()
   const scope = activeBurstScope(entry)
+  pruneExpiredActiveScopes(now)
   const activeStarts = pruneActiveStarts(scope, now)
   activeStarts.push(now)
-  activeStartsByScope.set(scope, activeStarts)
+  retainPRRefreshState(activeStartsByScope, scope, activeStarts, PR_REFRESH_ACTIVE_SCOPE_LIMIT)
 }
 
 function activeOrder(a: QueueEntry, b: QueueEntry): number {
@@ -588,8 +685,7 @@ function activeOrder(a: QueueEntry, b: QueueEntry): number {
   if (activeBurstScope(a) !== activeBurstScope(b)) {
     return 0
   }
-  // Why: activation churn should refresh the worktree the user lands on before
-  // stale transient selections from the same window/runtime scope.
+  // Why: refresh the worktree the user lands on before stale transient selections in the same window/runtime scope.
   return b.queuedAt - a.queuedAt
 }
 
@@ -693,7 +789,7 @@ async function drainQueue(): Promise<void> {
         continue
       }
       if (next.reason === 'visible' && !isVisibleKey(next.key)) {
-        errorBackoff.delete(next.key)
+        resetKeyRetryState(next.key)
         broadcast({ aliases, reason: next.reason, status: 'skipped', skippedReason: 'fresh' })
         continue
       }
@@ -705,18 +801,35 @@ async function drainQueue(): Promise<void> {
       )
 
       if (isBackground(next.reason)) {
-        // Why: the probe only warms rateLimitGuard's cached snapshot, so a
-        // failed probe must fail open — GHES with rate limiting disabled 404s
-        // every probe (#7553). A genuinely broken gh surfaces per-key as typed
-        // fetch outcomes instead (visible keys additionally back off).
-        await getRateLimit()
+        const executionOptions = ghRepoExecOptions(
+          githubRepoContext(
+            next.candidate.repoPath,
+            next.candidate.connectionId,
+            next.candidate.localGitOptions
+          )
+        )
+        const repository = await getOriginGitHubApiRepository(
+          next.candidate.repoPath,
+          next.candidate.connectionId,
+          executionOptions
+        )
+        // Why: only native github.com uses the singleton snapshot; scoped breakers protect GHES and WSL.
+        if (spendsSharedGitHubComQuota(repository, executionOptions)) {
+          // Why: the probe only warms the cache, so failures must fail open (#7553).
+          await getRateLimit()
+        }
         const buckets = backgroundRefreshBuckets()
         const blockedGuard = buckets
-          .map((bucket) => rateLimitGuard(bucket))
+          .map((bucket) => repositoryRateLimitGuard(repository, bucket, executionOptions))
           .find((guard) => guard.blocked)
         if (blockedGuard?.blocked) {
           const retryAt = blockedGuard.resetAt * 1000
-          queue.set(next.key, { ...next, dueAt: retryAt })
+          const retained = setBoundedQueueEntry({ ...next, dueAt: retryAt })
+          if (!retained) {
+            resetKeyRetryState(next.key)
+            broadcastCapacitySkip(aliases, next.reason)
+            continue
+          }
           broadcast({
             aliases,
             reason: next.reason,
@@ -731,12 +844,11 @@ async function drainQueue(): Promise<void> {
           noteBackgroundStart()
         }
         if (next.reason === 'active') {
-          // Why: activation is high priority, but tab/worktree churn can enqueue
-          // many distinct active refreshes that each probe local Git.
+          // Why: tab/worktree churn can enqueue many distinct active refreshes that each probe local Git.
           noteActiveStart(next)
         }
         for (const bucket of buckets) {
-          noteRateLimitSpend(bucket)
+          noteRepositoryRateLimitSpend(repository, bucket, 1, executionOptions)
         }
       }
 
@@ -748,15 +860,29 @@ async function drainQueue(): Promise<void> {
         next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null,
         ...hostedReviewOptionArgs(next.candidate)
       )
+      // Why: compute the retry schedule before broadcasting so the outcome and its follow-up share one timing; only visible keys auto-retry.
+      let plannedRetryAt: number | undefined
+      let broadcastOutcome = outcome
+      if (outcome.kind === 'upstream-error' && isVisibleKey(next.key)) {
+        plannedRetryAt = nextVisibleErrorRetryAt(next.key)
+        broadcastOutcome = withErrorSchedule(outcome, plannedRetryAt)
+      }
       outcomeObserver?.(next.candidate, outcome)
-      broadcast({ aliases, reason: next.reason, outcome, requestStartedAt }, requestSequence)
+      noteManualRetryGate(next.key, broadcastOutcome)
+      broadcast(
+        { aliases, reason: next.reason, outcome: broadcastOutcome, requestStartedAt },
+        requestSequence
+      )
       scheduleVisibleFollowUp(
         next.key,
         next.candidate,
         outcome,
         next.priority,
         aliases,
-        next.windowId
+        next.windowId,
+        {
+          plannedRetryAt
+        }
       )
     }
   } finally {
@@ -790,7 +916,7 @@ export function enqueuePRRefresh(
   const freshDueAt = shouldSkipFresh(candidate, reason) ? freshRetryAt(candidate) : null
   const dueAt = freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0)
   if (existing) {
-    existing.aliases.set(alias.cacheKey, alias)
+    addBoundedQueueAlias(existing, alias, reason)
     diagnosticsCounters.coalesced += 1
     recordPRRefreshQueueDiagnostic('coalesced', reason)
     const shouldPromoteExisting =
@@ -807,11 +933,7 @@ export function enqueuePRRefresh(
       existing.candidate = candidate
       existing.windowId = windowId ?? existing.windowId
     } else if (existing.candidate.worktreeId === candidate.worktreeId) {
-      // Why: a non-promoting coalesce (e.g. visible→visible) keeps the existing
-      // representative, but the representative drives the probe head. If its own
-      // worktree moved head/branch, refresh those probe inputs so divergence is
-      // stamped for the current head — otherwise the head-scoped clear never
-      // matches and a merged linked PR lingers after a branch switch.
+      // Why: the representative drives the probe head; refresh probe inputs when its worktree moved head/branch, else a merged linked PR lingers after a switch.
       existing.candidate = {
         ...existing.candidate,
         cacheKey: candidate.cacheKey,
@@ -820,9 +942,13 @@ export function enqueuePRRefresh(
       }
     }
   } else {
+    if (queue.size >= PR_REFRESH_QUEUE_ENTRY_LIMIT) {
+      broadcastCapacitySkip([alias], reason)
+      return
+    }
     diagnosticsCounters.enqueued += 1
     recordPRRefreshQueueDiagnostic('enqueued', reason)
-    queue.set(key, {
+    setBoundedQueueEntry({
       key,
       candidate,
       aliases: new Map([[alias.cacheKey, alias]]),
@@ -833,8 +959,7 @@ export function enqueuePRRefresh(
       windowId
     })
   }
-  // Why: visible/SWR refreshes are background maintenance and may sit behind
-  // the budget queue. Only user/action-driven queueing should surface in UI.
+  // Why: visible/SWR are background maintenance behind the budget queue; only user/action-driven queueing should surface in UI.
   if (shouldBroadcastQueued(reason, dueAt)) {
     broadcast({ aliases: [alias], reason, status: 'queued' })
   }
@@ -850,9 +975,13 @@ export function reportVisiblePRRefreshCandidates(
   if (existingVisible && generation < existingVisible.generation) {
     return
   }
-  visibleByWindow.set(windowId, { generation, keys: new Set(candidates.map(refreshKey)) })
+  const retainedCandidates = boundedVisiblePRRefreshCandidates(candidates)
+  visibleByWindow.set(windowId, {
+    generation,
+    keys: new Set(retainedCandidates.map(refreshKey))
+  })
   removeInvisibleVisibleRefreshes()
-  for (const candidate of candidates) {
+  for (const candidate of retainedCandidates) {
     enqueuePRRefresh(candidate, 'visible', 40, windowId)
   }
 }
@@ -878,7 +1007,14 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
   const key = refreshKey(candidate)
   const existing = queue.get(key)
   const aliasMap = new Map(existing ? existing.aliases : [])
-  aliasMap.set(alias.cacheKey, alias)
+  const evictedAlias = retainPRRefreshAlias(
+    aliasMap,
+    alias,
+    existing?.candidate.cacheKey ?? alias.cacheKey
+  )
+  if (evictedAlias) {
+    broadcastCapacitySkip([evictedAlias], 'manual')
+  }
   const aliases = Array.from(aliasMap.values())
   const skippedReason = validateCandidate(candidate)
   if (skippedReason) {
@@ -893,6 +1029,63 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
     return outcome
   }
 
+  // Why: enforce the rate-limit gate so a stale renderer can't bypass it; refuse without spending quota until the later of the two cooldowns.
+  const manualExecutionOptions = ghRepoExecOptions(
+    githubRepoContext(candidate.repoPath, candidate.connectionId, candidate.localGitOptions)
+  )
+  const manualRepository = await getOriginGitHubApiRepository(
+    candidate.repoPath,
+    candidate.connectionId,
+    manualExecutionOptions
+  )
+  const manualBlockedGuard = backgroundRefreshBuckets()
+    .map((bucket) => repositoryRateLimitGuard(manualRepository, bucket, manualExecutionOptions))
+    .find((guard) => guard.blocked)
+  const secondaryGateUntil = manualRetryGates.get(key)
+  const gateUntil = Math.max(
+    manualBlockedGuard?.blocked ? manualBlockedGuard.resetAt * 1000 : 0,
+    secondaryGateUntil !== undefined ? secondaryGateUntil : 0
+  )
+  if (gateUntil > Date.now()) {
+    const retryAt = gateUntil
+    // Why: paused maps `pausedUntil` into the renderer's auto-retry, so requeue at reset (finding 12) — don't advertise an unscheduled retry.
+    const retained = setBoundedQueueEntry({
+      key,
+      candidate,
+      aliases: aliasMap,
+      reason: 'manual',
+      priority: 40,
+      dueAt: retryAt,
+      queuedAt: nextQueueOrder()
+    })
+    if (!retained) {
+      broadcastCapacitySkip(aliases, 'manual')
+      return {
+        kind: 'upstream-error',
+        errorType: 'rate_limited',
+        message: 'GitHub is temporarily limiting requests. Try again after the limit resets.',
+        fetchedAt: Date.now(),
+        retryDisabledUntil: retryAt
+      }
+    }
+    broadcast({
+      aliases,
+      reason: 'manual',
+      status: 'paused',
+      pausedUntil: retryAt,
+      skippedReason: 'rate-limit'
+    })
+    scheduleDrain(Math.max(1_000, retryAt - Date.now()))
+    return {
+      kind: 'upstream-error',
+      errorType: 'rate_limited',
+      message: 'GitHub is temporarily limiting requests. Try again after the limit resets.',
+      fetchedAt: Date.now(),
+      nextAutoRetryAt: retryAt,
+      retryDisabledUntil: retryAt
+    }
+  }
+
   queue.delete(key)
   const requestSequence = nextSequence()
   const requestStartedAt = Date.now()
@@ -905,12 +1098,22 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
     candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
     ...hostedReviewOptionArgs(candidate)
   )
+  let plannedRetryAt: number | undefined
+  let broadcastOutcome = outcome
+  if (outcome.kind === 'upstream-error' && isVisibleKey(key)) {
+    plannedRetryAt = nextVisibleErrorRetryAt(key)
+    broadcastOutcome = withErrorSchedule(outcome, plannedRetryAt)
+  }
   outcomeObserver?.(candidate, outcome)
-  broadcast({ aliases, reason: 'manual', outcome, requestStartedAt }, requestSequence)
+  noteManualRetryGate(key, broadcastOutcome)
+  broadcast(
+    { aliases, reason: 'manual', outcome: broadcastOutcome, requestStartedAt },
+    requestSequence
+  )
   scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
-    // Why: GitHub often reports UNKNOWN immediately after `gh pr reopen`;
-    // do one prompt visible retry so conflicts replace the transient label.
+    plannedRetryAt,
+    // Why: GitHub reports UNKNOWN right after `gh pr reopen`; one prompt visible retry replaces the transient label.
     pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS
   })
-  return outcome
+  return broadcastOutcome
 }

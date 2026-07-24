@@ -12,6 +12,7 @@ import {
   resolveZoomTarget
 } from './useIpcEvents'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../shared/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
@@ -1703,14 +1704,14 @@ describe('useIpcEvents updater integration', () => {
       state: errorState
     })
 
-    expect(pendingListTargets).toHaveLength(2)
-    const resolveConnectingTargets = pendingListTargets.shift()!.resolve
-    const resolveErrorTargets = pendingListTargets.shift()!.resolve
+    expect(pendingListTargets).toHaveLength(1)
+    const resolveFirstTargets = pendingListTargets.shift()!.resolve
     const targets = [{ id: 'conn-new', label: 'New remote' }]
-    resolveErrorTargets(targets)
+    resolveFirstTargets(targets)
     await Promise.resolve()
     await Promise.resolve()
-    resolveConnectingTargets(targets)
+    expect(pendingListTargets).toHaveLength(1)
+    pendingListTargets.shift()!.resolve(targets)
     await Promise.resolve()
     await Promise.resolve()
 
@@ -1796,7 +1797,10 @@ describe('useIpcEvents updater integration', () => {
     const replyTerminalCreate = vi.fn()
     const dispatchEvent = vi.fn()
     const createFloatingWorkspaceTerminalTab = vi.fn()
-    const createWebRuntimeSessionTerminal = vi.fn().mockResolvedValue(false)
+    const createWebRuntimeSessionTerminal = vi.fn().mockResolvedValue({
+      status: 'failed',
+      message: 'The workspace is not connected to a remote Orca host.'
+    })
     const focusRuntimeTerminalSurface = vi.fn(() => false)
     const focusTerminalTabSurface = vi.fn()
     let floatingPanelFocused = false
@@ -1820,8 +1824,13 @@ describe('useIpcEvents updater integration', () => {
       tabsByWorktree: {} as Record<string, { id: string; ptyId?: string | null; title?: string }[]>,
       folderWorkspaces: [],
       projectGroups: [],
-      repos: [{ id: 'repo-1', connectionId: null }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-2', repoId: 'repo-1' }] },
+      repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }],
+      worktreesByRepo: {
+        'repo-1': ['wt-1', 'wt-2', 'wt-3', 'wt-4', 'wt-history'].map((id) => ({
+          id,
+          repoId: 'repo-1'
+        }))
+      } as Record<string, { id: string; repoId: string }[]>,
       openFiles: [],
       browserTabsByWorktree: {},
       tabBarOrderByWorktree: {},
@@ -2175,13 +2184,51 @@ describe('useIpcEvents updater integration', () => {
     expect(createTab).toHaveBeenCalledWith('wt-1')
     expect(setActiveTabType).toHaveBeenCalledWith('terminal')
 
+    // Exact regression sequence: Local default -> connect/navigate Windows 2 ->
+    // reveal a local terminal -> restart. Connection and navigation are transient.
+    storeState.repos.push({
+      id: 'windows-2-repo',
+      connectionId: null,
+      executionHostId: 'runtime:windows-2'
+    })
+    storeState.worktreesByRepo['windows-2-repo'] = [
+      { id: 'windows-2-worktree', repoId: 'windows-2-repo' }
+    ]
+    storeState.activeWorktreeId = 'windows-2-worktree'
+    createTab.mockClear()
+    replyTerminalCreate.mockClear()
+    createTerminalListenerRef.current({
+      requestId: 'local-reveal-after-remote-navigation',
+      worktreeId: 'wt-2',
+      title: 'Local shell',
+      presentation: 'focused'
+    })
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, undefined)
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'local-reveal-after-remote-navigation',
+      tabId: 'tab-new',
+      title: 'Local shell'
+    })
+    expect(storeState.settings.activeRuntimeEnvironmentId).toBeUndefined()
+    delete storeState.worktreesByRepo['windows-2-repo']
+    storeState.repos = storeState.repos.filter((repo) => repo.id !== 'windows-2-repo')
+    storeState.activeWorktreeId = 'wt-1'
+    expect(storeState.settings.activeRuntimeEnvironmentId).toBeUndefined()
+
     createWebRuntimeSessionTerminal.mockClear()
     createTab.mockClear()
     setActiveView.mockClear()
     setActiveWorktree.mockClear()
+    markWorktreeVisited.mockClear()
+    recordWorktreeVisit.mockClear()
     setActiveTabType.mockClear()
     setActiveTab.mockClear()
     revealWorktreeInSidebar.mockClear()
+
+    storeState.settings = {
+      ...storeState.settings,
+      activeRuntimeEnvironmentId: 'windows-2'
+    }
 
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -2206,6 +2253,12 @@ describe('useIpcEvents updater integration', () => {
       recordInteraction: false
     })
     expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'opencode' })
+    expect(storeState.settings.activeRuntimeEnvironmentId).toBe('windows-2')
+
+    storeState.settings = {
+      ...storeState.settings,
+      activeRuntimeEnvironmentId: undefined
+    }
 
     createTab.mockClear()
     setActiveView.mockClear()
@@ -2387,10 +2440,83 @@ describe('useIpcEvents updater integration', () => {
       title: 'Blocked Local Terminal'
     })
 
-    expect(createTab).not.toHaveBeenCalled()
+    expect(createTab).toHaveBeenCalled()
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-runtime-blocked',
+      tabId: 'tab-new',
+      title: 'Blocked Local Terminal'
+    })
+
+    createTab.mockClear()
+    replyTerminalCreate.mockClear()
+    storeState.repos = [
+      ...storeState.repos,
+      {
+        id: 'repo-remote',
+        connectionId: null,
+        executionHostId: 'runtime:focused-runtime'
+      }
+    ]
+    storeState.worktreesByRepo = {
+      ...storeState.worktreesByRepo,
+      'repo-remote': [{ id: 'wt-remote', repoId: 'repo-remote' }]
+    }
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-remote-owner-blocked',
+      worktreeId: 'wt-remote',
+      title: 'Remote-owned Terminal'
+    })
+    expect(createTab).not.toHaveBeenCalled()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-remote-owner-blocked',
       error: 'Local terminal creation is unavailable while a remote runtime is active'
+    })
+    delete storeState.worktreesByRepo['repo-remote']
+    storeState.repos = storeState.repos.filter((repo) => repo.id !== 'repo-remote')
+
+    createTab.mockClear()
+    replyTerminalCreate.mockClear()
+    storeState.repos = [
+      ...storeState.repos,
+      {
+        id: 'repo-conflicting-owner',
+        connectionId: null,
+        executionHostId: 'runtime:focused-runtime'
+      }
+    ]
+    storeState.worktreesByRepo = {
+      ...storeState.worktreesByRepo,
+      'repo-1': [...storeState.worktreesByRepo['repo-1'], { id: 'wt-ambiguous', repoId: 'repo-1' }],
+      'repo-conflicting-owner': [{ id: 'wt-ambiguous', repoId: 'repo-conflicting-owner' }]
+    }
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-ambiguous-owner',
+      worktreeId: 'wt-ambiguous',
+      title: 'Ambiguous Terminal',
+      source: 'runtime-session'
+    })
+    expect(createTab).not.toHaveBeenCalled()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-ambiguous-owner',
+      error: 'Terminal creation is unavailable because the worktree owner could not be resolved'
+    })
+    storeState.worktreesByRepo['repo-1'] = storeState.worktreesByRepo['repo-1'].filter(
+      (worktree) => worktree.id !== 'wt-ambiguous'
+    )
+    delete storeState.worktreesByRepo['repo-conflicting-owner']
+    storeState.repos = storeState.repos.filter((repo) => repo.id !== 'repo-conflicting-owner')
+
+    createTab.mockClear()
+    replyTerminalCreate.mockClear()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-missing-owner',
+      worktreeId: 'wt-missing',
+      title: 'Missing Terminal'
+    })
+    expect(createTab).not.toHaveBeenCalled()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-missing-owner',
+      error: 'Terminal creation is unavailable because the worktree owner could not be resolved'
     })
     storeState.settings.activeRuntimeEnvironmentId = undefined
 
@@ -4315,9 +4441,16 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     })
   })
 
-  it('refreshes active runtime worktrees from remote client events', async () => {
+  it('routes local and runtime worktree events to their owning hosts', async () => {
     const fetchWorktrees = vi.fn()
     const fetchWorktreeLineage = vi.fn()
+    // Mutable so the test can drop the runtime mid-run and prove the local flag
+    // is origin-based, not a sample of runtime state.
+    const mockSettings: { activeRuntimeEnvironmentId: string | null; terminalFontSize: number } = {
+      activeRuntimeEnvironmentId: 'env-1',
+      terminalFontSize: 13
+    }
+    let localWorktreesOnChanged: ((data: { repoId: string }) => void) | undefined
     let runtimeOnResponse: ((response: unknown) => void) | undefined
     const runtimeSubscribe = vi.fn(async (_args, callbacks) => {
       runtimeOnResponse = (callbacks as { onResponse: (response: unknown) => void }).onResponse
@@ -4380,7 +4513,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           clearTabPtyId: vi.fn(),
-          settings: { activeRuntimeEnvironmentId: 'env-1', terminalFontSize: 13 }
+          settings: mockSettings
         })
       }
     }))
@@ -4412,7 +4545,10 @@ describe('useIpcEvents CLI-created worktree activation', () => {
       api: {
         repos: { onChanged: () => () => {} },
         worktrees: {
-          onChanged: () => () => {},
+          onChanged: (callback: (data: { repoId: string }) => void) => {
+            localWorktreesOnChanged = callback
+            return () => {}
+          },
           onBaseStatus: () => () => {},
           onRemoteBranchConflict: () => () => {}
         },
@@ -4523,6 +4659,31 @@ describe('useIpcEvents CLI-created worktree activation', () => {
       },
       expect.any(Object)
     )
+    if (!localWorktreesOnChanged) {
+      throw new Error('Expected local worktree event callback')
+    }
+    localWorktreesOnChanged({ repoId: 'repo-1' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', { forceLocalOwner: true })
+    expect(fetchWorktreeLineage).toHaveBeenCalledWith({ forceLocalOwner: true })
+
+    fetchWorktrees.mockClear()
+    fetchWorktreeLineage.mockClear()
+    // With no runtime active the flag must still be true — it marks the event's
+    // local origin; sampling runtime state here would regress to false.
+    mockSettings.activeRuntimeEnvironmentId = null
+    localWorktreesOnChanged({ repoId: 'repo-1' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', { forceLocalOwner: true })
+    expect(fetchWorktreeLineage).toHaveBeenCalledWith({ forceLocalOwner: true })
+
+    fetchWorktrees.mockClear()
+    fetchWorktreeLineage.mockClear()
+    mockSettings.activeRuntimeEnvironmentId = 'env-1'
     if (!runtimeOnResponse) {
       throw new Error('Expected runtime client event callbacks')
     }
@@ -4533,8 +4694,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1')
-    expect(fetchWorktreeLineage).toHaveBeenCalledTimes(1)
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', undefined)
+    expect(fetchWorktreeLineage).toHaveBeenCalledWith(undefined)
   })
 })
 
@@ -4624,6 +4785,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {},
       agentStatusByPaneKey: {},
+      clearTransientAgentStatuses: vi.fn(),
       getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       recentlyClosedAgentStatusTabIds: {},
       repos: [],
@@ -4638,7 +4800,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   function buildWindowApi(args: {
     onSet: (cb: (data: AgentStatusSetData) => void) => () => void
-    onClear?: (cb: (data: { paneKey: string }) => void) => () => void
+    onClear?: (cb: (data: AgentStatusClearIpcPayload) => void) => () => void
     getSnapshot?: () => Promise<AgentStatusSetData[]>
     drop?: (paneKey: string) => void
     remoteWorkspace?: Record<string, unknown>
@@ -5715,7 +5877,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
-    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+    const onClearListenerRef: {
+      current: ((data: AgentStatusClearIpcPayload) => void) | null
+    } = {
       current: null
     }
 
@@ -5805,9 +5969,136 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
   })
 
+  it('blocks cleared snapshots across remount and accepts newer reconnect replay', async () => {
+    let resolveOldSnapshot!: (entries: AgentStatusSetData[]) => void
+    let resolveCurrentSnapshot!: (entries: AgentStatusSetData[]) => void
+    const oldSnapshot = new Promise<AgentStatusSetData[]>((resolve) => {
+      resolveOldSnapshot = resolve
+    })
+    const currentSnapshot = new Promise<AgentStatusSetData[]>((resolve) => {
+      resolveCurrentSnapshot = resolve
+    })
+    const effectCleanups: (() => void)[] = []
+    const setAgentStatus = vi.fn()
+    const clearTransientAgentStatuses = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const onClearListenerRef: {
+      current: ((data: AgentStatusClearIpcPayload) => void) | null
+    } = { current: null }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      clearTransientAgentStatuses,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      repos: [{ id: 'repo-1', connectionId: 'ssh-a' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Remote agent' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': { root: { type: 'leaf', leafId: FUTURE_LEAF_ID } }
+      }
+    })
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          const cleanup = effect()
+          effectCleanups.push(typeof cleanup === 'function' ? cleanup : () => {})
+        }
+      }
+    })
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (callback) => {
+          onSetListenerRef.current = callback
+          return () => {}
+        },
+        onClear: (callback) => {
+          onClearListenerRef.current = callback
+          return () => {}
+        },
+        getSnapshot: vi.fn().mockReturnValueOnce(oldSnapshot).mockReturnValueOnce(currentSnapshot)
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+    effectCleanups[0]?.()
+    useIpcEvents()
+    await Promise.resolve()
+    if (!onSetListenerRef.current || !onClearListenerRef.current) {
+      throw new Error('Expected agent status listeners to be registered')
+    }
+
+    expect(() =>
+      onClearListenerRef.current?.(null as unknown as AgentStatusClearIpcPayload)
+    ).not.toThrow()
+    expect(clearTransientAgentStatuses).not.toHaveBeenCalled()
+
+    onClearListenerRef.current({
+      transient: true,
+      connectionId: 'ssh-a',
+      clearedAt: 100
+    })
+    const staleEntry: AgentStatusSetData = {
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'stale snapshot',
+      agentType: 'codex',
+      worktreeId: 'wt-1',
+      connectionId: 'ssh-a',
+      receivedAt: 100,
+      stateStartedAt: 90
+    }
+    resolveOldSnapshot([staleEntry])
+    resolveCurrentSnapshot([staleEntry])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(clearTransientAgentStatuses).toHaveBeenCalledWith('ssh-a', 100)
+    expect(setAgentStatus).not.toHaveBeenCalled()
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'replayed',
+      agentType: 'codex',
+      worktreeId: 'wt-1',
+      connectionId: 'ssh-a',
+      receivedAt: 101,
+      stateStartedAt: 101
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledOnce()
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({ prompt: 'replayed' }),
+      'Remote agent',
+      { updatedAt: 101, stateStartedAt: 101 },
+      expect.objectContaining({ worktreeId: 'wt-1', connectionId: 'ssh-a' }),
+      undefined
+    )
+  })
+
   it('keeps a completed worktree-attributed row when main reports pane teardown', async () => {
     const removeAgentStatus = vi.fn()
-    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+    const onClearListenerRef: {
+      current: ((data: AgentStatusClearIpcPayload) => void) | null
+    } = {
       current: null
     }
 

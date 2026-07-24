@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  BRANCH_RENAME_FAILURE_KEY_MAX_BYTES,
+  BRANCH_RENAME_FAILURE_OUTPUT_MAX_BYTES,
+  __getBranchRenameFailureOutputCountForTests,
   __resetBranchRenameFailureOutputForTests,
   readBranchRenameFailureOutputForDisplay,
   rememberBranchRenameFailureOutput
@@ -47,5 +50,28 @@ describe('branch rename failure output store', () => {
     rememberBranchRenameFailureOutput('wt-new', output('AgentNew'))
     expect(readBranchRenameFailureOutputForDisplay('wt-0')).not.toBeNull()
     expect(readBranchRenameFailureOutputForDisplay('wt-1')).toBeNull()
+  })
+
+  it('admits exact byte boundaries and skips oversized retained text', () => {
+    const exactKey = 'k'.repeat(BRANCH_RENAME_FAILURE_KEY_MAX_BYTES)
+    const oversizedKey = `${exactKey}x`
+    rememberBranchRenameFailureOutput(exactKey, {
+      label: '',
+      exitCode: 1,
+      stdout: 'x'.repeat(BRANCH_RENAME_FAILURE_OUTPUT_MAX_BYTES),
+      stderr: ''
+    })
+    rememberBranchRenameFailureOutput(oversizedKey, output('oversized-key'))
+    rememberBranchRenameFailureOutput('oversized-output', {
+      label: '',
+      exitCode: 1,
+      stdout: 'x'.repeat(BRANCH_RENAME_FAILURE_OUTPUT_MAX_BYTES + 1),
+      stderr: ''
+    })
+
+    expect(__getBranchRenameFailureOutputCountForTests()).toBe(1)
+    expect(readBranchRenameFailureOutputForDisplay(exactKey)).not.toBeNull()
+    expect(readBranchRenameFailureOutputForDisplay(oversizedKey)).toBeNull()
+    expect(readBranchRenameFailureOutputForDisplay('oversized-output')).toBeNull()
   })
 })

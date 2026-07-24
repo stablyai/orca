@@ -2,6 +2,7 @@ import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import { isMarkdownPath } from './file-tree'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
+import { buildImageDataUri } from '../../../src/shared/image-data-uri'
 
 export type MobileFilePreviewTextKind = 'html' | 'markdown' | 'text'
 
@@ -117,10 +118,14 @@ function normalizeImagePreviewResult(result: unknown): MobileFilePreviewResult {
   ) {
     return previewError('binary_file')
   }
+  const dataUri = buildImageDataUri(preview.mimeType, preview.content)
+  if (!dataUri) {
+    return previewError('binary_file')
+  }
   return {
     status: 'ready',
     kind: 'image',
-    dataUri: `data:${preview.mimeType};base64,${preview.content}`
+    dataUri
   }
 }
 

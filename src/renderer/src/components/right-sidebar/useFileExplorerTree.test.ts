@@ -3,7 +3,10 @@ import type { SetStateAction } from 'react'
 import type { DirEntry } from '../../../../shared/types'
 import type { DirCache } from './file-explorer-types'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
-import { refreshFileExplorerExpandedDirs } from './useFileExplorerTree'
+import {
+  FILE_EXPLORER_REFRESH_CONCURRENCY,
+  refreshFileExplorerExpandedDirs
+} from './useFileExplorerTree'
 
 type CacheUpdate = SetStateAction<Record<string, DirCache>>
 
@@ -12,6 +15,46 @@ function entry(name: string, isDirectory = false): DirEntry {
 }
 
 describe('refreshFileExplorerExpandedDirs', () => {
+  it.each([
+    ['at the limit', FILE_EXPLORER_REFRESH_CONCURRENCY],
+    ['above the limit', FILE_EXPLORER_REFRESH_CONCURRENCY + 1]
+  ])('bounds expanded-directory reads %s', async (_, count) => {
+    let cache: Record<string, DirCache> = {}
+    let active = 0
+    let peak = 0
+    let started = 0
+    const releases: (() => void)[] = []
+    const refresh = refreshFileExplorerExpandedDirs({
+      dirs: Array.from({ length: count }, (_, index) => ({
+        dirPath: `/repo/dir-${index}`,
+        depth: 0
+      })),
+      worktreePath: '/repo',
+      dirLoadTracker: createFileExplorerDirLoadTracker(),
+      setDirCache: (update) => {
+        cache = typeof update === 'function' ? update(cache) : update
+      },
+      readDirectory: async () => {
+        started++
+        active++
+        peak = Math.max(peak, active)
+        await new Promise<void>((resolve) => releases.push(resolve))
+        active--
+        return { entries: [], operationOwner: { kind: 'local' as const } }
+      }
+    })
+
+    await vi.waitFor(() => expect(started).toBe(Math.min(count, FILE_EXPLORER_REFRESH_CONCURRENCY)))
+    if (count > FILE_EXPLORER_REFRESH_CONCURRENCY) {
+      releases.shift()?.()
+      await vi.waitFor(() => expect(started).toBe(count))
+    }
+    releases.splice(0).forEach((release) => release())
+
+    await expect(refresh).resolves.toBe(true)
+    expect(peak).toBe(Math.min(count, FILE_EXPLORER_REFRESH_CONCURRENCY))
+  })
+
   it('reloads expanded directories with one loading cache commit and one result cache commit', async () => {
     let cache: Record<string, DirCache> = {
       '/repo': {

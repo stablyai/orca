@@ -37,6 +37,9 @@ type RegisterAppMenuOptions = {
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined
+  // Why: the macOS app-menu title. Passed the per-branch dev label since
+  // app.name is now pinned to a stable value for Keychain-key stability.
+  appMenuLabel?: string
 }
 
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
@@ -130,7 +133,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   // redundant "Orca" entry with roles that don't apply, so we omit it there
   // and distribute its items across File / Help instead.
   const macAppMenu: Electron.MenuItemConstructorOptions = {
-    label: app.name,
+    label: options.appMenuLabel ?? app.name,
     submenu: [
       { role: 'about' },
       checkForUpdatesItem,

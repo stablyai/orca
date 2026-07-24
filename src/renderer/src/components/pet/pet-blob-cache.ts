@@ -2,7 +2,16 @@
 // without importing usePetUrl (which itself imports the store). Keeps
 // the dependency graph acyclic.
 
-import { detectFramesFromImageData, type DetectedFrame } from './sprite-frame-detection'
+import {
+  CustomPetLoadQueue,
+  MAX_CONCURRENT_CUSTOM_PET_LOADS,
+  MAX_PENDING_CUSTOM_PET_LOADS
+} from './custom-pet-load-queue'
+import { processCustomPetBundleSheet } from './custom-pet-bundle-processing'
+import type { DetectedSpriteCacheEntry } from './custom-pet-media-types'
+
+export { MAX_CONCURRENT_CUSTOM_PET_LOADS, MAX_PENDING_CUSTOM_PET_LOADS }
+export type { DetectedSpriteCacheEntry } from './custom-pet-media-types'
 
 // Why: sandbox=true + webSecurity=true block the renderer from reading user
 // files directly. For custom pet images we fetch the bytes over IPC and
@@ -11,22 +20,31 @@ import { detectFramesFromImageData, type DetectedFrame } from './sprite-frame-de
 // doesn't re-fetch from main.
 export const blobUrlCache = new Map<string, string>()
 export const CUSTOM_PET_BLOB_CACHE_MAX = 16
+export const CUSTOM_PET_MEDIA_CACHE_MAX_BYTES = 128 * 1024 * 1024
 
-export type DetectedSpriteCacheEntry = {
-  frames: DetectedFrame[]
-  /** Per-frame image bitmaps drawn from the keyed canvas. The overlay paints
-   *  these onto its own canvas one at a time, so we can crop irregular sheets
-   *  without forcing the manifest to declare a uniform grid. */
-  bitmaps: ImageBitmap[]
-  /** Manifest-declared playback speed; the overlay falls back to 8 fps when
-   *  the bundle didn't declare one. */
-  fps: number
-}
 export const detectedSpriteCache = new Map<string, DetectedSpriteCacheEntry>()
 const customPetBlobUrlLoads = new Map<string, Promise<string | null>>()
 const customPetBlobCacheEpoch = new Map<string, number>()
 const customPetBlobActiveLoadCounts = new Map<string, number>()
 const customPetBlobRetainCounts = new Map<string, number>()
+const customPetMediaBytes = new Map<string, number>()
+const customPetLoadQueue = new CustomPetLoadQueue()
+let retainedCustomPetMediaBytes = 0
+
+export function inspectCustomPetMediaCache(): {
+  activeLoads: number
+  cachedEntries: number
+  pendingLoads: number
+  retainedBytes: number
+} {
+  const loads = customPetLoadQueue.inspect()
+  return {
+    activeLoads: loads.active,
+    cachedEntries: blobUrlCache.size,
+    pendingLoads: loads.pending,
+    retainedBytes: retainedCustomPetMediaBytes
+  }
+}
 
 export function retainCustomPetBlobCacheEntry(id: string): () => void {
   customPetBlobRetainCounts.set(id, (customPetBlobRetainCounts.get(id) ?? 0) + 1)
@@ -76,22 +94,32 @@ export async function loadCustomBlobUrl(
   if (pending) {
     return pending
   }
+  // Why: reject before allocating tracking Maps/promises for overflow IDs;
+  // the queue's own guard remains the race-proof backstop.
+  if (customPetLoadQueue.inspect().pending >= MAX_PENDING_CUSTOM_PET_LOADS) {
+    return null
+  }
   const loadEpoch = customPetBlobCacheEpoch.get(id) ?? 0
   incrementCustomPetBlobActiveLoadCount(id)
-  const load = loadCustomBlobUrlUncached(
-    id,
-    fileName,
-    mimeType,
-    kind,
-    spriteFps,
-    hasManifestSprite,
-    loadEpoch
-  ).finally(() => {
-    if (customPetBlobUrlLoads.get(id) === load) {
-      customPetBlobUrlLoads.delete(id)
-    }
-    decrementCustomPetBlobActiveLoadCount(id)
-  })
+  const load = customPetLoadQueue
+    .run(() =>
+      loadCustomBlobUrlUncached(
+        id,
+        fileName,
+        mimeType,
+        kind,
+        spriteFps,
+        hasManifestSprite,
+        loadEpoch
+      )
+    )
+    .catch(() => null)
+    .finally(() => {
+      if (customPetBlobUrlLoads.get(id) === load) {
+        customPetBlobUrlLoads.delete(id)
+      }
+      decrementCustomPetBlobActiveLoadCount(id)
+    })
   customPetBlobUrlLoads.set(id, load)
   return load
 }
@@ -119,11 +147,14 @@ async function loadCustomBlobUrlUncached(
   hasManifestSprite: boolean | undefined,
   loadEpoch: number
 ): Promise<string | null> {
+  if ((customPetBlobCacheEpoch.get(id) ?? 0) !== loadEpoch) {
+    return null
+  }
   // Why: defensively clear any stale entry so we don't leak a prior blob URL
   // or ImageBitmap[] when re-populating after a cache miss.
   clearCustomPetBlobCacheEntry(id)
   const buffer = await window.api.pet.read(id, fileName, kind)
-  if (!buffer) {
+  if (!buffer || (customPetBlobCacheEpoch.get(id) ?? 0) !== loadEpoch) {
     return null
   }
   // Why: MIME comes from CustomPet.mimeType — required especially for
@@ -132,6 +163,7 @@ async function loadCustomBlobUrlUncached(
   const blob = new Blob([buffer], { type: mimeType })
   let url = URL.createObjectURL(blob)
   let detected: DetectedSpriteCacheEntry | null = null
+  let retainedBytes = blob.size
   // Why: pet bundles often ship spritesheets with a magenta chroma-key as
   // the background instead of true alpha (common in pixel-art tooling).
   // Strip it once at load and replace the cached URL with a transparent PNG
@@ -141,13 +173,16 @@ async function loadCustomBlobUrlUncached(
     // renderer reads the `sprite` branch of usePetUrl and never touches
     // detectedSpriteCache — so skipping detection (and the per-frame
     // ImageBitmap allocations) avoids a per-bundle memory leak.
-    const processed = await processBundleSheet(url, spriteFps, hasManifestSprite === true)
-    if (processed) {
+    const processed = await processCustomPetBundleSheet(url, spriteFps, hasManifestSprite === true)
+    if (processed?.kind === 'rejected') {
+      URL.revokeObjectURL(url)
+      return null
+    }
+    if (processed?.kind === 'processed') {
       URL.revokeObjectURL(url)
       url = processed.url
-      if (processed.detected) {
-        detected = processed.detected
-      }
+      detected = processed.detected
+      retainedBytes = processed.retainedBytes
     }
   }
   if ((customPetBlobCacheEpoch.get(id) ?? 0) !== loadEpoch) {
@@ -155,27 +190,47 @@ async function loadCustomBlobUrlUncached(
     closeDetectedSpriteCacheEntry(detected)
     return null
   }
-  cacheCustomPetBlobUrl(id, url, detected)
+  if (!cacheCustomPetBlobUrl(id, url, detected, retainedBytes)) {
+    URL.revokeObjectURL(url)
+    closeDetectedSpriteCacheEntry(detected)
+    return null
+  }
   return url
 }
 
 function cacheCustomPetBlobUrl(
   id: string,
   url: string,
-  detected: DetectedSpriteCacheEntry | null
-): void {
+  detected: DetectedSpriteCacheEntry | null,
+  retainedBytes: number
+): boolean {
   clearCustomPetBlobCacheEntry(id)
+  if (!Number.isSafeInteger(retainedBytes) || retainedBytes < 0) {
+    return false
+  }
+  evictInactiveCustomPetBlobUrls(retainedBytes, 1)
+  if (
+    blobUrlCache.size >= CUSTOM_PET_BLOB_CACHE_MAX ||
+    retainedCustomPetMediaBytes + retainedBytes > CUSTOM_PET_MEDIA_CACHE_MAX_BYTES
+  ) {
+    return false
+  }
   blobUrlCache.set(id, url)
+  customPetMediaBytes.set(id, retainedBytes)
+  retainedCustomPetMediaBytes += retainedBytes
   if (detected) {
     detectedSpriteCache.set(id, detected)
   }
-  evictInactiveCustomPetBlobUrls()
+  return true
 }
 
-function evictInactiveCustomPetBlobUrls(): void {
+function evictInactiveCustomPetBlobUrls(incomingBytes = 0, incomingEntries = 0): void {
   // Why: users can import many custom pets; inactive blob URLs and sprite
   // bitmaps should not stay resident for the whole renderer session.
-  while (blobUrlCache.size > CUSTOM_PET_BLOB_CACHE_MAX) {
+  while (
+    blobUrlCache.size + incomingEntries > CUSTOM_PET_BLOB_CACHE_MAX ||
+    retainedCustomPetMediaBytes + incomingBytes > CUSTOM_PET_MEDIA_CACHE_MAX_BYTES
+  ) {
     let evicted = false
     for (const id of blobUrlCache.keys()) {
       if (customPetBlobRetainCounts.has(id)) {
@@ -191,117 +246,6 @@ function evictInactiveCustomPetBlobUrls(): void {
   }
 }
 
-async function processBundleSheet(
-  srcUrl: string,
-  spriteFps?: number,
-  skipDetection?: boolean
-): Promise<{ url: string; detected: DetectedSpriteCacheEntry | null } | null> {
-  let detected: DetectedSpriteCacheEntry | null = null
-  try {
-    const img = await loadImage(srcUrl)
-    const canvas = document.createElement('canvas')
-    canvas.width = img.naturalWidth
-    canvas.height = img.naturalHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) {
-      return null
-    }
-    ctx.drawImage(img, 0, 0)
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    keyMagenta(data.data)
-    ctx.putImageData(data, 0, 0)
-    // Why: detect frames *after* keying so transparent gutters between
-    // sprites are visible to the band/column scanner. Without this the whole
-    // sheet collapses into one giant frame.
-    const sprite = skipDetection ? null : detectFramesFromImageData(data)
-    if (sprite && sprite.frames.length >= 1) {
-      // Why: allSettled so a single failed crop doesn't leak the bitmaps that
-      // did succeed — close fulfilled ones before bailing out.
-      const results = await Promise.allSettled(
-        sprite.frames.map((f) => createImageBitmap(canvas, f.x, f.y, f.w, f.h))
-      )
-      const rejected = results.some((r) => r.status === 'rejected')
-      if (rejected) {
-        // Why: don't discard the keyed canvas when only the per-frame crops
-        // failed — fall through to emit the keyed PNG so the caller still gets
-        // the chroma-keyed sheet instead of falling back to the un-keyed url.
-        for (const r of results) {
-          if (r.status === 'fulfilled') {
-            r.value.close()
-          }
-        }
-      } else {
-        const bitmaps = results.map((r) => (r as PromiseFulfilledResult<ImageBitmap>).value)
-        detected = { frames: sprite.frames, bitmaps, fps: spriteFps ?? 8 }
-      }
-    }
-    const out = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
-    if (!out) {
-      closeDetectedSpriteCacheEntry(detected)
-      return null
-    }
-    try {
-      return { url: URL.createObjectURL(out), detected }
-    } catch {
-      closeDetectedSpriteCacheEntry(detected)
-      return null
-    }
-  } catch {
-    closeDetectedSpriteCacheEntry(detected)
-    return null
-  }
-}
-
-// Why: WebP/JPEG-compressed magenta keys leave wide gradient halos around
-// each sprite, so a tight RGB-distance check leaves ugly fringing. We use a
-// hue-style test instead: the magenta family has R and B much greater than
-// G. Anything matching gets fully cleared; anything close gets proportional
-// alpha so antialiased edges fade smoothly.
-function magentaScore(r: number, g: number, b: number): number {
-  // 0 = not magenta, 1 = pure magenta key. Restricted to near-pure magenta
-  // (saturated R+B, very low G) so legitimate purples and pinks (e.g.
-  // 128,0,128 or 255,128,200) aren't keyed out of imported sprite art.
-  const minRB = Math.min(r, b)
-  if (g >= minRB) {
-    return 0
-  }
-  const dom = (minRB - g) / 255 // how much R and B dominate green
-  // Why: require a strong R+B dominance over G so purples/pinks (e.g.
-  // 128,0,128 or 255,128,200) aren't keyed, while still letting antialiased
-  // edge pixels (e.g. 255,128,255 → dom≈0.5) fade with proportional alpha.
-  if (dom <= 0.4) {
-    return 0
-  }
-  return Math.max(0, Math.min(1, dom * 1.4))
-}
-
-function keyMagenta(px: Uint8ClampedArray): void {
-  for (let i = 0; i < px.length; i += 4) {
-    const score = magentaScore(px[i], px[i + 1], px[i + 2])
-    if (score <= 0) {
-      continue
-    }
-    if (score >= 0.5) {
-      px[i + 3] = 0
-      px[i] = 0
-      px[i + 1] = 0
-      px[i + 2] = 0
-    } else {
-      const keep = 1 - score * 2
-      px[i + 3] = Math.round(px[i + 3] * Math.max(0, keep))
-    }
-  }
-}
-
-function loadImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = () => reject(new Error('image load failed'))
-    img.src = url
-  })
-}
-
 // Why: the store invokes this on removeCustomPet so the underlying Blob
 // is released; otherwise the blob: URL keeps it alive for the rest of the
 // session, wasting memory per imported image.
@@ -315,6 +259,9 @@ export function revokeCustomPetBlobUrl(id: string): void {
 }
 
 function clearCustomPetBlobCacheEntry(id: string): void {
+  const retainedBytes = customPetMediaBytes.get(id) ?? 0
+  customPetMediaBytes.delete(id)
+  retainedCustomPetMediaBytes = Math.max(0, retainedCustomPetMediaBytes - retainedBytes)
   const url = blobUrlCache.get(id)
   if (url) {
     URL.revokeObjectURL(url)

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -29,7 +29,8 @@ describe('readWorkingDiffFile', () => {
   it('marks oversized working-tree files as binary before diffing', async () => {
     tmpDir = await mkdtemp(path.join(tmpdir(), 'relay-working-file-'))
     const filePath = path.join(tmpDir, 'large.log')
-    await writeFile(filePath, Buffer.alloc(10 * 1024 * 1024 + 1, 'a'))
+    await writeFile(filePath, 'a')
+    await truncate(filePath, 10 * 1024 * 1024 + 1)
 
     await expect(readWorkingDiffFile(filePath)).resolves.toEqual({
       content: '',

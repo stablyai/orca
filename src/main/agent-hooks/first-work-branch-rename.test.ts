@@ -44,7 +44,9 @@ vi.mock('../ipc/worktree-logic', () => ({
 }))
 
 import {
+  FIRST_WORK_BRANCH_RENAME_IN_FLIGHT_LIMIT,
   FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT,
+  getFirstWorkBranchRenameStateForTests,
   maybeAutoRenameBranchOnFirstWork,
   resetFirstWorkBranchRenameState,
   type FirstWorkBranchRenameDeps
@@ -82,9 +84,9 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     )
   })
 
-  it('renames a fresh creature branch and its display name from the generated slug', async () => {
+  it('keeps incidental work-item markers from overriding the generated display name', async () => {
     const { deps, onRenamed, setDisplayName } = makeDeps()
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ prompt: 'Fix auth from note #1' }), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '-m', 'you/fix-auth'],
       expect.objectContaining({ cwd: '/repo/wt' })
@@ -219,7 +221,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       getCurrentDisplayName: () => 'Platform workspace'
     })
 
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ prompt: 'Fix auth from note #1' }), deps)
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
@@ -295,6 +297,45 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     )
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds simultaneous auto-rename attempts and recovers after they settle', async () => {
+    let releaseGit!: () => void
+    const gitGate = new Promise<void>((resolve) => {
+      releaseGit = resolve
+    })
+    gitExecFileAsyncMock.mockImplementation(async () => {
+      await gitGate
+      return { stdout: 'you/custom-branch\n', stderr: '' }
+    })
+    const { deps } = makeDeps()
+    const attempts = Array.from({ length: FIRST_WORK_BRANCH_RENAME_IN_FLIGHT_LIMIT }, (_, index) =>
+      maybeAutoRenameBranchOnFirstWork(
+        workingEvent({
+          tabId: undefined,
+          paneKey: '',
+          worktreeId: `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/concurrent-${index}`
+        }),
+        deps
+      )
+    )
+
+    expect(getFirstWorkBranchRenameStateForTests().inFlight).toBe(
+      FIRST_WORK_BRANCH_RENAME_IN_FLIGHT_LIMIT
+    )
+    await maybeAutoRenameBranchOnFirstWork(
+      workingEvent({
+        tabId: undefined,
+        paneKey: '',
+        worktreeId: `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/overflow`
+      }),
+      deps
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(FIRST_WORK_BRANCH_RENAME_IN_FLIGHT_LIMIT)
+
+    releaseGit()
+    await Promise.all(attempts)
+    expect(getFirstWorkBranchRenameStateForTests().inFlight).toBe(0)
   })
 
   it('retries on a later event after a transient failure (does not poison the worktree)', async () => {

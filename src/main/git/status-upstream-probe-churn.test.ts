@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
 
 // Repro command:
 //   pnpm exec vitest run --config config/vitest.config.ts src/main/git/status-upstream-probe-churn.test.ts -t "missing-upstream polling churn"
@@ -34,6 +35,21 @@ vi.mock('fs/promises', () => ({
 vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
+
+vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => {
+  const actual = await importOriginal<typeof BoundedFileReader>()
+  return {
+    ...actual,
+    readNodeFileWithinLimit: async (filePath: string, maxBytes: number) => {
+      const value = await readFileMock(filePath)
+      const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
+      if (buffer.length > maxBytes) {
+        throw new actual.NodeFileReadTooLargeError(buffer.length, maxBytes)
+      }
+      return { buffer, stats: { isFile: () => true, size: buffer.length } }
+    }
+  }
+})
 
 import { clearEffectiveUpstreamStatusCacheForTests, getStatus } from './status'
 

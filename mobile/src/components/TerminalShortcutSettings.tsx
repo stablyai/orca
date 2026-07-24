@@ -117,7 +117,7 @@ export function TerminalShortcutSettings({
     pendingCustomKeysWritesRef.current += 1
     customKeysWriteChainRef.current = customKeysWriteChainRef.current
       .catch(() => {})
-      .then(() => saveCustomKeys(next))
+      .then(() => saveCustomKeys(next).then(() => undefined))
       .catch(() => {})
       .finally(() => {
         pendingCustomKeysWritesRef.current -= 1

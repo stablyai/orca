@@ -172,6 +172,7 @@ export function useHostedReviewActions({
           : await updateGitHubHostedReviewState({
               repo,
               prNumber: review.number,
+              prRepo: githubPR?.prRepo ?? null,
               nextState
             })
         if (!result.ok) {
@@ -204,6 +205,7 @@ export function useHostedReviewActions({
     },
     [
       confirm,
+      githubPR?.prRepo,
       isGitLab,
       onRefreshReview,
       repo,

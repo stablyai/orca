@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  TERMINAL_ACCESSORY_LAYOUT_MAX_IDS,
+  TERMINAL_ACCESSORY_LAYOUT_MAX_STORAGE_CHARACTERS,
   TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
   createTerminalAccessoryLayoutPreference,
   getDefaultTerminalAccessoryBuiltInIds,
@@ -81,6 +83,61 @@ describe('terminal accessory layout', () => {
     await expect(loadTerminalAccessoryLayout()).resolves.toEqual(
       createTerminalAccessoryLayoutPreference(getDefaultTerminalAccessoryLayout())
     )
+  })
+
+  it('accepts the exact storage limit and skips parsing one character more', async () => {
+    const preference = {
+      version: 2,
+      orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+      visibleBuiltInIds: ['escape']
+    }
+    const serialized = JSON.stringify(preference)
+    asyncStorageMock.getItem.mockResolvedValueOnce(
+      serialized + ' '.repeat(TERMINAL_ACCESSORY_LAYOUT_MAX_STORAGE_CHARACTERS - serialized.length)
+    )
+    await expect(loadTerminalAccessoryLayout()).resolves.toMatchObject({
+      visibleBuiltInIds: ['escape']
+    })
+
+    const parse = vi.spyOn(JSON, 'parse')
+    asyncStorageMock.getItem.mockResolvedValueOnce(
+      'x'.repeat(TERMINAL_ACCESSORY_LAYOUT_MAX_STORAGE_CHARACTERS + 1)
+    )
+    await expect(loadTerminalAccessoryLayout()).resolves.toEqual(
+      createTerminalAccessoryLayoutPreference(getDefaultTerminalAccessoryLayout())
+    )
+    expect(parse).not.toHaveBeenCalled()
+    parse.mockRestore()
+  })
+
+  it('accepts the exact stored id count and falls back on one more', () => {
+    const exact = Array.from({ length: TERMINAL_ACCESSORY_LAYOUT_MAX_IDS }, (_, index) =>
+      index === 0 ? 'tab' : 'escape'
+    )
+    expect(
+      normalizeTerminalAccessoryLayoutPreference(
+        { version: 2, orderedBuiltInIds: exact, visibleBuiltInIds: ['escape'] },
+        ['escape', 'tab']
+      )
+    ).toEqual({
+      version: 2,
+      orderedBuiltInIds: ['tab', 'escape'],
+      visibleBuiltInIds: ['escape']
+    })
+    expect(
+      normalizeTerminalAccessoryLayoutPreference(
+        {
+          version: 2,
+          orderedBuiltInIds: [...exact, 'tab'],
+          visibleBuiltInIds: ['escape']
+        },
+        ['escape', 'tab']
+      )
+    ).toEqual({
+      version: 2,
+      orderedBuiltInIds: ['escape', 'tab'],
+      visibleBuiltInIds: ['escape', 'tab']
+    })
   })
 
   it('preserves a custom v2 order and its visible subset', () => {

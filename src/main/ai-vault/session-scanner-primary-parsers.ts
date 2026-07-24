@@ -1,8 +1,7 @@
-import { createReadStream } from 'node:fs'
-import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
+import { normalizePromptField } from '../../shared/agent-status-field-normalization'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -12,11 +11,13 @@ import {
   addPreviewContent,
   createAccumulator,
   finalizeSession,
+  sessionAccumulatorRetainedUtf8Bytes,
   sessionIdFromFileName,
   updateLatestLocation,
   updateTimeline
 } from './session-scanner-accumulator'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
+import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
 import {
   asRecord,
   claudeUsageTotal,
@@ -115,6 +116,14 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
     return
   }
 
+  if (record.type === 'last-prompt') {
+    const prompt = normalizePromptField(record.lastPrompt)
+    if (prompt) {
+      accumulator.lastUserPrompt = prompt
+    }
+    return
+  }
+
   if (record.type === 'user') {
     accumulator.messageCount++
     const title = extractMessageText(record.message)
@@ -184,6 +193,11 @@ function claudeResumeStateFromParseState(
   return {
     consumeLine: (line) => consumeClaudeSessionLine(state, line),
     clone: () => claudeResumeStateFromParseState(cloneClaudeSessionParseState(state)),
+    retainedUtf8Bytes: () =>
+      sessionAccumulatorRetainedUtf8Bytes(state.accumulator) +
+      Buffer.byteLength(state.metaTitle ?? '', 'utf8') +
+      Buffer.byteLength(state.generatedTitle ?? '', 'utf8') +
+      Buffer.byteLength(state.firstUserTitle ?? '', 'utf8'),
     touchFile: (file) => {
       state.accumulator.modifiedAt = file.modifiedAt
     },
@@ -195,10 +209,7 @@ export async function parseClaudeSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
+  const lines = iterateAiVaultJsonlLines(file.path)
   return parseClaudeSessionLines({ file, lines, platform })
 }
 

@@ -8,6 +8,7 @@ import {
 import {
   callComputerSidecarAction,
   callComputerSidecarCapabilities,
+  COMPUTER_SIDECAR_MAX_QUEUED_CALLS,
   resetComputerSidecarForTest
 } from './sidecar-client'
 
@@ -158,6 +159,44 @@ describe('computer sidecar client', () => {
     const secondRequest = child.sent[1]!
 
     child.emit('message', {
+      id: secondRequest.id,
+      ok: true,
+      result: { provider: 'second' }
+    })
+
+    await expect(secondCall).resolves.toEqual({ provider: 'second' })
+  })
+
+  it('fails closed when the serialized call queue reaches its cap', async () => {
+    const admitted = Array.from({ length: COMPUTER_SIDECAR_MAX_QUEUED_CALLS }, () =>
+      callComputerSidecarCapabilities()
+    )
+    const admittedSettlements = Promise.allSettled(admitted)
+    const child = children[0]!
+
+    await expect(callComputerSidecarCapabilities()).rejects.toThrow(
+      'computer sidecar queue limit reached'
+    )
+    expect(child.sent).toHaveLength(1)
+
+    child.emit('error', new Error('stop saturated sidecar'))
+    await admittedSettlements
+  })
+
+  it('releases queue admission after a call settles', async () => {
+    const firstCall = callComputerSidecarCapabilities()
+    const firstChild = children[0]!
+    const firstRequest = firstChild.sent[0]!
+    firstChild.emit('message', {
+      id: firstRequest.id,
+      ok: true,
+      result: { provider: 'first' }
+    })
+    await expect(firstCall).resolves.toEqual({ provider: 'first' })
+
+    const secondCall = callComputerSidecarCapabilities()
+    const secondRequest = firstChild.sent[1]!
+    firstChild.emit('message', {
       id: secondRequest.id,
       ok: true,
       result: { provider: 'second' }

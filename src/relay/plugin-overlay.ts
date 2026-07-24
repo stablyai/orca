@@ -17,19 +17,19 @@
 // Pi/OMP homes for those agents.
 
 import { createHash } from 'node:crypto'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  statSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
+import {
+  applyConfigOverlayPlan,
+  createConfigOverlayPlan,
+  type ConfigOverlayPlan
+} from '../main/pty/config-overlay-mirroring'
+import { safeRemoveOverlay } from '../main/pty/overlay-mirror'
+import {
+  isManagedPiExtensionFile,
+  withOrcaManagedPiExtensionMarker
+} from '../main/pi/managed-extension-ownership'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 
 const RELAY_HOOKS_DIR = '.orca-relay'
@@ -41,13 +41,6 @@ const PI_OVERLAY_SUBDIR_BY_KIND: Record<PiAgentKind, string> = {
 const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
-const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
-
-function withOrcaManagedPiExtensionMarker(source: string): string {
-  return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
-    ? source
-    : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
-}
 // Why: source-dir resolution is keyed off the launching agent (Pi or OMP).
 // Both consume `PI_CODING_AGENT_DIR` but default to different `~/.<kind>/agent`
 // paths on the remote disk. The renderer-chosen launch command flows in via
@@ -137,50 +130,16 @@ export class PluginOverlayManager {
     return this.piExtensionSources[kind] ?? this.piExtensionSources.pi
   }
 
-  private mirrorOpenCodeConfig(sourceDir: string, overlayDir: string): void {
-    for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
-      const sourcePath = join(sourceDir, entry.name)
-
-      if (entry.name === 'plugins') {
-        const isSymlink = entry.isSymbolicLink()
-        let isLinkPointingToDir = false
-        if (isSymlink) {
-          try {
-            isLinkPointingToDir = statSync(sourcePath).isDirectory()
-          } catch {
-            isLinkPointingToDir = false
-          }
-        }
-
-        if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
-          const overlayPluginsDir = join(overlayDir, 'plugins')
-          mkdirSync(overlayPluginsDir, { recursive: true })
-          for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            if (pluginEntry.name === OPENCODE_PLUGIN_FILE) {
-              continue
-            }
-            mirrorEntry(
-              join(resolvedSource, pluginEntry.name),
-              join(overlayPluginsDir, pluginEntry.name)
-            )
-          }
-          continue
-        }
-      }
-
-      mirrorEntry(sourcePath, join(overlayDir, entry.name))
-    }
-  }
-
   private writeOpenCodePlugin(overlayDir: string): void {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
     const pluginPath = join(pluginsDir, OPENCODE_PLUGIN_FILE)
     try {
       unlinkSync(pluginPath)
-    } catch {
-      // Fresh overlay or no same-named stale symlink.
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error
+      }
     }
     writeFileSync(pluginPath, this.opencodePluginSource!)
   }
@@ -197,8 +156,7 @@ export class PluginOverlayManager {
     }
     const dir = join(this.opencodeRoot, safeDirName(id))
     try {
-      safeRemoveOverlay(dir, this.opencodeRoot)
-      mkdirSync(dir, { recursive: true })
+      let plan: ConfigOverlayPlan | null = null
       if (existingConfigDir) {
         if (!existsSync(existingConfigDir)) {
           return null
@@ -206,7 +164,16 @@ export class PluginOverlayManager {
         // Why: OPENCODE_CONFIG_DIR is a single config root. Mirror the user's
         // remote root into the overlay before adding Orca's plugin so status
         // reporting does not hide their auth, models, keybinds, or plugins.
-        this.mirrorOpenCodeConfig(existingConfigDir, dir)
+        plan = createConfigOverlayPlan(existingConfigDir, {
+          reservedPluginFile: OPENCODE_PLUGIN_FILE
+        })
+      }
+      if (!safeRemoveOverlay(dir, this.opencodeRoot)) {
+        throw new Error('OpenCode overlay cleanup exceeded its safety limits')
+      }
+      mkdirSync(dir, { recursive: true })
+      if (plan) {
+        applyConfigOverlayPlan(plan, dir)
       }
       this.writeOpenCodePlugin(dir)
       return dir
@@ -220,14 +187,6 @@ export class PluginOverlayManager {
 
   private getDefaultPiAgentDir(kind: PiAgentKind): string {
     return join(this.homeDir, PI_AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
-  }
-
-  private canOverwritePiExtension(path: string): boolean {
-    try {
-      return readFileSync(path, 'utf8').includes(ORCA_MANAGED_EXTENSION_MARKER)
-    } catch {
-      return true
-    }
   }
 
   /** Install the Pi/OMP status extension into the remote real agent dir and
@@ -246,7 +205,7 @@ export class PluginOverlayManager {
       const extensionsDir = join(sourceAgentDir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
       const extensionPath = join(extensionsDir, PI_EXTENSION_FILE)
-      if (!this.canOverwritePiExtension(extensionPath)) {
+      if (existsSync(extensionPath) && !isManagedPiExtensionFile(extensionPath)) {
         return null
       }
       writeFileSync(extensionPath, extensionSource)
@@ -259,10 +218,8 @@ export class PluginOverlayManager {
     }
   }
 
-  /** Drop a paneKey's overlay dirs on PTY exit. Best-effort; cleanup over a
-   *  recursive tree may fail on exotic filesystems but the worst-case
-   *  outcome is unbounded growth on a long-lived relay, which the per-pane
-   *  caches alone do not bound. */
+  /** Drop a paneKey's overlay dirs on PTY exit. Best-effort and bounded; an
+   *  exotic or pathological tree is logged and left for a later cleanup. */
   clearOverlay(id: string): void {
     if (!isUsableId(id)) {
       return
@@ -273,7 +230,11 @@ export class PluginOverlayManager {
     // safeRemoveOverlay keeps each call bounded to its own tree.
     for (const root of [this.opencodeRoot, ...Object.values(this.piRoots)]) {
       try {
-        safeRemoveOverlay(join(root, safe), root)
+        if (!safeRemoveOverlay(join(root, safe), root)) {
+          process.stderr.write(
+            `[plugin-overlay] overlay cleanup stopped at its safety limit: ${join(root, safe)}\n`
+          )
+        }
       } catch (err) {
         // Why: log the failed cleanup so a permission/IO error is observable.
         // The leak is the failure mode the per-pane cache eviction exists to

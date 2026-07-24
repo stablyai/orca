@@ -4,11 +4,16 @@
 // app pins the certificate fingerprint received during QR pairing.
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, chmodSync } from 'node:fs'
+import { existsSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileSyncWithinLimit
+} from '../../shared/node-bounded-file-reader'
 
 const TLS_CERT_FILENAME = 'orca-tls-cert.pem'
 const TLS_KEY_FILENAME = 'orca-tls-key.pem'
+const MAX_TLS_PEM_FILE_BYTES = 1024 * 1024
 
 export type TlsCertificate = {
   cert: string
@@ -21,11 +26,17 @@ export function loadOrCreateTlsCertificate(userDataPath: string): TlsCertificate
   const keyPath = join(userDataPath, TLS_KEY_FILENAME)
 
   if (existsSync(certPath) && existsSync(keyPath)) {
-    const cert = readFileSync(certPath, 'utf-8')
-    const key = readFileSync(keyPath, 'utf-8')
-    const fingerprint = computeFingerprint(cert)
-    if (fingerprint) {
-      return { cert, key, fingerprint }
+    try {
+      const cert = readTlsPemFile(certPath)
+      const key = readTlsPemFile(keyPath)
+      const fingerprint = computeFingerprint(cert)
+      if (fingerprint) {
+        return { cert, key, fingerprint }
+      }
+    } catch (error) {
+      if (!(error instanceof NodeFileReadTooLargeError)) {
+        throw error
+      }
     }
     // Why: if the existing cert is malformed (e.g., from a buggy earlier
     // generation), regenerate rather than failing the WebSocket transport.
@@ -66,9 +77,13 @@ export function loadOrCreateTlsCertificate(userDataPath: string): TlsCertificate
   chmodSync(keyPath_, 0o600)
   chmodSync(certPath_, 0o600)
 
-  const cert = readFileSync(certPath_, 'utf-8')
-  const key = readFileSync(keyPath_, 'utf-8')
+  const cert = readTlsPemFile(certPath_)
+  const key = readTlsPemFile(keyPath_)
   return { cert, key, fingerprint: computeFingerprint(cert)! }
+}
+
+function readTlsPemFile(filePath: string): string {
+  return readNodeFileSyncWithinLimit(filePath, MAX_TLS_PEM_FILE_BYTES).buffer.toString('utf-8')
 }
 
 function resolveOpenSslExecutable(): string {

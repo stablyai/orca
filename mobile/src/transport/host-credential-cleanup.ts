@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
 
 const PENDING_STORAGE_KEY = 'orca:pending-host-credential-cleanups'
 const CLEANUP_CONFIRM_TIMEOUT_MS = 3_000
+export const HOST_CREDENTIAL_CLEANUP_MAX_PENDING_IDS = 256
+export const HOST_CREDENTIAL_CLEANUP_MAX_STORAGE_CHARACTERS = 256 * 1024
+export const HOST_CREDENTIAL_CLEANUP_MAX_HOST_ID_CHARACTERS = 4_096
+export const HOST_CREDENTIAL_CLEANUP_MAX_INFLIGHT_DELETES = 16
 
 type DeleteHostCredential = (hostId: string) => Promise<void>
 type CleanupAttemptResult = 'cleared' | 'pending'
@@ -33,7 +38,11 @@ function notifyPendingListeners(): void {
 }
 
 function markUnrecordedPending(hostId: string): void {
-  if (unrecordedPendingIds.has(hostId)) {
+  if (
+    unrecordedPendingIds.has(hostId) ||
+    !isTrackableHostId(hostId) ||
+    unrecordedPendingIds.size >= HOST_CREDENTIAL_CLEANUP_MAX_PENDING_IDS
+  ) {
     return
   }
   unrecordedPendingIds.add(hostId)
@@ -47,15 +56,53 @@ function clearUnrecordedPending(hostId: string): void {
 }
 
 function parsePendingIds(raw: string): string[] | null {
+  if (raw.length > HOST_CREDENTIAL_CLEANUP_MAX_STORAGE_CHARACTERS) {
+    return null
+  }
   try {
-    const parsed = JSON.parse(raw) as unknown
+    const parsed = parseMobileJsonTextWithinLimits(raw)
     if (!Array.isArray(parsed)) {
       return null
     }
-    return [...new Set(parsed.filter((value): value is string => typeof value === 'string'))]
+    const ids: string[] = []
+    const seen = new Set<string>()
+    for (const value of parsed) {
+      if (typeof value !== 'string') {
+        continue
+      }
+      if (!isTrackableHostId(value)) {
+        return null
+      }
+      if (!seen.has(value)) {
+        if (ids.length >= HOST_CREDENTIAL_CLEANUP_MAX_PENDING_IDS) {
+          return null
+        }
+        seen.add(value)
+        ids.push(value)
+      }
+    }
+    return ids
   } catch {
     return null
   }
+}
+
+function isTrackableHostId(hostId: string): boolean {
+  return hostId.length > 0 && hostId.length <= HOST_CREDENTIAL_CLEANUP_MAX_HOST_ID_CHARACTERS
+}
+
+function serializePendingIds(ids: string[]): string {
+  if (
+    ids.length > HOST_CREDENTIAL_CLEANUP_MAX_PENDING_IDS ||
+    ids.some((id) => !isTrackableHostId(id))
+  ) {
+    throw new Error('pending host credential cleanup limit exceeded')
+  }
+  const serialized = JSON.stringify(ids)
+  if (serialized.length > HOST_CREDENTIAL_CLEANUP_MAX_STORAGE_CHARACTERS) {
+    throw new Error('pending host credential cleanup storage limit exceeded')
+  }
+  return serialized
 }
 
 function sameIdList(a: string[], b: string[]): boolean {
@@ -103,7 +150,7 @@ async function mutatePendingIds(update: (ids: string[]) => string[]): Promise<vo
     if (sameIdList(current.ids, next)) {
       return
     }
-    await AsyncStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(next))
+    await AsyncStorage.setItem(PENDING_STORAGE_KEY, serializePendingIds(next))
     notifyPendingListeners()
   })
   pendingMutation = mutation.catch(() => {})
@@ -142,6 +189,9 @@ function startOrJoinDelete(hostId: string, deleteCredential: DeleteHostCredentia
   if (existing) {
     return existing
   }
+  if (inflightDeletes.size >= HOST_CREDENTIAL_CLEANUP_MAX_INFLIGHT_DELETES) {
+    return Promise.reject(new Error('host credential cleanup concurrency limit reached'))
+  }
   const cleanup = Promise.resolve()
     .then(() => deleteCredential(hostId))
     .finally(() => {
@@ -154,6 +204,9 @@ function startOrJoinDelete(hostId: string, deleteCredential: DeleteHostCredentia
 }
 
 async function recordCleanupIntent(hostId: string): Promise<boolean> {
+  if (!isTrackableHostId(hostId)) {
+    return false
+  }
   try {
     await addPendingId(hostId)
     return true
@@ -234,10 +287,10 @@ export async function retryPendingHostCredentialCleanups(
   deleteCredential: DeleteHostCredential
 ): Promise<{ clearedCount: number; remainingIds: string[]; storageUnreadable: boolean }> {
   const pending = await loadPendingCleanupState()
-  const outcomes = await Promise.all(
-    // Why: these ids are already durable (or a session-scoped fallback). Re-adding
-    // intent can race a late success and recreate a ghost row after deletion.
-    pending.ids.map((id) => confirmNativeCleanup(id, deleteCredential, CLEANUP_CONFIRM_TIMEOUT_MS))
+  const outcomes = await retryCleanupIds(
+    pending.ids,
+    deleteCredential,
+    HOST_CREDENTIAL_CLEANUP_MAX_INFLIGHT_DELETES
   )
   const remaining = await loadPendingCleanupState()
   return {
@@ -245,6 +298,29 @@ export async function retryPendingHostCredentialCleanups(
     remainingIds: remaining.ids,
     storageUnreadable: remaining.storageUnreadable
   }
+}
+
+async function retryCleanupIds(
+  ids: string[],
+  deleteCredential: DeleteHostCredential,
+  concurrency: number
+): Promise<CleanupAttemptResult[]> {
+  const outcomes: CleanupAttemptResult[] = []
+  let nextIndex = 0
+  const worker = async (): Promise<void> => {
+    while (nextIndex < ids.length) {
+      const index = nextIndex++
+      // Why: these ids already have recovery intent; re-adding can race a late
+      // success and recreate a ghost row after deletion.
+      outcomes[index] = await confirmNativeCleanup(
+        ids[index]!,
+        deleteCredential,
+        CLEANUP_CONFIRM_TIMEOUT_MS
+      )
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, ids.length) }, () => worker()))
+  return outcomes
 }
 
 /** Test-only: drop module listeners/in-flight state between cases. */

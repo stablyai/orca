@@ -1,38 +1,40 @@
 import type {
   LinearCollectionMeta,
   LinearIssueAttachment,
+  LinearIssueActivityEntry,
   LinearIssueChildNode,
   LinearIssueCommentNode,
   LinearIssueContextResult,
   LinearIssueInclude,
-  LinearIssueRelation,
   LinearIssueRequest
 } from '../../shared/linear-agent-access'
 import {
   LINEAR_ATTACHMENTS_CAP,
+  LINEAR_ACTIVITY_CAP,
   LINEAR_CHILDREN_NODE_CAP,
   LINEAR_COMMENTS_CAP,
   LINEAR_COMMENT_BODY_CAP,
-  LINEAR_RELATIONS_CAP,
   clampLinearIssueDepth
 } from '../../shared/linear-agent-access'
 import { extractLinearInlineMedia } from '../../shared/linear-inline-media'
+import { boundedIntegrationErrorMessage } from '../integration-error-message'
+import { IntegrationPaginationBudget } from '../integration-pagination-budget'
 import type { ResolvedIssue } from './issue-context-client'
 import { getRequiredEntry, withLinearRead } from './issue-context-client'
 import { getPublicFileUrlClient } from './client'
 import { includeErrorCode } from './issue-context-errors'
 import { readConnectionPages } from './issue-context-pagination'
+import { ACTIVITY_QUERY, mapActivity, type RawActivityResponse } from './issue-activity-raw'
+import { readIssueRelations } from './issue-context-relations'
 import {
   ATTACHMENTS_QUERY,
   CHILDREN_QUERY,
   COMMENTS_QUERY,
-  RELATIONS_QUERY,
   collectionMeta,
   mapIssue,
   type RawAttachmentsResponse,
   type RawChildrenResponse,
-  type RawCommentsResponse,
-  type RawRelationsResponse
+  type RawCommentsResponse
 } from './issue-context-raw'
 
 export async function readOptionalIncludes(
@@ -58,6 +60,9 @@ export async function readOptionalIncludes(
   if (request.include.relations) {
     includeTasks.push(['relations', async () => assignRelations(resolved, result, sections)])
   }
+  if (request.include.activity) {
+    includeTasks.push(['activity', async () => assignActivity(resolved, result, sections)])
+  }
 
   for (const [include, task] of includeTasks) {
     try {
@@ -66,7 +71,7 @@ export async function readOptionalIncludes(
       includeErrors.push({
         include,
         code: includeErrorCode(error),
-        message: error instanceof Error ? error.message : String(error)
+        message: boundedIntegrationErrorMessage(error)
       })
     }
   }
@@ -108,9 +113,19 @@ async function assignRelations(
   result: LinearIssueContextResult,
   sections: LinearIssueContextResult['meta']['sections']
 ): Promise<void> {
-  const read = await readRelations(resolved)
+  const read = await readIssueRelations(resolved)
   result.relations = read.items
   sections.relations = read.meta
+}
+
+async function assignActivity(
+  resolved: ResolvedIssue,
+  result: LinearIssueContextResult,
+  sections: LinearIssueContextResult['meta']['sections']
+): Promise<void> {
+  const read = await readActivity(resolved)
+  result.activity = read.items
+  sections.activity = read.meta
 }
 
 async function readComments(resolved: ResolvedIssue): Promise<{
@@ -162,6 +177,7 @@ async function readChildren(
   let returned = 0
   let capReached = false
   let depthReached = false
+  const budget = new IntegrationPaginationBudget()
 
   const readLevel = async (issueId: string, level: number): Promise<LinearIssueChildNode[]> => {
     if (level > depth || returned >= LINEAR_CHILDREN_NODE_CAP) {
@@ -169,16 +185,20 @@ async function readChildren(
       return []
     }
     const remaining = LINEAR_CHILDREN_NODE_CAP - returned
-    const response = await readConnectionPages(remaining, async (page) => {
-      return await withLinearRead(entry, async () => {
-        const client = getPublicFileUrlClient(entry)
-        const raw = await client.client.rawRequest<RawChildrenResponse, Record<string, unknown>>(
-          CHILDREN_QUERY,
-          { id: issueId, ...page }
-        )
-        return raw.data?.issue?.children ?? null
-      })
-    })
+    const response = await readConnectionPages(
+      remaining,
+      async (page) => {
+        return await withLinearRead(entry, async () => {
+          const client = getPublicFileUrlClient(entry)
+          const raw = await client.client.rawRequest<RawChildrenResponse, Record<string, unknown>>(
+            CHILDREN_QUERY,
+            { id: issueId, ...page }
+          )
+          return raw.data?.issue?.children ?? null
+        })
+      },
+      budget
+    )
     const nodes = response.nodes
     if (response.hasMore || nodes.length > remaining) {
       capReached = true
@@ -248,34 +268,22 @@ async function readAttachments(
     meta: collectionMeta(items.length, LINEAR_ATTACHMENTS_CAP, response.hasMore)
   }
 }
-
-async function readRelations(
+async function readActivity(
   resolved: ResolvedIssue
-): Promise<{ items: LinearIssueRelation[]; meta: LinearCollectionMeta }> {
+): Promise<{ items: LinearIssueActivityEntry[]; meta: LinearCollectionMeta }> {
   const entry = getRequiredEntry(resolved.workspace.id)
-  const response = await readConnectionPages(LINEAR_RELATIONS_CAP, async (page) => {
+  const response = await readConnectionPages(LINEAR_ACTIVITY_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
       const raw = await entry.client.client.rawRequest<
-        RawRelationsResponse,
+        RawActivityResponse,
         Record<string, unknown>
-      >(RELATIONS_QUERY, { id: resolved.issue.id, ...page })
-      return raw.data?.issue?.relations ?? null
+      >(ACTIVITY_QUERY, { id: resolved.issue.id, ...page })
+      return raw.data?.issue?.history ?? null
     })
   })
-  const items = response.nodes.slice(0, LINEAR_RELATIONS_CAP).map((node) => ({
-    id: node.id,
-    type: node.type,
-    relatedIssue: node.relatedIssue
-      ? {
-          id: node.relatedIssue.id,
-          identifier: node.relatedIssue.identifier,
-          title: node.relatedIssue.title,
-          url: node.relatedIssue.url
-        }
-      : null
-  }))
+  const items = response.nodes.slice(0, LINEAR_ACTIVITY_CAP).map(mapActivity)
   return {
     items,
-    meta: collectionMeta(items.length, LINEAR_RELATIONS_CAP, response.hasMore)
+    meta: collectionMeta(items.length, LINEAR_ACTIVITY_CAP, response.hasMore)
   }
 }

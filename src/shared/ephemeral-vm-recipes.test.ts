@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from './pairing'
 import {
+  EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS,
   getEphemeralVmRecipeResultWarnings,
   parseEphemeralVmRecipeResult,
   redactEphemeralVmRecipeDiagnosticText,
@@ -152,6 +153,22 @@ describe('parseEphemeralVmRecipeResult', () => {
       ok: false,
       error: 'Recipe stdout must be one JSON object.'
     })
+  })
+
+  it('rejects excessive nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    try {
+      const depth = EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+      const amplified = `${'['.repeat(depth)}0${']'.repeat(depth)}`
+
+      expect(parseEphemeralVmRecipeResult(amplified)).toEqual({
+        ok: false,
+        error: 'Recipe stdout must be one JSON object.'
+      })
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
   })
 
   it('rejects invalid pairing codes', () => {

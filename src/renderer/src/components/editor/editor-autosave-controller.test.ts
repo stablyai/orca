@@ -7,7 +7,10 @@ import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
 } from '../../../../shared/editor-save-events'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
-import { attachEditorAutosaveController } from './editor-autosave-controller'
+import {
+  attachEditorAutosaveController,
+  EDITOR_BULK_SAVE_CONCURRENCY
+} from './editor-autosave-controller'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import { __clearSelfWriteRegistryForTests, hasRecentSelfWrite } from './editor-self-write-registry'
 import {
@@ -52,6 +55,16 @@ function createEditorStore(): StoreApi<AppState> {
       editorAutoSave: true,
       editorAutoSaveDelayMs: 1000
     },
+    repos: [],
+    worktreesByRepo: {
+      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+    },
+    detectedWorktreesByRepo: {},
+    runtimeEnvironments: [],
+    runtimeEnvironmentCatalogHydrated: true,
+    removedRuntimeEnvironmentIds: new Set(),
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
 }
@@ -177,10 +190,76 @@ describe('attachEditorAutosaveController', () => {
 
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/repo/file.ts',
-        content: 'edited'
+        content: 'edited',
+        connectionId: undefined,
+        expectedExecutionHostId: 'local'
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
       expect(store.getState().editorDrafts).toEqual({})
+    } finally {
+      cleanup()
+    }
+  })
+
+  it.each([
+    ['at the limit', EDITOR_BULK_SAVE_CONCURRENCY],
+    ['above the limit', EDITOR_BULK_SAVE_CONCURRENCY + 1]
+  ])('bounds dirty-file writes %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    const releases: (() => void)[] = []
+    const writeFile = vi.fn(async () => {
+      active++
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      active--
+    })
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: { fs: { writeFile } }
+    } satisfies WindowStub)
+    const store = createEditorStore()
+    store.setState({
+      settings: { editorAutoSave: false, editorAutoSaveDelayMs: 1000 } as never
+    })
+    for (let index = 0; index < count; index++) {
+      const filePath = `/repo/file-${index}.ts`
+      store.getState().openFile({
+        filePath,
+        relativePath: `file-${index}.ts`,
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      })
+      store.getState().setEditorDraft(filePath, `draft ${index}`)
+      store.getState().markFileDirty(filePath, true)
+    }
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      const save = requestDirtyFileSave()
+      for (
+        let turn = 0;
+        turn < 10 && writeFile.mock.calls.length < Math.min(count, EDITOR_BULK_SAVE_CONCURRENCY);
+        turn++
+      ) {
+        await Promise.resolve()
+      }
+      expect(writeFile).toHaveBeenCalledTimes(Math.min(count, EDITOR_BULK_SAVE_CONCURRENCY))
+      if (count > EDITOR_BULK_SAVE_CONCURRENCY) {
+        releases.shift()?.()
+        await vi.waitFor(() => expect(writeFile).toHaveBeenCalledTimes(count))
+      }
+      releases.splice(0).forEach((release) => release())
+      await save
+
+      expect(peak).toBe(Math.min(count, EDITOR_BULK_SAVE_CONCURRENCY))
+      expect(store.getState().openFiles.filter((file) => file.isDirty)).toEqual([])
     } finally {
       cleanup()
     }
@@ -204,7 +283,30 @@ describe('attachEditorAutosaveController', () => {
 
     const store = createEditorStore()
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
+    store.setState({
+      worktreesByRepo: {
+        'folder-workspace-1': [
+          {
+            id: workspaceKey,
+            repoId: 'folder-workspace-1',
+            path: '/home/neil/platform',
+            hostId: 'ssh:ssh-1'
+          }
+        ] as never
+      },
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 4
+          }
+        ]
+      ])
+    })
     store.getState().openFile({
       filePath: '/home/neil/platform/api/src/file.ts',
       relativePath: 'api/src/file.ts',
@@ -219,14 +321,13 @@ describe('attachEditorAutosaveController', () => {
     try {
       await requestDirtyFileSave()
 
-      expect(mocks.getConnectionIdForFile).toHaveBeenCalledWith(
-        workspaceKey,
-        '/home/neil/platform/api/src/file.ts'
-      )
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/home/neil/platform/api/src/file.ts',
         content: 'edited',
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        expectedExecutionHostId: 'ssh:ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 4
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
     } finally {
@@ -289,7 +390,13 @@ describe('attachEditorAutosaveController', () => {
       expect(runtimeCall).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.write',
-        params: { worktree: 'id:wt-1', relativePath: 'file.ts', content: 'edited' },
+        expectedEnvironmentPairingRevision: undefined,
+        params: {
+          worktree: 'id:wt-1',
+          relativePath: 'file.ts',
+          content: 'edited',
+          expectedExecutionHostId: 'local'
+        },
         timeoutMs: 15_000
       })
       expect(writeFile).not.toHaveBeenCalled()
@@ -333,7 +440,9 @@ describe('attachEditorAutosaveController', () => {
 
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/repo/file.md',
-        content: 'pending rich edit'
+        content: 'pending rich edit',
+        connectionId: undefined,
+        expectedExecutionHostId: 'local'
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
       expect(store.getState().editorDrafts).toEqual({})
@@ -384,7 +493,7 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
-  it('backs up dirty editor drafts for hot exit without writing files', async () => {
+  it('leaves dirty editor drafts ready for the combined hot-exit checkpoint', async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const setSync = vi.fn()
     const eventTarget = new EventTarget()
@@ -422,13 +531,7 @@ describe('attachEditorAutosaveController', () => {
       await vi.advanceTimersByTimeAsync(1000)
 
       expect(writeFile).not.toHaveBeenCalled()
-      expect(setSync).toHaveBeenCalledTimes(1)
-      expect(setSync.mock.calls[0][0].openFilesByWorktree['wt-1'][0]).toEqual(
-        expect.objectContaining({
-          filePath: '/repo/file.md',
-          dirtyDraftContent: ''
-        })
-      )
+      expect(setSync).not.toHaveBeenCalled()
       expect(store.getState().openFiles[0]?.isDirty).toBe(true)
       expect(store.getState().editorDrafts['/repo/file.md']).toBe('')
     } finally {
@@ -574,7 +677,9 @@ describe('attachEditorAutosaveController', () => {
       await requestEditorFileSave({ fileId: '/repo/file.md' })
       expect(writeFile).toHaveBeenCalledWith({
         filePath: '/repo/file.md',
-        content: 'after save'
+        content: 'after save',
+        connectionId: undefined,
+        expectedExecutionHostId: 'local'
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
     } finally {

@@ -12,7 +12,12 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createLocalFileSink, getRotatedFamilySize, listRotatedFiles } from './local-file-sink'
+import {
+  createLocalFileSink,
+  DEFAULT_FLUSH_BUFFER_BYTE_THRESHOLD,
+  getRotatedFamilySize,
+  listRotatedFiles
+} from './local-file-sink'
 
 let dir: string
 
@@ -65,6 +70,50 @@ describe('local-file-sink — basic write', () => {
     // 5th push hits the threshold, flushes synchronously.
     expect(statSync(file).size).toBeGreaterThan(0)
     sink.close()
+  })
+
+  it('flushes at the default byte threshold before the count threshold', () => {
+    const file = join(dir, 'test.ndjson')
+    const emptyLineBytes = Buffer.byteLength(`${JSON.stringify({ payload: '' })}\n`, 'utf8')
+    const record = {
+      payload: 'x'.repeat(DEFAULT_FLUSH_BUFFER_BYTE_THRESHOLD - emptyLineBytes)
+    }
+    const sink = createLocalFileSink({
+      filePath: file,
+      batchWindowMs: 100_000,
+      flushBufferThreshold: 10_000
+    })
+
+    sink.push(record)
+
+    expect(statSync(file).size).toBe(DEFAULT_FLUSH_BUFFER_BYTE_THRESHOLD)
+    sink.close()
+  })
+
+  it('flushes a prior byte batch without reordering the next record', () => {
+    const file = join(dir, 'test.ndjson')
+    const first = { i: 1, payload: '😀'.repeat(8) }
+    const second = { i: 2, payload: '😀'.repeat(8) }
+    const firstLineBytes = Buffer.byteLength(`${JSON.stringify(first)}\n`, 'utf8')
+    const secondLineBytes = Buffer.byteLength(`${JSON.stringify(second)}\n`, 'utf8')
+    const sink = createLocalFileSink({
+      filePath: file,
+      batchWindowMs: 100_000,
+      flushBufferThreshold: 100,
+      flushBufferByteThreshold: firstLineBytes + secondLineBytes - 1
+    })
+
+    sink.push(first)
+    expect(statSync(file).size).toBe(0)
+    sink.push(second)
+    expect(statSync(file).size).toBe(firstLineBytes)
+    sink.close()
+
+    const records = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { i: number })
+    expect(records.map((record) => record.i)).toEqual([1, 2])
   })
 
   it('creates trace directories and files with private POSIX permissions', () => {
@@ -167,6 +216,31 @@ describe('local-file-sink — rotation', () => {
     const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
     expect(lines.map((line) => JSON.parse(line))).toEqual([{ ok: true }])
     expect(getRotatedFamilySize(file, 3)).toBeLessThanOrEqual(100)
+  })
+
+  it('stops serializing an oversized record before visiting the whole value', () => {
+    const file = join(dir, 'test.ndjson')
+    const sink = createLocalFileSink({
+      filePath: file,
+      maxBytes: 100,
+      batchWindowMs: 100_000,
+      flushBufferThreshold: 1
+    })
+    let visits = 0
+    const payload = Array.from({ length: 10_000 }, () => ({
+      toJSON: () => {
+        visits += 1
+        return 'value'
+      }
+    }))
+
+    sink.push({ payload })
+    sink.push({ ok: true })
+    sink.close()
+
+    expect(visits).toBeLessThan(payload.length)
+    const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
+    expect(lines.map((line) => JSON.parse(line))).toEqual([{ ok: true }])
   })
 
   it('splits an oversized buffered batch instead of dropping valid records', () => {

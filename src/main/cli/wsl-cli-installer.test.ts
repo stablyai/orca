@@ -134,7 +134,7 @@ function createWslRunner(
       }
       return ''
     }
-    if (command.includes('cat ')) {
+    if (command.includes('head -c ')) {
       if (command.includes(commandPath)) {
         return files.get(commandPath) ?? '__ORCA_MISSING__'
       }
@@ -206,6 +206,27 @@ describe('WslCliInstaller', () => {
     expect(installCommand).toContain('[ ! -L "$legacy_command_path" ]')
   })
 
+  it('continues checking WSL when the host launcher exists but host PATH is unknown', async () => {
+    const wsl = createWslRunner()
+    const hostStatus = {
+      ...makeHostStatus(),
+      pathConfigured: null,
+      detail: 'Orca could not read the Windows user PATH registry value.'
+    } satisfies CliInstallStatus
+    const installer = new WslCliInstaller({
+      platform: 'win32',
+      distro: 'Ubuntu',
+      hostInstaller: { getStatus: async () => hostStatus },
+      wslRunner: wsl.runner
+    })
+
+    await expect(installer.getStatus()).resolves.toMatchObject({
+      supported: true,
+      state: 'not_installed',
+      commandPath: '/home/alice/.local/bin/orca-ide'
+    })
+  })
+
   it('derives the shared WSL bridge path for current and legacy command names', () => {
     expect(_internals.getBridgePathFromCommandPath('/home/alice/.local/bin/orca-ide')).toBe(
       '/home/alice/.local/share/orca/orca-wsl-bridge.ps1'
@@ -246,7 +267,10 @@ describe('WslCliInstaller', () => {
       distro: 'Ubuntu',
       hostInstaller: { getStatus: async () => makeHostStatus('C:\\Orca\\orca.cmd') },
       wslRunner: async (distro, command) => {
-        if (command.includes('cat /home/alice/.local/share/orca/orca-wsl-bridge.ps1')) {
+        if (
+          command.includes('head -c ') &&
+          command.includes('/home/alice/.local/share/orca/orca-wsl-bridge.ps1')
+        ) {
           return `${_internals.buildWslBridgeScript()}\n`
         }
         return wsl.runner(distro, command)
@@ -807,9 +831,6 @@ describe('WslCliInstaller', () => {
       distro: 'Ubuntu',
       hostInstaller: { getStatus: async () => makeHostStatus('C:\\Orca\\orca.cmd') },
       wslRunner: async (distro, command) => {
-        if (command.includes('cat /home/alice/.local/share/orca/orca-wsl-bridge.ps1')) {
-          return 'user bridge'
-        }
         if (command.includes('rm -f')) {
           throw new Error('__ORCA_CONFLICT__')
         }

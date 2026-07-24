@@ -1,9 +1,8 @@
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
+import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -26,7 +25,6 @@ import {
   extractString,
   firstString,
   parseJsonObject,
-  readJsonObjectIfExists,
   tokenTotal
 } from './session-scanner-values'
 
@@ -39,39 +37,45 @@ export async function parseRovoSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const metadata = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
-  if (!metadata) {
+  const accumulator = await withAiVaultWholeJsonFile(file.path, (content) => {
+    const metadata = parseJsonObject(content)
+    if (!metadata) {
+      return null
+    }
+    const next = createAccumulator({
+      agent: 'rovo',
+      file,
+      sessionId: basename(dirname(file.path))
+    })
+    next.title = firstString(metadata, ['title', 'name', 'summary'])
+    next.cwd = firstString(metadata, [
+      'workspace_path',
+      'workspacePath',
+      'workspace',
+      'cwd',
+      'working_directory',
+      'workingDirectory',
+      'project_path',
+      'projectPath'
+    ])
+    updateTimeline(next, extractString(metadata.created_at) ?? extractString(metadata.createdAt))
+    updateTimeline(next, extractString(metadata.updated_at) ?? extractString(metadata.updatedAt))
+    return next
+  })
+  if (!accumulator) {
     return null
   }
-  const accumulator = createAccumulator({
-    agent: 'rovo',
-    file,
-    sessionId: basename(dirname(file.path))
-  })
-  accumulator.title = firstString(metadata, ['title', 'name', 'summary'])
-  accumulator.cwd = firstString(metadata, [
-    'workspace_path',
-    'workspacePath',
-    'workspace',
-    'cwd',
-    'working_directory',
-    'workingDirectory',
-    'project_path',
-    'projectPath'
-  ])
-  updateTimeline(
-    accumulator,
-    extractString(metadata.created_at) ?? extractString(metadata.createdAt)
-  )
-  updateTimeline(
-    accumulator,
-    extractString(metadata.updated_at) ?? extractString(metadata.updatedAt)
-  )
 
   const contextPath = join(dirname(file.path), 'session_context.json')
-  const context = await readJsonObjectIfExists(contextPath)
-  if (context) {
-    consumeRovoSessionContext(accumulator, context)
+  try {
+    await withAiVaultWholeJsonFile(contextPath, (content) => {
+      const context = parseJsonObject(content)
+      if (context) {
+        consumeRovoSessionContext(accumulator, context)
+      }
+    })
+  } catch {
+    // Optional context may not exist yet; metadata still yields a useful row.
   }
 
   return finalizeSession(accumulator, platform)
@@ -172,10 +176,7 @@ export async function parseMessageGraphSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
+  const lines = iterateAiVaultJsonlLines(file.path)
   return parseMessageGraphSessionLines({ agent, file, lines, platform })
 }
 

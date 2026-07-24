@@ -1,5 +1,10 @@
 import { z } from 'zod'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import {
+  FetchResponseBodyTooLargeError,
+  readFetchResponseTextWithinLimit
+} from '../../../src/shared/fetch-response-body'
+import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
 
 const MAX_RESPONSE_BYTES = 16 * 1024
 const ResolveResponseSchema = z
@@ -34,15 +39,16 @@ export async function resolveMobileRelayEndpoint(args: {
     if (!response.ok) {
       throw new Error(`relay director resolve failed (${response.status})`)
     }
-    const declaredLength = Number(response.headers.get('content-length') ?? 0)
-    if (declaredLength > MAX_RESPONSE_BYTES) {
-      throw new Error('relay director resolve response too large')
+    let raw: string
+    try {
+      raw = await readFetchResponseTextWithinLimit(response, MAX_RESPONSE_BYTES)
+    } catch (error) {
+      if (error instanceof FetchResponseBodyTooLargeError) {
+        throw new Error('relay director resolve response too large')
+      }
+      throw error
     }
-    const raw = await response.text()
-    if (new TextEncoder().encode(raw).byteLength > MAX_RESPONSE_BYTES) {
-      throw new Error('relay director resolve response too large')
-    }
-    const resolved = ResolveResponseSchema.parse(JSON.parse(raw) as unknown)
+    const resolved = ResolveResponseSchema.parse(parseMobileJsonTextWithinLimits(raw))
     return {
       ...args.relay,
       cellUrl: resolved.cellUrl,

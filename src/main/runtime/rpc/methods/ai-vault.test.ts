@@ -4,6 +4,7 @@ import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultScanOptions } from '../../../ai-vault/session-scanner-types'
+import { AI_VAULT_SESSION_ID_MAX_UTF8_BYTES } from '../../../ai-vault/session-list-retention'
 
 const { scanAiVaultSessions } = vi.hoisted(() => ({
   scanAiVaultSessions: vi.fn()
@@ -13,7 +14,11 @@ vi.mock('../../../ai-vault/session-scanner', () => ({
   scanAiVaultSessions
 }))
 
-import { AI_VAULT_METHODS, AiVaultListSessionsParams } from './ai-vault'
+import {
+  AI_VAULT_METHODS,
+  AiVaultListSessionsParams,
+  AiVaultPrepareSessionResumeParams
+} from './ai-vault'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions,
@@ -106,6 +111,41 @@ describe('aiVault.listSessions params schema', () => {
   })
 })
 
+describe('aiVault.prepareSessionResume', () => {
+  it('validates bounded paths and executes against the receiving host identity', async () => {
+    expect(
+      AiVaultPrepareSessionResumeParams.safeParse({
+        agent: 'codex',
+        filePath: '/managed/sessions/rollout-a.jsonl',
+        codexHome: '/managed'
+      }).success
+    ).toBe(true)
+    const prepareAiVaultSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      prepareAiVaultSessionResume
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('aiVault.prepareSessionResume', {
+        agent: 'codex',
+        filePath: '/managed/sessions/rollout-a.jsonl',
+        codexHome: '/managed',
+        executionHostId: 'ssh:spoofed'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { useRealCodexHome: true } })
+    expect(prepareAiVaultSessionResume).toHaveBeenCalledWith({
+      agent: 'codex',
+      filePath: '/managed/sessions/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'local'
+    })
+  })
+})
+
 describe('aiVault.listSessions handler + shared cache', () => {
   beforeEach(() => {
     resetAiVaultSessionListCacheForTests()
@@ -139,6 +179,24 @@ describe('aiVault.listSessions handler + shared cache', () => {
     await listAiVaultSessions({ limit: 500 })
     // Second call via the RPC method with the same cache key.
     await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
+    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds a pathological result before retaining it in the shared cache', async () => {
+    const oversized = makeSession()
+    oversized.sessionId = 'x'.repeat(AI_VAULT_SESSION_ID_MAX_UTF8_BYTES + 1)
+    scanAiVaultSessions.mockResolvedValue({
+      sessions: [oversized],
+      issues: [],
+      scannedAt: SCANNED_AT
+    })
+
+    const first = await listAiVaultSessions({ limit: 500 })
+    const second = await listAiVaultSessions({ limit: 500 })
+
+    expect(first.sessions).toEqual([])
+    expect(first.issues.at(-1)?.message).toContain('AI Vault omitted')
+    expect(second).toBe(first)
     expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
   })
 

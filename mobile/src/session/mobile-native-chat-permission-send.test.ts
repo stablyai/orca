@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { sendMobileNativeChatPermissionResponse } from './mobile-native-chat-permission-send'
 
 describe('sendMobileNativeChatPermissionResponse', () => {
@@ -16,12 +17,27 @@ describe('sendMobileNativeChatPermissionResponse', () => {
         deviceToken: 'phone',
         text: '1'
       })
-    ).resolves.toBe(true)
+    ).resolves.toBe('accepted')
     expect(sendRequest).toHaveBeenCalledWith('terminal.send', {
       terminal: 'terminal',
       text: '1',
       enter: false,
       client: { id: 'phone', type: 'mobile' }
     })
+  })
+
+  it('surfaces an ambiguous delivery as unknown instead of a definite failure', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockRejectedValue(markRpcDeliveryUnknown(new Error('Connection closed')))
+
+    await expect(
+      sendMobileNativeChatPermissionResponse({
+        client: { sendRequest } as unknown as RpcClient,
+        terminal: 'terminal',
+        deviceToken: null,
+        text: '1'
+      })
+    ).resolves.toBe('unknown')
   })
 })

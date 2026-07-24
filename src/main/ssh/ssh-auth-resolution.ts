@@ -1,9 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { utils, type BaseAgent, type ParsedKey } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { readSshKeyFile } from './ssh-key-file'
 
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
 // standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
@@ -26,7 +27,7 @@ export function findDefaultKeyFile(): PrivateKeyFile | undefined {
       if (!existsSync(resolved)) {
         continue
       }
-      const contents = readFileSync(resolved)
+      const contents = readSshKeyFile(resolved)
       return { path: keyPath, contents }
     } catch {
       continue
@@ -96,7 +97,7 @@ function resolveExplicitPrivateKeyPath(
 function readPrivateKey(keyPath: string): PrivateKeyFile | undefined {
   try {
     const resolvedPath = resolveSshConfigHomePath(keyPath)
-    return { path: keyPath, contents: readFileSync(resolvedPath) }
+    return { path: keyPath, contents: readSshKeyFile(resolvedPath) }
   } catch {
     return undefined
   }

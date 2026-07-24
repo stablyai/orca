@@ -5,6 +5,7 @@ import {
   seedNativeChatAppliedSessionOptions
 } from './native-chat-session-option-cache'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES } from './native-chat-composer-scope-cache'
 
 describe('native chat PTY session options', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
@@ -46,6 +47,28 @@ describe('native chat PTY session options', () => {
         })
       ])
     )
+  })
+
+  it('keeps oversized reported options live without retaining them for remount', () => {
+    const model = 'x'.repeat(NATIVE_CHAT_SCOPE_CACHE_MAX_VALUE_BYTES)
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      reportedValues: { model },
+      dispatchCommand: vi.fn()
+    })!
+
+    expect(surface.getSnapshot()[0]?.kind).toMatchObject({ currentValue: model })
+    expect(readNativeChatSessionOptionCache('pty-1')).toBeNull()
+
+    const remounted = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: vi.fn()
+    })!
+    expect(remounted.getSnapshot()[0]?.kind).not.toHaveProperty('currentValue')
   })
 
   it('restores launch-backed values through the tab-to-PTY cache handoff', () => {

@@ -17,6 +17,8 @@ vi.mock('@parcel/watcher', () => ({
   subscribe: mockSubscribe
 }))
 
+const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB', 'base64')
+
 function createMockDispatcher() {
   const requestHandlers = new Map<
     string,
@@ -138,6 +140,7 @@ describe('FsHandler', () => {
   it('registers all expected handlers', () => {
     const methods = Array.from(dispatcher._requestHandlers.keys())
     expect(methods).toContain('fs.readDir')
+    expect(methods).toContain('fs.readDirBounded')
     expect(methods).toContain('fs.readFile')
     expect(methods).toContain('fs.tempDir')
     expect(methods).toContain('fs.writeFile')
@@ -152,6 +155,7 @@ describe('FsHandler', () => {
     expect(methods).toContain('fs.realpath')
     expect(methods).toContain('fs.search')
     expect(methods).toContain('fs.listFiles')
+    expect(methods).toContain('fs.listMarkdownDocuments')
     expect(methods).toContain('fs.workspaceSpaceScan')
     expect(methods).toContain('fs.watch')
     expect(methods).toContain('fs.unwatchAndWait')
@@ -164,12 +168,12 @@ describe('FsHandler', () => {
     await expect(dispatcher.callRequest('fs.tempDir')).resolves.toBe(tmpdir())
   })
 
-  it('readDir returns sorted entries with directories first', async () => {
+  it('bounded readDir returns sorted entries with directories first', async () => {
     mkdirSync(path.join(tmpDir, 'subdir'))
     writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
     writeFileSync(path.join(tmpDir, 'aaa.txt'), 'world')
 
-    const result = (await dispatcher.callRequest('fs.readDir', { dirPath: tmpDir })) as {
+    const result = (await dispatcher.callRequest('fs.readDirBounded', { dirPath: tmpDir })) as {
       name: string
       isDirectory: boolean
     }[]
@@ -239,17 +243,19 @@ describe('FsHandler', () => {
 
   it('readFile returns base64 for image files', async () => {
     const filePath = path.join(tmpDir, 'test.png')
-    writeFileSync(filePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    writeFileSync(filePath, PNG_1X1)
 
     const result = (await dispatcher.callRequest('fs.readFile', { filePath })) as {
       content: string
       isBinary: boolean
       isImage: boolean
       mimeType: string
+      imageDimensions: { width: number; height: number }
     }
     expect(result.isBinary).toBe(true)
     expect(result.isImage).toBe(true)
     expect(result.mimeType).toBe('image/png')
+    expect(result.imageDimensions).toEqual({ width: 1, height: 1 })
     expect(result.content).toBeTruthy()
   })
 
