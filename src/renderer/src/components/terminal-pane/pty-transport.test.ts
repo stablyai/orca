@@ -89,6 +89,28 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('preserves an archived lost-worker receipt instead of presenting it as an exited PTY', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({
+      id: 'dead-worker',
+      lostWorkerRecovery: { kind: 'archived', archiveId: 'archive-1' }
+    })
+    const transport = createIpcPtyTransport({})
+
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'dead-worker',
+      callbacks: {}
+    })
+
+    expect(result).toEqual({
+      id: 'dead-worker',
+      lostWorkerRecovery: { kind: 'archived', archiveId: 'archive-1' }
+    })
+    expect(transport.getPtyId()).toBeNull()
+  })
+
   it('does not create a second kill authority when a mounted pane detaches', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>

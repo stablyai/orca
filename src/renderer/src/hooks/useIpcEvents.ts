@@ -791,6 +791,27 @@ export function getNewlyDisconnectedRuntimeEnvironmentIds(
   return getNewlyConnectedRuntimeEnvironmentIds(next, previous)
 }
 
+function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
+  if (!node) {
+    return 0
+  }
+  if (node.type === 'leaf') {
+    return 1
+  }
+  return countTerminalLayoutLeaves(node.first) + countTerminalLayoutLeaves(node.second)
+}
+
+export function getSshReconnectActivationSpawnSuppression(
+  layout: TerminalLayoutSnapshot | undefined
+): true | number {
+  const paneCount = Math.max(
+    1,
+    countTerminalLayoutLeaves(layout?.root),
+    Object.keys(layout?.ptyIdsByLeafId ?? {}).length
+  )
+  return paneCount === 1 ? true : paneCount
+}
+
 export function getRuntimeProjectRefreshEnvironmentIds(args: {
   previousDesired: readonly string[]
   nextDesired: readonly string[]
@@ -2790,8 +2811,10 @@ export function useIpcEvents(): void {
                           ...t,
                           generation: (t.generation ?? 0) + 1,
                           // Why: a reconnect remount with no bindable PTY must
-                          // pass the main-owned lost-worker gate before fresh spawn.
-                          pendingActivationSpawn: true
+                          // pass the main-owned lost-worker gate before fresh spawn; split panes need one token each.
+                          pendingActivationSpawn: getSshReconnectActivationSpawnSuppression(
+                            s.terminalLayoutsByTabId[t.id]
+                          )
                         }
                       : t
                   )

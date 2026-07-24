@@ -6,6 +6,7 @@ import {
   buildNewWorkspaceShortcutModalData,
   getNewlyConnectedRuntimeEnvironmentIds,
   getNewlyDisconnectedRuntimeEnvironmentIds,
+  getSshReconnectActivationSpawnSuppression,
   getRuntimeProjectRefreshEnvironmentIds,
   openNewWorkspaceFromShortcut,
   resolveBrowserSessionTabTarget,
@@ -65,6 +66,24 @@ describe('getNewlyDisconnectedRuntimeEnvironmentIds', () => {
       'env-b'
     ])
     expect(getNewlyDisconnectedRuntimeEnvironmentIds(['env-a'], ['env-a', 'env-b'])).toEqual([])
+  })
+})
+
+describe('getSshReconnectActivationSpawnSuppression', () => {
+  it('keeps one gate token for every split leaf during reconnect remount', () => {
+    expect(
+      getSshReconnectActivationSpawnSuppression({
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          second: { type: 'leaf', leafId: STALE_LEAF_ID }
+        },
+        activeLeafId: FUTURE_LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: {}
+      })
+    ).toBe(2)
   })
 })
 

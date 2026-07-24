@@ -13,6 +13,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { TerminalLostWorkerRendererReceipt } from '../../../../shared/terminal-archive-types'
 import type { PtyDataMeta } from './pty-dispatcher'
 
 export type PtyBufferSnapshot = {
@@ -47,6 +48,8 @@ export type LocalPtySessionMetadata = {
 
 export type PtyConnectResult = {
   id: string
+  /** A main-owned archive decision returned before a replacement PTY existed. */
+  lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean

@@ -197,6 +197,10 @@ function createOrAttachPayloadError(payload: unknown): string | null {
         DAEMON_PTY_HISTORY_SEED_MAX_BYTES
       ),
     () =>
+      payload.attachOnly === undefined || typeof payload.attachOnly === 'boolean'
+        ? null
+        : 'createOrAttach payload.attachOnly must be a boolean',
+    () =>
       optionalBoundedStringError(
         payload.shellOverride,
         'createOrAttach payload.shellOverride',

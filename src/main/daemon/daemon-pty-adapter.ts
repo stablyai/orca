@@ -9,6 +9,7 @@ import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
+  ATTACH_ONLY_PROTOCOL_VERSION,
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
@@ -106,6 +107,13 @@ export class TerminalKilledError extends Error {
     super(`Session "${sessionId}" was explicitly killed`)
     this.name = 'TerminalKilledError'
   }
+}
+
+function isDaemonSessionNotFoundError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === 'SessionNotFoundError' || error.message.startsWith('Session not found:'))
+  )
 }
 
 export class DaemonPtyAdapter implements IPtyProvider {
@@ -330,7 +338,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
 
-    const createOrAttach = (historySeed: string | null) => {
+    const createOrAttach = (historySeed: string | null, options?: { attachOnly?: boolean }) => {
       if (opts.signal?.aborted) {
         throw new Error('client_disconnected')
       }
@@ -351,6 +359,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         shellReadySupported,
         ...(shellReadyTimeoutMs !== undefined ? { shellReadyTimeoutMs } : {}),
         ...(historySeed ? { historySeed } : {}),
+        ...(options?.attachOnly ? { attachOnly: true } : {}),
         ...(this.supportsStartupIngress && opts.startupIngress
           ? { startupIngress: opts.startupIngress }
           : {}),
@@ -359,7 +368,40 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
 
     let scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
-    let result = await createOrAttach(scrollback)
+    let result: CreateOrAttachResult
+    if (restoreSkippedForLiveSession && opts.preSpawnLostWorker) {
+      if (this.protocolVersion < ATTACH_ONLY_PROTOCOL_VERSION) {
+        return {
+          id: sessionId,
+          lostWorkerRecovery: { kind: 'retryable-error', code: 'durability-failed' },
+          ...(wslDistro ? { wslDistro } : {})
+        }
+      }
+      try {
+        // Why: a probe can go stale between RPCs; attach-only makes that gap unable to create a replacement shell.
+        result = await createOrAttach(null, { attachOnly: true })
+      } catch (error) {
+        if (!isDaemonSessionNotFoundError(error)) {
+          throw error
+        }
+        restoreInfo = detectColdRestore({ ignoreCleanEnd: true })
+        const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
+        if (!coldRestore) {
+          return {
+            id: sessionId,
+            lostWorkerRecovery: { kind: 'retryable-error', code: 'capture-unavailable' },
+            ...(wslDistro ? { wslDistro } : {})
+          }
+        }
+        return {
+          id: sessionId,
+          lostWorkerRecovery: await opts.preSpawnLostWorker(coldRestore),
+          ...(wslDistro ? { wslDistro } : {})
+        }
+      }
+    } else {
+      result = await createOrAttach(scrollback)
+    }
     if (opts.agentSessionEnsure && !isAgentSessionClaimedSpawnResult(result.agentSessionEnsure)) {
       // Why: a claim-incapable owner may already have spawned before returning
       // a malformed response; retire only this requested session before failing closed.
@@ -416,14 +458,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
     }
 
-    // Why: the probe→createOrAttach gap is racy — the session can exit in between, so re-detect to match the unprobed restore path.
-    // Why ignoreCleanEnd: the raced exit event can write endedAt before the reply; nulling the restore here would delete the checkpoint instead of restoring it.
-    if (result.isNew && restoreSkippedForLiveSession) {
+    if (result.isNew && restoreSkippedForLiveSession && !opts.preSpawnLostWorker) {
       restoreInfo = detectColdRestore({ ignoreCleanEnd: true })
       scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
       if (restoreInfo && scrollback) {
-        // Why: the aliveness probe raced with session death, so the first
-        // create lacked recovery bytes. Replace it before exposing the PTY.
+        // Why: ordinary shells retain the legacy restart path; workers use attach-only above so they never create this provisional replacement.
         if (result.incarnationId) {
           operation.ignoredExitIncarnationIds.add(result.incarnationId)
         }

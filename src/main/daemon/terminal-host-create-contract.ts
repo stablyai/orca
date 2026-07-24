@@ -26,6 +26,8 @@ export type CreateOrAttachOptions = {
   shellReadySupported?: boolean
   shellReadyTimeoutMs?: number
   historySeed?: string
+  /** Refuse to turn a missing session into a replacement process. */
+  attachOnly?: boolean
   startupIngress?: PtyStartupIngressIntent
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim

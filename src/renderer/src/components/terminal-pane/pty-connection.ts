@@ -4621,6 +4621,21 @@ export function connectPanePty(
     // Why: the hibernation wake fires from noteVisibilityResume in the outer
     // connection scope, long after this deferred-connect closure has run.
     wakeHibernatedAgentPane = () => startFreshColdRestoreAgentResume()
+    const applyLostWorkerRecoveryReceipt = (receipt: TerminalLostWorkerRendererReceipt): void => {
+      if (receipt.kind === 'ordinary-shell') {
+        return
+      }
+      if (receipt.kind === 'archived') {
+        useAppStore.getState().closeTab(deps.tabId, {
+          reason: 'cleanup',
+          captureRecentlyClosed: false,
+          localPtyTeardownOwnedExternally: true,
+          runtimePtyTeardownOwnedExternally: true
+        })
+        return
+      }
+      reportError(`Terminal recovery is pending archive (${receipt.code}).`)
+    }
     const handleAutomaticLostWorkerRecovery = async (
       fallback: () => void,
       options: { hibernating?: boolean } = {}
@@ -4638,23 +4653,14 @@ export function connectPanePty(
           reason: connectionId ? 'relay-worker-lost' : 'daemon-worker-lost'
         })
       } catch {
-        fallback()
+        reportError('Terminal recovery could not be archived. Try again shortly.')
         return
       }
       if (receipt.kind === 'ordinary-shell') {
         fallback()
         return
       }
-      if (receipt.kind === 'archived') {
-        useAppStore.getState().closeTab(deps.tabId, {
-          reason: 'cleanup',
-          captureRecentlyClosed: false,
-          localPtyTeardownOwnedExternally: true,
-          runtimePtyTeardownOwnedExternally: true
-        })
-        return
-      }
-      reportError(`Terminal recovery is pending archive (${receipt.code}).`)
+      applyLostWorkerRecoveryReceipt(receipt)
     }
     const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
       !disposed &&
@@ -4836,6 +4842,25 @@ export function connectPanePty(
       const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
         .then(async (spawnedPtyId) => {
           if (outputCallbacks.generation !== transportStreamGeneration) {
+            const gen = await preSignalPromise
+            if (typeof gen === 'number') {
+              void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+            }
+            return null
+          }
+          if (
+            spawnedPtyId &&
+            typeof spawnedPtyId === 'object' &&
+            'lostWorkerRecovery' in spawnedPtyId &&
+            spawnedPtyId.lostWorkerRecovery
+          ) {
+            if (
+              paneStartup?.launchConfig ||
+              (startupOverride && 'launchConfig' in startupOverride)
+            ) {
+              clearRegisteredStartupLaunchConfig()
+            }
+            applyLostWorkerRecoveryReceipt(spawnedPtyId.lostWorkerRecovery)
             const gen = await preSignalPromise
             if (typeof gen === 'number') {
               void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
@@ -7251,6 +7276,11 @@ export function connectPanePty(
       const connectResult =
         result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
 
+      if (connectResult?.lostWorkerRecovery) {
+        applyLostWorkerRecoveryReceipt(connectResult.lostWorkerRecovery)
+        return connectResult.lostWorkerRecovery.kind === 'archived'
+      }
+
       if (connectResult?.exitedBeforeAttach) {
         // Why: the transport already delivered the dead session's final frame + exit; treat as terminal state, not a failed reattach.
         return true
@@ -7807,7 +7837,11 @@ export function connectPanePty(
                 )
               })
           } else {
-            startFreshColdRestoreAgentResume()
+            const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
+            await handleAutomaticLostWorkerRecovery(
+              () => startFreshColdRestoreAgentResume(coldRestoreStartup),
+              { hibernating: coldRestoreStartup?.hasSleepingRecord === true }
+            )
           }
         })()
         return

@@ -5132,11 +5132,7 @@ export function registerPtyHandlers(
             if (effectiveSessionAppId !== undefined) {
               ptySizes.delete(effectiveSessionAppId)
             }
-            throw new Error(
-              result.lostWorkerRecovery.kind === 'archived'
-                ? 'terminal_lost_worker_archived'
-                : 'terminal_lost_worker_archive_pending'
-            )
+            return resolvePaneSpawnReservation(reservationPaneKey, paneSpawnReservation, result)
           }
           rejectedRegistrationCandidate = result
           if (pendingRegistrationPtyId !== result.id) {

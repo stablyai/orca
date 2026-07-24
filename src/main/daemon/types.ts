@@ -23,6 +23,7 @@ export type { TerminalModes } from './terminal-modes'
 import type { TerminalSnapshot } from './terminal-snapshot'
 export type { TerminalSnapshot } from './terminal-snapshot'
 export {
+  ATTACH_ONLY_PROTOCOL_VERSION,
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
@@ -81,6 +82,8 @@ export type CreateOrAttachRequest = {
     shellReadyTimeoutMs?: number
     /** Recovered ANSI applied before the new subprocess can emit startup output. */
     historySeed?: string
+    /** Refuse to create when a formerly-live session vanished before attach. */
+    attachOnly?: boolean
     startupIngress?: PtyStartupIngressIntent
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim

@@ -209,6 +209,7 @@ type StoreState = {
   markTerminalTabUnread: ReturnType<typeof vi.fn>
   markTerminalPaneUnread: ReturnType<typeof vi.fn>
   markAgentCompletionPaneUnread: ReturnType<typeof vi.fn>
+  closeTab: ReturnType<typeof vi.fn>
 }
 
 type WindowsShiftEnterPaneState = Parameters<typeof resolveWindowsShiftEnterEncodingForPane>[0]
@@ -858,7 +859,8 @@ describe('connectPanePty', () => {
       }),
       markTerminalTabUnread: vi.fn(),
       markTerminalPaneUnread: vi.fn(),
-      markAgentCompletionPaneUnread: vi.fn()
+      markAgentCompletionPaneUnread: vi.fn(),
+      closeTab: vi.fn()
     } as StoreState
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
@@ -888,7 +890,8 @@ describe('connectPanePty', () => {
           declarePendingPaneSerializer: vi.fn().mockResolvedValue(1),
           settlePaneSerializer: vi.fn().mockResolvedValue(undefined),
           clearPendingPaneSerializer: vi.fn().mockResolvedValue(undefined),
-          reportRendererSerializerReady: vi.fn().mockResolvedValue(undefined)
+          reportRendererSerializerReady: vi.fn().mockResolvedValue(undefined),
+          handleLostTerminalCandidate: vi.fn().mockResolvedValue({ kind: 'ordinary-shell' })
         },
         platform: {
           get: vi.fn(() => ({ platform: 'win32', osRelease: '10.0.26100' }))
@@ -915,6 +918,10 @@ describe('connectPanePty', () => {
       const foregroundProcess = await window.api.pty.getForegroundProcess(id)
       const hasChildProcesses = await window.api.pty.hasChildProcesses(id)
       return { foregroundProcess, hasChildProcesses }
+    })
+    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockReset()
+    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockResolvedValue({
+      kind: 'ordinary-shell'
     })
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
@@ -6132,8 +6139,7 @@ describe('connectPanePty', () => {
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncTicks(10)
 
     expect(transport.connect).toHaveBeenNthCalledWith(
       1,
@@ -17526,6 +17532,72 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
     expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
     expect(mockStoreState.removeDeferredSshReconnectTarget).not.toHaveBeenCalled()
+  })
+
+  it('asks the main-owned gate before no-id deferred SSH recovery and closes an archived tab', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockResolvedValue({
+      kind: 'archived',
+      archiveId: 'archive-no-id'
+    })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: {}
+    }
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledOnce()
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(mockStoreState.closeTab).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ localPtyTeardownOwnedExternally: true })
+    )
+  })
+
+  it('keeps a deferred SSH tab when the archive handoff throws', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(
+      async (opts: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (opts.sessionId) {
+          opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: expired-session')
+          return undefined
+        }
+        return 'unexpected-fresh-pty'
+      }
+    )
+    transportFactoryQueue.push(transport)
+    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockRejectedValue(
+      new Error('capture callback failed')
+    )
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'expired-session' }
+    }
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledOnce()
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+      1,
+      'Terminal recovery is pending archive (durability-failed).'
+    )
+    expect(mockStoreState.closeTab).not.toHaveBeenCalled()
   })
 
   it('spawns a fresh PTY when a deferred SSH session expired', async () => {

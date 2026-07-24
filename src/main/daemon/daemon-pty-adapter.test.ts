@@ -1672,6 +1672,51 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSpawnOpts).toBeNull()
     })
 
+    it('uses attach-only before the lost-worker gate when a live probe races session exit', async () => {
+      const sessionId = 'lost-worker-probe-race'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/worker',
+          cols: 120,
+          rows: 40,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'worker output\r\n')
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      lastSpawnOpts = null
+      const probe = vi.spyOn(historyAdapter, 'getAppliedSize').mockImplementation(async () => {
+        lastSubprocess._simulateExit(1)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        return { cols: 80, rows: 24 }
+      })
+      const preSpawnLostWorker = vi.fn(async () => ({
+        kind: 'archived' as const,
+        archiveId: 'archive-worker-race'
+      }))
+
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId,
+        preSpawnLostWorker
+      })
+
+      expect(probe).toHaveBeenCalledOnce()
+      expect(preSpawnLostWorker).toHaveBeenCalledOnce()
+      expect(result.lostWorkerRecovery).toEqual({
+        kind: 'archived',
+        archiveId: 'archive-worker-race'
+      })
+      expect(lastSpawnOpts).toBeNull()
+    })
+
     it('repairs legacy hostname UNC cwd for WSL spawn and cold-restore metadata', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
