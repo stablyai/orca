@@ -27,6 +27,7 @@ import {
 } from './appearance-usage-percentage-search'
 
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { FileExplorerFontSizeSetting } from '../FileExplorerFontSizeSetting'
 
 import { useTranslate } from '@/i18n/use-translate'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
@@ -374,6 +375,10 @@ export function AppearanceWindowSidebarSection({
                       }
                     />
                   </SearchableSetting>
+                  <FileExplorerFontSizeSetting
+                    settings={settings}
+                    updateSettings={updateSettings}
+                  />
                   <SearchableSetting {...followSymlinkEntry}>
                     <SettingsSwitchRow
                       label={followSymlinkEntry.title}
