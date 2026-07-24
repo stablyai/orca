@@ -13,25 +13,26 @@ export { classifyGhError, classifyListIssuesError } from './gh-error-classificat
 export {
   _getOwnerRepoCacheSize,
   _resetOwnerRepoCache,
-  getIssueOwnerRepo,
-  getOwnerRepo,
   getOwnerRepoForRemote,
   getRemoteUrlForRepo,
   ghRepoExecOptions,
   githubRepoContext,
   parseGitHubOwnerRepo,
-  parseGitHubRemoteIdentity,
-  resolveIssueSource,
-  resolvePRRepositoryCandidates
+  parseGitHubRemoteIdentity
 } from './github-repository-identity'
 export type {
   GitHubRemoteIdentity,
   GitHubRepoContext,
   LocalGitExecOptions,
-  OwnerRepo,
-  PRRepositoryCandidates,
-  ResolvedIssueSource
+  OwnerRepo
 } from './github-repository-identity'
+export {
+  getIssueOwnerRepo,
+  getOwnerRepo,
+  resolveIssueSource,
+  resolvePRRepositoryCandidates
+} from './github-owner-repo-selection'
+export type { PRRepositoryCandidates, ResolvedIssueSource } from './github-owner-repo-selection'
 
 const MAX_CONCURRENT = 4
 let running = 0
