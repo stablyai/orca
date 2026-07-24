@@ -11,10 +11,53 @@ const LIGHT_FLOOR = 4.5
 function loadThemeInjected(extra: Record<string, unknown> = {}): Record<string, unknown> {
   const context: Record<string, unknown> = {
     defaultTheme: { background: '#1a1b26', foreground: '#c0caf5' },
+    // terminal-webview-html.ts:292 declares this at script load; applyTerminalTheme reads it.
+    terminalTheme: null,
     ...extra
   }
   new Script(TERMINAL_WEBVIEW_THEME_JS).runInNewContext(context)
   return context
+}
+
+type ThemeInjectedContext = Record<string, unknown> & {
+  applyTerminalTheme: (input: unknown, force?: boolean) => void
+}
+
+// Counting accessors: xterm rebuilds its palette on every options.theme write, so the
+// value gate is only observable as a write count, never as a final value.
+function loadThemeInjectedWithCountingTerm(): {
+  context: ThemeInjectedContext
+  writes: { theme: number; contrast: number }
+} {
+  const writes = { theme: 0, contrast: 0 }
+  let theme: unknown
+  let minimumContrastRatio = 1
+  const term = {
+    options: {
+      get theme() {
+        return theme
+      },
+      set theme(next: unknown) {
+        writes.theme += 1
+        theme = next
+      },
+      get minimumContrastRatio() {
+        return minimumContrastRatio
+      },
+      set minimumContrastRatio(next: number) {
+        writes.contrast += 1
+        minimumContrastRatio = next
+      }
+    }
+  }
+  const context = loadThemeInjected({
+    term,
+    document: {
+      documentElement: { style: { background: '' } },
+      body: { style: { background: '' } }
+    }
+  }) as ThemeInjectedContext
+  return { context, writes }
 }
 
 describe('mobile terminal-webview contrast floor gate', () => {
@@ -75,5 +118,45 @@ describe('mobile terminal-webview contrast floor gate', () => {
 
     context.applyTerminalTheme({ theme: { background: '#1e242a' } })
     expect(term.options.minimumContrastRatio).toBe(DARK_FLOOR)
+  })
+
+  it('does not rewrite an identical palette, but keeps the module theme vars current', () => {
+    const { context, writes } = loadThemeInjectedWithCountingTerm()
+    const second = { theme: { background: '#1a1b26', foreground: '#c0caf5' } }
+
+    context.applyTerminalTheme({ theme: { background: '#1a1b26', foreground: '#c0caf5' } })
+    context.applyTerminalTheme(second)
+
+    expect(writes.theme).toBe(1)
+    // terminal-webview-html.ts:713-718 builds the Terminal from these right after an apply.
+    expect(context.terminalThemeInput).toBe(second)
+    expect(context.terminalTheme).toMatchObject({ background: '#1a1b26' })
+  })
+
+  it('rewrites the palette when a color actually changes', () => {
+    const { context, writes } = loadThemeInjectedWithCountingTerm()
+
+    context.applyTerminalTheme({ theme: { background: '#1a1b26' } })
+    context.applyTerminalTheme({ theme: { background: '#282828' } })
+
+    expect(writes.theme).toBe(2)
+  })
+
+  it('rewrites an identical palette when forced by the iOS visibility repaint', () => {
+    const { context, writes } = loadThemeInjectedWithCountingTerm()
+
+    context.applyTerminalTheme({ theme: { background: '#1a1b26' } })
+    context.applyTerminalTheme({ theme: { background: '#1a1b26' } }, true)
+
+    expect(writes.theme).toBe(2)
+  })
+
+  it('does not rewrite the contrast floor when it is unchanged', () => {
+    const { context, writes } = loadThemeInjectedWithCountingTerm()
+
+    context.applyTerminalTheme({ theme: { background: '#1a1b26' } })
+    context.applyTerminalTheme({ theme: { background: '#282828' } })
+
+    expect(writes.contrast).toBe(1)
   })
 })

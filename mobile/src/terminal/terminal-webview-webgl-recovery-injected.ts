@@ -55,7 +55,8 @@ export const TERMINAL_WEBGL_RECOVERY_JS = `
     if (document.visibilityState !== 'visible') return;
     // Why: iOS may restore the xterm model while discarding GPU pixels/theme
     // paint state, so visibility must rebuild the atlas and repaint every row.
-    applyTerminalTheme(terminalThemeInput);
+    // force bypasses the no-op theme gate, which would otherwise skip this repaint.
+    applyTerminalTheme(terminalThemeInput, true);
     try { if (webglAddon && webglAddon.clearTextureAtlas) webglAddon.clearTextureAtlas(); } catch (e) {}
     refreshTerminalSurface();
   });

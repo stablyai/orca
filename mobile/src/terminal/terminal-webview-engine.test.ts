@@ -230,7 +230,7 @@ describe('terminal WebView bundled engine', () => {
     harness.document.visibilityState = 'visible'
     harness.fireVisibilityChange()
 
-    expect(harness.applyTerminalTheme).toHaveBeenCalledWith(harness.terminalThemeInput)
+    expect(harness.applyTerminalTheme).toHaveBeenCalledWith(harness.terminalThemeInput, true)
     expect(harness.addons[0]?.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(harness.term.refresh).toHaveBeenCalledTimes(1)
   })

@@ -94,16 +94,36 @@ export const TERMINAL_WEBVIEW_THEME_JS = `
     return Object.assign({}, defaultTheme, next);
   }
 
-  function applyTerminalTheme(input) {
+  // normalizeTerminalTheme always returns exactly defaultTheme's key set, so those keys
+  // are the complete value comparison.
+  function terminalThemesEqual(a, b) {
+    if (!a || !b) return false;
+    var keys = Object.keys(defaultTheme);
+    for (var i = 0; i < keys.length; i++) {
+      if (a[keys[i]] !== b[keys[i]]) return false;
+    }
+    return true;
+  }
+
+  function applyTerminalTheme(input, force) {
     terminalThemeInput = input;
-    terminalTheme = normalizeTerminalTheme(input);
+    var nextTheme = normalizeTerminalTheme(input);
+    var themeChanged = !terminalThemesEqual(terminalTheme, nextTheme);
+    terminalTheme = nextTheme;
     var background = terminalTheme.background || '${colors.terminalBg}';
     document.documentElement.style.background = background;
     document.body.style.background = background;
     terminalMinimumContrastRatio = resolveTerminalContrastFloor(background);
     if (term) {
-      term.options.theme = terminalTheme;
-      term.options.minimumContrastRatio = terminalMinimumContrastRatio;
+      // Why gated: writing options.theme rebuilds xterm's palette and discards a TUI's live
+      // OSC 4/10/11 mutations (mirrors terminal-appearance.ts:207-210). force = iOS repaint.
+      if (force || themeChanged) {
+        term.options.theme = terminalTheme;
+      }
+      // Why gated: writing minimumContrastRatio clears xterm's contrast cache (terminal-appearance.ts:218-220).
+      if (term.options.minimumContrastRatio !== terminalMinimumContrastRatio) {
+        term.options.minimumContrastRatio = terminalMinimumContrastRatio;
+      }
     }
   }
 `
