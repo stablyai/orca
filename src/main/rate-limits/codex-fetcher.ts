@@ -811,7 +811,10 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             const session = mapRpcWindow(classifiedWindows.session, CODEX_SESSION_WINDOW_MINUTES)
             const weekly = mapRpcWindow(classifiedWindows.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
             // Why: preferred session/weekly stay classification-driven; buckets surface extra meters from rateLimitsByLimitId.
-            const { buckets } = mapCodexRpcRateLimitsPayload(wrapper, mapRpcWindow)
+            const { buckets } = mapCodexRpcRateLimitsPayload(
+              wrapper as Parameters<typeof mapCodexRpcRateLimitsPayload>[0],
+              mapRpcWindow
+            )
             const rateLimitResetCredits = mapRpcRateLimitResetCredits(
               wrapper?.rateLimitResetCredits
             )

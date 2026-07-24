@@ -66,10 +66,6 @@ afterEach(() => {
   }
 })
 
-function withFileAuthStore(config: string): string {
-  return `cli_auth_credentials_store = "file"\n${config}`
-}
-
 function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true

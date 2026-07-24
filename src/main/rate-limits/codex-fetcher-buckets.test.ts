@@ -100,8 +100,10 @@ describe('fetchCodexRateLimits multi-meter windows', () => {
     const result = await resultPromise
 
     expect(result).toMatchObject({
-      session: { usedPercent: 10, windowMinutes: 299 },
-      weekly: { usedPercent: 20, windowMinutes: 10079 },
+      // Why: preferred session/weekly stay classification-normalized (upstream #10136);
+      // extra meters still surface via buckets with reported durations.
+      session: { usedPercent: 10, windowMinutes: 300 },
+      weekly: { usedPercent: 20, windowMinutes: 10080 },
       status: 'ok'
     })
     expect(result.buckets).toEqual([

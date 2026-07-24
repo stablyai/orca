@@ -9,12 +9,13 @@ export type CodexRpcRateWindow = {
 type CodexRpcRateLimitSnapshot = {
   limitId?: string
   limitName?: string
-  primary?: CodexRpcRateWindow
-  secondary?: CodexRpcRateWindow
+  primary?: CodexRpcRateWindow | null
+  secondary?: CodexRpcRateWindow | null
 }
 
 export type CodexRpcRateLimitsPayload = {
-  rateLimits?: CodexRpcRateLimitSnapshot
+  // Why: app-server may return rateLimits:null; treat null like missing preferred meter.
+  rateLimits?: CodexRpcRateLimitSnapshot | null
   rateLimitsByLimitId?: Record<string, CodexRpcRateLimitSnapshot | undefined> | null
 }
 
@@ -75,11 +76,11 @@ export function mapCodexRpcRateLimitsPayload(
 } {
   const preferred = getPreferredSnapshot(payload)
   const session = mapWindow(
-    preferred.snapshot?.primary,
+    preferred.snapshot?.primary ?? undefined,
     getWindowMinutes(preferred.snapshot?.primary?.windowDurationMins, 300)
   )
   const weekly = mapWindow(
-    preferred.snapshot?.secondary,
+    preferred.snapshot?.secondary ?? undefined,
     getWindowMinutes(preferred.snapshot?.secondary?.windowDurationMins, 10080)
   )
   const byId = payload?.rateLimitsByLimitId
@@ -94,14 +95,14 @@ export function mapCodexRpcRateLimitsPayload(
     }
     const name = getSnapshotName(id, snapshot)
     const primary = mapWindow(
-      snapshot.primary,
+      snapshot.primary ?? undefined,
       getWindowMinutes(snapshot.primary?.windowDurationMins, 300)
     )
     if (primary) {
       buckets.push({ name, ...primary })
     }
     const secondary = mapWindow(
-      snapshot.secondary,
+      snapshot.secondary ?? undefined,
       getWindowMinutes(snapshot.secondary?.windowDurationMins, 10080)
     )
     if (secondary) {
