@@ -385,7 +385,7 @@ import {
 import {
   crushOrcaHostArg,
   crushOrcaSocketPath,
-  crushSseBridgeSupported,
+  crushSseEnabledForLaunch,
   startCrushSseBridge,
   type CrushSseBridge
 } from '../agent-hooks/crush-sse-bridge'
@@ -24224,11 +24224,15 @@ export class OrcaRuntimeService {
       // Why: crush has no CLI hook contract. Orca enables crush's client-server
       // mode (CRUSH_CLIENT_SERVER=1) and points crush at a per-pane custom unix
       // socket via --host so each agent pane owns a private crush server + SSE
-      // stream that Orca subscribes to for status reporting. Gated to non-Windows
-      // because Node's socketPath HTTP transport is unix-only; on Windows crush
-      // falls back to the generic title-scraping status detector.
-      const crushSseEnabled =
-        launchOpts.launchAgent === 'crush' && !!launchToken && crushSseBridgeSupported()
+      // stream that Orca subscribes to for status reporting. Gated to local
+      // non-Windows launches: Node's socketPath HTTP transport is unix-only, and
+      // remote (SSH/relay) crush spawns its server on the remote host, so Orca's
+      // local dial would never connect — remote crush keeps title-scraping.
+      const crushSseEnabled = crushSseEnabledForLaunch({
+        launchAgent: launchOpts.launchAgent,
+        launchToken,
+        connectionId: workspace.connectionId
+      })
       const crushHostArg = crushSseEnabled && launchToken ? crushOrcaHostArg(launchToken) : null
       const baseEnv = {
         ...launchOpts.env,
@@ -28251,9 +28255,12 @@ export class OrcaRuntimeService {
   }
 
   private dropDisconnectedPtyRecord(ptyId: string): void {
-    // Why: pruning can remove a PTY without the normal exit callback.
+    // Why: pruning can remove a PTY without the normal exit callback, so the
+    // crush SSE bridge must be stopped here too — otherwise its reconnect loop
+    // outlives the pane and dials a socket that will never come back.
     this.advancePtyLifecycleGeneration(ptyId)
     this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
+    this.ptysById.get(ptyId)?.crushSseBridge?.stop()
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.setupCompletionTokenByPtyId.delete(ptyId)

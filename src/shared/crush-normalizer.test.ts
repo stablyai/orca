@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: crush's SSE pipeline is one subsystem; keeping the end-to-end normalize path, SSE parser, and cache semantics together surfaces regressions. */
 import { describe, expect, it } from 'vitest'
 import { normalizeHookPayload, createHookListenerState } from './agent-hook-listener'
 import type { HookListenerState } from './agent-hook-listener'
@@ -80,6 +79,73 @@ describe('normalizeHookPayload — crush (charmbracelet/crush) SSE bridge', () =
     expect(normalized!.payload.toolInput).toBe('ls -la')
     // Why: prompt persists from the previous user message — assistant turns don't reset.
     expect(normalized!.payload.prompt).toBe('do something')
+  })
+
+  it('skips finished tool_calls and surfaces the latest unfinished one as active', () => {
+    const s = state()
+    normalizeHookPayload(
+      s,
+      'crush',
+      crushBody({
+        hookEventName: 'message:user',
+        hookPayload: { role: 'user', parts: [{ type: 'text', data: { text: 'multi-step' } }] }
+      }),
+      'production'
+    )
+    const normalized = normalizeHookPayload(
+      s,
+      'crush',
+      crushBody({
+        hookEventName: 'message:assistant',
+        hookPayload: {
+          role: 'assistant',
+          parts: [
+            // Why: an earlier finished tool_call must NOT be reported as active.
+            {
+              type: 'tool_call',
+              data: { id: 'call-stale', name: 'grep', input: 'foo', finished: true }
+            },
+            {
+              type: 'tool_call',
+              data: { id: 'call-live', name: 'bash', input: 'ls -la', finished: false }
+            }
+          ]
+        }
+      }),
+      'production'
+    )
+    expect(normalized!.payload.state).toBe('working')
+    expect(normalized!.payload.toolName).toBe('bash')
+    expect(normalized!.payload.toolInput).toBe('ls -la')
+  })
+
+  it('reports no active tool when every tool_call in an assistant message is finished', () => {
+    const s = state()
+    normalizeHookPayload(
+      s,
+      'crush',
+      crushBody({
+        hookEventName: 'message:user',
+        hookPayload: { role: 'user', parts: [{ type: 'text', data: { text: 'done-step' } }] }
+      }),
+      'production'
+    )
+    const normalized = normalizeHookPayload(
+      s,
+      'crush',
+      crushBody({
+        hookEventName: 'message:assistant',
+        hookPayload: {
+          role: 'assistant',
+          parts: [
+            { type: 'tool_call', data: { id: 'c1', name: 'bash', input: 'pwd', finished: true } }
+          ]
+        }
+      }),
+      'production'
+    )
+    expect(normalized!.payload.state).toBe('working')
+    expect(normalized!.payload.toolName).toBeUndefined()
   })
 
   it('maps a permission_request to blocked with the requesting tool', () => {

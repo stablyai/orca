@@ -20,6 +20,7 @@ import { isAbsolute, join } from 'node:path'
 import {
   AGENT_MODEL_MAX_LENGTH,
   normalizeAgentStatusPayload,
+  parseAgentStatusPayload,
   type AgentStatusState,
   type AgentSubagentSnapshot,
   type ParsedAgentStatusPayload
@@ -3125,7 +3126,8 @@ function extractCrushToolFields(
       return {}
     }
     // Why: the latest unfinished tool_call is the active tool; finished ones are stale tool_result waits already shown as permission blockers.
-    for (const partRaw of parts) {
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const partRaw = parts[i]
       if (
         typeof partRaw !== 'object' ||
         partRaw === null ||
@@ -3134,7 +3136,7 @@ function extractCrushToolFields(
         continue
       }
       const data = (partRaw as { data?: Record<string, unknown> }).data
-      if (!data) {
+      if (!data || data.finished === true) {
         continue
       }
       const toolName = typeof data.name === 'string' ? data.name : undefined
@@ -3173,29 +3175,7 @@ function extractCrushToolFields(
   return {}
 }
 
-function crushUserMessageText(hookPayload: Record<string, unknown>): string {
-  const parts = hookPayload.parts
-  if (!Array.isArray(parts)) {
-    return ''
-  }
-  let text = ''
-  for (const partRaw of parts) {
-    if (
-      typeof partRaw !== 'object' ||
-      partRaw === null ||
-      (partRaw as { type?: string }).type !== 'text'
-    ) {
-      continue
-    }
-    const data = (partRaw as { data?: { text?: unknown } }).data
-    if (data && typeof data.text === 'string') {
-      text += data.text
-    }
-  }
-  return text
-}
-
-function crushAssistantMessageText(hookPayload: Record<string, unknown>): string {
+function crushMessageText(hookPayload: Record<string, unknown>): string {
   const parts = hookPayload.parts
   if (!Array.isArray(parts)) {
     return ''
@@ -3275,7 +3255,7 @@ function normalizeCrushEvent(
 
   let promptText = ''
   if (isNewUserTurn) {
-    promptText = crushUserMessageText(hookPayload)
+    promptText = crushMessageText(hookPayload)
   } else if (eventName === 'message:assistant' && !state.lastPromptByPaneKey.has(paneKey)) {
     // Why: the first assistant message after launch implies the user already
     // submitted (Orca pre-injected a prompt via stdin). Fall back to that prompt,
@@ -3285,7 +3265,7 @@ function normalizeCrushEvent(
 
   const lastAssistant =
     assistantMessage ??
-    (eventName === 'message:assistant' ? crushAssistantMessageText(hookPayload) : undefined)
+    (eventName === 'message:assistant' ? crushMessageText(hookPayload) : undefined)
 
   return parseAgentStatusPayload(
     JSON.stringify({

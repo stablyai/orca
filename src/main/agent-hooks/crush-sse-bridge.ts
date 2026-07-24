@@ -14,6 +14,7 @@ import { URL } from 'node:url'
 import {
   crushHookEventName,
   crushHookPayload,
+  crushOrcaSocketFileName,
   parseCrushSseChunk,
   parseCrushSseEvent,
   type CrushSseEnvelope
@@ -48,8 +49,8 @@ export function crushOrcaSocketDirectory(): string {
 
 /** Full filesystem path of the per-pane socket for a launchToken. */
 export function crushOrcaSocketPath(launchToken: string): string {
-  const safe = launchToken.replace(/[^a-zA-Z0-9_-]/g, '') || 'default'
-  return path.join(crushOrcaSocketDirectory(), `crush-orca-${safe}.sock`)
+  const dir = crushOrcaSocketDirectory()
+  return path.join(dir, crushOrcaSocketFileName(launchToken, dir))
 }
 
 /** `--host` value Orca passes to crush and its auto-spawned server. */
@@ -63,6 +64,23 @@ export function crushOrcaHostArg(launchToken: string): string {
  *  sockets. Why: gate Windows out for v1 — title-scraping remains available. */
 export function crushSseBridgeSupported(): boolean {
   return process.platform === 'darwin' || process.platform === 'linux'
+}
+
+/** Combined gate for crush SSE status reporting on a given launch. Why: the bridge
+ *  requires unix-socket transport (no Windows) AND a local launch (no SSH/relay:
+ *  the spawned crush server binds the remote host, not Orca's machine, so Orca's
+ *  local dial would never connect). Remote crush panes keep title-scraping. */
+export function crushSseEnabledForLaunch(args: {
+  launchAgent?: string | null
+  launchToken?: string | null
+  connectionId?: string | null
+}): boolean {
+  return (
+    args.launchAgent === 'crush' &&
+    !!args.launchToken &&
+    !args.connectionId &&
+    crushSseBridgeSupported()
+  )
 }
 
 export type CrushSseBridge = {
@@ -88,6 +106,9 @@ export function startCrushSseBridge(socketPath: string, deps: CrushSseBridgeDeps
     if (stopped) {
       return
     }
+    // Why: drop any partial SSE fragment left over from the previous connection
+    // so it can't corrupt the first event(s) on the new stream.
+    buffer = ''
     const req = http.request(
       {
         method: 'GET',
@@ -101,6 +122,7 @@ export function startCrushSseBridge(socketPath: string, deps: CrushSseBridgeDeps
         // schedule a reconnect instead of treating a partial response as fatal.
         if (res.statusCode !== 200) {
           res.resume()
+          reportError(new Error(`crush SSE stream returned ${res.statusCode ?? 'no status'}`))
           scheduleReconnect()
           return
         }
@@ -118,12 +140,30 @@ export function startCrushSseBridge(socketPath: string, deps: CrushSseBridgeDeps
           }
         })
         res.on('end', () => scheduleReconnect())
-        res.on('error', () => scheduleReconnect())
+        res.on('error', (err) => {
+          reportError(err)
+          scheduleReconnect()
+        })
       }
     )
-    req.on('error', () => scheduleReconnect())
+    req.on('error', (err) => {
+      reportError(err)
+      scheduleReconnect()
+    })
     currentRequest = req
     req.end()
+  }
+
+  // Why: route every connection / stream / delivery failure through deps.onError
+  // so a permanently wrong socket path or unbooted crush server is observable
+  // from the runtime side, and wrap the sink so a throwing observer can't crash
+  // the SSE read loop or the reconnect scheduler.
+  const reportError = (err: unknown): void => {
+    try {
+      deps.onError?.(err instanceof Error ? err : new Error(String(err)))
+    } catch {
+      // Why: the sink itself must never be able to crash the SSE read loop.
+    }
   }
 
   const dispatch = (ev: { data: string }): void => {
@@ -144,8 +184,9 @@ export function startCrushSseBridge(socketPath: string, deps: CrushSseBridgeDeps
       deps.onEvent({ hookEventName, hookPayload })
     } catch (err) {
       // Why: the sink (AgentHookServer.submitSyntheticHookEvent) is itself
-      // guarded, but wrap once more so a throwing observer can't kill the loop.
-      deps.onError?.(err instanceof Error ? err : new Error(String(err)))
+      // guarded, but route through reportError so a throwing observer can't
+      // kill the loop.
+      reportError(err)
     }
   }
 

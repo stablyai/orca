@@ -5,25 +5,45 @@
 // derivation, and a stateful SSE line parser. The normalizer (agent-hook-listener)
 // and the main-process SSE client (crush-sse-bridge) both depend on these.
 
+import { createHash } from 'node:crypto'
+
 export const CRUSH_ORCA_SOCKET_PREFIX = 'crush-orca-'
+const CRUSH_ORCA_SOCKET_SUFFIX = '.sock'
+// Why: macOS sun_path is 104 bytes incl. NUL, Linux 108. Use the lower bound so
+// the bound socket path fits on both platforms; longer paths fail bind(2)/connect(2).
+const CRUSH_ORCA_SOCKET_PATH_MAX = 103
 
 /** Derive the per-pane unix socket filename Orca instructs crush to bind.
  *  Why: per-pane socket → one crush server per pane → SSE attribution is trivial
  *  (events on socket X belong to pane X), sidestepping crush's single-global-socket
- *  workspace multiplexing which would otherwise need session_id→paneKey mapping. */
-export function crushOrcaSocketFileName(launchToken: string): string {
-  // Why: launch tokens are already filesystem-safe (uuid-ish); strip just in
-  // case. Empty → `default` so a probe without a bound pane still yields a
-  // stable, unique filename (used only in tests + path validation).
-  const safe = (launchToken || 'default').replace(/[^a-zA-Z0-9_-]/g, '')
-  return `${CRUSH_ORCA_SOCKET_PREFIX}${safe}.sock`
+ *  workspace multiplexing which would otherwise need session_id→paneKey mapping.
+ *
+ *  Pass `socketDir` to enable the sun_path-safe fallback: when `dir + sep + name`
+ *  would exceed the platform's sockaddr_un limit, the token is replaced by a
+ *  12-hex sha1 digest. Deterministic → crush's auto-spawned server (which inherits
+ *  `--host`) lands on the same path Orca dials. */
+export function crushOrcaSocketFileName(launchToken: string, socketDir?: string): string {
+  const raw = (launchToken || 'default').replace(/[^a-zA-Z0-9_-]/g, '') || 'default'
+  const inline = `${CRUSH_ORCA_SOCKET_PREFIX}${raw}${CRUSH_ORCA_SOCKET_SUFFIX}`
+  if (socketDir !== undefined) {
+    const dirLen = (socketDir.endsWith('/') ? socketDir.slice(0, -1) : socketDir).length
+    if (dirLen + 1 + inline.length > CRUSH_ORCA_SOCKET_PATH_MAX) {
+      const digest = createHash('sha1')
+        .update(launchToken || 'default')
+        .digest('hex')
+        .slice(0, 12)
+      return `${CRUSH_ORCA_SOCKET_PREFIX}${digest}${CRUSH_ORCA_SOCKET_SUFFIX}`
+    }
+  }
+  return inline
 }
 
 /** Full `--host` value Orca passes to crush. `unix://` scheme + absolute socket path.
  *  Empty launchToken falls back to a generic name so callers can probe without a
- *  bound pane (used only in tests). */
+ *  bound pane (used only in tests). Truncates the token to a hash when the full
+ *  path would exceed sun_path on the host platform. */
 export function crushOrcaHostUrl(socketDir: string, launchToken: string): string {
-  const fileName = crushOrcaSocketFileName(launchToken || 'default')
+  const fileName = crushOrcaSocketFileName(launchToken || 'default', socketDir)
   return `unix://${socketDir.endsWith('/') ? socketDir.slice(0, -1) : socketDir}/${fileName}`
 }
 

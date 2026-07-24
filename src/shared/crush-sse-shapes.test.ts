@@ -28,6 +28,31 @@ describe('crushOrcaHostUrl', () => {
     expect(crushOrcaHostUrl('/tmp', 'tok-id')).toBe('unix:///tmp/crush-orca-tok-id.sock')
     expect(crushOrcaHostUrl('/var/run/', 'tok-id')).toBe('unix:///var/run/crush-orca-tok-id.sock')
   })
+
+  it('keeps the full path under sun_path even with a long tmpdir + UUID token', () => {
+    // Why: a 60-char tmpdir + 36-char UUID token would be 60+1+52=113 (> macOS
+    // sun_path 104). The hash fallback collapses the token to 12 hex chars
+    // (60+1+28=89 ✓). Larger tmpdirs show up on some CI/dev sandboxes.
+    const longDir = `/${'x'.repeat(59)}` // 60 chars
+    const url = crushOrcaHostUrl(longDir, '550e8400-e29b-41d4-a716-446655440000')
+    expect(url.startsWith('unix://')).toBe(true)
+    const socketPath = url.slice('unix://'.length)
+    expect(socketPath.length).toBeLessThanOrEqual(103)
+    // Why: hashed filenames are deterministic — Orca's dial path must match the
+    // path crush's auto-spawned server binds (both derive from the same launchToken).
+    expect(crushOrcaHostUrl(longDir, '550e8400-e29b-41d4-a716-446655440000')).toBe(url)
+    // Sanity: a short dir with the same token keeps the literal form (no hash).
+    expect(crushOrcaHostUrl('/tmp', '550e8400-e29b-41d4-a716-446655440000')).toBe(
+      'unix:///tmp/crush-orca-550e8400-e29b-41d4-a716-446655440000.sock'
+    )
+  })
+
+  it('produces distinct hashed filenames for distinct tokens on a long dir', () => {
+    const longDir = `/${'x'.repeat(59)}`
+    const a = crushOrcaHostUrl(longDir, '550e8400-e29b-41d4-a716-446655440000')
+    const b = crushOrcaHostUrl(longDir, '6ba7b810-9dad-11d1-80b4-00c04fd430c8')
+    expect(a).not.toBe(b)
+  })
 })
 
 describe('parseCrushSseChunk', () => {

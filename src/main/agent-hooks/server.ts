@@ -664,7 +664,7 @@ export class AgentHookServer {
       paneKey: args.paneKey,
       hook_event_name: args.hookEventName,
       payload: args.hookPayload,
-      env: 'production'
+      env: this.env
     }
     if (args.launchToken) {
       body.launchToken = args.launchToken
