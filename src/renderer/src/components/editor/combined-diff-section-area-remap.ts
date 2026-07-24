@@ -10,7 +10,13 @@ export type RemappedCombinedDiffSections = {
 
 /**
  * Remap loaded sections onto the current entry list (area moves + removals).
- * Keeps Monaco bodies/keys stable. Returns null when a new path appears.
+ *
+ * Matches by path (preferring same area, then any area) so Monaco bodies and
+ * section keys stay stable across stage/unstage. Builds `sourceIndexes` in the
+ * new `entries` order so measured heights can follow permutations.
+ *
+ * @returns Remapped sections + prior indexes, or `null` when a new path appears
+ *   (caller should rebuild from scratch).
  */
 export function remapCombinedDiffSectionsForAreaMove({
   sections,
@@ -95,6 +101,13 @@ export function remapCombinedDiffSectionsForAreaMove({
   return { sections: remapped, sourceIndexes }
 }
 
+/**
+ * Reindex measured section heights to match a remapped row order.
+ *
+ * `sourceIndexes[i]` is the previous section index that now sits at `i`, so
+ * height at the old index moves with the row even when length is unchanged
+ * (same-length area-group permutations from stage/unstage).
+ */
 export function remapCombinedDiffSectionHeights(
   previousHeights: Record<number, number>,
   sourceIndexes: readonly number[]

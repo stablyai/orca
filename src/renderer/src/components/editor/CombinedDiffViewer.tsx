@@ -555,12 +555,8 @@ export default function CombinedDiffViewer({
     })
     if (remapped) {
       if (remapped.sections !== sectionsRef.current) {
-        const previousSections = sectionsRef.current
-        setSectionHeights((prev) =>
-          remapped.sections.length === previousSections.length
-            ? prev
-            : remapCombinedDiffSectionHeights(prev, remapped.sourceIndexes)
-        )
+        // Why: same length can still permute (area group reorder); always follow sourceIndexes.
+        setSectionHeights((prev) => remapCombinedDiffSectionHeights(prev, remapped.sourceIndexes))
         loadedIndicesRef.current = new Set(
           remapped.sections.flatMap((section, index) => (section.loading ? [] : [index]))
         )

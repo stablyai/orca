@@ -17,7 +17,13 @@ function section(overrides: Partial<DiffSection>): DiffSection {
     collapsed: false,
     loading: false,
     dirty: false,
-    diffResult: { kind: 'text', originalContent: 'old', modifiedContent: 'new' },
+    diffResult: {
+      kind: 'text',
+      originalContent: 'old',
+      modifiedContent: 'new',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    },
     largeDiffRenderLimit: null,
     ...overrides
   }
@@ -120,6 +126,65 @@ describe('remapCombinedDiffSectionsForAreaMove', () => {
       })
     ).toBeNull()
   })
+
+  it('permutes sourceIndexes when an area move reorders without changing count', () => {
+    const stagedB = section({
+      key: 'staged:src/b.ts',
+      path: 'src/b.ts',
+      area: 'staged',
+      originalContent: 'b-old',
+      modifiedContent: 'b-new'
+    })
+    const stagedD = section({
+      key: 'staged:src/d.ts',
+      path: 'src/d.ts',
+      area: 'staged',
+      originalContent: 'd-old',
+      modifiedContent: 'd-new'
+    })
+    const unstagedA = section({
+      key: 'unstaged:src/a.ts',
+      path: 'src/a.ts',
+      area: 'unstaged',
+      originalContent: 'a-old',
+      modifiedContent: 'a-new'
+    })
+    const unstagedC = section({
+      key: 'unstaged:src/c.ts',
+      path: 'src/c.ts',
+      area: 'unstaged',
+      originalContent: 'c-old',
+      modifiedContent: 'c-new'
+    })
+    const entries: GitStatusEntry[] = [
+      { path: 'src/a.ts', status: 'modified', area: 'staged' },
+      { path: 'src/b.ts', status: 'modified', area: 'staged' },
+      { path: 'src/d.ts', status: 'modified', area: 'staged' },
+      { path: 'src/c.ts', status: 'modified', area: 'unstaged' }
+    ]
+
+    const remapped = remapCombinedDiffSectionsForAreaMove({
+      sections: [stagedB, stagedD, unstagedA, unstagedC],
+      entries,
+      treeMode: 'all'
+    })
+
+    expect(remapped?.sourceIndexes).toEqual([2, 0, 1, 3])
+    expect(remapped?.sections.map((row) => row.path)).toEqual([
+      'src/a.ts',
+      'src/b.ts',
+      'src/d.ts',
+      'src/c.ts'
+    ])
+    expect(remapped?.sections[0]).toMatchObject({
+      key: 'unstaged:src/a.ts',
+      area: 'staged',
+      modifiedContent: 'a-new'
+    })
+    expect(
+      remapCombinedDiffSectionHeights({ 0: 100, 1: 200, 2: 300, 3: 400 }, remapped!.sourceIndexes)
+    ).toEqual({ 0: 300, 1: 100, 2: 200, 3: 400 })
+  })
 })
 
 describe('remapCombinedDiffSectionHeights', () => {
@@ -127,6 +192,17 @@ describe('remapCombinedDiffSectionHeights', () => {
     expect(remapCombinedDiffSectionHeights({ 0: 120, 1: 340, 2: 50 }, [1, 2])).toEqual({
       0: 340,
       1: 50
+    })
+  })
+
+  it('reindexes heights for a same-length permutation', () => {
+    expect(
+      remapCombinedDiffSectionHeights({ 0: 100, 1: 200, 2: 300, 3: 400 }, [2, 0, 1, 3])
+    ).toEqual({
+      0: 300,
+      1: 100,
+      2: 200,
+      3: 400
     })
   })
 })
