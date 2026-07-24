@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { Alert, View, Text, Pressable, StyleSheet } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { BottomDrawer } from '../components/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalQuickCommand } from '../../../src/shared/types'
@@ -39,6 +40,8 @@ export function QuickCommandsSheet({
   repoName,
   onLaunch
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createQuickCommandsSheetStyles)
   const { commands, loading, ready, error, persist } = useQuickCommands({
     client,
     enabled: visible
@@ -228,24 +231,25 @@ export function QuickCommandsSheet({
   )
 }
 
-const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.sm },
-  backButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  backSpacer: { width: 30 },
-  title: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center'
-  },
-  pressed: { backgroundColor: colors.bgRaised },
-  editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
-  descText: { fontSize: 12, color: colors.textMuted }
-})
+export const createQuickCommandsSheetStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    header: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.sm },
+    backButton: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    backSpacer: { width: 30 },
+    title: {
+      flex: 1,
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      textAlign: 'center'
+    },
+    pressed: { backgroundColor: colors.bgRaised },
+    editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
+    descText: { fontSize: 12, color: colors.textMuted }
+  })

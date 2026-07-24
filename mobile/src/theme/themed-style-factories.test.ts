@@ -150,7 +150,9 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../../app/h/[hostId]/session/mobile-session-review-comment-styles'),
     import('../../app/h/[hostId]/session/mobile-session-command-input-styles'),
     import('../session/MobileAgentWorkingIndicator'),
-    import('../terminal/terminal-webview-engine-error-state')
+    import('../terminal/terminal-webview-engine-error-state'),
+    import('../session/mobile-native-chat-view-styles'),
+    import('../session/mobile-native-chat-message-styles')
   ])
   const [
     bottomDrawer,
@@ -193,7 +195,9 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     sessionReview,
     sessionCommand,
     workingIndicator,
-    engineError
+    engineError,
+    nativeChatView,
+    nativeChatMessage
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -290,6 +294,14 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createTerminalWebViewEngineErrorStyles',
       factory: engineError.createTerminalWebViewEngineErrorStyles
+    },
+    {
+      name: 'createMobileNativeChatViewStyles',
+      factory: nativeChatView.createMobileNativeChatViewStyles
+    },
+    {
+      name: 'createMobileNativeChatMessageStyles',
+      factory: nativeChatMessage.createMobileNativeChatMessageStyles
     }
   ]
 }
@@ -394,5 +406,15 @@ describe('themed style factories', () => {
     const err = createTerminalWebViewEngineErrorStyles(darkColors)
     expect(err.errorOverlay.backgroundColor).toBe(darkColors.terminalBg)
     expect(err.errorTitle.color).toBe(darkColors.textPrimary)
+
+    const { createMobileNativeChatViewStyles } =
+      await import('../session/mobile-native-chat-view-styles')
+    const { createMobileNativeChatMessageStyles } =
+      await import('../session/mobile-native-chat-message-styles')
+    const chatView = createMobileNativeChatViewStyles(darkColors)
+    expect(chatView.root.backgroundColor).toBe(darkColors.bgBase)
+    expect(chatView.sendErrorText.color).toBe(darkColors.statusRed)
+    const chatMsg = createMobileNativeChatMessageStyles(darkColors)
+    expect(chatMsg.userText.color).toBe(darkColors.bgBase)
   })
 })

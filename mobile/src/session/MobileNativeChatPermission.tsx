@@ -1,7 +1,8 @@
 import { memo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 // Renders a detected agent permission ask as a card with tappable options.
@@ -14,6 +15,8 @@ function MobileNativeChatPermissionImpl({
   permission: MobileChatPermission
   onRespond: (send: string) => Promise<boolean>
 }): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileNativeChatPermissionStyles)
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
   const respond = async (send: string): Promise<void> => {
@@ -63,61 +66,62 @@ function MobileNativeChatPermissionImpl({
 
 export const MobileNativeChatPermission = memo(MobileNativeChatPermissionImpl)
 
-const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  detail: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: typography.metaSize + 5
-  },
-  options: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm
-  },
-  option: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  optionPrimary: {
-    backgroundColor: colors.accentBlue
-  },
-  optionSecondary: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  optionPressed: {
-    opacity: 0.7
-  },
-  optionText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  optionTextPrimary: {
-    color: colors.onAccent
-  }
-})
+export const createMobileNativeChatPermissionStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    card: {
+      marginHorizontal: spacing.lg,
+      marginVertical: spacing.sm,
+      padding: spacing.md,
+      gap: spacing.sm,
+      borderRadius: radii.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.bgPanel
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm
+    },
+    title: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    },
+    detail: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      lineHeight: typography.metaSize + 5
+    },
+    options: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm
+    },
+    option: {
+      minHeight: 44,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.button
+    },
+    optionPrimary: {
+      backgroundColor: colors.accentBlue
+    },
+    optionSecondary: {
+      backgroundColor: colors.bgRaised,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle
+    },
+    optionPressed: {
+      opacity: 0.7
+    },
+    optionText: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    },
+    optionTextPrimary: {
+      color: colors.onAccent
+    }
+  })

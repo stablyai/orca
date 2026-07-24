@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { AskAnswerSelection, AskPrompt } from './mobile-native-chat-ask'
 
 type Props = {
@@ -21,6 +22,8 @@ const OTHER = -1
  *  on the last step), and a Cancel that dismisses the prompt. Neutral styling
  *  with a subtle green accent on the active choice to match the rest of the app. */
 export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileNativeChatAskStyles)
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
@@ -208,6 +211,8 @@ function OptionRow({
   multi?: boolean
   onPress: () => void
 }): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileNativeChatAskStyles)
   return (
     <Pressable style={[styles.option, selected && styles.optionSelected]} onPress={onPress}>
       {/* Multi-select reads as a checkbox (square); single-select as a radio (circle). */}
@@ -232,147 +237,148 @@ function OptionRow({
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    maxHeight: 380,
-    backgroundColor: colors.bgPanel,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  tabs: {
-    flexGrow: 0,
-    paddingTop: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  tabsContent: {
-    paddingHorizontal: spacing.sm,
-    gap: spacing.xs,
-    alignItems: 'center'
-  },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    minHeight: 36,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent'
-  },
-  tabActive: {
-    borderBottomColor: colors.statusGreen
-  },
-  tabText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  tabTextActive: {
-    color: colors.textPrimary
-  },
-  scroll: {
-    paddingHorizontal: spacing.md
-  },
-  questionText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600',
-    marginVertical: spacing.sm
-  },
-  option: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    marginBottom: spacing.xs
-  },
-  optionSelected: {
-    borderColor: colors.statusGreen
-  },
-  check: {
-    width: 18,
-    height: 18,
-    borderWidth: 1.5,
-    borderColor: colors.textMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1
-  },
-  checkCircle: {
-    borderRadius: 9
-  },
-  checkSquare: {
-    borderRadius: 4
-  },
-  checkOn: {
-    backgroundColor: colors.statusGreen,
-    borderColor: colors.statusGreen
-  },
-  optionBody: {
-    flex: 1,
-    gap: 2
-  },
-  optionLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  optionDescription: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    padding: spacing.sm,
-    minHeight: 44,
-    marginBottom: spacing.xs
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  cancel: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm
-  },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  progress: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  next: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary
-  },
-  nextDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  nextText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  nextTextDisabled: {
-    color: colors.textMuted
-  }
-})
+export const createMobileNativeChatAskStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    card: {
+      maxHeight: 380,
+      backgroundColor: colors.bgPanel,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle
+    },
+    tabs: {
+      flexGrow: 0,
+      paddingTop: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle
+    },
+    tabsContent: {
+      paddingHorizontal: spacing.sm,
+      gap: spacing.xs,
+      alignItems: 'center'
+    },
+    tab: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      minHeight: 36,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderBottomWidth: 2,
+      borderBottomColor: 'transparent'
+    },
+    tabActive: {
+      borderBottomColor: colors.statusGreen
+    },
+    tabText: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    },
+    tabTextActive: {
+      color: colors.textPrimary
+    },
+    scroll: {
+      paddingHorizontal: spacing.md
+    },
+    questionText: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize + 1,
+      fontWeight: '600',
+      marginVertical: spacing.sm
+    },
+    option: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      padding: spacing.sm,
+      borderRadius: radii.card,
+      backgroundColor: colors.bgRaised,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      marginBottom: spacing.xs
+    },
+    optionSelected: {
+      borderColor: colors.statusGreen
+    },
+    check: {
+      width: 18,
+      height: 18,
+      borderWidth: 1.5,
+      borderColor: colors.textMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 1
+    },
+    checkCircle: {
+      borderRadius: 9
+    },
+    checkSquare: {
+      borderRadius: 4
+    },
+    checkOn: {
+      backgroundColor: colors.statusGreen,
+      borderColor: colors.statusGreen
+    },
+    optionBody: {
+      flex: 1,
+      gap: 2
+    },
+    optionLabel: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    },
+    optionDescription: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize
+    },
+    input: {
+      backgroundColor: colors.bgRaised,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.card,
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      padding: spacing.sm,
+      minHeight: 44,
+      marginBottom: spacing.xs
+    },
+    footer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.md,
+      gap: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle
+    },
+    cancel: {
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm
+    },
+    cancelText: {
+      color: colors.textSecondary,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    },
+    progress: {
+      color: colors.textMuted,
+      fontSize: typography.metaSize
+    },
+    next: {
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radii.button,
+      backgroundColor: colors.textPrimary
+    },
+    nextDisabled: {
+      backgroundColor: colors.bgRaised
+    },
+    nextText: {
+      color: colors.bgBase,
+      fontSize: typography.bodySize,
+      fontWeight: '700'
+    },
+    nextTextDisabled: {
+      color: colors.textMuted
+    }
+  })

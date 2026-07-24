@@ -12,8 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { colors } from '../theme/mobile-theme'
-import { styles } from './mobile-native-chat-view-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { createMobileNativeChatViewStyles } from './mobile-native-chat-view-styles'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages,
@@ -139,6 +139,8 @@ export function MobileNativeChatView({
   onOpenFile,
   keyboardInset = 0
 }: Props): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileNativeChatViewStyles)
   const insets = useSafeAreaInsets()
   const listRef = useRef<FlatList<NativeChatMessage>>(null)
   const [toolsExpanded, setToolsExpanded] = useState(false)

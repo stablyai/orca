@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard'
 import { ArrowUp, ChevronDown, Copy, SquareChevronRight } from 'lucide-react-native'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import {
   isImageRefBlock,
   isTextBlock,
@@ -14,7 +14,11 @@ import {
 } from './mobile-native-chat-blocks'
 import { diffFromText, diffFromToolCall, type DiffLine } from './mobile-native-chat-diff'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import { MAX_TOOL_RESULT_CHARS, styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
+import {
+  MAX_TOOL_RESULT_CHARS,
+  TEXT_SIZE,
+  createMobileNativeChatMessageStyles
+} from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import {
   summarizeToolInput,
@@ -26,6 +30,7 @@ const MAX_VISIBLE_TOOL_PAIRS = 6
 const MAX_TOOL_RUN_DIFF_ROWS = 240
 
 function DiffView({ lines }: { lines: DiffLine[] }): React.JSX.Element {
+  const styles = useThemedStyles(createMobileNativeChatMessageStyles)
   return (
     <View style={styles.diff}>
       {lines.map((line, i) => (
@@ -58,6 +63,7 @@ function ResultBody({
   isError?: boolean
   diff: DiffLine[] | null
 }): React.JSX.Element {
+  const styles = useThemedStyles(createMobileNativeChatMessageStyles)
   if (diff) {
     return <DiffView lines={diff} />
   }
@@ -85,6 +91,8 @@ function ToolLine({
   diffLineLimit: number
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileNativeChatMessageStyles)
   const [expanded, setExpanded] = useState(defaultExpanded)
   const { call, result } = pair
   const name = call ? call.name : 'Result'
@@ -148,6 +156,7 @@ function Prose({
   fontScale: number
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(createMobileNativeChatMessageStyles)
   if (isTextBlock(block)) {
     // Inverted (user) bubbles use a fixed dark-on-light text rather than the
     // markdown renderer's light-on-dark palette.
@@ -197,6 +206,8 @@ function ToolRun({
   trailing?: React.ReactNode
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileNativeChatMessageStyles)
   const [open, setOpen] = useState(defaultExpanded)
   const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
   const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
@@ -253,6 +264,8 @@ function AgentControls({
   onCopy: () => void
   onScrollToTop?: () => void
 }): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileNativeChatMessageStyles)
   return (
     <View style={styles.controls}>
       <Pressable
@@ -297,6 +310,7 @@ function MobileNativeChatMessageImpl({
   onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
+  const styles = useThemedStyles(createMobileNativeChatMessageStyles)
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isAgent = !isUser

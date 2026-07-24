@@ -3,9 +3,10 @@ import {
   buildMobileRichMarkdownEditorHtml,
   escapeInjectedJavaScriptString
 } from './mobile-rich-markdown-editor-html'
+import { darkColors } from '../theme/mobile-theme'
 
 function editorScript(): string {
-  const html = buildMobileRichMarkdownEditorHtml()
+  const html = buildMobileRichMarkdownEditorHtml(darkColors)
   const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1]
   expect(script).toBeTruthy()
   return script ?? ''

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { spacing, radii, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
   getQuickCommandAgentLabel,
@@ -34,6 +35,7 @@ function ActionToggle({
   value: QuickCommandDraft['action']
   onChange: (action: QuickCommandDraft['action']) => void
 }) {
+  const styles = useThemedStyles(createQuickCommandEditorFormStyles)
   return (
     <View style={styles.toggleGroup}>
       {(['terminal-command', 'agent-prompt'] as const).map((action) => {
@@ -72,6 +74,8 @@ export function QuickCommandEditorForm({
   onCancel,
   onSave
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createQuickCommandEditorFormStyles)
   const hasRepoScope = repoId !== null
   const [advancedOpen, setAdvancedOpen] = useState(draft.scope.type === 'repo')
   const isAgent = draft.action === 'agent-prompt'
@@ -240,78 +244,79 @@ export function QuickCommandEditorForm({
   )
 }
 
-const styles = StyleSheet.create({
-  form: { gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
-  field: { gap: spacing.sm },
-  label: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
-  input: {
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  textarea: { minHeight: 92, textAlignVertical: 'top' },
-  mono: { fontFamily: typography.monoFamily },
-  hint: { fontSize: 12, color: colors.textMuted },
-  error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.xs },
-  pressed: { backgroundColor: colors.bgRaised },
-  toggleGroup: { flexDirection: 'row', gap: spacing.sm },
-  toggleItem: {
-    flex: 1,
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  toggleItemSelected: { backgroundColor: colors.bgRaised, borderColor: colors.textMuted },
-  toggleItemDisabled: { opacity: 0.4 },
-  toggleText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
-  toggleTextSelected: { color: colors.textPrimary },
-  select: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2
-  },
-  selectValue: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  selectValueText: { fontSize: 14, color: colors.textPrimary },
-  selectPlaceholder: { fontSize: 14, color: colors.textMuted },
-  scopeRepoName: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    paddingHorizontal: spacing.xs
-  },
-  advancedToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.xs
-  },
-  advancedText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  advancedBody: { gap: spacing.md, paddingTop: spacing.xs },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  switchText: { flex: 1 },
-  switchTitle: { fontSize: 14, color: colors.textPrimary },
-  switchDesc: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
-  footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  button: { flex: 1, borderRadius: 8, paddingVertical: spacing.md, alignItems: 'center' },
-  cancelButton: { borderWidth: 1, borderColor: colors.borderSubtle },
-  cancelText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  saveButton: { backgroundColor: colors.textPrimary },
-  saveButtonDisabled: { backgroundColor: colors.bgRaised },
-  saveText: { fontSize: 14, fontWeight: '700', color: colors.bgBase },
-  saveTextDisabled: { color: colors.textMuted }
-})
+export const createQuickCommandEditorFormStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    form: { gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
+    field: { gap: spacing.sm },
+    label: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+    input: {
+      backgroundColor: colors.bgPanel,
+      color: colors.textPrimary,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      fontSize: 14,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle
+    },
+    textarea: { minHeight: 92, textAlignVertical: 'top' },
+    mono: { fontFamily: typography.monoFamily },
+    hint: { fontSize: 12, color: colors.textMuted },
+    error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.xs },
+    pressed: { backgroundColor: colors.bgRaised },
+    toggleGroup: { flexDirection: 'row', gap: spacing.sm },
+    toggleItem: {
+      flex: 1,
+      height: 40,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.bgPanel,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    toggleItemSelected: { backgroundColor: colors.bgRaised, borderColor: colors.textMuted },
+    toggleItemDisabled: { opacity: 0.4 },
+    toggleText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
+    toggleTextSelected: { color: colors.textPrimary },
+    select: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.input,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2
+    },
+    selectValue: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    selectValueText: { fontSize: 14, color: colors.textPrimary },
+    selectPlaceholder: { fontSize: 14, color: colors.textMuted },
+    scopeRepoName: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontFamily: typography.monoFamily,
+      paddingHorizontal: spacing.xs
+    },
+    advancedToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.xs
+    },
+    advancedText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+    advancedBody: { gap: spacing.md, paddingTop: spacing.xs },
+    switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    switchText: { flex: 1 },
+    switchTitle: { fontSize: 14, color: colors.textPrimary },
+    switchDesc: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+    footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+    button: { flex: 1, borderRadius: 8, paddingVertical: spacing.md, alignItems: 'center' },
+    cancelButton: { borderWidth: 1, borderColor: colors.borderSubtle },
+    cancelText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+    saveButton: { backgroundColor: colors.textPrimary },
+    saveButtonDisabled: { backgroundColor: colors.bgRaised },
+    saveText: { fontSize: 14, fontWeight: '700', color: colors.bgBase },
+    saveTextDisabled: { color: colors.textMuted }
+  })
