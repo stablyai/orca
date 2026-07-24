@@ -149,6 +149,15 @@ describe('IosEmulatorBackend', () => {
     expect(captureSimulatorLogMock).not.toHaveBeenCalled()
   })
 
+  it.each([0, -1, 1.5])('rejects invalid iOS log line count %s', async (lines) => {
+    const backend = new IosEmulatorBackend()
+
+    await expect(backend.logcat('device-1', { filters: ['com.acme'], lines })).rejects.toThrow(
+      'lines must be a positive integer'
+    )
+    expect(captureSimulatorLogMock).not.toHaveBeenCalled()
+  })
+
   it('fetches and normalizes the serve-sim accessibility tree', async () => {
     const raw = [
       {

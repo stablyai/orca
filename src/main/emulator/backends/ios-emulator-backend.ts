@@ -204,6 +204,9 @@ export class IosEmulatorBackend implements EmulatorBackend {
       )
     }
     const lines = options?.lines ?? IOS_LOGCAT_DEFAULT_LINES
+    if (!Number.isInteger(lines) || lines <= 0) {
+      throw new EmulatorError('emulator_error', 'iOS logcat lines must be a positive integer.')
+    }
     if (lines > IOS_LOGCAT_MAX_LINES) {
       throw new EmulatorError(
         'emulator_error',
