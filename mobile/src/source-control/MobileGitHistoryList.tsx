@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/client-context'
@@ -36,6 +37,8 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   bottomInset,
   refreshNonce = 0
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileGitHistoryListStyles)
   const forceReconnect = useForceReconnect()
   const [rows, setRows] = useState<MobileCommitRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -228,44 +231,45 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   )
 })
 
-const styles = StyleSheet.create({
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
-  stateText: { color: colors.textMuted, fontSize: typography.bodySize },
-  retryButton: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  retryText: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
-  commit: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
-  commitHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2
-  },
-  commitHeaderPressed: { backgroundColor: colors.bgRaised },
-  commitMain: { flex: 1, minWidth: 0 },
-  commitSubject: { color: colors.textPrimary, fontSize: typography.bodySize },
-  commitMeta: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily,
-    marginTop: 2
-  },
-  files: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: 4 },
-  fileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  filePath: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  fileStat: { fontSize: typography.metaSize, fontFamily: typography.monoFamily },
-  add: { color: colors.gitDecorationAdded },
-  del: { color: colors.gitDecorationDeleted },
-  empty: { color: colors.textMuted, fontSize: typography.metaSize }
-})
+export const createMobileGitHistoryListStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+    stateText: { color: colors.textMuted, fontSize: typography.bodySize },
+    retryButton: {
+      marginTop: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised
+    },
+    retryText: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
+    commit: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
+    commitHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2
+    },
+    commitHeaderPressed: { backgroundColor: colors.bgRaised },
+    commitMain: { flex: 1, minWidth: 0 },
+    commitSubject: { color: colors.textPrimary, fontSize: typography.bodySize },
+    commitMeta: {
+      color: colors.textMuted,
+      fontSize: typography.metaSize,
+      fontFamily: typography.monoFamily,
+      marginTop: 2
+    },
+    files: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: 4 },
+    fileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    filePath: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      fontFamily: typography.monoFamily
+    },
+    fileStat: { fontSize: typography.metaSize, fontFamily: typography.monoFamily },
+    add: { color: colors.gitDecorationAdded },
+    del: { color: colors.gitDecorationDeleted },
+    empty: { color: colors.textMuted, fontSize: typography.metaSize }
+  })

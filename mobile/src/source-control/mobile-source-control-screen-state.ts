@@ -10,7 +10,7 @@ import {
   RefreshCw,
   type LucideIcon
 } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import type { ThemeColors } from '../theme/mobile-theme'
 import type { MobileSourceControlActionIcon } from './mobile-source-control-actions'
 import type { MobileDiffLine } from '../session/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
@@ -134,7 +134,7 @@ export function formatBranchLabel(branch: string | undefined, head: string | und
   return branch || head?.slice(0, 7) || 'No branch'
 }
 
-export function statusColor(status: MobileGitFileStatus): string {
+export function statusColor(status: MobileGitFileStatus, colors: ThemeColors): string {
   switch (status) {
     case 'added':
     case 'copied':

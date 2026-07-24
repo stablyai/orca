@@ -157,7 +157,11 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/mobile-diff-review-control-styles'),
     import('../components/mobile-diff-review-layout-styles'),
     import('../components/mobile-diff-review-screen-styles'),
-    import('../components/MobileSyntaxSegments')
+    import('../components/MobileSyntaxSegments'),
+    import('../source-control/mobile-source-control-hub-styles'),
+    import('../source-control/mobile-source-control-list-styles'),
+    import('../source-control/mobile-source-control-diff-styles'),
+    import('../source-control/mobile-source-control-styles')
   ])
   const [
     bottomDrawer,
@@ -207,7 +211,11 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     diffControl,
     diffLayout,
     diffScreen,
-    syntaxSegments
+    syntaxSegments,
+    scHub,
+    scList,
+    scDiff,
+    scStyles
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -332,6 +340,22 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createMobileSyntaxTokenStyles',
       factory: syntaxSegments.createMobileSyntaxTokenStyles
+    },
+    {
+      name: 'createMobileSourceControlHubStyles',
+      factory: scHub.createMobileSourceControlHubStyles
+    },
+    {
+      name: 'createMobileSourceControlListStyles',
+      factory: scList.createMobileSourceControlListStyles
+    },
+    {
+      name: 'createMobileSourceControlDiffStyles',
+      factory: scDiff.createMobileSourceControlDiffStyles
+    },
+    {
+      name: 'createMobileSourceControlStyles',
+      factory: scStyles.createMobileSourceControlStyles
     }
   ]
 }
@@ -467,5 +491,24 @@ describe('themed style factories', () => {
     expect(review.footer.backgroundColor).toBe(darkColors.bgBase)
     const syntax = createMobileSyntaxTokenStyles(darkColors)
     expect(syntax.keyword.color).toBe(darkColors.syntaxKeyword)
+
+    const { createMobileSourceControlHubStyles } =
+      await import('../source-control/mobile-source-control-hub-styles')
+    const { createMobileSourceControlListStyles } =
+      await import('../source-control/mobile-source-control-list-styles')
+    const { createMobileSourceControlDiffStyles } =
+      await import('../source-control/mobile-source-control-diff-styles')
+    const { createMobileSourceControlStyles } =
+      await import('../source-control/mobile-source-control-styles')
+    const hub = createMobileSourceControlHubStyles(darkColors)
+    expect(hub.segments.backgroundColor).toBe(darkColors.bgPanel)
+    const scListSheet = createMobileSourceControlListStyles(darkColors)
+    expect(scListSheet.sectionTitle.color).toBe(darkColors.textSecondary)
+    const scDiffSheet = createMobileSourceControlDiffStyles(darkColors)
+    expect(scDiffSheet.stateTitle.color).toBe(darkColors.textPrimary)
+    const sc = createMobileSourceControlStyles(darkColors)
+    expect(sc.container.backgroundColor).toBe(darkColors.bgBase)
+    expect(sc.listContent.paddingBottom).toBe(136)
+    expect(sc.stateTitle.color).toBe(darkColors.textPrimary)
   })
 })

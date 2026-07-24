@@ -8,14 +8,15 @@ import {
   View
 } from 'react-native'
 import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
-import { styles } from './mobile-source-control-styles'
-import { hubStyles } from './mobile-source-control-hub-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { createMobileSourceControlStyles } from './mobile-source-control-styles'
+import { createMobileSourceControlHubStyles } from './mobile-source-control-hub-styles'
 
 type Props = {
   state: MobileSourceControlState
@@ -24,6 +25,9 @@ type Props = {
 // Changes tab: local file changes only — uncommitted (staged/unstaged) plus
 // committed-on-branch vs base. PR conflicts and push status live elsewhere.
 export function MobileSourceControlContent({ state }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileSourceControlStyles)
+  const hubStyles = useThemedStyles(createMobileSourceControlHubStyles)
   const {
     insets,
     connState,

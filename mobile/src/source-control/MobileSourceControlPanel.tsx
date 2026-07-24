@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { colors } from '../theme/mobile-theme'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
@@ -10,8 +9,9 @@ import { MobileSourceControlModals } from './MobileSourceControlModals'
 import { MobileSourceControlSegments } from './MobileSourceControlSegments'
 import { MobileSourceControlBranchCard } from './MobileSourceControlBranchCard'
 import { MobileGitHistoryList } from './MobileGitHistoryList'
-import { styles } from './mobile-source-control-styles'
-import { hubStyles } from './mobile-source-control-hub-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { createMobileSourceControlStyles } from './mobile-source-control-styles'
+import { createMobileSourceControlHubStyles } from './mobile-source-control-hub-styles'
 import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
 import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
@@ -45,6 +45,9 @@ export function MobileSourceControlPanel({
   onFileOpenStart,
   onOpenedFileDiff
 }: MobileSourceControlPanelProps) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileSourceControlStyles)
+  const hubStyles = useThemedStyles(createMobileSourceControlHubStyles)
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
   // Track first visit so Changes/History stay mounted (keep scroll) after first open; PR still unmounts when inactive.
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
