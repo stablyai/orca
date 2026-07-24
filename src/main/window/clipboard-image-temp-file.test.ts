@@ -123,6 +123,14 @@ describe('sanitizeAttachmentFileName', () => {
   it('strips trailing dots that Windows drops silently', () => {
     expect(sanitizeAttachmentFileName('archive...')).toBe('archive')
   })
+
+  it('never exposes a leading dot when truncation drops the whole body', () => {
+    // 4-byte emoji body + 77-byte extension: the body cannot fit the 3-byte
+    // budget, so only the extension survives the cut.
+    const sanitized = sanitizeAttachmentFileName(`😀.${'a'.repeat(76)}`)
+    expect(sanitized).not.toBeNull()
+    expect(sanitized?.startsWith('.')).toBe(false)
+  })
 })
 
 describe('saveClipboardImageBufferAsTempFile', () => {

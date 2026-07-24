@@ -63,8 +63,12 @@ function truncateFileNameToBytes(name: string, maxBytes: number): string {
     truncated += char
     usedBytes += charBytes
   }
-  // Re-strip a trailing dot the cut may have exposed (Windows drops it silently).
-  const result = (truncated + (keepExtension ? extension : '')).replace(/\.+$/, '')
+  // Re-strip dots the cut may expose: trailing (Windows drops it silently) and
+  // leading, which reappears when the body truncates away entirely and only the
+  // extension remains — the hidden-file shape the upstream strip exists to prevent.
+  const result = (truncated + (keepExtension ? extension : ''))
+    .replace(/\.+$/, '')
+    .replace(/^\.+/, '')
   return result || truncated
 }
 
