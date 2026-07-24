@@ -16,7 +16,7 @@ function worktreeSortOrderNeedsPersistence(
       return true
     }
     seen.add(worktreeId)
-    // Why: never mint meta for ids the store does not already know (#9342).
+    // Why: never mint meta for unknown ids (#9342); only evaluate existing entries.
     const meta = store.getWorktreeMeta(worktreeId)
     if (!meta) {
       continue
@@ -49,12 +49,10 @@ export function persistWorktreeSortOrder(
   for (let index = 0; index < orderedIds.length; index++) {
     const worktreeId = orderedIds[index]!
     // Why: a sort-order snapshot must only reorder existing worktrees, never
-    // mint new meta — a stale id would otherwise resurrect an orphan workspace
-    // (setWorktreeMeta has no repo-existence check) (#9342).
+    // mint new meta (#9342).
     if (!store.getWorktreeMeta(worktreeId)) {
       continue
     }
-    // Descending timestamps make the first requested item win on cold start.
     store.setWorktreeMeta(worktreeId, { sortOrder: now - index * 1000 })
     updated += 1
   }

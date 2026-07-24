@@ -25,6 +25,11 @@ function makeRuntime() {
 describe('OrcaRuntimeService sort-order persistence', () => {
   it('emits remote refreshes only when the requested order changes', () => {
     const { events, invalidateResolvedWorktreeCache, runtime, setWorktreeMeta } = makeRuntime()
+    // Why: sort-order snapshots only rewrite existing meta (#9342); seed entries first.
+    // Seed inverted ranks so the first request actually needs a write.
+    setWorktreeMeta('first', { sortOrder: 0 })
+    setWorktreeMeta('second', { sortOrder: 1 })
+    setWorktreeMeta.mockClear()
 
     expect(runtime.persistManagedWorktreeSortOrder(['first', 'second'])).toEqual({ updated: 2 })
     expect(setWorktreeMeta).toHaveBeenCalledTimes(2)
