@@ -39,6 +39,19 @@ import {
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
+import {
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from '../shared/agent-session-resume'
+import {
+  RELAY_PTY_REVIVE_OUTCOME_VERSION,
+  type RelayPtyDurableLaunch,
+  type RelayPtyLostEntry,
+  type RelayPtyReviveDiagnostic,
+  type RelayPtyReviveOutcomeV1,
+  type RelayPtyRevivedEntry
+} from '../shared/pty-revive-protocol'
+import { clampUtf8TextTail, measureUtf8ByteLength } from '../shared/utf8-byte-limits'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import {
@@ -63,10 +76,12 @@ import { PtyOutputBroadcast } from './pty-output-broadcast'
 import {
   assertRelayPtyPersistenceFieldWithinLimit,
   assertRelayPtyRetainedFieldsWithinLimits,
-  parseRelayPtyPersistenceEnvelope,
+  parseRelayPtyPersistenceState,
   parseRelayPtyPersistenceIds,
   sanitizeRelayPtyEnvToDelete,
   serializeRelayPtyPersistenceEnvelope,
+  MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES,
+  MAX_RELAY_PTY_LOST_TAIL_BYTES,
   type RelayPtyIdentity,
   type RelayPtyPersistenceEntry
 } from './pty-persistence-envelope'
@@ -92,6 +107,7 @@ type ManagedPty = {
   pty: IPty
   initialCwd: string
   buffered: string
+  bufferedTruncated?: boolean
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
   /** True once disposeManagedPty has run; blocks double-dispose and makes post-dispose calls fail "not found" not silently. */
@@ -116,6 +132,10 @@ type ManagedPty = {
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
   ownerBackend: PtyOwnerBackend
   agentSessionOwners?: AgentSessionOwnerBinding[]
+  durableLaunch?: RelayPtyDurableLaunch
+  providerSession?: AgentProviderSessionMetadata
+  orchestrationTaskId?: string
+  revivedFromIncarnationId?: string
 }
 
 type RelayAgentSessionCreateResult = {
@@ -128,6 +148,54 @@ type RelayAgentSessionCreateResult = {
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
 const AGENT_SESSION_CREATE_OPERATION_LIMIT = 4_096
+
+type RelayPtyTypedReviveEntryResult = {
+  revived?: RelayPtyRevivedEntry
+  lost?: RelayPtyLostEntry
+  diagnostics?: RelayPtyReviveDiagnostic[]
+}
+
+type PendingRelayPtyReviveOperation = {
+  key: string
+  operation: Promise<RelayPtyTypedReviveEntryResult>
+}
+
+type RelayPtyArchiveContext = {
+  providerSession?: AgentProviderSessionMetadata
+  orchestrationTaskId?: string
+}
+
+function withinPersistenceFieldLimit(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !measureUtf8ByteLength(value, { stopAfterBytes: MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES })
+      .exceededLimit
+  )
+}
+
+function normalizeRelayPtyArchiveContext(value: unknown): RelayPtyArchiveContext {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const context = value as Record<string, unknown>
+  const candidateProviderSession =
+    normalizeAgentProviderSession(context.providerSession) ?? undefined
+  const providerSession =
+    candidateProviderSession &&
+    withinPersistenceFieldLimit(candidateProviderSession.id) &&
+    (!candidateProviderSession.transcriptPath ||
+      withinPersistenceFieldLimit(candidateProviderSession.transcriptPath))
+      ? candidateProviderSession
+      : undefined
+  const orchestrationTaskId = withinPersistenceFieldLimit(context.orchestrationTaskId)
+    ? context.orchestrationTaskId
+    : undefined
+  return {
+    ...(providerSession ? { providerSession } : {}),
+    ...(orchestrationTaskId ? { orchestrationTaskId } : {})
+  }
+}
 
 type ManagedStartupCommand = {
   command: string
@@ -184,7 +252,7 @@ function disposeManagedPty(managed: ManagedPty): void {
 const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 export const IMMEDIATE_PTY_EXIT_TIMEOUT_MS = 8_000
 export const MAX_RELAY_PTY_SESSIONS = 50
-export const REPLAY_BUFFER_MAX = 100 * 1024
+export const REPLAY_BUFFER_MAX = MAX_RELAY_PTY_LOST_TAIL_BYTES
 const INTERACTIVE_OUTPUT_WINDOW_MS = 100
 const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
 const INTERACTIVE_REDRAW_MAX_CHARS = 16 * 1024
@@ -280,7 +348,7 @@ export class PtyHandler {
   private lastInputAtByPty = new Map<string, number>()
   private interactiveOutputCharsByPty = new Map<string, number>()
   private pendingSpawnCount = 0
-  private pendingReviveIds = new Set<string>()
+  private pendingReviveOperations = new Map<string, PendingRelayPtyReviveOperation>()
   private creationFenced = false
   private pendingCreationDrainResolvers = new Set<() => void>()
   private worktreeRemovalCoordinator: RelayPtyWorktreeRemovalCoordinator | null = null
@@ -458,6 +526,7 @@ export class PtyHandler {
     managed.buffered += data
     if (managed.buffered.length > REPLAY_BUFFER_MAX) {
       managed.buffered = managed.buffered.slice(-REPLAY_BUFFER_MAX)
+      managed.bufferedTruncated = true
     }
   }
 
@@ -608,7 +677,9 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
-      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
+      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+      ptyPersistenceEnvelopeVersion: 2,
+      ptyReviveOutcomeVersion: RELAY_PTY_REVIVE_OUTCOME_VERSION
     }))
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
@@ -922,7 +993,7 @@ export class PtyHandler {
     let id: string
     do {
       id = `pty-${this.nextId++}`
-    } while (this.ptys.has(id) || this.pendingReviveIds.has(id))
+    } while (this.ptys.has(id) || this.pendingReviveOperations.has(id))
 
     // Why: augmenter values override renderer env so remote paths and hook coords win over local userData.
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
@@ -947,6 +1018,15 @@ export class PtyHandler {
       envToDelete
     })
     const command = typeof params.command === 'string' ? params.command : undefined
+    const archiveContext = normalizeRelayPtyArchiveContext(params.archiveContext)
+    const durableLaunch: RelayPtyDurableLaunch = {
+      ...(withinPersistenceFieldLimit(command) ? { startupCommand: command } : {}),
+      ...(withinPersistenceFieldLimit(resolvedShellOverride)
+        ? { shellOverride: resolvedShellOverride }
+        : {}),
+      ...(isTuiAgent(params.launchAgent) ? { launchAgent: params.launchAgent } : {}),
+      startedAt: Date.now()
+    }
     const terminalWindowsWslDistro =
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
@@ -1021,6 +1101,13 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      durableLaunch,
+      ...(archiveContext.providerSession
+        ? { providerSession: archiveContext.providerSession }
+        : {}),
+      ...(archiveContext.orchestrationTaskId
+        ? { orchestrationTaskId: archiveContext.orchestrationTaskId }
+        : {}),
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath: shell,
@@ -1349,6 +1436,7 @@ export class PtyHandler {
 
   private async serialize(params: Record<string, unknown>): Promise<string> {
     const ids = parseRelayPtyPersistenceIds(params.ids, MAX_RELAY_PTY_SESSIONS)
+    const formatVersion = params.formatVersion === 2 ? 2 : undefined
     const entries: RelayPtyPersistenceEntry[] = []
     for (const id of ids) {
       const managed = this.ptys.get(id)
@@ -1356,7 +1444,7 @@ export class PtyHandler {
         continue
       }
       const { pid, cols, rows } = managed.pty
-      entries.push({
+      const entry: RelayPtyPersistenceEntry = {
         id,
         pid,
         cols,
@@ -1370,16 +1458,64 @@ export class PtyHandler {
         envToDelete: managed.envToDelete,
         gitCredentialPromptGuarded: managed.gitCredentialPromptGuarded,
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
-      })
+      }
+      if (formatVersion === 2) {
+        const tail = clampUtf8TextTail(managed.buffered, MAX_RELAY_PTY_LOST_TAIL_BYTES)
+        entries.push({
+          ...entry,
+          sourceIncarnationId: managed.incarnationId,
+          replayTail: {
+            data: tail.text,
+            encoding: 'utf8',
+            byteLength: tail.bytes,
+            truncated:
+              managed.bufferedTruncated === true || tail.text.length !== managed.buffered.length
+          },
+          durableLaunch: managed.durableLaunch,
+          ...(this.agentSessionOwners.listForPty(id).length
+            ? { agentOwners: this.agentSessionOwners.listForPty(id) }
+            : {}),
+          ...(managed.providerSession ? { providerSession: managed.providerSession } : {}),
+          ...(managed.orchestrationTaskId
+            ? { orchestrationTaskId: managed.orchestrationTaskId }
+            : {})
+        })
+      } else {
+        entries.push(entry)
+      }
     }
-    return serializeRelayPtyPersistenceEnvelope(entries, MAX_RELAY_PTY_SESSIONS)
+    return serializeRelayPtyPersistenceEnvelope(entries, MAX_RELAY_PTY_SESSIONS, formatVersion)
   }
 
-  private async revive(params: Record<string, unknown>): Promise<void> {
-    const entries = parseRelayPtyPersistenceEnvelope(params.state, MAX_RELAY_PTY_SESSIONS)
+  private async revive(params: Record<string, unknown>): Promise<void | RelayPtyReviveOutcomeV1> {
+    const state = parseRelayPtyPersistenceState(params.state, MAX_RELAY_PTY_SESSIONS)
+    if (params.formatVersion !== 2) {
+      await this.reviveLegacy(state.entries)
+      return
+    }
 
+    const results = await Promise.all(
+      state.entries.map((entry) => this.reviveTypedEntry(entry, state.formatVersion))
+    )
+    return {
+      outcomeVersion: RELAY_PTY_REVIVE_OUTCOME_VERSION,
+      revived: results.flatMap((result) => (result.revived ? [result.revived] : [])),
+      lost: results.flatMap((result) => (result.lost ? [result.lost] : [])),
+      diagnostics: [
+        ...(state.formatVersion === 'legacy' ? [{ code: 'legacy-state' as const }] : []),
+        ...results.flatMap((result) => result.diagnostics ?? [])
+      ]
+    }
+  }
+
+  private async reviveLegacy(entries: readonly RelayPtyPersistenceEntry[]): Promise<void> {
     for (const entry of entries) {
-      if (this.ptys.has(entry.id) || this.pendingReviveIds.has(entry.id)) {
+      if (this.ptys.has(entry.id)) {
+        continue
+      }
+      const pending = this.pendingReviveOperations.get(entry.id)
+      if (pending) {
+        await pending.operation
         continue
       }
       // Only re-attach if the original process is still alive
@@ -1392,20 +1528,168 @@ export class PtyHandler {
         ? splitWorktreeId(entry.worktreeId)?.worktreePath
         : undefined
       const finishCreation = this.beginPtyCreation([ownedPath, entry.cwd])
-      this.pendingReviveIds.add(entry.id)
+      const operation = this.reviveEntry(entry).then(() => ({}))
+      this.pendingReviveOperations.set(entry.id, {
+        key: this.reviveOperationKey(entry, 'legacy-request'),
+        operation
+      })
       try {
-        await this.reviveEntry(entry)
+        await operation
       } finally {
-        this.pendingReviveIds.delete(entry.id)
+        if (this.pendingReviveOperations.get(entry.id)?.operation === operation) {
+          this.pendingReviveOperations.delete(entry.id)
+        }
         finishCreation()
       }
     }
   }
 
-  private async reviveEntry(entry: RelayPtyPersistenceEntry): Promise<void> {
+  private async reviveTypedEntry(
+    entry: RelayPtyPersistenceEntry,
+    formatVersion: 2 | 'legacy'
+  ): Promise<RelayPtyTypedReviveEntryResult> {
+    const key = this.reviveOperationKey(entry, `typed-${formatVersion}`)
+    const pending = this.pendingReviveOperations.get(entry.id)
+    if (pending) {
+      if (pending.key === key) {
+        return await pending.operation
+      }
+      await pending.operation
+      return this.reviveTypedEntry(entry, formatVersion)
+    }
+    const operation = this.reviveTypedEntryOnce(entry, formatVersion)
+    this.pendingReviveOperations.set(entry.id, { key, operation })
+    try {
+      return await operation
+    } finally {
+      if (this.pendingReviveOperations.get(entry.id)?.operation === operation) {
+        this.pendingReviveOperations.delete(entry.id)
+      }
+    }
+  }
+
+  private async reviveTypedEntryOnce(
+    entry: RelayPtyPersistenceEntry,
+    formatVersion: 2 | 'legacy'
+  ): Promise<RelayPtyTypedReviveEntryResult> {
+    const kind = this.reviveKindFor(entry, formatVersion)
+    const existing = this.ptys.get(entry.id)
+    if (existing) {
+      if (this.isCompatibleReviveIdentity(existing, entry)) {
+        return {
+          revived: {
+            id: entry.id,
+            disposition: 'already-managed',
+            incarnationId: existing.incarnationId,
+            ...(existing.paneKey ? { paneKey: existing.paneKey } : {}),
+            ...(existing.tabId ? { tabId: existing.tabId } : {})
+          }
+        }
+      }
+      return {
+        lost: this.toLostReviveEntry(entry, kind, 'process-not-running'),
+        diagnostics: [{ code: 'entry-invalid', id: entry.id }]
+      }
+    }
+    if (kind === 'recognized-worker') {
+      return { lost: this.toLostReviveEntry(entry, kind, 'worker-replacement-forbidden') }
+    }
+    if (kind === 'unclassified') {
+      return { lost: this.toLostReviveEntry(entry, kind, 'process-not-running') }
+    }
+    try {
+      process.kill(entry.pid, 0)
+    } catch {
+      return { lost: this.toLostReviveEntry(entry, kind, 'process-not-running') }
+    }
+    const ownedPath = entry.worktreeId ? splitWorktreeId(entry.worktreeId)?.worktreePath : undefined
+    const finishCreation = this.beginPtyCreation([ownedPath, entry.cwd])
+    try {
+      const incarnationId = await this.reviveEntry(entry, true)
+      return incarnationId
+        ? {
+            revived: {
+              id: entry.id,
+              disposition: 'replacement-spawned',
+              incarnationId,
+              ...(entry.paneKey ? { paneKey: entry.paneKey } : {}),
+              ...(entry.tabId ? { tabId: entry.tabId } : {})
+            }
+          }
+        : { lost: this.toLostReviveEntry(entry, kind, 'pty-runtime-unavailable') }
+    } finally {
+      finishCreation()
+    }
+  }
+
+  private reviveKindFor(
+    entry: RelayPtyPersistenceEntry,
+    formatVersion: 2 | 'legacy'
+  ): RelayPtyLostEntry['kind'] {
+    if (formatVersion === 'legacy') {
+      return 'unclassified'
+    }
+    return entry.durableLaunch?.launchAgent ||
+      entry.providerSession ||
+      entry.orchestrationTaskId ||
+      entry.agentOwners?.length
+      ? 'recognized-worker'
+      : 'ordinary-shell'
+  }
+
+  private reviveOperationKey(entry: RelayPtyPersistenceEntry, protocol: string): string {
+    return `${protocol}:${JSON.stringify(entry)}`
+  }
+
+  private isCompatibleReviveIdentity(
+    managed: ManagedPty,
+    entry: RelayPtyPersistenceEntry
+  ): boolean {
+    return (
+      managed.paneKey === entry.paneKey &&
+      managed.tabId === entry.tabId &&
+      managed.attachIdentity?.paneKey === entry.attachIdentity?.paneKey &&
+      managed.attachIdentity?.tabId === entry.attachIdentity?.tabId &&
+      (entry.sourceIncarnationId === undefined ||
+        managed.incarnationId === entry.sourceIncarnationId ||
+        managed.revivedFromIncarnationId === entry.sourceIncarnationId)
+    )
+  }
+
+  private toLostReviveEntry(
+    entry: RelayPtyPersistenceEntry,
+    kind: RelayPtyLostEntry['kind'],
+    reason: RelayPtyLostEntry['reason']
+  ): RelayPtyLostEntry {
+    return {
+      id: entry.id,
+      kind,
+      reason,
+      pid: entry.pid,
+      cols: entry.cols,
+      rows: entry.rows,
+      cwd: entry.cwd,
+      ...(entry.sourceIncarnationId ? { sourceIncarnationId: entry.sourceIncarnationId } : {}),
+      ...(entry.paneKey ? { paneKey: entry.paneKey } : {}),
+      ...(entry.tabId ? { tabId: entry.tabId } : {}),
+      ...(entry.attachIdentity ? { attachIdentity: entry.attachIdentity } : {}),
+      ...(entry.worktreeId ? { worktreeId: entry.worktreeId } : {}),
+      ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
+      ...(entry.replayTail ? { replayTail: entry.replayTail } : {}),
+      ...(entry.durableLaunch ? { durableLaunch: entry.durableLaunch } : {}),
+      ...(entry.agentOwners?.length ? { agentOwners: entry.agentOwners } : {}),
+      ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
+      ...(entry.orchestrationTaskId ? { orchestrationTaskId: entry.orchestrationTaskId } : {})
+    }
+  }
+
+  private async reviveEntry(
+    entry: RelayPtyPersistenceEntry,
+    allowRuntimeUnavailable = false
+  ): Promise<string | null> {
     const ptyMod = await this.loadPty()
     if (!ptyMod) {
-      return
+      return null
     }
     // Why: pane identity comes from the serialized entry (not env) since hook scripts exit without ORCA_PANE_KEY.
     const revivedEnv: Record<string, string> = {}
@@ -1442,17 +1726,30 @@ export class PtyHandler {
       Object.assign(spawnEnv, gitCredentialPromptGuardEnv(spawnEnv, process.platform))
     }
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
-    const term = ptyMod.spawn(shell, shellLaunch.args, {
-      name: spawnEnv.TERM ?? 'xterm-256color',
-      cols: entry.cols,
-      rows: entry.rows,
-      cwd: entry.cwd,
-      // Why: no provider-delivered command is waiting for a ready marker.
-      env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
-    })
+    let term: IPty
+    try {
+      term = ptyMod.spawn(shell, shellLaunch.args, {
+        name: spawnEnv.TERM ?? 'xterm-256color',
+        cols: entry.cols,
+        rows: entry.rows,
+        cwd: entry.cwd,
+        // Why: no provider-delivered command is waiting for a ready marker.
+        env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
+      })
+    } catch (error) {
+      if (isMissingNodePtyNativeBinding(error)) {
+        this.invalidatePtyModuleAfterBindingFailure()
+        if (allowRuntimeUnavailable) {
+          return null
+        }
+        throw new Error('node-pty is not available on this remote host')
+      }
+      throw error
+    }
+    const incarnationId = randomUUID()
     this.wireAndStore({
       id: entry.id,
-      incarnationId: randomUUID(),
+      incarnationId,
       pty: term,
       initialCwd: entry.cwd,
       buffered: '',
@@ -1467,6 +1764,7 @@ export class PtyHandler {
         platform: process.platform,
         shellPath: shell
       }),
+      ...(entry.sourceIncarnationId ? { revivedFromIncarnationId: entry.sourceIncarnationId } : {}),
       ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
     })
 
@@ -1474,6 +1772,7 @@ export class PtyHandler {
     if (match) {
       this.nextId = Math.max(this.nextId, Number.parseInt(match[1], 10) + 1)
     }
+    return incarnationId
   }
 
   startGraceTimer(onExpire: () => void, timeoutMs = this.graceTimeMs): void {

@@ -33,6 +33,7 @@ import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-ow
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
+  PtyPersistenceProtocolOptions,
   PtyProviderBufferSnapshot,
   PtyProcessInfo,
   PtySpawnOptions,
@@ -862,7 +863,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
   }
 
-  async serialize(ids: string[]): Promise<string> {
+  async serialize(ids: string[], _options?: PtyPersistenceProtocolOptions): Promise<string> {
     const sessions: Record<string, { initialCwd?: string }> = {}
     for (const id of ids) {
       sessions[id] = { initialCwd: this.initialCwds.get(id) }
@@ -870,8 +871,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return JSON.stringify(sessions)
   }
 
-  async revive(_state: string): Promise<void> {
-    // Sessions already live in the daemon — no revival needed
+  async revive(_state: string, _options?: PtyPersistenceProtocolOptions) {
+    // Sessions already live in the daemon — no revival needed.
+    return { mode: 'not-applicable' as const }
   }
 
   /** Called on app launch. Lists daemon sessions, kills orphans whose workspaceId

@@ -988,8 +988,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(() => JSON.parse(state)).not.toThrow()
     })
 
-    it('revive does not throw', async () => {
-      await expect(adapter.revive('{}')).resolves.toBeUndefined()
+    it('reports that daemon revival is not applicable', async () => {
+      await expect(adapter.revive('{}')).resolves.toEqual({ mode: 'not-applicable' })
     })
   })
 

@@ -2,6 +2,7 @@ import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
+  PtyPersistenceProtocolOptions,
   PtyProviderBufferSnapshot,
   PtyProcessInfo,
   PtySpawnOptions,
@@ -205,12 +206,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).confirmForegroundProcess(id)
   }
 
-  async serialize(ids: string[]): Promise<string> {
-    return this.current.serialize(ids)
+  async serialize(ids: string[], options?: PtyPersistenceProtocolOptions): Promise<string> {
+    return options ? this.current.serialize(ids, options) : this.current.serialize(ids)
   }
 
-  async revive(state: string): Promise<void> {
-    await this.current.revive(state)
+  async revive(state: string, options?: PtyPersistenceProtocolOptions) {
+    return options ? await this.current.revive(state, options) : await this.current.revive(state)
   }
 
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {

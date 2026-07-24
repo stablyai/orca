@@ -3,6 +3,7 @@ import {
   MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES,
   MAX_RELAY_PTY_PERSISTENCE_RETAINED_BYTES,
   MAX_RELAY_PTY_PERSISTENCE_STATE_BYTES,
+  parseRelayPtyPersistenceState,
   parseRelayPtyPersistenceEnvelope,
   serializeRelayPtyPersistenceEnvelope,
   type RelayPtyPersistenceEntry
@@ -39,6 +40,125 @@ describe('relay PTY persistence envelope', () => {
     const serialized = serializeRelayPtyPersistenceEnvelope(entries, 50)
 
     expect(parseRelayPtyPersistenceEnvelope(serialized, 50)).toEqual(entries)
+  })
+
+  it('keeps the default array wire while round-tripping a strict v2 envelope', () => {
+    const owner = {
+      claim: {
+        digestVersion: 1 as const,
+        keyId: 'claim-key',
+        identityDigest: 'a'.repeat(43),
+        worktreeScopeDigest: 'b'.repeat(43),
+        agent: 'codex' as const
+      },
+      generation: 'generation-1',
+      phase: 'live' as const,
+      ptyId: 'pty-1',
+      surface: {
+        worktreeId: 'repo::/repo',
+        tabId: 'tab-1',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        terminalHandle: 'term_abc123'
+      }
+    }
+    const v2 = entry(1, {
+      sourceIncarnationId: 'incarnation-1',
+      replayTail: { data: 'tail', encoding: 'utf8', byteLength: 4, truncated: false },
+      durableLaunch: {
+        startupCommand: 'codex --resume session-1',
+        shellOverride: '/bin/zsh',
+        launchAgent: 'codex',
+        startedAt: 42
+      },
+      agentOwners: [owner],
+      providerSession: { key: 'session_id', id: 'session-1' },
+      orchestrationTaskId: 'task-1'
+    })
+
+    const legacy = serializeRelayPtyPersistenceEnvelope([entry(1)], 50)
+    const serialized = serializeRelayPtyPersistenceEnvelope([v2], 50, 2)
+
+    expect(JSON.parse(legacy)).toBeInstanceOf(Array)
+    expect(parseRelayPtyPersistenceState(serialized, 50)).toEqual({
+      formatVersion: 2,
+      entries: [v2]
+    })
+  })
+
+  it('trims a v2 replay tail by UTF-8 bytes before dropping metadata', () => {
+    const emojiTail = '😀'.repeat(25_600)
+    const serialized = serializeRelayPtyPersistenceEnvelope(
+      [
+        entry(1, {
+          sourceIncarnationId: 'incarnation-1',
+          cwd: `/repo/${'x'.repeat(30 * 1024)}`,
+          replayTail: {
+            data: emojiTail,
+            encoding: 'utf8',
+            byteLength: Buffer.byteLength(emojiTail, 'utf8'),
+            truncated: false
+          },
+          durableLaunch: { startupCommand: 'codex --resume session-1', launchAgent: 'codex' }
+        })
+      ],
+      50,
+      2
+    )
+
+    const parsed = parseRelayPtyPersistenceState(serialized, 50)
+    const restored = parsed.entries[0]!
+    expect(restored.cwd).toContain('/repo/')
+    expect(restored.durableLaunch).toEqual({
+      startupCommand: 'codex --resume session-1',
+      launchAgent: 'codex'
+    })
+    expect(restored.replayTail).toMatchObject({ encoding: 'utf8', truncated: true })
+    expect(Buffer.byteLength(restored.replayTail!.data, 'utf8')).toBe(
+      restored.replayTail!.byteLength
+    )
+    expect(restored.replayTail!.data.endsWith('😀')).toBe(true)
+  })
+
+  it('rejects unknown v2 fields instead of guessing a version from entry shape', () => {
+    expect(() =>
+      parseRelayPtyPersistenceState(
+        JSON.stringify({
+          schemaVersion: 2,
+          entries: [{ ...entry(1), sourceIncarnationId: 'incarnation-1', unknown: true }]
+        }),
+        50
+      )
+    ).toThrow('unknown field')
+    expect(() =>
+      parseRelayPtyPersistenceState(
+        JSON.stringify({
+          schemaVersion: 2,
+          entries: [
+            {
+              ...entry(1),
+              sourceIncarnationId: 'incarnation-1',
+              attachIdentity: { paneKey: 'pane-1', unexpected: true }
+            }
+          ]
+        }),
+        50
+      )
+    ).toThrow('unknown field')
+    expect(() =>
+      parseRelayPtyPersistenceState(
+        JSON.stringify({
+          schemaVersion: 2,
+          entries: [
+            {
+              ...entry(1),
+              sourceIncarnationId: 'incarnation-1',
+              providerSession: { key: 'session_id', id: 'session-1', unexpected: true }
+            }
+          ]
+        }),
+        50
+      )
+    ).toThrow('unknown field')
   })
 
   it('accepts the field limit and rejects limit plus one', () => {

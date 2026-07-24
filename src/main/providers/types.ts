@@ -28,6 +28,8 @@ import type { GitProviderStatusOptions } from './git-provider-status-options'
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from './pty-provider-events'
 import type { PtySpawnResult } from './pty-spawn-result'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { PtyReviveResult } from '../../shared/pty-revive-protocol'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
@@ -57,6 +59,10 @@ export type PtyProviderBufferSnapshot = {
   pendingEscapeTailAnsi?: string
 }
 
+export type PtyPersistenceProtocolOptions = {
+  formatVersion?: 2
+}
+
 export type PtySpawnOptions = {
   cols: number
   rows: number
@@ -70,6 +76,11 @@ export type PtySpawnOptions = {
   startupCommandDelivery?: StartupCommandDelivery
   /** Minimal allowlisted launch ownership preserved by daemon reattach. */
   launchAgent?: TuiAgent
+  /** Main-sanitized recovery facts for a versioned trusted-relay handoff. */
+  archiveContext?: {
+    providerSession?: AgentProviderSessionMetadata
+    orchestrationTaskId?: string
+  }
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
@@ -196,8 +207,8 @@ export type IPtyProvider = {
   getForegroundProcess(id: string): Promise<string | null>
   /** Strong process evidence captured after the caller's command boundary. */
   confirmForegroundProcess?: (id: string) => Promise<string | null>
-  serialize(ids: string[]): Promise<string>
-  revive(state: string): Promise<void>
+  serialize(ids: string[], options?: PtyPersistenceProtocolOptions): Promise<string>
+  revive(state: string, options?: PtyPersistenceProtocolOptions): Promise<PtyReviveResult>
   // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
   listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>

@@ -1,5 +1,12 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type {
+  IPtyProvider,
+  PtyPersistenceProtocolOptions,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from './types'
+import type { PtyReviveResult } from '../../shared/pty-revive-protocol'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { createSshPtyAppliedSizeReader } from './ssh-pty-applied-size'
 import type {
@@ -22,14 +29,12 @@ import {
 import { buildSshPtySpawnRequest } from './ssh-pty-spawn-request'
 import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
+import { SshPtyPersistenceRevive } from './ssh-pty-persistence-revive'
 import { SshPtyProviderNotifications } from './ssh-pty-provider-notifications'
 import { SshPtyLiveRoster } from './ssh-pty-live-roster'
 import { isAdmittedSshRelayPtyId } from './ssh-pty-wire-admission'
-
-// Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
-function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
-  return deadlineMs === undefined ? undefined : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
-}
+import { relayPtyRequestTimeout } from './ssh-pty-request-timeout'
+import { getSshPtyDefaultShell, getSshPtyProfiles } from './ssh-pty-shell-info'
 
 /** Remote PTY provider that proxies IPtyProvider operations through the relay. */
 export class SshPtyProvider implements IPtyProvider {
@@ -38,6 +43,7 @@ export class SshPtyProvider implements IPtyProvider {
   private readonly livePtys = new SshPtyLiveRoster()
   readonly getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
+  private readonly persistenceRevive: SshPtyPersistenceRevive
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
   private readonly notifications: SshPtyProviderNotifications
 
@@ -49,6 +55,11 @@ export class SshPtyProvider implements IPtyProvider {
     this.connectionId = connectionId
     this.mux = mux
     this.agentSessionCapabilities = new SshAgentSessionCapabilities(mux)
+    this.persistenceRevive = new SshPtyPersistenceRevive(
+      mux,
+      (id) => this.toRelayPtyId(id),
+      (id) => this.toAppPtyId(id)
+    )
     this.getAppliedSize = createSshPtyAppliedSizeReader(mux, connectionId)
     this.notifications = new SshPtyProviderNotifications(
       mux,
@@ -230,7 +241,7 @@ export class SshPtyProvider implements IPtyProvider {
         immediate: opts.immediate ?? false,
         keepHistory: opts.keepHistory ?? false
       },
-      relayTimeoutOptions(opts.deadlineMs)
+      relayPtyRequestTimeout(opts.deadlineMs)
     )
     this.livePtys.recordExit(id)
   }
@@ -283,15 +294,12 @@ export class SshPtyProvider implements IPtyProvider {
     })) as { foregroundProcess: string | null; hasChildProcesses: boolean }
   }
 
-  async serialize(ids: string[]): Promise<string> {
-    const result = await this.mux.request('pty.serialize', {
-      ids: ids.map((id) => this.toRelayPtyId(id))
-    })
-    return result as string
+  async serialize(ids: string[], options?: PtyPersistenceProtocolOptions): Promise<string> {
+    return this.persistenceRevive.serialize(ids, options)
   }
 
-  async revive(state: string): Promise<void> {
-    await this.mux.request('pty.revive', { state })
+  async revive(state: string, options?: PtyPersistenceProtocolOptions): Promise<PtyReviveResult> {
+    return this.persistenceRevive.revive(state, options)
   }
 
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
@@ -299,7 +307,7 @@ export class SshPtyProvider implements IPtyProvider {
     const result = await this.mux.request(
       'pty.listProcesses',
       undefined,
-      relayTimeoutOptions(opts?.deadlineMs)
+      relayPtyRequestTimeout(opts?.deadlineMs)
     )
     const processes = mapSshPtyProcessList(result, (id) => this.toAppPtyId(id))
     this.livePtys.reconcileListing(
@@ -314,13 +322,11 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   async getDefaultShell(): Promise<string> {
-    const result = await this.mux.request('pty.getDefaultShell')
-    return result as string
+    return getSshPtyDefaultShell(this.mux)
   }
 
   async getProfiles(): Promise<{ name: string; path: string }[]> {
-    const result = await this.mux.request('pty.getProfiles')
-    return result as { name: string; path: string }[]
+    return getSshPtyProfiles(this.mux)
   }
 
   onData(callback: SshPtyDataCallback): () => void {

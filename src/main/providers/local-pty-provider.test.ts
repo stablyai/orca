@@ -1902,4 +1902,8 @@ describe('LocalPtyProvider', () => {
       await expect(shutdown).resolves.toBeUndefined()
     })
   })
+
+  it('reports local revival as not applicable instead of a fake empty outcome', async () => {
+    await expect(provider.revive('{}')).resolves.toEqual({ mode: 'not-applicable' })
+  })
 })

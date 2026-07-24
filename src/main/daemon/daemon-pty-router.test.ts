@@ -84,7 +84,7 @@ function createAdapter(
     inspectProcess: vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false })),
     confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
-    revive: vi.fn(async () => {}),
+    revive: vi.fn(async () => ({ mode: 'not-applicable' as const })),
     getDefaultShell: vi.fn(async () => '/bin/zsh'),
     getProfiles: vi.fn(async () => []),
     onData: vi.fn(
@@ -582,5 +582,13 @@ describe('DaemonPtyRouter', () => {
       expect(current.dispose).not.toHaveBeenCalled()
       expect(legacy.dispose).not.toHaveBeenCalled()
     })
+  })
+
+  it('forwards the current adapter revival result', async () => {
+    const current = createAdapter('current')
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+
+    await expect(router.revive('{}')).resolves.toEqual({ mode: 'not-applicable' })
+    expect(current.revive).toHaveBeenCalledWith('{}')
   })
 })

@@ -1316,8 +1316,8 @@ export class LocalPtyProvider implements IPtyProvider {
   async serialize(_ids: string[]): Promise<string> {
     return '{}'
   }
-  async revive(_state: string): Promise<void> {
-    /* re-spawning handles local revival */
+  async revive(_state: string) {
+    return { mode: 'not-applicable' as const }
   }
 
   async listProcesses(): Promise<PtyProcessInfo[]> {

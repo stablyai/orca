@@ -1,7 +1,11 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
 import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
-import type { IPtyProvider, PtyBackgroundStreamEvent } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyBackgroundStreamEvent,
+  PtyPersistenceProtocolOptions
+} from '../providers/types'
 import type { PtyDataEvent, PtyProviderBufferSnapshot } from '../providers/types'
 import type { PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import {
@@ -167,12 +171,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.providerFor(id).confirmForegroundProcess?.(id) ?? null
   }
 
-  async serialize(ids: string[]): Promise<string> {
-    return this.fallback.serialize(ids)
+  async serialize(ids: string[], options?: PtyPersistenceProtocolOptions): Promise<string> {
+    return options ? this.fallback.serialize(ids, options) : this.fallback.serialize(ids)
   }
 
-  async revive(state: string): Promise<void> {
-    await this.fallback.revive(state)
+  async revive(state: string, options?: PtyPersistenceProtocolOptions) {
+    return options ? await this.fallback.revive(state, options) : await this.fallback.revive(state)
   }
 
   listProcesses = (opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> =>
@@ -283,7 +287,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   getCurrentDaemonSessionIds(): string[] {
-    return this.sessionIdsForProvider(this.current)
+    return [...this.sessionProviders]
+      .filter(([, provider]) => provider === this.current)
+      .map(([id]) => id)
   }
 
   fanoutCurrentDaemonSyntheticExits(code: number): void {
@@ -330,12 +336,6 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       }
     }
     return null
-  }
-
-  private sessionIdsForProvider(provider: IPtyProvider): string[] {
-    return [...this.sessionProviders]
-      .filter(([, mappedProvider]) => mappedProvider === provider)
-      .map(([id]) => id)
   }
 
   private daemonAdapterFor(sessionId: string): DaemonPtyAdapter | null {

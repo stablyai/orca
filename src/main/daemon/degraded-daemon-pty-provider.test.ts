@@ -44,7 +44,7 @@ function createProvider(
     getForegroundProcess: vi.fn(async () => null),
     confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
-    revive: vi.fn(async () => {}),
+    revive: vi.fn(async () => ({ mode: 'not-applicable' as const })),
     listProcesses: vi.fn(async () => sessions.map((id) => ({ id, cwd: '', title: label }))),
     getDefaultShell: vi.fn(async () => '/bin/zsh'),
     getProfiles: vi.fn(async () => []),
@@ -327,5 +327,14 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: -1 })
     expect(provider.getCurrentDaemonSessionIds()).toEqual([])
     expect(provider.hasPty('legacy-session')).toBe(true)
+  })
+
+  it('forwards the fallback revival result without claiming typed inspection', async () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    await expect(provider.revive('{}')).resolves.toEqual({ mode: 'not-applicable' })
+    expect(fallback.revive).toHaveBeenCalledWith('{}')
   })
 })

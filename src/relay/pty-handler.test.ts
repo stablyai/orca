@@ -3067,6 +3067,150 @@ describe('PtyHandler', () => {
     ])
     expect(handler.activePtyCount).toBe(0)
   })
+
+  it('keeps legacy persistence behavior until a caller explicitly requests v2', async () => {
+    await spawnPty({ command: 'codex', launchAgent: 'codex' })
+
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    const legacyRevive = await dispatcher.callRequest('pty.revive', { state })
+
+    expect(JSON.parse(state)).toBeInstanceOf(Array)
+    expect(legacyRevive).toBeUndefined()
+  })
+
+  it('returns a recognized worker as lost before probing or spawning it', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      const result = (await dispatcher.callRequest('pty.revive', {
+        formatVersion: 2,
+        state: JSON.stringify({
+          schemaVersion: 2,
+          entries: [
+            {
+              id: 'pty-worker',
+              pid: process.pid,
+              sourceIncarnationId: 'incarnation-worker',
+              cols: 80,
+              rows: 24,
+              cwd: '/repo',
+              durableLaunch: { launchAgent: 'codex', startupCommand: 'codex --full-auto' }
+            }
+          ]
+        })
+      })) as { lost: { kind: string; reason: string }[] }
+
+      expect(result.lost).toEqual([
+        expect.objectContaining({
+          kind: 'recognized-worker',
+          reason: 'worker-replacement-forbidden'
+        })
+      ])
+      expect(killSpy).not.toHaveBeenCalled()
+      expect(mockPtySpawn).not.toHaveBeenCalled()
+    } finally {
+      killSpy.mockRestore()
+    }
+  })
+
+  it('reports typed lost outcomes for dead ordinary and legacy-unclassified entries', async () => {
+    const deadPid = process.pid + 1_000_000
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw new Error('must not probe unclassified state')
+    })
+    try {
+      const ordinary = (await dispatcher.callRequest('pty.revive', {
+        formatVersion: 2,
+        state: JSON.stringify({
+          schemaVersion: 2,
+          entries: [
+            {
+              id: 'pty-dead',
+              pid: deadPid,
+              sourceIncarnationId: 'incarnation-dead',
+              cols: 80,
+              rows: 24,
+              cwd: '/repo'
+            }
+          ]
+        })
+      })) as { lost: { kind: string; reason: string }[] }
+      const legacy = (await dispatcher.callRequest('pty.revive', {
+        formatVersion: 2,
+        state: JSON.stringify([
+          { id: 'pty-legacy', pid: deadPid, cols: 80, rows: 24, cwd: '/repo' }
+        ])
+      })) as { lost: { kind: string }[]; diagnostics: { code: string }[] }
+
+      expect(ordinary.lost).toEqual([
+        expect.objectContaining({ kind: 'ordinary-shell', reason: 'process-not-running' })
+      ])
+      expect(legacy.lost).toEqual([expect.objectContaining({ kind: 'unclassified' })])
+      expect(legacy.diagnostics).toContainEqual({ code: 'legacy-state' })
+      expect(killSpy).toHaveBeenCalledOnce()
+      expect(mockPtySpawn).not.toHaveBeenCalled()
+    } finally {
+      killSpy.mockRestore()
+    }
+  })
+
+  it('coalesces concurrent typed ordinary revival into one replacement and one outcome', async () => {
+    const state = JSON.stringify({
+      schemaVersion: 2,
+      entries: [
+        {
+          id: 'pty-concurrent',
+          pid: process.pid,
+          sourceIncarnationId: 'incarnation-concurrent',
+          cols: 80,
+          rows: 24,
+          cwd: '/repo'
+        }
+      ]
+    })
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      const [first, second] = await Promise.all([
+        dispatcher.callRequest('pty.revive', { state, formatVersion: 2 }),
+        dispatcher.callRequest('pty.revive', { state, formatVersion: 2 })
+      ])
+
+      expect(first).toEqual(second)
+      expect(first).toMatchObject({
+        revived: [{ id: 'pty-concurrent', disposition: 'replacement-spawned' }]
+      })
+      expect(mockPtySpawn).toHaveBeenCalledOnce()
+    } finally {
+      killSpy.mockRestore()
+    }
+  })
+
+  it('reports an identity collision as lost instead of adopting another pane PTY', async () => {
+    await spawnPty({ env: { ORCA_PANE_KEY: 'tab-live:leaf-live' }, tabId: 'tab-live' })
+
+    const result = (await dispatcher.callRequest('pty.revive', {
+      formatVersion: 2,
+      state: JSON.stringify({
+        schemaVersion: 2,
+        entries: [
+          {
+            id: 'pty-1',
+            pid: process.pid,
+            sourceIncarnationId: 'old-incarnation',
+            cols: 80,
+            rows: 24,
+            cwd: '/repo',
+            paneKey: 'tab-other:leaf-other',
+            tabId: 'tab-other'
+          }
+        ]
+      })
+    })) as { revived: unknown[]; lost: { id: string }[]; diagnostics: { code: string }[] }
+
+    expect(result.revived).toEqual([])
+    expect(result.lost).toEqual([expect.objectContaining({ id: 'pty-1' })])
+    expect(result.diagnostics).toContainEqual({ code: 'entry-invalid', id: 'pty-1' })
+    expect(mockPtySpawn).toHaveBeenCalledOnce()
+  })
 })
 
 describe('attachIdentityMismatches', () => {
