@@ -3,6 +3,8 @@ import { z } from 'zod'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 
+const RELAY_HTTP_REQUEST_DEADLINE_MS = 15_000
+
 const RelayTokenResponseSchema = z
   .object({
     relayToken: z
@@ -37,6 +39,18 @@ export class RelayHttpError extends Error {
   }
 }
 
+export function shouldRetryRelayConnectionError(error: unknown): boolean {
+  if (!(error instanceof RelayHttpError)) {
+    return true
+  }
+  return (
+    error.statusCode >= 500 ||
+    error.statusCode === 408 ||
+    error.statusCode === 425 ||
+    error.statusCode === 429
+  )
+}
+
 export function deriveRelayHostId(publicKey: Uint8Array): string {
   return createHash('sha256').update(publicKey).digest('base64url').slice(0, 16)
 }
@@ -59,6 +73,7 @@ export async function exchangeRelayAuthorization(input: {
   accessToken: string
   keypair: E2EEKeypair
   fetch?: typeof globalThis.fetch
+  requestDeadlineMs?: number
 }): Promise<RelayAuthorization> {
   const relayHostId = deriveRelayHostId(input.keypair.publicKey)
   const response = await (input.fetch ?? globalThis.fetch)(input.endpoint, {
@@ -67,6 +82,8 @@ export async function exchangeRelayAuthorization(input: {
       authorization: `Bearer ${input.accessToken}`,
       'content-type': 'application/json'
     },
+    // A blackholed request must settle so the coordinator can advance its bounded retry state.
+    signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
     body: JSON.stringify({ relayHostId, hostPublicKeyB64: input.keypair.publicKeyB64 })
   })
   if (!response.ok) {
@@ -85,6 +102,7 @@ export async function requestRelayAssignment(input: {
   relayToken: string
   relayHostId: string
   fetch?: typeof globalThis.fetch
+  requestDeadlineMs?: number
 }): Promise<RelayAssignment> {
   if (!isAllowedRelayOrigin(input.directorUrl)) {
     throw new RelayHttpError('assignment', 400)
@@ -95,6 +113,7 @@ export async function requestRelayAssignment(input: {
       authorization: `Bearer ${input.relayToken}`,
       'content-type': 'application/json'
     },
+    signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
     body: JSON.stringify({ v: 1, relayHostId: input.relayHostId })
   })
   if (!response.ok) {

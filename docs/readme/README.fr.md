@@ -3,7 +3,7 @@
 </h1>
 
 <p align="center">
-  <a href="https://github.com/stablyai/orca/stargazers"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="Étoiles GitHub" /></a>
+  <a href="https://github.com/stablyai/orca"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="Étoiles GitHub" /></a>
   <a href="https://github.com/stablyai/orca/releases"><img src="../assets/readme-downloads.svg" alt="Téléchargements totaux sur toutes les versions" /></a>
   <img src="https://badgen.net/github/license/stablyai/orca" alt="Licence" />
   <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Rejoindre le Discord Orca" /></a>
@@ -40,7 +40,7 @@
 
 Surveillez et pilotez vos agents depuis votre téléphone — soyez notifié quand un agent termine, et envoyez des instructions de suivi où que vous soyez.
 
-[App Store iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [APK Android 0.0.31](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.31/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+[App Store iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [APK Android 0.0.32](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.32/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -235,7 +235,7 @@ yay -S stably-orca-bin
 Associez-la à l'app de bureau pour surveiller et piloter vos agents depuis votre téléphone.
 
 - **iOS :** [Télécharger sur l'App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) ou [rejoindre TestFlight](https://testflight.apple.com/join/YjeGMQBA)
-- **Android :** [Télécharger l'APK 0.0.31](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.31/app-release.apk)
+- **Android :** [Télécharger l'APK 0.0.32](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.32/app-release.apk)
 
 ---
 

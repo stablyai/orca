@@ -109,44 +109,6 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   openclaw: 'openclaw.ai'
 }
 
-export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
-  claude: 'claude',
-  'claude-agent-teams': 'orca claude-teams',
-  openclaude: 'openclaude',
-  codex: 'codex',
-  grok: 'grok',
-  copilot: 'copilot',
-  opencode: 'opencode',
-  'mimo-code': 'mimo',
-  ante: 'ante',
-  pi: 'pi',
-  omp: 'omp',
-  gemini: 'gemini',
-  antigravity: 'agy',
-  aider: 'aider',
-  goose: 'goose',
-  amp: 'amp',
-  kilo: 'kilo',
-  kiro: 'kiro-cli',
-  crush: 'crush',
-  aug: 'auggie',
-  autohand: 'autohand',
-  cline: 'cline',
-  codebuff: 'codebuff',
-  'command-code': 'command-code',
-  continue: 'continue',
-  cursor: 'cursor-agent',
-  droid: 'droid',
-  kimi: 'kimi',
-  'mistral-vibe': 'mistral-vibe',
-  // Why: QwenLM/qwen-code installs its CLI executable as `qwen`, not `qwen-code`.
-  'qwen-code': 'qwen',
-  rovo: 'rovo',
-  hermes: 'hermes',
-  devin: 'devin',
-  openclaw: 'openclaw'
-}
-
 export function isMobileTuiAgent(value: unknown): value is TuiAgent {
   return MOBILE_TUI_AGENT_AUTO_PICK_ORDER.includes(value as TuiAgent)
 }

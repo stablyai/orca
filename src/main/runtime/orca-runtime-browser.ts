@@ -299,7 +299,7 @@ export class RuntimeBrowserCommands {
     await waitForTabRegistration(browserPageId)
   }
 
-  // Why: CDP navigation bypasses Electron's webview events, so the renderer's did-navigate listeners never fire; push updates to keep the UI in sync.
+  // Why: helper-driven clicks can bypass Electron navigation events; push authoritative URL/title updates after automation.
   private notifyRendererNavigation(browserPageId: string, url: string, title: string): void {
     try {
       const win = this.host.getAuthoritativeWindow()
@@ -1345,7 +1345,7 @@ export class RuntimeBrowserCommands {
       bridge.setActiveTab(wcId, worktreeId)
     }
 
-    // Why: the webview loads about:blank first, so navigate via the bridge to make agent-browser's CDP session track the real URL.
+    // Why: the webview loads about:blank first; route navigation through the bridge so its registered owner remains authoritative.
     if (url && url !== 'about:blank') {
       try {
         const result = await bridge.goto(url, worktreeId, browserPageId)

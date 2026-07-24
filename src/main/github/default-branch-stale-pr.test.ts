@@ -209,6 +209,11 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
+    // Why: getPRForBranch resolves origin through getOwnerRepoForRemote.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     resolvePRRepositoryCandidatesMock.mockReset()
     resolvePRRepositoryCandidatesMock.mockImplementation(async (repoPath, connectionId) => {
       const origin = await getOwnerRepoMock(repoPath, connectionId)
@@ -246,7 +251,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     // The head-branch lookup still runs (state=all) and sees the closed PR…
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1'],
-      { cwd: '/repo-root' }
+      { cwd: '/repo-root', host: 'github.com' }
     )
     // …but the default-branch guard discards it: no PR on the trunk (#9171).
     expect(pr).toBeNull()

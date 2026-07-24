@@ -86,10 +86,21 @@ import { isRemovedRuntimeHostId } from './stale-runtime-host-rows'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
+import { getEnvironmentSshStateGeneration } from './runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
+import {
+  findFolderWorkspaceOwner,
+  getRuntimeEnvironmentIdForFolderWorkspace
+} from '@/lib/folder-workspace-runtime-owner'
+import {
+  FolderWorkspaceUpdateCoordinator,
+  type FolderWorkspaceUpdateTicket
+} from './folder-workspace-update-coordinator'
 
 const ERROR_TOAST_DURATION = 60_000
 const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
 const safeAutoForkSyncAttempts = new Map<string, { attemptedAt: number; promise?: Promise<void> }>()
+const runtimeRepoFetchGenerationByEnvironment = new Map<string, number>()
 
 export type RepoUpdate = Partial<
   Pick<
@@ -118,6 +129,48 @@ export type RepoUpdate = Partial<
 }
 
 type ProjectUpdate = ProjectUpdateArgs['updates']
+
+type FolderWorkspaceUpdates = Partial<
+  Pick<
+    FolderWorkspace,
+    | 'name'
+    | 'folderPath'
+    | 'linkedTask'
+    | 'comment'
+    | 'isArchived'
+    | 'isUnread'
+    | 'isPinned'
+    | 'sortOrder'
+    | 'manualOrder'
+    | 'workspaceStatus'
+    | 'createdWithAgent'
+    | 'pendingFirstAgentMessageRename'
+    | 'firstAgentMessageRenameError'
+    | 'lastActivityAt'
+  >
+>
+
+type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
+type FolderWorkspaceUpdateCoordinatorInstance =
+  FolderWorkspaceUpdateCoordinator<FolderWorkspaceUpdateField>
+type RepoSliceGet = Parameters<StateCreator<AppState>>[1]
+
+const folderWorkspaceUpdateCoordinators = new WeakMap<
+  RepoSliceGet,
+  FolderWorkspaceUpdateCoordinatorInstance
+>()
+
+function getFolderWorkspaceUpdateCoordinator(
+  get: RepoSliceGet
+): FolderWorkspaceUpdateCoordinatorInstance {
+  const existing = folderWorkspaceUpdateCoordinators.get(get)
+  if (existing) {
+    return existing
+  }
+  const created = new FolderWorkspaceUpdateCoordinator<FolderWorkspaceUpdateField>()
+  folderWorkspaceUpdateCoordinators.set(get, created)
+  return created
+}
 
 type NestedRepoScanControls = {
   scanId?: string
@@ -379,13 +432,17 @@ function setupWithFetchedOwner(
   target: ReturnType<typeof getActiveRuntimeTarget>
 ): ProjectHostSetup {
   const hostId = getRuntimeTargetHostId(target)
-  if (target.kind !== 'environment' || setup.hostId !== LOCAL_EXECUTION_HOST_ID) {
+  if (target.kind !== 'environment') {
     return setup
   }
+  const executionHostId = setup.executionHostId ?? setup.hostId
   return {
     ...setup,
     hostId,
-    executionHostId: hostId
+    executionHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? hostId : executionHostId,
+    runtimeOwnerEnvironmentId: target.environmentId,
+    // Why: paired clients route through the HUB and must not treat its private SSH target as client-local configuration.
+    connectionId: null
   }
 }
 
@@ -614,9 +671,9 @@ function mergeProjectHostSetupCompatibility(
   derived: Pick<RepoSlice, 'projects' | 'projectHostSetups'>,
   fetched: ProjectHostSetupProjection
 ): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const fetchedSetupOwners = new Set(fetched.setups.map(getProjectHostSetupOwnerKey))
+  const fetchedRepoSetupKeys = new Set(fetched.setups.map(getRepoDerivedSetupKey))
   const derivedSetups = derived.projectHostSetups.filter(
-    (setup) => !fetchedSetupOwners.has(getProjectHostSetupOwnerKey(setup))
+    (setup) => !fetchedRepoSetupKeys.has(getRepoDerivedSetupKey(setup))
   )
   const projectHostSetups = mergeProjectHostSetupsByOwner(derivedSetups, fetched.setups)
   const setupProjectIds = new Set(projectHostSetups.map((setup) => setup.projectId))
@@ -629,8 +686,18 @@ function mergeProjectHostSetupCompatibility(
   }
 }
 
+function getRepoDerivedSetupKey(setup: ProjectHostSetup): string {
+  // Why: authoritative routing provenance may be absent from the repo-derived fallback it replaces.
+  return JSON.stringify([setup.hostId, setup.repoId || setup.id])
+}
+
 function getProjectHostSetupOwnerKey(setup: ProjectHostSetup): string {
-  return `${setup.hostId}:${setup.repoId || setup.id}`
+  return JSON.stringify([
+    setup.hostId,
+    setup.executionHostId ?? setup.hostId,
+    setup.runtimeOwnerEnvironmentId ?? null,
+    setup.repoId || setup.id
+  ])
 }
 
 function mergeProjectHostSetupsByOwner(
@@ -902,6 +969,23 @@ type FetchedFolderWorkspaceCatalog = {
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 }
 
+function getFolderWorkspaceCatalogReplacementIds(
+  catalog: FetchedFolderWorkspaceCatalog,
+  currentFolderWorkspaces: readonly FolderWorkspace[],
+  projectGroups: readonly ProjectGroup[]
+): Set<string> {
+  const replacedIds = new Set(catalog.folderWorkspaces.map((workspace) => workspace.id))
+  const projectGroupHostIds = new Map(
+    projectGroups.map((group) => [group.id, getProjectGroupHostId(group)])
+  )
+  for (const workspace of currentFolderWorkspaces) {
+    if (projectGroupHostIds.get(workspace.projectGroupId) === catalog.hostId) {
+      replacedIds.add(workspace.id)
+    }
+  }
+  return replacedIds
+}
+
 async function fetchRepoCatalogForTarget(
   target: ReturnType<typeof getActiveRuntimeTarget>
 ): Promise<FetchedRepoCatalog> {
@@ -1115,19 +1199,41 @@ function mergeFetchedFolderWorkspaceCatalog(
   }
 }
 
-async function fetchFolderWorkspacesForTarget(
-  target: ReturnType<typeof getActiveRuntimeTarget>,
-  currentFolderWorkspaces: readonly FolderWorkspace[],
-  projectGroups: readonly ProjectGroup[]
-): Promise<{
-  folderWorkspaces: FolderWorkspace[]
-  hostId: ReturnType<typeof getRuntimeTargetHostId>
-}> {
-  return mergeFetchedFolderWorkspaceCatalog(
-    await fetchFolderWorkspaceCatalogForTarget(target),
-    currentFolderWorkspaces,
-    projectGroups
-  )
+async function reconcileFailedFolderWorkspaceUpdate(args: {
+  target: ReturnType<typeof getActiveRuntimeTarget>
+  folderWorkspaceId: string
+  ticket: FolderWorkspaceUpdateTicket<FolderWorkspaceUpdateField>
+  coordinator: FolderWorkspaceUpdateCoordinatorInstance
+  set: Parameters<StateCreator<AppState>>[0]
+  get: Parameters<StateCreator<AppState>>[1]
+}): Promise<void> {
+  try {
+    const catalog = await fetchFolderWorkspaceCatalogForTarget(args.target)
+    const latestFields = args.coordinator.latestFields(args.folderWorkspaceId, args.ticket)
+    if (latestFields.length === 0) {
+      return
+    }
+    const refreshed = catalog.folderWorkspaces.find(
+      (workspace) => workspace.id === args.folderWorkspaceId
+    )
+    args.set((state) => ({
+      folderWorkspaces: refreshed
+        ? state.folderWorkspaces.map((workspace) =>
+            workspace.id === args.folderWorkspaceId
+              ? mergeFolderWorkspaceUpdateResponse(workspace, refreshed, latestFields)
+              : workspace
+          )
+        : state.folderWorkspaces.filter((workspace) => workspace.id !== args.folderWorkspaceId),
+      ...(folderWorkspaceUpdateInvalidatesPathStatus(latestFields) || !refreshed
+        ? { folderWorkspacePathStatuses: {} }
+        : {})
+    }))
+    if (!refreshed) {
+      args.get().purgeWorktreeTerminalState([folderWorkspaceKey(args.folderWorkspaceId)])
+    }
+  } catch (err) {
+    console.warn('Failed to reconcile folder workspace after update failure:', err)
+  }
 }
 
 async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]> {
@@ -1202,6 +1308,37 @@ function getAddRepoPathRouteSettings(
   return options && 'runtimeEnvironmentId' in options
     ? { activeRuntimeEnvironmentId: options.runtimeEnvironmentId ?? null }
     : fallbackSettings
+}
+
+function folderWorkspaceUpdateInvalidatesPathStatus(
+  fields: readonly FolderWorkspaceUpdateField[]
+): boolean {
+  return fields.includes('folderPath')
+}
+
+function mergeFolderWorkspaceUpdateResponse(
+  current: FolderWorkspace,
+  updated: FolderWorkspace,
+  fields: readonly FolderWorkspaceUpdateField[],
+  options: { rejectOlderResponse?: boolean } = {}
+): FolderWorkspace {
+  if (
+    fields.length === 0 ||
+    (options.rejectOlderResponse && updated.updatedAt < current.updatedAt)
+  ) {
+    return current
+  }
+  const next = { ...current }
+  for (const field of fields) {
+    // Why: coalesced activity can land an older response after later local bumps.
+    if (field === 'lastActivityAt') {
+      next.lastActivityAt = Math.max(current.lastActivityAt, updated.lastActivityAt)
+      continue
+    }
+    Object.assign(next, { [field]: updated[field] })
+  }
+  next.updatedAt = Math.max(current.updatedAt, updated.updatedAt)
+  return next
 }
 
 function getRuntimeEnvironmentDisplayName(state: AppState, environmentId: string): string {
@@ -1443,25 +1580,7 @@ export type RepoSlice = {
   ) => Promise<FolderWorkspacePathStatus | null>
   updateFolderWorkspace: (
     folderWorkspaceId: string,
-    updates: Partial<
-      Pick<
-        FolderWorkspace,
-        | 'name'
-        | 'folderPath'
-        | 'linkedTask'
-        | 'comment'
-        | 'isArchived'
-        | 'isUnread'
-        | 'isPinned'
-        | 'sortOrder'
-        | 'manualOrder'
-        | 'workspaceStatus'
-        | 'createdWithAgent'
-        | 'pendingFirstAgentMessageRename'
-        | 'firstAgentMessageRenameError'
-        | 'lastActivityAt'
-      >
-    >
+    updates: FolderWorkspaceUpdates
   ) => Promise<boolean>
   deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
   updateProjectGroup: (
@@ -1593,11 +1712,29 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   fetchRuntimeEnvironmentRepos: async (environmentId) => {
+    const requestGeneration = (runtimeRepoFetchGenerationByEnvironment.get(environmentId) ?? 0) + 1
+    runtimeRepoFetchGenerationByEnvironment.set(environmentId, requestGeneration)
+    const connectionGeneration = getEnvironmentSshStateGeneration(environmentId)
+    const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
     try {
       const target = { kind: 'environment' as const, environmentId }
       const catalog = await fetchRepoCatalogForTarget(target)
+      if (
+        runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
+        getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
+        getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
+      ) {
+        return []
+      }
       let finalizedHostRepos: Repo[] = []
       set((s) => {
+        if (
+          runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
+          getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
+          getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
+        ) {
+          return s
+        }
         // Why: skip merging a runtime env removed while this Connect-flow fetch was in flight, so purged repos aren't re-added (#8881).
         if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
           return s
@@ -1803,11 +1940,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   fetchFolderWorkspaces: async () => {
     try {
+      const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
       const target = getActiveRuntimeTarget(get().settings)
-      const { folderWorkspaces } = await fetchFolderWorkspacesForTarget(
-        target,
+      const catalog = await fetchFolderWorkspaceCatalogForTarget(target)
+      const current = get()
+      folderWorkspaceUpdates.recordCatalogReplacement(
+        getFolderWorkspaceCatalogReplacementIds(
+          catalog,
+          current.folderWorkspaces,
+          current.projectGroups
+        )
+      )
+      const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
+        catalog,
         [],
-        get().projectGroups
+        current.projectGroups
       )
       set({ folderWorkspaces, folderWorkspacePathStatuses: {} })
     } catch (err) {
@@ -1816,16 +1963,26 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   fetchFolderWorkspacesForAllHosts: async (options) => {
+    const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
     // Why: folder workspaces are owned through their project groups; fetch groups first, then merge each host's folder slice.
     const applyCatalog = (catalog: FetchedFolderWorkspaceCatalog): void => {
-      set((s) => ({
-        folderWorkspaces: mergeFetchedFolderWorkspaceCatalog(
-          catalog,
-          s.folderWorkspaces,
-          s.projectGroups
-        ).folderWorkspaces,
-        folderWorkspacePathStatuses: {}
-      }))
+      set((current) => {
+        folderWorkspaceUpdates.recordCatalogReplacement(
+          getFolderWorkspaceCatalogReplacementIds(
+            catalog,
+            current.folderWorkspaces,
+            current.projectGroups
+          )
+        )
+        return {
+          folderWorkspaces: mergeFetchedFolderWorkspaceCatalog(
+            catalog,
+            current.folderWorkspaces,
+            current.projectGroups
+          ).folderWorkspaces,
+          folderWorkspacePathStatuses: {}
+        }
+      })
     }
 
     let failed = false
@@ -2039,6 +2196,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   createFolderWorkspace: async (args, options) => {
     try {
+      // Why: a new folder has no owner yet, so creation follows the caller-selected path-status host.
       const target = getActiveRuntimeTarget(
         getFolderWorkspacePathStatusRouteSettings(options, get().settings)
       )
@@ -2066,8 +2224,19 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   updateFolderWorkspace: async (folderWorkspaceId, updates) => {
+    const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
+    const state = get()
+    if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
+      return false
+    }
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId)
+    // Why: owner-scoped mutations must not follow whichever runtime happens to be focused.
+    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
+    const updateTicket = folderWorkspaceUpdates.begin(
+      folderWorkspaceId,
+      Object.keys(updates) as FolderWorkspaceUpdateField[]
+    )
     try {
-      const target = getActiveRuntimeTarget(get().settings)
       const updated =
         target.kind === 'local'
           ? await window.api.folderWorkspaces.update({ folderWorkspaceId, updates })
@@ -2080,24 +2249,58 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               )
             ).folderWorkspace
       if (!updated) {
+        await reconcileFailedFolderWorkspaceUpdate({
+          target,
+          folderWorkspaceId,
+          ticket: updateTicket,
+          coordinator: folderWorkspaceUpdates,
+          set,
+          get
+        })
         return false
       }
-      set((s) => ({
-        folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-          workspace.id === folderWorkspaceId ? updated : workspace
-        ),
-        folderWorkspacePathStatuses: {}
-      }))
+      const latestFields = folderWorkspaceUpdates.latestFields(folderWorkspaceId, updateTicket)
+      const catalogChanged = folderWorkspaceUpdates.catalogChanged(folderWorkspaceId, updateTicket)
+      if (latestFields.length > 0) {
+        set((s) => ({
+          folderWorkspaces: s.folderWorkspaces.map((workspace) =>
+            workspace.id === folderWorkspaceId
+              ? mergeFolderWorkspaceUpdateResponse(workspace, updated, latestFields, {
+                  rejectOlderResponse: catalogChanged
+                })
+              : workspace
+          ),
+          ...(folderWorkspaceUpdateInvalidatesPathStatus(latestFields)
+            ? { folderWorkspacePathStatuses: {} }
+            : {})
+        }))
+      }
       return true
     } catch (err) {
       console.error('Failed to update folder workspace:', err)
+      await reconcileFailedFolderWorkspaceUpdate({
+        target,
+        folderWorkspaceId,
+        ticket: updateTicket,
+        coordinator: folderWorkspaceUpdates,
+        set,
+        get
+      })
       return false
+    } finally {
+      folderWorkspaceUpdates.finish(folderWorkspaceId, updateTicket)
     }
   },
 
   deleteFolderWorkspace: async (folderWorkspaceId) => {
+    const state = get()
+    if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
+      return false
+    }
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId)
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      // Why: deletion targets the folder's owner; focus may be on a different host.
+      const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
       const deleted =
         target.kind === 'local'
           ? await window.api.folderWorkspaces.delete({ folderWorkspaceId })

@@ -20,6 +20,17 @@ describe('mapRuntimeError', () => {
   )
 
   it.each([
+    'remote_update_manual_required',
+    'remote_update_not_available',
+    'remote_update_not_downloaded'
+  ])('preserves remote updater failure %s', (code) => {
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
+      ok: false,
+      error: { code, message: code }
+    })
+  })
+
+  it.each([
     ['window_not_focused', 'keyboard input requires focus', 'restore-window'],
     ['permission_denied', 'missing DBUS_SESSION_BUS_ADDRESS', 'permissions'],
     ['element_not_found', 'fresh element index required', 'get-app-state'],

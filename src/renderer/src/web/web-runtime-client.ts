@@ -2,6 +2,7 @@
 import type { RuntimeRpcResponse, RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
 import type { WebPairingOffer } from './web-pairing'
+import { installWindowVisibilityInterval } from '../lib/window-visibility-interval'
 import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime-tailscale-hint'
 import {
   decrypt,
@@ -76,7 +77,7 @@ export class WebRuntimeClient {
   private connectTimer: number | null = null
   private handshakeTimer: number | null = null
   private reconnectTimer: number | null = null
-  private heartbeatTimer: number | null = null
+  private heartbeatCleanup: (() => void) | null = null
   private lastInboundFrameAt = 0
   // Timestamp of an outstanding liveness probe (null = none); dead-close fires only on an unanswered sent probe.
   private heartbeatProbeSentAt: number | null = null
@@ -765,18 +766,32 @@ export class WebRuntimeClient {
 
   private startHeartbeat(): void {
     this.clearHeartbeatTimer()
+    // Why: this runs at 'connected', right after the handshake's inbound frames — a genuine liveness
+    // baseline. Only the fresh-connect moment resets lastInboundFrameAt; the visible re-arm below must not.
     const now = this.now()
     this.lastInboundFrameAt = now
     this.lastHeartbeatTickAt = now
     this.heartbeatProbeSentAt = null
-    this.heartbeatTimer = window.setInterval(() => this.runHeartbeatTick(), HEARTBEAT_INTERVAL_MS)
+    this.heartbeatCleanup = installWindowVisibilityInterval({
+      run: () => this.runHeartbeatTick(),
+      runOnVisible: () => this.rebaselineHeartbeat(),
+      intervalMs: HEARTBEAT_INTERVAL_MS
+    })
+  }
+
+  private rebaselineHeartbeat(): void {
+    // Why: the interval is merely parked while hidden, so on becoming visible reset the tick clock (don't
+    // let the parked gap trip the suspended-loop rebaseline) and drop a probe that was in flight when we
+    // hid. But PRESERVE lastInboundFrameAt: if the socket went silent while hidden, keeping the real
+    // last-heard time lets the next tick detect the staleness and probe promptly, instead of masking a
+    // dead connection for another full idle window (#9883 review).
+    this.lastHeartbeatTickAt = this.now()
+    this.heartbeatProbeSentAt = null
   }
 
   private clearHeartbeatTimer(): void {
-    if (this.heartbeatTimer) {
-      window.clearInterval(this.heartbeatTimer)
-      this.heartbeatTimer = null
-    }
+    this.heartbeatCleanup?.()
+    this.heartbeatCleanup = null
     this.heartbeatProbeSentAt = null
   }
 

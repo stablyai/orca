@@ -13,6 +13,7 @@ import {
   writeClaudeManagedAuthFile
 } from './managed-auth-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import { getDefaultWslDistro, getWslHome, toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
 import { hasLiveClaudePtys } from './live-pty-gate'
@@ -683,9 +684,10 @@ export class ClaudeRuntimeAuthService {
   private getDefaultAccountSelectionTarget(
     settings = this.store.getSettings()
   ): ClaudeAccountSelectionTarget {
-    if (process.platform === 'win32' && settings.localAccountRuntime === 'wsl') {
-      // Why: auth defaults follow account runtime settings, not legacy terminal WSL settings that can outlive the Terminal UI.
-      return { runtime: 'wsl', wslDistro: settings.localAccountWslDistro ?? null }
+    // Why: Windows auth follows the resolved account runtime; stale cross-platform WSL pins must stay local-host.
+    const resolved = resolveLocalAccountRuntimeTarget(settings)
+    if (process.platform === 'win32' && resolved.runtime === 'wsl') {
+      return { runtime: 'wsl', wslDistro: resolved.wslDistro }
     }
     return { runtime: 'host' }
   }

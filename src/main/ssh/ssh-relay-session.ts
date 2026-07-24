@@ -7,11 +7,9 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
-import {
-  SshPtyProvider,
-  isSshPtyIdentityMismatchError,
-  isSshPtyNotFoundError
-} from '../providers/ssh-pty-provider'
+import { SshPtyProvider } from '../providers/ssh-pty-provider'
+import type { SshPtyExitCallback } from '../providers/ssh-pty-provider-contract'
+import { isSshPtyIdentityMismatchError, isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
@@ -34,7 +32,9 @@ import {
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
-  setPtyOwnership
+  setPtyOwnership,
+  restorePtyIncarnation,
+  isCurrentPtyExit
 } from '../ipc/pty'
 import {
   recordHiddenRendererPtyDataDrop,
@@ -70,6 +70,9 @@ import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
+
+type SshPtyExitPayload = Parameters<SshPtyExitCallback>[0]
+type PendingPtyReattach = { exits: SshPtyExitPayload[] }
 
 type RemoteCliBridgeEnv = {
   remoteHome: string
@@ -147,6 +150,7 @@ export class SshRelaySession {
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private forwardedReattachReplayByPty = new Map<string, ForwardedReplayFingerprint>()
+  private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
 
   constructor(
     readonly targetId: string,
@@ -956,17 +960,30 @@ export class SshRelaySession {
       }
     })
     ptyProvider.onExit((payload) => {
-      const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
-      clearProviderPtyState(payload.id)
-      deletePtyOwnership(payload.id)
-      this.forwardedReattachReplayByPty.delete(payload.id)
-      this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
-      this.runtime?.onPtyExit(payload.id, payload.code)
-      const win = this.getMainWindow()
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('pty:exit', payload)
+      const pendingReattach = this.pendingPtyReattaches.get(payload.id)
+      if (pendingReattach) {
+        // Why: attach response and exit can share one transport batch, before incarnation restoration runs.
+        pendingReattach.exits.push(payload)
+        return
       }
+      if (!isCurrentPtyExit(payload)) {
+        return
+      }
+      this.retireExitedPty(payload)
     })
+  }
+
+  private retireExitedPty(payload: SshPtyExitPayload): void {
+    const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
+    clearProviderPtyState(payload.id)
+    deletePtyOwnership(payload.id)
+    this.forwardedReattachReplayByPty.delete(payload.id)
+    this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
+    this.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
+    const win = this.getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:exit', payload)
+    }
   }
 
   private replayFingerprint(data: string): string {
@@ -1001,6 +1018,7 @@ export class SshRelaySession {
     const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
       .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
+    const activeLeaseByPtyId = new Map(activeLeases.map((lease) => [lease.ptyId, lease]))
     const leasedPtyIds = activeLeases.map((lease) => lease.ptyId)
     // Why: pass pane identity so the relay can reject cross-generation id collisions; tabId falls back for pre-leafId leases.
     const expectedIdentityByPtyId = new Map(
@@ -1028,6 +1046,9 @@ export class SshRelaySession {
       if (!shouldContinue()) {
         return
       }
+      const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+      const pendingReattach: PendingPtyReattach = { exits: [] }
+      this.pendingPtyReattaches.set(appPtyId, pendingReattach)
       try {
         const expectedIdentity = expectedIdentityByPtyId.get(ptyId)
         const attachResult =
@@ -1037,15 +1058,55 @@ export class SshRelaySession {
         if (!shouldContinue()) {
           return
         }
-        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+        const exitDuringAttach = pendingReattach.exits.find(
+          (exit) =>
+            !exit.incarnationId ||
+            !attachResult.incarnationId ||
+            exit.incarnationId === attachResult.incarnationId
+        )
+        if (exitDuringAttach) {
+          if (attachResult.incarnationId) {
+            restorePtyIncarnation(appPtyId, attachResult.incarnationId)
+            this.runtime?.acceptPtyIncarnationForExit(appPtyId, attachResult.incarnationId)
+          }
+          this.retireExitedPty(exitDuringAttach)
+          continue
+        }
         setPtyOwnership(appPtyId, this.targetId)
+        if (attachResult.incarnationId) {
+          restorePtyIncarnation(appPtyId, attachResult.incarnationId)
+          const lease = activeLeaseByPtyId.get(ptyId)
+          if (lease?.worktreeId && lease.tabId && lease.leafId) {
+            this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
+              tabId: lease.tabId,
+              leafId: lease.leafId,
+              incarnationId: attachResult.incarnationId
+            })
+            // Why: reconnect may be the first new-relay response that can backfill exact exit fencing.
+            try {
+              this.store.persistPtyBinding({
+                worktreeId: lease.worktreeId,
+                tabId: lease.tabId,
+                leafId: lease.leafId,
+                ptyId: appPtyId,
+                incarnationId: attachResult.incarnationId
+              })
+            } catch (error) {
+              // Why: this backfill improves future fencing but must not disconnect an already-live relay PTY.
+              console.error('[ssh-relay-session] Failed to persist reconnect incarnation:', error)
+            }
+          } else {
+            this.runtime?.onPtySpawned(appPtyId, attachResult.incarnationId, {
+              awaitsRegistration: false
+            })
+          }
+        }
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'attached')
         this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
       } catch (err) {
         if (!isSshPtyNotFoundError(err)) {
           throw err
         }
-        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
         if (isSshPtyIdentityMismatchError(err)) {
           console.warn(
             `[ssh-relay-session] Ignoring stale PTY ${ptyId} for ${this.targetId} after relay identity mismatch: ${
@@ -1067,6 +1128,10 @@ export class SshRelaySession {
         const win = this.getMainWindow()
         if (win && !win.isDestroyed()) {
           win.webContents.send('pty:exit', { id: appPtyId, code: -1 })
+        }
+      } finally {
+        if (this.pendingPtyReattaches.get(appPtyId) === pendingReattach) {
+          this.pendingPtyReattaches.delete(appPtyId)
         }
       }
     }

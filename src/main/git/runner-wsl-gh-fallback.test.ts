@@ -20,7 +20,11 @@ vi.mock('../wsl', async (importOriginal) => ({
   getDefaultWslDistro: getDefaultWslDistroMock
 }))
 
-import { ghExecFileAsync, glabExecFileAsync } from './runner'
+import { ghExecFileAsync, glabExecFileAsync, setDefaultWslDistroOverride } from './runner'
+import { _resetGhRateLimitBreaker } from './gh-rate-limit-breaker'
+
+const PRIMARY_RATE_LIMIT_STDERR =
+  'gh: API rate limit exceeded for user ID 1775218. Please wait. (HTTP 403)'
 
 type MockChildProcess = EventEmitter & {
   pid: number
@@ -44,6 +48,8 @@ describe('ghExecFileAsync WSL fallback', () => {
     spawnMock.mockReset()
     getDefaultWslDistroMock.mockReset()
     getDefaultWslDistroMock.mockReturnValue(null)
+    setDefaultWslDistroOverride(null)
+    _resetGhRateLimitBreaker()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -52,6 +58,7 @@ describe('ghExecFileAsync WSL fallback', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    _resetGhRateLimitBreaker()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -187,6 +194,42 @@ describe('ghExecFileAsync WSL fallback', () => {
     )
   })
 
+  it('falls back for repo view with an explicit positional repository', async () => {
+    execFileMock.mockImplementation((binary, _args, options, callback) => {
+      if (typeof options === 'function') {
+        callback = options
+      }
+      if (binary === 'wsl.exe') {
+        callback(
+          Object.assign(new Error('Command failed: wsl.exe'), {
+            stdout: '',
+            stderr: 'bash: line 1: gh: command not found\n'
+          })
+        )
+        return
+      }
+      callback(null, { stdout: '{"isFork":false}', stderr: '' })
+    })
+
+    await expect(
+      ghExecFileAsync(
+        ['repo', 'view', 'github.acme-corp.com/stablyhq/noqa', '--json', 'isFork,parent'],
+        {
+          cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`,
+          host: 'github.acme-corp.com'
+        }
+      )
+    ).resolves.toEqual({ stdout: '{"isFork":false}', stderr: '' })
+
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'gh',
+      ['repo', 'view', 'github.acme-corp.com/stablyhq/noqa', '--json', 'isFork,parent'],
+      expect.objectContaining({ cwd: undefined }),
+      expect.any(Function)
+    )
+  })
+
   it('does not fall back for gh api calls that depend on repo-context placeholders', async () => {
     execFileMock.mockImplementation((_binary, _args, _options, callback) => {
       callback(
@@ -225,6 +268,43 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).resolves.toEqual({ stdout: '{"data":{}}', stderr: '' })
 
     expect(execFileMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a host-pinned idempotent gh GraphQL query after host injection', async () => {
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(
+          Object.assign(new Error('HTTP 502 Bad Gateway'), {
+            stdout: '',
+            stderr: 'HTTP 502 Bad Gateway'
+          })
+        )
+      })
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(null, { stdout: '{"data":{}}', stderr: '' })
+      })
+
+    await expect(
+      ghExecFileAsync(['api', 'graphql', '-f', 'query=query { viewer { login } }'], {
+        host: 'github.acme-corp.com'
+      })
+    ).resolves.toEqual({ stdout: '{"data":{}}', stderr: '' })
+
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      1,
+      'gh',
+      [
+        'api',
+        '--hostname',
+        'github.acme-corp.com',
+        'graphql',
+        '-f',
+        'query=query { viewer { login } }'
+      ],
+      expect.any(Object),
+      expect.any(Function)
+    )
   })
 
   it('does not retry non-idempotent gh API transient failures', async () => {
@@ -305,6 +385,63 @@ describe('ghExecFileAsync WSL fallback', () => {
       expect.objectContaining({ cwd: undefined }),
       expect.any(Function)
     )
+  })
+
+  it('checks a blocked WSL scope before repeating a native-to-WSL fallback', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    execFileMock.mockImplementation((binary, _args, _options, callback) => {
+      if (binary === 'gh') {
+        callback(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT', stderr: '' }))
+        return
+      }
+      callback(
+        Object.assign(new Error(PRIMARY_RATE_LIMIT_STDERR), {
+          stdout: '',
+          stderr: PRIMARY_RATE_LIMIT_STDERR
+        })
+      )
+    })
+
+    await expect(ghExecFileAsync(['api', 'repos/acme/widgets/pulls'])).rejects.toThrow('rate limit')
+    await expect(ghExecFileAsync(['api', 'repos/acme/widgets/pulls'])).rejects.toMatchObject({
+      ghRateLimitBlocked: true
+    })
+
+    expect(execFileMock).toHaveBeenCalledTimes(3)
+    expect(execFileMock.mock.calls.map(([binary]) => binary)).toEqual(['gh', 'wsl.exe', 'gh'])
+  })
+
+  it('checks a blocked native scope before repeating a WSL-to-native fallback', async () => {
+    execFileMock.mockImplementation((binary, _args, _options, callback) => {
+      if (binary === 'wsl.exe') {
+        callback(
+          Object.assign(new Error('Command failed: wsl.exe'), {
+            stdout: '',
+            stderr: 'bash: line 1: gh: command not found\n'
+          })
+        )
+        return
+      }
+      callback(
+        Object.assign(new Error(PRIMARY_RATE_LIMIT_STDERR), {
+          stdout: '',
+          stderr: PRIMARY_RATE_LIMIT_STDERR
+        })
+      )
+    })
+
+    const options = {
+      cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`
+    }
+    await expect(ghExecFileAsync(['api', 'repos/acme/widgets/pulls'], options)).rejects.toThrow(
+      'rate limit'
+    )
+    await expect(
+      ghExecFileAsync(['api', 'repos/acme/widgets/pulls'], options)
+    ).rejects.toMatchObject({ ghRateLimitBlocked: true })
+
+    expect(execFileMock).toHaveBeenCalledTimes(3)
+    expect(execFileMock.mock.calls.map(([binary]) => binary)).toEqual(['wsl.exe', 'gh', 'wsl.exe'])
   })
 
   it('does not retry non-idempotent glab transient failures', async () => {
@@ -487,5 +624,67 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).resolves.toEqual({ stdout: '[]', stderr: '' })
 
     expect(execFileMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('resolves fallback to the overridden distro if configured, and falls back to default WSL distro otherwise', async () => {
+    // 1) Test with override configured (should use 'Debian' override)
+    setDefaultWslDistroOverride('Debian')
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' }))
+      })
+      .mockImplementationOnce((binary, args, _options, callback) => {
+        if (binary === 'wsl.exe' && args.includes('Debian')) {
+          callback(null, { stdout: 'Logged in to github.com as override', stderr: '' })
+          return
+        }
+        callback(new Error('Wrong distro fallback'))
+      })
+
+    await expect(ghExecFileAsync(['auth', 'status'])).resolves.toEqual({
+      stdout: 'Logged in to github.com as override',
+      stderr: ''
+    })
+
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'wsl.exe',
+      ['-d', 'Debian', '--', 'bash', '-c', "'gh' 'auth' 'status'"],
+      expect.any(Object),
+      expect.any(Function)
+    )
+
+    // 2) Test without override (should use default 'Ubuntu')
+    execFileMock.mockClear()
+    setDefaultWslDistroOverride(null)
+
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' }))
+      })
+      .mockImplementationOnce((binary, args, _options, callback) => {
+        if (binary === 'wsl.exe' && args.includes('Ubuntu')) {
+          callback(null, { stdout: 'Logged in to github.com as default', stderr: '' })
+          return
+        }
+        callback(new Error('Wrong distro fallback'))
+      })
+
+    await expect(ghExecFileAsync(['auth', 'status'])).resolves.toEqual({
+      stdout: 'Logged in to github.com as default',
+      stderr: ''
+    })
+
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'bash', '-c', "'gh' 'auth' 'status'"],
+      expect.any(Object),
+      expect.any(Function)
+    )
   })
 })

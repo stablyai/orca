@@ -2,7 +2,26 @@
 
 Date: 2026-07-19
 
-Status: Final decision; implementation pending
+Status: Implemented with the 2026-07-20 ownership amendment below
+
+## 2026-07-20 Ownership Amendment
+
+Fresh paired-runtime evidence showed that the display/controller platform is not a safe proxy for
+the PTY backend. A macOS client can attach to a native ConPTY owned by a paired Windows runtime, so
+renderer-side local/SSH/remote heuristics can transfer OSC 10/11 authority to the wrong responder.
+
+The PTY-owning process now classifies the backend from its own platform and the shell that actually
+won spawn: `windows-conpty`, `windows-wsl`, or `posix-pty`. Native ConPTY consumes complete OSC 10/11
+queries before model, replay, or view delivery. During the bounded startup window it replies once
+when validated theme colors are available; after the deadline, or without colors, it consumes the
+query without replying. A consuming-view handshake does not transfer this authority. Split query
+candidates remain bounded and private across authority-close, expiry, and snapshot barriers; a
+candidate that proves malformed is released unchanged.
+
+WSL and POSIX PTYs continue to transfer authority to the normal visible/hidden responder after the
+startup window. The same owner-side rule applies to local, daemon, SSH-relay, and paired-runtime
+PTYs. This amendment supersedes contrary transfer/fallback language below; the echo projection is
+selected only by the authoritative owner backend, never by renderer or connection metadata.
 
 ## Problem
 
@@ -31,13 +50,13 @@ the failure requires an additional agent, timing, input-mode, or replay conditio
 
 ## Root Cause
 
-The startup OSC responder currently runs in Electron main only after runtime ingestion
-([`pty.ts`](../../../src/main/ipc/pty.ts)). `LocalPtyProvider` calls the runtime before its public
-data listeners ([`local-pty-provider.ts`](../../../src/main/providers/local-pty-provider.ts)), while
-daemon `Session` advances sequence state, writes its emulator, persists pending output, and fans out
-data before Electron main receives it ([`session.ts`](../../../src/main/daemon/session.ts)). A
-renderer-only filter can therefore hide the symptom without removing it from the authoritative
-model, daemon history, snapshots, or remote delivery.
+OSC responders downstream of the PTY owner do not know whether the bytes came from native ConPTY,
+WSL, or a POSIX PTY. `LocalPtyProvider` calls the runtime before its public data listeners
+([`local-pty-provider.ts`](../../../src/main/providers/local-pty-provider.ts)), while daemon `Session`
+advances sequence state, writes its emulator, persists pending output, and fans out data before
+Electron main receives it ([`session.ts`](../../../src/main/daemon/session.ts)). A renderer-only
+filter can therefore misclassify paired runtimes and hide the symptom without removing it from the
+authoritative model, daemon history, snapshots, or remote delivery.
 
 The corrupted echo is timing-dependent but its ordering failure is deterministic: any sanitizer
 downstream of an authoritative consumer is too late. The independent `[I` symptom has not yet met
@@ -228,14 +247,15 @@ When registered for an agent spawn, it:
    hidden model nor a delivered renderer can answer it a second time;
 6. begins echo recognition as soon as each individual reply is written.
 
-If attributes or a provider are unavailable, the query is not consumed. It passes through unchanged
-to normal query authority. A reattach never registers startup response state, matching current
-behavior.
+If attributes or a provider are unavailable, native ConPTY consumes the query without replying;
+WSL and POSIX PTYs pass it through unchanged to normal query authority. A reattach never registers
+startup response state, matching current behavior, but native ConPTY ownership still prevents a
+downstream reply.
 
 ### Exact authority transfer
 
-Startup query interception opens only for a fresh session whose atomic creation installed the
-transaction before buffered output release. It closes at the first of:
+Startup query response authority opens only for a fresh session whose atomic creation installed the
+transaction before buffered output release. For WSL and POSIX PTYs it closes at the first of:
 
 - both OSC 10 and OSC 11 slots have been answered;
 - the startup deadline expires;
@@ -243,7 +263,9 @@ transaction before buffered output release. It closes at the first of:
   hidden-runtime ownership mark is established;
 - the spawn fails, is cancelled, reattaches, or exits.
 
-Closing query interception does not discard already-written reply candidates. Echo recognition has
+Native ConPTY does not transfer OSC 10/11 authority at those boundaries: the deadline stops source
+replies, while complete queries remain consumed for the life of the PTY. Closing response authority
+does not discard already-written reply candidates. Echo recognition has
 its own bounded lifetime and may finish or drain after normal authority takes over. A close and a
 provider callback are ordered by the source owner's per-PTY ingress queue. Transport attachment to
 a daemon/relay client is not a consuming-view signal. Main sends the close over a versioned control

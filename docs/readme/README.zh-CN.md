@@ -36,7 +36,7 @@
 
 用手机监控并指挥你的智能体 — 智能体完成时收到通知，随时随地发送后续指令。
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.31/app-release.apk) · [文档 →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.32/app-release.apk) · [文档 →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -227,7 +227,7 @@ yay -S stably-orca-bin
 与桌面应用配对，用手机监控并指挥你的智能体。
 
 - **iOS:** [从 App Store 下载](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [下载 APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.31/app-release.apk)
+- **Android:** [下载 APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.32/app-release.apk)
 
 ---
 
@@ -235,7 +235,7 @@ yay -S stably-orca-bin
 
 - **Discord:** 加入 **[Discord](https://discord.gg/fzjDKHxv8Q)** 社区。
 - **Twitter / X:** 关注 **[@orca_build](https://x.com/orca_build)** 获取更新和公告。
-- **微信:** 第一、二个微信群均已满，现在可以加入第三个群。
+- **微信:** 其他群已满，现在加入第 5 群。
 
   <img src="../assets/wechat-qr.jpg" alt="Orca 社区微信群二维码" width="160" />
 

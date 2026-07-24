@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/types'
 
@@ -6,10 +6,13 @@ export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
   detectedIds: TuiAgent[] | null
   isLoading: boolean
+  /** True when the first probe for this mounted remote target finished without a result. */
+  detectionFailed: boolean
   isRefreshing: boolean
-  /** Re-runs `preflight.refreshAgents` and updates every subscribed surface in
-   *  the same tick. Idempotent while in flight: concurrent callers receive the
-   *  same pending promise. */
+  /** Forces a re-detect on the target host (`preflight.refreshAgents` for
+   *  local/runtime targets, a fresh probe for SSH) and updates every
+   *  subscribed surface in the same tick. Idempotent while in flight:
+   *  concurrent callers receive the same pending promise. */
   refresh: () => Promise<TuiAgent[]>
 }
 
@@ -47,10 +50,10 @@ function normalizeAgentDetectionTarget(
  * (store not hydrated) — returns loading state.
  */
 export function useDetectedAgents(
-  connectionId: AgentDetectionTarget | string | null | undefined = null
+  connectionId: AgentDetectionTarget | string | null | undefined
 ): UseDetectedAgentsResult {
   const target = normalizeAgentDetectionTarget(connectionId)
-  const retriedEmptyTargetRef = useRef<string | null>(null)
+  const observedRemoteTargetKeysRef = useRef<Set<string>>(new Set())
   // Why: undefined means "store not yet hydrated" — we don't know if the
   // worktree is local or remote yet. This prevents flashing local agents for
   // remote worktrees during hydration.
@@ -61,6 +64,12 @@ export function useDetectedAgents(
       ? target.connectionId
       : target?.kind === 'runtime'
         ? target.environmentId
+        : null
+  const remoteTargetKey =
+    targetKind === 'ssh' && targetId
+      ? `ssh:${targetId}`
+      : targetKind === 'runtime' && targetId
+        ? `runtime:${targetId}`
         : null
 
   const detectedIds = useAppStore((s) => {
@@ -87,48 +96,73 @@ export function useDetectedAgents(
     }
     return s.isDetectingAgents
   })
-  const isRefreshing = useAppStore((s) => (targetKind === 'local' ? s.isRefreshingAgents : false))
-  const ensureLocal = useAppStore((s) => s.ensureDetectedAgents)
-  const ensureRemote = useAppStore((s) => s.ensureRemoteDetectedAgents)
-  const ensureRuntime = useAppStore((s) => s.ensureRuntimeDetectedAgents)
-  const refresh = useAppStore((s) => s.refreshDetectedAgents)
+  const isRefreshing = useAppStore((s) => {
+    if (targetKind === 'runtime' && targetId) {
+      return s.isRefreshingRuntimeAgents[targetId] ?? false
+    }
+    if (targetKind === 'ssh' && targetId) {
+      return s.isDetectingRemoteAgents[targetId] ?? false
+    }
+    return targetKind === 'local' ? s.isRefreshingAgents : false
+  })
+  const detectionFailed =
+    detectedIds === null &&
+    !isLoading &&
+    !isRefreshing &&
+    remoteTargetKey !== null &&
+    observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+  // Why: refresh must hit the same host the list came from — refreshing the
+  // local PATH while showing a remote server's agents is a silent no-op.
+  const refresh = useCallback((): Promise<TuiAgent[]> => {
+    if (isUnknown) {
+      return Promise.resolve([])
+    }
+    // Why: retained tab bars stay mounted; imperative action reads avoid six
+    // no-op Zustand subscriptions per hook during unrelated store churn.
+    const state = useAppStore.getState()
+    if (targetKind === 'runtime' && targetId) {
+      return state.refreshRuntimeDetectedAgents(targetId)
+    }
+    if (targetKind === 'ssh' && targetId) {
+      return state.refreshRemoteDetectedAgents(targetId)
+    }
+    return state.refreshDetectedAgents()
+  }, [isUnknown, targetKind, targetId])
 
   useEffect(() => {
     if (isUnknown) {
       return
     }
-    const emptyRetryKey =
-      targetKind === 'ssh' && targetId
-        ? `ssh:${targetId}`
-        : targetKind === 'runtime' && targetId
-          ? `runtime:${targetId}`
-          : null
+    const isNewRemoteTarget =
+      remoteTargetKey !== null && !observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+    // Why: switching A → B → A is still one mounted surface; remember every
+    // target so empty hosts don't respawn all detection subprocesses on each switch.
+    if (remoteTargetKey !== null) {
+      observedRemoteTargetKeysRef.current.add(remoteTargetKey)
+    }
+    const state = useAppStore.getState()
     if (targetKind === 'ssh' && targetId) {
       if (detectedIds === null) {
-        retriedEmptyTargetRef.current = emptyRetryKey
-        void ensureRemote(targetId)
-      } else if (detectedIds.length === 0 && retriedEmptyTargetRef.current !== emptyRetryKey) {
+        void state.ensureRemoteDetectedAgents(targetId)
+      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
         // Why: a newly opened remote launch surface should get one fresh probe
         // after a prior empty result, but must not spin while the host has no agents.
-        retriedEmptyTargetRef.current = emptyRetryKey
-        void ensureRemote(targetId)
+        void state.ensureRemoteDetectedAgents(targetId)
       }
     } else if (targetKind === 'runtime' && targetId) {
       if (detectedIds === null) {
-        retriedEmptyTargetRef.current = emptyRetryKey
-        void ensureRuntime(targetId)
-      } else if (detectedIds.length === 0 && retriedEmptyTargetRef.current !== emptyRetryKey) {
+        void state.ensureRuntimeDetectedAgents(targetId)
+      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
         // Why: remote `orca serve` users can install/fix PATH without reconnecting;
         // retry once per mounted surface so the menu can pick that up.
-        retriedEmptyTargetRef.current = emptyRetryKey
-        void ensureRuntime(targetId)
+        void state.ensureRuntimeDetectedAgents(targetId)
       }
     } else {
       if (detectedIds === null) {
-        void ensureLocal()
+        void state.ensureDetectedAgents()
       }
     }
-  }, [isUnknown, targetKind, targetId, detectedIds, ensureLocal, ensureRemote, ensureRuntime])
+  }, [isUnknown, targetKind, targetId, remoteTargetKey, detectedIds])
 
-  return { detectedIds, isLoading, isRefreshing, refresh }
+  return { detectedIds, isLoading, detectionFailed, isRefreshing, refresh }
 }

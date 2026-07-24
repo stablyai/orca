@@ -43,6 +43,12 @@ import {
 } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import {
+  getCyclicProjectedWorktreeLineageIds,
+  getLineageRenderInfo
+} from './worktree-lineage-projection'
+
+export { getLineageRenderInfo } from './worktree-lineage-projection'
 
 export { branchName }
 
@@ -373,30 +379,6 @@ export function getLineageGroupKey(worktreeId: string): string {
   return `${LINEAGE_GROUP_PREFIX}${worktreeId}`
 }
 
-export type LineageRenderInfo =
-  | { state: 'none' }
-  | { state: 'valid'; lineage: WorktreeLineage; parent: Worktree }
-  | { state: 'missing'; lineage: WorktreeLineage }
-
-export function getLineageRenderInfo(
-  worktree: Worktree,
-  lineageById: Record<string, WorktreeLineage>,
-  worktreeMap: Map<string, Worktree>
-): LineageRenderInfo {
-  const lineage = lineageById[worktree.id]
-  if (!lineage) {
-    return { state: 'none' }
-  }
-  const parent = worktreeMap.get(lineage.parentWorktreeId)
-  if (
-    !parent ||
-    worktree.instanceId !== lineage.worktreeInstanceId ||
-    parent.instanceId !== lineage.parentWorktreeInstanceId
-  ) {
-    return { state: 'missing', lineage }
-  }
-  return { state: 'valid', lineage, parent }
-}
 export function getPRGroupKey(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
@@ -603,9 +585,19 @@ function appendWorktreeRows(
     groupDepth: number
     sectionKey: string
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
+    hostContextLabelByWorktreeId?: ReadonlyMap<string, string>
+    cyclicLineageIds: ReadonlySet<string>
   }
 ): void {
-  const { nestLineage, collapsedGroups, groupDepth, sectionKey, hostContextLabelByRepoId } = options
+  const {
+    nestLineage,
+    collapsedGroups,
+    groupDepth,
+    sectionKey,
+    hostContextLabelByRepoId,
+    hostContextLabelByWorktreeId,
+    cyclicLineageIds
+  } = options
   if (!nestLineage) {
     for (const worktree of worktrees) {
       result.push(
@@ -618,7 +610,9 @@ function appendWorktreeRows(
           isLastLineageChild: false,
           lineageChildCount: 0,
           lineageCollapsed: false,
-          hostContextLabel: hostContextLabelByRepoId?.get(worktree.repoId)
+          hostContextLabel:
+            hostContextLabelByWorktreeId?.get(worktree.id) ??
+            hostContextLabelByRepoId?.get(worktree.repoId)
         })
       )
     }
@@ -629,7 +623,7 @@ function appendWorktreeRows(
   const childrenByParentId = new Map<string, Worktree[]>()
   const childIds = new Set<string>()
   for (const worktree of worktrees) {
-    const lineage = getLineageRenderInfo(worktree, lineageById, worktreeMap)
+    const lineage = getLineageRenderInfo(worktree, lineageById, worktreeMap, cyclicLineageIds)
     if (lineage.state !== 'valid' || !visibleIds.has(lineage.parent.id)) {
       continue
     }
@@ -663,7 +657,9 @@ function appendWorktreeRows(
         isLastLineageChild: isLastChild,
         lineageChildCount: children.length,
         lineageCollapsed,
-        hostContextLabel: hostContextLabelByRepoId?.get(worktree.repoId)
+        hostContextLabel:
+          hostContextLabelByWorktreeId?.get(worktree.id) ??
+          hostContextLabelByRepoId?.get(worktree.repoId)
       })
     )
     if (lineageCollapsed) {
@@ -729,6 +725,22 @@ function getMixedHostContextLabels(
     uniqueLabels.add(label)
   }
   return uniqueLabels.size > 1 ? labelsByRepoId : undefined
+}
+
+function getMixedWorktreeHostContextLabels(
+  worktrees: readonly Worktree[],
+  repoMap: Map<string, Repo>,
+  hostLabelById: ReadonlyMap<string, string> | undefined,
+  defaultHostId: ExecutionHostId
+): Map<string, string> | undefined {
+  const labelsByWorktreeId = new Map<string, string>()
+  const uniqueHostIds = new Set<ExecutionHostId>()
+  for (const worktree of worktrees) {
+    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
+    uniqueHostIds.add(hostId)
+    labelsByWorktreeId.set(worktree.id, hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId))
+  }
+  return uniqueHostIds.size > 1 ? labelsByWorktreeId : undefined
 }
 
 function getHostWorktreeCounts(
@@ -999,6 +1011,9 @@ export function buildRows(
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
+  const cyclicLineageIds = nestLineage
+    ? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
+    : new Set<string>()
 
   const pendingByRepo = new Map<string, PendingCreationRef[]>()
   for (const creation of pendingCreations) {
@@ -1020,6 +1035,12 @@ export function buildRows(
     pinnedDisplayPolicy === 'duplicate-in-groups'
       ? worktrees
       : worktrees.filter((worktree) => !worktree.isPinned)
+  const mixedWorktreeHostContextLabels = getMixedWorktreeHostContextLabels(
+    naturalWorktrees,
+    repoMap,
+    hostLabelById,
+    defaultHostId
+  )
   const renderedNaturalAnchorRepoIds = getRenderedNaturalAnchorRepoIds({
     groupBy,
     worktrees: naturalWorktrees,
@@ -1058,7 +1079,9 @@ export function buildRows(
           nestLineage,
           collapsedGroups,
           groupDepth: 0,
-          sectionKey: ALL_GROUP_KEY
+          sectionKey: ALL_GROUP_KEY,
+          hostContextLabelByWorktreeId: mixedWorktreeHostContextLabels,
+          cyclicLineageIds
         })
       }
     }
@@ -1296,13 +1319,17 @@ export function buildRows(
           groupBy === 'repo'
             ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
             : undefined
+        const hostContextLabelByWorktreeId =
+          groupBy === 'repo' ? undefined : mixedWorktreeHostContextLabels
         if (groupBy === 'repo') {
           appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
             nestLineage,
             collapsedGroups,
             groupDepth: projectGroupDepth,
             sectionKey: key,
-            hostContextLabelByRepoId
+            hostContextLabelByRepoId,
+            hostContextLabelByWorktreeId,
+            cyclicLineageIds
           })
         } else {
           appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
@@ -1310,7 +1337,9 @@ export function buildRows(
             collapsedGroups,
             groupDepth: projectGroupDepth,
             sectionKey: key,
-            hostContextLabelByRepoId
+            hostContextLabelByRepoId,
+            hostContextLabelByWorktreeId,
+            cyclicLineageIds
           })
         }
       }

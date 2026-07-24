@@ -2,10 +2,18 @@
    selection, per-agent controls, and runtime location together so settings
    reconciliation stays visible in one file. */
 import { useId, useMemo, useState } from 'react'
-import { Check, ChevronDown, ExternalLink, Info, RefreshCw, Terminal } from 'lucide-react'
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ExternalLink,
+  Info,
+  RefreshCw,
+  Terminal
+} from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -679,12 +687,36 @@ export function AgentsPane({
   wslDistros,
   wslCapabilitiesLoading
 }: AgentsPaneProps): React.JSX.Element {
-  const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
-  // Why: refresh re-spawns the user's login shell to re-capture PATH
-  // (preflight:refreshAgents on the main side). This handles the
-  // "installed a new CLI, Orca doesn't see it yet" case without a restart.
+  // Why: the Active Server routes agent launches and provider checks through
+  // that server, so this pane must list what THAT host can launch — detecting
+  // on the client showed a Windows machine's agents while paired to a Linux
+  // server (the enable/disable/default toggles below stay client settings).
+  const activeServerEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
+  const agentDetectionTarget = useMemo<AgentDetectionTarget>(
+    () =>
+      activeServerEnvironmentId
+        ? { kind: 'runtime', environmentId: activeServerEnvironmentId }
+        : { kind: 'local' },
+    [activeServerEnvironmentId]
+  )
+  const {
+    detectedIds: detectedList,
+    detectionFailed,
+    isRefreshing,
+    refresh: refreshTargetAgents
+  } = useDetectedAgents(agentDetectionTarget)
+  const refreshLocalAgents = useAppStore((s) => s.refreshDetectedAgents)
+  const activeServerName = useAppStore((s) =>
+    activeServerEnvironmentId
+      ? (s.runtimeEnvironments.find((environment) => environment.id === activeServerEnvironmentId)
+          ?.name ?? null)
+      : null
+  )
+  // Why: refresh re-spawns the target host's login shell to re-capture PATH
+  // (preflight:refreshAgents). This handles the "installed a new CLI, Orca
+  // doesn't see it yet" case without a restart.
   const handleRefresh = (): void => {
-    void refresh()
+    void refreshTargetAgents()
   }
   const detectedIds = useMemo<Set<string> | null>(
     () => (detectedList ? new Set(detectedList) : null),
@@ -822,7 +854,9 @@ export function AgentsPane({
       <AgentRuntimeSetting
         settings={settings}
         updateSettings={updateSettings}
-        refresh={refresh}
+        // Why: this control changes the client-local Windows/WSL runtime even
+        // while the Installed list is scoped to an active remote server.
+        refresh={refreshLocalAgents}
         wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}
         wslDistros={wslDistros}
@@ -849,6 +883,13 @@ export function AgentsPane({
                   {detectedAgents.length}{' '}
                   {translate('auto.components.settings.AgentsPane.ed3e110e61', 'detected')}
                 </SettingsBadge>
+                {activeServerName ? (
+                  <SettingsBadge tone="muted">
+                    {translate('auto.components.settings.AgentsPane.03e1a5081a', 'on {{value0}}', {
+                      value0: activeServerName
+                    })}
+                  </SettingsBadge>
+                ) : null}
               </span>
             }
             action={
@@ -858,10 +899,17 @@ export function AgentsPane({
                 size="xs"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                title={translate(
-                  'auto.components.settings.AgentsPane.13647f9f80',
-                  'Re-read your shell PATH and re-detect installed agents'
-                )}
+                title={
+                  activeServerEnvironmentId
+                    ? translate(
+                        'auto.components.settings.AgentsPane.25a41a9aad',
+                        'Re-detect agents installed on the active server'
+                      )
+                    : translate(
+                        'auto.components.settings.AgentsPane.13647f9f80',
+                        'Re-read your shell PATH and re-detect installed agents'
+                      )
+                }
                 className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
               >
                 <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
@@ -948,12 +996,34 @@ export function AgentsPane({
         </section>
       )}
 
-      {detectedIds === null && (
+      {detectedIds === null && !detectionFailed && (
         <div className="flex items-center justify-center rounded-md border border-dashed border-border/50 py-6 text-sm text-muted-foreground">
           {translate(
             'auto.components.settings.AgentsPane.d83834f5e6',
             'Detecting installed agents…'
           )}
+        </div>
+      )}
+
+      {detectionFailed && (
+        <div className="flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <span className="flex min-w-0 items-start gap-2">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            {translate(
+              'auto.components.settings.AgentsPane.remoteDetectionFailed',
+              'Couldn’t detect installed agents. Check the host connection and try again.'
+            )}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={handleRefresh}
+            className="h-6 shrink-0 gap-1.5 px-2 text-destructive hover:text-destructive"
+          >
+            <RefreshCw className="size-3" />
+            {translate('auto.components.settings.AgentsPane.retryDetection', 'Retry')}
+          </Button>
         </div>
       )}
     </div>

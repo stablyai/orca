@@ -10,6 +10,9 @@ import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   supportsPtyStartupIngress,
@@ -20,6 +23,13 @@ import {
   type SessionInfo,
   type TakePendingOutputResult
 } from './types'
+import {
+  isAgentSessionClaimedSpawnResult,
+  isAgentSessionOwnerBinding,
+  type AgentSessionOwnerBinding
+} from '../../shared/agent-session-host-authority'
+import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
+import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -33,15 +43,15 @@ import { resolveWslSessionContext } from './wsl-session-context'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { ColdRestorePayloadCache, type ColdRestorePayload } from './cold-restore-payload-cache'
+import { PtyProcessListAdmission } from '../providers/pty-process-list-admission'
 
-type ColdRestorePayload = {
-  scrollback: string
-  cwd: string
-  cols: number
-  rows: number
-  oscLinks?: TerminalOscLinkRange[]
+type PendingDaemonSpawnOperation = {
+  exitsBySessionId: Map<string, { incarnationId?: string }[]>
+  ignoredExitIncarnationIds: Set<string>
+  ignoreNextExit: boolean
 }
 
 function getRecoveredHistorySeed(restoreInfo: ColdRestoreInfo): string | null {
@@ -108,7 +118,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     transformed?: boolean
     seq?: number
   }) => void)[] = []
-  private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  private exitListeners: ((payload: {
+    id: string
+    code: number
+    incarnationId?: PtyIncarnationId
+  }) => void)[] = []
   private backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   private removeEventListener: (() => void) | null = null
   private initialCwds = new Map<string, string>()
@@ -116,9 +130,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Why: StrictMode/re-render remounts can call createOrAttach for a just-killed session; tombstones stop the daemon resurrecting it (Map evicts oldest-first, per terminal-host.ts).
   private killedSessionTombstones = new Map<string, number>()
   // Why: React StrictMode double-mounts; this sticky cache returns the same cold restore data on remount until the renderer acknowledges it.
-  private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private sleepRestoreSessionIds = new Set<string>()
+  private coldRestoreCache = new ColdRestorePayloadCache(undefined, (sessionId) => {
+    this.sleepRestoreSessionIds.delete(sessionId)
+  })
   private activeSessionIds = new Set<string>()
+  private sessionIncarnations = new Map<string, string>()
+  private pendingSpawnOperationsBySessionId = new Map<string, Set<PendingDaemonSpawnOperation>>()
+  private pendingClaimSpawnOperations = new Set<PendingDaemonSpawnOperation>()
   private dirtySessionVersions = new Map<string, number>()
   // Why: a cold-restored session is a fresh shell atop a pre-crash log; incremental appends would be rejected on restore, so the first tick re-anchors with a full snapshot.
   private sessionsNeedingFullCheckpoint = new Set<string>()
@@ -179,21 +198,65 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.historyManager
   }
 
-  async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    return this.withDaemonRetry(() => this.doSpawn(opts))
+  supportsAgentSessionClaims(): boolean {
+    return this.protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
   }
 
-  private async doSpawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+  providesAgentSessionOwnerListings(_ptyId: string): boolean {
+    return this.supportsAgentSessionClaims()
+  }
+
+  supportsAgentSessionCreateOperations(): boolean {
+    // Why: old daemons never advertised the lower-owner protocol, so preserve their legacy launch.
+    return this.protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
+  }
+
+  async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     const sessionId = opts.sessionId ?? mintPtySessionId(opts.worktreeId)
+    const operation = {
+      exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
+      ignoredExitIncarnationIds: new Set<string>(),
+      ignoreNextExit: false
+    }
+    const operations = this.pendingSpawnOperationsBySessionId.get(sessionId) ?? new Set()
+    operations.add(operation)
+    this.pendingSpawnOperationsBySessionId.set(sessionId, operations)
+    if (opts.agentSessionEnsure) {
+      this.pendingClaimSpawnOperations.add(operation)
+    }
+    try {
+      return await this.withDaemonRetry(() => this.doSpawn({ ...opts, sessionId }, operation))
+    } finally {
+      this.pendingClaimSpawnOperations.delete(operation)
+      operations.delete(operation)
+      if (operations.size === 0) {
+        this.pendingSpawnOperationsBySessionId.delete(sessionId)
+      }
+    }
+  }
+
+  private async doSpawn(
+    opts: PtySpawnOptions,
+    operation: PendingDaemonSpawnOperation
+  ): Promise<PtySpawnResult> {
+    if (
+      opts.agentSessionEnsure &&
+      this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
+    ) {
+      throw new Error('agent_session_claim_unavailable')
+    }
+    let sessionId = opts.sessionId!
     let wslDistro = resolveWslSessionContext({
       cwd: opts.cwd,
       sessionId,
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro
     })?.distro
-    const detectColdRestore = (options?: { ignoreCleanEnd?: boolean }): ColdRestoreInfo | null => {
+    const detectColdRestore = async (options?: {
+      ignoreCleanEnd?: boolean
+    }): Promise<ColdRestoreInfo | null> => {
       const restoreInfo =
-        this.historyReader?.detectColdRestore(sessionId, { ...options, wslDistro }) ?? null
+        (await this.historyReader?.detectColdRestore(sessionId, { ...options, wslDistro })) ?? null
       if (!restoreInfo) {
         return null
       }
@@ -230,7 +293,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if ((await this.getAppliedSize(sessionId)) !== null) {
         restoreSkippedForLiveSession = true
       } else {
-        restoreInfo = detectColdRestore()
+        restoreInfo = await detectColdRestore()
       }
     }
     let effectiveCwd = restoreInfo?.cwd ?? opts.cwd
@@ -251,8 +314,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
 
-    const createOrAttach = (historySeed: string | null) =>
-      this.client.request<CreateOrAttachResult>('createOrAttach', {
+    const createOrAttach = (historySeed: string | null) => {
+      if (opts.signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      return this.client.request<CreateOrAttachResult>('createOrAttach', {
         sessionId,
         cols: effectiveCols,
         rows: effectiveRows,
@@ -271,11 +337,31 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ...(historySeed ? { historySeed } : {}),
         ...(this.supportsStartupIngress && opts.startupIngress
           ? { startupIngress: opts.startupIngress }
-          : {})
+          : {}),
+        ...(opts.agentSessionEnsure ? { agentSessionEnsure: opts.agentSessionEnsure } : {})
       })
+    }
 
     let scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
     let result = await createOrAttach(scrollback)
+    if (opts.agentSessionEnsure && !isAgentSessionClaimedSpawnResult(result.agentSessionEnsure)) {
+      // Why: a claim-incapable owner may already have spawned before returning
+      // a malformed response; retire only this requested session before failing closed.
+      await this.client.request('kill', { sessionId }).catch(() => {})
+      throw new Error('agent_session_claim_unavailable')
+    }
+    sessionId = result.agentSessionEnsure?.owner.ptyId ?? sessionId
+    const exitedResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
+    if (exitedResult) {
+      return exitedResult
+    }
+    if (result.incarnationId) {
+      this.sessionIncarnations.set(sessionId, result.incarnationId)
+    }
+    const claimResult = (): Pick<PtySpawnResult, 'agentSessionEnsure'> | Record<string, never> =>
+      result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}
+    const incarnationResult = (): Pick<PtySpawnResult, 'incarnationId'> | Record<string, never> =>
+      result.incarnationId ? { incarnationId: result.incarnationId } : {}
     let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
     // Why: explicit null from a current daemon overrides the caller's WSL preference; undefined keeps compatibility with older daemons.
     wslDistro = providerWslDistro ?? undefined
@@ -304,7 +390,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
       return {
         id: sessionId,
+        ...incarnationResult(),
         pid,
+        ...claimResult(),
         ...launchIdentity(),
         coldRestore: cachedRestore,
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
@@ -315,15 +403,27 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Why: the probe→createOrAttach gap is racy — the session can exit in between, so re-detect to match the unprobed restore path.
     // Why ignoreCleanEnd: the raced exit event can write endedAt before the reply; nulling the restore here would delete the checkpoint instead of restoring it.
     if (result.isNew && restoreSkippedForLiveSession) {
-      restoreInfo = detectColdRestore({ ignoreCleanEnd: true })
+      restoreInfo = await detectColdRestore({ ignoreCleanEnd: true })
       scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
       if (restoreInfo && scrollback) {
-        // Why: the aliveness probe raced with session death, so the first create lacked recovery bytes; replace it before exposing the PTY.
+        // Why: the aliveness probe raced with session death, so the first
+        // create lacked recovery bytes. Replace it before exposing the PTY.
+        if (result.incarnationId) {
+          operation.ignoredExitIncarnationIds.add(result.incarnationId)
+        }
+        operation.ignoreNextExit = true
         await this.client.request('kill', { sessionId, immediate: true })
         effectiveCwd = restoreInfo.cwd
         effectiveCols = restoreInfo.cols
         effectiveRows = restoreInfo.rows
         result = await createOrAttach(scrollback)
+        const exitedRetryResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
+        if (exitedRetryResult) {
+          return exitedRetryResult
+        }
+        if (result.incarnationId) {
+          this.sessionIncarnations.set(sessionId, result.incarnationId)
+        }
         providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
         wslDistro = providerWslDistro ?? undefined
         if (wslDistro) {
@@ -335,7 +435,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.initialCwds.set(sessionId, effectiveCwd)
       }
     } else if (!result.isNew && result.historySeeded === false) {
-      restoreInfo = detectColdRestore()
+      restoreInfo = await detectColdRestore()
       scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
     }
 
@@ -363,7 +463,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.coldRestoreCache.set(sessionId, coldRestore)
         return {
           id: sessionId,
+          ...incarnationResult(),
           pid,
+          ...claimResult(),
           ...launchIdentity(),
           coldRestore,
           ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
@@ -373,7 +475,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
       return {
         id: sessionId,
+        ...incarnationResult(),
         pid,
+        ...claimResult(),
         ...launchIdentity(),
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {})
@@ -405,7 +509,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (!isReattach || !result.snapshot) {
       return {
         id: sessionId,
+        ...incarnationResult(),
         pid,
+        ...claimResult(),
         ...launchIdentity(),
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {}),
@@ -422,7 +528,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const kittyKeyboardFlags = result.snapshot.modes.kittyKeyboardFlags
     return {
       id: sessionId,
+      ...incarnationResult(),
       pid,
+      ...claimResult(),
       ...launchIdentity(),
       ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
       snapshot: snapshotPayload,
@@ -439,6 +547,36 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ? { pendingEscapeTailAnsi: result.snapshot.pendingEscapeTailAnsi }
         : {})
     }
+  }
+
+  private resultForExitBeforeSpawnReply(
+    sessionId: string,
+    result: CreateOrAttachResult,
+    operation: PendingDaemonSpawnOperation
+  ): PtySpawnResult | null {
+    const matchingExit = (operation.exitsBySessionId.get(sessionId) ?? []).some(
+      (exit) =>
+        !(exit.incarnationId && operation.ignoredExitIncarnationIds.has(exit.incarnationId)) &&
+        (!exit.incarnationId ||
+          !result.incarnationId ||
+          exit.incarnationId === result.incarnationId)
+    )
+    if (!matchingExit) {
+      return null
+    }
+    // Why: stream exit can beat the control reply; return proof upward without republishing dead adapter state.
+    const exitedResult: PtySpawnResult = {
+      id: sessionId,
+      exitedBeforeSpawnReply: true,
+      ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+      ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
+      ...(!result.isNew ? { isReattach: true } : {})
+    }
+    return exitedResult
+  }
+
+  didExitBeforeSpawnReply(result: PtySpawnResult): boolean {
+    return result.exitedBeforeSpawnReply === true
   }
 
   async attach(id: string): Promise<void> {
@@ -517,7 +655,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
       await this.checkpointSessions([id], { final: true, teardown: true })
       const wslDistro = this.wslDistrosBySessionId.get(id)
-      const detected = this.historyReader?.detectColdRestore(id, { wslDistro }) ?? null
+      const detected = (await this.historyReader?.detectColdRestore(id, { wslDistro })) ?? null
       const restoreInfo = detected
         ? {
             ...detected,
@@ -532,7 +670,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
       if (coldRestore) {
         this.coldRestoreCache.set(id, coldRestore)
-        this.sleepRestoreSessionIds.add(id)
+        if (this.coldRestoreCache.has(id)) {
+          this.sleepRestoreSessionIds.add(id)
+        }
         // Why: physical exit must not mark intentional sleep as a clean end; the final checkpoint stays the wake-time recovery authority.
         this.historyManager?.suspendSession(id)
       }
@@ -684,6 +824,18 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return foregroundProcess !== null && !isShellProcess(foregroundProcess)
   }
 
+  async inspectProcess(
+    id: string
+  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+    if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
+      throw new Error('terminal_liveness_unavailable')
+    }
+    return this.client.request<{
+      foregroundProcess: string | null
+      hasChildProcesses: boolean
+    }>('inspectProcess', { sessionId: id })
+  }
+
   async getForegroundProcess(id: string): Promise<string | null> {
     try {
       const result = await this.client.request<{ foregroundProcess: string | null }>(
@@ -771,22 +923,61 @@ export class DaemonPtyAdapter implements IPtyProvider {
       undefined,
       remainingRequestTimeoutMs(opts?.deadlineMs)
     )
-    return result.sessions
-      .filter((s) => s.isAlive)
-      .map((s) => ({
-        id: s.sessionId,
-        // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
-        cwd: s.cwd ?? this.initialCwds.get(s.sessionId) ?? '',
-        title: 'shell',
-        ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {})
-      }))
+    const admission = new PtyProcessListAdmission()
+    const processes: PtyProcessInfo[] = []
+    for (const session of result.sessions) {
+      if (!session.isAlive) {
+        continue
+      }
+      const { worktreeId } = parsePtySessionId(session.sessionId)
+      processes.push(
+        admission.admit({
+          id: session.sessionId,
+          ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
+          // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
+          cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
+          title: 'shell',
+          ...(worktreeId ? { worktreeId } : {}),
+          ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+          ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+          ...this.validatedAgentSessionOwners(session.agentSessionOwners)
+        })
+      )
+    }
+    return processes
   }
 
-  // Why keep both: the Manage Sessions panel needs full SessionInfo (pid/state/createdAt) that listProcesses drops for the IPtyProvider contract.
+  private validatedAgentSessionOwners(
+    owners: unknown
+  ): { agentSessionOwners: AgentSessionOwnerBinding[] } | Record<string, never> {
+    if (owners === undefined) {
+      return {}
+    }
+    if (
+      !Array.isArray(owners) ||
+      owners.length > MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES ||
+      !owners.every((owner) => isAgentSessionOwnerBinding(owner) && owner.phase === 'live')
+    ) {
+      throw new Error('agent_session_ownership_unknown')
+    }
+    return owners.length > 0
+      ? { agentSessionOwners: owners.map(cloneAgentSessionOwnerBinding) }
+      : {}
+  }
+
+  // Why: the Manage Sessions panel needs the full SessionInfo (pid, state,
+  // createdAt) per session for display; listProcesses drops that detail for
+  // the IPtyProvider contract. Keep both in parallel rather than widening
+  // the provider surface.
   async listSessions(): Promise<SessionInfo[]> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions.filter((s) => s.isAlive)
+    return result.sessions
+      .filter((s) => s.isAlive)
+      .map((session) => ({
+        ...session,
+        ...this.validatedAgentSessionOwners(session.agentSessionOwners)
+      }))
   }
 
   getActiveSessionIds(): string[] {
@@ -809,8 +1000,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // Why: don't catch listener throws — matches the natural onExit fanout so synthetic exits keep the same error semantics.
       // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
       for (const listener of [...this.exitListeners]) {
-        listener({ id, code })
+        listener({
+          id,
+          code,
+          ...(this.sessionIncarnations.get(id)
+            ? { incarnationId: this.sessionIncarnations.get(id) }
+            : {})
+        })
       }
+      this.sessionIncarnations.delete(id)
     }
   }
 
@@ -864,7 +1062,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return () => {}
   }
 
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void {
+  onExit(
+    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
+  ): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
@@ -1346,6 +1546,29 @@ export class DaemonPtyAdapter implements IPtyProvider {
           fact: event.payload
         })
       } else if (event.event === 'exit') {
+        const pendingOperations = new Set([
+          ...(this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? []),
+          ...this.pendingClaimSpawnOperations
+        ])
+        for (const operation of pendingOperations) {
+          if (operation.ignoreNextExit) {
+            operation.ignoreNextExit = false
+            continue
+          }
+          const exits = operation.exitsBySessionId.get(event.sessionId) ?? []
+          exits.push(
+            event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}
+          )
+          operation.exitsBySessionId.set(event.sessionId, exits)
+        }
+        const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
+        if (
+          event.payload.incarnationId &&
+          currentIncarnationId &&
+          event.payload.incarnationId !== currentIncarnationId
+        ) {
+          return
+        }
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
         // Why: a reused sessionId must not inherit the dead session's owed resume (stray resumePty) or backgrounded/thinned state.
@@ -1367,9 +1590,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
         }
         this.initialCwds.delete(event.sessionId)
         this.wslDistrosBySessionId.delete(event.sessionId)
+        this.sessionIncarnations.delete(event.sessionId)
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.exitListeners]) {
-          listener({ id: event.sessionId, code: event.payload.code })
+          listener({
+            id: event.sessionId,
+            code: event.payload.code,
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {})
+          })
         }
       }
     })

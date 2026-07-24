@@ -25,6 +25,12 @@ function makeTab(id: string, worktreeId: string, ptyId: string | null): Terminal
 
 function makeState(overrides: Partial<RetirementState> = {}): RetirementState {
   return {
+    worktreesByRepo: {
+      repo: [
+        { id: 'wt-1', repoId: 'repo', hostId: 'local' },
+        { id: 'wt-2', repoId: 'repo', hostId: 'local' }
+      ]
+    },
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
     ptyIdsByTabId: {},
@@ -135,6 +141,12 @@ describe('terminal tab retirement planning', () => {
     const legacy = 'remote:terminal-1'
     const state = makeState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
+      worktreesByRepo: {
+        repo: [
+          { id: 'wt-1', repoId: 'repo' },
+          { id: 'wt-2', repoId: 'repo' }
+        ]
+      },
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1', 'wt-1', legacy)],
         'wt-2': [makeTab('tab-2', 'wt-2', scoped)]
@@ -150,6 +162,7 @@ describe('terminal tab retirement planning', () => {
   it('deduplicates legacy and scoped aliases owned by the closing tab', () => {
     const state = makeState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
+      worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo' }] },
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1', 'wt-1', 'remote:terminal-1')]
       },
@@ -183,6 +196,40 @@ describe('terminal tab retirement planning', () => {
     expect(plan.unroutablePtyIds).toEqual([malformedRemote])
     expect(plan.localOrSshPtyIds).toEqual(['pty-live'])
     expect(plan.sharedPtyIds).toEqual([])
+  })
+
+  it('never kills a HUB-native PTY when duplicate worktree ownership is ambiguous', () => {
+    const state = makeState({
+      worktreesByRepo: {
+        repo: [
+          { id: 'wt-1', repoId: 'repo', hostId: 'ssh:private', runtimeOwnerEnvironmentId: 'hub-a' },
+          { id: 'wt-1', repoId: 'repo', hostId: 'ssh:private', runtimeOwnerEnvironmentId: 'hub-b' }
+        ]
+      },
+      tabsByWorktree: {
+        'wt-1': [makeTab('tab-1', 'wt-1', 'ssh:private@@pty-1')]
+      }
+    })
+
+    const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+    expect(plan.localOrSshPtyIds).toEqual([])
+    expect(plan.runtimeTerminals).toEqual([])
+    expect(plan.unroutablePtyIds).toEqual(['ssh:private@@pty-1'])
+  })
+
+  it('never falls an unknown stale worktree through to local PTY teardown', () => {
+    const state = makeState({
+      worktreesByRepo: {},
+      tabsByWorktree: {
+        'stale-worktree': [makeTab('tab-1', 'stale-worktree', 'ssh:private@@pty-1')]
+      }
+    })
+
+    const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+    expect(plan.localOrSshPtyIds).toEqual([])
+    expect(plan.unroutablePtyIds).toEqual(['ssh:private@@pty-1'])
   })
 
   it('deduplicates batch-owned PTYs while protecting owners outside the close set', () => {

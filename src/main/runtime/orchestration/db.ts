@@ -89,6 +89,14 @@ const SCHEMA_VERSION = 6
 export class OrchestrationDb {
   private db: Database.Database
 
+  // Why: the orchestration DB is created lazily for ALL users, but only the
+  // small minority who dispatch work ever have dispatch_contexts rows. The
+  // renderer graph publish rebuilds orchestration context on every 16ms tick
+  // (buildAgentOrchestrationByPaneKey), issuing 2 queries per terminal. Cache
+  // emptiness so the non-orchestration majority short-circuits the whole
+  // per-terminal fan-out. Only createDispatchContext flips this false→true.
+  private hasAnyDispatchContextsCache: boolean | undefined
+
   constructor(dbPath: string | ':memory:') {
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
@@ -670,6 +678,7 @@ export class OrchestrationDb {
          VALUES (?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
       )
       .run(id, taskId, assigneeHandle, assigneePaneKey ?? null, priorFailures)
+    this.hasAnyDispatchContextsCache = true
 
     this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
 
@@ -692,6 +701,20 @@ export class OrchestrationDb {
 
   getActiveDispatchForTerminal(handle: string): DispatchContextRow | undefined {
     return this.findActiveDispatchForAssignee(handle)
+  }
+
+  /**
+   * Cheap "are there any dispatch rows at all" probe. When false, no terminal
+   * can have an active or recent-completed dispatch, so orchestration-context
+   * builders can skip their per-terminal query fan-out entirely. Cached after
+   * the first probe; createDispatchContext marks it true, resets clear it.
+   */
+  hasAnyDispatchContexts(): boolean {
+    if (this.hasAnyDispatchContextsCache === undefined) {
+      const row = this.db.prepare('SELECT 1 FROM dispatch_contexts LIMIT 1').get()
+      this.hasAnyDispatchContextsCache = row !== undefined
+    }
+    return this.hasAnyDispatchContextsCache
   }
 
   private findActiveDispatchForAssignee(
@@ -956,6 +979,7 @@ export class OrchestrationDb {
     this.db.exec('DELETE FROM dispatch_contexts')
     this.db.exec('DELETE FROM tasks')
     this.db.exec('DELETE FROM messages')
+    this.hasAnyDispatchContextsCache = undefined
   }
 
   resetTasks(): void {
@@ -963,6 +987,7 @@ export class OrchestrationDb {
     this.db.exec('DELETE FROM decision_gates')
     this.db.exec('DELETE FROM dispatch_contexts')
     this.db.exec('DELETE FROM tasks')
+    this.hasAnyDispatchContextsCache = undefined
   }
 
   resetMessages(): void {

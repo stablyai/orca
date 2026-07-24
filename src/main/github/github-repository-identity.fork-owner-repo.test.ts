@@ -128,7 +128,8 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
     // fast-path would be skipped.
     const upstream = await getRepoUpstream(FORK_PATH)
 
-    expect(upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
+    // Why: origin resolution pins github.com so host-scoped execution is explicit.
+    expect(upstream).toEqual({ owner: 'stablyai', repo: 'orca', host: 'github.com' })
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

@@ -11,6 +11,7 @@ import {
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import type { TuiAgent } from '../../shared/types'
+import { randomUUID } from 'node:crypto'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import {
   PtyStartupIngress,
@@ -24,6 +25,7 @@ import type {
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
+import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
 // Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
@@ -85,16 +87,18 @@ export type SessionOptions = {
   // a reaper, dead sessions and their scrollback emulators accumulate for the daemon's lifetime.
   onExit?: (code: number) => void
   startupIngress?: PtyStartupIngressIntent
+  ownerBackend?: PtyOwnerBackend
 }
 
 type AttachedClient = {
   token: symbol
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
-  onExit: (code: number) => void
+  onExit: (code: number, incarnationId: string) => void
 }
 
 export class Session {
   readonly sessionId: string
+  readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
@@ -158,6 +162,7 @@ export class Session {
     this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
+      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.emitSubprocessOutput(emission)
     })
@@ -522,7 +527,7 @@ export class Session {
     this.emulator.dispose()
 
     for (const client of clientsToNotify) {
-      client.onExit(-1)
+      client.onExit(-1, this.incarnationId)
     }
   }
 
@@ -667,7 +672,7 @@ export class Session {
     this.disposeSubprocessHandle()
 
     for (const client of this.attachedClients) {
-      client.onExit(code)
+      client.onExit(code, this.incarnationId)
     }
 
     // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.

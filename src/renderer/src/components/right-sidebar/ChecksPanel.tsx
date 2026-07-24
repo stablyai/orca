@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { githubProjectHost } from '../../../../shared/github-project-identity'
 import HostedReviewActions from './HostedReviewActions'
 import {
   PullRequestIcon,
@@ -133,7 +134,11 @@ import {
   shouldPollChecksPanelRuntimeSshStatus,
   type ChecksPanelGitStatusSnapshot
 } from './checks-panel-git-status-snapshot'
-import { resolveChecksPanelPRRefreshRequest } from './checks-panel-pr-refresh-request'
+import {
+  getChecksPanelForegroundReviewEvidenceKey,
+  resolveChecksPanelPRRefreshRequest,
+  resolveChecksPanelReviewEvidenceProvider
+} from './checks-panel-pr-refresh-request'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -524,6 +529,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const prevChecksRef = useRef<string>('')
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
   const panelVisibleSinceRef = useRef<number | null>(null)
+  const foregroundedUnrenderedReviewKeyRef = useRef<string | null>(null)
   commentsRef.current = comments
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
   const allocatePullRequestGenerationRequestId = useAppStore(
@@ -953,6 +959,32 @@ export default function ChecksPanel(): React.JSX.Element {
     eligibilityReview: hostedReviewCreation?.review ?? null
   })
   const checksPanelReviewLookup = checksPanelReviewLookupResult.state
+  const hasUnrenderedReviewEvidence =
+    checksPanelReviewLookup === 'positive_unresolved' ||
+    (checksPanelReviewLookup !== 'found' &&
+      hostedReviewCreation?.blockedReason === 'existing_review')
+  const unrenderedReviewEvidenceIdentity =
+    linkedReviewNumber ??
+    hostedReview?.number ??
+    hostedReviewCreation?.review?.number ??
+    checksPanelReviewLookupResult.openReviewUrl ??
+    'unknown'
+  const unrenderedReviewEvidenceProvider = resolveChecksPanelReviewEvidenceProvider({
+    linkedGitHubPR: linkedPR,
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR,
+    eligibilityProvider: hostedReviewCreation?.provider,
+    cachedProvider: hostedReview?.provider
+  })
+  const foregroundReviewEvidenceKey = getChecksPanelForegroundReviewEvidenceKey({
+    refreshContextKey,
+    reviewEvidenceIdentity: unrenderedReviewEvidenceIdentity,
+    reviewEvidenceProvider: unrenderedReviewEvidenceProvider,
+    hasUnrenderedReviewEvidence,
+    isGitHubReviewContext
+  })
   // Confirmed readiness from the last eligibility snapshot, not live canCreate (which would be circular and flap during transient failures).
   const hardErrorObservedAt =
     isGitHubReviewContext && hardRefreshError && hardRefreshError.contextKey === panelContextKey
@@ -1346,6 +1378,9 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [agentComposerState?.commentResolution, stateRequestKey])
 
   useEffect(() => {
+    if (foregroundReviewEvidenceKey === null || !isPanelVisible) {
+      foregroundedUnrenderedReviewKeyRef.current = null
+    }
     if (isPanelVisible && repo && !isFolder && branch) {
       void fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
@@ -1363,8 +1398,15 @@ export default function ChecksPanel(): React.JSX.Element {
         const refreshRequest = resolveChecksPanelPRRefreshRequest({
           cachedHasPR: prCachedHasPR,
           cachedFetchedAt: prFetchedAt ?? null,
-          panelVisibleSince: panelVisibleSinceRef.current
+          panelVisibleSince: panelVisibleSinceRef.current,
+          hasUnrenderedReviewEvidence: foregroundReviewEvidenceKey !== null,
+          hasRequestedForegroundRefresh:
+            foregroundReviewEvidenceKey !== null &&
+            foregroundedUnrenderedReviewKeyRef.current === foregroundReviewEvidenceKey
         })
+        if (refreshRequest.reason === 'active' && foregroundReviewEvidenceKey !== null) {
+          foregroundedUnrenderedReviewKeyRef.current = foregroundReviewEvidenceKey
+        }
         enqueueGitHubPRRefresh(activeWorktreeId, refreshRequest.reason, refreshRequest.priority)
       }
     }
@@ -1374,6 +1416,7 @@ export default function ChecksPanel(): React.JSX.Element {
     enqueueGitHubPRRefresh,
     fallbackGitHubPRNumber,
     fetchHostedReviewForBranch,
+    foregroundReviewEvidenceKey,
     isFolder,
     isGitHubReviewContext,
     isPanelVisible,
@@ -2758,6 +2801,7 @@ export default function ChecksPanel(): React.JSX.Element {
       const result = await window.api.gh.updateIssueCommentBySlug({
         owner: pr.prRepo.owner,
         repo: pr.prRepo.repo,
+        host: githubProjectHost(pr.prRepo.host),
         commentId: comment.id,
         body
       })
@@ -2793,6 +2837,7 @@ export default function ChecksPanel(): React.JSX.Element {
       const result = await window.api.gh.deleteIssueCommentBySlug({
         owner: pr.prRepo.owner,
         repo: pr.prRepo.repo,
+        host: githubProjectHost(pr.prRepo.host),
         commentId: comment.id
       })
       if (!result.ok) {

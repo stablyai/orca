@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   hasPairedMobileDevice: false,
+  agentBucketCounts: { attention: 0, working: 0, idle: 0 },
   dismissMobileOnboardingBadge: vi.fn(),
   setSetupGuideSidebarDismissed: vi.fn()
 }))
@@ -37,6 +38,10 @@ vi.mock('@/store/selectors', () => ({
 
 vi.mock('@/components/activity/useActivityUnreadCount', () => ({
   useActivityUnreadCount: () => 0
+}))
+
+vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
+  useAgentBucketCounts: () => mocks.agentBucketCounts
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
@@ -203,6 +208,7 @@ describe('SidebarNav', () => {
     vi.clearAllMocks()
     await i18n.changeLanguage('en')
     mocks.hasPairedMobileDevice = false
+    mocks.agentBucketCounts = { attention: 0, working: 0, idle: 0 }
     setSidebarState()
   })
 
@@ -250,6 +256,26 @@ describe('SidebarNav', () => {
     const container = await renderSidebarNav()
 
     expect(queryButtonByText(container, 'Agent Dashboard')).not.toBeNull()
+  })
+
+  it('uses a question glyph only for the Needs You count', async () => {
+    mocks.agentBucketCounts = { attention: 2, working: 3, idle: 4 }
+    setSidebarState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        experimentalAgentDashboardPopout: true
+      }
+    })
+    const container = await renderSidebarNav()
+
+    const attention = container.querySelector('[aria-label="Needs You: 2"]')
+    const working = container.querySelector('[aria-label="Working: 3"]')
+    const idle = container.querySelector('[aria-label="Idle: 4"]')
+    expect(attention?.querySelector('.lucide-message-circle-question-mark')).not.toBeNull()
+    expect(working?.querySelector('.rounded-full')).not.toBeNull()
+    expect(idle?.querySelector('.rounded-full')).not.toBeNull()
+    expect(working?.querySelector('svg')).toBeNull()
+    expect(idle?.querySelector('svg')).toBeNull()
   })
 
   it('shows the Mobile entry by default for older settings', () => {

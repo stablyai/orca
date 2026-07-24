@@ -6,8 +6,10 @@ import {
 } from '../../../shared/ai-vault-types'
 import {
   isResumableTuiAgent,
+  type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
+import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault-resume-path'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -41,6 +43,7 @@ export type AiVaultResumeStartup = {
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
+  providerSession?: AgentProviderSessionMetadata
 }
 
 type AiVaultResumeWorktreeArgs = {
@@ -80,16 +83,19 @@ export function buildAiVaultResumeStartupForWorktree(
 }
 
 function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVaultResumeStartup {
+  const providerSession = getAiVaultAgentProviderSession(args.session)
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.resumeCommand &&
+    args.session.agent !== 'omp' &&
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
     !args.commandOverride?.trim()
   ) {
     return {
       command: args.session.resumeCommand,
-      ...realHomeCodexResumeEnvDeletion(args.session)
+      ...realHomeCodexResumeEnvDeletion(args.session),
+      ...(providerSession ? { providerSession } : {})
     }
   }
   const platform =
@@ -101,6 +107,7 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
+  const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
   const liveShell: AgentStartupShell | undefined =
@@ -109,10 +116,10 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
         ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
         : 'powershell'
       : undefined
-  if (isResumableTuiAgent(args.session.agent)) {
+  if (providerSession && isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
-      providerSession: { key: 'session_id', id: args.session.sessionId },
+      providerSession,
       cmdOverrides: {
         ...args.state.settings?.agentCmdOverrides,
         ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
@@ -123,20 +130,36 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
         args.session.agent,
         args.state.settings?.agentDefaultArgs
       ),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv)
+      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
+      ...(args.session.agent === 'omp' && resumeFilePath
+        ? { ompResumeFilePath: resumeFilePath }
+        : {})
     })
     if (startupPlan) {
       return {
-        command: buildAiVaultResumeShellCommand({
-          resumeCommand: startupPlan.launchCommand,
-          cwd: args.session.cwd,
-          platform,
-          codexHome,
-          shell: liveShell
-        }),
+        command:
+          args.session.agent === 'omp'
+            ? buildAiVaultResumeCommand({
+                agent: args.session.agent,
+                sessionId: args.session.sessionId,
+                resumeFilePath,
+                cwd: args.session.cwd,
+                platform,
+                commandOverride: startupPlan.launchConfig.agentCommand,
+                codexHome,
+                shell: liveShell
+              })
+            : buildAiVaultResumeShellCommand({
+                resumeCommand: startupPlan.launchCommand,
+                cwd: args.session.cwd,
+                platform,
+                codexHome,
+                shell: liveShell
+              }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         ...realHomeCodexResumeEnvDeletion(args.session),
-        launchConfig: startupPlan.launchConfig
+        launchConfig: startupPlan.launchConfig,
+        providerSession
       }
     }
   }
@@ -148,7 +171,7 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
       // Why: OMP resumes by absolute transcript path, so local rebuilds must
       // forward it too — otherwise a custom OMP_CODING_AGENT_DIR / WSL-store
       // session would resume by id against the default store and miss.
-      resumeFilePath: args.session.filePath,
+      resumeFilePath,
       cwd: args.session.cwd,
       platform,
       commandOverride: args.commandOverride,
@@ -175,6 +198,23 @@ function resolveAiVaultResumeShell(args: AiVaultResumeWorktreeArgs): AgentStartu
       ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
       : undefined
   return resolveStartupShell(platform, shell)
+}
+
+export function getAiVaultAgentProviderSession(
+  session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
+): AgentProviderSessionMetadata | null {
+  if (!isResumableTuiAgent(session.agent)) {
+    return null
+  }
+  if (session.agent === 'antigravity') {
+    return { key: 'conversation_id', id: session.sessionId }
+  }
+  if (session.agent === 'pi') {
+    return session.filePath
+      ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
+      : null
+  }
+  return { key: 'session_id', id: session.sessionId }
 }
 
 function getAiVaultResumeCodexHome(

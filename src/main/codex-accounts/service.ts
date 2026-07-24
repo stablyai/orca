@@ -202,6 +202,20 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.doSelectAccount(accountId, target))
   }
 
+  // Why: quota probes against a cold per-account CODEX_HOME can take 10–25s
+  // (RPC + PTY fallback) and queue behind an in-flight global usage refresh.
+  // The refresh synchronously flips usage to "fetching" before its first await,
+  // so the switcher updates immediately; the probe itself must never block or
+  // fail the already-durable account mutation.
+  private startQuotaRefreshInBackground(
+    outgoingAccountId: string | null | undefined,
+    target: CodexAccountSelectionTarget | undefined
+  ): void {
+    void this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, target).catch((error) => {
+      console.error('[codex-accounts] Quota refresh after account change failed:', error)
+    })
+  }
+
   private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
     const managedHome = this.createManagedHome(accountId, target)
@@ -252,7 +266,7 @@ export class CodexAccountService {
 
       // Why: switching activates the new account, so cache the outgoing account's usage for the switcher.
       const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
-      await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, targetSelection)
+      this.startQuotaRefreshInBackground(outgoingAccountId, targetSelection)
       return this.getSnapshot()
     } catch (error) {
       this.safeRemoveManagedHome(managedHomePath, accountId)
@@ -308,7 +322,7 @@ export class CodexAccountService {
     this.runtimeHome.syncForCurrentSelection(accountTarget)
 
     // Why: re-auth can change the underlying Codex identity, so force a fresh read to avoid showing stale quota.
-    await this.rateLimits.refreshForCodexAccountChange(undefined, accountTarget)
+    this.startQuotaRefreshInBackground(undefined, accountTarget)
     return this.getSnapshot()
   }
 
@@ -337,7 +351,7 @@ export class CodexAccountService {
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
     this.rateLimits.evictInactiveCodexCache(accountId)
-    await this.rateLimits.refreshForCodexAccountChange(
+    this.startQuotaRefreshInBackground(
       getSelectedCodexAccountIdForTarget(settings, getCodexSelectionTargetForAccount(account)) ===
         accountId
         ? accountId
@@ -386,7 +400,7 @@ export class CodexAccountService {
       this.lifecycle.onHostSystemDefaultSelected?.()
     }
 
-    await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, effectiveTarget)
+    this.startQuotaRefreshInBackground(outgoingAccountId, effectiveTarget)
     return this.getSnapshot()
   }
 

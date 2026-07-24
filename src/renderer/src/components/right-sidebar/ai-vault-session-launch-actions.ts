@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
@@ -26,6 +26,9 @@ import {
   isKnownAiVaultResumeWorkspaceTarget,
   type AiVaultSessionResumeTargetState
 } from './ai-vault-session-resume'
+import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 
 export function useAiVaultSessionLaunchActions({
   activeWorktree,
@@ -41,7 +44,13 @@ export function useAiVaultSessionLaunchActions({
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   copyResumeCommand: (session: AiVaultSession, worktreeId?: string | null) => Promise<void>
   handleResume: (session: AiVaultSession, targetWorktreeId?: string) => void
+  handleContinueInNewSession: (session: AiVaultSession, targetWorktreeId: string) => void
+  continuationRequest: AgentSessionContinuationRequest | null
+  handleContinuationDialogOpenChange: (open: boolean) => void
 } {
+  const [continuationRequest, setContinuationRequest] =
+    useState<AgentSessionContinuationRequest | null>(null)
+
   const buildResumeCommand = useCallback(
     (session: AiVaultSession, worktreeId?: string | null): string =>
       buildAiVaultResumeCopyCommandForWorktree({
@@ -76,9 +85,7 @@ export function useAiVaultSessionLaunchActions({
           )
         )
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : 'Could not prepare this session for resume.'
-        )
+        notifyAiVaultSessionPreparationFailure(error)
       }
     },
     [buildResumeCommand]
@@ -86,25 +93,14 @@ export function useAiVaultSessionLaunchActions({
 
   const handleResume = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
-      const targetId = resolveAiVaultSessionLaunchTarget({
+      const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         targetWorktreeId,
         targetState
       })
-      if (targetId.status === 'missing') {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
-            'Open a workspace before resuming a session.'
-          )
-        )
-        return
-      }
-
-      if (targetId.status === 'unsupported') {
-        toast.error(aiVaultResumeUnsupportedMessage(targetId.targetStatus))
+      if (!targetId) {
         return
       }
 
@@ -125,16 +121,20 @@ export function useAiVaultSessionLaunchActions({
             ...buildResumeStartup(preparedSession, targetId.worktreeId)
           })
           if (launchResult.tabId === null) {
-            void launchResult.runtimeLaunch.then((created) => {
-              if (!created) {
+            void launchResult.runtimeLaunch.then((outcome) => {
+              if (outcome.status === 'failed') {
                 toast.error(
-                  translate(
-                    'auto.lib.launch.agent.in.new.tab.11cce5cc77',
-                    'Could not launch {{value0}} in a new terminal.',
-                    { value0: agentLabel(session.agent) }
-                  )
+                  outcome.message ||
+                    translate(
+                      'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+                      'Could not launch {{value0}} in a new terminal.',
+                      { value0: agentLabel(session.agent) }
+                    )
                 )
                 return
+              }
+              if (useAppStore.getState().activeWorktreeId !== targetId.worktreeId) {
+                activateAiVaultResumeWorkspace(targetId.worktreeId)
               }
               showQueuedToast()
             })
@@ -145,16 +145,88 @@ export function useAiVaultSessionLaunchActions({
           }
           showQueuedToast()
         })
-        .catch((error: unknown) => {
-          toast.error(
-            error instanceof Error ? error.message : 'Could not prepare this session for resume.'
-          )
-        })
+        .catch(notifyAiVaultSessionPreparationFailure)
     },
     [activeWorktree?.id, activeWorktreeId, buildResumeStartup, targetState]
   )
 
-  return { buildResumeStartup, copyResumeCommand, handleResume }
+  const handleContinueInNewSession = useCallback(
+    (session: AiVaultSession, targetWorktreeId: string): void => {
+      const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
+        sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
+        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+        targetWorktreeId,
+        targetState
+      })
+      if (!targetId) {
+        return
+      }
+
+      const targetWorkspacePath = resolveAiVaultTargetWorkspacePath(
+        targetState,
+        targetId.worktreeId
+      )
+      if (!targetWorkspacePath) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
+            'Open a workspace before resuming a session.'
+          )
+        )
+        return
+      }
+      setContinuationRequest(
+        prepareAiVaultSessionContinuation({
+          session,
+          targetWorktreeId: targetId.worktreeId,
+          targetWorkspacePath
+        })
+      )
+    },
+    [activeWorktree?.id, activeWorktreeId, targetState]
+  )
+
+  const handleContinuationDialogOpenChange = useCallback((open: boolean): void => {
+    if (!open) {
+      setContinuationRequest(null)
+    }
+  }, [])
+
+  return {
+    buildResumeStartup,
+    copyResumeCommand,
+    handleResume,
+    handleContinueInNewSession,
+    continuationRequest,
+    handleContinuationDialogOpenChange
+  }
+}
+
+function notifyAiVaultSessionPreparationFailure(error: unknown): void {
+  toast.error(
+    error instanceof Error
+      ? error.message
+      : translate(
+          'auto.components.right.sidebar.AiVaultPanel.prepareSessionResumeFailed',
+          'Could not prepare this session for resume.'
+        )
+  )
+}
+
+function resolveAiVaultTargetWorkspacePath(
+  state: AiVaultSessionResumeTargetState,
+  workspaceId: string
+): string | null {
+  const scope = parseWorkspaceKey(workspaceId)
+  if (scope?.type === 'folder') {
+    return (
+      state.folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId)
+        ?.folderPath ?? null
+    )
+  }
+  const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
+  return findWorktreeById(state.worktreesByRepo, worktreeId)?.path ?? null
 }
 
 export type AiVaultSessionLaunchTarget =
@@ -197,6 +269,26 @@ export function resolveAiVaultSessionLaunchTarget(args: {
   }
 
   return { status: 'ready', worktreeId: targetWorktreeId }
+}
+
+function resolveAiVaultSessionLaunchTargetOrNotify(
+  args: Parameters<typeof resolveAiVaultSessionLaunchTarget>[0]
+): Extract<AiVaultSessionLaunchTarget, { status: 'ready' }> | null {
+  const target = resolveAiVaultSessionLaunchTarget(args)
+  if (target.status === 'missing') {
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
+        'Open a workspace before resuming a session.'
+      )
+    )
+    return null
+  }
+  if (target.status === 'unsupported') {
+    toast.error(aiVaultResumeUnsupportedMessage(target.targetStatus))
+    return null
+  }
+  return target
 }
 
 function aiVaultResumeUnsupportedMessage(

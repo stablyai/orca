@@ -80,7 +80,7 @@ describe('MobilePairingConnectionOptions', () => {
     expect(connect).toHaveBeenCalledOnce()
   })
 
-  it('hides Sign in when local network is selected', () => {
+  it('hides Sign in when LAN is selected', () => {
     render(<MobilePairingConnectionOptions value="local-only" onChange={vi.fn()} />)
     expect(screen.queryByTestId('anywhere-sign-in-panel')).toBeNull()
   })
@@ -159,7 +159,7 @@ describe('MobilePairingConnectionOptions', () => {
     await waitFor(() => expect(screen.getByText('Ready')).toBeVisible())
     expect(screen.queryByTestId('anywhere-sign-in-panel')).toBeNull()
 
-    await user.click(screen.getByRole('radio', { name: /Local network/i }))
+    await user.click(screen.getByRole('radio', { name: /^LAN\b/i }))
     expect(onChange).toHaveBeenCalledWith('local-only')
     statusListener?.('standby')
   })

@@ -174,7 +174,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       timeoutSec: 10
     })
     expect(trustConfig).not.toContain(selfComputed)
-    expect(Object.keys(readCodexTrustGrantLedgerHome(managedHome)!.entries)).toHaveLength(6)
+    expect(Object.keys(readCodexTrustGrantLedgerHome(managedHome)!.entries)).toHaveLength(8)
   })
 
   it('keeps config byte-stable and skips the session on a repeat ledger hit', () => {

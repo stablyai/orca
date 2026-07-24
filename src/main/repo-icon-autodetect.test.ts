@@ -179,7 +179,8 @@ describe('detectRepoIcon', () => {
         source: 'github',
         label: 'stablyai/orca'
       },
-      upstream: { owner: 'stablyai', repo: 'orca' }
+      // Why: fork parents resolve host-qualified so avatars/links stay on the fork's server.
+      upstream: { owner: 'stablyai', repo: 'orca', host: 'github.com' }
     })
   })
 

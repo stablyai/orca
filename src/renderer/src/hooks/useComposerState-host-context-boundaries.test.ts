@@ -70,6 +70,18 @@ describe('useComposerState host-context boundaries', () => {
     ).toEqual({ workspaceName: 'title-derived-name', displayName: 'Title derived name' })
   })
 
+  it('requires pasted PR recovery to match the selected GitHub host', () => {
+    const recoverySection = sourceBetween(
+      HOOK_SOURCE,
+      'const effectiveLinkedPR = useMemo',
+      'const setupConfig = useMemo'
+    )
+
+    expect(recoverySection).toContain('githubRepoIdentityKey(fromName.slug)')
+    expect(recoverySection).toContain('githubRepoIdentityKey(selectedRepoSlug)')
+    expect(recoverySection).not.toContain('fromName.slug.owner.toLowerCase()')
+  })
+
   it('auto-owns linked-item generated prefilled names', () => {
     expect(
       getInitialAutoManagedWorkspaceName({

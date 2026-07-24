@@ -115,6 +115,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     let current = true
     const statuses: string[] = []
     const keypair = nacl.box.keyPair()
+    const detachTransport = vi.fn()
     const connecting = RelaySessionBroker.connect({
       authConfig: {
         relayTokenEndpoint: 'https://auth.example.test/v1/relay-token',
@@ -127,12 +128,14 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
       },
       appVersion: '1.0.0',
-      mobileSocketWiring: { attachTransport: vi.fn() } as never,
+      mobileSocketWiring: { attachTransport: vi.fn(() => detachTransport) } as never,
       isCurrent: () => current,
       refreshAccessToken: async () => null,
       onStatus: (status) => statuses.push(status)
     })
     await vi.waitFor(() => expect(fakes.controls).toHaveLength(1))
+    const transportStopped = deferred<void>()
+    fakes.transports[0]!.stop.mockReturnValue(transportStopped.promise)
     current = false
     controlAck.resolve({
       type: 'host-hello-ack',
@@ -147,6 +150,9 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     await expect(connecting).rejects.toBeInstanceOf(StaleRelayBrokerError)
     expect(fakes.controls[0]!.closeNow).toHaveBeenCalledOnce()
     expect(fakes.transports[0]!.stop).toHaveBeenCalledOnce()
+    expect(detachTransport).not.toHaveBeenCalled()
+    transportStopped.resolve(undefined)
+    await vi.waitFor(() => expect(detachTransport).toHaveBeenCalledOnce())
     expect(statuses).toEqual(['connecting'])
   })
 
@@ -316,7 +322,7 @@ function brokerOptions(
       publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
     },
     appVersion: '1.0.0',
-    mobileSocketWiring: { attachTransport: vi.fn() } as never,
+    mobileSocketWiring: { attachTransport: vi.fn(() => () => {}) } as never,
     isCurrent: () => true,
     refreshAccessToken: async () => null,
     onStatus: vi.fn(),

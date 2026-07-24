@@ -54,7 +54,7 @@ describe('AccountsPane Z.ai credentials', () => {
     const user = userEvent.setup()
     render(<AccountsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
 
-    const input = screen.getByPlaceholderText('Enter API key')
+    const input = screen.getByLabelText('Z.ai API Key')
     expect(input).toHaveAttribute('type', 'password')
 
     await user.type(input, 'test-zai-key-not-secret')
@@ -85,7 +85,7 @@ describe('AccountsPane Z.ai credentials', () => {
     const user = userEvent.setup()
     render(<AccountsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
 
-    await user.type(screen.getByPlaceholderText('Enter API key'), 'test-zai-key-not-secret')
+    await user.type(screen.getByLabelText('Z.ai API Key'), 'test-zai-key-not-secret')
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(screen.getByRole('button', { name: 'Replace' })).toBeVisible()
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Loader2, Lock, LockOpen, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -152,6 +152,7 @@ export function ProviderSecretCredential({
   trailingGuidance
 }: ProviderSecretCredentialProps): React.JSX.Element {
   const { busy, configured, draft, setDraft, saveCredential, clearCredential } = state
+  const credentialInputId = useId()
 
   return (
     <>
@@ -183,10 +184,10 @@ export function ProviderSecretCredential({
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Label>{credentialLabel}</Label>
+            <Label htmlFor={credentialInputId}>{credentialLabel}</Label>
             <Badge
               variant={configured ? 'secondary' : 'outline'}
-              className="h-5 gap-1 rounded-full px-2 text-[10px] font-medium text-muted-foreground"
+              className="h-5 gap-1 rounded-full px-2 text-xs font-medium text-muted-foreground"
             >
               {configured ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
               {configured ? savedLabel : notSavedLabel}
@@ -196,6 +197,7 @@ export function ProviderSecretCredential({
         </div>
         <div className="flex gap-2">
           <Input
+            id={credentialInputId}
             type="password"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}

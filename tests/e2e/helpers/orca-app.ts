@@ -111,7 +111,10 @@ function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   return testInfo.project.metadata.orcaHeadful === true
 }
 
-function forwardElectronProcessLogs(app: ElectronApplication, testInfo: TestInfo): void {
+// Why: exported so specs that launch their own ElectronApplication outside
+// this fixture (e.g. multi-instance lifecycle tests) can still opt into the
+// same ORCA_E2E_FORWARD_APP_LOGS-gated stdout/stderr capture.
+export function forwardElectronProcessLogs(app: ElectronApplication, testInfo: TestInfo): void {
   if (process.env.ORCA_E2E_FORWARD_APP_LOGS !== '1') {
     return
   }
@@ -246,7 +249,8 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...homeIsolation.env,
         NODE_ENV: 'development',
         ...((process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
-          process.env.ORCA_E2E_SSH_DOCKER === '1') &&
+          process.env.ORCA_E2E_SSH_DOCKER === '1' ||
+          process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') &&
         !cleanEnv.ORCA_RELAY_PATH
           ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
           : {}),

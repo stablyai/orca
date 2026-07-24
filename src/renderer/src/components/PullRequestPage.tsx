@@ -91,7 +91,10 @@ import {
   getLargeDiffRenderLimit,
   type LargeDiffRenderLimit
 } from '@/components/editor/large-diff-render-limit'
-import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
+import {
+  getCombinedDiffBranchEntriesInTreeOrder,
+  type CombinedDiffFileTreeEntry
+} from '@/components/editor/combined-diff-file-tree-model'
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult
@@ -179,6 +182,8 @@ import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
+import { githubProjectHost } from '../../../shared/github-project-identity'
+import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
 import {
   findGithubPrWorkspaceAttachment,
   getGithubPrWorkspaceAttachmentLabel
@@ -223,18 +228,18 @@ import {
 import { translate } from '@/i18n/i18n'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
-// Why: the item URL is the only owner/repo source present on every work item across the IPC boundary; non-GitHub hosts return null (matching the indicator's suppression).
+// Why: the item URL is the only host-aware repository identity present on every work item across IPC.
 function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
   try {
     const parsed = new URL(url)
-    if (parsed.hostname !== 'github.com') {
+    if ((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || !parsed.host) {
       return null
     }
     const segments = parsed.pathname.split('/').filter(Boolean)
     if (segments.length < 2) {
       return null
     }
-    return { owner: segments[0], repo: segments[1] }
+    return { owner: segments[0], repo: segments[1], host: parsed.host }
   } catch {
     return null
   }
@@ -285,11 +290,31 @@ function normalizeItemDialogTab(
 export type PullRequestPageProjectOrigin = {
   owner: string
   repo: string
+  host?: string
   number: number
   type: 'issue' | 'pr'
   projectId: string
   projectItemId: string
   cacheKey: string
+}
+
+// Why: every PR mutation needs the same host-pinned identity so process GH_HOST
+// cannot redirect a github.com item or a Project row to the wrong server.
+function resolvePullRequestRepo(
+  item: Pick<GitHubWorkItem, 'prRepo' | 'url'>,
+  projectOrigin?: Pick<PullRequestPageProjectOrigin, 'owner' | 'repo' | 'host'>
+): GitHubOwnerRepo | null {
+  const repo =
+    item.prRepo ??
+    (projectOrigin
+      ? {
+          owner: projectOrigin.owner,
+          repo: projectOrigin.repo,
+          host: projectOrigin.host
+        }
+      : null) ??
+    parseOwnerRepoFromItemUrl(item.url)
+  return repo ? { ...repo, host: githubProjectHost(repo.host) } : null
 }
 
 type PullRequestPageProps = {
@@ -561,7 +586,8 @@ function PRAssigneesPanel({
     slugOwner,
     slugRepo,
     assigneeLogins,
-    sourceSettings
+    sourceSettings,
+    projectOrigin?.host ?? assigneeSlug?.host
   )
   const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, sourceSettings)
   const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
@@ -729,12 +755,14 @@ function PRReviewersPanel({
   loading,
   repoPath,
   sourceContext,
+  projectOrigin,
   onReviewersRequested
 }: {
   item: GitHubWorkItem
   loading: boolean
   repoPath: string | null
   sourceContext?: TaskSourceContext | null
+  projectOrigin?: PullRequestPageProjectOrigin
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -834,19 +862,23 @@ function PRReviewersPanel({
     return Array.from(byLogin.values())
   }, [item.author, item.latestReviews, localReviewRequests])
 
-  const reviewSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const reviewRepo = useMemo(
+    () => resolvePullRequestRepo(item, projectOrigin),
+    [item, projectOrigin]
+  )
   const reviewerMetadataBySlug = useRepoAssigneesBySlug(
-    open && reviewSlug ? reviewSlug.owner : null,
-    open && reviewSlug ? reviewSlug.repo : null,
+    open && reviewRepo ? reviewRepo.owner : null,
+    open && reviewRepo ? reviewRepo.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    sourceSettings
+    sourceSettings,
+    reviewRepo?.host
   )
   const reviewerMetadataByPath = useRepoAssignees(
-    open && !reviewSlug ? repoPath : null,
-    open && !reviewSlug ? item.repoId : null,
+    open && !reviewRepo ? repoPath : null,
+    open && !reviewRepo ? item.repoId : null,
     sourceSettings
   )
-  const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
+  const reviewerMetadata = reviewRepo ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
   const reviewers = getGitHubPRReviewerRows(displayItem)
   const authorLogin = item.author?.toLowerCase() ?? null
@@ -976,7 +1008,12 @@ function PRReviewersPanel({
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.requestPRReviewers',
-              { repo: runtimeRepo, prNumber: item.number, reviewers: logins },
+              {
+                repo: runtimeRepo,
+                prNumber: item.number,
+                reviewers: logins,
+                prRepo: reviewRepo
+              },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.requestPRReviewers({
@@ -984,7 +1021,8 @@ function PRReviewersPanel({
               repoId: item.repoId,
               sourceContext,
               prNumber: item.number,
-              reviewers: logins
+              reviewers: logins,
+              prRepo: reviewRepo
             })
       if (!reviewerPanelMountedRef.current) {
         return
@@ -1066,7 +1104,12 @@ function PRReviewersPanel({
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.removePRReviewers',
-              { repo: runtimeRepo, prNumber: item.number, reviewers: logins },
+              {
+                repo: runtimeRepo,
+                prNumber: item.number,
+                reviewers: logins,
+                prRepo: reviewRepo
+              },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.removePRReviewers({
@@ -1074,7 +1117,8 @@ function PRReviewersPanel({
               repoId: item.repoId,
               sourceContext,
               prNumber: item.number,
-              reviewers: logins
+              reviewers: logins,
+              prRepo: reviewRepo
             })
       if (!reviewerPanelMountedRef.current) {
         return
@@ -1690,6 +1734,7 @@ function getPRFileContentCacheKey(args: {
   repoId: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   file: GitHubPRFile
   headSha: string
   baseSha: string
@@ -1703,6 +1748,7 @@ function getPRFileContentCacheKey(args: {
     repositoryKey,
     sourceKey,
     args.prNumber,
+    args.prRepo ? githubRepoIdentityKey(args.prRepo) : '',
     args.file.path,
     args.file.oldPath ?? '',
     args.file.status,
@@ -1716,6 +1762,7 @@ function loadPRFileContents(args: {
   repoId: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   file: GitHubPRFile
   headSha: string
   baseSha: string
@@ -1736,6 +1783,7 @@ function loadPRFileContents(args: {
           {
             repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
             prNumber: args.prNumber,
+            prRepo: args.prRepo ?? null,
             path: args.file.path,
             oldPath: args.file.oldPath,
             status: args.file.status,
@@ -1749,6 +1797,7 @@ function loadPRFileContents(args: {
           repoId: args.repoId,
           sourceContext: args.sourceContext,
           prNumber: args.prNumber,
+          prRepo: args.prRepo ?? null,
           path: args.file.path,
           oldPath: args.file.oldPath,
           status: args.file.status,
@@ -1781,6 +1830,7 @@ function addIssueCommentForRepo(args: {
   number: number
   body: string
   type?: 'issue' | 'pr'
+  prRepo?: GitHubOwnerRepo | null
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
   if (runtimeHost) {
@@ -1790,7 +1840,8 @@ function addIssueCommentForRepo(args: {
       {
         repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         number: args.number,
-        body: args.body
+        body: args.body,
+        prRepo: args.prRepo ?? null
       },
       { timeoutMs: 30_000 }
     ).then((result) => {
@@ -1815,7 +1866,8 @@ function addIssueCommentForRepo(args: {
     sourceContext: args.sourceContext,
     number: args.number,
     body: args.body,
-    type: args.type
+    type: args.type,
+    prRepo: args.prRepo ?? null
   })
 }
 
@@ -1824,6 +1876,7 @@ function addPRReviewCommentForRepo(args: {
   repoPath: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   commitId: string
   path: string
   line: number
@@ -1838,6 +1891,7 @@ function addPRReviewCommentForRepo(args: {
       {
         repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         prNumber: args.prNumber,
+        prRepo: args.prRepo ?? null,
         commitId: args.commitId,
         path: args.path,
         line: args.line,
@@ -1866,6 +1920,7 @@ function addPRReviewCommentForRepo(args: {
     repoId: args.repoId,
     sourceContext: args.sourceContext,
     prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null,
     commitId: args.commitId,
     path: args.path,
     line: args.line,
@@ -1879,6 +1934,7 @@ function addPRReviewCommentReplyForRepo(args: {
   repoPath: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   commentId: number
   body: string
   threadId?: string
@@ -1893,6 +1949,7 @@ function addPRReviewCommentReplyForRepo(args: {
       {
         repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         prNumber: args.prNumber,
+        prRepo: args.prRepo ?? null,
         commentId: args.commentId,
         body: args.body,
         threadId: args.threadId,
@@ -1921,6 +1978,7 @@ function addPRReviewCommentReplyForRepo(args: {
     repoId: args.repoId,
     sourceContext: args.sourceContext,
     prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null,
     commentId: args.commentId,
     body: args.body,
     threadId: args.threadId,
@@ -1957,6 +2015,7 @@ function setPRFileViewedForRepo(args: {
   repoPath: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   pullRequestId: string
   path: string
   viewed: boolean
@@ -1968,6 +2027,7 @@ function setPRFileViewedForRepo(args: {
       'github.setPRFileViewed',
       {
         repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
+        prRepo: args.prRepo ?? null,
         pullRequestId: args.pullRequestId,
         path: args.path,
         viewed: args.viewed
@@ -1994,6 +2054,7 @@ function setPRFileViewedForRepo(args: {
     repoId: args.repoId,
     sourceContext: args.sourceContext,
     prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null,
     pullRequestId: args.pullRequestId,
     path: args.path,
     viewed: args.viewed
@@ -2167,6 +2228,7 @@ type PRFilesCombinedDiffViewerProps = {
   repoId: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   prUrl: string
   headSha: string | undefined
   baseSha: string | undefined
@@ -2182,6 +2244,7 @@ function PRFilesCombinedDiffViewer({
   repoId,
   sourceContext,
   prNumber,
+  prRepo,
   prUrl,
   headSha,
   baseSha,
@@ -2215,7 +2278,10 @@ function PRFilesCombinedDiffViewer({
     if (entriesCacheRef.current?.signature === diffEntrySignature) {
       return entriesCacheRef.current.entries
     }
-    const nextEntries = files.map(gitHubPRFileToBranchEntry)
+    const nextEntries = getCombinedDiffBranchEntriesInTreeOrder(
+      'commit',
+      files.map(gitHubPRFileToBranchEntry)
+    )
     entriesCacheRef.current = {
       signature: diffEntrySignature,
       entries: nextEntries
@@ -2258,15 +2324,16 @@ function PRFilesCombinedDiffViewer({
       JSON.stringify({
         repoId,
         prNumber,
+        prRepo: prRepo ? githubRepoIdentityKey(prRepo) : null,
         headSha: headSha ?? null,
         baseSha: baseSha ?? null,
         files: diffEntrySignature
       }),
-    [baseSha, diffEntrySignature, headSha, prNumber, repoId]
+    [baseSha, diffEntrySignature, headSha, prNumber, prRepo, repoId]
   )
   const viewStateKey = useMemo(
-    () => [repoId || repoPath, prNumber].join('\0'),
-    [prNumber, repoId, repoPath]
+    () => [repoId || repoPath, prNumber, prRepo ? githubRepoIdentityKey(prRepo) : ''].join('\0'),
+    [prNumber, prRepo, repoId, repoPath]
   )
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sideBySide, setSideBySide] = useState(false)
@@ -2380,6 +2447,7 @@ function PRFilesCombinedDiffViewer({
           repoId,
           sourceContext,
           prNumber,
+          prRepo,
           file,
           headSha,
           baseSha
@@ -2428,7 +2496,7 @@ function PRFilesCombinedDiffViewer({
           )
         })
     },
-    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath, sourceContext]
+    [baseSha, fileByPath, headSha, prNumber, prRepo, repoId, repoPath, sourceContext]
   )
 
   const retrySection = useCallback(
@@ -2663,6 +2731,7 @@ function PRFilesCombinedDiffViewer({
         repoId,
         sourceContext,
         prNumber,
+        prRepo,
         commitId: headSha,
         path: section.path,
         line: lineNumber,
@@ -2682,7 +2751,7 @@ function PRFilesCombinedDiffViewer({
       )
       return true
     },
-    [headSha, onCommentAdded, prNumber, repoId, repoPath, sourceContext]
+    [headSha, onCommentAdded, prNumber, prRepo, repoId, repoPath, sourceContext]
   )
 
   const renderViewedCheckbox = useCallback(
@@ -2830,6 +2899,7 @@ function CommentCodeContext({
   repoId,
   sourceContext,
   prNumber,
+  prRepo,
   files,
   headSha,
   baseSha
@@ -2839,6 +2909,7 @@ function CommentCodeContext({
   repoId: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   files: GitHubPRFile[]
   headSha: string | undefined
   baseSha: string | undefined
@@ -2862,7 +2933,16 @@ function CommentCodeContext({
       return
     }
     let cancelled = false
-    loadPRFileContents({ repoPath, repoId, sourceContext, prNumber, file, headSha, baseSha })
+    loadPRFileContents({
+      repoPath,
+      repoId,
+      sourceContext,
+      prNumber,
+      prRepo,
+      file,
+      headSha,
+      baseSha
+    })
       .then((result) => {
         if (!cancelled) {
           setContents(result)
@@ -2876,7 +2956,7 @@ function CommentCodeContext({
     return () => {
       cancelled = true
     }
-  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath, sourceContext])
+  }, [baseSha, file, headSha, line, prNumber, prRepo, repoId, repoPath, sourceContext])
 
   const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
     contextExpansionState,
@@ -3246,8 +3326,12 @@ function ConversationTab({
   }, [bodyEditing, cancelBodyTextareaFocusFrame])
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
   const markdownGitHubRepo = useMemo(
-    () => (projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : bodySlug),
+    () =>
+      projectOrigin
+        ? { owner: projectOrigin.owner, repo: projectOrigin.repo, host: projectOrigin.host }
+        : bodySlug,
     [bodySlug, projectOrigin]
   )
   const canEditBody =
@@ -3313,6 +3397,7 @@ function ConversationTab({
               repoId: item.repoId,
               sourceContext,
               prNumber: item.number,
+              prRepo,
               commentId: comment.id,
               body: replyBody,
               threadId: comment.threadId,
@@ -3325,7 +3410,8 @@ function ConversationTab({
               sourceContext,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
-              type: item.type
+              type: item.type,
+              prRepo
             })
 
       if (!result.ok) {
@@ -3346,6 +3432,7 @@ function ConversationTab({
       item.repoId,
       item.type,
       onCommentAdded,
+      prRepo,
       repoPath,
       sourceContext
     ]
@@ -3376,6 +3463,7 @@ function ConversationTab({
           loading={loading}
           repoPath={repoPath}
           sourceContext={sourceContext}
+          projectOrigin={projectOrigin}
           onReviewersRequested={onReviewersRequested}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
@@ -3491,6 +3579,7 @@ function ConversationTab({
           repoId={item.repoId}
           sourceContext={sourceContext}
           prNumber={item.number}
+          prRepo={prRepo}
           files={files}
           headSha={headSha}
           baseSha={baseSha}
@@ -3749,6 +3838,7 @@ function ConversationTab({
             sourceContext={sourceContext}
             issueNumber={item.number}
             itemType={item.type}
+            prRepo={prRepo}
             mentionOptions={mentionOptions}
             onCommentAdded={onCommentAdded}
           />
@@ -3793,6 +3883,7 @@ function PRActionsPanel({
     )
   )
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
+  const prRepo = resolvePullRequestRepo(item, projectOrigin)
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
   const canMutateState = localState !== 'merged' && canMutateWithRepoContext
@@ -3856,6 +3947,7 @@ function PRActionsPanel({
         sourceContext,
         projectOrigin,
         number: item.number,
+        prRepo,
         updates: { state: nextState }
       })
       toast.success(
@@ -3908,7 +4000,7 @@ function PRActionsPanel({
                 repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
                 prNumber: item.number,
                 method,
-                prRepo: item.prRepo ?? null
+                prRepo
               },
               { timeoutMs: 30_000 }
             )
@@ -3918,7 +4010,7 @@ function PRActionsPanel({
               sourceContext,
               prNumber: item.number,
               method,
-              prRepo: item.prRepo ?? null
+              prRepo
             })
       if (!result.ok) {
         toast.error(result.error)
@@ -3965,7 +4057,7 @@ function PRActionsPanel({
                 prNumber: item.number,
                 enabled,
                 method: enabled ? mergeMethods.defaultMethod : undefined,
-                prRepo: item.prRepo ?? null
+                prRepo
               },
               { timeoutMs: 30_000 }
             )
@@ -3976,7 +4068,7 @@ function PRActionsPanel({
               prNumber: item.number,
               enabled,
               method: enabled ? mergeMethods.defaultMethod : undefined,
-              prRepo: item.prRepo ?? null
+              prRepo
             })
       if (!result.ok) {
         toast.error(result.error)
@@ -4483,7 +4575,7 @@ function ChecksTab({
     },
     [item, targetRepoId]
   )
-  const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
   const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const sorted = [...list].sort(
@@ -4547,6 +4639,7 @@ function ChecksTab({
             sourceContext,
             prNumber: item.number,
             headSha,
+            prRepo,
             noCache: true
           }))) as PRCheckDetail[]
       setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
@@ -4590,7 +4683,8 @@ function ChecksTab({
                 repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
                 prNumber: item.number,
                 headSha,
-                failedOnly
+                failedOnly,
+                prRepo
               },
               { timeoutMs: 30_000 }
             )
@@ -4600,7 +4694,8 @@ function ChecksTab({
               sourceContext,
               prNumber: item.number,
               headSha,
-              failedOnly
+              failedOnly,
+              prRepo
             })
         if (!result.ok) {
           toast.error(result.error)
@@ -4628,6 +4723,7 @@ function ChecksTab({
       headSha,
       item.number,
       item.repoId,
+      prRepo,
       runtimeHost,
       rerunning,
       repoId,
@@ -5489,6 +5585,7 @@ async function runIssueUpdate(args: {
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
+      host: githubProjectHost(args.projectOrigin.host),
       number: args.number,
       updates: args.updates
     }
@@ -5569,7 +5666,11 @@ async function runWorkItemBodyUpdate(args: {
 }): Promise<void> {
   if (args.item.type === 'pr') {
     const targetSlug = args.projectOrigin
-      ? { owner: args.projectOrigin.owner, repo: args.projectOrigin.repo }
+      ? {
+          owner: args.projectOrigin.owner,
+          repo: args.projectOrigin.repo,
+          host: args.projectOrigin.host
+        }
       : args.parsedSlug
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
@@ -5582,6 +5683,7 @@ async function runWorkItemBodyUpdate(args: {
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
+      host: githubProjectHost(targetSlug.host),
       number: args.item.number,
       updates: { body: args.body }
     }
@@ -5630,6 +5732,7 @@ async function runPullRequestStateUpdate(args: {
   sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   number: number
+  prRepo?: GitHubOwnerRepo | null
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
@@ -5641,6 +5744,7 @@ async function runPullRequestStateUpdate(args: {
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
+      host: githubProjectHost(args.projectOrigin.host),
       number: args.number,
       updates: args.updates
     }
@@ -5687,6 +5791,7 @@ async function runPullRequestStateUpdate(args: {
           {
             repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
             prNumber: args.number,
+            prRepo: args.prRepo ?? null,
             updates: args.updates
           },
           { timeoutMs: 30_000 }
@@ -5696,6 +5801,7 @@ async function runPullRequestStateUpdate(args: {
           repoId: args.repoId ?? undefined,
           sourceContext: args.sourceContext,
           prNumber: args.number,
+          prRepo: args.prRepo ?? null,
           updates: args.updates
         })
   if (!res.ok) {
@@ -5783,14 +5889,25 @@ function GHEditSection({
     projectOrigin ? null : repoId,
     sourceSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)
+  const repoLabelsBySlug = useRepoLabelsBySlug(
+    slugOwner,
+    slugRepo,
+    sourceSettings,
+    projectOrigin?.host
+  )
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
     sourceSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(
+    slugOwner,
+    slugRepo,
+    assignees,
+    sourceSettings,
+    projectOrigin?.host
+  )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
   // Why: sync local assignees on item change / detail resolve, but skip if the user made an optimistic edit so we don't clobber in-flight changes.
@@ -6205,6 +6322,7 @@ function GHCommentComposer({
   sourceContext,
   issueNumber,
   itemType,
+  prRepo,
   mentionOptions,
   onCommentAdded
 }: {
@@ -6214,6 +6332,7 @@ function GHCommentComposer({
   sourceContext?: TaskSourceContext | null
   issueNumber: number
   itemType: 'issue' | 'pr'
+  prRepo?: GitHubOwnerRepo | null
   mentionOptions: MentionOption[]
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
@@ -6253,7 +6372,8 @@ function GHCommentComposer({
         sourceContext,
         number: issueNumber,
         body: bodyState.body,
-        type: itemType
+        type: itemType,
+        prRepo
       })
       if (!mountedRef.current) {
         return
@@ -6291,6 +6411,7 @@ function GHCommentComposer({
     sourceContext,
     issueNumber,
     itemType,
+    prRepo,
     onCommentAdded
   ])
   const canSubmitComment = hasBoundedCommentBodyText(body)
@@ -6807,6 +6928,7 @@ export default function PullRequestPage({
           repoPath: repoPath ?? '',
           sourceContext,
           prNumber: workItem.number,
+          prRepo: resolvePullRequestRepo(workItem, projectOrigin),
           pullRequestId: details.pullRequestId,
           path,
           viewed
@@ -6836,6 +6958,7 @@ export default function PullRequestPage({
       canUseDetailsRepoContext,
       details?.pullRequestId,
       detailsCacheKey,
+      projectOrigin,
       repoPath,
       sourceContext,
       workItem
@@ -7204,6 +7327,7 @@ export default function PullRequestPage({
                     repoId={effectiveRepoId ?? ''}
                     sourceContext={sourceContext}
                     prNumber={workItem.number}
+                    prRepo={resolvePullRequestRepo(workItem, projectOrigin)}
                     prUrl={workItem.url}
                     headSha={details?.headSha}
                     baseSha={details?.baseSha}

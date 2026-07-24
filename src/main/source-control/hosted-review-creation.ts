@@ -68,9 +68,13 @@ async function isGitHubAuthenticated(
   }
   await acquire()
   try {
+    // Why: `host` scopes any rate-limit breaker trip to github.com — the host
+    // this probe actually targets — instead of a GH_HOST-derived scope.
     await ghExecFileAsync(
       ['auth', 'status', '--hostname', 'github.com'],
-      connectionId ? {} : { cwd: repoPath, ...getHostedReviewLocalGitOptions(options) }
+      connectionId
+        ? { host: 'github.com' }
+        : { cwd: repoPath, ...getHostedReviewLocalGitOptions(options), host: 'github.com' }
     )
     return true
   } catch {

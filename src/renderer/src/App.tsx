@@ -42,6 +42,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { useAppStore } from './store'
+import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
@@ -131,7 +132,10 @@ import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard
 } from './lib/shutdown-checkpoint-guard'
-import { collectFolderWorkspaceKeysFromSession } from './lib/workspace-session-hydration-keys'
+import {
+  collectFolderWorkspaceKeysFromSession,
+  collectWorktreeHydrationRepoIdsFromSession
+} from './lib/workspace-session-hydration-keys'
 import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
@@ -178,10 +182,13 @@ import {
   type PhysicalModifierToken
 } from '../../shared/keybindings'
 import {
+  getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -345,6 +352,9 @@ const SshPassphraseDialog = lazy(() =>
 const UpdateCard = lazy(() =>
   import('./components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
 )
+const RemoteServerUpdateDialog = lazy(
+  () => import('./components/settings/RemoteServerUpdateDialog')
+)
 const ContextualTourOverlay = lazy(() =>
   import('./components/contextual-tours/ContextualTourOverlay').then((module) => ({
     default: module.ContextualTourOverlay
@@ -427,6 +437,7 @@ function App(): React.JSX.Element {
       fetchFolderWorkspaces: s.fetchFolderWorkspaces,
       fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
       fetchAllWorktrees: s.fetchAllWorktrees,
+      fetchWorktrees: s.fetchWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchOrcaProfiles: s.fetchOrcaProfiles,
       fetchSettings: s.fetchSettings,
@@ -456,6 +467,7 @@ function App(): React.JSX.Element {
       setRightSidebarTab: s.setRightSidebarTab,
       showRightSidebarFiles: s.showRightSidebarFiles,
       showRightSidebarSearch: s.showRightSidebarSearch,
+      openDiffNotesSendMenuForActiveWorktree: s.openDiffNotesSendMenuForActiveWorktree,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -855,31 +867,69 @@ function App(): React.JSX.Element {
             hydratePersistedUI: actions.hydratePersistedUI
           })
         )
-        const startupRuntimeHostIds = await timeRendererStartupStep(
+        // Why: list-runtime-session-hosts reads no repo state, so overlap it with the repo scan
+        // instead of paying its IPC round-trip serially before repos. .catch marks rejections handled
+        // if an earlier await throws first; the value is awaited below and surfaces any error there.
+        const runtimeHostsPromise = timeRendererStartupStep(
           'list-runtime-session-hosts',
           listRuntimeSessionHostIdsForStartup
         )
+        runtimeHostsPromise.catch(() => {})
         // Why: saved remote runtimes can spend the full connect timeout; load only the local catalog for first paint and refresh remotes after hydration.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
         )
-        await timeRendererStartupStep('fetch-project-groups-local', () =>
-          actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
-        )
-        await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
-          actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
-        )
-        await timeRendererStartupStep('fetch-worktrees', () =>
-          actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
-        )
-        // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
-        const sessionRead = await timeRendererStartupStep('session-get', () =>
-          fetchWorkspaceSessionWithRuntimeHostOwners(
-            window.api.session,
-            useAppStore.getState().repos,
-            startupRuntimeHostIds
+        // Why: folder workspaces merge against projectGroups (repos.ts fetchFolderWorkspacesForAllHosts),
+        // so keep this chain ordered while overlapping it with session-scoped hydration.
+        const localCatalogChain = (async () => {
+          await timeRendererStartupStep('fetch-project-groups-local', () =>
+            actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
+          )
+          await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
+            actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+          )
+        })()
+        const sessionReadPromise = runtimeHostsPromise.then((startupRuntimeHostIds) =>
+          // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
+          timeRendererStartupStep('session-get', () =>
+            fetchWorkspaceSessionWithRuntimeHostOwners(
+              window.api.session,
+              useAppStore.getState().repos,
+              startupRuntimeHostIds
+            )
           )
         )
+        const hydrationSessionChain = sessionReadPromise.then(async (sessionRead) => {
+          const hydrationRepoIds = collectWorktreeHydrationRepoIdsFromSession(
+            sessionRead.session,
+            sessionRead.runtimeHostIdByWorkspaceSessionKey
+          )
+          const hydrationRepoIdSet = new Set(hydrationRepoIds)
+          const hydrationRepos = useAppStore.getState().repos.filter(
+            (repo) =>
+              hydrationRepoIdSet.has(repo.id) &&
+              // Why: disconnected SSH repos hydrate from local metadata; only runtime-owned repos use placeholders.
+              parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'
+          )
+          await timeRendererStartupStep('fetch-hydration-worktrees', () =>
+            mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY, (repo) =>
+              actions.fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
+            )
+          )
+          return sessionRead
+        })
+        // Why: wait for both writers to settle before recovery so neither can mutate hydrated state afterward.
+        const [sessionOutcome, catalogOutcome] = await Promise.allSettled([
+          hydrationSessionChain,
+          localCatalogChain
+        ])
+        if (sessionOutcome.status === 'rejected') {
+          throw sessionOutcome.reason
+        }
+        if (catalogOutcome.status === 'rejected') {
+          throw catalogOutcome.reason
+        }
+        const sessionRead = sessionOutcome.value
         await keybindingsPromise
         if (!cancelled) {
           const sessionHydrationOptions = {
@@ -1006,19 +1056,34 @@ function App(): React.JSX.Element {
           })
           void (async () => {
             try {
-              await timeRendererStartupStep('remote-catalog-refresh', async () => {
-                await actions.fetchReposForAllHosts()
-                await actions.fetchProjectGroupsForAllHosts()
-                await actions.fetchFolderWorkspacesForAllHosts()
-              })
-              if (!cancelled) {
-                await timeRendererStartupStep('remote-worktree-refresh', async () => {
-                  await actions.fetchAllWorktrees()
-                  await actions.fetchWorktreeLineage()
+              try {
+                await timeRendererStartupStep('remote-catalog-refresh', async () => {
+                  await actions.fetchReposForAllHosts()
+                  await actions.fetchProjectGroupsForAllHosts()
+                  await actions.fetchFolderWorkspacesForAllHosts()
                 })
+              } catch (err) {
+                console.warn('Remote startup catalog refresh failed:', err)
               }
-            } catch (err) {
-              console.warn('Remote startup catalog refresh failed:', err)
+              if (!cancelled) {
+                try {
+                  await timeRendererStartupStep('remote-worktree-refresh', async () => {
+                    // Why: the full scan is not required for session recovery, so keep it off the startup-critical path.
+                    await actions.fetchAllWorktrees()
+                    // Why: the startup prune only saw session-referenced repos; use the deferred scan's
+                    // authoritative results to drop deleted-worktree visit timestamps that would
+                    // otherwise accumulate unbounded (disconnected SSH stays non-authoritative and is kept).
+                    actions.pruneLastVisitedTimestamps()
+                    await actions.fetchWorktreeLineage()
+                  })
+                } catch (err) {
+                  console.warn('Deferred startup worktree refresh failed:', err)
+                }
+              }
+            } finally {
+              if (!cancelled) {
+                useAppStore.setState({ startupWorktreeRefreshCompleted: true })
+              }
             }
           })()
         }
@@ -1031,6 +1096,8 @@ function App(): React.JSX.Element {
           error
         )
         if (!cancelled) {
+          // Why: degraded mode stays interactive; later repo/runtime changes must not remain gated forever.
+          useAppStore.setState({ startupWorktreeRefreshCompleted: true })
           // Why (issue #1158): only apply default UI if ui.get() never hydrated; otherwise defaults would clobber ui.json via the debounced writer.
           const fallbackUI = getStartupErrorFallbackUI(uiHydrated)
           if (fallbackUI) {
@@ -1359,6 +1426,24 @@ function App(): React.JSX.Element {
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
+  // Why (STA-2383): macOS throttles the backgrounded window; on occlusion-uncover only `focus`
+  // fires (invalidate-only), so the app-shell's dvh height stays stale and the bottom status bar
+  // is clipped off-screen until a manual resize. Relay the genuine hidden→visible reveal so main
+  // runs the same full repaint (size jiggle) that show/restore/resume get, recomputing the layout.
+  useEffect(() => {
+    if (!isMac || isPairedWebClientWindow()) {
+      return
+    }
+    const handler = (): void => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+      window.api?.ui?.notifyWindowRevealed?.()
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [])
+
   const hasTabBar = tabCount >= 2
   const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
@@ -1673,6 +1758,15 @@ function App(): React.JSX.Element {
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
         return
+      }
+
+      // Unbound by default; opens the active worktree's Source Control notes send picker. Only consumes the chord when there are unsent notes.
+      if (matchShortcut('sourceControl.sendReviewNotes')) {
+        if (actions.openDiffNotesSendMenuForActiveWorktree()) {
+          input.preventDefault()
+          notifyTerminalCapture('sourceControl.sendReviewNotes')
+          return
+        }
       }
 
       if (matchShortcut('sidebar.checks.toggle')) {
@@ -2535,6 +2629,15 @@ function App(): React.JSX.Element {
             >
               <SkillFreshnessUpdateDialog />
             </RecoverableRenderErrorBoundary>
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.remote-server-update-dialog"
+                surface="overlay"
+                compact
+              >
+                <RemoteServerUpdateDialog />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
       </TooltipProvider>

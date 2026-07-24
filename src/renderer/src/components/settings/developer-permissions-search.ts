@@ -146,16 +146,19 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
   {
     title: translate(
       'auto.components.settings.developer.permissions.search.3363889768',
-      'Local Network, USB, and Bluetooth'
+      'LAN, USB, and Bluetooth'
     ),
     description: translate(
       'auto.components.settings.developer.permissions.search.acad3d4743',
-      'Allow device and local-network tools used from terminal sessions.'
+      'Allow device tools and LAN access used from terminal sessions.'
     ),
     keywords: [
-      translate(
+      // Why: UI says LAN (aligned with mobile), but macOS System Settings still
+      // labels the privacy toggle "Local Network" — keep both findable.
+      ...translateSearchKeyword(
         'auto.components.settings.developer.permissions.search.fa3239cd42',
-        'local network'
+        'lan',
+        { aliases: ['local network', 'local-network'] }
       ),
       ...translateSearchKeyword(
         'auto.components.settings.developer.permissions.search.c4a4a02ea4',

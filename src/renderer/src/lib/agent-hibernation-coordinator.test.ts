@@ -80,12 +80,20 @@ function installEligibleState(
   overrides: Partial<AppState> = {}
 ): typeof shutdownCompletedAgentPaneForHibernation {
   const e = entry()
+  const runtimeOwnerEnvironmentId = overrides.settings?.activeRuntimeEnvironmentId ?? undefined
   useAppStore.setState({
     settings: {
       experimentalAgentHibernation: true,
       agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
     } as never,
     activeWorktreeId: 'wt-active',
+    repos: [],
+    worktreesByRepo: {
+      'fixture-repo': [
+        { id: 'wt-bg', repoId: 'fixture-repo', hostId: 'local', runtimeOwnerEnvironmentId }
+      ]
+    } as never,
+    detectedWorktreesByRepo: {},
     tabsByWorktree: { 'wt-bg': [tab()] },
     terminalLayoutsByTabId: { 'tab-1': layout() },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },

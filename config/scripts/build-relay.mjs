@@ -10,7 +10,7 @@
  */
 import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const __dirname = import.meta.dirname
@@ -26,6 +26,13 @@ const MANAGED_HOOK_RUNTIME_ENTRY = join(
   'managed-hook-runtime.ts'
 )
 const JSONC_PARSER_ESM_ENTRY = join(ROOT, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js')
+const NODE_PTY_CONSOLE_LIST_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-patch.cjs'
+const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
+  ROOT,
+  'config',
+  'relay-assets',
+  NODE_PTY_CONSOLE_LIST_PATCH_FILENAME
+)
 
 const PLATFORMS = [
   'linux-x64',
@@ -58,6 +65,13 @@ for (const platform of PLATFORMS) {
       'process.env.NODE_ENV': '"production"'
     }
   })
+
+  if (platform.startsWith('win32-')) {
+    copyFileSync(
+      NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
+      join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
+    )
+  }
 
   await build({
     entryPoints: [WATCHER_ENTRY],
@@ -101,9 +115,12 @@ for (const platform of PLATFORMS) {
     .update(relayContent)
     .update(watcherContent)
     .update(managedHookRuntimeContent)
-    .digest('hex')
-    .slice(0, 12)
-  writeFileSync(join(outDir, '.version'), `${RELAY_VERSION}+${hash}`)
+  // Why: changing the remote node-pty patch must select a fresh immutable Windows relay directory.
+  if (platform.startsWith('win32-')) {
+    hash.update(readFileSync(join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)))
+  }
+  const contentHash = hash.digest('hex').slice(0, 12)
+  writeFileSync(join(outDir, '.version'), `${RELAY_VERSION}+${contentHash}`)
 
   console.log(`Built relay for ${platform} → ${outDir}/relay.js`)
 }

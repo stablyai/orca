@@ -26,6 +26,10 @@ export type ReconcileSerializedMarkdownParams = {
   roundTrip: (markdown: string) => string | null
 }
 
+export function restoreMarkdownSourceEol(markdown: string, source: string): string {
+  return restoreEol(toLf(markdown), detectDominantEol(source))
+}
+
 /**
  * Carries the user's edit into the original source style so untouched regions keep their non-canonical bytes.
  * Falls back to canonical `edited` when the transform can't be proven render-equivalent, so it never corrupts or relocates content.
@@ -80,6 +84,15 @@ export function reconcileSerializedMarkdown({
     diffs = cleanupEfficiency(diffs)
   }
   const patches = makePatches(baseLf, diffs)
+  // Why: applyPatches decodes starts as UTF-8 offsets even though makePatches returns UTF-16 indices; encode against the divergent text being patched so decoding preserves the fuzzy-match seed.
+  const utf8Offsets = getUtf8OffsetsAtCodeUnitIndices(
+    originalSourceLf,
+    patches.flatMap((patch) => [patch.start1, patch.start2])
+  )
+  for (const patch of patches) {
+    patch.start1 = utf8Offsets.get(patch.start1) ?? 0
+    patch.start2 = utf8Offsets.get(patch.start2) ?? 0
+  }
   const [reconciledLf, results] = applyPatches(patches, originalSourceLf)
 
   // Branch 5: a hunk failed to locate in the non-canonical source → unreliable fuzzy match, fall back to canonical.
@@ -120,6 +133,42 @@ function restoreEol(lfText: string, eol: '\n' | '\r\n'): string {
 function normalizeForSafety(text: string): string {
   // Why: compare exactly (only CRLF-normalized) — a trailing `\n\n` empty paragraph is semantic, so a lenient trimEnd would mask the trailing-block drift branch 6 must catch.
   return text.replace(/\r\n/g, '\n')
+}
+
+function getUtf8OffsetsAtCodeUnitIndices(
+  text: string,
+  codeUnitIndices: number[]
+): Map<number, number> {
+  const targets = [...new Set(codeUnitIndices)].sort((a, b) => a - b)
+  const offsets = new Map<number, number>()
+  let codeUnitIndex = 0
+  let byteOffset = 0
+  for (const target of targets) {
+    const boundedTarget = Math.max(0, Math.min(target, text.length))
+    while (codeUnitIndex < boundedTarget) {
+      const codePoint = text.codePointAt(codeUnitIndex)
+      if (codePoint === undefined) {
+        break
+      }
+      byteOffset += utf8CodePointLength(codePoint)
+      codeUnitIndex += codePoint > 0xffff ? 2 : 1
+    }
+    offsets.set(target, byteOffset)
+  }
+  return offsets
+}
+
+function utf8CodePointLength(codePoint: number): number {
+  if (codePoint <= 0x7f) {
+    return 1
+  }
+  if (codePoint <= 0x7ff) {
+    return 2
+  }
+  if (codePoint <= 0xffff) {
+    return 3
+  }
+  return 4
 }
 
 function hasRepeatedHalfMatchSeed(textA: string, textB: string): boolean {

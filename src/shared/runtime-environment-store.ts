@@ -99,6 +99,7 @@ export function updateEnvironmentFromPairingCode(
   const store = readEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
+  const previousPairingRevision = existing.pairingRevision ?? existing.createdAt
   const environment = createEnvironmentFromPairingOffer({
     id: existing.id,
     name: existing.name,
@@ -111,6 +112,7 @@ export function updateEnvironmentFromPairingCode(
     ...environment,
     createdAt: existing.createdAt,
     updatedAt: now,
+    pairingRevision: Math.max(now, previousPairingRevision + 1),
     lastUsedAt: existing.lastUsedAt
   }
   writeEnvironmentStore(userDataPath, {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeRepoIcon } from './repo-icon'
+import { githubAvatarIcon, sanitizeRepoIcon } from './repo-icon'
 
 describe('sanitizeRepoIcon', () => {
   it('accepts lucide, emoji, and supported image icons', () => {
@@ -21,6 +21,19 @@ describe('sanitizeRepoIcon', () => {
     ).toEqual({
       type: 'image',
       src: 'https://github.com/stablyai.png?size=64',
+      source: 'github',
+      label: 'stablyai/orca'
+    })
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
+        src: 'https://github.acme.test/stablyai.png?size=64',
+        source: 'github',
+        label: 'stablyai/orca'
+      })
+    ).toEqual({
+      type: 'image',
+      src: 'https://github.acme.test/stablyai.png?size=64',
       source: 'github',
       label: 'stablyai/orca'
     })
@@ -88,9 +101,30 @@ describe('sanitizeRepoIcon', () => {
     expect(
       sanitizeRepoIcon({
         type: 'image',
-        src: 'https://example.com/icon.png',
+        src: 'https://example.com/nested/icon.png',
         source: 'github'
       })
     ).toBeUndefined()
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
+        src: 'https://user@example.com/icon.png',
+        source: 'github'
+      })
+    ).toBeUndefined()
+  })
+
+  it('builds hosted avatar URLs only from a valid host value', () => {
+    expect(
+      githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'GitHub.Acme.Test:8443' })
+    ).toMatchObject({ src: 'https://github.acme.test:8443/acme.png?size=64' })
+    // Explicit default port 443 is canonical for an HTTPS host: accept it
+    // (serialized without the port) rather than falling back to github.com.
+    expect(
+      githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'ghe.example:443' })
+    ).toMatchObject({ src: 'https://ghe.example/acme.png?size=64' })
+    expect(
+      githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'github.com@evil.example' })
+    ).toMatchObject({ src: 'https://github.com/acme.png?size=64' })
   })
 })

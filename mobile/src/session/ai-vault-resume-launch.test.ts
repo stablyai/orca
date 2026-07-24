@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
   createMobileAiVaultResumeMutationRegistry,
-  prepareMobileAiVaultSessionResume,
   readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
@@ -121,6 +121,50 @@ describe('buildMobileAiVaultResumeCommand', () => {
 })
 
 describe('buildMobileAiVaultResumeLaunch', () => {
+  it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'omp',
+        sessionId: 'omp-custom-1',
+        filePath: '/custom/omp-sessions/project/session.jsonl'
+      }),
+      hostPlatform: 'linux',
+      settings: {
+        agentDefaultArgs: { omp: '--model custom' },
+        agentDefaultEnv: { omp: { OMP_PROFILE: 'custom' } }
+      }
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && omp '--model' 'custom' --resume '/custom/omp-sessions/project/session.jsonl'",
+      env: { OMP_PROFILE: 'custom' },
+      launchConfig: {
+        agentCommand: "omp '--model' 'custom'",
+        agentArgs: '--model custom',
+        agentEnv: { OMP_PROFILE: 'custom' },
+        ompResumeFilePath: '/custom/omp-sessions/project/session.jsonl'
+      },
+      launchAgent: 'omp'
+    })
+
+    const coldLaunch = buildAgentResumeStartupPlan({
+      agent: 'omp',
+      providerSession: { key: 'session_id', id: 'omp-custom-1' },
+      cmdOverrides: {},
+      agentArgs: launch.launchConfig?.agentArgs,
+      agentEnv: launch.launchConfig?.agentEnv,
+      agentCommand: launch.launchConfig?.agentCommand,
+      ompResumeFilePath: launch.launchConfig?.ompResumeFilePath,
+      platform: 'linux'
+    })
+    expect(coldLaunch).toMatchObject({
+      launchCommand:
+        "omp '--model' 'custom' '--resume' '/custom/omp-sessions/project/session.jsonl'",
+      env: { OMP_PROFILE: 'custom' }
+    })
+  })
+
   it('uses shared TUI startup planning for default args, env, and launch config', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({
@@ -178,59 +222,6 @@ describe('buildMobileAiVaultResumeLaunch', () => {
   })
 })
 
-describe('prepareMobileAiVaultSessionResume', () => {
-  it('materializes legacy shared-home sessions before building a real-home launch', async () => {
-    const legacy = session({
-      agent: 'codex',
-      filePath:
-        '/Users/ada/Library/Application Support/orca/codex-runtime-home/home/sessions/2026/07/20/rollout-a.jsonl',
-      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
-    })
-    const sendRequest = vi.fn().mockResolvedValue({
-      ok: true,
-      result: { useRealCodexHome: true }
-    })
-
-    const prepared = await prepareMobileAiVaultSessionResume({ sendRequest }, legacy)
-    const launch = buildMobileAiVaultResumeLaunch({ session: prepared, hostPlatform: 'darwin' })
-
-    expect(sendRequest).toHaveBeenCalledWith(
-      'aiVault.prepareSessionResume',
-      expect.objectContaining({ filePath: legacy.filePath, codexHome: legacy.codexHome }),
-      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
-    )
-    expect(launch.command).not.toContain('CODEX_HOME=')
-    expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
-  })
-
-  it('fails before terminal creation when targeted materialization fails', async () => {
-    const legacy = session({
-      agent: 'codex',
-      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
-    })
-    const sendRequest = vi.fn().mockResolvedValue({
-      ok: false,
-      error: { message: 'Retry resume after checking session folder permissions.' }
-    })
-
-    await expect(prepareMobileAiVaultSessionResume({ sendRequest }, legacy)).rejects.toThrow(
-      /Retry resume/
-    )
-  })
-
-  it.each([
-    '/Users/ada/.config/codex',
-    '/Users/ada/Library/Application Support/orca/codex-accounts/a/home',
-    '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex'
-  ])('preserves a non-legacy Codex home without an RPC: %s', async (codexHome) => {
-    const current = session({ agent: 'codex', codexHome })
-    const sendRequest = vi.fn()
-
-    await expect(prepareMobileAiVaultSessionResume({ sendRequest }, current)).resolves.toBe(current)
-    expect(sendRequest).not.toHaveBeenCalled()
-  })
-})
-
 describe('resumeAiVaultSessionInTerminal', () => {
   it('creates a fresh terminal and sends the command with Enter', async () => {
     const sendRequest = vi
@@ -252,7 +243,10 @@ describe('resumeAiVaultSessionInTerminal', () => {
           agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
         },
         launchAgent: 'claude',
-        clientMutationId: 'resume-1'
+        clientMutationId: 'resume-1',
+        activate: false,
+        select: true,
+        navigation: 'caller'
       })
     ).resolves.toMatchObject({ id: 'tab-1', terminal: 'pty-1' })
     expect(sendRequest).toHaveBeenNthCalledWith(
@@ -268,7 +262,10 @@ describe('resumeAiVaultSessionInTerminal', () => {
           agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
         },
         launchAgent: 'claude',
-        clientMutationId: 'resume-1'
+        clientMutationId: 'resume-1',
+        activate: false,
+        select: true,
+        navigation: 'caller'
       },
       // Why: a socket drop mid-resume must reject within the request timeout
       // instead of parking on the reconnect waiter with the spinner pinned.

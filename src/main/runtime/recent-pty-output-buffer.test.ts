@@ -165,6 +165,83 @@ describe('RecentPtyOutputBuffer', () => {
     expect(buffer.read()).toBe(reference ?? '')
   })
 
+  it('retainedChunks preserves original chunk boundaries within the window', () => {
+    const buffer = new RecentPtyOutputBuffer()
+    buffer.append('wrote /tmp/a.json')
+    buffer.append('suffix.txt')
+    expect(buffer.retainedChunks().chunks).toEqual(['wrote /tmp/a.json', 'suffix.txt'])
+    expect(buffer.read()).toBe('wrote /tmp/a.jsonsuffix.txt')
+    // read() must not collapse the chunk array before compact(): boundaries
+    // survive a read so the backfill can still replay original chunks.
+    expect(buffer.retainedChunks().chunks).toEqual(['wrote /tmp/a.json', 'suffix.txt'])
+  })
+
+  it('retainedChunks keeps the full original head chunk when the window trims mid-chunk', () => {
+    const buffer = new RecentPtyOutputBuffer()
+    const head = 'a'.repeat(RECENT_PTY_OUTPUT_LIMIT - 5)
+    buffer.append(head)
+    buffer.append('bbbbbbbbbb')
+    buffer.append('cc')
+    const { chunks, headChunkIsPartial } = buffer.retainedChunks()
+    // The head chunk is intact (its original text, trimmed prefix included)
+    // so candidate backfill sees the same input the eager extractor saw.
+    expect(chunks).toEqual([head, 'bbbbbbbbbb', 'cc'])
+    expect(headChunkIsPartial).toBe(false)
+    expect(buffer.read()).toBe(`${'a'.repeat(RECENT_PTY_OUTPUT_LIMIT - 12)}bbbbbbbbbbcc`)
+  })
+
+  it('retainedChunks flags a pre-sliced oversized head chunk as partial', () => {
+    const buffer = new RecentPtyOutputBuffer()
+    buffer.append('z'.repeat(RECENT_PTY_OUTPUT_LIMIT + 100))
+    expect(buffer.retainedChunks().headChunkIsPartial).toBe(true)
+    buffer.append('tail')
+    expect(buffer.retainedChunks().headChunkIsPartial).toBe(true)
+    // Once the partial head chunk is fully evicted the flag clears.
+    buffer.append('w'.repeat(RECENT_PTY_OUTPUT_LIMIT - 1))
+    const { chunks, headChunkIsPartial } = buffer.retainedChunks()
+    expect(headChunkIsPartial).toBe(false)
+    expect(chunks).toEqual(['tail', 'w'.repeat(RECENT_PTY_OUTPUT_LIMIT - 1)])
+    // An exactly cap-sized append is stored whole, not partial.
+    const exact = new RecentPtyOutputBuffer()
+    exact.append('q'.repeat(RECENT_PTY_OUTPUT_LIMIT))
+    expect(exact.retainedChunks().headChunkIsPartial).toBe(false)
+  })
+
+  it('compact collapses to a single chunk and restores read-time defragmentation', () => {
+    const buffer = new RecentPtyOutputBuffer()
+    let reference: string | undefined
+    for (let i = 0; i < 200; i++) {
+      const chunk = `${i}:${'p'.repeat(700)}\n`
+      buffer.append(chunk)
+      reference = referenceAppend(reference, chunk)
+    }
+    buffer.compact()
+    expect(buffer.retainedChunks().chunks).toEqual([reference])
+    expect(buffer.read()).toBe(reference)
+    // After compact, a read re-collapses fragmentation from later appends.
+    buffer.append('after')
+    reference = referenceAppend(reference, 'after')
+    expect(buffer.read()).toBe(reference)
+    expect(buffer.retainedChunks().chunks).toEqual([reference])
+  })
+
+  it('retainedChunks window-trimmed join always equals read()', () => {
+    const rng = mulberry32(0xfeed)
+    const buffer = new RecentPtyOutputBuffer()
+    const joinRetained = (): string => {
+      const { chunks } = buffer.retainedChunks()
+      const joined = chunks.join('')
+      return joined.slice(Math.max(0, joined.length - RECENT_PTY_OUTPUT_LIMIT))
+    }
+    for (let i = 0; i < 300; i++) {
+      buffer.append(String.fromCharCode(33 + (i % 90)).repeat(Math.floor(rng() * 1500)))
+      if (i % 11 === 0) {
+        expect(joinRetained()).toBe(buffer.read())
+      }
+    }
+    expect(joinRetained()).toBe(buffer.read())
+  })
+
   it('stays equivalent under randomized chunk sizes straddling the cap', () => {
     const rng = mulberry32(0xc0ffee)
     for (let round = 0; round < 5; round++) {
