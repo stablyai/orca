@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     elevation: 4
   },
   fabPressed: {
-    backgroundColor: colors.textPrimary
+    backgroundColor: colors.surfaceBrightPressed
   },
   fabDisabled: {
     opacity: 0.5
