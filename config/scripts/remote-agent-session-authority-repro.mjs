@@ -10,6 +10,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
+import { createRequire } from 'node:module'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -17,6 +18,9 @@ import { createInterface } from 'node:readline'
 import { cleanupIsolatedDaemons, isProcessAlive } from './remote-agent-session-process-cleanup.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
+const { parsePaneKey } = createRequire(import.meta.url)(
+  path.join(repoRoot, 'out', 'shared', 'stable-pane-id.js')
+)
 const clientScript = path.join(import.meta.dirname, 'remote-agent-session-repro-client.mjs')
 const fixtureScript = path.join(import.meta.dirname, 'remote-agent-session-repro-fixture.mjs')
 const writableShellScript = path.join(
@@ -204,7 +208,11 @@ try {
   if (!oldTerminal.tabId || !oldTerminal.paneKey || !oldTerminal.ptyId) {
     throw new Error(`retired terminal identity is incomplete: ${JSON.stringify(oldTerminal)}`)
   }
-  const leafId = oldTerminal.paneKey.slice(oldTerminal.paneKey.indexOf(':') + 1)
+  const parsedPaneKey = parsePaneKey(oldTerminal.paneKey)
+  if (!parsedPaneKey || parsedPaneKey.tabId !== oldTerminal.tabId) {
+    throw new Error(`retired terminal pane identity is invalid: ${JSON.stringify(oldTerminal)}`)
+  }
+  const leafId = parsedPaneKey.leafId
   const staleWrite = await callClient(pairingCode, 'session.tabs.updatePaneLayout', {
     worktree,
     tabId: oldTerminal.tabId,
