@@ -382,6 +382,14 @@ import {
   buildAgentResumeStartupPlan,
   buildAgentStartupPlan
 } from '../../shared/tui-agent-startup'
+import {
+  crushOrcaHostArg,
+  crushOrcaSocketPath,
+  crushSseBridgeSupported,
+  startCrushSseBridge,
+  type CrushSseBridge
+} from '../agent-hooks/crush-sse-bridge'
+import { agentHookServer } from '../agent-hooks/server'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import {
   isAgentForegroundWrapperProcess,
@@ -1255,6 +1263,11 @@ type RuntimePtyWorktreeRecord = {
   waitBlockedAt: number | null
   // Why: memoized wait scan of the current retained tail (see RuntimeLeafRecord).
   tailWaitState?: TerminalTailWaitState
+  // Why: crush (charmbracelet/crush) SSE bridge for agent-status reporting.
+  // crush has no CLI hook contract; Orca subscribes to its per-pane SSE stream
+  // and stops the subscriber when the crush PTY exits. Field is optional because
+  // non-crush PTYs never carry one and crush on Windows is unsupported.
+  crushSseBridge?: CrushSseBridge
 }
 
 type TerminalCreateOptions = {
@@ -12886,6 +12899,13 @@ export class OrcaRuntimeService {
       this.intentionalHandlelessPtyStops.has(ptyId) &&
       (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
     advertisedUrlWatcher.unbindPty(ptyId)
+    // Why: stop the crush SSE subscriber synchronously so reconnect timers
+    // don't outlive the crush PTY; idempotent if crush was never enabled.
+    const ptyForBridge = this.ptysById.get(ptyId)
+    ptyForBridge?.crushSseBridge?.stop()
+    if (ptyForBridge) {
+      ptyForBridge.crushSseBridge = undefined
+    }
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
     this.remoteTerminalViewSubscriberCounts.delete(ptyId)
@@ -24201,9 +24221,19 @@ export class OrcaRuntimeService {
       const launchToken = launchOpts.launchConfig
         ? (launchOpts.launchToken ?? randomUUID())
         : undefined
+      // Why: crush has no CLI hook contract. Orca enables crush's client-server
+      // mode (CRUSH_CLIENT_SERVER=1) and points crush at a per-pane custom unix
+      // socket via --host so each agent pane owns a private crush server + SSE
+      // stream that Orca subscribes to for status reporting. Gated to non-Windows
+      // because Node's socketPath HTTP transport is unix-only; on Windows crush
+      // falls back to the generic title-scraping status detector.
+      const crushSseEnabled =
+        launchOpts.launchAgent === 'crush' && !!launchToken && crushSseBridgeSupported()
+      const crushHostArg = crushSseEnabled && launchToken ? crushOrcaHostArg(launchToken) : null
       const baseEnv = {
         ...launchOpts.env,
-        ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
+        ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {}),
+        ...(crushSseEnabled ? { CRUSH_CLIENT_SERVER: '1' } : {})
       }
       const claudeAgentTeamsSourceCommand =
         launchOpts.claudeAgentTeamsSourceCommand?.trim() || launchOpts.command?.trim() || undefined
@@ -24273,13 +24303,23 @@ export class OrcaRuntimeService {
       if (launchOpts.signal?.aborted) {
         throw new Error('client_disconnected')
       }
+      // Why: crush's `--host` arg must be appended to the launch command so
+      // crush's auto-spawned `crush server` binds the per-pane socket Orca
+      // subscribes to. crush's promptInjectionMode is stdin-after-start, so the
+      // command here is pre-prompt and a trailing --host is safe. Other agents
+      // and Windows crush (no socketPath support) leave the command verbatim.
+      const launchCommandForSpawn = sequencedStartupCommand
+        ? launchOpts.command
+        : (agentTeamsPlan?.command ?? launchOpts.command)
+      const crushCommandWithHost =
+        crushHostArg && launchCommandForSpawn
+          ? `${launchCommandForSpawn} --host ${crushHostArg}`
+          : launchCommandForSpawn
       const result = await this.ptyController.spawn({
         cols: 120,
         rows: 40,
         cwd,
-        command: sequencedStartupCommand
-          ? launchOpts.command
-          : (agentTeamsPlan?.command ?? launchOpts.command),
+        command: crushCommandWithHost,
         launchAgent: launchOpts.launchAgent,
         commandDelivery: 'provider',
         startupCommandDelivery: launchOpts.startupCommandDelivery,
@@ -24370,6 +24410,33 @@ export class OrcaRuntimeService {
           : null
         pty.launchToken = launchToken ?? null
         pty.launchAgent = launchOpts.launchAgent ?? null
+        // Why: start the crush SSE subscriber once the PTY record exists so
+        // status events flow through the same hook ingest pipeline as native
+        // hooks. Pass launchToken/tabId/worktreeId so synthetic events carry
+        // the same attribution real hook posts do.
+        if (crushSseEnabled && launchToken) {
+          const bridge = startCrushSseBridge(crushOrcaSocketPath(launchToken), {
+            paneKey,
+            launchToken,
+            tabId,
+            worktreeId: workspace.id,
+            onEvent: ({ hookEventName, hookPayload }) => {
+              agentHookServer.submitSyntheticHookEvent({
+                source: 'crush',
+                paneKey,
+                launchToken,
+                tabId,
+                worktreeId: workspace.id,
+                hookEventName,
+                hookPayload
+              })
+            },
+            onError: (err) => {
+              console.warn('[crush-sse-bridge]', err.message)
+            }
+          })
+          pty.crushSseBridge = bridge
+        }
       }
       const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
       if (pty && launchOpts.deferMobileSessionPublish !== true) {

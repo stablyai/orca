@@ -228,6 +228,7 @@ export function extractAgentProviderSession(
     case 'command-code':
     case 'copilot':
     case 'hermes':
+    case 'crush':
       return null
   }
 }

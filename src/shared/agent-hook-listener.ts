@@ -2314,6 +2314,9 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'crush':
+      // Why: crush SSE role=user messages are the new-turn boundary (user submitted a prompt); assistant messages are working updates.
+      return eventName === 'message:user'
   }
 }
 
@@ -2405,6 +2408,8 @@ function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'crush':
+      return extractCrushToolFields(eventName, hookPayload)
   }
 }
 
@@ -3100,6 +3105,201 @@ function pruneAmpThreadCacheKeys(
     state.ampCompletedCacheKeys.delete(key)
     overflow--
   }
+}
+
+// ─── Crush (charmbracelet/crush) SSE bridge normalizer ────────────────────────
+// Why: crush has no CLI hook contract. Orca subscribes to crush's per-pane SSE
+// stream (CRUSH_CLIENT_SERVER=1 + custom --host socket per pane) and synthesizes
+// a hook event per envelope. hookEventName is the SSE payload type, with `message`
+// split into `message:user` (new turn) / `message:assistant` (working update) so
+// the existing isNewTurnEvent(source, eventName) contract (eventName-only) can
+// discriminate the two roles. hookPayload carries the inner SSE payload verbatim.
+
+function extractCrushToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (eventName === 'message:assistant') {
+    const parts = hookPayload.parts
+    if (!Array.isArray(parts)) {
+      return {}
+    }
+    // Why: the latest unfinished tool_call is the active tool; finished ones are stale tool_result waits already shown as permission blockers.
+    for (const partRaw of parts) {
+      if (
+        typeof partRaw !== 'object' ||
+        partRaw === null ||
+        (partRaw as { type?: string }).type !== 'tool_call'
+      ) {
+        continue
+      }
+      const data = (partRaw as { data?: Record<string, unknown> }).data
+      if (!data) {
+        continue
+      }
+      const toolName = typeof data.name === 'string' ? data.name : undefined
+      const toolInputSource = data.input
+      return toolUpdate(
+        {
+          toolName,
+          toolInput:
+            deriveToolInputPreview(toolName, toolInputSource) ??
+            deriveFallbackToolInputPreview(toolInputSource)
+        },
+        { hasToolInputField: toolInputSource !== undefined }
+      )
+    }
+    return {}
+  }
+  if (eventName === 'permission_request') {
+    const toolName = readString(hookPayload, 'tool_name')
+    const params = hookPayload.params
+    const toolInput =
+      deriveToolInputPreview(toolName, params) ??
+      deriveToolInputPreview(toolName, hookPayload.path) ??
+      deriveFallbackToolInputPreview(params)
+    return toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: params !== undefined || hookPayload.path !== undefined }
+    )
+  }
+  if (eventName === 'run_complete') {
+    const text = readString(hookPayload, 'text')
+    if (text) {
+      return { lastAssistantMessage: text }
+    }
+    return {}
+  }
+  return {}
+}
+
+function crushUserMessageText(hookPayload: Record<string, unknown>): string {
+  const parts = hookPayload.parts
+  if (!Array.isArray(parts)) {
+    return ''
+  }
+  let text = ''
+  for (const partRaw of parts) {
+    if (
+      typeof partRaw !== 'object' ||
+      partRaw === null ||
+      (partRaw as { type?: string }).type !== 'text'
+    ) {
+      continue
+    }
+    const data = (partRaw as { data?: { text?: unknown } }).data
+    if (data && typeof data.text === 'string') {
+      text += data.text
+    }
+  }
+  return text
+}
+
+function crushAssistantMessageText(hookPayload: Record<string, unknown>): string {
+  const parts = hookPayload.parts
+  if (!Array.isArray(parts)) {
+    return ''
+  }
+  let text = ''
+  for (const partRaw of parts) {
+    if (
+      typeof partRaw !== 'object' ||
+      partRaw === null ||
+      (partRaw as { type?: string }).type !== 'text'
+    ) {
+      continue
+    }
+    const data = (partRaw as { data?: { text?: unknown } }).data
+    if (data && typeof data.text === 'string') {
+      text += data.text
+    }
+  }
+  return text
+}
+
+function normalizeCrushEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  _promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  // Why: crush SSE gives us the user's prompt directly via the role=user message
+  // (a turn-start boundary). _promptText arrives empty from the SSE bridge since
+  // crush never POSTs a hook; the prompt is resolved from the user-message parts.
+  const isNewUserTurn = eventName === 'message:user'
+  let stateName: 'working' | 'blocked' | 'done' | null = null
+  let interrupted: boolean | undefined
+  let assistantMessage: string | undefined
+
+  if (eventName === 'message:user' || eventName === 'message:assistant') {
+    stateName = 'working'
+  } else if (eventName === 'permission_request') {
+    stateName = 'blocked'
+  } else if (eventName === 'run_complete') {
+    stateName = 'done'
+    interrupted = hookPayload.cancelled === true ? true : undefined
+    const text = readString(hookPayload, 'text')
+    if (text) {
+      assistantMessage = text
+    }
+  } else if (eventName === 'agent_event') {
+    // Why: agent_event with type=response fires just before run_complete and
+    // confirms the agent's turn has ended; type=error/error surface agent failures.
+    // Treat both as terminal `done`. run_complete (if it follows) is idempotent.
+    const eventType = readString(hookPayload, 'type')
+    if (eventType === 'response' || eventType === 'error' || eventType === 'summarize') {
+      stateName = 'done'
+      if (eventType === 'error') {
+        const errMsg = readString(hookPayload, 'error')
+        if (errMsg) {
+          assistantMessage = errMsg
+        }
+      }
+    } else {
+      return null
+    }
+  } else {
+    return null
+  }
+
+  const resetOnNewTurn = isNewUserTurn
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractCrushToolFields(eventName, hookPayload),
+    {
+      resetOnNewTurn
+    }
+  )
+
+  let promptText = ''
+  if (isNewUserTurn) {
+    promptText = crushUserMessageText(hookPayload)
+  } else if (eventName === 'message:assistant' && !state.lastPromptByPaneKey.has(paneKey)) {
+    // Why: the first assistant message after launch implies the user already
+    // submitted (Orca pre-injected a prompt via stdin). Fall back to that prompt,
+    // carried indirectly through resolvePrompt's retained last value.
+    promptText = ''
+  }
+
+  const lastAssistant =
+    assistantMessage ??
+    (eventName === 'message:assistant' ? crushAssistantMessageText(hookPayload) : undefined)
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, { resetOnNewTurn }),
+      agentType: 'crush',
+      ...(readString(hookPayload, 'model') ? { model: readString(hookPayload, 'model') } : {}),
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
+      ...(lastAssistant ? { lastAssistantMessage: lastAssistant } : {}),
+      ...(interrupted ? { interrupted } : {})
+    })
+  )
 }
 
 function hasExplicitPromptForSource(
@@ -4043,6 +4243,9 @@ export function normalizeHookPayload(
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'crush':
+      payload = normalizeCrushEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
   }
 
   // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
@@ -4110,7 +4313,10 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/kimi': 'kimi',
+  // Why: crush never POSTs here — its SSE bridge feeds via submitSyntheticHookEvent.
+  // Kept so resolveHookSource round-trips an explicit /hook/crush POST (tests, future).
+  '/hook/crush': 'crush'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {
