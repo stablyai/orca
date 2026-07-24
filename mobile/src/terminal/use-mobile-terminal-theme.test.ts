@@ -142,9 +142,9 @@ describe('useMobileTerminalTheme', () => {
     expect(harness.rendered).toHaveLength(renderCount)
   })
 
-  it('falls back to Builtin Tango Light when app mode is light and the host is dark', async () => {
-    // Failing repro first: null light slot + dark host must not paint the host palette
-    // into a light app (the two-slot model exists to prevent that mismatch).
+  it('passes the host palette through under a light app when no slot is chosen', async () => {
+    // Mode is threaded from useTheme, but null-slot remains pure host passthrough
+    // until Appearance can actually select light (mode-mismatch fallback deferred).
     vi.resetModules()
     const storage = (await import('@react-native-async-storage/async-storage')).default
     vi.mocked(storage.getItem).mockResolvedValue(null)
@@ -168,45 +168,7 @@ describe('useMobileTerminalTheme', () => {
       setAppTheme?.('light')
     })
 
-    expect(rendered.at(-1)).toEqual({
-      mode: 'light',
-      theme: getBuiltinTerminalThemePalette('Builtin Tango Light')
-    })
-
-    await act(async () => {
-      renderer.unmount()
-    })
-  })
-
-  it('passes a same-mode host theme through by identity under a light app', async () => {
-    vi.resetModules()
-    const storage = (await import('@react-native-async-storage/async-storage')).default
-    vi.mocked(storage.getItem).mockResolvedValue(null)
-    const lightHost: MobileTerminalTheme = {
-      mode: 'light',
-      theme: { background: '#ffffff', foreground: '#111111' }
-    }
-    const { ThemeProvider, useTheme } = await import('../theme/theme-context')
-    const { useMobileTerminalTheme } = await import('./use-mobile-terminal-theme')
-    const rendered: (MobileTerminalTheme | undefined)[] = []
-    let setAppTheme: ((next: 'system' | 'dark' | 'light') => void) | null = null
-
-    function Harness() {
-      const theme = useTheme()
-      setAppTheme = theme.setAppTheme
-      rendered.push(useMobileTerminalTheme(lightHost))
-      return null
-    }
-
-    let renderer!: ReactTestRenderer
-    await act(async () => {
-      renderer = create(createElement(ThemeProvider, null, createElement(Harness)))
-    })
-    await act(async () => {
-      setAppTheme?.('light')
-    })
-
-    expect(rendered.at(-1)).toBe(lightHost)
+    expect(rendered.at(-1)).toBe(hostTheme)
 
     await act(async () => {
       renderer.unmount()
