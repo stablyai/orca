@@ -28,16 +28,13 @@ export type InsertServeSimPasteboardTextDeps = {
   settleDelayMs?: number
 }
 
-// Why: an insertion is a three-step sequence (pbcopy → settle → Cmd+V) against
-// one shared device pasteboard. Concurrent calls for the same device would
-// interleave, so an earlier chord could paste text a later call already
-// overwrote. Serialize per udid; different devices stay independent.
+// Why: concurrent pbcopy → settle → Cmd+V sequences share one device
+// pasteboard, so an earlier chord could paste text a later call overwrote.
 const deviceInsertionChains = new Map<string, Promise<unknown>>()
 
 function enqueueForDevice<T>(udid: string, run: () => Promise<T>): Promise<T> {
   const pending = deviceInsertionChains.get(udid) ?? Promise.resolve()
-  // Run after the predecessor settles either way: a failed insertion must not
-  // wedge the queue for the device.
+  // Settled either way: a failed insertion must not wedge the device queue.
   const result = pending.then(run, run)
   const chain = result.then(
     () => {},
@@ -74,8 +71,7 @@ export async function insertServeSimPasteboardText(
     )
   }
   const setPasteboardText = deps.setPasteboardText ?? setIosSimulatorPasteboardText
-  // Validation above stays outside the queue so bad requests fail fast instead
-  // of waiting behind (or delaying) an in-flight insertion.
+  // Validated before enqueueing so invalid requests fail without waiting.
   await enqueueForDevice(udid, async () => {
     await setPasteboardText(udid, text)
     await delay(deps.settleDelayMs ?? PASTEBOARD_SETTLE_DELAY_MS)
