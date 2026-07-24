@@ -4,12 +4,12 @@
 # Provisions everything docs/reference/headless-linux-server.md covers, on any
 # systemd Linux with apt, dnf, yum, zypper, or pacman:
 #
-#   curl -fsSL https://raw.githubusercontent.com/stablyai/orca/main/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/stablyai/orca/main/install.sh | bash
 #
-# Run with sudo for a system-wide service (dedicated service user, /opt/orca,
-# system unit). Run WITHOUT sudo for a rootless install: everything lives under
-# your home, the service is a systemd user unit kept alive via lingering, and
-# Chromium uses the user-namespace sandbox.
+# No sudo needed: by default everything lives under your home, the service is
+# a systemd user unit kept alive via lingering, and Chromium uses the
+# user-namespace sandbox. Run with sudo instead for a system-wide service
+# (dedicated service user, /opt/orca, system unit).
 #
 # What it does: installs dependencies (curl, file, xvfb), downloads the release
 # AppImage (sha512-verified against the release's latest-linux*.yml), uses the
@@ -33,8 +33,9 @@ usage() {
   cat <<'EOF'
 Usage: install.sh [options]
 
-Run with sudo for a system-wide service, or as a regular user for a rootless
-install (under ~/.local/opt/orca, with a systemd user unit).
+No sudo needed: as a regular user this performs a rootless install (under
+~/.local/opt/orca, with a systemd user unit). Run with sudo for a system-wide
+service instead.
 
   --pairing-address <addr>  Address advertised to clients (IP, hostname, or
                             proxy URL). Default: the host's default-route IP,
