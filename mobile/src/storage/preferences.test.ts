@@ -12,9 +12,11 @@ import {
   loadHostSidebarWidth,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
+  loadAppTheme,
   loadTerminalLinkOpenMode,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
+  saveAppTheme,
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
   savePushNotificationsEnabled,
@@ -487,5 +489,36 @@ describe('terminal link open mode preference', () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  })
+})
+
+describe('app theme preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('defaults to dark when unset, garbage, or unreadable', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(loadAppTheme()).resolves.toBe('dark')
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:appTheme')
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('sepia')
+    await expect(loadAppTheme()).resolves.toBe('dark')
+
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+    await expect(loadAppTheme()).resolves.toBe('dark')
+  })
+
+  it('returns each valid value verbatim', async () => {
+    for (const value of ['system', 'dark', 'light'] as const) {
+      vi.mocked(AsyncStorage.getItem).mockResolvedValue(value)
+      await expect(loadAppTheme()).resolves.toBe(value)
+    }
+  })
+
+  it('persists the raw preference string to orca:appTheme', async () => {
+    await saveAppTheme('light')
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:appTheme', 'light')
   })
 })
