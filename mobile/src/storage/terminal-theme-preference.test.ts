@@ -146,6 +146,21 @@ describe('mobile terminal theme preference', () => {
     })
   })
 
+  it('writes only the patched slot when the read failed, so the others survive', async () => {
+    const store = await freshStore()
+    // Read fails but writes succeed: the merge base is the in-memory default, so
+    // writing the untouched slots would erase what is really on disk.
+    vi.mocked(store.storage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await store.saveMobileTerminalThemeSelection({ dark: 'One Dark' })
+
+    expect(store.storage.setItem).toHaveBeenCalledExactlyOnceWith(
+      'orca:terminalThemeDark',
+      'One Dark'
+    )
+    expect(store.storage.removeItem).not.toHaveBeenCalled()
+  })
+
   it('publishes to subscribers before the write resolves', async () => {
     const store = await freshStore()
     const pending = deferred<undefined>()

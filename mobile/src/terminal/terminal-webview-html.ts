@@ -13,7 +13,7 @@ import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
 import { TERMINAL_WHEEL_SCROLL_JS } from './terminal-webview-wheel-scroll-injected'
 
-const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
+export const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
   foreground: '#c0caf5',
   cursor: '#c0caf5',

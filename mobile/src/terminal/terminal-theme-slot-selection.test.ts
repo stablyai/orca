@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getBuiltinTerminalThemePalette } from '../../../src/shared/terminal-themes'
 import type { MobileTerminalThemeSelection } from '../storage/terminal-theme-preference'
 import { selectMobileTerminalTheme } from './terminal-theme-slot-selection'
+import { DEFAULT_TERMINAL_THEME } from './terminal-webview-html'
 import type { MobileTerminalTheme } from './terminal-webview-contract'
 
 const FOLLOW_DESKTOP: MobileTerminalThemeSelection = {
@@ -66,5 +67,15 @@ describe('selectMobileTerminalTheme', () => {
     expect(
       selectMobileTerminalTheme({ ...FOLLOW_DESKTOP, dark: 'One Dark' }, 'light', hostTheme)
     ).toBe(hostTheme)
+  })
+})
+
+describe('shared catalog vs the WebView whitelist', () => {
+  it('covers every slot the WebView normalizer keeps, so no theme renders half-default', () => {
+    // Why here: mobile owns the whitelist (terminal-webview-html.ts's defaultTheme), so drift
+    // must fail on this side — a src/shared test cannot import from mobile.
+    const palette = getBuiltinTerminalThemePalette('Ghostty Default Style Dark')
+    expect(palette).toBeTruthy()
+    expect(Object.keys(palette ?? {}).sort()).toEqual(Object.keys(DEFAULT_TERMINAL_THEME).sort())
   })
 })
