@@ -17,13 +17,10 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
         ]
       : []
 
-  // Why: OMP's resume id (ctx.sessionManager.getSessionId()) is only reachable
-  // through the handler ctx, so refresh the shared metadata on every event —
-  // the transport keeps only the latest pending post and a session can switch
-  // within a process; the id feeds cold-restore (`omp --resume <id>`).
-  const ctxParam = kind === 'omp' ? ', ctx' : ''
-  const bareCtxParams = kind === 'omp' ? '_event, ctx' : ''
-  const captureSessionMetadata = kind === 'omp' ? ['    updateSessionMetadata(ctx)'] : []
+  // Why: OMP can switch sessions in-process, so each latest-only post needs fresh identity.
+  const ctxParam = ', ctx'
+  const bareCtxParams = '_event, ctx'
+  const captureSessionMetadata = ['    updateRuntimeOmpSessionMetadata(ctx)']
 
   return [
     '// Why: pi assistant messages carry content as an array of parts',

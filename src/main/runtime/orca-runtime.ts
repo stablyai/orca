@@ -1260,7 +1260,8 @@ function copySleepingAgentLaunchConfig(
   return {
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv }
+    agentEnv: { ...config.agentEnv },
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
   }
 }
 
@@ -21224,6 +21225,7 @@ export class OrcaRuntimeService {
           ? request.agentArgs
           : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+      ompResumeFilePath: request.ompResumeFilePath,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       platform,
       shell,

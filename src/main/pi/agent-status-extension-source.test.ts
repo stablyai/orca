@@ -388,40 +388,23 @@ describe('getPiAgentStatusExtensionSource', () => {
   })
 
   it('omits absent or empty Pi session metadata from status posts', async () => {
-    const harness = createHarness({ kind: 'pi' })
-    await harness.callHook(
-      'session_start',
-      {},
-      { sessionManager: { getSessionId: () => '', getSessionFile: () => undefined } }
-    )
-    await harness.callHook('agent_start')
+    for (const sessionManager of [
+      { getSessionId: () => '', getSessionFile: () => undefined },
+      { getSessionFile: () => '/tmp/pi-session.jsonl' }
+    ]) {
+      const harness = createHarness({ kind: 'pi' })
+      await harness.callHook('session_start', {}, { sessionManager })
+      await harness.callHook('agent_start')
 
-    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
-    const payloads = harness.fetchMock.mock.calls.map(
-      ([_, init]) => JSON.parse(String(init?.body)).payload
-    )
-    expect(payloads).toEqual([
-      { hook_event_name: 'session_start' },
-      { hook_event_name: 'agent_start' }
-    ])
-  })
-
-  it('preserves Pi session file metadata when the session id is unavailable', async () => {
-    const harness = createHarness({
-      kind: 'pi',
-      existsSync: (path) => path === '/tmp/pi-session.jsonl'
-    })
-
-    await harness.callHook(
-      'session_start',
-      {},
-      { sessionManager: { getSessionFile: () => '/tmp/pi-session.jsonl' } }
-    )
-
-    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
-      hook_event_name: 'session_start',
-      session_file: '/tmp/pi-session.jsonl'
-    })
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+      const payloads = harness.fetchMock.mock.calls.map(
+        ([_, init]) => JSON.parse(String(init?.body)).payload
+      )
+      expect(payloads).toEqual([
+        { hook_event_name: 'session_start' },
+        { hook_event_name: 'agent_start' }
+      ])
+    }
   })
 
   it('keeps OMP runtime status payloads unchanged by Pi session metadata', async () => {
@@ -453,63 +436,83 @@ describe('getPiAgentStatusExtensionSource', () => {
     )
   })
 
-  it('attaches the OMP handler-context session_id to a posted snapshot', async () => {
-    // Why: OMP cold-restore needs the provider session id, sourced from the
-    // second handler argument (ctx.sessionManager.getSessionId()).
+  it('tracks persistent OMP sessions and clears ephemeral session ids', async () => {
     const harness = createHarness({ kind: 'omp' })
-    const ctx = { sessionManager: { getSessionId: () => 'omp-session-9' } }
+    let sessionId = 'omp-session-8'
+    const sessionManager = { getSessionId: () => sessionId, getSessionFile: () => '/tmp/s' }
 
-    await harness.callHook('agent_start', undefined, ctx)
-
-    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    const startBody = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
-    expect(startBody.payload).toEqual({
-      hook_event_name: 'agent_start',
-      session_id: 'omp-session-9'
-    })
-  })
-
-  it('carries the OMP session_id alongside a prompt-bearing snapshot', async () => {
-    // Why: refreshing on every event (not just the first) matters because the
-    // transport keeps only the latest pending post and sessions can switch.
-    const harness = createHarness({ kind: 'omp' })
-
-    await harness.callHook(
-      'before_agent_start',
-      { prompt: 'hi' },
-      { sessionManager: { getSessionId: () => 'omp-session-9' } }
-    )
-
-    const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
-    expect(body.payload).toEqual({
-      hook_event_name: 'before_agent_start',
-      prompt: 'hi',
-      session_id: 'omp-session-9'
-    })
-  })
-
-  it('omits the OMP session_id when the handler context exposes no session manager', async () => {
-    const harness = createHarness({ kind: 'omp' })
-
-    await harness.callHook('agent_end', undefined, {})
-
-    const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
-    expect(body.payload).toEqual({ hook_event_name: 'agent_end' })
-  })
-
-  it('routes an OMP executable through /hook/omp', async () => {
-    const harness = createHarness({
-      kind: 'pi',
-      title: 'omp',
-      existsSync: () => false
+    await harness.callHook('agent_start', undefined, { sessionManager })
+    sessionId = 'omp-session-9'
+    await harness.callHook('before_agent_start', { prompt: 'hi' }, { sessionManager })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    await harness.callHook('agent_end', undefined, {
+      sessionManager: { getSessionId: () => 'omp-ephemeral' }
     })
 
-    await harness.callHook('agent_start')
-
-    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
-    expect(harness.spawnMock).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(3))
+    expect(
+      harness.fetchMock.mock.calls.map(([_, init]) => JSON.parse(String(init?.body)).payload)
+    ).toEqual([
+      { hook_event_name: 'agent_start', session_id: 'omp-session-8' },
+      {
+        hook_event_name: 'before_agent_start',
+        prompt: 'hi',
+        session_id: 'omp-session-9'
+      },
+      { hook_event_name: 'agent_end' }
+    ])
   })
+
+  it.each([
+    ['OMP extension', { kind: 'omp' as const }],
+    ['runtime-routed OMP', { kind: 'pi' as const, title: 'omp' }]
+  ])(
+    'keeps queued %s status bound to the session active when it was posted',
+    async (_name, args) => {
+      const finishDeliveries: (() => void)[] = []
+      const harness = createHarness({
+        ...args,
+        fetchImpl: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              finishDeliveries.push(() => resolve({ ok: true }))
+            })
+        )
+      })
+
+      await harness.callHook('agent_start', undefined, {
+        sessionManager: {
+          getSessionId: () => 'omp-session-8',
+          getSessionFile: () => '/tmp/omp-session-8.jsonl'
+        }
+      })
+      await harness.callHook(
+        'message_end',
+        { message: { role: 'assistant', content: 'done' } },
+        {
+          sessionManager: {
+            getSessionId: () => 'omp-session-9',
+            getSessionFile: () => '/tmp/omp-session-9.jsonl'
+          }
+        }
+      )
+      await harness.callHook('message_end', { message: { role: 'user', content: 'next' } }, {})
+
+      finishDeliveries[0]?.()
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+      const body = JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body))
+      expect(body.payload).toEqual({
+        hook_event_name: 'message_end',
+        role: 'assistant',
+        text: 'done',
+        session_id: 'omp-session-9'
+      })
+      expect(body.payload).not.toHaveProperty('session_file')
+      expect(harness.fetchMock.mock.calls[1]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
+      expect(harness.spawnMock).not.toHaveBeenCalled()
+      finishDeliveries[1]?.()
+    }
+  )
 
   it.each(['pi', 'omp'] as const)(
     'registers no status handlers for a nested %s subagent process',

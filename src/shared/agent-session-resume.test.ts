@@ -61,7 +61,6 @@ describe('agent session resume metadata', () => {
   })
 
   it('rejects unsupported sources and unsafe ids', () => {
-    // Why: cursor is a genuinely non-resumable source now that omp resumes (#8962).
     expect(extractAgentProviderSession('cursor', { session_id: 'cursor-session' })).toBeNull()
     expect(normalizeAgentProviderSession({ key: 'session_id', id: 'bad\nid' })).toBeNull()
     expect(normalizeAgentProviderSession({ key: 'session_id', id: '--last' })).toBeNull()

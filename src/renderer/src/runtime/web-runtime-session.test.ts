@@ -1041,7 +1041,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     })
   })
 
-  it('preserves the exact resume when a new host reports an old execution owner', async () => {
+  it('uses the exact legacy OMP resume when an older host only advertises base authority', async () => {
     const methods: string[] = []
     const runtimeCall = vi.fn(async (request: { method: string }) => {
       methods.push(request.method)
@@ -1063,8 +1063,8 @@ describe('createWebRuntimeSessionTerminal', () => {
           id: 'ensure',
           ok: false,
           error: {
-            code: 'agent_session_legacy_required',
-            message: 'agent_session_legacy_required'
+            code: 'invalid_argument',
+            message: 'old host rejected OMP'
           }
         }
       }
@@ -1080,24 +1080,25 @@ describe('createWebRuntimeSessionTerminal', () => {
       createWebRuntimeSessionTerminal({
         worktreeId: WORKTREE_ID,
         agentSessionKind: 'resume',
-        launchAgent: 'codex',
-        command: "codex resume 'session-1'",
-        env: { CODEX_PROFILE: 'captured' },
+        launchAgent: 'omp',
+        command: "omp --resume '/custom/omp/project/session.jsonl'",
+        env: { PI_CODING_AGENT_DIR: '/custom/omp' },
+        launchConfig: {
+          agentCommand: 'omp',
+          agentArgs: '',
+          agentEnv: { PI_CODING_AGENT_DIR: '/custom/omp' },
+          ompResumeFilePath: '/custom/omp/project/session.jsonl'
+        },
         providerSession: { key: 'session_id', id: 'session-1' }
       })
     ).resolves.toEqual({ status: 'created' })
 
-    expect(methods).toEqual([
-      'status.get',
-      'terminal.ensureAgentSession',
-      'session.tabs.createTerminal',
-      'session.tabs.list'
-    ])
-    expect(runtimeCall.mock.calls[2]?.[0]).toMatchObject({
+    expect(methods).toEqual(['status.get', 'session.tabs.createTerminal', 'session.tabs.list'])
+    expect(runtimeCall.mock.calls[1]?.[0]).toMatchObject({
       params: {
-        command: "codex resume 'session-1'",
-        env: { CODEX_PROFILE: 'captured' },
-        launchAgent: 'codex'
+        command: "omp --resume '/custom/omp/project/session.jsonl'",
+        env: { PI_CODING_AGENT_DIR: '/custom/omp' },
+        launchAgent: 'omp'
       }
     })
   })

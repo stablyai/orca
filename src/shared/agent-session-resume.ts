@@ -36,6 +36,7 @@ export type SleepingAgentLaunchConfig = {
   agentCommand?: string
   agentArgs: string
   agentEnv: Record<string, string>
+  ompResumeFilePath?: string
 }
 
 export type SleepingAgentSessionRecord = {
@@ -213,8 +214,7 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
-    // OMP's managed extension posts the authoritative id from
-    // ctx.sessionManager.getSessionId(); the CLI resumes it via `omp --resume <id>`.
+    // Why: OMP's managed extension reports the authoritative CLI resume id.
     case 'omp': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
@@ -230,7 +230,8 @@ export function extractAgentProviderSession(
 
 export function getAgentResumeArgv(
   agent: ResumableTuiAgent,
-  providerSession: AgentProviderSessionMetadata
+  providerSession: AgentProviderSessionMetadata,
+  ompResumeFilePath?: string | null
 ): string[] | null {
   const id = providerSession.id
   switch (agent) {
@@ -257,6 +258,8 @@ export function getAgentResumeArgv(
     case 'devin':
       return providerSession.key === 'session_id' ? ['devin', '--resume', id] : null
     case 'omp':
-      return providerSession.key === 'session_id' ? ['omp', '--resume', id] : null
+      return providerSession.key === 'session_id'
+        ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
+        : null
   }
 }

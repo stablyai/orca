@@ -81,12 +81,17 @@ function getAgentStatusTabId(entry: {
 
 function activeOrQueuedResumeClaimsProviderSession(
   record: SleepingAgentSessionRecord,
-  state: ReturnType<typeof useAppStore.getState>
+  state: ReturnType<typeof useAppStore.getState>,
+  samePaneOwnsRecovery: boolean
 ): boolean {
   const worktreeTabIds = new Set(
     (state.tabsByWorktree[record.worktreeId] ?? []).map((tab) => tab.id)
   )
   for (const entry of Object.values(state.agentStatusByPaneKey)) {
+    // Why: only an owned pane needs its record; hidden/live panes still dedupe by status.
+    if (samePaneOwnsRecovery && entry.paneKey === record.paneKey) {
+      continue
+    }
     if (
       worktreeTabIds.has(getAgentStatusTabId(entry) ?? '') &&
       entry.worktreeId === record.worktreeId &&
@@ -181,7 +186,7 @@ export function resumeSleepingAgentSessionsForWorktree(
       }
       continue
     }
-    if (activeOrQueuedResumeClaimsProviderSession(record, currentState)) {
+    if (activeOrQueuedResumeClaimsProviderSession(record, currentState, isPaneOwned)) {
       // Why: main can replay the old wake record after the same provider
       // session was already queued in a fresh tab; clear the stale replay.
       state.clearSleepingAgentSession(record.paneKey)

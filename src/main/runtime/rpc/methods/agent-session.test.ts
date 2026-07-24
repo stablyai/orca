@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
@@ -48,8 +49,9 @@ describe('agent session RPC methods', () => {
       request('terminal.ensureAgentSession', {
         kind: 'explicit',
         worktree: 'id:worktree-1',
-        agent: 'codex',
+        agent: 'omp',
         providerSession: { key: 'session_id', id: 'provider-session-1' },
+        ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         presentation: 'focused',
@@ -62,8 +64,9 @@ describe('agent session RPC methods', () => {
       {
         kind: 'explicit',
         worktree: 'id:worktree-1',
-        agent: 'codex',
+        agent: 'omp',
         providerSession: { key: 'session_id', id: 'provider-session-1' },
+        ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         presentation: 'focused',
@@ -321,5 +324,6 @@ describe('agent session RPC methods', () => {
     expect(RUNTIME_PROTOCOL_VERSION).toBe(3)
     expect(MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION).toBe(2)
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY)
   })
 })

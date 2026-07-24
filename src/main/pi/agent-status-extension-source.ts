@@ -13,28 +13,40 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getGeneratedNodeBoundedFileReaderSourceLines } from '../generated-node-bounded-file-reader'
 import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-source'
+import { getPiAgentStatusRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
 
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
 export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
-  const sessionMetadataSourceLines = [
-    'let sessionMetadata: Record<string, unknown> = {}',
-    '',
-    'function updateSessionMetadata(ctx: unknown): void {',
-    '  const sessionManager = (ctx as { sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown } } | null)?.sessionManager',
-    '  const sessionId = sessionManager?.getSessionId?.()',
-    '  const sessionFile = sessionManager?.getSessionFile?.()',
-    '  sessionMetadata = {}',
-    "  if (typeof sessionId === 'string' && sessionId) {",
-    '    sessionMetadata.session_id = sessionId',
-    '  }',
-    "  if (typeof sessionFile === 'string' && sessionFile) {",
-    '    sessionMetadata.session_file = sessionFile',
-    '  }',
-    '}',
-    '',
-    ...(kind === 'pi'
+  // Why: OMP needs the file only to reject ephemeral sessions; disclose just its resume id.
+  const sessionMetadataSourceLines =
+    kind === 'pi'
       ? [
+          'let sessionMetadata: Record<string, unknown> = {}',
+          'let runtimeOmpSessionMetadata: Record<string, unknown> = {}',
+          '',
+          'function updateSessionMetadata(ctx: unknown): void {',
+          '  const sessionManager = (ctx as { sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown } } | null)?.sessionManager',
+          '  const sessionId = sessionManager?.getSessionId?.()',
+          '  const sessionFile = sessionManager?.getSessionFile?.()',
+          "  sessionMetadata = typeof sessionId === 'string' && sessionId ? {",
+          '    session_id: sessionId,',
+          "    ...(typeof sessionFile === 'string' && sessionFile ? { session_file: sessionFile } : {}),",
+          '  } : {}',
+          '}',
+          '',
+          'function updateRuntimeOmpSessionMetadata(ctx: unknown): void {',
+          '  if (!isOmpRuntime()) return',
+          '  const sessionManager = (ctx as { sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown } } | null)?.sessionManager',
+          '  const sessionId = sessionManager?.getSessionId?.()',
+          '  const sessionFile = sessionManager?.getSessionFile?.()',
+          "  runtimeOmpSessionMetadata = typeof sessionId === 'string' && sessionId && typeof sessionFile === 'string' && sessionFile ? { session_id: sessionId } : {}",
+          '}',
+          '',
+          'function getPostSessionMetadata(ompRuntime: boolean): Record<string, unknown> {',
+          '  return ompRuntime ? runtimeOmpSessionMetadata : sessionMetadata',
+          '}',
+          '',
           'function getPersistedSessionMetadata(): Record<string, unknown> {',
           '  const sessionFile = sessionMetadata.session_file',
           "  if (typeof sessionFile !== 'string' || !sessionFile) return {}",
@@ -49,15 +61,30 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           '}',
           ''
         ]
-      : [])
-  ]
-  // Why: Pi resumes by transcript file, so its metadata is gated on the file
-  // actually existing; OMP resumes by session id alone (`omp --resume <id>`,
-  // #8962), so the latest handler-captured metadata rides every post as-is.
+      : [
+          'let sessionMetadata: Record<string, unknown> = {}',
+          '',
+          'function updateSessionMetadata(ctx: unknown): void {',
+          '  const sessionManager = (ctx as { sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown } } | null)?.sessionManager',
+          '  const sessionId = sessionManager?.getSessionId?.()',
+          '  const sessionFile = sessionManager?.getSessionFile?.()',
+          "  sessionMetadata = typeof sessionId === 'string' && sessionId && typeof sessionFile === 'string' && sessionFile ? { session_id: sessionId } : {}",
+          '}',
+          '',
+          'function updateRuntimeOmpSessionMetadata(ctx: unknown): void {',
+          '  updateSessionMetadata(ctx)',
+          '}',
+          '',
+          'function getPostSessionMetadata(_ompRuntime: boolean): Record<string, unknown> {',
+          '  return sessionMetadata',
+          '}',
+          ''
+        ]
+  // Why: Pi resumes from an existing transcript; OMP resumes directly by session id (#8962).
   const payloadLine =
     kind === 'pi'
-      ? '    payload: { hook_event_name: hookEventName, ...getPersistedSessionMetadata(), ...extra },'
-      : '    payload: { hook_event_name: hookEventName, ...sessionMetadata, ...extra },'
+      ? '    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata()), ...extra },'
+      : '    payload: { hook_event_name: hookEventName, ...metadata, ...extra },'
 
   // Why: keep this string self-contained — it runs inside the pi process,
   // so it cannot import from Orca's main bundle. fs/http coords come from
@@ -75,7 +102,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'const HOOK_POST_TIMEOUT_MS = 1000',
     ...getGeneratedNodeBoundedFileReaderSourceLines({ typed: true }),
     'let activePost = false',
-    'let pendingPost: { hookEventName: string; extra: Record<string, unknown> } | null = null',
+    'let pendingPost: { hookEventName: string; extra: Record<string, unknown>; metadata: Record<string, unknown>; ompRuntime: boolean } | null = null',
     ...sessionMetadataSourceLines,
     '',
     '// Why: re-reading the endpoint file on every event is cheap (small file,',
@@ -132,32 +159,16 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  }',
     '}',
     '',
-    'function processName(value: unknown): string {',
-    "  return String(value || '').split(/[\\\\/]/).pop()?.toLowerCase() || ''",
-    '}',
-    '',
-    'function resolveHookPath(): string {',
-    `  const configuredPath = '/hook/${kind}'`,
-    '  const executableNames = [',
-    '    processName(process.title),',
-    '    processName(process.env._),',
-    '    processName(process.argv[1]),',
-    '    processName(process.argv[0])',
-    '  ]',
-    '  const isOmpExecutable = executableNames.some((name) =>',
-    "    ['omp', 'omp.js', 'omp.sh', 'omp.cmd', 'omp.exe', 'omp.bat'].includes(name)",
-    '  )',
-    '  // Why: a bare shell may launch either Pi or OMP after spawn. Runtime',
-    '  // executable detection keeps that status labeled',
-    '  // as OMP instead of silently reporting it as Pi.',
-    '  if (isOmpExecutable) {',
-    "    return '/hook/omp'",
-    '  }',
-    '  return configuredPath',
-    '}',
+    ...getPiAgentStatusRuntimeDetectionSourceLines(kind),
     '',
     'function post(hookEventName: string, extra: Record<string, unknown> = {}): void {',
-    '  pendingPost = { hookEventName, extra }',
+    '  const ompRuntime = isOmpRuntime()',
+    '  pendingPost = {',
+    '    hookEventName,',
+    '    extra,',
+    '    metadata: getPostSessionMetadata(ompRuntime),',
+    '    ompRuntime,',
+    '  }',
     '  drainPosts()',
     '}',
     '',
@@ -166,7 +177,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  const next = pendingPost',
     '  pendingPost = null',
     '  activePost = true',
-    '  void postOnce(next.hookEventName, next.extra)',
+    '  void postOnce(next.hookEventName, next.extra, next.metadata, next.ompRuntime)',
     '    .catch(() => {})',
     '    .finally(() => {',
     '      activePost = false',
@@ -176,12 +187,14 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '',
     'async function postOnce(',
     '  hookEventName: string,',
-    '  extra: Record<string, unknown>',
+    '  extra: Record<string, unknown>,',
+    '  metadata: Record<string, unknown>,',
+    '  ompRuntime: boolean',
     '): Promise<void> {',
     '  const coords = resolveHookCoords()',
     '  const paneKey = process.env.ORCA_PANE_KEY',
     '  if (!coords.port || !coords.token || !paneKey) return',
-    '  const url = `http://127.0.0.1:${coords.port}${resolveHookPath()}`',
+    '  const url = `http://127.0.0.1:${coords.port}${resolveHookPath(ompRuntime)}`',
     '  const body = JSON.stringify({',
     '    paneKey,',
     "    launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || '',",
