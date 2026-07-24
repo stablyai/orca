@@ -6,4 +6,5 @@ export type TerminalTabCloseRequest = {
 export type TerminalTabCloseResponse = {
   requestId: string
   error?: string
+  archiveId?: string
 }

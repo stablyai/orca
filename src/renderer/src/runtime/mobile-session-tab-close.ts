@@ -10,6 +10,9 @@ export function closeMobileSessionTabInStore(
   const unifiedTab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
     (tab) => tab.id === tabId || tab.entityId === tabId
   )
+  if (unifiedTab?.contentType === 'terminal') {
+    return false
+  }
   if (unifiedTab && EDITOR_SESSION_CONTENT_TYPES.has(unifiedTab.contentType)) {
     store.closeFile(unifiedTab.entityId)
     return true

@@ -7,7 +7,7 @@ import {
 } from './agent-session-resume'
 import { normalizeExecutionHostId, type ExecutionHostId } from './execution-host'
 import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './types'
+import type { TuiAgent, WorkspaceSessionState } from './types'
 
 export const TERMINAL_ARCHIVE_SCHEMA_VERSION = 1 as const
 export const DEFAULT_TERMINAL_ARCHIVE_RETENTION_DAYS = 7
@@ -128,6 +128,24 @@ export const terminalArchiveSnapshotSchema = z
   .strict()
 
 export type TerminalArchiveSnapshot = z.infer<typeof terminalArchiveSnapshotSchema>
+
+/** Renderer-owned xterm bytes captured before a user closes an entire tab. */
+export type TerminalArchiveRendererSnapshot = {
+  buffer: string
+  source: 'renderer'
+  truncated: boolean
+  byteLength: number
+}
+
+/** Narrow renderer → main handoff; main supplies the authoritative pane identities. */
+export type TerminalArchiveRendererCloseRequest = {
+  session: WorkspaceSessionState
+  worktreeId: string
+  tabId: string
+  executionHostId: ExecutionHostId
+  runtimeEnvironmentId?: string
+  snapshotsByLeafId: Record<string, TerminalArchiveRendererSnapshot>
+}
 
 export const archivedTerminalPaneSchema = z
   .object({

@@ -923,6 +923,8 @@ const api = {
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
+    archiveTerminalTab: (request) => ipcRenderer.invoke('pty:archiveTerminalTab', request),
+
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
     getAuthoritativeBufferSnapshotCapabilities: (

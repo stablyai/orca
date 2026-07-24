@@ -1577,7 +1577,7 @@ export function useTerminalPaneLifecycle({
       }
       if (mgr.getPanes().length <= 1) {
         // Why: route through closeTerminalTab (not raw closeTab) so a pinned tab hits the confirmation guard — this was the one path that silently dropped pinned tabs.
-        closeTerminalTab(tabId)
+        closeTerminalTab(tabId, { reason: 'pane-only' })
       } else {
         mgr.closePane(detail.paneRuntimeId)
         scheduleRuntimeGraphSync()

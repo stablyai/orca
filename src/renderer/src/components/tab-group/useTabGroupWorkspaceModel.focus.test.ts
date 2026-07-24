@@ -251,7 +251,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(event.detail).toEqual({ tabId: 'terminal-1' })
   })
 
-  it('revokes local terminal state before paired-host bulk close', async () => {
+  it('waits for the paired-host archive receipt before closing the local terminal mirror', async () => {
     const secondTerminal = {
       id: 'terminal-2',
       ptyId: 'remote:env-1@@pty-2',
@@ -301,21 +301,34 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       }
     }
     mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    let resolveHostReceipt: (receipt: { closed: true; archiveId: string }) => void = () => {}
+    const hostReceipt = new Promise<{ closed: true; archiveId: string }>((resolve) => {
+      resolveHostReceipt = resolve
+    })
+    mocks.closeWebRuntimeSessionTab.mockReturnValue(hostReceipt)
     const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
     const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
 
     model.commands.closeOthers(firstUnified.id)
 
-    expect(mocks.closeTab).toHaveBeenCalledWith(
-      'terminal-2',
-      expect.objectContaining({ remoteCloseOwnedByHost: true })
+    await vi.waitFor(() =>
+      expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith({
+        worktreeId: 'wt-1',
+        tabId: 'terminal-2',
+        environmentId: 'env-1',
+        reason: 'user'
+      })
     )
-    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      tabId: 'terminal-2',
-      environmentId: 'env-1',
-      reason: 'user'
-    })
+    expect(mocks.closeTab).not.toHaveBeenCalled()
+
+    resolveHostReceipt({ closed: true, archiveId: '11111111-1111-4111-8111-111111111111' })
+
+    await vi.waitFor(() =>
+      expect(mocks.closeTab).toHaveBeenCalledWith('terminal-2', {
+        reason: undefined,
+        remoteCloseOwnedByHost: true
+      })
+    )
   })
 
   it('records terminal split completion when splitting a single terminal tab group', async () => {

@@ -2949,6 +2949,8 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
     clearBuffer: () => {},
     kill: () => Promise.resolve(),
+    // A web client must ask its runtime owner to archive; pretending this local shim succeeded would permit data loss.
+    archiveTerminalTab: () => Promise.reject(new Error('terminal_archive_unavailable')),
     ackColdRestore: () => {},
     ackData: () => {},
     onDeliveryResyncRequest: () => noopUnsubscribe,

@@ -81,10 +81,10 @@ describe('closeTerminalTab kill-all routing', () => {
       })
     )
 
-    closeTerminalTab('terminal-1', { force: true })
+    closeTerminalTab('terminal-1', { force: true, reason: 'cleanup' })
 
     expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
-    expect(closeTab).toHaveBeenCalledWith('terminal-1', { reason: undefined })
+    expect(closeTab).toHaveBeenCalledWith('terminal-1', { reason: 'cleanup' })
     expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
 
@@ -94,9 +94,9 @@ describe('closeTerminalTab kill-all routing', () => {
     })
     getStateMock.mockReturnValue(state)
 
-    closeTerminalTab('terminal-1', { force: true })
+    closeTerminalTab('terminal-1', { force: true, reason: 'cleanup' })
 
-    expect(state.closeTab).toHaveBeenCalledWith('terminal-1')
+    expect(state.closeTab).toHaveBeenCalledWith('terminal-1', { reason: 'cleanup' })
     expect(state.setActiveFile).toHaveBeenCalledWith('editor-1')
     expect(state.setActiveTabType).toHaveBeenCalledWith('editor')
     expect(state.closeFile).not.toHaveBeenCalled()
@@ -111,8 +111,9 @@ describe('closeTerminalTab kill-all routing', () => {
     })
     getStateMock.mockReturnValue(state)
 
-    closeTerminalTab('terminal-1', { force: true })
+    closeTerminalTab('terminal-1', { force: true, reason: 'cleanup' })
 
+    expect(state.closeTab).toHaveBeenCalledWith('terminal-1', { reason: 'cleanup' })
     expect(state.setActiveBrowserTab).toHaveBeenCalledWith('browser-1')
     expect(state.setActiveTabType).toHaveBeenCalledWith('browser')
     expect(state.closeBrowserTab).not.toHaveBeenCalled()
@@ -124,8 +125,9 @@ describe('closeTerminalTab kill-all routing', () => {
     const state = baseState()
     getStateMock.mockReturnValue(state)
 
-    closeTerminalTab('terminal-1', { force: true })
+    closeTerminalTab('terminal-1', { force: true, reason: 'cleanup' })
 
+    expect(state.closeTab).toHaveBeenCalledWith('terminal-1', { reason: 'cleanup' })
     expect(state.setActiveWorktree).toHaveBeenCalledWith(null)
     expect(state.setActiveFile).not.toHaveBeenCalled()
     expect(state.setActiveBrowserTab).not.toHaveBeenCalled()

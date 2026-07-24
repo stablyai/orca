@@ -12,12 +12,12 @@ const TERMINAL_TAB_CLOSE_TIMEOUT_MS = 20_000
 export async function requestTerminalTabCloseFromRenderer(
   mainWindow: BrowserWindow,
   tabId: string
-): Promise<void> {
+): Promise<{ archiveId: string } | void> {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
     throw new Error('renderer_unavailable')
   }
   const requestId = randomUUID()
-  await new Promise<void>((resolve, reject) => {
+  return await new Promise<{ archiveId: string } | void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       ipcMain.removeListener('ui:terminalTabCloseResponse', onResponse)
       reject(new Error('terminal_tab_close_timeout'))
@@ -33,7 +33,7 @@ export async function requestTerminalTabCloseFromRenderer(
       if (response.error) {
         reject(new Error(response.error))
       } else {
-        resolve()
+        resolve(response.archiveId ? { archiveId: response.archiveId } : undefined)
       }
     }
     ipcMain.on('ui:terminalTabCloseResponse', onResponse)

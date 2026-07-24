@@ -659,7 +659,7 @@ export async function activateWebRuntimeSessionTab(args: {
   tabId: string
   environmentId?: string | null
 }): Promise<boolean> {
-  return callWebRuntimeSessionTabMethod('session.tabs.activate', args)
+  return (await callWebRuntimeSessionTabMethod('session.tabs.activate', args)) === true
 }
 
 export async function closeWebRuntimeSessionTab(args: {
@@ -669,8 +669,10 @@ export async function closeWebRuntimeSessionTab(args: {
   reason: RuntimeSessionTabCloseReason
   publicationEpoch?: string | null
   terminalHandle?: string | null
-}): Promise<boolean> {
-  return callWebRuntimeSessionTabMethod('session.tabs.close', args)
+}): Promise<RuntimeMobileSessionTabCloseResult | { closed: false }> {
+  return (await callWebRuntimeSessionTabMethod('session.tabs.close', args)) as
+    | RuntimeMobileSessionTabCloseResult
+    | { closed: false }
 }
 
 export async function moveWebRuntimeSessionTab(
@@ -790,7 +792,7 @@ async function callWebRuntimeSessionTabMethod(
     publicationEpoch?: string | null
     terminalHandle?: string | null
   }
-): Promise<boolean> {
+): Promise<boolean | RuntimeMobileSessionTabCloseResult | { closed: false }> {
   const environmentId =
     args.environmentId?.trim() ??
     useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
@@ -879,7 +881,7 @@ async function callWebRuntimeSessionTabMethod(
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision
       })
     }
-    return true
+    return isClose ? (result ?? { closed: false }) : true
   } catch (error) {
     for (const hostTabId of closeIntentTabIds) {
       clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
@@ -895,7 +897,7 @@ async function callWebRuntimeSessionTabMethod(
       `[web-runtime-session] failed to ${isClose ? 'close' : 'activate'} tab:`,
       error instanceof Error ? error.message : String(error)
     )
-    return false
+    return isClose ? { closed: false } : false
   }
 }
 

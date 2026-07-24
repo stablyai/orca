@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
+import type * as Os from 'node:os'
 import { basename, join, win32 } from 'node:path'
 import { ipcMain } from 'electron'
 import type {
@@ -96,6 +97,7 @@ import {
   getDefaultWorkspaceSession
 } from '../../shared/constants'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+import { TerminalArchiveStore } from '../terminal-archive-store'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 import type {
@@ -111,6 +113,15 @@ import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
+
+const runtimeTestHome = vi.hoisted(() => `/private/tmp/orca-runtime-test-home-${process.pid}`)
+
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof Os>()
+  return { ...actual, homedir: () => runtimeTestHome }
+})
+
+mkdirSync(runtimeTestHome, { recursive: true })
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1372,18 +1383,78 @@ function makeHeadlessTerminalLayout(
   }
 }
 
+function makeArchiveReadyWorkspaceSession(session: WorkspaceSessionState): WorkspaceSessionState {
+  const terminalPtyIncarnationsByPaneKey = { ...session.terminalPtyIncarnationsByPaneKey }
+  const terminalLayoutsByTabId = { ...session.terminalLayoutsByTabId }
+  for (const tabs of Object.values(session.tabsByWorktree)) {
+    for (const tab of tabs) {
+      const layout = terminalLayoutsByTabId[tab.id]
+      if (!layout) {
+        continue
+      }
+      const leafIds = new Set(Object.keys(layout.ptyIdsByLeafId ?? {}))
+      const collectLeafIds = (node: TerminalLayoutSnapshot['root']): void => {
+        if (!node) {
+          return
+        }
+        if (node.type === 'leaf') {
+          leafIds.add(node.leafId)
+          return
+        }
+        collectLeafIds(node.first)
+        collectLeafIds(node.second)
+      }
+      collectLeafIds(layout.root)
+      for (const leafId of leafIds) {
+        const paneKey = makePaneKey(tab.id, leafId)
+        terminalPtyIncarnationsByPaneKey[paneKey] ??= `test-incarnation:${paneKey}`
+      }
+      terminalLayoutsByTabId[tab.id] = {
+        ...layout,
+        buffersByLeafId: Object.fromEntries(
+          [...leafIds].map((leafId) => [
+            leafId,
+            layout.buffersByLeafId?.[leafId] ?? `test scrollback for ${tab.id}:${leafId}`
+          ])
+        )
+      }
+    }
+  }
+  return { ...session, terminalLayoutsByTabId, terminalPtyIncarnationsByPaneKey }
+}
+
+function createRuntimeTestTerminalArchiveStore() {
+  let archives = {}
+  return (snapshotSource: ConstructorParameters<typeof TerminalArchiveStore>[1]) =>
+    new TerminalArchiveStore(
+      {
+        getTerminalArchives: () => archives,
+        replaceTerminalArchivesAndFlush: (next) => {
+          archives = next
+        },
+        getTerminalArchiveRetentionDays: () => 7,
+        isExecutionHostReachable: () => true,
+        worktreeExists: () => true,
+        isTerminalScrollbackSnapshotLive: () => false
+      },
+      snapshotSource
+    )
+}
+
 function makeRuntimeStoreWithWorkspaceSession(initialSession: WorkspaceSessionState): {
   runtimeStore: typeof store & {
     getWorkspaceSession: () => WorkspaceSessionState
-    setWorkspaceSession: ReturnType<typeof vi.fn>
+    setWorkspaceSession: (next: WorkspaceSessionState) => void
     persistPtyBinding: ReturnType<typeof vi.fn>
   }
   getSession: () => WorkspaceSessionState
 } {
-  let session = initialSession
+  let session = makeArchiveReadyWorkspaceSession(initialSession)
+  const createTerminalArchiveStore = createRuntimeTestTerminalArchiveStore()
   const runtimeStore = {
     ...store,
     getWorkspaceSession: () => session,
+    createTerminalArchiveStore,
     setWorkspaceSession: vi.fn((next: WorkspaceSessionState) => {
       session = next
     }),
@@ -20981,26 +21052,30 @@ describe('OrcaRuntimeService', () => {
 
   it('closes a headless SSH tab only in its SSH workspace-session partition', async () => {
     const sshPtyId = 'ssh:ssh-1@@remote-pty'
-    const localSession = makeWorkspaceSessionWithHeadlessTerminal()
-    let sshSession = makeWorkspaceSessionWithHeadlessTerminal({
-      tabsByWorktree: {
-        [TEST_WORKTREE_ID]: [
-          {
-            id: 'ssh-host-tab',
-            ptyId: sshPtyId,
-            worktreeId: TEST_WORKTREE_ID,
-            title: 'SSH host terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'ssh-host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: sshPtyId })
-      }
-    })
+    const localSession = makeArchiveReadyWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    let sshSession = makeArchiveReadyWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'ssh-host-tab',
+              ptyId: sshPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'SSH host terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'ssh-host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: sshPtyId })
+        }
+      })
+    )
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
     const setWorkspaceSession = vi.fn((session: WorkspaceSessionState, hostId?: string | null) => {
       expect(hostId).toBe('ssh:ssh-1')
@@ -21013,6 +21088,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
       getWorkspaceSession: (hostId?: string | null) =>
         hostId === 'ssh:ssh-1' ? sshSession : localSession,
+      createTerminalArchiveStore: createRuntimeTestTerminalArchiveStore(),
       setWorkspaceSession
     } as never)
     runtime.setPtyController({
@@ -21516,7 +21592,28 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
-    const runtime = new OrcaRuntimeService(store)
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'laptop-tab',
+              ptyId: null,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Laptop terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'laptop-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: undefined })
+        }
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setNotifier({ closeTerminal } as never)
     runtime.setPtyController({
       spawn,
@@ -21546,15 +21643,18 @@ describe('OrcaRuntimeService', () => {
       ptyKilled: true
     })
     expect(kill).toHaveBeenCalledWith('laptop-created-pty')
-    expect(closeTerminal).toHaveBeenCalledWith('laptop-tab')
+    expect(closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('waits for renderer acknowledgement before returning a whole-tab close receipt', async () => {
+  it('waits for renderer acknowledgement before returning a whole-tab archive receipt', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
-    const acknowledged = makeDeferred()
-    const closeTerminalTab = vi.fn(() => acknowledged.promise)
+    let resolveAcknowledged!: (result: { archiveId: string }) => void
+    const acknowledged = new Promise<{ archiveId: string }>((resolve) => {
+      resolveAcknowledged = resolve
+    })
+    const closeTerminalTab = vi.fn(() => acknowledged)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
     runtime.setPtyController({
@@ -21593,11 +21693,12 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() => expect(closeTerminalTab).toHaveBeenCalledWith('host-tab'))
     expect(settled).toBe(false)
 
-    acknowledged.resolve()
+    resolveAcknowledged({ archiveId: '11111111-1111-4111-8111-111111111111' })
     await expect(pending).resolves.toEqual({
       handle: terminal.handle,
       tabId: 'host-tab',
       closeMode: 'tab',
+      archiveId: '11111111-1111-4111-8111-111111111111',
       ptyKilled: false
     })
   })
@@ -21643,6 +21744,18 @@ describe('OrcaRuntimeService', () => {
       leafId: HEADLESS_LEAF_ID
     })
     await runtime.splitTerminal(terminal.handle, { direction: 'vertical' })
+    runtimeStore.setWorkspaceSession(
+      makeArchiveReadyWorkspaceSession({
+        ...getSession(),
+        terminalLayoutsByTabId: {
+          ...getSession().terminalLayoutsByTabId,
+          'durable-tab': makeHeadlessTerminalLayout({
+            [HEADLESS_LEAF_ID]: 'headless-left',
+            [HEADLESS_SECOND_LEAF_ID]: 'headless-right'
+          })
+        }
+      })
+    )
 
     await runtime.closeTerminalTab(terminal.handle)
 
@@ -23332,7 +23445,7 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
   })
 
-  it('retires an SSH-owned surface when a stale renderer acknowledges close after relay recovery', async () => {
+  it('keeps renderer-owned SSH tab retirement on the pane-only exit path after relay recovery', async () => {
     const ptyId = 'ssh:ssh-1@@relay-recovered-pty'
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
@@ -23413,11 +23526,11 @@ describe('OrcaRuntimeService', () => {
       ptyKilled: true
     })
 
-    expect(closeTerminalTab).toHaveBeenCalledWith('host-tab')
-    expect(closeTerminal).toHaveBeenCalledWith('host-tab')
-    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
-    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
-    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    expect(closeTerminal).not.toHaveBeenCalled()
+    // Why: a renderer-owned pane exit removes its own last-pane mirror; the runtime must not turn it into a user whole-tab archive.
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
+    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
   })
 
   it('keeps the renderer close transaction for an adopted runtime-owned tab', async () => {

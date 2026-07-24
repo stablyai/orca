@@ -10,7 +10,7 @@ import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-ro
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
-export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit'
+export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit' | 'pane-only'
 
 export type TerminalTabRetirementState = WorktreeRuntimeOwnerState &
   Pick<

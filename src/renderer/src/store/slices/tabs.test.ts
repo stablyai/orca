@@ -251,7 +251,7 @@ describe('TabsSlice', () => {
       // Activate t2 so closing it tests neighbor selection
       store.getState().activateTab(t2.id)
 
-      const result = store.getState().closeUnifiedTab(t2.id)
+      const result = store.getState().closeUnifiedTab(t2.id, { terminalRetirementHandled: true })
 
       expect(result).toEqual({ closedTabId: t2.id, wasLastTab: false, worktreeId: WT })
       const state = store.getState()
@@ -265,7 +265,7 @@ describe('TabsSlice', () => {
       const t2 = store.getState().createUnifiedTab(WT, 'terminal')
       // t2 is already active (last created)
 
-      const result = store.getState().closeUnifiedTab(t2.id)
+      const result = store.getState().closeUnifiedTab(t2.id, { terminalRetirementHandled: true })
 
       expect(result?.wasLastTab).toBe(false)
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(t1.id)
@@ -274,7 +274,7 @@ describe('TabsSlice', () => {
     it('returns wasLastTab: true when closing the only tab', () => {
       const t1 = store.getState().createUnifiedTab(WT, 'terminal')
 
-      const result = store.getState().closeUnifiedTab(t1.id)
+      const result = store.getState().closeUnifiedTab(t1.id, { terminalRetirementHandled: true })
 
       expect(result?.wasLastTab).toBe(true)
       expect(store.getState().unifiedTabsByWorktree[WT]).toHaveLength(0)
@@ -287,7 +287,7 @@ describe('TabsSlice', () => {
       const t3 = store.getState().createUnifiedTab(WT, 'terminal')
       // t3 is active
 
-      store.getState().closeUnifiedTab(t1.id)
+      store.getState().closeUnifiedTab(t1.id, { terminalRetirementHandled: true })
 
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(t3.id)
     })
@@ -432,7 +432,7 @@ describe('TabsSlice', () => {
       // Visit order ...→t3→t1→t3; closing t3 should jump to t1 (MRU previous), not the visual neighbor t2.
       store.getState().activateTab(t1.id)
       store.getState().activateTab(t3.id)
-      store.getState().closeUnifiedTab(t3.id)
+      store.getState().closeUnifiedTab(t3.id, { terminalRetirementHandled: true })
 
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(t1.id)
       // t2 should still exist and not be active
@@ -502,7 +502,7 @@ describe('TabsSlice', () => {
         activeGroupIdByWorktree: { [WT]: groupId }
       })
 
-      store.getState().closeUnifiedTab('b')
+      store.getState().closeUnifiedTab('b', { terminalRetirementHandled: true })
 
       // MRU only contains 'b' itself, so fallback picks the right neighbor 'c'.
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe('c')
@@ -529,7 +529,7 @@ describe('TabsSlice', () => {
       // Re-focus the second group via t2, then close it: expect the same-group previous tab (t3), not a source-group neighbor.
       store.getState().activateTab(t3.id)
       store.getState().activateTab(t2.id)
-      store.getState().closeUnifiedTab(t2.id)
+      store.getState().closeUnifiedTab(t2.id, { terminalRetirementHandled: true })
 
       const secondGroup = store.getState().groupsByWorktree[WT].find((g) => g.id === secondGroupId)
       expect(secondGroup?.activeTabId).toBe(t3.id)
@@ -1341,9 +1341,9 @@ describe('TabsSlice', () => {
 
   describe('closeOtherTabs', () => {
     it('closes all tabs except the target and pinned tabs', () => {
-      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t1 = store.getState().createUnifiedTab(WT, 'editor')
+      const t2 = store.getState().createUnifiedTab(WT, 'editor')
+      const t3 = store.getState().createUnifiedTab(WT, 'editor')
 
       store.getState().pinTab(t1.id)
 
@@ -1357,8 +1357,8 @@ describe('TabsSlice', () => {
     })
 
     it('activates the target tab', () => {
-      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
-      store.getState().createUnifiedTab(WT, 'terminal')
+      const t1 = store.getState().createUnifiedTab(WT, 'editor')
+      store.getState().createUnifiedTab(WT, 'editor')
 
       store.getState().closeOtherTabs(t1.id)
 
@@ -1370,16 +1370,24 @@ describe('TabsSlice', () => {
       const closed = store.getState().closeOtherTabs(t1.id)
       expect(closed).toEqual([])
     })
+
+    it('leaves terminal rows for the archive transaction', () => {
+      const target = store.getState().createUnifiedTab(WT, 'editor')
+      const terminal = store.getState().createUnifiedTab(WT, 'terminal')
+
+      expect(store.getState().closeOtherTabs(target.id)).toEqual([])
+      expect(store.getState().unifiedTabsByWorktree[WT].map((tab) => tab.id)).toContain(terminal.id)
+    })
   })
 
   // ─── closeTabsToRight ─────────────────────────────────────────────
 
   describe('closeTabsToRight', () => {
     it('closes unpinned tabs to the right of target', () => {
-      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t4 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t1 = store.getState().createUnifiedTab(WT, 'editor')
+      const t2 = store.getState().createUnifiedTab(WT, 'editor')
+      const t3 = store.getState().createUnifiedTab(WT, 'editor')
+      const t4 = store.getState().createUnifiedTab(WT, 'editor')
 
       store.getState().pinTab(t3.id)
 
@@ -1391,8 +1399,8 @@ describe('TabsSlice', () => {
     })
 
     it('activates target if active tab was closed', () => {
-      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
-      store.getState().createUnifiedTab(WT, 'terminal')
+      const t1 = store.getState().createUnifiedTab(WT, 'editor')
+      store.getState().createUnifiedTab(WT, 'editor')
       // last created tab is active
 
       store.getState().closeTabsToRight(t1.id)
@@ -1757,7 +1765,7 @@ describe('TabsSlice', () => {
 
       // Activate the terminal tab, then close it
       store.getState().activateTab(term.id)
-      store.getState().closeUnifiedTab(term.id)
+      store.getState().closeUnifiedTab(term.id, { terminalRetirementHandled: true })
 
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(editor.id)
     })

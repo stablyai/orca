@@ -285,6 +285,8 @@ export type RuntimeMobileSessionTabMoveResult = {
 
 export type RuntimeMobileSessionTabCloseResult = {
   closed: true
+  /** Present when a user whole-tab close crossed the archive durability boundary. */
+  archiveId?: string
   refused?: true
   refusalReason?:
     | 'missing-intent'
@@ -300,7 +302,7 @@ export type RuntimeMobileSessionTabCloseResult = {
 // Why: lets the host tell a user's close from a client-lifecycle echo
 // ('pty-exit'/'cleanup') and adjudicate against its own PTY liveness.
 // Absent on legacy clients, where the existing close endpoint remains user intent.
-export type RuntimeSessionTabCloseReason = 'user' | 'pty-exit' | 'cleanup'
+export type RuntimeSessionTabCloseReason = 'user' | 'pty-exit' | 'cleanup' | 'pane-only'
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
@@ -673,6 +675,7 @@ export type RuntimeTerminalClose = {
   tabId: string
   /** Present for the durable whole-tab lifecycle without changing legacy receipts. */
   closeMode?: 'tab'
+  archiveId?: string
   ptyKilled: boolean
 }
 

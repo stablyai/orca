@@ -581,6 +581,7 @@ export type TerminalSlice = {
       captureRecentlyClosed?: boolean
       remoteCloseOwnedByHost?: boolean
       localPtyTeardownOwnedExternally?: boolean
+      runtimePtyTeardownOwnedExternally?: boolean
       precomputedRetirementPlan?: TerminalTabRetirementPlan
     }
   ) => void
@@ -1176,7 +1177,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ? []
         : retirementPlan.localOrSshPtyIds.map(async (ptyId) => window.api.pty.kill(ptyId))
       const localOrSshTaskCount = retirementTasks.length
-      if (!opts?.remoteCloseOwnedByHost) {
+      if (!opts?.remoteCloseOwnedByHost && !opts?.runtimePtyTeardownOwnedExternally) {
         for (const terminal of retirementPlan.runtimeTerminals) {
           if (!terminal.environmentId && !fallbackWorktreeRoute) {
             continue

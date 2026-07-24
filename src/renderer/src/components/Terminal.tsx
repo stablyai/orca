@@ -132,7 +132,7 @@ import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-p
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
-import { closeTerminalTab } from './terminal/terminal-tab-actions'
+import { closeTerminalTab, closeTerminalTabAsync } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
@@ -143,6 +143,14 @@ const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 // Why: gate handler runs after a dialog advances so a stray carry-over click can't act on the next dialog; ~200ms absorbs a physical double-click while staying responsive.
 const CLOSE_DIALOG_DEBOUNCE_MS = 200
 const CHILD_PROCESS_CHECK_CONCURRENCY = 8
+
+async function closeTerminalTabFromBulk(tabId: string): Promise<void> {
+  try {
+    await closeTerminalTabAsync(tabId)
+  } catch {
+    // The close transaction preserves the tab and exposes its own retry affordance.
+  }
+}
 const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
   'editor',
   'diff',
@@ -278,7 +286,6 @@ function Terminal(): React.JSX.Element | null {
   const activeTabId = useAppStore((s) => s.activeTabId)
   const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
   const createTab = useAppStore((s) => s.createTab)
-  const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
@@ -1424,59 +1431,61 @@ function Terminal(): React.JSX.Element | null {
       const state = useAppStore.getState()
       const order = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
       const dirtyFileIds: string[] = []
-      for (const id of order) {
-        if (id === tabId) {
-          continue
-        }
-        const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
-          (candidate) => candidate.id === id || candidate.entityId === id
-        )
-        if (unifiedTab?.isPinned) {
-          continue
-        }
-        const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-        if (
-          isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-          (unifiedTab?.contentType === 'terminal' ||
-            (unifiedTab?.contentType === 'browser' &&
-              browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
-        ) {
-          if (unifiedTab.contentType === 'terminal') {
-            // Why: paired-host bulk close must revoke renderer resume and hook authority, not just remove the host session tab.
-            closeTerminalTab(unifiedTab.entityId)
-          } else {
-            void closeWebRuntimeSessionTab({
-              worktreeId: activeWorktreeId,
-              tabId: unifiedTab.id,
-              environmentId: runtimeEnvironmentId,
-              reason: 'user'
-            })
-          }
-          continue
-        }
-        if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
-          closeTab(id)
-        } else if (
-          state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
-        ) {
-          const file = state.openFiles.find((candidate) => candidate.id === id)
-          if (file?.isDirty) {
-            dirtyFileIds.push(id)
+      void (async () => {
+        for (const id of order) {
+          if (id === tabId) {
             continue
           }
-          closeFile(id)
-        } else if (
-          (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
-        ) {
-          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
-          closeBrowserTab(id)
+          const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
+            (candidate) => candidate.id === id || candidate.entityId === id
+          )
+          if (unifiedTab?.isPinned) {
+            continue
+          }
+          const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+          if (
+            isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+            (unifiedTab?.contentType === 'terminal' ||
+              (unifiedTab?.contentType === 'browser' &&
+                browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
+          ) {
+            if (unifiedTab.contentType === 'terminal') {
+              // Why: paired-host bulk close must revoke renderer resume and hook authority, not just remove the host session tab.
+              await closeTerminalTabFromBulk(unifiedTab.entityId)
+            } else {
+              void closeWebRuntimeSessionTab({
+                worktreeId: activeWorktreeId,
+                tabId: unifiedTab.id,
+                environmentId: runtimeEnvironmentId,
+                reason: 'user'
+              })
+            }
+            continue
+          }
+          if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
+            await closeTerminalTabFromBulk(id)
+          } else if (
+            state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
+          ) {
+            const file = state.openFiles.find((candidate) => candidate.id === id)
+            if (file?.isDirty) {
+              dirtyFileIds.push(id)
+              continue
+            }
+            closeFile(id)
+          } else if (
+            (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
+          ) {
+            destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
+            closeBrowserTab(id)
+          }
         }
-      }
-      if (dirtyFileIds.length > 0) {
-        queueEditorCloseRequests(dirtyFileIds)
-      }
+        if (dirtyFileIds.length > 0) {
+          queueEditorCloseRequests(dirtyFileIds)
+        }
+      })()
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [activeWorktreeId, closeBrowserTab, closeFile, queueEditorCloseRequests]
   )
 
   const handleCloseTabsToRight = useCallback(
@@ -1492,56 +1501,58 @@ function Terminal(): React.JSX.Element | null {
       }
       const rightIds = currentOrder.slice(index + 1)
       const dirtyFileIds: string[] = []
-      for (const id of rightIds) {
-        const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
-          (candidate) => candidate.id === id || candidate.entityId === id
-        )
-        if (unifiedTab?.isPinned) {
-          continue
-        }
-        const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-        if (
-          isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-          (unifiedTab?.contentType === 'terminal' ||
-            (unifiedTab?.contentType === 'browser' &&
-              browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
-        ) {
-          if (unifiedTab.contentType === 'terminal') {
-            // Why: route terminal close through the destructive local lifecycle boundary before the paired-host RPC.
-            closeTerminalTab(unifiedTab.entityId)
-          } else {
-            void closeWebRuntimeSessionTab({
-              worktreeId: activeWorktreeId,
-              tabId: unifiedTab.id,
-              environmentId: runtimeEnvironmentId,
-              reason: 'user'
-            })
-          }
-          continue
-        }
-        if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
-          closeTab(id)
-        } else if (
-          state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
-        ) {
-          const file = state.openFiles.find((candidate) => candidate.id === id)
-          if (file?.isDirty) {
-            dirtyFileIds.push(id)
+      void (async () => {
+        for (const id of rightIds) {
+          const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
+            (candidate) => candidate.id === id || candidate.entityId === id
+          )
+          if (unifiedTab?.isPinned) {
             continue
           }
-          closeFile(id)
-        } else if (
-          (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
-        ) {
-          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
-          closeBrowserTab(id)
+          const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+          if (
+            isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+            (unifiedTab?.contentType === 'terminal' ||
+              (unifiedTab?.contentType === 'browser' &&
+                browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
+          ) {
+            if (unifiedTab.contentType === 'terminal') {
+              // Why: route terminal close through the destructive local lifecycle boundary before the paired-host RPC.
+              await closeTerminalTabFromBulk(unifiedTab.entityId)
+            } else {
+              void closeWebRuntimeSessionTab({
+                worktreeId: activeWorktreeId,
+                tabId: unifiedTab.id,
+                environmentId: runtimeEnvironmentId,
+                reason: 'user'
+              })
+            }
+            continue
+          }
+          if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
+            await closeTerminalTabFromBulk(id)
+          } else if (
+            state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
+          ) {
+            const file = state.openFiles.find((candidate) => candidate.id === id)
+            if (file?.isDirty) {
+              dirtyFileIds.push(id)
+              continue
+            }
+            closeFile(id)
+          } else if (
+            (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
+          ) {
+            destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
+            closeBrowserTab(id)
+          }
         }
-      }
-      if (dirtyFileIds.length > 0) {
-        queueEditorCloseRequests(dirtyFileIds)
-      }
+        if (dirtyFileIds.length > 0) {
+          queueEditorCloseRequests(dirtyFileIds)
+        }
+      })()
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [activeWorktreeId, closeBrowserTab, closeFile, queueEditorCloseRequests]
   )
 
   const handleCloseAllFiles = useCallback(() => {

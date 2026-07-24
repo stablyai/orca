@@ -21,7 +21,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '../../runtime/web-runtime-session'
-import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { closeTerminalTab, closeTerminalTabAsync } from '../terminal/terminal-tab-actions'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
@@ -76,7 +76,6 @@ export function useTabGroupWorkspaceModel({
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
   const closeEmptyGroup = useAppStore((state) => state.closeEmptyGroup)
   const createTab = useAppStore((state) => state.createTab)
-  const closeTab = useAppStore((state) => state.closeTab)
   const setActiveTab = useAppStore((state) => state.setActiveTab)
   const setActiveFile = useAppStore((state) => state.setActiveFile)
   const setActiveTabType = useAppStore((state) => state.setActiveTabType)
@@ -285,53 +284,57 @@ export function useTabGroupWorkspaceModel({
 
   const closeMany = useCallback(
     (itemIds: string[]) => {
-      for (const itemId of itemIds) {
-        const item = groupTabs.find((candidate) => candidate.id === itemId)
-        if (!item || item.isPinned) {
-          continue
-        }
-        const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
-          useAppStore.getState(),
-          worktreeId
-        )
-        if (item.contentType === 'terminal' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-          // Why: revoke local resume + hook authority before the host removes its canonical tab.
-          closeTerminalTab(item.entityId)
-          continue
-        }
-        if (item.contentType === 'browser') {
-          // Why: see closeItem — host-close a remote-owned browser or pageless host-mirror; always remove the visible tab.
-          const browserState = useAppStore.getState()
-          const hasLocalPages =
-            (browserState.browserPagesByWorkspace[item.entityId] ?? []).length > 0
-          const shouldCloseOnHost =
-            isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-            (browserWorkspaceHasRemoteOwner(browserState, item.entityId, runtimeEnvironmentId) ||
-              !hasLocalPages)
-          if (shouldCloseOnHost) {
-            void closeWebRuntimeSessionTab({
-              worktreeId,
-              tabId: item.id,
-              environmentId: runtimeEnvironmentId,
-              reason: 'user'
-            })
+      void (async () => {
+        for (const itemId of itemIds) {
+          const item = groupTabs.find((candidate) => candidate.id === itemId)
+          if (!item || item.isPinned) {
+            continue
           }
-          destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
-          closeBrowserTab(item.entityId)
-          closeUnifiedTab(item.id)
-        } else if (item.contentType === 'terminal') {
-          closeTab(item.entityId)
-        } else if (item.contentType === 'simulator') {
-          closeUnifiedTab(item.id)
-        } else {
-          const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
-          if (canCloseTab) {
+          const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+            useAppStore.getState(),
+            worktreeId
+          )
+          if (item.contentType === 'terminal') {
+            // Why: every user bulk close shares the durable archive/retirement transaction.
+            try {
+              await closeTerminalTabAsync(item.entityId)
+            } catch {
+              // The transaction keeps the live tab and exposes retry feedback.
+            }
+            continue
+          }
+          if (item.contentType === 'browser') {
+            // Why: see closeItem — host-close a remote-owned browser or pageless host-mirror; always remove the visible tab.
+            const browserState = useAppStore.getState()
+            const hasLocalPages =
+              (browserState.browserPagesByWorkspace[item.entityId] ?? []).length > 0
+            const shouldCloseOnHost =
+              isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+              (browserWorkspaceHasRemoteOwner(browserState, item.entityId, runtimeEnvironmentId) ||
+                !hasLocalPages)
+            if (shouldCloseOnHost) {
+              void closeWebRuntimeSessionTab({
+                worktreeId,
+                tabId: item.id,
+                environmentId: runtimeEnvironmentId,
+                reason: 'user'
+              })
+            }
+            destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
+            closeBrowserTab(item.entityId)
             closeUnifiedTab(item.id)
+          } else if (item.contentType === 'simulator') {
+            closeUnifiedTab(item.id)
+          } else {
+            const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
+            if (canCloseTab) {
+              closeUnifiedTab(item.id)
+            }
           }
         }
-      }
+      })()
     },
-    [closeBrowserTab, closeEditorIfUnreferenced, closeTab, closeUnifiedTab, groupTabs, worktreeId]
+    [closeBrowserTab, closeEditorIfUnreferenced, closeUnifiedTab, groupTabs, worktreeId]
   )
 
   const activateTerminal = useCallback(

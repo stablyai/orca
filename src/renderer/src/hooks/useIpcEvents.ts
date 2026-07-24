@@ -1928,6 +1928,17 @@ export function useIpcEvents(): void {
           })
           return
         }
+        const terminalTarget = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
+          (tab) => tab.contentType === 'terminal' && (tab.id === tabId || tab.entityId === tabId)
+        )
+        if (terminalTarget) {
+          guardPinnedTabClose({
+            isPinned: isPinnedSessionTab(store, worktreeId, terminalTarget.entityId),
+            tabLabel: resolvePinnedTabLabel(store, worktreeId, terminalTarget.entityId),
+            onClose: () => closeTerminalTab(terminalTarget.entityId)
+          })
+          return
+        }
         guardPinnedTabClose({
           isPinned: isPinnedSessionTab(store, worktreeId, tabId),
           tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
@@ -2013,17 +2024,21 @@ export function useIpcEvents(): void {
       unsubs.push(
         window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId }) => {
           let responded = false
-          const respond = (error?: string): void => {
+          const respond = (error?: string, archiveId?: string): void => {
             if (responded) {
               return
             }
             responded = true
-            window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+            window.api.ui.respondTerminalTabClose({
+              requestId,
+              ...(error ? { error } : {}),
+              ...(archiveId ? { archiveId } : {})
+            })
           }
           closeTerminalTab(tabId, {
             rejectPinned: true,
             onCancel: () => respond('terminal_tab_pinned'),
-            onClosed: () => {
+            onClosed: (archiveId) => {
               void (async () => {
                 const state = useAppStore.getState()
                 await persistWorkspaceSessionByHost(
@@ -2031,11 +2046,12 @@ export function useIpcEvents(): void {
                   buildWorkspaceSessionPayload(state),
                   state
                 )
-                respond()
+                respond(undefined, archiveId)
               })().catch((error: unknown) => {
                 respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
               })
-            }
+            },
+            onError: (error) => respond(error.message)
           })
         })
       )

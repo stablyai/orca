@@ -244,7 +244,7 @@ describe('terminal tab retirement store boundary', () => {
     expect(store.getState().lastKnownRelayPtyIdByTabId['closed-tab']).toBeUndefined()
   })
 
-  it('retires a unified-only terminal instead of removing only its wrapper', async () => {
+  it('keeps a unified-only terminal until archive-first close hands off retirement', () => {
     const store = createRetirementStore()
     const unified = makeUnifiedTab({
       id: 'unified-tab-1',
@@ -268,11 +268,12 @@ describe('terminal tab retirement store boundary', () => {
       ptyIdsByTabId: { 'terminal-tab-1': ['pty-unified-only'] }
     })
 
-    store.getState().closeUnifiedTab(unified.id)
-    await vi.waitFor(() => expect(mockKill).toHaveBeenCalledWith('pty-unified-only'))
+    const result = store.getState().closeUnifiedTab(unified.id)
 
-    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
-    expect(store.getState().ptyIdsByTabId['terminal-tab-1']).toBeUndefined()
+    expect(result).toBeNull()
+    expect(mockKill).not.toHaveBeenCalled()
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([unified])
+    expect(store.getState().ptyIdsByTabId['terminal-tab-1']).toEqual(['pty-unified-only'])
   })
 
   it('lets a paired host own runtime teardown while pruning local state', async () => {

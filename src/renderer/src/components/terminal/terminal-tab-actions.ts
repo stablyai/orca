@@ -1,7 +1,6 @@
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import {
-  activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab,
   isWebRuntimeSessionActive,
   toHostSessionTabId
@@ -18,6 +17,18 @@ import type {
 } from '@/store/slices/terminal-tab-retirement'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
+import { awaitTerminalTabClose } from './terminal-tab-close-completion'
+import { isPinnedVisibleTerminalTab } from './terminal-tab-pin-visibility'
+import {
+  reportTerminalCloseError,
+  retireArchivedTerminalPtys
+} from './terminal-tab-retirement-transaction'
+import {
+  archiveTerminalTabBeforeRetirement,
+  canArchiveTerminalTabClose,
+  isTerminalArchiveTopologyCurrent,
+  terminalArchiveCloseUnavailableError
+} from './terminal-archive-close'
 import {
   getWorktreeTerminalTabIds,
   resolveTerminalCloseTarget,
@@ -26,21 +37,6 @@ import {
 } from './terminal-close-target'
 export type { PrecomputedTerminalCloseState } from './terminal-close-target'
 export { closeOtherTerminalTabs, closeTerminalTabsToRight } from './terminal-tab-bulk-actions'
-
-type TerminalTabActionState = ReturnType<typeof useAppStore.getState>
-
-function isPinnedVisibleTab(
-  state: TerminalTabActionState,
-  worktreeId: string,
-  visibleId: string
-): boolean {
-  return (
-    (state.unifiedTabsByWorktree?.[worktreeId] ?? []).some(
-      (tab) => (tab.id === visibleId || tab.entityId === visibleId) && tab.isPinned
-    ) ?? false
-  )
-}
-
 export function closeTerminalTab(
   tabId: string,
   options?: {
@@ -55,10 +51,15 @@ export function closeTerminalTab(
     lifecyclePtyId?: string
     captureRecentlyClosed?: boolean
     localPtyTeardownOwnedExternally?: boolean
+    runtimePtyTeardownOwnedExternally?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
     precomputedCloseState?: PrecomputedTerminalCloseState
-    onClosed?: () => void
+    /** Internal re-entry after the archive durability boundary succeeds. */
+    archiveCommitted?: boolean
+    archiveId?: string
+    onClosed?: (archiveId?: string) => void
     onCancel?: () => void
+    onError?: (error: Error) => void
   }
 ): void {
   const state = useAppStore.getState()
@@ -69,7 +70,7 @@ export function closeTerminalTab(
   )
   const target = resolveTerminalCloseTarget(state, tabId, precomputedCloseState)
   if (!target) {
-    options?.onClosed?.()
+    options?.onClosed?.(options?.archiveId)
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
@@ -78,13 +79,12 @@ export function closeTerminalTab(
     options?.onCancel?.()
     return
   }
-
   // Why: a pinned tab routes through the confirmation guard instead of closing
   // outright. `force` is the post-confirmation re-entry, which skips the guard.
   if (
     options?.reason !== 'pty-exit' &&
     !options?.force &&
-    isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)
+    isPinnedVisibleTerminalTab(owningWorktreeId, terminalTabId)
   ) {
     // Why: background lifecycle callers cannot safely wait on a modal whose
     // owner may be unattended; reject pinned tabs without bypassing the guard.
@@ -100,7 +100,6 @@ export function closeTerminalTab(
     })
     return
   }
-
   const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (options?.reason === 'pty-exit') {
@@ -131,22 +130,28 @@ export function closeTerminalTab(
       wireReason === 'user'
         ? null
         : getLatestWebSessionTabsPublicationEpoch(runtimeEnvironmentId, owningWorktreeId)
-    // Why: prune local mirrors immediately so close feels responsive while the
-    // host session snapshot catches up.
-    closeLocalTerminalTabState(terminalTabId, {
-      reason: options?.reason,
-      ...(options?.captureRecentlyClosed !== undefined
-        ? { captureRecentlyClosed: options.captureRecentlyClosed }
-        : {}),
-      remoteCloseOwnedByHost: true,
-      ...(options?.localPtyTeardownOwnedExternally
-        ? { localPtyTeardownOwnedExternally: true }
-        : {}),
-      ...(options?.precomputedRetirementPlan
-        ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
-        : {})
-    })
-    void closeWebRuntimeSessionTab({
+    // Archive-capable clients wait for the host durability receipt; older preloads stay optimistic.
+    const closeLocalMirror = (archiveId = options?.archiveId): void => {
+      closeLocalTerminalTabState(terminalTabId, {
+        reason: options?.reason,
+        ...(options?.captureRecentlyClosed !== undefined
+          ? { captureRecentlyClosed: options.captureRecentlyClosed }
+          : {}),
+        remoteCloseOwnedByHost: true,
+        ...(options?.localPtyTeardownOwnedExternally
+          ? { localPtyTeardownOwnedExternally: true }
+          : {}),
+        ...(options?.precomputedRetirementPlan
+          ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
+          : {})
+      })
+      options?.onClosed?.(archiveId)
+    }
+    if (options?.reason === 'pane-only') {
+      closeLocalMirror()
+      return
+    }
+    const hostClose = closeWebRuntimeSessionTab({
       worktreeId: owningWorktreeId,
       tabId: hostBackedTabId,
       environmentId: runtimeEnvironmentId,
@@ -160,10 +165,87 @@ export function closeTerminalTab(
           }
         : {})
     })
-    options?.onClosed?.()
+    if (wireReason === 'user') {
+      void Promise.resolve(hostClose)
+        .then((receipt) => {
+          if (!receipt.closed || receipt.refused || !receipt.archiveId) {
+            throw new Error(
+              translate(
+                'auto.components.terminal.terminal.tab.actions.a4f4c513c5',
+                'Terminal archive protection did not receive a durable host receipt.'
+              )
+            )
+          }
+          closeLocalMirror(receipt.archiveId)
+        })
+        .catch((error: unknown) => {
+          const archiveError =
+            error instanceof Error ? error : new Error('terminal_tab_close_failed')
+          reportTerminalCloseError(archiveError, options?.onError, () =>
+            closeTerminalTab(tabId, options)
+          )
+        })
+      return
+    }
+    void Promise.resolve(hostClose)
+      .then((receipt) => {
+        if (!receipt.closed || receipt.refused) {
+          throw new Error(
+            translate(
+              'auto.components.terminal.terminal.tab.actions.fddc720203',
+              'The execution host refused to close this tab.'
+            )
+          )
+        }
+        closeLocalMirror()
+      })
+      .catch((error: unknown) => {
+        const closeError = error instanceof Error ? error : new Error('terminal_tab_close_failed')
+        reportTerminalCloseError(closeError, options?.onError, () =>
+          closeTerminalTab(tabId, options)
+        )
+      })
     return
   }
-
+  const archiveReason = options?.reason ?? options?.hostCloseReason ?? 'user'
+  if (!options?.archiveCommitted && archiveReason === 'user') {
+    if (!canArchiveTerminalTabClose()) {
+      reportTerminalCloseError(terminalArchiveCloseUnavailableError(), options?.onError, () =>
+        closeTerminalTab(tabId, options)
+      )
+      return
+    }
+    void archiveTerminalTabBeforeRetirement(terminalTabId, owningWorktreeId)
+      .then(async (receipt) => {
+        if (!isTerminalArchiveTopologyCurrent(terminalTabId, receipt.topologyFingerprint)) {
+          throw new Error(
+            translate(
+              'auto.components.terminal.terminal.tab.actions.43cd15a02d',
+              'Terminal layout changed while archiving. Retry close to archive the latest panes.'
+            )
+          )
+        }
+        const retirementPlan = await retireArchivedTerminalPtys(terminalTabId, owningWorktreeId)
+        closeTerminalTab(tabId, {
+          ...options,
+          archiveCommitted: true,
+          archiveId: receipt.archiveId,
+          captureRecentlyClosed: false,
+          precomputedCloseState: undefined,
+          // The state transition follows successful provider teardown; it must not issue a second kill.
+          localPtyTeardownOwnedExternally: true,
+          runtimePtyTeardownOwnedExternally: true,
+          precomputedRetirementPlan: retirementPlan
+        })
+      })
+      .catch((error: unknown) => {
+        const archiveError = error instanceof Error ? error : new Error('terminal_archive_failed')
+        reportTerminalCloseError(archiveError, options?.onError, () =>
+          closeTerminalTab(tabId, options)
+        )
+      })
+    return
+  }
   const currentTerminalTabIds = precomputedCloseState
     ? null
     : getWorktreeTerminalTabIds(state, owningWorktreeId)
@@ -177,6 +259,9 @@ export function closeTerminalTab(
         : {}),
       ...(options?.localPtyTeardownOwnedExternally
         ? { localPtyTeardownOwnedExternally: true }
+        : {}),
+      ...(options?.runtimePtyTeardownOwnedExternally
+        ? { runtimePtyTeardownOwnedExternally: true }
         : {}),
       ...(options?.precomputedRetirementPlan
         ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
@@ -200,10 +285,9 @@ export function closeTerminalTab(
         }
       }
     }
-    options?.onClosed?.()
+    options?.onClosed?.(options?.archiveId)
     return
   }
-
   if (state.activeWorktreeId === owningWorktreeId && terminalTabId === state.activeTabId) {
     const currentIndex = currentTerminalTabIds?.indexOf(terminalTabId) ?? -1
     const nextTabId = precomputedCloseState
@@ -220,44 +304,21 @@ export function closeTerminalTab(
       ? { captureRecentlyClosed: options.captureRecentlyClosed }
       : {}),
     ...(options?.localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
+    ...(options?.runtimePtyTeardownOwnedExternally
+      ? { runtimePtyTeardownOwnedExternally: true }
+      : {}),
     ...(options?.precomputedRetirementPlan
       ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
       : {})
   })
-  options?.onClosed?.()
+  options?.onClosed?.(options?.archiveId)
 }
 
-export function activateTerminalTab(tabId: string): void {
-  const s = useAppStore.getState()
-  const owningWorktreeId =
-    Object.entries(s.tabsByWorktree).find(([, worktreeTabs]) =>
-      worktreeTabs.some((tab) => tab.id === tabId)
-    )?.[0] ?? null
-  const worktreeRoute = resolveTerminalWorktreeRoute(s, owningWorktreeId)
-  if (!worktreeRoute) {
-    return
-  }
-  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
-  if (owningWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: activation needs to update the host's active tab as well as the
-    // local optimistic state, otherwise the next host snapshot snaps back.
-    void activateWebRuntimeSessionTab({
-      worktreeId: owningWorktreeId,
-      tabId,
-      environmentId: runtimeEnvironmentId
-    })
-  }
-  s.setActiveTab(tabId)
-  s.setActiveTabType('terminal')
+export function closeTerminalTabAsync(
+  tabId: string,
+  options?: Parameters<typeof closeTerminalTab>[1]
+): Promise<void> {
+  return awaitTerminalTabClose(closeTerminalTab, tabId, options)
 }
 
-export function toggleTerminalPaneExpand(tabId: string): void {
-  useAppStore.getState().setActiveTab(tabId)
-  requestAnimationFrame(() => {
-    window.dispatchEvent(
-      new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, {
-        detail: { tabId }
-      })
-    )
-  })
-}
+export { activateTerminalTab, toggleTerminalPaneExpand } from './terminal-tab-activation'

@@ -878,11 +878,8 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     }
 
     if (tab.contentType === 'terminal' && !opts?.terminalRetirementHandled) {
-      const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
-      const wasLastTab = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId)).length === 0
-      // Why: unified-only hydrated tabs still own provider sessions without a legacy row, so retire every terminal close by entity id.
-      get().closeTab(tab.entityId, { recordInteraction: opts?.recordInteraction })
-      return { closedTabId: tabId, wasLastTab, worktreeId }
+      // Why: archive-first retirement is asynchronous and lives outside this synchronous visual-state slice.
+      return null
     }
 
     const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
@@ -1191,7 +1188,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       return []
     }
     const closedIds = (state.unifiedTabsByWorktree[worktreeId] ?? [])
-      .filter((item) => item.groupId === group.id && item.id !== tabId && !item.isPinned)
+      .filter(
+        (item) =>
+          item.groupId === group.id &&
+          item.id !== tabId &&
+          !item.isPinned &&
+          item.contentType !== 'terminal'
+      )
       .map((item) => item.id)
     for (const id of closedIds) {
       get().closeUnifiedTab(id)
@@ -1214,13 +1217,12 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     if (index === -1) {
       return []
     }
-    const closableIds = group.tabOrder
-      .slice(index + 1)
-      .filter(
-        (id) =>
-          !(state.unifiedTabsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === id)
-            ?.isPinned
+    const closableIds = group.tabOrder.slice(index + 1).filter((id) => {
+      const candidate = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+        (item) => item.id === id
       )
+      return !candidate?.isPinned && candidate?.contentType !== 'terminal'
+    })
     for (const id of closableIds) {
       get().closeUnifiedTab(id)
     }

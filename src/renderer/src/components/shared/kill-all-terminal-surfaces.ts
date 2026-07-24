@@ -46,11 +46,12 @@ type KillAllTerminalSurfaceDependencies = {
     tabId: string,
     options: {
       force: true
+      reason: 'cleanup'
       localPtyTeardownOwnedExternally: true
       precomputedRetirementPlan: TerminalTabRetirementPlan
       precomputedCloseState: PrecomputedTerminalCloseState
     }
-  ) => void
+  ) => void | Promise<void>
   killPty: (ptyId: string) => Promise<void>
   now: () => number
   yieldToRenderer: () => Promise<void>
@@ -216,8 +217,9 @@ export async function runKillAllTerminalSurfaces(
       )
       let closeFailed = false
       try {
-        deps.closeSurface(targetId, {
+        await deps.closeSurface(targetId, {
           force: true,
+          reason: 'cleanup',
           localPtyTeardownOwnedExternally: true,
           precomputedRetirementPlan: retirementPlan,
           precomputedCloseState: {

@@ -2762,6 +2762,34 @@
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
           }
+        },
+        "terminal": {
+          "archive": {
+            "close": {
+              "d45b935f2b": "Terminal archive protection is unavailable. Keep this tab open and reload Orca."
+            }
+          },
+          "tab": {
+            "actions": {
+              "a4f4c513c5": "Terminal archive protection did not receive a durable host receipt.",
+              "fddc720203": "The execution host refused to close this tab.",
+              "43cd15a02d": "Terminal layout changed while archiving. Retry close to archive the latest panes."
+            },
+            "close": {
+              "completion": {
+                "cbbc80b16f": "Terminal was not closed",
+                "814c051db5": "Retry"
+              }
+            },
+            "retirement": {
+              "transaction": {
+                "bca566909a": "Terminal was not closed",
+                "b2c07ffc64": "Retry",
+                "66acba8f75": "Terminal ownership changed and cannot be safely retired. Retry close.",
+                "1f62db337b": "Terminal retirement failed. The archived tab remains open; retry close."
+              }
+            }
+          }
         }
       },
       "tab": {

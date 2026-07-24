@@ -1424,7 +1424,7 @@ describe('web runtime session tab actions', () => {
         tabId: 'local-browser-unified',
         reason: 'user'
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({})
 
     expect(runtimeCall).toHaveBeenNthCalledWith(1, {
       selector: ENVIRONMENT_ID,
@@ -1481,14 +1481,14 @@ describe('web runtime session tab actions', () => {
         publicationEpoch: 'epoch-1',
         terminalHandle: 'term-1'
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({})
     await expect(
       closeWebRuntimeSessionTab({
         worktreeId: WORKTREE_ID,
         tabId: 'local-browser-unified',
         reason: 'user'
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({})
 
     expect(runtimeCall).toHaveBeenNthCalledWith(1, {
       selector: ENVIRONMENT_ID,
@@ -1566,7 +1566,7 @@ describe('web runtime session tab actions', () => {
         publicationEpoch: 'epoch-1',
         terminalHandle: 'term-1'
       })
-    ).resolves.toBe(false)
+    ).resolves.toEqual({ closed: false })
 
     expect(runtimeCall).toHaveBeenNthCalledWith(
       1,
@@ -1617,7 +1617,7 @@ describe('web runtime session tab actions', () => {
         publicationEpoch: 'epoch-1',
         terminalHandle: 'term-1'
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({ closed: true, refused: true, snapshotRepublished: true })
 
     expect(
       isWebSessionCloseIntentPending(
@@ -1668,7 +1668,7 @@ describe('web runtime session tab actions', () => {
         publicationEpoch: 'epoch-1',
         terminalHandle: 'term-1'
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({ closed: true, refused: true })
 
     expect(
       isWebSessionCloseIntentPending(
@@ -1703,7 +1703,7 @@ describe('web runtime session tab actions', () => {
         tabId: 'local-browser-unified',
         reason: 'user'
       })
-    ).resolves.toBe(false)
+    ).resolves.toEqual({ closed: false })
 
     expect(
       isWebSessionCloseIntentPending(

@@ -15,6 +15,17 @@ export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-rea
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import {
+  captureTerminalArchiveTab,
+  type TerminalArchivePaneSnapshotCapture
+} from '../../shared/workspace-session-terminal-archive'
+import type {
+  ArchivedTerminalPane,
+  TerminalArchiveRendererCloseRequest
+} from '../../shared/terminal-archive-types'
+import { getUtf8ByteLength } from '../../shared/utf8-byte-limits'
+import { workspaceSessionStateSchema } from '../../shared/workspace-session-schema'
+import { makeTerminalArchiveSourcePaneSignature } from '../terminal-archive-source-pane-signature'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
@@ -1619,6 +1630,7 @@ export function registerPtyHandlers(
   // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
+  ipcMain.removeHandler('pty:archiveTerminalTab')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
@@ -1643,6 +1655,160 @@ export function registerPtyHandlers(
   ipcMain.removeAllListeners('pty:ackData')
   ipcMain.removeAllListeners('pty:deliveryResyncResponse')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
+
+  // One store serializes all close intents registered by this IPC owner. The
+  // pane object itself is request-local, so a WeakMap keeps concurrent captures isolated.
+  const archiveSnapshotsByPane = new WeakMap<
+    ArchivedTerminalPane,
+    TerminalArchivePaneSnapshotCapture
+  >()
+  const archiveStore =
+    typeof store?.createTerminalArchiveStore === 'function'
+      ? store.createTerminalArchiveStore({
+          capture: async (pane) => archiveSnapshotsByPane.get(pane) ?? { kind: 'unavailable' }
+        })
+      : null
+
+  ipcMain.handle(
+    'pty:archiveTerminalTab',
+    async (_event, raw: unknown): Promise<{ archiveId: string }> => {
+      if (!store || !archiveStore || !raw || typeof raw !== 'object') {
+        throw new Error('terminal_archive_unavailable')
+      }
+      const request = raw as Partial<TerminalArchiveRendererCloseRequest>
+      if (
+        typeof request.worktreeId !== 'string' ||
+        !request.worktreeId ||
+        typeof request.tabId !== 'string' ||
+        !request.tabId ||
+        typeof request.executionHostId !== 'string' ||
+        !request.executionHostId
+      ) {
+        throw new Error('terminal_archive_invalid_request')
+      }
+      const parsedRendererSession = workspaceSessionStateSchema.safeParse(request.session)
+      if (!parsedRendererSession.success) {
+        throw new Error('terminal_archive_invalid_session')
+      }
+
+      const persistedSession = store.getWorkspaceSession(request.executionHostId)
+      // The renderer owns the frozen layout and xterm bytes; process identity and
+      // host-observed hints stay main-owned so stale clients cannot archive a replacement PTY.
+      const session = {
+        ...parsedRendererSession.data,
+        terminalPtyIncarnationsByPaneKey: persistedSession.terminalPtyIncarnationsByPaneKey,
+        terminalArchiveHintsByPaneKey: persistedSession.terminalArchiveHintsByPaneKey
+      }
+      const captured = captureTerminalArchiveTab({
+        session,
+        worktreeId: request.worktreeId,
+        tabId: request.tabId
+      })
+      if (!captured) {
+        throw new Error('terminal_archive_capture_unavailable')
+      }
+
+      const rendererSnapshots = request.snapshotsByLeafId ?? {}
+      for (const [leafId, pane] of Object.entries(captured.panesByLeafId)) {
+        const snapshot = rendererSnapshots[leafId]
+        const ptyId = session.terminalLayoutsByTabId[request.tabId]?.ptyIdsByLeafId?.[leafId]
+        const provider = ptyId ? tryGetProviderForPty(ptyId) : undefined
+        const cwd = ptyId ? await provider?.getCwd(ptyId).catch(() => '') : ''
+        const archivedPane = cwd ? { ...pane, cwd } : pane
+        captured.panesByLeafId[leafId] = archivedPane
+
+        const fromBuffer = (
+          buffer: string,
+          source: 'renderer' | 'daemon-headless' | 'relay-tail' | 'session-sidecar',
+          truncated = false
+        ): TerminalArchivePaneSnapshotCapture =>
+          buffer.length === 0
+            ? { kind: 'captured-empty' }
+            : {
+                kind: 'captured-bytes',
+                buffer,
+                source,
+                truncated,
+                byteLength: getUtf8ByteLength(buffer)
+              }
+
+        // Provider snapshots are authoritative for daemon-backed panes and win over all client material.
+        const providerSnapshot =
+          ptyId && provider?.canProvideAuthoritativeBufferSnapshot?.(ptyId)
+            ? await provider
+                ?.getBufferSnapshot?.(ptyId, { scrollbackRows: 50_000 })
+                .catch(() => null)
+            : null
+        if (providerSnapshot?.data !== undefined) {
+          archiveSnapshotsByPane.set(
+            archivedPane,
+            fromBuffer(providerSnapshot.data, 'daemon-headless')
+          )
+          continue
+        }
+        if (
+          snapshot &&
+          typeof snapshot.buffer === 'string' &&
+          snapshot.source === 'renderer' &&
+          typeof snapshot.truncated === 'boolean' &&
+          typeof snapshot.byteLength === 'number' &&
+          Number.isFinite(snapshot.byteLength) &&
+          snapshot.byteLength >= 0
+        ) {
+          archiveSnapshotsByPane.set(
+            archivedPane,
+            fromBuffer(snapshot.buffer, 'renderer', snapshot.truncated)
+          )
+          continue
+        }
+        const persistedLayout = persistedSession.terminalLayoutsByTabId[request.tabId]
+        const sidecarBuffer =
+          persistedLayout?.buffersByLeafId?.[leafId] ??
+          (persistedLayout?.scrollbackRefsByLeafId?.[leafId]
+            ? store.readTerminalScrollbackSnapshot(persistedLayout.scrollbackRefsByLeafId[leafId])
+            : null)
+        if (typeof sidecarBuffer === 'string') {
+          archiveSnapshotsByPane.set(archivedPane, fromBuffer(sidecarBuffer, 'session-sidecar'))
+          continue
+        }
+        const relaySnapshot = ptyId
+          ? await runtime?.serializeHiddenOutputRecoveryBuffer(ptyId, { scrollbackRows: 50_000 })
+          : null
+        if (relaySnapshot?.data !== undefined) {
+          archiveSnapshotsByPane.set(
+            archivedPane,
+            fromBuffer(relaySnapshot.data, 'relay-tail', true)
+          )
+          continue
+        }
+        // Missing capture is not an empty terminal: Store must reject before the caller can retire it.
+        archiveSnapshotsByPane.set(archivedPane, { kind: 'unavailable' })
+      }
+      const operationId = `user-close:${request.tabId}:${makeTerminalArchiveSourcePaneSignature(
+        captured.panesByLeafId,
+        captured.sourcePaneIdentityByLeafId
+      )}`
+      const archive = await archiveStore.archiveTerminalTab({
+        operationId,
+        sourceTabId: request.tabId,
+        executionHostId: request.executionHostId,
+        ...(typeof request.runtimeEnvironmentId === 'string' && request.runtimeEnvironmentId
+          ? { runtimeEnvironmentId: request.runtimeEnvironmentId }
+          : {}),
+        worktreeId: request.worktreeId,
+        title: captured.tab.customTitle || captured.tab.title,
+        ...(captured.tab.defaultTitle ? { defaultTitle: captured.tab.defaultTitle } : {}),
+        ...(captured.tab.color !== undefined ? { color: captured.tab.color } : {}),
+        layout: captured.layout,
+        panesByLeafId: captured.panesByLeafId,
+        sourcePaneIdentityByLeafId: captured.sourcePaneIdentityByLeafId,
+        reason: 'user-close',
+        createdAt: captured.tab.createdAt,
+        capturedAt: Date.now()
+      })
+      return { archiveId: archive.id }
+    }
+  )
 
   // Why: only LocalPtyProvider needs main-process hook injection; daemon-backed providers spawn subprocesses internally.
   if (localProvider instanceof LocalPtyProvider) {
