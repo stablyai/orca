@@ -3208,7 +3208,7 @@ describe('registerWorktreeHandlers', () => {
       fetchGitHubPullRequestHead,
       fetchRemoteTrackingRef: vi.fn()
     })
-    store.getRepo.mockReturnValue({
+    const sshRepo = {
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
@@ -3216,7 +3216,9 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-1',
       worktreeBaseRef: null
-    })
+    }
+    store.getRepos.mockReturnValue([sshRepo])
+    store.getRepo.mockReturnValue(sshRepo)
 
     const result = await handlers['worktrees:resolvePrBase'](null, {
       repoId: 'repo-1',
@@ -3258,7 +3260,7 @@ describe('registerWorktreeHandlers', () => {
       fetchGitHubPullRequestHead,
       fetchRemoteTrackingRef: vi.fn()
     })
-    store.getRepo.mockReturnValue({
+    const sshRepo = {
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
@@ -3266,7 +3268,9 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-1',
       worktreeBaseRef: null
-    })
+    }
+    store.getRepos.mockReturnValue([sshRepo])
+    store.getRepo.mockReturnValue(sshRepo)
 
     const result = await handlers['worktrees:resolvePrBase'](null, {
       repoId: 'repo-1',
