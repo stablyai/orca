@@ -31,14 +31,20 @@ optional: without it, use the AppImage's supported extraction path:
 ```bash
 cd /opt/orca
 ./orca-linux.AppImage --appimage-extract
-/opt/orca/squashfs-root/AppRun serve --port 6768
+APPDIR=/opt/orca/squashfs-root /opt/orca/squashfs-root/AppRun serve --port 6768
 ```
+
+`APPDIR` is required when invoking `AppRun` directly. The AppImage runtime
+sets it automatically, but outside that runtime `AppRun`'s autodetection walks
+up the tree looking for a directory entry named after its first argument
+(`serve`), never finds one, and fails with
+`AppRun: line 45: /orca-ide: No such file or directory`.
 
 Docker commonly has no FUSE device. Use `--appimage-extract` once or
 `--appimage-extract-and-run`; neither requires a privileged container. The
 extract-and-run wrapper can print extracted paths before Orca starts, so
 automation that requires stdout to contain only the ready JSON should extract
-once and invoke `squashfs-root/AppRun`.
+once and invoke `squashfs-root/AppRun` with `APPDIR` set.
 
 Download and make the AppImage executable:
 
@@ -268,6 +274,12 @@ the command:
 
 This disables a security boundary. Prefer a dedicated unprivileged service
 user, especially when the listener is reachable beyond localhost.
+
+A root systemd unit also needs an explicit `HOME`. systemd does not set
+`$HOME` for units without `User=`, and without it Chromium silently splits
+profile state between `/root/.config/orca` and `/tmp/.config/orca` — including
+the pairing device keys, which are then lost on reboot. Set
+`Environment=HOME=/root` in the unit.
 
 ## Pairing troubleshooting
 
@@ -745,6 +757,9 @@ is resolved.
 - Service crash-loops right after an upgrade: use [Roll back](#roll-back) with
   the pre-upgrade `.ready` bundle. Do not rerun the upgrade first; doing so would
   make the crashing version the next rollback binary.
+- `AppRun: line 45: /orca-ide: No such file or directory`: set
+  `APPDIR=/path/to/squashfs-root` in the environment when invoking the
+  extracted `AppRun` directly.
 - Diagnosing other missing libraries: extract the AppImage without launching it
   with `./orca-linux.AppImage --appimage-extract`, then run
-  `ldd squashfs-root/orca` to list any shared libraries the host is missing.
+  `ldd squashfs-root/orca-ide` to list any shared libraries the host is missing.
