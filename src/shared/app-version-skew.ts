@@ -41,17 +41,25 @@ export function parseAppVersion(version: string | null | undefined): ParsedAppVe
   ) {
     return null
   }
-  return {
-    release: [Number(match[1]), Number(match[2]), Number(match[3])],
-    prerelease
+  const release = [Number(match[1]), Number(match[2]), Number(match[3])] as [number, number, number]
+  // Why: Number() is lossy past 2^53, so two distinct huge segments would compare
+  // equal and produce a false "no skew"; no real version gets near this.
+  if (release.some((segment) => !Number.isSafeInteger(segment))) {
+    return null
   }
+  return { release, prerelease }
 }
 
 function comparePrereleaseIds(a: string, b: string): number {
   const aNumeric = /^\d+$/.test(a)
   const bNumeric = /^\d+$/.test(b)
   if (aNumeric && bNumeric) {
-    return Number(a) - Number(b)
+    // Why: length-then-lexicographic is exact for any magnitude (the strict
+    // parse forbids leading zeros), where Number() would lose precision.
+    if (a.length !== b.length) {
+      return a.length - b.length
+    }
+    return a < b ? -1 : a > b ? 1 : 0
   }
   // Why: semver rule — numeric identifiers sort below alphanumeric ones.
   if (aNumeric !== bNumeric) {

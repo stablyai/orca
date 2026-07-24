@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { describeAppVersionSkew, evaluateAppVersionSkew, parseAppVersion } from './app-version-skew'
+import {
+  compareAppVersions,
+  describeAppVersionSkew,
+  evaluateAppVersionSkew,
+  parseAppVersion
+} from './app-version-skew'
 
 describe('evaluateAppVersionSkew', () => {
   it('returns null when client and server versions match', () => {
@@ -113,6 +118,24 @@ describe('parseAppVersion', () => {
       release: [1, 4, 147],
       prerelease: ['01a']
     })
+  })
+
+  it('rejects release segments beyond safe-integer precision instead of mis-comparing them', () => {
+    expect(parseAppVersion('9007199254740993.0.0')).toBeNull()
+    expect(parseAppVersion('1.2.9007199254740993')).toBeNull()
+    // The safe-integer boundary itself still parses.
+    expect(parseAppVersion('9007199254740991.0.0')).toEqual({
+      release: [9007199254740991, 0, 0],
+      prerelease: null
+    })
+  })
+
+  it('compares huge numeric prerelease identifiers exactly', () => {
+    const older = parseAppVersion('1.0.0-rc.9007199254740992')
+    const newer = parseAppVersion('1.0.0-rc.9007199254740993')
+    expect(older).not.toBeNull()
+    expect(newer).not.toBeNull()
+    expect(compareAppVersions(older!, newer!)).toBeLessThan(0)
   })
 })
 
