@@ -13694,7 +13694,11 @@ export class OrcaRuntimeService {
     if (!record?.ptyId) {
       return null
     }
-    // Why: runtime epoch + PTY generation prevents a restored same-looking pane from inheriting old Dispatch authority.
+    const incarnationId = live?.pty.incarnationId ?? this.ptysById.get(record.ptyId)?.incarnationId
+    if (incarnationId) {
+      return `${record.ptyId}:${incarnationId}`
+    }
+    // Why: legacy providers may omit process incarnation; retain the prior restart-degraded fence.
     return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
   }
 

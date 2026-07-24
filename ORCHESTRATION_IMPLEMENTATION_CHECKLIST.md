@@ -30,6 +30,8 @@ Status meanings:
 - [x] Phase 1 local Run, mailbox, lifecycle, and idempotency primitives complete.
 - [x] Phase 2 same-server composed worker lifecycle complete.
 - [x] Phase 3 connected-server federation complete.
+- [ ] Revalidate Phase 3 after the 2026-07-24 post-rebase dogfood exposed a renderer-adoption
+      process-identity regression.
 - [x] Phase 4 explicitly deferred because its exact-source prerequisite does not exist.
 
 ## Scope invariants
@@ -324,6 +326,8 @@ Explicit non-goals:
 
 ### Federation scenario matrix
 
+- [ ] Post-rebase physical Mac Run home -> Windows worker preserves exact process identity through
+      renderer adoption, routed read, heartbeat, question/reply, completion, and stop.
 - [x] Mac Run home -> Windows worker: start, completion, failure, question/reply, read, and stop.
 - [x] Windows Run home -> Mac worker: the same flows through a saved Mac pairing.
 - [x] Native, WSL, SSH, and relay-backed execution-host paths preserve ownership and CLI capability.
@@ -1185,6 +1189,38 @@ Append new entries chronologically. Do not rewrite older entries except to corre
     localization catalog; changed-file lint and every in-scope quality gate pass.
 - Next:
   - Resolve CodeRabbit threads and confirm the PR checks at the final head.
+
+### 2026-07-24 — Post-rebase physical federation dogfood
+
+- Changes:
+  - Rebased the branch onto current main and launched isolated branch-head desktop runtimes on the
+    Mac Run home and the physical Windows worker server.
+  - Started a real Windows Codex worker in a new top-level worktree with explicit setup-run.
+  - Replaced the orchestration process fence's renderer generation with the controller-issued PTY
+    incarnation when available, retaining the prior value only for legacy providers.
+  - Added a runtime regression covering a visible terminal surface detaching and reattaching around
+    the same process, followed by a replacement incarnation.
+- Files:
+  - `src/main/runtime/orca-runtime.ts`
+  - `src/main/runtime/orca-runtime.test.ts`
+  - `ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md`
+- Verification:
+  - The remote start returned ready in about nine seconds with setup `running`,
+    `startupPolicy=start-immediately`, one agent terminal, one setup terminal, and accepted task
+    input.
+  - The original branch head then reproduced immediate `identity_changed`: routed read failed and
+    the exact injected capability could not send a heartbeat or question.
+  - The new focused process-identity regression passed, the 18-test federation suite passed, and
+    Node typecheck passed.
+- Findings:
+  - A renderer pane generation is presentation state, not process identity. A healthy PTY can move
+    between a runtime-owned background surface and the renderer without losing Dispatch authority.
+  - The PTY controller incarnation is already available on native Windows/macOS and SSH/relay paths;
+    using it fixes the race without relaxing replacement-process fencing or adding a new identity
+    subsystem.
+- Next:
+  - Rebuild both branch runtimes, repeat the full physical Mac-to-Windows lifecycle, then run the
+    remaining local error/recovery matrix before closing the revalidation rows.
 
 ### Entry template
 

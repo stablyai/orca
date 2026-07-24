@@ -17309,6 +17309,65 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getTerminalProcessIncarnation(handle)).toBe(incarnation)
   })
 
+  it('preserves PTY process identity while a renderer surface detaches and reattaches', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({
+        id: 'pty-bg',
+        incarnationId: 'incarnation-bg'
+      }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    const [tabId, leafId] = created.paneKey?.split(':') ?? []
+    if (!tabId || !leafId) {
+      throw new Error('expected stable pane identity')
+    }
+    const syncSurface = (ptyId: string | null): void => {
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Codex',
+            activeLeafId: leafId,
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            leafId,
+            paneRuntimeId: 1,
+            ptyId,
+            paneTitle: 'Codex'
+          }
+        ]
+      })
+    }
+
+    syncSurface('pty-bg')
+    await runtime.listTerminals()
+    const before = runtime.getTerminalProcessIncarnation(created.handle)
+    syncSurface(null)
+    syncSurface('pty-bg')
+    await runtime.listTerminals()
+
+    expect(runtime.getTerminalProcessIncarnation(created.handle)).toBe(before)
+
+    runtime.registerPty('pty-bg', TEST_WORKTREE_ID, null, {
+      tabId,
+      leafId,
+      incarnationId: 'incarnation-replacement'
+    })
+    expect(runtime.getTerminalProcessIncarnation(created.handle)).not.toBe(before)
+  })
+
   it('recognizes runtime-created PTY handles with agent launch titles', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
