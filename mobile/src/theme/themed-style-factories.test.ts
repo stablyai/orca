@@ -152,7 +152,12 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../session/MobileAgentWorkingIndicator'),
     import('../terminal/terminal-webview-engine-error-state'),
     import('../session/mobile-native-chat-view-styles'),
-    import('../session/mobile-native-chat-message-styles')
+    import('../session/mobile-native-chat-message-styles'),
+    import('../components/mobile-markdown-styles'),
+    import('../components/mobile-diff-review-control-styles'),
+    import('../components/mobile-diff-review-layout-styles'),
+    import('../components/mobile-diff-review-screen-styles'),
+    import('../components/MobileSyntaxSegments')
   ])
   const [
     bottomDrawer,
@@ -197,7 +202,12 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     workingIndicator,
     engineError,
     nativeChatView,
-    nativeChatMessage
+    nativeChatMessage,
+    markdownStyles,
+    diffControl,
+    diffLayout,
+    diffScreen,
+    syntaxSegments
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -302,6 +312,26 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createMobileNativeChatMessageStyles',
       factory: nativeChatMessage.createMobileNativeChatMessageStyles
+    },
+    {
+      name: 'createMobileMarkdownStyles',
+      factory: markdownStyles.createMobileMarkdownStyles
+    },
+    {
+      name: 'createMobileDiffReviewControlStyles',
+      factory: diffControl.createMobileDiffReviewControlStyles
+    },
+    {
+      name: 'createMobileDiffReviewLayoutStyles',
+      factory: diffLayout.createMobileDiffReviewLayoutStyles
+    },
+    {
+      name: 'createMobileDiffReviewStyles',
+      factory: diffScreen.createMobileDiffReviewStyles
+    },
+    {
+      name: 'createMobileSyntaxTokenStyles',
+      factory: syntaxSegments.createMobileSyntaxTokenStyles
     }
   ]
 }
@@ -416,5 +446,26 @@ describe('themed style factories', () => {
     expect(chatView.sendErrorText.color).toBe(darkColors.statusRed)
     const chatMsg = createMobileNativeChatMessageStyles(darkColors)
     expect(chatMsg.userText.color).toBe(darkColors.bgBase)
+
+    const { createMobileMarkdownStyles } = await import('../components/mobile-markdown-styles')
+    const { createMobileDiffReviewControlStyles } =
+      await import('../components/mobile-diff-review-control-styles')
+    const { createMobileDiffReviewLayoutStyles } =
+      await import('../components/mobile-diff-review-layout-styles')
+    const { createMobileDiffReviewStyles } =
+      await import('../components/mobile-diff-review-screen-styles')
+    const { createMobileSyntaxTokenStyles } = await import('../components/MobileSyntaxSegments')
+    const md = createMobileMarkdownStyles(darkColors)
+    expect(md.paragraph.color).toBe(darkColors.textPrimary)
+    expect(md.link.color).toBe(darkColors.accentBlue)
+    const control = createMobileDiffReviewControlStyles(darkColors)
+    expect(control.footer.backgroundColor).toBe(darkColors.bgBase)
+    const layout = createMobileDiffReviewLayoutStyles(darkColors)
+    expect(layout.safeArea.backgroundColor).toBe(darkColors.bgBase)
+    const review = createMobileDiffReviewStyles(darkColors)
+    expect(review.safeArea.backgroundColor).toBe(darkColors.bgBase)
+    expect(review.footer.backgroundColor).toBe(darkColors.bgBase)
+    const syntax = createMobileSyntaxTokenStyles(darkColors)
+    expect(syntax.keyword.color).toBe(darkColors.syntaxKeyword)
   })
 })
