@@ -23,7 +23,6 @@ import type {
 import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
