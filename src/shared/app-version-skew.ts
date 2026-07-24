@@ -26,13 +26,24 @@ export function parseAppVersion(version: string | null | undefined): ParsedAppVe
   if (!trimmed) {
     return null
   }
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(trimmed)
+  // Why: strict SemVer shapes only — a malformed identifier must read as
+  // "unknown version" (null), never produce a false skew verdict.
+  const match =
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(
+      trimmed
+    )
   if (!match) {
+    return null
+  }
+  const prerelease = match[4] ? match[4].split('.') : null
+  if (
+    prerelease?.some((id) => id === '' || (/^\d+$/.test(id) && id.length > 1 && id.startsWith('0')))
+  ) {
     return null
   }
   return {
     release: [Number(match[1]), Number(match[2]), Number(match[3])],
-    prerelease: match[4] ? match[4].split('.') : null
+    prerelease
   }
 }
 

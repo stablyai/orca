@@ -8,7 +8,12 @@ export function getClientAppVersion(): Promise<string | null> {
   // store assemblies) degrades to "unknown version" instead of throwing.
   cachedClientAppVersion ??= Promise.resolve()
     .then(() => window.api.updater.getVersion())
-    .catch(() => null)
+    .catch(() => {
+      // Why: a rejected lookup must not poison the cache — clear it so the next
+      // status ingestion retries instead of skipping skew detection all session.
+      cachedClientAppVersion = null
+      return null
+    })
   return cachedClientAppVersion
 }
 

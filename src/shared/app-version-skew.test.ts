@@ -96,6 +96,24 @@ describe('parseAppVersion', () => {
     expect(parseAppVersion('1.4')).toBeNull()
     expect(parseAppVersion('v1.4.147')).toBeNull()
   })
+
+  it('rejects leading-zero and empty identifiers instead of mis-ranking them', () => {
+    expect(parseAppVersion('01.4.147')).toBeNull()
+    expect(parseAppVersion('1.04.147')).toBeNull()
+    expect(parseAppVersion('1.4.147-rc..1')).toBeNull()
+    expect(parseAppVersion('1.4.147-rc.01')).toBeNull()
+    expect(parseAppVersion('1.4.147-.rc')).toBeNull()
+    expect(parseAppVersion('1.4.147+build..1')).toBeNull()
+    // Zero itself and zero-containing alphanumerics stay valid per SemVer.
+    expect(parseAppVersion('1.4.147-rc.0')).toEqual({
+      release: [1, 4, 147],
+      prerelease: ['rc', '0']
+    })
+    expect(parseAppVersion('1.4.147-01a')).toEqual({
+      release: [1, 4, 147],
+      prerelease: ['01a']
+    })
+  })
 })
 
 describe('describeAppVersionSkew', () => {
