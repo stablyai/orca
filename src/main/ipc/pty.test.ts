@@ -233,6 +233,7 @@ import {
   SSH_SESSION_EXPIRED_ERROR
 } from '../providers/ssh-pty-errors'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
+import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
 
 const POWERSHELL_OSC133_ARGS = [
@@ -2828,6 +2829,40 @@ describe('registerPtyHandlers', () => {
             configurable: true,
             value: originalPlatform
           })
+        }
+      })
+
+      it('drops OPENCODE_CONFIG_DIR for a WSL daemon spawn until the guest overlay is known', async () => {
+        await withWin32Platform(async () => {
+          const env = await daemonSpawnAndGetEnv({}, undefined, undefined, undefined, {
+            shellOverride: 'wsl.exe'
+          })
+          // Why: relay not connected yet → never cross the Windows overlay path into WSL.
+          expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+          expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+          expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+        })
+      })
+
+      it('points OPENCODE_CONFIG_DIR at the guest overlay when the WSL relay reports it', async () => {
+        const guestDir = '/home/jin/.orca-relay/opencode-overlays/abc'
+        const spy = vi.spyOn(wslHookRelayManager, 'getOpenCodeOverlayDir').mockReturnValue(guestDir)
+        try {
+          await withWin32Platform(async () => {
+            const env = await daemonSpawnAndGetEnv(
+              { ORCA_OPENCODE_SOURCE_CONFIG_DIR: '/home/jin/.config/opencode' },
+              undefined,
+              undefined,
+              undefined,
+              { shellOverride: 'wsl.exe' }
+            )
+            expect(env.OPENCODE_CONFIG_DIR).toBe(guestDir)
+            expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe(guestDir)
+            // The Windows-side source pointer must not cross into the guest.
+            expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+          })
+        } finally {
+          spy.mockRestore()
         }
       })
 

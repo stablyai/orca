@@ -128,6 +128,24 @@ describe('addOrcaWslInteropEnv', () => {
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).toBe('ORCA_WSL_HOOK_RELAY_VERSION/u')
   })
+
+  it('crosses a guest-side OpenCode config overlay untranslated (/u)', () => {
+    const env: Record<string, string> = {
+      OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc',
+      ORCA_OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc'
+    }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).toContain('OPENCODE_CONFIG_DIR/u')
+    expect(env.WSLENV).toContain('ORCA_OPENCODE_CONFIG_DIR/u')
+    expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR/p')
+  })
+
+  it('does not register the OpenCode config vars when they are absent', () => {
+    const env: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
+    expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
+  })
 })
 
 describe('addWorktreeSetupWslInteropEnv', () => {

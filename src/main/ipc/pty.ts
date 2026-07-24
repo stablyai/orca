@@ -1073,6 +1073,18 @@ export function buildPtyHostEnv(
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
       }
+      // Why: OpenCode loads its status plugin from a guest config overlay, so point OPENCODE_CONFIG_DIR at the guest dir the relay materialized.
+      const opencodeOverlayDir = wslHookRelayManager.getOpenCodeOverlayDir(distro)
+      if (opencodeOverlayDir) {
+        baseEnv.OPENCODE_CONFIG_DIR = opencodeOverlayDir
+        baseEnv.ORCA_OPENCODE_CONFIG_DIR = opencodeOverlayDir
+        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+      } else {
+        // Why: relay not connected yet (or older guest bundle) — never cross the Windows overlay path into WSL; drop it so in-guest OpenCode uses its own config (pre-fix behavior, no status but no regression).
+        delete baseEnv.OPENCODE_CONFIG_DIR
+        delete baseEnv.ORCA_OPENCODE_CONFIG_DIR
+        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+      }
     }
   }
 

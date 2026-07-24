@@ -54,6 +54,10 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // via /mnt/c) until the WSL hook relay reports the guest home — then it is
   // already a guest-side POSIX path and must cross untranslated.
   const endpointFlag = env.ORCA_AGENT_HOOK_ENDPOINT?.startsWith('/') ? 'u' : 'p'
+  // Why: the OpenCode overlay dirs are guest-side POSIX paths (/u) once the WSL
+  // relay reports them; /p is a defensive default should a Windows path ever appear.
+  const opencodeConfigFlag = env.OPENCODE_CONFIG_DIR?.startsWith('/') ? 'u' : 'p'
+  const orcaOpencodeConfigFlag = env.ORCA_OPENCODE_CONFIG_DIR?.startsWith('/') ? 'u' : 'p'
   // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',
@@ -68,6 +72,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_AGENT_HOOK_ENV/u',
     'ORCA_AGENT_HOOK_VERSION/u',
     `ORCA_AGENT_HOOK_ENDPOINT/${endpointFlag}`,
+    `OPENCODE_CONFIG_DIR/${opencodeConfigFlag}`,
+    `ORCA_OPENCODE_CONFIG_DIR/${orcaOpencodeConfigFlag}`,
     'ORCA_WSL_HOOK_RELAY_VERSION/u',
     'ORCA_WSL_HOOK_INSTANCE/u',
     'ORCA_OMP_SOURCE_AGENT_DIR/p',
