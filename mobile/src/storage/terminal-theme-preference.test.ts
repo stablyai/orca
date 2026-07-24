@@ -96,6 +96,56 @@ describe('mobile terminal theme preference', () => {
     expect(store.storage.removeItem).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the untouched stored slots when a save precedes the first load', async () => {
+    const store = await freshStore()
+    const stored: Record<string, string | null> = {
+      'orca:terminalThemeDark': 'Nord',
+      'orca:terminalThemeLight': 'GitHub Light',
+      'orca:terminalUseSeparateLightTheme': 'false'
+    }
+    vi.mocked(store.storage.getItem).mockImplementation(async (key: string) => stored[key] ?? null)
+    vi.mocked(store.storage.setItem).mockImplementation(async (key: string, value: string) => {
+      stored[key] = value
+    })
+    vi.mocked(store.storage.removeItem).mockImplementation(async (key: string) => {
+      stored[key] = null
+    })
+
+    await store.saveMobileTerminalThemeSelection({ dark: 'One Dark' })
+
+    expect(stored).toEqual({
+      'orca:terminalThemeDark': 'One Dark',
+      'orca:terminalThemeLight': 'GitHub Light',
+      'orca:terminalUseSeparateLightTheme': 'false'
+    })
+    expect(store.getMobileTerminalThemeSelection()).toEqual({
+      dark: 'One Dark',
+      light: 'GitHub Light',
+      useSeparateLightTheme: false
+    })
+  })
+
+  it('retries a failed read instead of pinning the default for the session', async () => {
+    const store = await freshStore()
+    vi.mocked(store.storage.getItem).mockRejectedValueOnce(new Error('storage unavailable'))
+
+    await expect(store.loadMobileTerminalThemeSelection()).resolves.toEqual({
+      dark: null,
+      light: null,
+      useSeparateLightTheme: true
+    })
+
+    vi.mocked(store.storage.getItem).mockImplementation(async (key: string) =>
+      key === 'orca:terminalThemeDark' ? 'One Dark' : null
+    )
+
+    await expect(store.loadMobileTerminalThemeSelection()).resolves.toEqual({
+      dark: 'One Dark',
+      light: null,
+      useSeparateLightTheme: true
+    })
+  })
+
   it('publishes to subscribers before the write resolves', async () => {
     const store = await freshStore()
     const pending = deferred<undefined>()
@@ -137,11 +187,13 @@ describe('mobile terminal theme preference', () => {
     )
 
     const load = store.loadMobileTerminalThemeSelection()
-    await store.saveMobileTerminalThemeSelection({ dark: 'Nord' })
+    const write = store.saveMobileTerminalThemeSelection({ dark: 'Nord' })
+    expect(store.getMobileTerminalThemeSelection().dark).toBe('Nord')
     pending.resolve('Dracula')
-    await load
+    await Promise.all([load, write])
 
     expect(store.getMobileTerminalThemeSelection().dark).toBe('Nord')
+    expect(store.storage.setItem).toHaveBeenCalledWith('orca:terminalThemeDark', 'Nord')
   })
 
   it('unsubscribing stops further notifications', async () => {
