@@ -41,7 +41,8 @@ vi.mock('expo-router', () => ({ router: { replace: () => undefined } }))
 vi.mock('../platform/haptics', () => ({
   triggerError: () => undefined,
   triggerSuccess: () => undefined,
-  triggerMediumImpact: () => undefined
+  triggerMediumImpact: () => undefined,
+  triggerSelection: () => undefined
 }))
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isWideLayout: false, modalMaxWidth: 480, width: 390 })
@@ -128,7 +129,11 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     // cover batch 3. Other app factories are identity-checked via git diff -w.
     import('../../app/voice-settings-styles'),
     import('../components/ConnectionLog'),
-    import('../components/VoiceModelList')
+    import('../components/VoiceModelList'),
+    import('../components/terminal-shortcut-settings-styles'),
+    import('../components/custom-key-modal-styles'),
+    import('../session/MobileTerminalLiveInputStatus'),
+    import('../components/DragReorderList')
   ])
   const [
     bottomDrawer,
@@ -152,7 +157,11 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     accountUsage,
     voiceSettings,
     connectionLog,
-    voiceModelList
+    voiceModelList,
+    shortcutSettings,
+    customKeyModal,
+    liveInputStatus,
+    dragReorderList
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -188,7 +197,17 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     { name: 'createAccountUsageStyles', factory: accountUsage.createAccountUsageStyles },
     { name: 'createVoiceSettingsStyles', factory: voiceSettings.createVoiceSettingsStyles },
     { name: 'createConnectionLogStyles', factory: connectionLog.createConnectionLogStyles },
-    { name: 'createVoiceModelListStyles', factory: voiceModelList.createVoiceModelListStyles }
+    { name: 'createVoiceModelListStyles', factory: voiceModelList.createVoiceModelListStyles },
+    {
+      name: 'createTerminalShortcutSettingsStyles',
+      factory: shortcutSettings.createTerminalShortcutSettingsStyles
+    },
+    { name: 'createCustomKeyModalStyles', factory: customKeyModal.createCustomKeyModalStyles },
+    {
+      name: 'createMobileTerminalLiveInputStatusStyles',
+      factory: liveInputStatus.createMobileTerminalLiveInputStatusStyles
+    },
+    { name: 'createDragReorderListStyles', factory: dragReorderList.createDragReorderListStyles }
   ]
 }
 
@@ -237,5 +256,15 @@ describe('themed style factories', () => {
     expect(voice.heading.color).toBe(darkColors.textPrimary)
     const log = createConnectionLogStyles(darkColors)
     expect(log.timestamp.color).toBe(darkColors.textMuted)
+
+    const { createTerminalShortcutSettingsStyles } =
+      await import('../components/terminal-shortcut-settings-styles')
+    const { createCustomKeyModalStyles } = await import('../components/custom-key-modal-styles')
+    const shortcuts = createTerminalShortcutSettingsStyles(darkColors)
+    expect(shortcuts.keycap.backgroundColor).toBe(darkColors.bgRaised)
+    // Delete affordance keeps its literal red wash in both modes (statusRed at 10%).
+    expect(shortcuts.deleteButton.backgroundColor).toBe('rgba(239, 68, 68, 0.1)')
+    const customKey = createCustomKeyModalStyles(darkColors)
+    expect(customKey.title.color).toBe(darkColors.textPrimary)
   })
 })

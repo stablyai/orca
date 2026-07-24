@@ -13,7 +13,8 @@ import Animated, {
   type AnimatedRef,
   type SharedValue
 } from 'react-native-reanimated'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { triggerMediumImpact, triggerSelection } from '../platform/haptics'
 import {
   clampDragReorderIndex,
@@ -236,6 +237,12 @@ function DragReorderRow({
     dragTranslationY,
     dragPointerAbsY
   } = shared
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createDragReorderListStyles)
+  // Hoisted out of the worklet below: capturing two strings keeps the animated
+  // style shareable instead of cloning the whole palette to the UI runtime.
+  const draggedBg = colors.bgRaised
+  const restingBg = colors.bgPanel
 
   const pan = Gesture.Pan()
     .activateAfterLongPress(LONG_PRESS_ACTIVATION_MS)
@@ -274,7 +281,7 @@ function DragReorderRow({
         zIndex: 2,
         elevation: 4,
         shadowOpacity: 0.3,
-        backgroundColor: colors.bgRaised,
+        backgroundColor: draggedBg,
         transform: [{ scale: 1.02 }]
       }
     }
@@ -283,7 +290,7 @@ function DragReorderRow({
       zIndex: 0,
       elevation: 0,
       shadowOpacity: 0,
-      backgroundColor: colors.bgPanel,
+      backgroundColor: restingBg,
       transform: [{ scale: 1 }]
     }
   })
@@ -319,31 +326,32 @@ function DragReorderRow({
   )
 }
 
-const styles = StyleSheet.create({
-  row: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8
-  },
-  rowContent: {
-    flex: 1
-  },
-  handle: {
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md
-  },
-  rowSeparator: {
-    position: 'absolute',
-    bottom: 0,
-    left: spacing.md,
-    right: spacing.md,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
-  }
-})
+export const createDragReorderListStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    row: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowRadius: 8
+    },
+    rowContent: {
+      flex: 1
+    },
+    handle: {
+      alignSelf: 'stretch',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.md
+    },
+    rowSeparator: {
+      position: 'absolute',
+      bottom: 0,
+      left: spacing.md,
+      right: spacing.md,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle
+    }
+  })
