@@ -176,6 +176,11 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/droid-hook.sh',
           install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          // Why: Kimi's local script selection is platform-branched; pin that a Windows host still writes the POSIX remote body.
+          path: '/home/dev/.orca/agent-hooks/kimi-hook.sh',
+          install: (sftp: SFTPWrapper) => new KimiHookService().installRemote(sftp, '/home/dev')
         }
       ]
 

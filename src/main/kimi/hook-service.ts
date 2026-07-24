@@ -211,7 +211,9 @@ export class KimiHookService {
     return this.getStatus()
   }
 
-  // Why: SFTP 远端约定为 POSIX，不能让本机 Windows 平台选择污染远端脚本。
+  // Why: SFTP remotes are always POSIX, so force the shared `.sh` body and never
+  // let the local host's Windows platform selection leak into the remote script.
+  // The managed script body is platform-independent (Kimi's remote shell is sh/Git Bash).
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = pathPosix.join(remoteHome, '.kimi-code', 'config.toml')
     const remoteScriptPath = pathPosix.join(
