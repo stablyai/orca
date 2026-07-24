@@ -728,6 +728,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...(admittedSessionId ? { sessionId: admittedSessionId } : {}),
           // Why: hidden-at-spawn mark must reach main before the PTY's first byte — ride the spawn IPC, not the visibility sync (terminal-query-authority.md).
           ...(options.initiallyHidden ? { initiallyHidden: true } : {}),
+          ...(options.controlledHibernationWake ? { controlledHibernationWake: true } : {}),
           worktreeId,
           ...(tabId ? { tabId } : {}),
           ...(leafId ? { leafId } : {}),

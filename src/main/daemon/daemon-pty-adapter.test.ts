@@ -1691,10 +1691,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       lastSpawnOpts = null
-      const probe = vi.spyOn(historyAdapter, 'getAppliedSize').mockImplementation(async () => {
-        lastSubprocess._simulateExit(1)
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        return { cols: 80, rows: 24 }
+      const client = (historyAdapter as unknown as { client: DaemonClient }).client
+      const originalRequest = client.request.bind(client)
+      const request = vi.spyOn(client, 'request')
+      request.mockImplementation(async (type, payload) => {
+        if (type === 'createOrAttach' && (payload as { attachOnly?: boolean }).attachOnly) {
+          lastSubprocess._simulateExit(1)
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+        return await originalRequest(type, payload)
       })
       const preSpawnLostWorker = vi.fn(async () => ({
         kind: 'archived' as const,
@@ -1708,12 +1713,64 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         preSpawnLostWorker
       })
 
-      expect(probe).toHaveBeenCalledOnce()
+      expect(request).toHaveBeenCalledWith(
+        'createOrAttach',
+        expect.objectContaining({ attachOnly: true })
+      )
       expect(preSpawnLostWorker).toHaveBeenCalledOnce()
       expect(result.lostWorkerRecovery).toEqual({
         kind: 'archived',
         archiveId: 'archive-worker-race'
       })
+      expect(lastSpawnOpts).toBeNull()
+    })
+
+    it('adopts a live lost worker with missing history without creating a replacement', async () => {
+      const sessionId = 'lost-worker-missing-history-live'
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      rmSync(join(historyDir, getHistorySessionDirName(sessionId)), {
+        recursive: true,
+        force: true
+      })
+      lastSpawnOpts = null
+      const preSpawnLostWorker = vi.fn(async () => ({
+        kind: 'archived' as const,
+        archiveId: 'unexpected-archive'
+      }))
+
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId,
+        preSpawnLostWorker
+      })
+
+      expect(result).toMatchObject({ id: sessionId, isReattach: true })
+      expect(preSpawnLostWorker).not.toHaveBeenCalled()
+      expect(lastSpawnOpts).toBeNull()
+    })
+
+    it('returns capture-unavailable for a lost worker with missing history instead of creating one', async () => {
+      const sessionId = 'lost-worker-missing-history'
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const preSpawnLostWorker = vi.fn(async () => ({
+        kind: 'archived' as const,
+        archiveId: 'unexpected-archive'
+      }))
+
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId,
+        preSpawnLostWorker
+      })
+
+      expect(result.lostWorkerRecovery).toEqual({
+        kind: 'retryable-error',
+        code: 'capture-unavailable'
+      })
+      expect(preSpawnLostWorker).not.toHaveBeenCalled()
       expect(lastSpawnOpts).toBeNull()
     })
 
@@ -1889,6 +1946,63 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(result.coldRestore).toBeUndefined()
+    })
+
+    it('returns capture-unavailable for an empty lost-worker payload without creating a replacement', async () => {
+      const sessionId = 'lost-worker-empty-payload'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/myapp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(
+        join(sessionDir, 'checkpoint.json'),
+        JSON.stringify({
+          snapshotAnsi: '',
+          scrollbackAnsi: '',
+          oscLinks: [],
+          rehydrateSequences: '\x1b[?1049h',
+          cwd: '/projects/myapp',
+          cols: 80,
+          rows: 24,
+          modes: {
+            bracketedPaste: false,
+            mouseTracking: false,
+            applicationCursor: false,
+            alternateScreen: true
+          },
+          scrollbackLines: 0,
+          generation: 0,
+          checkpointedAt: '2026-04-15T11:00:00Z'
+        })
+      )
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const preSpawnLostWorker = vi.fn(async () => ({
+        kind: 'archived' as const,
+        archiveId: 'unexpected-archive'
+      }))
+
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId,
+        preSpawnLostWorker
+      })
+
+      expect(result.lostWorkerRecovery).toEqual({
+        kind: 'retryable-error',
+        code: 'capture-unavailable'
+      })
+      expect(preSpawnLostWorker).not.toHaveBeenCalled()
+      expect(lastSpawnOpts).toBeNull()
     })
 
     it('re-anchors a cold-restored session with a full checkpoint on the first tick', async () => {

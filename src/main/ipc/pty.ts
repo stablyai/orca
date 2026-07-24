@@ -4665,6 +4665,8 @@ export function registerPtyHandlers(
         }
         // Why: hidden-at-spawn declaration (terminal-query-authority.md §races) — main marks hidden before byte zero so the gate owns spawn-time queries.
         initiallyHidden?: boolean
+        // Why: only the renderer-controlled sleeping-record wake may bypass the lost-worker gate; agent-resume payloads alone are not wake evidence.
+        controlledHibernationWake?: boolean
         // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.
         tabId?: string
         leafId?: string
@@ -5015,8 +5017,7 @@ export function registerPtyHandlers(
       const daemonColdRestoreIsRecognizedWorker =
         isDaemonHostSpawn &&
         !isMintedSessionId &&
-        !args.launchConfig &&
-        !args.resumeProviderSession &&
+        args.controlledHibernationWake !== true &&
         typeof args.worktreeId === 'string' &&
         args.worktreeId.length > 0 &&
         typeof args.tabId === 'string' &&

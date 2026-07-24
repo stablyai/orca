@@ -4830,6 +4830,7 @@ export function connectPanePty(
           : {}),
         ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
         ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
+        ...(coldRestoreOverride?.hasSleepingRecord ? { controlledHibernationWake: true } : {}),
         ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
         callbacks: outputCallbacks.callbacks
       })
@@ -7741,6 +7742,7 @@ export function connectPanePty(
                 ? { launchToken: coldRestoreStartup.launchToken }
                 : {}),
               ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+              ...(coldRestoreStartup?.hasSleepingRecord ? { controlledHibernationWake: true } : {}),
               ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
               callbacks: outputCallbacks.callbacks
             })
@@ -7972,6 +7974,7 @@ export function connectPanePty(
           : {}),
         ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
         ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+        ...(coldRestoreStartup?.hasSleepingRecord ? { controlledHibernationWake: true } : {}),
         ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
         callbacks: outputCallbacks.callbacks
       })

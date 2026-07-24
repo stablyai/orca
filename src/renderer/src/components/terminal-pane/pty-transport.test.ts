@@ -151,6 +151,16 @@ describe('createIpcPtyTransport', () => {
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ resumeProviderSession }))
   })
 
+  it('forwards an explicit controlled hibernation wake to the PTY spawn', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+
+    await transport.connect({ url: '', controlledHibernationWake: true, callbacks: {} })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ controlledHibernationWake: true }))
+  })
+
   it('leaves the transport silently unbound after a failed connect — sendInput drops with no write IPC (frozen-terminal repro)', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

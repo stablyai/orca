@@ -7976,7 +7976,8 @@ describe('connectPanePty', () => {
           ORCA_WORKTREE_ID: 'wt-1',
           ORCA_WORKSPACE_ID: 'wt-1',
           ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
-        })
+        }),
+        controlledHibernationWake: true
       })
     )
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(paneKey, launchConfig, {
@@ -8144,6 +8145,7 @@ describe('connectPanePty', () => {
         })
       })
     )
+    expect(transport.connect.mock.calls.at(-1)?.[0]).not.toHaveProperty('controlledHibernationWake')
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(paneKey, launchConfig, {
       agentType: 'codex',
       launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
@@ -17562,7 +17564,11 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('keeps a deferred SSH tab when the archive handoff throws', async () => {
+  it('keeps a deferred SSH tab when archive capture throws before the helper returns', async () => {
+    const { shutdownBufferCaptures } = await import('./shutdown-buffer-captures')
+    shutdownBufferCaptures.set('tab-1', () => {
+      throw new Error('capture callback failed')
+    })
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transport.connect.mockImplementation(
@@ -17575,9 +17581,6 @@ describe('connectPanePty', () => {
       }
     )
     transportFactoryQueue.push(transport)
-    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockRejectedValue(
-      new Error('capture callback failed')
-    )
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
@@ -17588,16 +17591,25 @@ describe('connectPanePty', () => {
     }
     const deps = createDeps()
 
-    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
-    await flushAsyncTicks(20)
+    try {
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(20)
 
-    expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledOnce()
-    expect(transport.connect).toHaveBeenCalledTimes(1)
-    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
-      1,
-      'Terminal recovery is pending archive (durability-failed).'
-    )
-    expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+      expect(window.api.pty.handleLostTerminalCandidate).not.toHaveBeenCalled()
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+      expect(
+        transport.connect.mock.calls.filter(
+          ([options]) => !(options as { sessionId?: string }).sessionId
+        )
+      ).toHaveLength(0)
+      expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+        1,
+        'Terminal recovery could not be archived. Try again shortly.'
+      )
+      expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+    } finally {
+      shutdownBufferCaptures.delete('tab-1')
+    }
   })
 
   it('spawns a fresh PTY when a deferred SSH session expired', async () => {

@@ -298,31 +298,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
       this.setPtyBackgrounded(sessionId, false)
     }
 
-    // Why detect crash-recovery history before spawning: the revived shell should inherit the recovered cwd/dims, not the renderer's mount-time request.
-    // Why probe aliveness first: detectColdRestore replays up to ~5MB on the main process, but a live session's snapshot supersedes disk, so the replay would be wasted.
     let restoreInfo: ColdRestoreInfo | null = null
     let restoreSkippedForLiveSession = false
-    if (this.historyReader?.hasRestorableHistory(sessionId)) {
-      if ((await this.getAppliedSize(sessionId)) !== null) {
-        restoreSkippedForLiveSession = true
-      } else {
-        restoreInfo = detectColdRestore()
-      }
-    }
-    let effectiveCwd = restoreInfo?.cwd ?? opts.cwd
-    let effectiveCols = restoreInfo?.cols ?? opts.cols
-    let effectiveRows = restoreInfo?.rows ?? opts.rows
-
-    if (restoreInfo && opts.preSpawnLostWorker) {
-      const coldRestore = this.buildColdRestorePayload(restoreInfo)
-      if (coldRestore) {
-        return {
-          id: sessionId,
-          lostWorkerRecovery: await opts.preSpawnLostWorker(coldRestore),
-          ...(wslDistro ? { wslDistro } : {})
-        }
-      }
-    }
+    let effectiveCwd = opts.cwd
+    let effectiveCols = opts.cols
+    let effectiveRows = opts.rows
 
     const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
     const isCodexStartupCommand =
@@ -367,9 +347,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       })
     }
 
-    let scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
+    let scrollback: string | null = null
     let result: CreateOrAttachResult
-    if (restoreSkippedForLiveSession && opts.preSpawnLostWorker) {
+    if (opts.preSpawnLostWorker) {
       if (this.protocolVersion < ATTACH_ONLY_PROTOCOL_VERSION) {
         return {
           id: sessionId,
@@ -378,7 +358,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         }
       }
       try {
-        // Why: a probe can go stale between RPCs; attach-only makes that gap unable to create a replacement shell.
+        // Why: recognized workers must adopt a live session before any recovery payload can choose an archive path.
         result = await createOrAttach(null, { attachOnly: true })
       } catch (error) {
         if (!isDaemonSessionNotFoundError(error)) {
@@ -400,6 +380,19 @@ export class DaemonPtyAdapter implements IPtyProvider {
         }
       }
     } else {
+      // Why detect crash-recovery history before spawning: the revived shell should inherit the recovered cwd/dims, not the renderer's mount-time request.
+      // Why probe aliveness first: detectColdRestore replays up to ~5MB on the main process, but a live session's snapshot supersedes disk, so the replay would be wasted.
+      if (this.historyReader?.hasRestorableHistory(sessionId)) {
+        if ((await this.getAppliedSize(sessionId)) !== null) {
+          restoreSkippedForLiveSession = true
+        } else {
+          restoreInfo = detectColdRestore()
+        }
+      }
+      effectiveCwd = restoreInfo?.cwd ?? opts.cwd
+      effectiveCols = restoreInfo?.cols ?? opts.cols
+      effectiveRows = restoreInfo?.rows ?? opts.rows
+      scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
       result = await createOrAttach(scrollback)
     }
     if (opts.agentSessionEnsure && !isAgentSessionClaimedSpawnResult(result.agentSessionEnsure)) {

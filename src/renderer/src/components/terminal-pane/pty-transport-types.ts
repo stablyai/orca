@@ -108,6 +108,8 @@ export type PtyTransport = {
      *  first byte and the gate + model responder own spawn-time queries.
      *  Ignored by remote-runtime transports (not gate-markable). */
     initiallyHidden?: boolean
+    /** Explicitly marks the renderer-controlled wake of a hibernated agent. */
+    controlledHibernationWake?: boolean
     command?: string
     env?: Record<string, string>
     envToDelete?: string[]

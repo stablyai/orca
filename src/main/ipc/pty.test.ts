@@ -590,6 +590,65 @@ describe('registerPtyHandlers', () => {
     return spawn
   }
 
+  it('guards recognized daemon workers with agent-resume payloads unless the wake is explicitly controlled', async () => {
+    const daemonSpawn = installDaemonTestProvider()
+    daemonSpawn.mockImplementation(async (options: { sessionId?: string }) => ({
+      id: options.sessionId ?? 'daemon-worker',
+      lostWorkerRecovery: { kind: 'retryable-error' as const, code: 'capture-unavailable' as const }
+    }))
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = makePaneKey('tab-1', leafId)
+    const store = {
+      getWorkspaceSession: vi.fn(() => ({
+        terminalArchiveHintsByPaneKey: {
+          [paneKey]: { providerSession: { key: 'session_id', id: 'worker-session' } }
+        }
+      }))
+    }
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const agentResume = {
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+      resumeProviderSession: { key: 'session_id' as const, id: 'worker-session' }
+    }
+    const spawn = handlers.get('pty:spawn')!
+
+    await spawn(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      sessionId: 'daemon-worker',
+      ...agentResume
+    })
+
+    expect(daemonSpawn.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        preSpawnLostWorker: expect.any(Function)
+      })
+    )
+
+    await spawn(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      sessionId: 'daemon-worker',
+      controlledHibernationWake: true,
+      ...agentResume
+    })
+
+    expect(daemonSpawn.mock.calls[1]?.[0]).not.toHaveProperty('preSpawnLostWorker')
+  })
+
   function installObservableDaemonTestProvider() {
     const spawn = vi.fn(async (options: { sessionId?: string }) => ({
       id: options.sessionId ?? 'daemon-pty'
