@@ -67,17 +67,16 @@ async function readStoredSelection(): Promise<MobileTerminalThemeSelection> {
       AsyncStorage.getItem(SEPARATE_LIGHT_KEY)
     ])
   } catch {
+    // Why: memoising a failed read would pin the default for the whole session.
+    loadPromise = null
     return selection
   }
-  // Why: a choice made while this read was in flight is newer than storage.
-  if (!hydrated) {
-    hydrated = true
-    publish({
-      dark: readSlot(stored[0] ?? null),
-      light: readSlot(stored[1] ?? null),
-      useSeparateLightTheme: stored[2] !== 'false'
-    })
-  }
+  hydrated = true
+  publish({
+    dark: readSlot(stored[0] ?? null),
+    light: readSlot(stored[1] ?? null),
+    useSeparateLightTheme: stored[2] !== 'false'
+  })
   return selection
 }
 
@@ -92,8 +91,13 @@ export function loadMobileTerminalThemeSelection(): Promise<MobileTerminalThemeS
 export async function saveMobileTerminalThemeSelection(
   patch: Partial<MobileTerminalThemeSelection>
 ): Promise<void> {
+  if (!hydrated) {
+    // Why: the tap must not wait for the read, but merging onto the pre-load
+    // default would erase the two slots this patch never touches.
+    publish({ ...selection, ...patch })
+    await loadMobileTerminalThemeSelection()
+  }
   const next = { ...selection, ...patch }
-  hydrated = true
   // Why: publish before the write so live panes repaint without awaiting storage.
   publish(next)
   await Promise.all([

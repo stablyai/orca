@@ -33,8 +33,10 @@ const hostTheme: MobileTerminalTheme = {
 }
 
 // Why: the preference store is a module singleton, so every case needs a fresh graph.
-async function mountHarness() {
+async function mountHarness(stored: Record<string, string> = {}) {
   vi.resetModules()
+  const storage = (await import('@react-native-async-storage/async-storage')).default
+  vi.mocked(storage.getItem).mockImplementation(async (key: string) => stored[key] ?? null)
   const { saveMobileTerminalThemeSelection } = await import('../storage/terminal-theme-preference')
   const { useMobileTerminalTheme } = await import('./use-mobile-terminal-theme')
   const rendered: (MobileTerminalTheme | undefined)[] = []
@@ -77,6 +79,17 @@ describe('useMobileTerminalTheme', () => {
     const harness = await mountHarness()
 
     expect(harness.rendered.at(-1)).toBe(hostTheme)
+
+    await harness.unmount()
+  })
+
+  it('adopts the persisted slot on a cold start, with no save', async () => {
+    const harness = await mountHarness({ 'orca:terminalThemeDark': 'One Dark' })
+
+    expect(harness.rendered.at(-1)).toEqual({
+      mode: 'dark',
+      theme: getBuiltinTerminalThemePalette('One Dark')
+    })
 
     await harness.unmount()
   })

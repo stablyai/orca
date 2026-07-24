@@ -80,6 +80,16 @@ describe('TerminalWebView frame background', () => {
     await frame.unmount()
   })
 
+  // Why: `terminalTheme` is unvalidated wire data, so a version-mismatched host may push no palette.
+  it('falls back to the app terminal background when the host pushes no palette object', async () => {
+    const frame = await renderFrame({ mode: 'dark' } as unknown as MobileTerminalTheme)
+
+    expect(frame.containerStyle[1]).toBeNull()
+    expect(frame.webViewStyle[1]).toBeNull()
+
+    await frame.unmount()
+  })
+
   it('paints the frame with the resolved terminal background so a light theme has no dark halo', async () => {
     const frame = await renderFrame({
       mode: 'light',

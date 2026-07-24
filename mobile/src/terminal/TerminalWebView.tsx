@@ -365,7 +365,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 
   // Why: the frame must follow the resolved terminal background, not the app
   // palette, or a device-picked light theme renders inside a dark halo.
-  const frameBackground = terminalTheme?.theme.background
+  const frameBackground = terminalTheme?.theme?.background
   const frameOverride = frameBackground ? { backgroundColor: frameBackground } : null
 
   return (
