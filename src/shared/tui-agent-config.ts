@@ -96,6 +96,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
     promptInjectionMode: 'stdin-after-start'
   },
+  gjc: {
+    detectCmd: 'gjc',
+    launchCmd: 'gjc',
+    expectedProcess: 'gjc',
+    // Why: `gjc "<prompt>"` starts the interactive TUI with the prompt as the
+    // first message (docs: "Interactive mode with initial prompt"), so argv
+    // injection keeps the hosted session alive without a paste race.
+    promptInjectionMode: 'argv'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
