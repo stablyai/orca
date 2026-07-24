@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
 import {
   attributeOpenCodeUsageEvent,
+  listOpenCodeDatabases,
   parseOpenCodeUsageDatabase,
   parseOpenCodeUsageRow,
   scanOpenCodeUsageDatabases
@@ -421,6 +422,13 @@ describe('scanOpenCodeUsageDatabases', () => {
     db.close()
     return path
   }
+
+  it('resolves a relative OPENCODE_DB from the OpenCode data directory', async () => {
+    const dbPath = writeSessionTotalsDb('custom.db', [])
+    process.env.OPENCODE_DB = 'custom.db'
+
+    await expect(listOpenCodeDatabases()).resolves.toEqual([dbPath])
+  })
 
   it('counts a session duplicated into a stale backup database exactly once', async () => {
     // The backup holds a stale snapshot of session-1; the canonical db has
