@@ -14,9 +14,15 @@ import { Callout, ImagePlaceholder } from '@/components/docs/prose';
 
 The Orca CLI is the `orca` command-line interface for scripting a running Orca editor from any shell. Use it to create and inspect worktrees, drive agent terminals, open files and diffs, automate the built-in browser, run scheduled automations, and control Orca-native tools from scripts or AI agents.
 
-It ships with the desktop app; register it under [Settings → Experimental → CLI](/docs/settings).
+It ships with the desktop app; register it under [Settings → General → Orca CLI](/docs/settings). On some Linux installs the registered command is `orca-ide` (plain `orca` may be the GNOME screen reader) — use whichever command Orca registered on your machine.
 
-Agents can install the matching Orca CLI skill with:
+Agents should load the version-matched CLI guide from a running Orca binary:
+
+```bash
+orca skills get orca-cli
+```
+
+Or install the skill package into an agent’s skill directory:
 
 ```bash
 npx skills add https://github.com/stablyai/orca --skill orca-cli

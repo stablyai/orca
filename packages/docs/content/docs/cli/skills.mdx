@@ -1,6 +1,6 @@
 ---
 title: Orca skills registry & MCP
-description: Install Orca agent skills with npx skills add, including orca-cli, orchestration, computer-use, orca-linear, and orca-emulator.
+description: Install Orca agent skills with npx skills add, including orca-cli, orchestration, computer-use, orca-linear, orca-emulator, and more.
 keywords:
   - Orca skills
   - npx skills add
@@ -9,13 +9,14 @@ keywords:
   - computer-use skill
   - orca-linear skill
   - orca-emulator skill
+  - orca-per-workspace-env skill
 ---
 
-Orca CLI commands are distributed as **skills** — versioned packages an agent can install into its own skill directory.
+Orca CLI commands are distributed as **skills** — versioned packages an agent can install into its own skill directory. Prefer `orca skills get <name>` from a running Orca binary so the guide matches that install.
 
 ## Installable Orca skills
 
-Use `npx skills add` with the public Orca repo and the skill name. The default agent setup uses `orca-cli`, `computer-use`, and `orchestration`; install `orca-linear` when agents need Linear ticket context and `orca-emulator` when they need to drive a local iOS Simulator from Orca.
+Use `npx skills add` with the public Orca repo and the skill name. The default agent setup uses `orca-cli`, `computer-use`, and `orchestration`; install the others when agents need Linear context, simulators, Android emulators, or per-workspace environments.
 
 | Skill | Install | Use it for |
 | --- | --- | --- |
@@ -24,6 +25,8 @@ Use `npx skills add` with the public Orca repo and the skill name. The default a
 | [`computer-use`](#computer-use) | `npx skills add https://github.com/stablyai/orca --skill computer-use` | Desktop app control through accessibility trees, screenshots, clicks, typing, and safe UI actions. |
 | [`orca-linear`](#orca-linear) | `npx skills add https://github.com/stablyai/orca --skill orca-linear` | Linear ticket context for agents working from linked Linear issues. |
 | [`orca-emulator`](#orca-emulator) | `npx skills add https://github.com/stablyai/orca --skill orca-emulator` | iOS Simulator control from Orca with taps, gestures, typing, permissions, camera injection, and accessibility. |
+| [`orca-emulator-android`](#orca-emulator-android) | `npx skills add https://github.com/stablyai/orca --skill orca-emulator-android` | Android emulator control from Orca. |
+| [`orca-per-workspace-env`](#orca-per-workspace-env) | `npx skills add https://github.com/stablyai/orca --skill orca-per-workspace-env` | Per-workspace environments (ephemeral VMs / sandboxes) via Orca. |
 
 ## orca-cli
 
@@ -76,6 +79,22 @@ npx skills add https://github.com/stablyai/orca --skill orca-emulator
 ```
 
 Use this when an agent should control an iOS Simulator from inside Orca through `orca emulator` commands.
+
+## orca-emulator-android
+
+```
+npx skills add https://github.com/stablyai/orca --skill orca-emulator-android
+```
+
+Use this when an agent should drive an Android emulator from Orca.
+
+## orca-per-workspace-env
+
+```
+npx skills add https://github.com/stablyai/orca --skill orca-per-workspace-env
+```
+
+Use this when agents should create or manage [per-workspace environments](/docs/ways-to-run#4-per-workspace-environments-ephemeral-vms) (cloud sandboxes, VMs, or local Docker) through Orca.
 
 ## Add your own skills
 
