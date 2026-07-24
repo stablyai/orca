@@ -28,6 +28,30 @@ export type InsertServeSimPasteboardTextDeps = {
   settleDelayMs?: number
 }
 
+// Why: an insertion is a three-step sequence (pbcopy → settle → Cmd+V) against
+// one shared device pasteboard. Concurrent calls for the same device would
+// interleave, so an earlier chord could paste text a later call already
+// overwrote. Serialize per udid; different devices stay independent.
+const deviceInsertionChains = new Map<string, Promise<unknown>>()
+
+function enqueueForDevice<T>(udid: string, run: () => Promise<T>): Promise<T> {
+  const pending = deviceInsertionChains.get(udid) ?? Promise.resolve()
+  // Run after the predecessor settles either way: a failed insertion must not
+  // wedge the queue for the device.
+  const result = pending.then(run, run)
+  const chain = result.then(
+    () => {},
+    () => {}
+  )
+  deviceInsertionChains.set(udid, chain)
+  void chain.then(() => {
+    if (deviceInsertionChains.get(udid) === chain) {
+      deviceInsertionChains.delete(udid)
+    }
+  })
+  return result
+}
+
 // Inserts arbitrary Unicode text by replacing the device pasteboard and
 // pressing Cmd+V. Unlike per-usage HID typing, this is independent of the
 // simulator's hardware-keyboard layout, but it does overwrite the device
@@ -50,10 +74,14 @@ export async function insertServeSimPasteboardText(
     )
   }
   const setPasteboardText = deps.setPasteboardText ?? setIosSimulatorPasteboardText
-  await setPasteboardText(udid, text)
-  await delay(deps.settleDelayMs ?? PASTEBOARD_SETTLE_DELAY_MS)
-  await sendServeSimKeyboardFrameSequence(wsUrl, buildServeSimPasteChordFrames(), {
-    frameDelayMs: deps.frameDelayMs
+  // Validation above stays outside the queue so bad requests fail fast instead
+  // of waiting behind (or delaying) an in-flight insertion.
+  await enqueueForDevice(udid, async () => {
+    await setPasteboardText(udid, text)
+    await delay(deps.settleDelayMs ?? PASTEBOARD_SETTLE_DELAY_MS)
+    await sendServeSimKeyboardFrameSequence(wsUrl, buildServeSimPasteChordFrames(), {
+      frameDelayMs: deps.frameDelayMs
+    })
   })
 }
 

@@ -59,6 +59,83 @@ describe('insertServeSimPasteboardText', () => {
     }
   })
 
+  it('serializes concurrent insertions for the same device', async () => {
+    const events: string[] = []
+    const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
+    await once(wss, 'listening')
+    wss.on('connection', (ws) => {
+      ws.on('message', (raw) => {
+        const frame = decodeFrame(raw)
+        if (frame.usage === 25 && frame.type === 'down') {
+          events.push('chord')
+        }
+      })
+    })
+
+    try {
+      const { port } = wss.address() as AddressInfo
+      const wsUrl = `ws://127.0.0.1:${port}`
+      // Make the first pasteboard write slow so the second call would overtake
+      // it without a per-device queue.
+      let call = 0
+      const setPasteboardText = vi.fn(async () => {
+        const index = ++call
+        events.push(`pbcopy${index}`)
+        if (index === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 60))
+        }
+      })
+
+      await Promise.all([
+        insertServeSimPasteboardText(
+          { udid: UDID, text: '첫번째', wsUrl },
+          { setPasteboardText, settleDelayMs: 0, frameDelayMs: 0 }
+        ),
+        insertServeSimPasteboardText(
+          { udid: UDID, text: '두번째', wsUrl },
+          { setPasteboardText, settleDelayMs: 0, frameDelayMs: 0 }
+        )
+      ])
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      // Each insertion completes its pbcopy → chord pair before the next starts.
+      expect(events).toEqual(['pbcopy1', 'chord', 'pbcopy2', 'chord'])
+    } finally {
+      wss.close()
+    }
+  })
+
+  it('keeps the device queue usable after a failed insertion', async () => {
+    const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
+    await once(wss, 'listening')
+
+    try {
+      const { port } = wss.address() as AddressInfo
+      const wsUrl = `ws://127.0.0.1:${port}`
+      const setPasteboardText = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('pbcopy failed'))
+        .mockResolvedValueOnce(undefined)
+
+      await expect(
+        insertServeSimPasteboardText(
+          { udid: UDID, text: '실패', wsUrl },
+          { setPasteboardText, settleDelayMs: 0, frameDelayMs: 0 }
+        )
+      ).rejects.toThrow('pbcopy failed')
+
+      await expect(
+        insertServeSimPasteboardText(
+          { udid: UDID, text: '성공', wsUrl },
+          { setPasteboardText, settleDelayMs: 0, frameDelayMs: 0 }
+        )
+      ).resolves.toBeUndefined()
+      expect(setPasteboardText).toHaveBeenCalledTimes(2)
+    } finally {
+      wss.close()
+    }
+  })
+
   it('requires an active stream before touching the pasteboard', async () => {
     const setPasteboardText = vi.fn()
 
