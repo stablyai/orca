@@ -2,7 +2,8 @@ import { createContext, useContext, useRef, type ReactNode } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { useHostClient } from '../transport/client-context'
 import { useHostStatusGates, type HostStatusGates } from '../transport/host-status-gates'
-import { colors } from '../theme/mobile-theme'
+import type { ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
 type Props = {
@@ -23,6 +24,8 @@ export function useHostProtocolGates(): HostStatusGates {
 // Why: single choke point above every /h/[hostId] route so a blocked verdict replaces the
 // whole host UI (sidebar + detail stack) while the host list and other hosts stay usable.
 export function HostProtocolGate({ hostId, children }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createHostProtocolGateStyles)
   const { client, state } = useHostClient(hostId)
   const gates = useHostStatusGates({ hostId, client, connState: state })
   const { compatVerdict, statusPending } = gates
@@ -49,11 +52,12 @@ export function HostProtocolGate({ hostId, children }: Props) {
   return <HostStatusGatesContext.Provider value={gates}>{children}</HostStatusGatesContext.Provider>
 }
 
-const styles = StyleSheet.create({
-  pending: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase
-  }
-})
+export const createHostProtocolGateStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    pending: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgBase
+    }
+  })

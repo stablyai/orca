@@ -4,7 +4,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { triggerMediumImpact } from '../platform/haptics'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { AgentSpinner } from './AgentSpinner'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
@@ -70,6 +71,8 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
   onLongPress,
   onToggleLineage
 }: Props<T>) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createWorktreeListRowStyles)
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
   const folderMeta = item.comment?.trim() || item.path || 'Folder'
   const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
@@ -198,133 +201,134 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
 
 export const WorktreeListRow = memo(WorktreeListRowComponent) as typeof WorktreeListRowComponent
 
-const styles = StyleSheet.create({
-  worktreeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: spacing.sm + 2,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
-    // Reserve the active accent bar width so active/inactive rows align.
-    borderLeftWidth: 2,
-    borderLeftColor: 'transparent'
-  },
-  worktreeRowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  // Highlight the worktree currently focused on the desktop, mirroring the
-  // desktop sidebar's selected-card treatment (raised fill + left accent).
-  worktreeRowActive: {
-    backgroundColor: colors.bgPanel,
-    // Neutral grey accent, matching the desktop's active-tab indicator rather
-    // than a blue line.
-    borderLeftColor: colors.textSecondary
-  },
-  indicatorCol: {
-    width: 20,
-    alignItems: 'center',
-    paddingTop: 6,
-    marginRight: spacing.sm,
-    gap: 4
-  },
-  unreadBell: {
-    marginTop: 2
-  },
-  worktreeMain: {
-    flex: 1,
-    marginRight: spacing.sm
-  },
-  worktreeNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  worktreeName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    flexShrink: 1
-  },
-  worktreeNameUnread: {
-    fontWeight: '700'
-  },
-  textReadOnly: {
-    opacity: 0.5
-  },
-  prBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4
-  },
-  prNumber: {
-    fontSize: 10,
-    color: colors.textSecondary
-  },
-  folderBadge: {
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4
-  },
-  folderBadgeText: {
-    fontSize: 10,
-    color: colors.textSecondary
-  },
-  worktreeMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-    gap: spacing.xs
-  },
-  repoName: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    maxWidth: 100
-  },
-  branchName: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    flexShrink: 1
-  },
-  childBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4
-  },
-  childBadgeText: {
-    fontSize: 10,
-    color: colors.textMuted
-  },
-  lineageToggle: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: spacing.xs,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radii.button
-  },
-  lineageToggleText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '600'
-  },
-  terminalCount: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    minWidth: 16,
-    textAlign: 'right',
-    paddingTop: 3
-  }
-})
+export const createWorktreeListRowStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    worktreeRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      paddingVertical: spacing.sm + 2,
+      paddingLeft: spacing.lg,
+      paddingRight: spacing.lg,
+      // Reserve the active accent bar width so active/inactive rows align.
+      borderLeftWidth: 2,
+      borderLeftColor: 'transparent'
+    },
+    worktreeRowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    // Highlight the worktree currently focused on the desktop, mirroring the
+    // desktop sidebar's selected-card treatment (raised fill + left accent).
+    worktreeRowActive: {
+      backgroundColor: colors.bgPanel,
+      // Neutral grey accent, matching the desktop's active-tab indicator rather
+      // than a blue line.
+      borderLeftColor: colors.textSecondary
+    },
+    indicatorCol: {
+      width: 20,
+      alignItems: 'center',
+      paddingTop: 6,
+      marginRight: spacing.sm,
+      gap: 4
+    },
+    unreadBell: {
+      marginTop: 2
+    },
+    worktreeMain: {
+      flex: 1,
+      marginRight: spacing.sm
+    },
+    worktreeNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm
+    },
+    worktreeName: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      flexShrink: 1
+    },
+    worktreeNameUnread: {
+      fontWeight: '700'
+    },
+    textReadOnly: {
+      opacity: 0.5
+    },
+    prBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: 4
+    },
+    prNumber: {
+      fontSize: 10,
+      color: colors.textSecondary
+    },
+    folderBadge: {
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: 4
+    },
+    folderBadgeText: {
+      fontSize: 10,
+      color: colors.textSecondary
+    },
+    worktreeMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 2,
+      gap: spacing.xs
+    },
+    repoName: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      maxWidth: 100
+    },
+    branchName: {
+      fontSize: 11,
+      color: colors.textMuted,
+      fontFamily: typography.monoFamily,
+      flexShrink: 1
+    },
+    childBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: 4
+    },
+    childBadgeText: {
+      fontSize: 10,
+      color: colors.textMuted
+    },
+    lineageToggle: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: spacing.xs,
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: radii.button
+    },
+    lineageToggleText: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontWeight: '600'
+    },
+    terminalCount: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      minWidth: 16,
+      textAlign: 'right',
+      paddingTop: 3
+    }
+  })

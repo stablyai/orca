@@ -37,8 +37,31 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
+vi.mock('expo-router', () => ({ router: { replace: () => undefined } }))
+vi.mock('../platform/haptics', () => ({
+  triggerError: () => undefined,
+  triggerSuccess: () => undefined,
+  triggerMediumImpact: () => undefined
+}))
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isWideLayout: false, modalMaxWidth: 480, width: 390 })
+}))
+vi.mock('../components/AgentSpinner', () => ({ AgentSpinner: () => null }))
+vi.mock('../components/AgentStateDot', () => ({ AgentStateDot: () => null }))
+vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+vi.mock('../components/MobileRepoIcon', () => ({ MobileRepoIcon: () => null }))
+vi.mock('../components/WorktreeAgentList', () => ({ WorktreeAgentList: () => null }))
+vi.mock('../components/pr-sidebar/pr-sidebar-status-color', () => ({
+  statusColor: () => '#888'
+}))
+vi.mock('../transport/client-context', () => ({
+  useHostClient: () => ({ client: null, state: 'disconnected' })
+}))
+vi.mock('../transport/host-status-gates', () => ({
+  useHostStatusGates: () => ({
+    compatVerdict: { kind: 'ok' },
+    statusPending: false
+  })
 }))
 vi.mock('../dictation/use-dictation-setup-poller', () => ({
   useDictationSetupPoller: () => undefined
@@ -48,10 +71,6 @@ vi.mock('../dictation/mobile-dictation-setup', () => ({
   fetchDictationSetup: async () => null,
   isModelInFlight: () => false,
   setDictationConfig: async () => undefined
-}))
-vi.mock('../platform/haptics', () => ({
-  triggerError: () => undefined,
-  triggerSuccess: () => undefined
 }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
@@ -83,7 +102,28 @@ type StyleFactory = {
   readonly factory: (colors: ThemeColors) => Record<string, unknown>
 }
 
-async function loadBatch1Factories(): Promise<readonly StyleFactory[]> {
+async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
+  const mods = await Promise.all([
+    import('../components/bottom-drawer-styles'),
+    import('../components/PickerModal'),
+    import('../components/PickerListDrawer'),
+    import('../components/ConfirmModal'),
+    import('../components/TextInputModal'),
+    import('../components/ActionSheetModal'),
+    import('../components/RightDrawer'),
+    import('../components/SetupHookTrustDrawer'),
+    import('../components/MobileDictationSetupSheet'),
+    import('../components/MobileSearchField'),
+    import('../components/WorktreeMetaGlyphs'),
+    import('../components/WorktreeAgentRow'),
+    import('../components/WorktreeListRow'),
+    import('../components/AuthFailedBanner'),
+    import('../components/HostProtocolGate'),
+    import('../components/ProtocolBlockScreen'),
+    import('../components/WorkspaceDetailPlaceholder'),
+    import('../components/NewWorkspaceFab'),
+    import('../components/AccountUsage')
+  ])
   const [
     bottomDrawer,
     pickerModal,
@@ -94,19 +134,17 @@ async function loadBatch1Factories(): Promise<readonly StyleFactory[]> {
     rightDrawer,
     setupTrust,
     dictation,
-    searchField
-  ] = await Promise.all([
-    import('../components/bottom-drawer-styles'),
-    import('../components/PickerModal'),
-    import('../components/PickerListDrawer'),
-    import('../components/ConfirmModal'),
-    import('../components/TextInputModal'),
-    import('../components/ActionSheetModal'),
-    import('../components/RightDrawer'),
-    import('../components/SetupHookTrustDrawer'),
-    import('../components/MobileDictationSetupSheet'),
-    import('../components/MobileSearchField')
-  ])
+    searchField,
+    metaGlyphs,
+    agentRow,
+    listRow,
+    authBanner,
+    protocolGate,
+    protocolBlock,
+    placeholder,
+    fab,
+    accountUsage
+  ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
     { name: 'createPickerModalStyles', factory: pickerModal.createPickerModalStyles },
@@ -123,13 +161,28 @@ async function loadBatch1Factories(): Promise<readonly StyleFactory[]> {
       name: 'createMobileDictationSetupSheetStyles',
       factory: dictation.createMobileDictationSetupSheetStyles
     },
-    { name: 'createMobileSearchFieldStyles', factory: searchField.createMobileSearchFieldStyles }
+    { name: 'createMobileSearchFieldStyles', factory: searchField.createMobileSearchFieldStyles },
+    { name: 'createWorktreeMetaGlyphsStyles', factory: metaGlyphs.createWorktreeMetaGlyphsStyles },
+    { name: 'createWorktreeAgentRowStyles', factory: agentRow.createWorktreeAgentRowStyles },
+    { name: 'createWorktreeListRowStyles', factory: listRow.createWorktreeListRowStyles },
+    { name: 'createAuthFailedBannerStyles', factory: authBanner.createAuthFailedBannerStyles },
+    { name: 'createHostProtocolGateStyles', factory: protocolGate.createHostProtocolGateStyles },
+    {
+      name: 'createProtocolBlockScreenStyles',
+      factory: protocolBlock.createProtocolBlockScreenStyles
+    },
+    {
+      name: 'createWorkspaceDetailPlaceholderStyles',
+      factory: placeholder.createWorkspaceDetailPlaceholderStyles
+    },
+    { name: 'createNewWorkspaceFabStyles', factory: fab.createNewWorkspaceFabStyles },
+    { name: 'createAccountUsageStyles', factory: accountUsage.createAccountUsageStyles }
   ]
 }
 
 describe('themed style factories', () => {
   it('emits the same keys in both palettes and differs in value', async () => {
-    const factories = await loadBatch1Factories()
+    const factories = await loadThemedFactories()
     for (const { name, factory } of factories) {
       const darkSheet = factory(darkColors)
       const lightSheet = factory(lightColors)
@@ -138,9 +191,11 @@ describe('themed style factories', () => {
     }
   })
 
-  it('keeps batch-1 dark palette values byte-identical to pre-conversion tokens', async () => {
+  it('keeps dark palette values byte-identical to pre-conversion tokens', async () => {
     const { createBottomDrawerStyles } = await import('../components/bottom-drawer-styles')
     const { createConfirmModalStyles } = await import('../components/ConfirmModal')
+    const { createNewWorkspaceFabStyles } = await import('../components/NewWorkspaceFab')
+    const { createAuthFailedBannerStyles } = await import('../components/AuthFailedBanner')
 
     // Behavioural identity: same tokens reach the same style properties under dark.
     const drawer = createBottomDrawerStyles(darkColors)
@@ -153,5 +208,14 @@ describe('themed style factories', () => {
     expect(confirm.title.color).toBe(darkColors.textPrimary)
     expect(confirm.destructiveButton.backgroundColor).toBe(darkColors.statusRed)
     expect(confirm.destructiveText.color).toBe('#fff')
+
+    const fab = createNewWorkspaceFabStyles(darkColors)
+    expect(fab.fab.backgroundColor).toBe(darkColors.surfaceBright)
+    expect(fab.fabPressed.backgroundColor).toBe(darkColors.surfaceBrightPressed)
+    expect(fab.fab.shadowColor).toBe('#000')
+
+    const banner = createAuthFailedBannerStyles(darkColors)
+    expect(banner.text.color).toBe(darkColors.statusRed)
+    expect(banner.actionText.color).toBe(darkColors.accentBlue)
   })
 })

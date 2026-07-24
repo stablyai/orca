@@ -1,15 +1,33 @@
 import { View, StyleSheet } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import type { ThemeColors } from '../theme/mobile-theme'
+import { useTheme } from '../theme/theme-context'
 import type { ConnectionState } from '../transport/types'
 import type { ConnectionVerdict } from '../transport/connection-health'
 
-const stateColors: Record<ConnectionState, string> = {
-  connected: colors.statusGreen,
-  connecting: colors.statusAmber,
-  handshaking: colors.statusAmber,
-  reconnecting: colors.statusAmber,
-  disconnected: colors.textMuted,
-  'auth-failed': colors.statusRed
+function resolveStateColor(
+  state: ConnectionState,
+  colors: ThemeColors,
+  verdict?: ConnectionVerdict
+): string {
+  if (verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed') {
+    return colors.statusRed
+  }
+  if (verdict?.kind === 'warning') {
+    return colors.statusAmber
+  }
+  switch (state) {
+    case 'connected':
+      return colors.statusGreen
+    case 'connecting':
+    case 'handshaking':
+    case 'reconnecting':
+      return colors.statusAmber
+    case 'auth-failed':
+      return colors.statusRed
+    case 'disconnected':
+    default:
+      return colors.textMuted
+  }
 }
 
 // Why: when caller passes a verdict, the dot color reflects the verdict's
@@ -24,15 +42,12 @@ export function StatusDot({
   state: ConnectionState
   verdict?: ConnectionVerdict
 }) {
-  const color =
-    verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed'
-      ? colors.statusRed
-      : verdict?.kind === 'warning'
-        ? colors.statusAmber
-        : (stateColors[state] ?? colors.textMuted)
+  const { colors } = useTheme()
+  const color = resolveStateColor(state, colors, verdict)
   return <View style={[styles.dot, { backgroundColor: color }]} />
 }
 
+// Layout-only sheet — no palette tokens, so it stays module-scope.
 const styles = StyleSheet.create({
   dot: {
     width: 8,

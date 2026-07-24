@@ -1,6 +1,7 @@
 import { CircleDot, GitMerge, StickyNote } from 'lucide-react-native'
 import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import type { ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { prStateToken } from './pr-state-token'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
 
@@ -29,6 +30,8 @@ export function WorktreeMetaGlyphs({
   linkedIssue,
   linkedGitLabIssue
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createWorktreeMetaGlyphsStyles)
   const hasNotes = (comment ?? '').trim().length > 0
   const hasLinear = Boolean(linkedLinearIssue)
   const hasGitLabMR = linkedGitLabMR != null
@@ -46,16 +49,17 @@ export function WorktreeMetaGlyphs({
   )
 }
 
-const styles = StyleSheet.create({
-  metaGlyphs: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginLeft: 2
-  },
-  linearGlyph: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted
-  }
-})
+export const createWorktreeMetaGlyphsStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    metaGlyphs: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginLeft: 2
+    },
+    linearGlyph: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.textMuted
+    }
+  })

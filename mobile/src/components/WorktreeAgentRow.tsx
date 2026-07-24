@@ -1,7 +1,8 @@
 import { memo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing, type ThemeColors } from '../theme/mobile-theme'
+import { useThemedStyles } from '../theme/theme-context'
 import { agentDisplayLabel, agentDotState, formatTimeAgo } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
@@ -20,6 +21,7 @@ type Props = {
 // One inline agent row: state dot → identity → last message/prompt → time ago.
 // Mirrors desktop DashboardAgentRow's compact in-card layout.
 function WorktreeAgentRowComponent({ agent, depth, now, unvisited }: Props) {
+  const styles = useThemedStyles(createWorktreeAgentRowStyles)
   const dotState = agentDotState(agent, now)
   const label = agentDisplayLabel(agent, now)
   const ts = formatTimeAgo(agent.stateStartedAt, now)
@@ -40,24 +42,25 @@ function WorktreeAgentRowComponent({ agent, depth, now, unvisited }: Props) {
 
 export const WorktreeAgentRow = memo(WorktreeAgentRowComponent)
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: 3
-  },
-  label: {
-    flex: 1,
-    fontSize: 11,
-    color: colors.textMuted
-  },
-  labelUnvisited: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  time: {
-    fontSize: 10,
-    color: colors.textMuted
-  }
-})
+export const createWorktreeAgentRowStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginTop: 3
+    },
+    label: {
+      flex: 1,
+      fontSize: 11,
+      color: colors.textMuted
+    },
+    labelUnvisited: {
+      color: colors.textPrimary,
+      fontWeight: '600'
+    },
+    time: {
+      fontSize: 10,
+      color: colors.textMuted
+    }
+  })
