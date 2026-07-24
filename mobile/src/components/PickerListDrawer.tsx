@@ -85,6 +85,8 @@ export function PickerListDrawer<T extends { id: string; label: string }>({
             <Pressable
               style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
               onPress={() => closeThenSelect(item)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
             >
               {renderIcon?.(item)}
               <Text
