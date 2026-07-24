@@ -15,6 +15,27 @@ current Debian stable — anything with glibc 2.31 or newer (see
 [Linux glibc compatibility](./linux-glibc-compatibility.md)). Package names can
 differ on other Debian-derived releases.
 
+## Quick Install
+
+The install script provisions everything this guide covers — dependencies,
+the sha512-verified AppImage via the FUSE-free extraction path, a dedicated
+service user with Chromium's setuid sandbox restored, and a running systemd
+service — on any systemd distro with apt, dnf, yum, zypper, or pacman:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/stablyai/orca/main/install.sh | sudo bash
+```
+
+It advertises the host's default-route address (the listener itself binds all
+interfaces) and prints the pairing URL when the server reports ready. Useful
+flags: `--pairing-address <addr>` (Tailscale/LAN-only or reverse-proxy
+setups), `--port <port>`, `--version <tag>` (pin instead of latest),
+`--user root` (runs with `--no-sandbox`), `--appimage <path>` (offline
+install), `--no-start`, `--uninstall [--purge]`, `--help`.
+
+The rest of this guide documents the manual path — everything the script
+automates, plus upgrades and rollback.
+
 ## Ubuntu and Debian prerequisites
 
 Install the AppImage runtime dependency and Xvfb:
