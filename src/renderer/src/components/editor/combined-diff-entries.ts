@@ -21,11 +21,9 @@ export function getCombinedUncommittedEntries(
 
 export function resolveCombinedUncommittedSnapshotEntries(
   snapshotEntries: readonly GitStatusEntry[],
-  liveEntries: readonly GitStatusEntry[],
-  retainedResolvedEntries: readonly GitStatusEntry[] = []
+  liveEntries: readonly GitStatusEntry[]
 ): GitStatusEntry[] {
   const liveEntriesByPath = getGitStatusEntriesByPath(liveEntries)
-  const retainedEntriesByPath = getGitStatusEntriesByPath(retainedResolvedEntries)
   const snapshotAreaKeys = new Set(snapshotEntries.map(getUncommittedAreaPathKey))
   const resolvedEntries: GitStatusEntry[] = []
   const resolvedAreaKeys = new Set<string>()
@@ -45,17 +43,12 @@ export function resolveCombinedUncommittedSnapshotEntries(
       continue
     }
 
-    const retainedPathEntries = retainedEntriesByPath.get(snapshotEntry.path) ?? []
-    if (
-      livePathEntries.length === 0 &&
-      retainedPathEntries.some((retainedEntry) => retainedEntry.area === snapshotEntry.area)
-    ) {
-      pushResolvedEntry(snapshotEntry)
+    // Why: discard/delete/commit removed the path — don't keep an empty ghost row.
+    if (livePathEntries.length === 0) {
       continue
     }
 
-    const movedEntry =
-      livePathEntries[0] ?? (retainedPathEntries.length === 1 ? retainedPathEntries[0] : undefined)
+    const movedEntry = livePathEntries[0]
     if (!movedEntry || movedEntry.area === snapshotEntry.area) {
       pushResolvedEntry(snapshotEntry)
       continue
