@@ -1,30 +1,31 @@
 type TerminalDeliveryCredit = {
   complete: () => void
-  claimed: boolean
-  credited: boolean
+  open: boolean
+  pendingClaims: number
+  completed: boolean
 }
 
-// Why: consumers must claim during deliver(); after it returns this synchronous slot is restored and unclaimed credit settles.
+// Why: claims are synchronous; nesting restores an outer delivery after an inner callback returns.
 let currentDeliveryCredit: TerminalDeliveryCredit | null = null
 
 function completeTerminalDeliveryCredit(credit: TerminalDeliveryCredit): void {
-  // Why: queue splitting and discard paths can both settle one delivery.
-  if (credit.credited) {
+  if (credit.completed || credit.open || credit.pendingClaims > 0) {
     return
   }
-  credit.credited = true
+  credit.completed = true
   credit.complete()
 }
 
-/** Defers producer credit until the output scheduler consumes or discards the delivery. */
+/** Defers producer credit until every output scheduler consumer parses or discards it. */
 export function deliverTerminalDataWithDeferredCredit(
   complete: () => void,
   deliver: () => void
 ): void {
   const credit: TerminalDeliveryCredit = {
     complete,
-    claimed: false,
-    credited: false
+    open: true,
+    pendingClaims: 0,
+    completed: false
   }
   const previousCredit = currentDeliveryCredit
   currentDeliveryCredit = credit
@@ -32,18 +33,24 @@ export function deliverTerminalDataWithDeferredCredit(
     deliver()
   } finally {
     currentDeliveryCredit = previousCredit
-    if (!credit.claimed) {
-      completeTerminalDeliveryCredit(credit)
-    }
+    credit.open = false
+    completeTerminalDeliveryCredit(credit)
   }
 }
 
-/** Claims the current delivery for parse-deferred settlement by the output scheduler. */
 export function takeCurrentTerminalDeliveryCredit(): (() => void) | null {
   const credit = currentDeliveryCredit
-  if (!credit || credit.claimed) {
+  if (!credit || !credit.open) {
     return null
   }
-  credit.claimed = true
-  return () => completeTerminalDeliveryCredit(credit)
+  credit.pendingClaims += 1
+  let settled = false
+  return () => {
+    if (settled) {
+      return
+    }
+    settled = true
+    credit.pendingClaims -= 1
+    completeTerminalDeliveryCredit(credit)
+  }
 }

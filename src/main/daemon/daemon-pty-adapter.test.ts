@@ -885,6 +885,26 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
       expect(procs[0].worktreeId).toBe('repo::/repo/owned-before-osc7')
     })
+
+    it('reports the daemon session WSL owner', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        const spawned = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+
+        const procs = await adapter.listProcesses()
+
+        expect(procs.find((process) => process.id === spawned.id)?.wslDistro).toBe('Ubuntu')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+    })
   })
 
   describe('hasChildProcesses / getForegroundProcess', () => {
@@ -1994,9 +2014,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        coldRestoreCache: { byteSize: number }
+      }
 
       const first = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(first.coldRestore).toBeDefined()
+      expect(internals.coldRestoreCache.byteSize).toBeGreaterThan(0)
 
       // Second call (StrictMode remount) should get cached data
       const second = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
@@ -2005,6 +2029,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       // After ack, cold restore should not be returned
       historyAdapter.ackColdRestore(sessionId)
+      expect(internals.coldRestoreCache.byteSize).toBe(0)
       const third = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(third.coldRestore).toBeUndefined()
     })

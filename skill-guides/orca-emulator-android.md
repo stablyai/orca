@@ -118,8 +118,9 @@ Use `--json` for agent-friendly output. Coordinates are **normalized 0..1**
 - `gesture` is a straight swipe between the first and last point (adb limitation);
   fine for scroll/swipe, not for true multi-touch paths.
 - Capability verbs `install/launch/permissions/logcat` are **Android-only** and
-  fail against an iOS device with `emulator_unsupported`. `ax` works on both,
-  with backend-specific output (uiautomator tree vs serve-sim AX snapshot).
+  fail against an iOS device with `emulator_unsupported`. `ax` works on **both**,
+  with backend-specific output (Android: `uiautomator` node tree; iOS: serve-sim
+  raw AX node tree with frames normalized to 0..1).
 - No camera/sensor injection yet.
 
 ## Targeting devices & worktrees

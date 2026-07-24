@@ -36,6 +36,7 @@ import { createAgentStatusSlice } from './agent-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
+import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
@@ -87,6 +88,7 @@ export function createTestStore() {
     ...createPaneForegroundAgentSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
+    ...createRuntimeDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
     ...createWorkspaceCleanupSlice(...a),

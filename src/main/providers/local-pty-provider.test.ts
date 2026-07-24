@@ -13,8 +13,7 @@ const {
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
   readWindowsConptyProcessIdsMock,
-  captureDescendantSnapshotMock,
-  terminateDescendantSnapshotMock
+  killWithDescendantSweepMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -25,8 +24,7 @@ const {
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
   readWindowsConptyProcessIdsMock: vi.fn(),
-  captureDescendantSnapshotMock: vi.fn(),
-  terminateDescendantSnapshotMock: vi.fn()
+  killWithDescendantSweepMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -55,8 +53,7 @@ vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
 }))
 
 vi.mock('../pty-descendant-termination', () => ({
-  captureDescendantSnapshot: captureDescendantSnapshotMock,
-  terminateDescendantSnapshot: terminateDescendantSnapshotMock
+  killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths (the fs mock
@@ -150,9 +147,13 @@ describe('LocalPtyProvider', () => {
     accessSyncMock.mockReturnValue(undefined)
     mkdirSyncMock.mockReset()
     writeFileSyncMock.mockReset()
-    captureDescendantSnapshotMock.mockReset()
-    captureDescendantSnapshotMock.mockResolvedValue(null)
-    terminateDescendantSnapshotMock.mockReset()
+    killWithDescendantSweepMock.mockReset()
+    // Default: no-op sweep that still runs killRoot (matches empty-snapshot degrade).
+    killWithDescendantSweepMock.mockImplementation(
+      async (_rootPid: number, killRoot: () => void, _deps?: { ownsRoot?: () => boolean }) => {
+        killRoot()
+      }
+    )
     prepareMacosTccLoginShellMock.mockReset()
     prepareMacosTccLoginShellMock.mockResolvedValue(undefined)
     resolveAgentForegroundProcessMock.mockReset()
@@ -231,7 +232,6 @@ describe('LocalPtyProvider', () => {
       expect(second).toEqual({
         id: 'serve-session-1',
         pid: 12345,
-        wslDistro: null,
         isReattach: true
       })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
@@ -1426,11 +1426,15 @@ describe('LocalPtyProvider', () => {
     })
 
     it('waits for an in-flight agent shutdown before reusing the same session id', async () => {
-      let resolveSnapshot!: (value: null) => void
-      captureDescendantSnapshotMock.mockReturnValue(
-        new Promise<null>((resolve) => {
-          resolveSnapshot = resolve
-        })
+      let releaseSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(
+        (_rootPid: number, killRoot: () => void) =>
+          new Promise<void>((resolve) => {
+            releaseSweep = () => {
+              killRoot()
+              resolve()
+            }
+          })
       )
       const spawnArgs = {
         cols: 80,
@@ -1446,18 +1450,22 @@ describe('LocalPtyProvider', () => {
       await Promise.resolve()
       expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 1)
 
-      resolveSnapshot(null)
+      releaseSweep()
       await shutdown
       await respawn
       expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 2)
     })
 
-    it('coalesces duplicate shutdown while descendant capture is pending', async () => {
-      let resolveSnapshot!: (value: null) => void
-      captureDescendantSnapshotMock.mockReturnValue(
-        new Promise<null>((resolve) => {
-          resolveSnapshot = resolve
-        })
+    it('coalesces duplicate shutdown while descendant sweep is pending', async () => {
+      let releaseSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(
+        (_rootPid: number, killRoot: () => void) =>
+          new Promise<void>((resolve) => {
+            releaseSweep = () => {
+              killRoot()
+              resolve()
+            }
+          })
       )
       const { id } = await provider.spawn({
         cols: 80,
@@ -1467,22 +1475,27 @@ describe('LocalPtyProvider', () => {
 
       const first = provider.shutdown(id, { immediate: true })
       const second = provider.shutdown(id, { immediate: true })
-      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
-      resolveSnapshot(null)
+      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
+      releaseSweep()
       await Promise.all([first, second])
-      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
     })
 
-    it('does not signal a captured tree after the tracked root exits naturally', async () => {
-      let resolveSnapshot!: (value: {
-        rootPgid: number
-        descendants: []
-        capturedAtMs: number
-      }) => void
-      captureDescendantSnapshotMock.mockReturnValue(
-        new Promise((resolve) => {
-          resolveSnapshot = resolve
-        })
+    it('does not terminate descendants after the tracked root exits mid-sweep', async () => {
+      const terminateDescendants = vi.fn()
+      let releaseSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(
+        (_rootPid: number, killRoot: () => void, deps?: { ownsRoot?: () => boolean }) =>
+          new Promise<void>((resolve) => {
+            releaseSweep = () => {
+              // Production killWithDescendantSweep only signals descendants while ownsRoot.
+              if (deps?.ownsRoot?.() ?? true) {
+                terminateDescendants()
+              }
+              killRoot()
+              resolve()
+            }
+          })
       )
       const { id } = await provider.spawn({
         cols: 80,
@@ -1492,10 +1505,10 @@ describe('LocalPtyProvider', () => {
 
       const shutdown = provider.shutdown(id, { immediate: true })
       exitCb?.({ exitCode: 0 })
-      resolveSnapshot({ rootPgid: mockProc.pid, descendants: [], capturedAtMs: Date.now() })
+      releaseSweep()
       await shutdown
 
-      expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
+      expect(terminateDescendants).not.toHaveBeenCalled()
     })
   })
 
@@ -1788,6 +1801,28 @@ describe('LocalPtyProvider', () => {
       expect(newEntries[0]).toHaveProperty('title', 'zsh')
       expect(newEntries[0]).toHaveProperty('cwd', '/tmp/owned-cwd')
       expect(newEntries[0]).toHaveProperty('worktreeId', 'repo::/tmp/owned-cwd')
+      expect(newEntries[0]).not.toHaveProperty('wslDistro')
+      expect(newEntries[1]).not.toHaveProperty('wslDistro')
+    })
+
+    it('reports native and WSL ownership explicitly on Windows', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const native = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe'
+      })
+      const wsl = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+      })
+
+      const processes = await provider.listProcesses()
+
+      expect(processes.find((process) => process.id === native.id)?.wslDistro).toBeNull()
+      expect(processes.find((process) => process.id === wsl.id)?.wslDistro).toBe('Ubuntu')
     })
   })
 

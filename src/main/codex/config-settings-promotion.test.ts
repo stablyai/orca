@@ -201,7 +201,7 @@ describe('codex settings write-back promotion', () => {
     simulateCodexSettingWrite('model', '"o4"')
     syncSystemConfigIntoManagedCodexHome()
     expect(readSystemConfig()).toBe('model = "gpt-5"\n')
-    expect(JSON.parse(readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 1 })
+    expect(JSON.parse(readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 2 })
 
     simulateCodexSettingWrite('model', '"o4"')
     syncSystemConfigIntoManagedCodexHome()

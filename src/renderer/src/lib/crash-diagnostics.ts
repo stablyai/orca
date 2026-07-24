@@ -2,11 +2,19 @@ import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue
 } from '../../../shared/crash-reporting'
-import { getBrowserWebviewMemoryProfile } from '../components/browser-pane/webview-registry'
+import {
+  getBrowserWebviewMemoryProfile,
+  type BrowserWebviewMemoryProfile
+} from '../components/browser-pane/webview-registry'
 import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
+import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
 
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
+// Why: one detailed breadcrumb per threshold names what grew before an OOM.
+const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
+
+type RendererSurface = 'main' | 'dashboard-popout'
 
 type BrowserPerformanceMemory = {
   usedJSHeapSize?: number
@@ -16,18 +24,21 @@ type BrowserPerformanceMemory = {
 
 let rendererCrashDiagnosticsInstalled = false
 let rendererMemoryInterval: number | null = null
+let rendererSurface: RendererSurface = 'main'
+const emittedHighwaterRatios = new Set<number>()
 
 // Why re-exported from a leaf module: terminal modules and their e2e-visible
 // import chains need breadcrumb recording without this file's import.meta /
 // webview-registry baggage. See crash-breadcrumb-recorder.ts.
 export { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 
-export function installRendererCrashDiagnostics(): void {
+export function installRendererCrashDiagnostics(surface: RendererSurface = 'main'): void {
   if (rendererCrashDiagnosticsInstalled || typeof window === 'undefined') {
     return
   }
 
   rendererCrashDiagnosticsInstalled = true
+  rendererSurface = surface
   window.addEventListener('error', recordRendererError)
   window.addEventListener('unhandledrejection', recordRendererUnhandledRejection)
 
@@ -55,6 +66,8 @@ function disposeRendererCrashDiagnostics(): void {
     window.clearInterval(rendererMemoryInterval)
     rendererMemoryInterval = null
   }
+  emittedHighwaterRatios.clear()
+  rendererSurface = 'main'
 }
 
 if (typeof import.meta !== 'undefined' && import.meta.hot) {
@@ -112,6 +125,57 @@ function recordRendererMemory(reason: string): void {
       registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
     })
   )
+  recordRendererMemoryHighwater(memory, browserWebviews)
+}
+
+function recordRendererMemoryHighwater(
+  memory: BrowserPerformanceMemory,
+  browserWebviews: BrowserWebviewMemoryProfile
+): void {
+  const used = memory.usedJSHeapSize
+  const limit = memory.jsHeapSizeLimit
+  // Why: NaN would satisfy `ratio < threshold` for nothing, emitting both
+  // levels spuriously and disarming the one-shot for the session.
+  if (!isFiniteHeapBytes(used) || !isFiniteHeapBytes(limit) || limit <= 0) {
+    return
+  }
+  const ratio = used / limit
+  let crossedThreshold = false
+  for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
+    if (ratio >= threshold && !emittedHighwaterRatios.has(threshold)) {
+      crossedThreshold = true
+      break
+    }
+  }
+  if (!crossedThreshold) {
+    return
+  }
+  // Why: a single sample can cross both thresholds; profile the large heap once.
+  const profile = compactBreadcrumbData({
+    rendererSurface,
+    usedHeapMB: toMegabytes(used),
+    totalHeapMB: toMegabytes(memory.totalJSHeapSize),
+    heapLimitMB: toMegabytes(limit),
+    domNodes: document.getElementsByTagName('*').length,
+    terminalElements: document.querySelectorAll('.xterm').length,
+    browserWebviews: browserWebviews.browserWebviewCount,
+    registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount,
+    ...collectRendererMemoryProfileCounts()
+  })
+  for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
+    if (ratio < threshold || emittedHighwaterRatios.has(threshold)) {
+      continue
+    }
+    emittedHighwaterRatios.add(threshold)
+    recordRendererCrashBreadcrumb('renderer_memory_highwater', {
+      ...profile,
+      thresholdPct: Math.round(threshold * 100)
+    })
+  }
+}
+
+function isFiniteHeapBytes(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function getPerformanceMemory(): BrowserPerformanceMemory | undefined {

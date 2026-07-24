@@ -81,10 +81,10 @@ describe('HistoryReader', () => {
   })
 
   describe('detectColdRestore — checkpoint.json', () => {
-    it('returns restore info from checkpoint.json for unclean shutdown', () => {
+    it('returns restore info from checkpoint.json for unclean shutdown', async () => {
       writeSessionWithCheckpoint(dir, 'sess-1', makeMeta(), makeCheckpoint())
 
-      const info = reader.detectColdRestore('sess-1')
+      const info = await reader.detectColdRestore('sess-1')
       expect(info).not.toBeNull()
       expect(info!.cwd).toBe('/home/user/project')
       expect(info!.cols).toBe(80)
@@ -93,7 +93,7 @@ describe('HistoryReader', () => {
       expect(info!.rehydrateSequences).toBe('')
     })
 
-    it('restores terminal modes from checkpoint', () => {
+    it('restores terminal modes from checkpoint', async () => {
       const modes = {
         bracketedPaste: true,
         mouseTracking: false,
@@ -102,12 +102,12 @@ describe('HistoryReader', () => {
       }
       writeSessionWithCheckpoint(dir, 'sess-1', makeMeta(), makeCheckpoint({ modes }))
 
-      const info = reader.detectColdRestore('sess-1')
+      const info = await reader.detectColdRestore('sess-1')
       expect(info!.modes.bracketedPaste).toBe(true)
       expect(info!.modes.applicationCursor).toBe(true)
     })
 
-    it('restores rehydrateSequences from checkpoint', () => {
+    it('restores rehydrateSequences from checkpoint', async () => {
       writeSessionWithCheckpoint(
         dir,
         'sess-1',
@@ -115,19 +115,19 @@ describe('HistoryReader', () => {
         makeCheckpoint({ rehydrateSequences: '\x1b[?2004h' })
       )
 
-      const info = reader.detectColdRestore('sess-1')
+      const info = await reader.detectColdRestore('sess-1')
       expect(info!.rehydrateSequences).toBe('\x1b[?2004h')
     })
 
-    it('restores OSC link ranges from checkpoint', () => {
+    it('restores OSC link ranges from checkpoint', async () => {
       const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
       writeSessionWithCheckpoint(dir, 'sess-1', makeMeta(), makeCheckpoint({ oscLinks }))
 
-      const info = reader.detectColdRestore('sess-1')
+      const info = await reader.detectColdRestore('sess-1')
       expect(info!.oscLinks).toEqual(oscLinks)
     })
 
-    it('returns null for clean shutdown (endedAt is set)', () => {
+    it('returns null for clean shutdown (endedAt is set)', async () => {
       writeSessionWithCheckpoint(
         dir,
         'sess-1',
@@ -135,37 +135,37 @@ describe('HistoryReader', () => {
         makeCheckpoint()
       )
 
-      expect(reader.detectColdRestore('sess-1')).toBeNull()
+      expect(await reader.detectColdRestore('sess-1')).toBeNull()
     })
 
-    it('returns null for nonexistent session', () => {
-      expect(reader.detectColdRestore('nonexistent')).toBeNull()
+    it('returns null for nonexistent session', async () => {
+      expect(await reader.detectColdRestore('nonexistent')).toBeNull()
     })
 
-    it('returns null for corrupt meta.json', () => {
+    it('returns null for corrupt meta.json', async () => {
       const sessionDir = join(dir, getHistorySessionDirName('corrupt'))
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(join(sessionDir, 'meta.json'), 'not json')
       writeFileSync(join(sessionDir, 'checkpoint.json'), JSON.stringify(makeCheckpoint()))
 
-      expect(reader.detectColdRestore('corrupt')).toBeNull()
+      expect(await reader.detectColdRestore('corrupt')).toBeNull()
     })
 
-    it('falls back to scrollback.bin when checkpoint.json is corrupt', () => {
+    it('falls back to scrollback.bin when checkpoint.json is corrupt', async () => {
       const sessionDir = join(dir, getHistorySessionDirName('bad-cp'))
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(join(sessionDir, 'meta.json'), JSON.stringify(makeMeta()))
       writeFileSync(join(sessionDir, 'checkpoint.json'), 'not json')
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'fallback data\r\n')
 
-      const info = reader.detectColdRestore('bad-cp')
+      const info = await reader.detectColdRestore('bad-cp')
       expect(info).not.toBeNull()
       expect(info!.snapshotAnsi).toBe('fallback data\r\n')
       expect(info!.rehydrateSequences).toBe('')
     })
   })
 
-  it('replays incremental hostname OSC-7 with the same WSL context', () => {
+  it('replays incremental hostname OSC-7 with the same WSL context', async () => {
     writeSessionWithCheckpoint(dir, 'wsl-log', makeMeta(), makeCheckpoint({ generation: 7 }))
     const sessionDir = join(dir, getHistorySessionDirName('wsl-log'))
     writeFileSync(
@@ -178,16 +178,16 @@ describe('HistoryReader', () => {
       ])
     )
 
-    const info = reader.detectColdRestore('wsl-log', { wslDistro: 'Ubuntu' })
+    const info = await reader.detectColdRestore('wsl-log', { wslDistro: 'Ubuntu' })
 
     expect(info?.cwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\user\\project')
   })
 
   describe('detectColdRestore — scrollback.bin fallback (backward compatibility)', () => {
-    it('restores from scrollback.bin when checkpoint.json is absent', () => {
+    it('restores from scrollback.bin when checkpoint.json is absent', async () => {
       writeSessionWithScrollback(dir, 'old-sess', makeMeta(), 'old format data\r\n')
 
-      const info = reader.detectColdRestore('old-sess')
+      const info = await reader.detectColdRestore('old-sess')
       expect(info).not.toBeNull()
       expect(info!.snapshotAnsi).toContain('old format data')
       expect(info!.rehydrateSequences).toBe('')
@@ -195,20 +195,20 @@ describe('HistoryReader', () => {
       expect(info!.modes.alternateScreen).toBe(false)
     })
 
-    it('returns null when neither checkpoint.json nor scrollback.bin exist', () => {
+    it('returns null when neither checkpoint.json nor scrollback.bin exist', async () => {
       const sessionDir = join(dir, getHistorySessionDirName('no-data'))
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(join(sessionDir, 'meta.json'), JSON.stringify(makeMeta()))
 
-      expect(reader.detectColdRestore('no-data')).toBeNull()
+      expect(await reader.detectColdRestore('no-data')).toBeNull()
     })
 
-    it('truncates alt-screen from scrollback.bin fallback', () => {
+    it('truncates alt-screen from scrollback.bin fallback', async () => {
       const scrollback = ['normal output\r\n', '\x1b[?1049h', 'vim content here'].join('')
 
       writeSessionWithScrollback(dir, 'tui-sess', makeMeta(), scrollback)
 
-      const info = reader.detectColdRestore('tui-sess')
+      const info = await reader.detectColdRestore('tui-sess')
       expect(info).not.toBeNull()
       expect(info!.snapshotAnsi).toContain('normal output')
       expect(info!.snapshotAnsi).not.toContain('vim content')
@@ -216,7 +216,7 @@ describe('HistoryReader', () => {
   })
 
   describe('TUI truncation (scrollback.bin fallback path)', () => {
-    it('preserves content when alt-screen is properly closed', () => {
+    it('preserves content when alt-screen is properly closed', async () => {
       const scrollback = [
         'before vim\r\n',
         '\x1b[?1049h',
@@ -227,13 +227,13 @@ describe('HistoryReader', () => {
 
       writeSessionWithScrollback(dir, 'closed-tui', makeMeta(), scrollback)
 
-      const info = reader.detectColdRestore('closed-tui')
+      const info = await reader.detectColdRestore('closed-tui')
       expect(info).not.toBeNull()
       expect(info!.snapshotAnsi).toContain('before vim')
       expect(info!.snapshotAnsi).toContain('after vim')
     })
 
-    it('handles multiple alt-screen cycles with last one unclosed', () => {
+    it('handles multiple alt-screen cycles with last one unclosed', async () => {
       const scrollback = [
         'line1\r\n',
         '\x1b[?1049h',
@@ -246,14 +246,14 @@ describe('HistoryReader', () => {
 
       writeSessionWithScrollback(dir, 'multi-tui', makeMeta(), scrollback)
 
-      const info = reader.detectColdRestore('multi-tui')
+      const info = await reader.detectColdRestore('multi-tui')
       expect(info).not.toBeNull()
       expect(info!.snapshotAnsi).toContain('line1')
       expect(info!.snapshotAnsi).toContain('line2')
       expect(info!.snapshotAnsi).not.toContain('vim2-still-running')
     })
 
-    it('truncates at outermost unmatched alt-screen-on for nested sessions', () => {
+    it('truncates at outermost unmatched alt-screen-on for nested sessions', async () => {
       const scrollback = [
         'normal output\r\n',
         '\x1b[?1049h',
@@ -264,17 +264,17 @@ describe('HistoryReader', () => {
 
       writeSessionWithScrollback(dir, 'nested-tui', makeMeta(), scrollback)
 
-      const info = reader.detectColdRestore('nested-tui')
+      const info = await reader.detectColdRestore('nested-tui')
       expect(info).not.toBeNull()
       expect(info!.snapshotAnsi).toContain('normal output')
       expect(info!.snapshotAnsi).not.toContain('tmux content')
       expect(info!.snapshotAnsi).not.toContain('vim inside tmux')
     })
 
-    it('returns full content when no alt-screen sequences', () => {
+    it('returns full content when no alt-screen sequences', async () => {
       writeSessionWithScrollback(dir, 'plain', makeMeta(), 'just normal shell output\r\n')
 
-      const info = reader.detectColdRestore('plain')
+      const info = await reader.detectColdRestore('plain')
       expect(info!.snapshotAnsi).toBe('just normal shell output\r\n')
     })
   })

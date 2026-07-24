@@ -55,10 +55,7 @@ import { resolveAgentForegroundProcessWithAvailability } from './agent-foregroun
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import {
-  captureDescendantSnapshot,
-  terminateDescendantSnapshot
-} from '../pty-descendant-termination'
+import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { canConfirmAgentFromConsolePresence } from './windows-console-foreground'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
@@ -847,7 +844,11 @@ export class LocalPtyProvider implements IPtyProvider {
     const proc = spawnResult.process
     const spawnedShellIsWsl =
       process.platform === 'win32' && pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
-    const spawnedWslDistro = spawnedShellIsWsl ? (launchWslDistro ?? undefined) : null
+    const spawnedWslDistro = spawnedShellIsWsl
+      ? (launchWslDistro ?? undefined)
+      : process.platform === 'win32'
+        ? null
+        : undefined
     createPtyPhysicalExit(id)
     ptyProcesses.set(id, proc)
     ptyInitialCwd.set(id, cwd)
@@ -1111,19 +1112,24 @@ export class LocalPtyProvider implements IPtyProvider {
     operation: PtyShutdownOperation
   ): Promise<void> {
     const physicalExit = ptyPhysicalExits.get(id)
-    // Why: snapshot before signaling — once the shell dies, descendants reparent to pid 1 and a ppid walk can't find them.
-    const descendants = ptyAgentSessionIds.has(id)
-      ? await captureDescendantSnapshot(proc.pid)
-      : null
-    // Why: a natural exit can race the snapshot — never signal descendants or the root PID after this PTY loses ownership.
-    if (ptyProcesses.get(id) === proc) {
-      if (descendants) {
-        terminateDescendantSnapshot(descendants)
+    const signalRoot = (): void => {
+      // Why: natural exit can race the sweep — never signal after this PTY loses ownership.
+      if (ptyProcesses.get(id) !== proc) {
+        return
       }
       // Cancel startup delivery now, but keep the exit listener and ownership maps until node-pty reports physical exit.
       runPtyCleanup(id)
       operation.rootSignalled = true
       this.requestTrackedPtyShutdown(id, proc, operation.immediate)
+    }
+    if (ptyAgentSessionIds.has(id)) {
+      // Why: POSIX needs a pre-kill descendant snapshot; Windows uses taskkill /T so
+      // agent/MCP orphans cannot hold the worktree cwd after shell stop (#10004).
+      await killWithDescendantSweep(proc.pid, signalRoot, {
+        ownsRoot: () => ptyProcesses.get(id) === proc
+      })
+    } else {
+      signalRoot()
     }
     await waitForPtyPhysicalExit(id, physicalExit)
   }
@@ -1323,7 +1329,8 @@ export class LocalPtyProvider implements IPtyProvider {
       cwd: ptyInitialCwd.get(id) ?? '',
       title: proc.process || ptyShellName.get(id) || 'shell',
       ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
-      ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {})
+      ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {}),
+      ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {})
     }))
   }
 

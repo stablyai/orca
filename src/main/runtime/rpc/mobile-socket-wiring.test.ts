@@ -84,12 +84,50 @@ describe('MobileSocketWiring', () => {
       onBinary: vi.fn(),
       onClose: vi.fn()
     })
-    wiring.attachTransport(direct)
+    const detachDirect = wiring.attachTransport(direct)
     wiring.attachTransport(relay)
 
     expect(wiring.terminateDeviceConnections('valid-token')).toBe(3)
     expect(direct.terminateClientConnections).toHaveBeenCalledWith('valid-token')
     expect(relay.terminateClientConnections).toHaveBeenCalledWith('valid-token')
+
+    detachDirect()
+    direct.terminateClientConnections.mockClear()
+    relay.terminateClientConnections.mockClear()
+    expect(wiring.terminateDeviceConnections('valid-token')).toBe(2)
+    expect(direct.terminateClientConnections).not.toHaveBeenCalled()
+    expect(relay.terminateClientConnections).toHaveBeenCalledWith('valid-token')
+  })
+
+  it('releases detached transports from revocation fanout under origin churn', () => {
+    const desktop = generateKeyPair()
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registryFor('device-1', 'valid-token'),
+      e2eeKeypair: {
+        publicKey: desktop.publicKey,
+        secretKey: desktop.secretKey,
+        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
+      },
+      onText: vi.fn(),
+      onBinary: vi.fn(),
+      onClose: vi.fn()
+    })
+    const live = new FakeTransport()
+    wiring.attachTransport(live)
+    const retired = Array.from({ length: 1_000 }, () => new FakeTransport())
+
+    for (const transport of retired) {
+      const detach = wiring.attachTransport(transport)
+      detach()
+      detach()
+    }
+
+    expect(wiring['transports'].size).toBe(1)
+    expect(wiring.terminateDeviceConnections('valid-token')).toBe(0)
+    expect(live.terminateClientConnections).toHaveBeenCalledOnce()
+    expect(
+      retired.every((transport) => transport.terminateClientConnections.mock.calls.length === 0)
+    ).toBe(true)
   })
 
   it('preserves the legacy direct handshake, identity, and close cleanup', () => {

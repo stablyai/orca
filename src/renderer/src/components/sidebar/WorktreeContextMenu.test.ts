@@ -11,9 +11,10 @@ import {
   getWorktreeParentPickerLabel,
   hasWorktreeParentLink,
   isWorktreeParentPickerDisabled,
+  planWorkspaceStatusAssignment,
   selectMenuScopedMap
 } from './WorktreeContextMenu'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { Worktree, WorktreeLineage, WorkspaceStatusDefinition } from '../../../../shared/types'
 
 describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
   // Why: the closed menu wrapper must stay inert to delete teardown's high-churn
@@ -232,5 +233,51 @@ describe('project removal from workspace context menus', () => {
     expect(isContextWorktreeDeletable({ isMainWorktree: false }, folderRepo)).toBe(true)
     expect(isContextWorktreeDeletable({ isMainWorktree: true }, folderRepo)).toBe(false)
     expect(isContextWorktreeDeletable({ isMainWorktree: false }, null)).toBe(false)
+  })
+})
+
+describe('planWorkspaceStatusAssignment (context-menu "Move to Status" routing)', () => {
+  // Why: this is the exact branch #10175 regressed on — the board must funnel
+  // through the Linear-sync callback, the sidebar list must stay local-only. A
+  // silent flip of either branch re-introduces the bug, so pin both here.
+  const statuses: WorkspaceStatusDefinition[] = [
+    { id: 'todo', label: 'Todo' },
+    { id: 'in-review', label: 'In review' }
+  ]
+  const wt = (id: string, workspaceStatus: string): Worktree =>
+    ({ id, workspaceStatus }) as Worktree
+
+  it('routes to board Linear-sync with ALL selected ids when the board wired a callback', () => {
+    // The board path forwards every id; moveWorktreesToStatus filters no-ops downstream.
+    expect(
+      planWorkspaceStatusAssignment(
+        [wt('a', 'todo'), wt('b', 'in-review')],
+        'in-review',
+        statuses,
+        true
+      )
+    ).toEqual({ kind: 'board-sync', worktreeIds: ['a', 'b'] })
+  })
+
+  it('falls back to local-only writes of only status-changed worktrees off the board', () => {
+    expect(
+      planWorkspaceStatusAssignment(
+        [wt('a', 'todo'), wt('b', 'in-review')],
+        'in-review',
+        statuses,
+        false
+      )
+    ).toEqual({ kind: 'local-only', localWriteIds: ['a'] })
+  })
+
+  it('writes nothing on the local-only path when every worktree already has the target status', () => {
+    expect(
+      planWorkspaceStatusAssignment(
+        [wt('a', 'in-review'), wt('b', 'in-review')],
+        'in-review',
+        statuses,
+        false
+      )
+    ).toEqual({ kind: 'local-only', localWriteIds: [] })
   })
 })

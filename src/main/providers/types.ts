@@ -29,9 +29,9 @@ import type { PtySpawnResult } from './pty-spawn-result'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type {
   AgentSessionExecutionClaim,
-  AgentSessionOwnerBinding,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
+import type { PtyProcessInfo } from './pty-process-info'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -114,19 +114,7 @@ export type PtySpawnOptions = {
   signal?: AbortSignal
 }
 
-export type { PtySpawnResult }
-
-export type PtyProcessInfo = {
-  id: string
-  incarnationId?: PtyIncarnationId
-  cwd: string
-  title: string
-  /** Owning worktree when the provider can report it authoritatively. */
-  worktreeId?: string
-  /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
-  terminalHandle?: string
-  agentSessionOwners?: AgentSessionOwnerBinding[]
-}
+export type { PtyProcessInfo, PtySpawnResult }
 
 type PtyProbeOptions = { signal?: AbortSignal }
 
@@ -393,10 +381,7 @@ export type IGitProvider = {
 
 // ─── Provider Registry ──────────────────────────────────────────────
 
-/**
- * Routes operations to the correct provider based on connectionId.
- * null/undefined connectionId = local provider.
- */
+/** Routes operations by connectionId; null/undefined selects the local provider. */
 export type IProviderRegistry = {
   getPtyProvider(connectionId: string | null | undefined): IPtyProvider
   getFilesystemProvider(connectionId: string | null | undefined): IFilesystemProvider

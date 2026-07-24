@@ -42,6 +42,7 @@ export class RelayControlOrigin {
   private leaseExpiresAt = 0
   private acceptingConnections = true
   private closed = false
+  private readonly detachMobileSocketTransport: () => void
 
   constructor(options: RelayControlOriginOptions) {
     this.options = options
@@ -53,8 +54,9 @@ export class RelayControlOrigin {
       createSocket: options.createDataSocket,
       onConnectionClosed: (connectionId) => options.onConnectionReleased(connectionId, this)
     })
-    options.mobileSocketWiring.attachTransport(this.transport, (ws) =>
-      this.transport.metadataFor(ws)
+    this.detachMobileSocketTransport = options.mobileSocketWiring.attachTransport(
+      this.transport,
+      (ws) => this.transport.metadataFor(ws)
     )
   }
 
@@ -152,7 +154,12 @@ export class RelayControlOrigin {
     }
     this.controls.clear()
     this.activeControl = null
-    await this.transport.stop()
+    try {
+      await this.transport.stop()
+    } finally {
+      // Why: detaching earlier would skip socket-close cleanup in MobileSocketWiring.
+      this.detachMobileSocketTransport()
+    }
   }
 
   closeNow(): void {

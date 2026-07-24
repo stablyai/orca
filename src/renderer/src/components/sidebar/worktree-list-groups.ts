@@ -585,6 +585,7 @@ function appendWorktreeRows(
     groupDepth: number
     sectionKey: string
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
+    hostContextLabelByWorktreeId?: ReadonlyMap<string, string>
     cyclicLineageIds: ReadonlySet<string>
   }
 ): void {
@@ -594,6 +595,7 @@ function appendWorktreeRows(
     groupDepth,
     sectionKey,
     hostContextLabelByRepoId,
+    hostContextLabelByWorktreeId,
     cyclicLineageIds
   } = options
   if (!nestLineage) {
@@ -608,7 +610,9 @@ function appendWorktreeRows(
           isLastLineageChild: false,
           lineageChildCount: 0,
           lineageCollapsed: false,
-          hostContextLabel: hostContextLabelByRepoId?.get(worktree.repoId)
+          hostContextLabel:
+            hostContextLabelByWorktreeId?.get(worktree.id) ??
+            hostContextLabelByRepoId?.get(worktree.repoId)
         })
       )
     }
@@ -653,7 +657,9 @@ function appendWorktreeRows(
         isLastLineageChild: isLastChild,
         lineageChildCount: children.length,
         lineageCollapsed,
-        hostContextLabel: hostContextLabelByRepoId?.get(worktree.repoId)
+        hostContextLabel:
+          hostContextLabelByWorktreeId?.get(worktree.id) ??
+          hostContextLabelByRepoId?.get(worktree.repoId)
       })
     )
     if (lineageCollapsed) {
@@ -719,6 +725,22 @@ function getMixedHostContextLabels(
     uniqueLabels.add(label)
   }
   return uniqueLabels.size > 1 ? labelsByRepoId : undefined
+}
+
+function getMixedWorktreeHostContextLabels(
+  worktrees: readonly Worktree[],
+  repoMap: Map<string, Repo>,
+  hostLabelById: ReadonlyMap<string, string> | undefined,
+  defaultHostId: ExecutionHostId
+): Map<string, string> | undefined {
+  const labelsByWorktreeId = new Map<string, string>()
+  const uniqueHostIds = new Set<ExecutionHostId>()
+  for (const worktree of worktrees) {
+    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
+    uniqueHostIds.add(hostId)
+    labelsByWorktreeId.set(worktree.id, hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId))
+  }
+  return uniqueHostIds.size > 1 ? labelsByWorktreeId : undefined
 }
 
 function getHostWorktreeCounts(
@@ -1013,6 +1035,12 @@ export function buildRows(
     pinnedDisplayPolicy === 'duplicate-in-groups'
       ? worktrees
       : worktrees.filter((worktree) => !worktree.isPinned)
+  const mixedWorktreeHostContextLabels = getMixedWorktreeHostContextLabels(
+    naturalWorktrees,
+    repoMap,
+    hostLabelById,
+    defaultHostId
+  )
   const renderedNaturalAnchorRepoIds = getRenderedNaturalAnchorRepoIds({
     groupBy,
     worktrees: naturalWorktrees,
@@ -1052,6 +1080,7 @@ export function buildRows(
           collapsedGroups,
           groupDepth: 0,
           sectionKey: ALL_GROUP_KEY,
+          hostContextLabelByWorktreeId: mixedWorktreeHostContextLabels,
           cyclicLineageIds
         })
       }
@@ -1290,6 +1319,8 @@ export function buildRows(
           groupBy === 'repo'
             ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
             : undefined
+        const hostContextLabelByWorktreeId =
+          groupBy === 'repo' ? undefined : mixedWorktreeHostContextLabels
         if (groupBy === 'repo') {
           appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
             nestLineage,
@@ -1297,6 +1328,7 @@ export function buildRows(
             groupDepth: projectGroupDepth,
             sectionKey: key,
             hostContextLabelByRepoId,
+            hostContextLabelByWorktreeId,
             cyclicLineageIds
           })
         } else {
@@ -1306,6 +1338,7 @@ export function buildRows(
             groupDepth: projectGroupDepth,
             sectionKey: key,
             hostContextLabelByRepoId,
+            hostContextLabelByWorktreeId,
             cyclicLineageIds
           })
         }

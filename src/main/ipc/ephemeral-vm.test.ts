@@ -275,10 +275,8 @@ describe('registerEphemeralVmHandlers', () => {
     } as never)
     expect(cleaned).toEqual(expect.objectContaining({ status: 'cleaned' }))
     expect(listEnvironments(userDataPath)).toEqual([])
-    expect(store.updateSettings).toHaveBeenLastCalledWith(
-      { activeRuntimeEnvironmentId: null },
-      { notifyListeners: true }
-    )
+    expect(store.getSettings().activeRuntimeEnvironmentId).toBe(result.environment!.id)
+    expect(store.updateSettings).toHaveBeenCalledTimes(1)
   })
 
   it('provisions an ssh recipe without creating a runtime environment', async () => {

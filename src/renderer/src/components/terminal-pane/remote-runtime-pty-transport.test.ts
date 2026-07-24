@@ -2251,7 +2251,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: {
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
+              capabilities: ['agent-session.host-authority.v1', 'agent-session.omp-resume-path.v1']
             }
           }
         : { ok: true, result: { terminal: { handle: 'terminal-1' } } }
@@ -2274,14 +2274,14 @@ describe('createRemoteRuntimePtyTransport', () => {
       env: { CODEX_PROFILE: 'captured', ORCA_AGENT_LAUNCH_TOKEN: 'fresh-token' },
       launchConfig: {
         agentArgs: '--model gpt-5',
-        agentEnv: { CODEX_PROFILE: 'captured' }
+        agentEnv: { CODEX_PROFILE: 'captured' },
+        ompResumeFilePath: '/custom/omp/project/session.jsonl'
       },
       launchToken: 'fresh-token',
-      launchAgent: 'codex',
+      launchAgent: 'omp',
       resumeProviderSession: {
         key: 'session_id',
-        id: 'session-1',
-        transcriptPath: '/home/example/.codex/sessions/2026/07/20/rollout-a.jsonl'
+        id: 'session-1'
       },
       callbacks: {}
     })
@@ -2293,12 +2293,12 @@ describe('createRemoteRuntimePtyTransport', () => {
         params: expect.objectContaining({
           kind: 'explicit',
           worktree: 'id:wt-1',
-          agent: 'codex',
+          agent: 'omp',
           providerSession: {
             key: 'session_id',
-            id: 'session-1',
-            transcriptPath: '/home/example/.codex/sessions/2026/07/20/rollout-a.jsonl'
+            id: 'session-1'
           },
+          ompResumeFilePath: '/custom/omp/project/session.jsonl',
           agentArgs: '--profile captured',
           placement: { tabId: 'tab-1', leafId: 'pane:1' },
           presentation: 'background'

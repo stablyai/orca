@@ -99,7 +99,7 @@ Use `--json` for agent-friendly output. Commands are workspace-scoped by default
 | Rotate device              | `ORCA emulator rotate landscape_left`       | Remembers orientation for subsequent gestures. |
 | Camera injection           | `ORCA emulator camera com.acme.App --webcam` | Or --file, placeholder. Hot-swap with switch. May (re)launch app. |
 | Permissions                | `ORCA emulator permissions grant camera com.acme.App` | grant/revoke/reset/list. See full subcommand help. |
-| Accessibility tree         | `ORCA emulator ax [--device <id>]`          | Raw serve-sim AX snapshot (screen + elements). Needs an active session. |
+| Accessibility tree         | `ORCA emulator ax [--device <id>]`          | Raw serve-sim AX node tree (labels, roles, nested children, capped at 500 nodes; frames normalized 0..1 with top-left origin — tap an element at its frame center: x+width/2, y+height/2). Needs an active session. |
 | Raw / advanced             | `ORCA emulator exec --command "tap 0.5 0.7"` | Or "ca-debug blended on", "memory-warning", full serve-sim subcommands (no "serve-sim" prefix needed in the command string). Bridge injects active device context. |
 | Stop                       | `ORCA emulator kill [--device <id>]`        | Or let pane close / Orca quit clean up. |
 

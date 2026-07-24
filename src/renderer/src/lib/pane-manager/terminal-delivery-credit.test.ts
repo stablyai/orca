@@ -41,4 +41,26 @@ describe('terminal delivery credit', () => {
     expect(complete).toHaveBeenCalledOnce()
     expect(claimLater!()).toBeNull()
   })
+  it('settles only after every scheduler write claimed by one delivery completes', async () => {
+    const { deliverTerminalDataWithDeferredCredit, takeCurrentTerminalDeliveryCredit } =
+      await import('./terminal-delivery-credit')
+    const complete = vi.fn()
+    let first: (() => void) | null = null
+    let second: (() => void) | null = null
+
+    deliverTerminalDataWithDeferredCredit(complete, () => {
+      first = takeCurrentTerminalDeliveryCredit()
+      second = takeCurrentTerminalDeliveryCredit()
+    })
+
+    expect(first).not.toBeNull()
+    expect(second).not.toBeNull()
+    first!()
+    expect(complete).not.toHaveBeenCalled()
+    second!()
+    expect(complete).toHaveBeenCalledOnce()
+    first!()
+    second!()
+    expect(complete).toHaveBeenCalledOnce()
+  })
 })

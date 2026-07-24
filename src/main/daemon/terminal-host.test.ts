@@ -84,6 +84,9 @@ describe('TerminalHost', () => {
     await host.dispose()
   })
 
+  it('rejects missing strict inspection', () =>
+    expect(() => host.inspectProcess('missing-session')).toThrow('not found'))
+
   describe('createOrAttach', () => {
     it('creates a new session when none exists', async () => {
       const result = await host.createOrAttach({

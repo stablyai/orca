@@ -1125,6 +1125,65 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('shows distinct Orca server names when status grouping mixes runtime hosts', () => {
+    const firstRepo: Repo = {
+      ...repo,
+      id: 'repo-runtime-a',
+      executionHostId: 'runtime:env-a'
+    }
+    const secondRepo: Repo = {
+      ...repo,
+      id: 'repo-runtime-b',
+      executionHostId: 'runtime:env-b'
+    }
+    const firstWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-runtime-a',
+      repoId: firstRepo.id
+    }
+    const secondWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-runtime-b',
+      repoId: secondRepo.id
+    }
+    const rows = buildRows(
+      'workspace-status',
+      [firstWorktree, secondWorktree],
+      new Map([
+        [firstRepo.id, firstRepo],
+        [secondRepo.id, secondRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [firstWorktree.id, firstWorktree],
+        [secondWorktree.id, secondWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [],
+      new Map([
+        ['runtime:env-a', 'Remote Mac'],
+        ['runtime:env-b', 'Build Linux']
+      ])
+    )
+
+    expect(rows.filter((row) => row.type === 'item')).toMatchObject([
+      { worktree: { id: firstWorktree.id }, hostContextLabel: 'Remote Mac' },
+      { worktree: { id: secondWorktree.id }, hostContextLabel: 'Build Linux' }
+    ])
+  })
+
   it('omits host context labels when a project group only has one host', () => {
     const secondLocalWorktree: Worktree = {
       ...worktree,

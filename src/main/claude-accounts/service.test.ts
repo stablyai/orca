@@ -21,8 +21,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+const commandMocks = vi.hoisted(() => ({
+  resolveClaudeCommand: vi.fn(() => 'claude')
+}))
+
 vi.mock('../codex-cli/command', () => ({
-  resolveClaudeCommand: () => 'claude'
+  resolveClaudeCommand: commandMocks.resolveClaudeCommand
 }))
 
 vi.mock('./keychain', () => ({
@@ -1260,6 +1264,126 @@ describe('ClaudeAccountService credential capture', () => {
     }
   })
 
+  it('owns the complete cmd.exe command line for a resolved Windows Claude command', async () => {
+    setPlatform('win32')
+    vi.resetModules()
+    commandMocks.resolveClaudeCommand.mockReturnValueOnce(
+      'C:\\Users\\First Last\\AppData\\Roaming\\npm\\claude.cmd'
+    )
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => {
+      child.stdout.write('{"email":"user@example.com"}\n')
+      queueMicrotask(() => child.emit('close', 0))
+      return child
+    })
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      const service = new ClaudeAccountService(
+        createService() as never,
+        createService() as never,
+        createService() as never
+      )
+      await (
+        service as unknown as {
+          runClaudeCommand(
+            args: string[],
+            configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
+            timeoutMs: number
+          ): Promise<string>
+        }
+      ).runClaudeCommand(
+        ['auth', 'status', '--json'],
+        { windowsPath: 'C:\\tmp\\claude-auth', linuxPath: null, wslDistro: null },
+        1000
+      )
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        process.env.ComSpec ?? 'cmd.exe',
+        [
+          '/d',
+          '/v:off',
+          '/s',
+          '/c',
+          '""C:\\Users\\First Last\\AppData\\Roaming\\npm\\claude.cmd" "auth" "status" "--json""'
+        ],
+        expect.objectContaining({ shell: false, windowsVerbatimArguments: true })
+      )
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
+  it('keeps WSL execution separate from Windows command resolution', async () => {
+    setPlatform('win32')
+    vi.resetModules()
+    commandMocks.resolveClaudeCommand.mockClear()
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => {
+      child.stdout.write('{"email":"user@example.com"}\n')
+      queueMicrotask(() => child.emit('close', 0))
+      return child
+    })
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      const service = new ClaudeAccountService(
+        createService() as never,
+        createService() as never,
+        createService() as never
+      )
+      await (
+        service as unknown as {
+          runClaudeCommand(
+            args: string[],
+            configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
+            timeoutMs: number
+          ): Promise<string>
+        }
+      ).runClaudeCommand(
+        ['auth', 'status', '--json'],
+        {
+          windowsPath: 'C:\\tmp\\claude-auth',
+          linuxPath: '/home/user/.config/orca auth',
+          wslDistro: 'Ubuntu Test'
+        },
+        1000
+      )
+
+      expect(commandMocks.resolveClaudeCommand).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        [
+          '-d',
+          'Ubuntu Test',
+          '--',
+          'bash',
+          '-lc',
+          "export CLAUDE_CONFIG_DIR='/home/user/.config/orca auth'; exec claude 'auth' 'status' '--json'"
+        ],
+        expect.objectContaining({ shell: false, windowsVerbatimArguments: false })
+      )
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
   it('pipes stdin only for the explicit Claude account login command', async () => {
     setPlatform('linux')
     vi.resetModules()
@@ -1547,10 +1671,7 @@ describe('ClaudeAccountService credential capture', () => {
     child.stderr = new PassThrough()
     child.kill = vi.fn()
     const destroyStdin = vi.spyOn(child.stdin, 'destroy')
-    const taskkill = new EventEmitter() as EventEmitter & {
-      unref: ReturnType<typeof vi.fn>
-    }
-    taskkill.unref = vi.fn()
+    const taskkill = new EventEmitter()
     const spawnMock = vi.fn((command: string) => (command === 'taskkill.exe' ? taskkill : child))
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
 
@@ -1585,21 +1706,23 @@ describe('ClaudeAccountService credential capture', () => {
       const addPromise = service.addAccount()
       await vi.waitFor(() => {
         expect(spawnMock).toHaveBeenCalledWith(
-          'claude',
-          ['auth', 'login', '--claudeai'],
-          expect.objectContaining({ shell: true })
+          process.env.ComSpec ?? 'cmd.exe',
+          ['/d', '/v:off', '/s', '/c', '""claude" "auth" "login" "--claudeai""'],
+          expect.objectContaining({ shell: false, windowsVerbatimArguments: true })
         )
       })
 
       expect(service.cancelPendingLogin()).toBe(true)
-      await expect(addPromise).rejects.toThrow('Claude sign-in was cancelled.')
+      const rejection = expect(addPromise).rejects.toThrow('Claude sign-in was cancelled.')
       expect(child.kill).not.toHaveBeenCalled()
       expect(spawnMock).toHaveBeenCalledWith(
         'taskkill.exe',
         ['/pid', '1234', '/t', '/f'],
         expect.objectContaining({ stdio: 'ignore', windowsHide: true })
       )
-      expect(taskkill.unref).toHaveBeenCalled()
+      expect(destroyStdin).not.toHaveBeenCalled()
+      taskkill.emit('close', 0)
+      await rejection
       expect(destroyStdin).toHaveBeenCalledTimes(1)
       expect(service.cancelPendingLogin()).toBe(false)
     } finally {

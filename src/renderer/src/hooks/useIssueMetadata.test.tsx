@@ -7,7 +7,8 @@ import {
   clearLinearMetadataCache,
   useTeamLabels,
   useTeamMembers,
-  useTeamStates
+  useTeamStates,
+  useTeamsStates
 } from './useIssueMetadata'
 
 const linearMocks = vi.hoisted(() => ({
@@ -149,5 +150,46 @@ describe('useIssueMetadata Linear hooks', () => {
     expect(error).toBe('Could not connect')
     expect(linearMocks.linearTeamMembers).toHaveBeenCalledTimes(1)
     expect(renders).toBeLessThanOrEqual(4)
+  })
+
+  it('unions workflow states across every selected team (#8739)', async () => {
+    let states: { id: string; name: string }[] = []
+    linearMocks.linearTeamStates.mockImplementation(async (_settings, teamId: string) => {
+      if (teamId === 'team-be') {
+        return [
+          { id: 'be-todo', name: 'Todo' },
+          { id: 'be-done', name: 'Done' }
+        ]
+      }
+      if (teamId === 'team-fe') {
+        return [
+          { id: 'fe-todo', name: 'Todo' },
+          { id: 'fe-review', name: 'In Review' }
+        ]
+      }
+      return []
+    })
+
+    function MultiProbe(): null {
+      const metadata = useTeamsStates(
+        ['team-fe', 'team-be'],
+        { activeRuntimeEnvironmentId: null },
+        'ws-1'
+      )
+      states = metadata.data as { id: string; name: string }[]
+      return null
+    }
+
+    renderProbe(<MultiProbe />)
+    await flushEffects()
+    await flushEffects()
+
+    expect(linearMocks.linearTeamStates).toHaveBeenCalledTimes(2)
+    expect(states.map((s) => s.id).sort()).toEqual([
+      'be-done',
+      'be-todo',
+      'fe-review',
+      'fe-todo'
+    ])
   })
 })

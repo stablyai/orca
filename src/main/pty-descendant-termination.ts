@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 
 export const DESCENDANT_KILL_GRACE_MS = 2_000
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
@@ -162,6 +163,13 @@ export function collectDescendantRows(
       childrenByPpid.set(row.ppid, [row])
     }
   }
+  // Why: a ppid walk is only meaningful while the root is alive in this snapshot.
+  // An absent root has already exited — its real descendants reparent to pid 1 and
+  // become unreachable by ppid, so any rows still pointing at the vacated PID are a
+  // PID-reuse coincidence. Sweeping them could signal an unrelated process, so bail.
+  if (!rootRow) {
+    return { rootPgid: null, descendants: [], capturedAtMs }
+  }
   const descendants: ProcessTableRow[] = []
   const queue = [rootPid]
   const visited = new Set(queue)
@@ -178,7 +186,7 @@ export function collectDescendantRows(
       queue.push(child.pid)
     }
   }
-  return { rootPgid: rootRow?.pgid ?? null, descendants, capturedAtMs }
+  return { rootPgid: rootRow.pgid, descendants, capturedAtMs }
 }
 
 type SnapshotDeps = {
@@ -191,8 +199,8 @@ type SnapshotDeps = {
  * Snapshots a PTY root's live descendant tree. Must run BEFORE the root is
  * signalled: once the root dies, surviving descendants reparent to pid 1 and
  * can no longer be found by a ppid walk. Resolves null (never rejects) on
- * Windows, ps failure, or timeout — callers then degrade to today's
- * shell-only kill.
+ * Windows, ps failure, or timeout — callers then degrade to shell-only kill
+ * on POSIX, or Windows `taskkill /T` via killWithDescendantSweep.
  */
 export async function captureDescendantSnapshot(
   rootPid: number,
@@ -213,17 +221,41 @@ export async function captureDescendantSnapshot(
   return collectDescendantRows(rootPid, capture.rows, capture.capturedAtMs)
 }
 
+type KillSweepDeps = SnapshotDeps &
+  TerminateDeps & {
+    ownsRoot?: () => boolean
+    /** Injectable Windows tree killer (defaults to taskkill /T /F). */
+    killWindowsTree?: WindowsTreeKiller
+  }
+
 /**
- * Standard agent-session kill sequencing: snapshot the descendant tree,
- * signal its members, then run the caller's root kill. Callers must not signal
- * the root before this runs — a dead root's descendants reparent to pid 1 and
- * become unfindable. Snapshot failure degrades to killRoot alone.
+ * Standard agent-session kill sequencing.
+ * - POSIX: snapshot the descendant tree, signal members, then killRoot.
+ * - Windows: taskkill /T /F walks the ConPTY tree (shell → agent → MCP) so
+ *   worktree teardown is not blocked by orphans holding the cwd handle.
+ * Callers must not signal the root before this runs on POSIX — a dead root's
+ * descendants reparent to pid 1 and become unfindable. Snapshot failure
+ * degrades to killRoot alone on POSIX.
  */
 export async function killWithDescendantSweep(
   rootPid: number,
   killRoot: () => void,
-  deps: SnapshotDeps & TerminateDeps & { ownsRoot?: () => boolean } = {}
+  deps: KillSweepDeps = {}
 ): Promise<void> {
+  const platform = deps.platform ?? process.platform
+  if (platform === 'win32') {
+    try {
+      if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
+        const killTree = deps.killWindowsTree ?? terminateWindowsProcessTree
+        // Why: taskkill may race an already-exited tree; never block killRoot on that.
+        await killTree(rootPid).catch(() => {})
+      }
+    } finally {
+      killRoot()
+    }
+    return
+  }
+
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
   try {
     // Signal the captured descendants while their parent links still exist;

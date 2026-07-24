@@ -168,8 +168,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
     expect(JSON.stringify(added)).not.toContain('device-token')
     expect(JSON.stringify(added)).not.toContain('publicKeyB64')
-    activeRuntimeEnvironmentId = added.environment.id
-
     const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
     expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
     expect(JSON.stringify(await list(null, undefined))).not.toContain('device-token')
@@ -190,14 +188,29 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(removed).toMatchObject({
       removed: { id: added.environment.id, name: 'desk' }
     })
-    expect(store.updateSettings).toHaveBeenCalledWith(
-      { activeRuntimeEnvironmentId: null },
-      { notifyListeners: true }
-    )
     expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
+  })
+
+  it('requires an explicit Advanced selection before removing the Active Server', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    activeRuntimeEnvironmentId = added.environment.id
+    const remove = handler<{ selector: string }, { removed: { id: string } }>(
+      'runtimeEnvironments:remove'
+    )
+
+    expect(() => remove(null, { selector: added.environment.id })).toThrow(
+      'Choose another Active Server in Advanced'
+    )
+    expect(activeRuntimeEnvironmentId).toBe(added.environment.id)
+    expect(store.updateSettings).not.toHaveBeenCalled()
   })
 
   it('disconnects a saved runtime without removing it', async () => {

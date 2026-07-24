@@ -168,3 +168,33 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).not.toContain('40% used')
   })
 })
+
+describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
+  // A partial/rehydrated provider can carry an undefined (not null) window even
+  // though the type declares `session`/`weekly` as `RateLimitWindow | null`. The
+  // old `s.window !== null` filter let the undefined-window section through, so
+  // getTightestUsageSection's reduce read `.usedPercent` of undefined and crashed
+  // the status-bar overlay (TypeError in ProviderSegment).
+  const partialProvider = {
+    provider: 'codex',
+    weekly: windowOf(42, 10080),
+    updatedAt: Date.now(),
+    error: null,
+    status: 'ok'
+  } as unknown as ProviderRateLimits // `session` omitted -> undefined at runtime
+
+  it('getTightestUsageSection ignores an undefined window instead of crashing', async () => {
+    const { getTightestUsageSection } = await import('./UsageRosterPanel')
+    expect(() => getTightestUsageSection(partialProvider)).not.toThrow()
+    expect(getTightestUsageSection(partialProvider)?.window.usedPercent).toBe(42)
+  })
+
+  it('ProviderSegment renders without crashing when a provider window is undefined', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    expect(() =>
+      renderToStaticMarkup(
+        <ProviderSegment p={partialProvider} compact={false} display="used" mode="compact" />
+      )
+    ).not.toThrow()
+  })
+})

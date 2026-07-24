@@ -83,7 +83,7 @@ import {
   seedStore
 } from './store-test-helpers'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
-import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
+import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import {
   loadSessionCommitDrafts,
   saveSessionCommitDrafts
@@ -1300,6 +1300,55 @@ describe('setActiveWorktree', () => {
     expect(state.tabsByWorktree[wt].find((tab) => tab.id === targetTabId)?.ptyId).toBe(
       'pty-detached'
     )
+  })
+
+  // Regression for #9911: a split SSH tab's single relay slot points at the
+  // last-bound pane; when it exits, clearTabPtyId must promote a surviving pane
+  // instead of clearing, or a later relay-drop bulk-clear leaves the survivor
+  // visible only in the layout leaf map and the orphan sweep deletes the live tab.
+  it('promotes a surviving pane into the relay slot so a split tab is not orphaned after a relay drop', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const tabId = 'tab-split'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: { [wt]: [makeTab({ id: tabId, worktreeId: wt, ptyId: 'pty-B' })] },
+      ptyIdsByTabId: { [tabId]: ['pty-A', 'pty-B'] },
+      // Newest-bound pane B owns the single relay slot.
+      lastKnownRelayPtyIdByTabId: { [tabId]: 'pty-B' },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'leaf-a' },
+            second: { type: 'leaf', leafId: 'leaf-b' }
+          },
+          activeLeafId: 'leaf-a',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-a': 'pty-A', 'leaf-b': 'pty-B' }
+        }
+      },
+      // The transiently-absent unified entry is the condition #9911 recovers from.
+      unifiedTabsByWorktree: { [wt]: [] }
+    })
+
+    // Pane B (the relay-slot owner) exits: the slot must fall back to survivor A.
+    store.getState().clearTabPtyId(tabId, 'pty-B')
+    expect(store.getState().ptyIdsByTabId[tabId]).toEqual(['pty-A'])
+    expect(store.getState().lastKnownRelayPtyIdByTabId[tabId]).toBe('pty-A')
+
+    // Relay drop bulk-clears the row + live index but preserves the relay slot.
+    store.getState().clearTabPtyId(tabId)
+    const state = store.getState()
+    expect(state.ptyIdsByTabId[tabId]).toEqual([])
+    expect(state.tabsByWorktree[wt][0].ptyId).toBeNull()
+    expect(state.lastKnownRelayPtyIdByTabId[tabId]).toBe('pty-A')
+    // Survivor A is still reconnectable, so the sweep must not delete the tab.
+    expect(getOrphanTerminalIds(state, wt)).not.toContain(tabId)
   })
 
   it('stores trimmed quick command labels on terminal and unified tabs', () => {
@@ -3154,7 +3203,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     const state = store.getState()
     expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
-    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    // Why: a done resumable agent retains its origin:'live' recovery anchor (#9454), so a failed shutdown rolls back to it, not to undefined — and must not commit a worktree-sleep record.
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
+      origin: 'live',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-rollback-1' }
+    })
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
   })
 
@@ -3293,7 +3347,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     const state = store.getState()
     expect(state.ptyIdsByTabId['tab-1']).toEqual(['pty-agent', 'pty-shell'])
-    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    // Why: done resumable agent keeps its origin:'live' anchor (#9454); a failed kill rolls back to it, not undefined, and never commits worktree-sleep.
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
+      origin: 'live',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'target-session' }
+    })
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
     expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
     expect(mockRestorePtyDataHandlersAfterFailedShutdown).toHaveBeenCalledWith(handlerSnapshots)
@@ -3595,7 +3654,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     ])
     expect(state.suppressedPtyExitIds['remote:env-1@@terminal-1']).toBeUndefined()
     expect(state.suppressedPtyExitIds['terminal-1']).toBeUndefined()
-    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    // Why: done resumable agent keeps its origin:'live' anchor (#9454); a failed target-only stop rolls back to it, not undefined, and never commits worktree-sleep.
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
+      origin: 'live',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'target-session' }
+    })
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
   })
 
@@ -4441,7 +4505,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('terminal_liveness_unavailable')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    // Why: done resumable agent keeps its origin:'live' anchor (#9454); an inconclusive stop rolls back to it, not undefined, and never commits worktree-sleep.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'live',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
@@ -4495,7 +4564,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('exact_terminal_stop_unverified')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    // Why: done resumable agent keeps its origin:'live' anchor (#9454); an unverified stop rolls back to it, not undefined, and never commits worktree-sleep.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'live',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
@@ -4977,7 +5051,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('stop failed')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    // Why: done resumable agent keeps its origin:'live' anchor (#9454); a failed stop rolls back to it, not undefined, and never commits worktree-sleep.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'live',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(mockUnregisterPtyDataHandlers).not.toHaveBeenCalledWith(['pty-1'])
     expect(mockApi.pty.kill).not.toHaveBeenCalled()

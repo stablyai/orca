@@ -1,4 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
@@ -21,6 +22,13 @@ export function resolveTerminalWorktreeRoute(
     parseWorkspaceKey(worktreeId)?.type === 'folder'
   ) {
     return { runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId) }
+  }
+  // Why: inline setup/onboarding terminals (skill installs, feature tips) have no worktree row,
+  // so the strict owner resolver reports them as an unresolved cross-host worktree. Scope them to
+  // the active runtime — so a remote skill install lands on that runtime — falling back to local
+  // when none is focused, instead of failing them closed.
+  if (isEphemeralSetupTerminalWorktreeId(worktreeId)) {
+    return { runtimeEnvironmentId: getSingleFocusedRuntimeEnvironmentId(state) }
   }
   const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
   if (resolution.kind === 'resolved') {

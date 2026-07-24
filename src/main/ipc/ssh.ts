@@ -558,6 +558,29 @@ function createSshConnectionCallbacks(): SshConnectionCallbacks {
       } else if (relayReconnectAlreadyInFlight) {
         // Why: duplicate connected notifications belong to the same socket generation and must not expose providers before relay recovery finishes.
         return
+      } else if (
+        state.status === 'connected' &&
+        session !== undefined &&
+        sessionState !== 'ready' &&
+        !completedTransportReconnect &&
+        connectInFlight.has(targetId)
+      ) {
+        // Why: the raw SSH transport reaches 'connected' before the relay session establishes during an
+        // explicit connect. Forwarding it makes the renderer treat the host as fully up — it remounts
+        // SSH panes (-> window.api.ssh.connect) and fires connected-gated data reads before any provider
+        // exists. On a permanent relay-deploy failure that premature 'connected' drives an unbounded
+        // reconnect loop. Hold it at 'deploying-relay'; the in-flight doConnect broadcasts the
+        // authoritative 'connected' directly (bypassing this callback) after establish() succeeds, or a
+        // terminal state on failure. The connectInFlight gate keeps this scoped to a live connect, so a
+        // stray raw 'connected' with no follow-up (e.g. a transport blip on a session left 'idle' by a
+        // relay version mismatch) is never wedged at 'deploying-relay'.
+        clearRelayStateOverride(targetId)
+        broadcastSshState(getCurrentMainWindow, targetId, {
+          targetId,
+          status: 'deploying-relay',
+          error: state.error,
+          reconnectAttempt: state.reconnectAttempt
+        })
       } else {
         clearRelayStateOverride(targetId)
         broadcastSshState(getCurrentMainWindow, targetId, state)

@@ -9,15 +9,19 @@ const {
   killServeSimHelperProcessesForDeviceMock,
   listSimulatorDevicesMock,
   listServeSimHelperProcessesForDeviceMock,
-  shutdownSimulatorDeviceMock
+  shutdownSimulatorDeviceMock,
+  netFetchMock
 } = vi.hoisted(() => ({
   execServeSimCommandMock: vi.fn(async () => ({})),
   hideNativeSimulatorAppMock: vi.fn(async () => {}),
   killServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
   listSimulatorDevicesMock: vi.fn(async (): Promise<SimulatorDevice[]> => []),
   listServeSimHelperProcessesForDeviceMock: vi.fn(async (): Promise<ServeSimHelperProcess[]> => []),
-  shutdownSimulatorDeviceMock: vi.fn(async () => {})
+  shutdownSimulatorDeviceMock: vi.fn(async () => {}),
+  netFetchMock: vi.fn()
 }))
+
+vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 vi.mock('./serve-sim-execution', () => ({
   execServeSimCommand: execServeSimCommandMock,
@@ -62,6 +66,7 @@ function session(deviceUdid: string): EmulatorSessionInfo {
     deviceUdid,
     streamUrl: `http://127.0.0.1:3100/${deviceUdid}`,
     wsUrl: `ws://127.0.0.1:3100/${deviceUdid}`,
+    axUrl: `http://127.0.0.1:3100/${deviceUdid}/ax`,
     helperPid: 1234,
     // iOS serve-sim sessions round-trip through the registry as mjpeg.
     streamCodec: 'mjpeg'
@@ -84,6 +89,7 @@ describe('EmulatorBridge helper ownership', () => {
     hideNativeSimulatorAppMock.mockImplementation(async () => {})
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
+    netFetchMock.mockReset()
   })
 
   it('stops the previous Orca-managed helper when a worktree switches devices', async () => {
@@ -184,49 +190,10 @@ describe('EmulatorBridge helper ownership', () => {
 
   it('rejects a capability the resolved backend does not support', async () => {
     const bridge = new EmulatorBridge()
-    // device-1 resolves to the iOS backend, which does not advertise install.
+    // device-1 resolves to the iOS backend, which advertises no explicit-verb caps.
     await expect(
       bridge.runCapability('install', { device: 'device-1' }, async () => 'unused')
     ).rejects.toMatchObject({ code: 'emulator_unsupported' })
-  })
-
-  it('routes ax to the active session ax endpoint on iOS', async () => {
-    const fetchAccessibilityTree = vi.fn(async () => ({ elements: [] }))
-    const bridge = new EmulatorBridge({ fetchAccessibilityTree })
-    bridge.registerActiveEmulator('wt-1', {
-      ...session('device-1'),
-      axUrl: 'http://127.0.0.1:3100/device-1/ax'
-    })
-
-    await expect(bridge.accessibilityTree({ worktreeId: 'wt-1' })).resolves.toEqual({
-      elements: []
-    })
-    expect(fetchAccessibilityTree).toHaveBeenCalledWith('http://127.0.0.1:3100/device-1/ax')
-  })
-
-  it('derives the ax endpoint for sessions registered without axUrl', async () => {
-    const fetchAccessibilityTree = vi.fn(async () => ({ elements: [] }))
-    const bridge = new EmulatorBridge({ fetchAccessibilityTree })
-    // e.g. renderer-supplied session info that predates ax derivation.
-    bridge.registerActiveEmulator('wt-1', {
-      ...session('device-1'),
-      streamUrl: 'http://127.0.0.1:3100/stream.mjpeg'
-    })
-
-    await expect(bridge.accessibilityTree({ worktreeId: 'wt-1' })).resolves.toEqual({
-      elements: []
-    })
-    expect(fetchAccessibilityTree).toHaveBeenCalledWith('http://127.0.0.1:3100/ax')
-  })
-
-  it('rejects ax when the session has no ax endpoint and none can be derived', async () => {
-    const bridge = new EmulatorBridge()
-    // session() streamUrl has no mjpeg suffix, so no /ax endpoint can be inferred.
-    bridge.registerActiveEmulator('wt-1', session('device-1'))
-
-    await expect(bridge.accessibilityTree({ worktreeId: 'wt-1' })).rejects.toMatchObject({
-      code: 'emulator_no_active'
-    })
   })
 
   it('kills the helper and shuts down the selected simulator', async () => {
@@ -391,6 +358,190 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     hideNativeSimulatorAppMock.mockImplementation(async () => {})
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
+    netFetchMock.mockReset()
+  })
+
+  it('reads iOS accessibility from the active worktree session', async () => {
+    const tree = [{ type: 'Application', children: [] }]
+    netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    // Routing test: normalization is covered in serve-sim-ax-normalization.test.ts.
+    await expect(commands.emulatorAx({ worktree: 'wt-1' })).resolves.toMatchObject([
+      { type: 'Application' }
+    ])
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3100/device-1/ax',
+      expect.any(Object)
+    )
+  })
+
+  it('reads iOS accessibility from an attached device without a worktree', async () => {
+    const tree = [{ type: 'Application', children: [] }]
+    netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
+    listSimulatorDevicesMock.mockResolvedValue([
+      {
+        name: 'iPhone attached',
+        udid: 'device-1',
+        state: 'Booted',
+        runtime: 'iOS 26.0'
+      }
+    ])
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    await expect(commands.emulatorAx({ device: 'device-1' })).resolves.toMatchObject([
+      { type: 'Application' }
+    ])
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3100/device-1/ax',
+      expect.any(Object)
+    )
+  })
+
+  it('reads ax for an explicit device when the worktree has no active session', async () => {
+    const tree = [{ type: 'Application', children: [] }]
+    netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
+    listSimulatorDevicesMock.mockResolvedValue([
+      {
+        name: 'iPhone elsewhere',
+        udid: 'device-1',
+        state: 'Booted',
+        runtime: 'iOS 26.0'
+      }
+    ])
+    const bridge = new EmulatorBridge()
+    // The session lives under another worktree; the CLI still resolves the
+    // caller's cwd worktree, which has nothing attached.
+    bridge.registerActiveEmulator('wt-other', session('device-1'), { managed: true })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    await expect(
+      commands.emulatorAx({ device: 'device-1', worktree: 'wt-1' })
+    ).resolves.toMatchObject([{ type: 'Application' }])
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3100/device-1/ax',
+      expect.any(Object)
+    )
+  })
+
+  it('reports when the requested iOS device differs from the active session', async () => {
+    listSimulatorDevicesMock.mockResolvedValue([
+      {
+        name: 'iPhone requested',
+        udid: 'device-requested',
+        state: 'Booted',
+        runtime: 'iOS 26.0'
+      }
+    ])
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-active'), { managed: true })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    await expect(
+      commands.emulatorAx({ device: 'device-requested', worktree: 'wt-1' })
+    ).rejects.toMatchObject({
+      code: 'emulator_no_active',
+      message: expect.stringContaining('active: device-active')
+    })
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('heals a session registered without an axUrl by deriving it from the stream url', async () => {
+    const tree = [{ type: 'Application', children: [] }]
+    netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
+    const bridge = new EmulatorBridge()
+    // No axUrl on the registered session (e.g. reattach path predating derivation).
+    bridge.registerActiveEmulator(
+      'wt-1',
+      {
+        deviceUdid: 'device-1',
+        streamUrl: 'http://127.0.0.1:3100/helper/device-1/stream.mjpeg',
+        wsUrl: 'ws://127.0.0.1:3100/helper/device-1/ws',
+        streamCodec: 'mjpeg'
+      },
+      { managed: true }
+    )
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    await expect(commands.emulatorAx({ worktree: 'wt-1' })).resolves.toMatchObject([
+      { type: 'Application' }
+    ])
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3100/helper/device-1/ax',
+      expect.any(Object)
+    )
+  })
+
+  it('does not fabricate an /ax endpoint from a non-mjpeg stream url', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator(
+      'wt-1',
+      {
+        deviceUdid: 'device-1',
+        streamUrl: 'http://127.0.0.1:3100/helper/device-1/stream.h264',
+        wsUrl: 'ws://127.0.0.1:3100/helper/device-1/ws',
+        streamCodec: 'mjpeg'
+      },
+      { managed: true }
+    )
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null
+      })
+    })
+
+    await expect(commands.emulatorAx({ worktree: 'wt-1' })).rejects.toMatchObject({
+      code: 'emulator_no_active'
+    })
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
   it('reconnects to an existing active helper instead of replacing it', async () => {
@@ -418,29 +569,6 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       worktreeId: 'wt-1',
       info: session('device-1')
     })
-  })
-
-  it('routes emulatorAx through the bridge to the active session ax endpoint', async () => {
-    const fetchAccessibilityTree = vi.fn(async () => ({ elements: [{ label: 'Login' }] }))
-    const bridge = new EmulatorBridge({ fetchAccessibilityTree })
-    bridge.registerActiveEmulator('wt-1', {
-      ...session('device-1'),
-      axUrl: 'http://127.0.0.1:3100/device-1/ax'
-    })
-    const commands = new RuntimeEmulatorCommands({
-      getEmulatorBridge: () => bridge,
-      resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1' })),
-      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
-      getSettings: () => ({
-        mobileEmulatorEnabled: true,
-        mobileEmulatorDefaultDeviceUdid: null
-      })
-    })
-
-    await expect(commands.emulatorAx({ worktree: 'wt-1' })).resolves.toEqual({
-      elements: [{ label: 'Login' }]
-    })
-    expect(fetchAccessibilityTree).toHaveBeenCalledWith('http://127.0.0.1:3100/device-1/ax')
   })
 
   it('rejects attach when mobile emulator is disabled', async () => {

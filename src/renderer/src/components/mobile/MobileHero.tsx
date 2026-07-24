@@ -279,7 +279,7 @@ export function HeroFlow({
                 onClick={onRegeneratePairing}
                 // Why: signed-out Anywhere can't serve Relay; disabling avoids
                 // minting a local-only QR under the Relay label. Sign in or pick
-                // Local network (shown in the path options above) to enable it.
+                // LAN (shown in the path options above) to enable it.
                 disabled={pairLoading || !canGeneratePairing}
               >
                 {pairLoading
@@ -298,7 +298,7 @@ export function HeroFlow({
                   <span className="min-w-0">
                     {translate(
                       'auto.components.mobile.MobileHero.relayDegradedNotice',
-                      'Relay couldn’t be reached — this code only works on your local network.'
+                      'Relay couldn’t be reached — this code only works on your LAN or Tailscale.'
                     )}
                   </span>
                 </p>

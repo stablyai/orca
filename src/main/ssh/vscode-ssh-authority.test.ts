@@ -34,6 +34,16 @@ describe('resolveVsCodeSshAuthority', () => {
     ).toEqual({ ok: true, authority: 'ada@builder.example.com' })
   })
 
+  it.each(['', '   '])(
+    'uses a host-only authority for a manual port-22 target without a username',
+    (username) => {
+      expect(resolveVsCodeSshAuthority(createTarget({ username }))).toEqual({
+        ok: true,
+        authority: 'builder.example.com'
+      })
+    }
+  )
+
   it('requires an alias for manual targets on non-default ports', () => {
     expect(
       resolveVsCodeSshAuthority(
@@ -49,11 +59,12 @@ describe('resolveVsCodeSshAuthority', () => {
 
   it.each([
     createTarget({ host: ' ' }),
-    createTarget({ username: '' }),
     createTarget({ host: 'builder\nmalicious' }),
+    createTarget({ username: '\n' }),
+    createTarget({ username: 'ada\nmalicious' }),
     createTarget({ source: 'ssh-config', configHost: '\u0000builder' }),
     createTarget({ port: 0 })
-  ])('rejects incomplete or unsafe target fields', (target) => {
+  ])('rejects invalid or unsafe target fields', (target) => {
     expect(resolveVsCodeSshAuthority(target)).toEqual({
       ok: false,
       reason: 'ssh-target-invalid'

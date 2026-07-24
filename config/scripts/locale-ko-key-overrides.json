@@ -2667,7 +2667,10 @@
     "ko": "SSH를 통해 기존 머신의 파일, terminals, Git, 워크스페이스를 사용합니다."
   },
   "auto.components.settings.SettingsFormControls.c822571b2e": {
-    "ko": "\"{{value0}}\"과(와) 일치"
+    "ko": " \"{{value0}}\"과(와) 일치"
+  },
+  "auto.components.settings.SettingsFormControls.cb330ef7f8": {
+    "ko": "/{{value0}}"
   },
   "auto.components.settings.SettingsFormControls.fbb428db98": {
     "ko": "선택됨:"

@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { readAgentStateFileSync } from '../agent-state-file-reader'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
@@ -7,8 +8,10 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   promoteCodexRuntimeSettingsToSystem,
   snapshotCodexRuntimeSettingsBaseline,
-  type CodexSettingsPromotionHomes
+  type CodexSettingsPromotionHomes,
+  type CodexSettingsPromotionPlan
 } from './config-settings-promotion'
+import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -30,50 +33,59 @@ export function syncSystemConfigIntoManagedCodexHome(
   // Why: the mirror overwrites runtime settings from ~/.codex, so changes the
   // user made inside Orca-launched Codex (/model, /approvals) must be written
   // back to ~/.codex first or this very pass silently reverts them.
-  if (!promoteCodexRuntimeSettingsToSystem(homes)) {
+  const promotionPlan = promoteCodexRuntimeSettingsToSystem(homes)
+  if (!promotionPlan) {
     // Why: mirroring after a failed write-back would erase the runtime change;
     // leave both runtime and its old baseline intact so the next launch retries.
     return
   }
+  let preservedConflictKeys: ReadonlySet<string>
   try {
-    syncSystemConfigIntoManagedCodexHomeUnsafe(homes)
+    preservedConflictKeys = syncSystemConfigIntoManagedCodexHomeUnsafe(homes, promotionPlan)
   } catch (error) {
     console.warn('[codex-config] Failed to mirror system Codex config:', error)
     return
   }
   // Why: the baseline advances only after a successful mirror; recording an
   // unpromoted runtime change as Orca-written would strand it forever.
-  snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
+  snapshotCodexRuntimeSettingsBaseline(
+    homes.runtimeHomePath,
+    new Map([...promotionPlan.conflicts].filter(([key]) => preservedConflictKeys.has(key)))
+  )
 }
 
-function syncSystemConfigIntoManagedCodexHomeUnsafe({
-  runtimeHomePath,
-  systemHomePath
-}: CodexSettingsPromotionHomes): void {
+function syncSystemConfigIntoManagedCodexHomeUnsafe(
+  { runtimeHomePath, systemHomePath }: CodexSettingsPromotionHomes,
+  promotionPlan: CodexSettingsPromotionPlan
+): ReadonlySet<string> {
   const systemConfigPath = join(systemHomePath, 'config.toml')
   const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
   const systemConfigExists = existsSync(systemConfigPath)
   const runtimeConfigExists = existsSync(runtimeConfigPath)
   if (!systemConfigExists && !runtimeConfigExists) {
-    return
+    return new Set()
   }
 
-  const rawSystemConfig = systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : ''
+  const rawSystemConfig = systemConfigExists ? readAgentStateFileSync(systemConfigPath) : ''
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
     )
-    return
+    return new Set()
   }
 
   const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
-  const runtimeConfig = readFileSync(runtimeConfigPath, 'utf-8')
-  const mergedConfig = mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig)
-  if (mergedConfig !== runtimeConfig) {
-    writeFileAtomically(runtimeConfigPath, mergedConfig)
+  const runtimeConfig = readAgentStateFileSync(runtimeConfigPath)
+  const preserved = preserveRuntimeConflictValues(
+    mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig),
+    promotionPlan.runtimeValuesToPreserve
+  )
+  if (preserved.content !== runtimeConfig) {
+    writeFileAtomically(runtimeConfigPath, preserved.content)
   }
+  return preserved.keys
 }
 
 export function resolveCodexConfigMirrorSourceDirectory(systemHomePath: string): string {

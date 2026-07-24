@@ -1,10 +1,12 @@
 import { AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from '../../../shared/agent-session-host-authority'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { RuntimeRpcCallError, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { isRuntimeCompatBlockError } from './runtime-protocol-compat'
 
 export async function runRemoteAgentSessionLaunch<TResult>(args: {
   environmentId: string
   hostAuthority?: () => Promise<TResult>
+  hostAuthorityCapability?: RuntimeCapability
   legacy: (options: { skipCompatibilityCheck: boolean }) => Promise<TResult>
 }): Promise<TResult> {
   if (!args.hostAuthority) {
@@ -14,7 +16,7 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
   try {
     supported = await runtimeEnvironmentSupportsCapability(
       args.environmentId,
-      AGENT_SESSION_HOST_AUTHORITY_CAPABILITY
+      args.hostAuthorityCapability ?? AGENT_SESSION_HOST_AUTHORITY_CAPABILITY
     )
   } catch (error) {
     if (isRuntimeCompatBlockError(error)) {

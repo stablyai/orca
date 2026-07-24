@@ -2,13 +2,13 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  readFileSync,
   readlinkSync,
   realpathSync,
   statSync,
   writeFileSync
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { readAgentStateFileSync } from '../agent-state-file-reader'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
@@ -20,6 +20,13 @@ import {
 } from './config-toml-line-scan'
 import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-path'
 import { tuiStructuredKey, upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import {
+  readCodexSettingsBaseline,
+  writeCodexSettingsBaseline,
+  type CodexSettingsBaseline,
+  type CodexSettingsConflict
+} from './config-settings-baseline'
+import { resolveUntrackedCodexSetting } from './config-settings-conflict-resolution'
 
 // Why: the mirror reverts in-Codex config changes each launch; promotion salvages them by diffing the last baseline.
 
@@ -76,41 +83,6 @@ type TopLevelSettingValue = {
   multiline: boolean
 }
 
-type SettingsBaselineFile = {
-  version: 1
-  settings: Record<string, string>
-}
-
-function getSettingsBaselinePath(runtimeHomePath: string): string {
-  return join(runtimeHomePath, '.orca-config-settings-baseline.json')
-}
-
-function readSettingsBaseline(runtimeHomePath: string): Map<string, string> | null {
-  const baselinePath = getSettingsBaselinePath(runtimeHomePath)
-  if (!existsSync(baselinePath)) {
-    return null
-  }
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(baselinePath, 'utf-8'))
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return null
-    }
-    const settings = (parsed as SettingsBaselineFile).settings
-    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-      return null
-    }
-    const result = new Map<string, string>()
-    for (const [key, value] of Object.entries(settings)) {
-      if (typeof value === 'string') {
-        result.set(key, value)
-      }
-    }
-    return result
-  } catch {
-    return null
-  }
-}
-
 function matchPromotedStructuredKey(
   line: string,
   inPreamble: boolean,
@@ -142,7 +114,7 @@ function readPromotedSettingValues(configPath: string): Map<string, TopLevelSett
   if (!existsSync(configPath)) {
     return result
   }
-  const lines = readFileSync(configPath, 'utf-8').split('\n')
+  const lines = readAgentStateFileSync(configPath).split('\n')
   let state = createTomlLineScanState()
   let inPreamble = true
   let tuiTableSeen = false
@@ -187,28 +159,22 @@ function readPromotedSettingValues(configPath: string): Map<string, TopLevelSett
  * Call after a successful mirror only — advancing past an unpromoted change strands it forever.
  */
 export function snapshotCodexRuntimeSettingsBaseline(
-  runtimeHomePath = getOrcaManagedCodexHomePath()
+  runtimeHomePath = getOrcaManagedCodexHomePath(),
+  conflicts: ReadonlyMap<string, CodexSettingsConflict> = new Map()
 ): void {
   try {
     const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
     // Why: record an empty baseline even for a missing runtime config, so Codex's first write still diffs and promotes.
-    const settings: Record<string, string> = {}
-    for (const [key, value] of readPromotedSettingValues(runtimeTomlPath)) {
-      if (!value.multiline) {
-        settings[key] = value.raw
+    const runtimeValues = readPromotedSettingValues(runtimeTomlPath)
+    const settings = new Map<string, string | null>()
+    for (const key of PROMOTED_STRUCTURED_KEYS) {
+      const value = runtimeValues.get(key)
+      if (!conflicts.has(key) && !value?.multiline) {
+        // Why: explicit nulls distinguish a schema-aware absence from a key added by a later schema.
+        settings.set(key, value?.raw ?? null)
       }
     }
-    const file: SettingsBaselineFile = { version: 1, settings }
-    const baselinePath = getSettingsBaselinePath(runtimeHomePath)
-    const serialized = `${JSON.stringify(file, null, 2)}\n`
-    // Why: launch prep runs repeatedly; skip byte-identical rewrites to avoid needless disk writes.
-    if (existsSync(baselinePath) && readFileSync(baselinePath, 'utf-8') === serialized) {
-      return
-    }
-    writeFileSync(baselinePath, serialized, {
-      encoding: 'utf-8',
-      mode: 0o600
-    })
+    writeCodexSettingsBaseline(runtimeHomePath, { settings, conflicts })
   } catch (error) {
     console.warn('[codex-settings-promotion] failed to snapshot settings baseline', error)
   }
@@ -217,6 +183,11 @@ export function snapshotCodexRuntimeSettingsBaseline(
 export type CodexSettingsPromotionHomes = {
   runtimeHomePath: string
   systemHomePath: string
+}
+
+export type CodexSettingsPromotionPlan = {
+  conflicts: ReadonlyMap<string, CodexSettingsConflict>
+  runtimeValuesToPreserve: ReadonlyMap<string, string | null>
 }
 
 function getHostPromotionHomes(): CodexSettingsPromotionHomes {
@@ -231,63 +202,50 @@ function getHostPromotionHomes(): CodexSettingsPromotionHomes {
  * Runs before the config mirror so promoted values survive it instead of reverting.
  * WSL callers pass explicit per-distro homes; default is the host runtime home and ~/.codex.
  */
-export function promoteCodexRuntimeSettingsToSystem(homes?: CodexSettingsPromotionHomes): boolean {
+export function promoteCodexRuntimeSettingsToSystem(
+  homes?: CodexSettingsPromotionHomes
+): CodexSettingsPromotionPlan | null {
   try {
-    promoteCodexRuntimeSettingsToSystemUnsafe(homes ?? getHostPromotionHomes())
-    return true
+    return promoteCodexRuntimeSettingsToSystemUnsafe(homes ?? getHostPromotionHomes())
   } catch (error) {
     // Why: promotion is best-effort launch prep; a malformed file must not block Codex launch.
     console.warn('[codex-settings-promotion] failed to promote runtime settings', error)
-    return false
+    return null
   }
 }
 
-function promoteCodexRuntimeSettingsToSystemUnsafe(homes: CodexSettingsPromotionHomes): void {
+function promoteCodexRuntimeSettingsToSystemUnsafe(
+  homes: CodexSettingsPromotionHomes
+): CodexSettingsPromotionPlan {
   const { runtimeHomePath, systemHomePath } = homes
   const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
   const systemTomlPath = join(systemHomePath, 'config.toml')
   if (resolve(runtimeTomlPath) === resolve(systemTomlPath)) {
-    return
+    return emptyPromotionPlan()
   }
   if (!existsSync(runtimeTomlPath)) {
-    return
+    return emptyPromotionPlan()
   }
   // Why: without a baseline, a stale runtime value looks like a fresh in-Codex change; skip until the mirror writes one.
-  const baseline = readSettingsBaseline(runtimeHomePath)
+  const baseline = readCodexSettingsBaseline(runtimeHomePath)
   if (!baseline) {
-    return
+    return emptyPromotionPlan()
   }
   const runtimeValues = readPromotedSettingValues(runtimeTomlPath)
-  const changedRuntimeValues = new Map<string, string>()
-  for (const key of PROMOTED_STRUCTURED_KEYS) {
-    const runtime = runtimeValues.get(key)
-    if (!runtime || runtime.multiline) {
-      continue
-    }
-    if (runtime.raw === baseline.get(key)) {
-      // Orca mirrored this value and nothing touched it since — not a change.
-      continue
-    }
-    changedRuntimeValues.set(key, runtime.raw)
-  }
-  if (changedRuntimeValues.size === 0) {
-    return
-  }
   const systemValues = readPromotedSettingValues(systemTomlPath)
   const updates = new Map<string, string>()
-  for (const [key, runtimeRaw] of changedRuntimeValues) {
-    const system = systemValues.get(key)
-    if (system?.multiline) {
-      continue
-    }
-    // Why: ~/.codex is source of truth — an outside edit since the baseline wins over the in-Codex change.
-    if (system?.raw !== baseline.get(key)) {
-      continue
-    }
-    updates.set(key, runtimeRaw)
-  }
+  const conflicts = new Map<string, CodexSettingsConflict>()
+  const runtimeValuesToPreserve = new Map<string, string | null>()
+  collectPromotionChanges({
+    baseline,
+    runtimeValues,
+    systemValues,
+    updates,
+    conflicts,
+    runtimeValuesToPreserve
+  })
   if (updates.size === 0) {
-    return
+    return { conflicts, runtimeValuesToPreserve }
   }
   // Why: a fresh host has no ~/.codex; create it owner-only (holds auth.json) or the atomic write ENOENTs and the mirror wipes it.
   mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
@@ -295,19 +253,72 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(homes: CodexSettingsPromotion
   // Why: a dangling symlink may target an unmade dir tree; create its real parent so the atomic temp write has a home.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
   const targetExists = existsSync(writeTarget.path)
-  const systemContent = targetExists ? readFileSync(writeTarget.path, 'utf-8') : ''
+  const systemContent = targetExists ? readAgentStateFileSync(writeTarget.path) : ''
   const nextContent = upsertPromotedSettingsInContent(systemContent, updates)
   if (nextContent === systemContent) {
-    return
+    return { conflicts, runtimeValuesToPreserve }
   }
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // Why: \\wsl$ 9P symlink metadata is unreliable; write through the existing file to preserve the WSL-side inode.
     writeFileSync(writeTarget.path, nextContent, 'utf-8')
-    return
+    return { conflicts, runtimeValuesToPreserve }
   }
   writeFileAtomically(writeTarget.path, nextContent, {
     mode: writeTarget.mode
   })
+  return { conflicts, runtimeValuesToPreserve }
+}
+
+type PromotionCollectionContext = {
+  baseline: CodexSettingsBaseline
+  runtimeValues: ReadonlyMap<string, TopLevelSettingValue>
+  systemValues: ReadonlyMap<string, TopLevelSettingValue>
+  updates: Map<string, string>
+  conflicts: Map<string, CodexSettingsConflict>
+  runtimeValuesToPreserve: Map<string, string | null>
+}
+
+function collectPromotionChanges(context: PromotionCollectionContext): void {
+  for (const key of PROMOTED_STRUCTURED_KEYS) {
+    const runtimeRaw = getComparableRaw(context.runtimeValues.get(key))
+    const systemRaw = getComparableRaw(context.systemValues.get(key))
+    if (runtimeRaw === undefined || systemRaw === undefined) {
+      continue
+    }
+
+    const existingConflict = context.baseline.conflicts.get(key)
+    if (existingConflict || !context.baseline.settings.has(key)) {
+      const resolution = resolveUntrackedCodexSetting(runtimeRaw, systemRaw, existingConflict)
+      if (resolution.action === 'promote-runtime') {
+        context.updates.set(key, resolution.raw)
+      } else if (resolution.action === 'preserve') {
+        // Why: a schema-new key has no three-way ancestor; preserve both values until content changes one side.
+        context.conflicts.set(key, resolution.conflict)
+        context.runtimeValuesToPreserve.set(key, runtimeRaw)
+      }
+      continue
+    }
+
+    if (runtimeRaw === null || runtimeRaw === context.baseline.settings.get(key)) {
+      continue
+    }
+    // Why: ~/.codex remains source of truth when both sides changed from a known baseline.
+    if (systemRaw !== context.baseline.settings.get(key)) {
+      continue
+    }
+    context.updates.set(key, runtimeRaw)
+  }
+}
+
+function getComparableRaw(value: TopLevelSettingValue | undefined): string | null | undefined {
+  if (!value) {
+    return null
+  }
+  return value.multiline ? undefined : value.raw
+}
+
+function emptyPromotionPlan(): CodexSettingsPromotionPlan {
+  return { conflicts: new Map(), runtimeValuesToPreserve: new Map() }
 }
 
 // Why: follow an existing dotfile-manager symlink and carry its mode forward so an atomic write can't widen a 0600 config.
