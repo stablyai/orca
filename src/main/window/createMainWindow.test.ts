@@ -2100,6 +2100,93 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:openNewWorkspace')
   })
 
+  it('skips jumpToWorktreeIndex and jumpToTabIndex when floating terminal input is focused', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const setFocusedListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setFloatingTerminalInputFocused')?.[1]
+    expect(setFocusedListener).toBeTypeOf('function')
+    setFocusedListener?.({ sender: webContents } as never, true)
+
+    const isDarwin = process.platform === 'darwin'
+
+    // Cmd+1 (workspace switch) should not be dispatched
+    const preventDefault1 = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: preventDefault1 } as never,
+      {
+        type: 'keyDown',
+        code: 'Digit1',
+        key: '1',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: false
+      } as never
+    )
+    expect(preventDefault1).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:jumpToWorktreeIndex', expect.anything())
+
+    // Ctrl+1 on macOS / Alt+1 on others (tab switch) should not be dispatched
+    const preventDefault2 = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: preventDefault2 } as never,
+      isDarwin
+        ? ({
+            type: 'keyDown',
+            code: 'Digit1',
+            key: '1',
+            meta: false,
+            control: true,
+            alt: false,
+            shift: false
+          } as never)
+        : ({
+            type: 'keyDown',
+            code: 'Digit1',
+            key: '1',
+            meta: false,
+            control: false,
+            alt: true,
+            shift: false
+          } as never)
+    )
+    expect(preventDefault2).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:jumpToTabIndex', expect.anything())
+  })
+
   it('still intercepts Cmd+Shift+B and Cmd+Alt+B when the markdown editor is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
