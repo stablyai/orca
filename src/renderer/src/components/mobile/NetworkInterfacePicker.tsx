@@ -6,7 +6,7 @@ import type { MobileNetworkInterface } from '../settings/mobile-network-interfac
 
 // Why: MobileHero (mobile pairing screen) and MobilePairingSetupSection
 // (Settings → Mobile) both need the same network selector. This wraps the
-// generic AddressPicker with the mobile grammar (IPv4, any RFC 1123
+// generic AddressPicker with the mobile grammar (IP literals, any RFC 1123
 // hostname — including Tailscale *.ts.net and DDNS domains — optionally
 // with :port) and copy. Discovered interfaces come from the OS; "Add custom
 // address…" opens a dialog for an address the OS didn't surface — the only
@@ -82,11 +82,11 @@ export function NetworkInterfacePicker({
         inputLabel: translate('auto.components.mobile.CustomNetworkAddressDialog.label', 'Address'),
         placeholder: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.placeholder',
-          'my-mac.ts.net, home.example.com, or 192.168.1.50'
+          'my-mac.ts.net, home.example.com, 192.168.1.50, or 2001:db8::10'
         ),
         hint: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.hint',
-          'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.'
+          'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port. Use [IPv6]:port when adding a port to IPv6.'
         ),
         cancel: translate('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
         confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address')

@@ -43,6 +43,8 @@ describe('registerMobileHandlers', () => {
       })
       .mockReturnValueOnce({
         en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
+        bridge100: [{ family: 'IPv6', internal: false, address: '2001:db8::24' }],
+        awdl0: [{ family: 'IPv6', internal: false, address: 'fe80::abcd' }],
         tailscale0: [{ family: 'IPv4', internal: false, address: '100.64.1.20' }]
       })
 
@@ -54,7 +56,8 @@ describe('registerMobileHandlers', () => {
     expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
       interfaces: [
         { name: 'tailscale0', address: '100.64.1.20' },
-        { name: 'en0', address: '192.168.1.24' }
+        { name: 'en0', address: '192.168.1.24' },
+        { name: 'bridge100', address: '2001:db8::24' }
       ]
     })
   })

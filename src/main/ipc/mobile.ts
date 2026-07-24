@@ -14,13 +14,15 @@ import {
   type WindowsMobileFirewallEnvironment
 } from '../runtime/windows-mobile-firewall'
 
+const IPV6_LINK_LOCAL_PREFIX = /^fe[89ab][0-9a-f]:/i
+
 export type NetworkInterface = {
   name: string
   address: string
 }
 
 // Why: the WebSocket transport advertises 0.0.0.0 as its endpoint, which isn't
-// connectable from a mobile device. We enumerate all non-internal IPv4
+// connectable from a mobile device. We enumerate all non-internal IP
 // addresses so the user can choose which one to advertise in the QR code
 // (e.g. LAN vs Tailscale).
 function getNetworkInterfaces(): NetworkInterface[] {
@@ -31,7 +33,11 @@ function getNetworkInterfaces(): NetworkInterface[] {
       continue
     }
     for (const addr of addrs) {
-      if (addr.family === 'IPv4' && !addr.internal) {
+      if (
+        !addr.internal &&
+        (addr.family === 'IPv4' ||
+          (addr.family === 'IPv6' && !IPV6_LINK_LOCAL_PREFIX.test(addr.address)))
+      ) {
         result.push({ name, address: addr.address })
       }
     }

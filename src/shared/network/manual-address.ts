@@ -1,6 +1,4 @@
-// Why: pure shared helper so the same validation runs in renderer
-// today and in any future CLI/main-process caller without duplicating
-// the IPv4 + hostname + optional-port grammar.
+// Why: pure shared helper so renderer and future callers share the same IP/host + optional-port grammar.
 const IPV4_OCTET = '(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
 const IPV4 = `(?:${IPV4_OCTET}\\.){3}${IPV4_OCTET}`
 const IPV4_REGEX = new RegExp(`^${IPV4}$`)
@@ -16,7 +14,8 @@ const HOSTNAME_REGEX = new RegExp(`^${HOSTNAME}$`, 'i')
 const HOSTNAME_MAX_LENGTH = 253
 const MIN_PORT = 1
 const MAX_PORT = 65535
-const ERROR_MESSAGE = 'Enter an IPv4 address or hostname, optionally with a :port suffix'
+const ERROR_MESSAGE = 'Enter an IP address or hostname, optionally with a :port suffix'
+const IPV6_LINK_LOCAL_PREFIX = /^fe[89ab][0-9a-f]:/i
 
 export type ParseManualAddressResult = { ok: true; address: string } | { ok: false; error: string }
 
@@ -27,6 +26,10 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   }
   if (/\s/.test(trimmed)) {
     return { ok: false, error: ERROR_MESSAGE }
+  }
+
+  if (trimmed.includes(':') && isValidIpv6AddressOverride(trimmed)) {
+    return { ok: true, address: trimmed }
   }
 
   const { host, port } = splitHostPort(trimmed)
@@ -58,11 +61,6 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   return { ok: false, error: ERROR_MESSAGE }
 }
 
-// Why: mirrors `parsePairingAddressOverride` in src/main/runtime/runtime-rpc.ts
-// so the UI only accepts what the main process's pairing endpoint resolution
-// can already handle. IPv6 stays out of scope (same as that function), so a
-// second colon is left in `host` and fails the grammar checks below instead
-// of being misparsed as a port.
 function splitHostPort(value: string): { host: string; port: string | null } {
   const firstColon = value.indexOf(':')
   if (firstColon === -1 || value.includes(':', firstColon + 1)) {
@@ -80,4 +78,34 @@ function isValidPort(port: string): boolean {
   }
   const value = Number(port)
   return value >= MIN_PORT && value <= MAX_PORT
+}
+
+function isValidIpv6AddressOverride(value: string): boolean {
+  const explicitPort = value.startsWith('[')
+    ? (value.match(/^\[[^\]]+\]:(\d+)$/)?.[1] ?? null)
+    : null
+  if (value.startsWith('[') && value.includes(']:') && explicitPort === null) {
+    return false
+  }
+  if (explicitPort !== null && !isValidPort(explicitPort)) {
+    return false
+  }
+
+  try {
+    const url = new URL(value.startsWith('[') ? `ws://${value}` : `ws://[${value}]`)
+    const hostname = url.hostname.replace(/^\[|\]$/g, '')
+    return (
+      hostname.includes(':') &&
+      hostname !== '::' &&
+      !IPV6_LINK_LOCAL_PREFIX.test(hostname) &&
+      !url.username &&
+      !url.password &&
+      url.pathname === '/' &&
+      !url.search &&
+      !url.hash &&
+      url.port !== '0'
+    )
+  } catch {
+    return false
+  }
 }

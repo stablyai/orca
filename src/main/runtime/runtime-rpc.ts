@@ -125,6 +125,10 @@ function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   return url.toString()
 }
 
+function formatWebSocketBindHost(host: string): string {
+  return host.includes(':') ? `[${host}]` : host
+}
+
 function webClientPathForEndpoint(pathname: string): string {
   if (!pathname || pathname === '/') {
     return '/web-index.html'
@@ -891,7 +895,7 @@ export class OrcaRuntimeRpcServer {
         this.pairingInitializationFailure = null
         try {
           const wsTransport = new WebSocketTransport({
-            host: '0.0.0.0',
+            host: ['::', '0.0.0.0'],
             port: this.wsPort,
             staticRoot: this.webClientRoot,
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
@@ -956,7 +960,7 @@ export class OrcaRuntimeRpcServer {
           activeTransports.push(wsTransport)
           transportsMeta.push({
             kind: 'websocket',
-            endpoint: `ws://0.0.0.0:${wsTransport.resolvedPort}`
+            endpoint: `ws://${formatWebSocketBindHost(wsTransport.resolvedHost)}:${wsTransport.resolvedPort}`
           })
         } catch (error) {
           // Why: WebSocket transport is supplementary; on failure (e.g. port in use) continue with Unix socket only.
