@@ -72,6 +72,7 @@ function RightSidebarInner(): React.JSX.Element {
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
+  const overlayLayout = useAppStore((s) => s.settings?.rightSidebarLayoutMode === 'overlay')
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
   const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
   // Why: source control and checks are meaningless for non-git folders.
@@ -277,7 +278,9 @@ function RightSidebarInner(): React.JSX.Element {
     <div
       ref={containerRef}
       className={cn(
-        'relative flex-shrink-0 flex flex-row',
+        'flex flex-row',
+        // Why: removing overlay mode from flex flow prevents terminal reflow when the sidebar toggles.
+        overlayLayout ? 'absolute inset-y-0 right-0 z-30' : 'relative flex-shrink-0',
         // Why: overflow-visible is needed when open so the resize handle
         // on the left edge remains interactive.  When closed (width 0),
         // switch to overflow-hidden so the activity bar icons and panel

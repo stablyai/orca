@@ -27,6 +27,7 @@ import {
 } from './appearance-sidebar-search'
 import { translate } from '@/i18n/i18n'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { RightSidebarLayoutSetting } from './RightSidebarLayoutSetting'
 
 type AppearanceWindowSidebarSectionProps = {
   settings: GlobalSettings
@@ -122,6 +123,12 @@ export function AppearanceWindowSidebarSection({
         >
           <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
         </SearchableSetting>
+
+        <RightSidebarLayoutSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          forceVisible={forceVisiblePrimary}
+        />
 
         <SearchableSetting
           title={statusBarTitle}

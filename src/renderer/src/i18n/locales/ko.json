@@ -7424,7 +7424,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "사용량 백분율",
-            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다."
+            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다.",
+            "rightSidebarLayout": {
+              "title": "Right Sidebar Layout",
+              "description": "Push resizes the workspace; Overlay floats the sidebar over it so terminals never reflow."
+            }
           }
         },
         "auto": {
@@ -9255,7 +9259,10 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "사용",
-          "usagePercentageDisplayRemaining": "남음"
+          "usagePercentageDisplayRemaining": "남음",
+          "rightSidebarLayoutDescription": "Overlay floats the sidebar over the workspace so terminals keep their size when it opens.",
+          "rightSidebarLayoutPush": "Push",
+          "rightSidebarLayoutOverlay": "Overlay"
         },
         "TerminalInteractionSection": {
           "567633ff50": "우클릭하면 클립보드 내용을 터미널에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Control 클릭하세요.",

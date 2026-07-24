@@ -35,6 +35,46 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog(
   })
 )
 
+export const getRightSidebarLayoutEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.rightSidebarLayout.title',
+      'Right Sidebar Layout'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.rightSidebarLayout.description',
+      'Push resizes the workspace; Overlay floats the sidebar over it so terminals never reflow.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarLayout.rightSidebar',
+        'right sidebar'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarLayout.overlay',
+        'overlay'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarLayout.push',
+        'push'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarLayout.float',
+        'float'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarLayout.resize',
+        'resize'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarLayout.terminal',
+        'terminal'
+      )
+    ]
+  })
+)
+
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
@@ -193,5 +233,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
+  getRightSidebarLayoutEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])
