@@ -3,9 +3,12 @@ import {
   retireTerminalNoticeLifetime
 } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { sweepRetiredTerminalTabState } from './retired-terminal-tab-state-sweep'
-import { getRecentlyClosedTabPosition } from '../../slices/tabs/recently-closed-tab-position'
-import { pushClosedTerminalTabSnapshot } from '../tabs/recently-closed-terminal-tabs'
+import {
+  captureClosedTerminalTabSnapshot,
+  pushClosedTerminalTabSnapshot
+} from '../tabs/recently-closed-terminal-tabs'
 import { pushRecentlyClosedTabKind } from '../../slices/tabs/recently-closed-tabs'
 // Use store-free registry to avoid reentering slice creation through terminal-parked-tab-watchers.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
@@ -122,23 +125,29 @@ export function createTerminalTabCloseActions(
                   }
                 }
               : s.closedTerminalTabTombstonesByTabId
-          // Why: only explicit user closes feed the Cmd+Shift+T reopen stack; cleanup/PTY-exit closes must not pollute undo history.
-          const closedPosition =
-            closedWorktreeId && closedTab
-              ? getRecentlyClosedTabPosition(s, closedWorktreeId, closedTab.id)
-              : undefined
-          const capturedSnapshot =
-            closeReason === 'user' &&
-            opts?.captureRecentlyClosed !== false &&
-            closedTab &&
-            closedWorktreeId
-              ? {
-                  ...(closedTab.startupCwd ? { startupCwd: closedTab.startupCwd } : {}),
-                  ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
-                  ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
-                  ...(closedTab.color ? { color: closedTab.color } : {}),
-                  ...(closedPosition ? { position: closedPosition } : {})
+          const captureRecentlyClosed =
+            closeReason === 'user' && opts?.captureRecentlyClosed !== false
+          let closedAgentSession: SleepingAgentSessionRecord | undefined
+          const sleepingDraft = recordDraft(s.sleepingAgentSessionsByPaneKey)
+          if (retiresSession) {
+            for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
+              if (paneKey.startsWith(`${tabId}:`) || record.tabId === tabId) {
+                // Live agent status already checkpoints its resumable identity here.
+                if (
+                  captureRecentlyClosed &&
+                  record.worktreeId === closedWorktreeId &&
+                  (!closedAgentSession || record.updatedAt >= closedAgentSession.updatedAt)
+                ) {
+                  closedAgentSession = record
                 }
+                sleepingDraft.delete(paneKey)
+              }
+            }
+          }
+          const nextSleepingAgentSessionsByPaneKey = sleepingDraft.finish()
+          const capturedSnapshot =
+            captureRecentlyClosed && closedTab && closedWorktreeId
+              ? captureClosedTerminalTabSnapshot(s, closedWorktreeId, closedTab, closedAgentSession)
               : null
           const nextExpanded = omitByTabId(s.expandedPaneByTabId)
           const nextCanExpand = omitByTabId(s.canExpandPaneByTabId)
@@ -161,16 +170,6 @@ export function createTerminalTabCloseActions(
             s.lastTerminalInputAtByPaneKey,
             tabId
           )
-          // Same pane-key/tab match as removeSleepingAgentSessionsForTab, as delete operations.
-          const sleepingDraft = recordDraft(s.sleepingAgentSessionsByPaneKey)
-          if (retiresSession) {
-            for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
-              if (paneKey.startsWith(`${tabId}:`) || record.tabId === tabId) {
-                sleepingDraft.delete(paneKey)
-              }
-            }
-          }
-          const nextSleepingAgentSessionsByPaneKey = sleepingDraft.finish()
           const nextPendingStartupByTabId = omitAddressedByTabId(s.pendingStartupByTabId)
           const nextAutomaticAgentResumeClaimsByTabId = omitByTabId(
             s.automaticAgentResumeClaimsByTabId
