@@ -49,6 +49,18 @@ export class SshPtyPersistenceRevive {
         throw new Error('PTY revive outcome contains an invalid relay PTY id')
       }
     }
+    for (const entry of outcome.lost) {
+      for (const owner of entry.agentOwners ?? []) {
+        if (!isAdmittedSshRelayPtyId(owner.ptyId) || owner.ptyId !== entry.id) {
+          throw new Error('PTY revive outcome contains an invalid agent owner PTY id')
+        }
+      }
+    }
+    for (const diagnostic of outcome.diagnostics) {
+      if (diagnostic.id !== undefined && !isAdmittedSshRelayPtyId(diagnostic.id)) {
+        throw new Error('PTY revive outcome contains an invalid relay PTY id')
+      }
+    }
     return {
       ...outcome,
       revived: outcome.revived.map((entry) => ({ ...entry, id: this.toAppPtyId(entry.id) })),
@@ -63,6 +75,10 @@ export class SshPtyPersistenceRevive {
               }))
             }
           : {})
+      })),
+      diagnostics: outcome.diagnostics.map((diagnostic) => ({
+        ...diagnostic,
+        ...(diagnostic.id === undefined ? {} : { id: this.toAppPtyId(diagnostic.id) })
       }))
     }
   }

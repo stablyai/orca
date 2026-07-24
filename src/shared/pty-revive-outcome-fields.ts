@@ -1,14 +1,19 @@
 import { normalizeAgentProviderSession } from './agent-session-resume'
-import { isAgentSessionOwnerBinding } from './agent-session-host-authority'
+import { normalizeAgentSessionOwnerBindings } from './agent-session-owner-wire-normalization'
+import {
+  isRelayPtyPersistenceFieldWithinLimit,
+  MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES
+} from './pty-persistence-wire-limits'
 import type {
   RelayPtyLostEntry,
   RelayPtyReviveDiagnostic,
   RelayPtyRevivedEntry
 } from './pty-revive-protocol'
 import { isTuiAgent } from './tui-agent-config'
+import { terminalSizeAdmissionError } from './terminal-size-limits'
 import { measureUtf8ByteLength } from './utf8-byte-limits'
 
-const MAX_RELAY_PTY_REVIVE_FIELD_BYTES = 64 * 1024
+export const MAX_RELAY_PTY_REVIVE_FIELD_BYTES = MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES
 const MAX_RELAY_PTY_REVIVE_REPLAY_TAIL_BYTES = 100 * 1024
 
 export function normalizeRelayPtyRevivedEntry(value: unknown): RelayPtyRevivedEntry {
@@ -70,13 +75,18 @@ export function normalizeRelayPtyLostEntry(value: unknown): RelayPtyLostEntry {
   ) {
     throw new Error('PTY revive lost entry reason is invalid')
   }
+  const id = requiredString(entry.id, 'PTY revive lost entry id')
+  const sizeError = terminalSizeAdmissionError(entry.cols, entry.rows, 'PTY revive lost entry')
+  if (sizeError) {
+    throw new Error(sizeError)
+  }
   return {
-    id: requiredString(entry.id, 'PTY revive lost entry id'),
+    id,
     kind: entry.kind,
     reason: entry.reason,
     pid: positiveSafeInteger(entry.pid, 'PTY revive lost entry pid'),
-    cols: positiveSafeInteger(entry.cols, 'PTY revive lost entry cols'),
-    rows: positiveSafeInteger(entry.rows, 'PTY revive lost entry rows'),
+    cols: entry.cols as number,
+    rows: entry.rows as number,
     cwd: requiredString(entry.cwd, 'PTY revive lost entry cwd'),
     ...optionalStringField(entry, 'sourceIncarnationId', 'PTY revive lost entry'),
     ...optionalStringField(entry, 'paneKey', 'PTY revive lost entry'),
@@ -86,7 +96,7 @@ export function normalizeRelayPtyLostEntry(value: unknown): RelayPtyLostEntry {
     ...optionalStringField(entry, 'terminalHandle', 'PTY revive lost entry'),
     ...optionalReplayTail(entry.replayTail),
     ...optionalDurableLaunch(entry.durableLaunch),
-    ...optionalAgentOwners(entry.agentOwners),
+    ...optionalAgentOwners(entry.agentOwners, id),
     ...optionalProviderSession(entry.providerSession),
     ...optionalStringField(entry, 'orchestrationTaskId', 'PTY revive lost entry')
   }
@@ -136,7 +146,12 @@ function optionalReplayTail(value: unknown): Pick<RelayPtyLostEntry, 'replayTail
   if (tail.encoding !== 'utf8' || typeof tail.truncated !== 'boolean') {
     throw new Error('PTY revive replay tail is invalid')
   }
-  const data = requiredString(tail.data, 'PTY revive replay tail data', true)
+  const data = requiredString(
+    tail.data,
+    'PTY revive replay tail data',
+    true,
+    MAX_RELAY_PTY_REVIVE_REPLAY_TAIL_BYTES
+  )
   const byteLength = nonNegativeSafeInteger(tail.byteLength, 'PTY revive replay tail byteLength')
   if (
     byteLength > MAX_RELAY_PTY_REVIVE_REPLAY_TAIL_BYTES ||
@@ -186,37 +201,45 @@ function optionalDurableLaunch(value: unknown): Pick<RelayPtyLostEntry, 'durable
   }
 }
 
-function optionalAgentOwners(value: unknown): Pick<RelayPtyLostEntry, 'agentOwners'> {
+function optionalAgentOwners(
+  value: unknown,
+  entryId: string
+): Pick<RelayPtyLostEntry, 'agentOwners'> {
   if (value === undefined) {
     return {}
   }
-  if (!Array.isArray(value) || !value.every(isAgentSessionOwnerBinding)) {
-    throw new Error('PTY revive agent owners are invalid')
-  }
-  return { agentOwners: value }
+  return { agentOwners: normalizeAgentSessionOwnerBindings(value, entryId, 'PTY revive') }
 }
 
 function optionalProviderSession(value: unknown): Pick<RelayPtyLostEntry, 'providerSession'> {
   if (value === undefined) {
     return {}
   }
-  const providerSession = normalizeAgentProviderSession(value)
+  const record = requireRelayPtyReviveRecord(value, 'PTY revive provider session')
+  assertExactKeys(record, ['key', 'id', 'transcriptPath'], 'PTY revive provider session')
+  const providerSession = normalizeAgentProviderSession(record)
   if (
     !providerSession ||
-    measureUtf8ByteLength(providerSession.id, { stopAfterBytes: MAX_RELAY_PTY_REVIVE_FIELD_BYTES })
-      .exceededLimit ||
+    !isRelayPtyPersistenceFieldWithinLimit(providerSession.id) ||
     (providerSession.transcriptPath &&
-      measureUtf8ByteLength(providerSession.transcriptPath, {
-        stopAfterBytes: MAX_RELAY_PTY_REVIVE_FIELD_BYTES
-      }).exceededLimit)
+      !isRelayPtyPersistenceFieldWithinLimit(providerSession.transcriptPath))
   ) {
     throw new Error('PTY revive provider session is invalid')
   }
   return { providerSession }
 }
 
-function requiredString(value: unknown, name: string, allowEmpty = false): string {
-  if (typeof value !== 'string' || (!allowEmpty && value.length === 0)) {
+function requiredString(
+  value: unknown,
+  name: string,
+  allowEmpty = false,
+  maxBytes = MAX_RELAY_PTY_REVIVE_FIELD_BYTES
+): string {
+  if (
+    typeof value !== 'string' ||
+    (!allowEmpty && value.length === 0) ||
+    !isRelayPtyPersistenceFieldWithinLimit(value, maxBytes)
+  ) {
     throw new Error(`${name} is invalid`)
   }
   return value

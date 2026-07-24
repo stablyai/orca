@@ -42,7 +42,7 @@ describe('SshPtyPersistenceRevive', () => {
               cwd: '/repo'
             }
           ],
-          diagnostics: []
+          diagnostics: [{ code: 'entry-invalid', id: 'pty-2' }]
         }
       }
       return undefined
@@ -51,7 +51,11 @@ describe('SshPtyPersistenceRevive', () => {
     await expect(subject.serialize(['pty-1'], { formatVersion: 2 })).resolves.toBe('v2-state')
     await expect(subject.revive('v2-state', { formatVersion: 2 })).resolves.toMatchObject({
       mode: 'typed',
-      outcome: { revived: [{ id: 'app:pty-1' }], lost: [{ id: 'app:pty-2' }] }
+      outcome: {
+        revived: [{ id: 'app:pty-1' }],
+        lost: [{ id: 'app:pty-2' }],
+        diagnostics: [{ code: 'entry-invalid', id: 'app:pty-2' }]
+      }
     })
     expect(mux.request).toHaveBeenCalledWith('pty.serialize', {
       ids: ['relay:pty-1'],
@@ -95,6 +99,28 @@ describe('SshPtyPersistenceRevive', () => {
       'pty.getCapabilities',
       'pty.revive'
     ])
+  })
+
+  it('fails closed when a typed diagnostic references a non-admitted relay PTY id', async () => {
+    const { mux, subject } = createSubject()
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.getCapabilities') {
+        return { ptyPersistenceEnvelopeVersion: 2, ptyReviveOutcomeVersion: 1 }
+      }
+      if (method === 'pty.revive') {
+        return {
+          outcomeVersion: 1,
+          revived: [],
+          lost: [],
+          diagnostics: [{ code: 'entry-invalid', id: 'invalid\nid' }]
+        }
+      }
+      return undefined
+    })
+
+    await expect(subject.revive('v2-state', { formatVersion: 2 })).rejects.toThrow(
+      'invalid relay PTY id'
+    )
   })
 
   it('keeps the existing legacy wire until a caller explicitly requests v2', async () => {

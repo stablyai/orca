@@ -2,20 +2,17 @@ import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
 } from '../shared/agent-session-resume'
-import {
-  isAgentSessionOwnerBinding,
-  type AgentSessionOwnerBinding
-} from '../shared/agent-session-host-authority'
+import { normalizeAgentSessionOwnerBindings } from '../shared/agent-session-owner-wire-normalization'
+import type { AgentSessionOwnerBinding } from '../shared/agent-session-host-authority'
+import { assertRelayPtyPersistenceFieldWithinLimit } from '../shared/pty-persistence-wire-limits'
 import type { RelayPtyDurableLaunch, RelayPtyReplayTail } from '../shared/pty-revive-protocol'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import { measureUtf8ByteLength } from '../shared/utf8-byte-limits'
 import { terminalSizeAdmissionError } from '../shared/terminal-size-limits'
 import { normalizeRelayPtyV2EntryBasics } from './pty-persistence-v2-entry-basics'
 import {
-  MAX_RELAY_PTY_ENV_DELETE_KEYS,
   MAX_RELAY_PTY_LOST_TAIL_BYTES,
   MAX_RELAY_PTY_PERSISTENCE_ENTRY_BYTES,
-  MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES,
   MAX_RELAY_PTY_PERSISTENCE_RETAINED_BYTES,
   sanitizeRelayPtyEnvToDelete,
   type RelayPtyIdentity,
@@ -84,6 +81,7 @@ export function normalizeRelayPtyPersistenceEntry(
     )
   }
   const v2Basics = v2 ? normalizeRelayPtyV2EntryBasics(entry) : undefined
+  const id = requiredString(entry.id, 'id', !v2)
   const attachIdentity = v2Basics?.attachIdentity ?? normalizeLegacyIdentity(entry.attachIdentity)
   const paneKey = optionalString(entry.paneKey, 'paneKey')
   const tabId = optionalString(entry.tabId, 'tabId')
@@ -99,13 +97,13 @@ export function normalizeRelayPtyPersistenceEntry(
     : undefined
   const replayTail = v2 ? normalizeReplayTail(entry.replayTail) : undefined
   const durableLaunch = v2 ? normalizeDurableLaunch(entry.durableLaunch) : undefined
-  const agentOwners = v2 ? normalizeAgentOwners(entry.agentOwners) : undefined
+  const agentOwners = v2 ? normalizeAgentOwners(entry.agentOwners, id) : undefined
   const providerSession = v2 ? normalizeProviderSession(entry.providerSession) : undefined
   const orchestrationTaskId = v2
     ? optionalString(entry.orchestrationTaskId, 'orchestrationTaskId')
     : undefined
   return {
-    id: requiredString(entry.id, 'id', !v2),
+    id,
     pid: positiveSafeInteger(entry.pid, 'pid'),
     cols,
     rows,
@@ -131,14 +129,6 @@ export function normalizeRelayPtyPersistenceEntry(
 
 export function serializedRelayPtyPersistenceEntry(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf8')
-}
-
-export function assertRelayPtyPersistenceFieldWithinLimit(field: string, value: string): void {
-  if (Buffer.byteLength(value, 'utf8') > MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES) {
-    throw new Error(
-      `PTY persistence field "${field}" exceeds ${MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES} bytes`
-    )
-  }
 }
 
 function normalizeLegacyIdentity(value: unknown): RelayPtyIdentity | undefined {
@@ -205,18 +195,14 @@ function normalizeDurableLaunch(value: unknown): RelayPtyDurableLaunch | undefin
   }
 }
 
-function normalizeAgentOwners(value: unknown): AgentSessionOwnerBinding[] | undefined {
+function normalizeAgentOwners(
+  value: unknown,
+  entryId: string
+): AgentSessionOwnerBinding[] | undefined {
   if (value === undefined) {
     return undefined
   }
-  if (
-    !Array.isArray(value) ||
-    value.length > MAX_RELAY_PTY_ENV_DELETE_KEYS ||
-    !value.every(isAgentSessionOwnerBinding)
-  ) {
-    throw new Error('PTY persistence agent owners are invalid')
-  }
-  return value
+  return normalizeAgentSessionOwnerBindings(value, entryId, 'PTY persistence')
 }
 
 function normalizeProviderSession(value: unknown): AgentProviderSessionMetadata | undefined {

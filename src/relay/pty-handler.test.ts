@@ -499,6 +499,12 @@ describe('PtyHandler', () => {
     ).rejects.toThrow(`PTY persistence request exceeds ${MAX_RELAY_PTY_SESSIONS} entries`)
   })
 
+  it('rejects duplicate requested PTY ids before serialization', async () => {
+    await expect(
+      dispatcher.callRequest('pty.serialize', { ids: ['pty-1', 'pty-1'], formatVersion: 2 })
+    ).rejects.toThrow('duplicate PTY ids')
+  })
+
   it('spawns a PTY without post-Node-18 array copy methods', async () => {
     const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toReversed')
     Reflect.deleteProperty(Array.prototype, 'toReversed')
@@ -3076,6 +3082,73 @@ describe('PtyHandler', () => {
 
     expect(JSON.parse(state)).toBeInstanceOf(Array)
     expect(legacyRevive).toBeUndefined()
+  })
+
+  it('rejects v2 state on the legacy revive path before probing or spawning', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await expect(
+        dispatcher.callRequest('pty.revive', {
+          state: JSON.stringify({
+            schemaVersion: 2,
+            entries: [
+              {
+                id: 'pty-worker',
+                pid: process.pid,
+                sourceIncarnationId: 'incarnation-worker',
+                cols: 80,
+                rows: 24,
+                cwd: '/repo',
+                durableLaunch: { launchAgent: 'codex' }
+              }
+            ]
+          })
+        })
+      ).rejects.toThrow('requires typed revive')
+
+      expect(killSpy).not.toHaveBeenCalled()
+      expect(mockPtySpawn).not.toHaveBeenCalled()
+    } finally {
+      killSpy.mockRestore()
+    }
+  })
+
+  it('rejects duplicate v2 state ids before any revive side effect', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await expect(
+        dispatcher.callRequest('pty.revive', {
+          formatVersion: 2,
+          state: JSON.stringify({
+            schemaVersion: 2,
+            entries: [
+              {
+                id: 'pty-duplicate',
+                pid: process.pid,
+                sourceIncarnationId: 'incarnation-shell',
+                cols: 80,
+                rows: 24,
+                cwd: '/repo'
+              },
+              {
+                id: 'pty-duplicate',
+                pid: process.pid,
+                sourceIncarnationId: 'incarnation-worker',
+                cols: 80,
+                rows: 24,
+                cwd: '/repo',
+                durableLaunch: { launchAgent: 'codex' }
+              }
+            ]
+          })
+        })
+      ).rejects.toThrow('duplicate PTY ids')
+
+      expect(killSpy).not.toHaveBeenCalled()
+      expect(mockPtySpawn).not.toHaveBeenCalled()
+    } finally {
+      killSpy.mockRestore()
+    }
   })
 
   it('returns a recognized worker as lost before probing or spawning it', async () => {

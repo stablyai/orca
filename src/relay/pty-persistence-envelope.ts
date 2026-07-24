@@ -1,5 +1,6 @@
 import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
 import type { AgentSessionOwnerBinding } from '../shared/agent-session-host-authority'
+import { assertRelayPtyPersistenceFieldWithinLimit } from '../shared/pty-persistence-wire-limits'
 import type { RelayPtyDurableLaunch, RelayPtyReplayTail } from '../shared/pty-revive-protocol'
 import { clampUtf8TextTail } from '../shared/utf8-byte-limits'
 import { assertJsonTextStructureWithinLimits } from '../shared/json-text-structure-limit'
@@ -15,7 +16,6 @@ import {
 } from './pty-persistence-entry-normalization'
 
 export const MAX_RELAY_PTY_PERSISTENCE_STATE_BYTES = 8 * 1024 * 1024
-export const MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES = 64 * 1024
 export const MAX_RELAY_PTY_PERSISTENCE_ENTRY_BYTES = 128 * 1024
 export const MAX_RELAY_PTY_PERSISTENCE_RETAINED_BYTES = 6 * 1024 * 1024
 export const MAX_RELAY_PTY_LOST_TAIL_BYTES = 100 * 1024
@@ -84,12 +84,8 @@ export function assertRelayPtyRetainedFieldsWithinLimits(fields: RelayPtyRetaine
     if (value === undefined) {
       return
     }
+    assertRelayPtyPersistenceFieldWithinLimit(field, value)
     const bytes = Buffer.byteLength(value, 'utf8')
-    if (bytes > MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES) {
-      throw new Error(
-        `PTY persistence field "${field}" exceeds ${MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES} bytes`
-      )
-    }
     retainedBytes += bytes
   }
 
@@ -159,7 +155,9 @@ export function parseRelayPtyPersistenceIds(value: unknown, maxEntries: number):
   if (!Array.isArray(value) || value.length > maxEntries) {
     throw new Error(`PTY persistence request exceeds ${maxEntries} entries`)
   }
-  return value.map((id) => requiredString(id, 'id'))
+  const ids = value.map((id) => requiredString(id, 'id'))
+  assertUniquePtyIds(ids, 'PTY persistence request')
+  return ids
 }
 
 function normalizeLegacyEnvelope(value: unknown[], maxEntries: number): RelayPtyPersistenceEntry[] {
@@ -181,6 +179,10 @@ function normalizeV2Envelope(value: unknown, maxEntries: number): RelayPtyParsed
   const entries = envelope.entries.map((entry, index) =>
     normalizeRelayPtyPersistenceEntry(entry, index, true)
   )
+  assertUniquePtyIds(
+    entries.map((entry) => entry.id),
+    'PTY persistence v2 envelope'
+  )
   assertV2EnvelopeRetainedBytes(entries)
   return { formatVersion: 2, entries }
 }
@@ -193,6 +195,10 @@ function boundV2Entries(
     normalizeRelayPtyPersistenceEntry(entry, index, true)
   )
   assertEnvelopeEntryCount(normalized, maxEntries)
+  assertUniquePtyIds(
+    normalized.map((entry) => entry.id),
+    'PTY persistence v2 envelope'
+  )
   let retainedBytes = 0
   return normalized.map((entry) => {
     const withoutTail = { ...entry }
@@ -208,6 +214,25 @@ function boundV2Entries(
         `PTY persistence state exceeds ${MAX_RELAY_PTY_PERSISTENCE_RETAINED_BYTES} retained bytes`
       )
     }
+    const sourceReplayTail = entry.replayTail
+    if (!sourceReplayTail) {
+      retainedBytes += metadataBytes
+      return withoutTail
+    }
+    const minimumTail: RelayPtyReplayTail = {
+      data: '',
+      encoding: 'utf8',
+      byteLength: 0,
+      truncated: true
+    }
+    const minimumCandidate = { ...entry, replayTail: minimumTail }
+    const minimumCandidateBytes = serializedRelayPtyPersistenceEntry(minimumCandidate)
+    if (
+      minimumCandidateBytes > MAX_RELAY_PTY_PERSISTENCE_ENTRY_BYTES ||
+      retainedBytes + minimumCandidateBytes > MAX_RELAY_PTY_PERSISTENCE_RETAINED_BYTES
+    ) {
+      throw new Error('PTY persistence state cannot retain a truncated replay tail')
+    }
     let tailBudget = Math.max(
       0,
       Math.min(
@@ -216,8 +241,8 @@ function boundV2Entries(
         MAX_RELAY_PTY_PERSISTENCE_RETAINED_BYTES - retainedBytes - metadataBytes
       )
     )
-    let replayTail = boundReplayTail(entry, tailBudget)
-    while (replayTail) {
+    let replayTail = boundReplayTail(sourceReplayTail, tailBudget)
+    while (true) {
       const candidate = { ...entry, replayTail }
       const candidateBytes = serializedRelayPtyPersistenceEntry(candidate)
       const excess = Math.max(
@@ -228,22 +253,16 @@ function boundV2Entries(
         retainedBytes += candidateBytes
         return candidate
       }
+      if (replayTail.byteLength === 0) {
+        throw new Error('PTY persistence state cannot retain a truncated replay tail')
+      }
       tailBudget = Math.max(0, replayTail.byteLength - excess - 4)
-      replayTail = tailBudget > 0 ? boundReplayTail(entry, tailBudget) : undefined
+      replayTail = boundReplayTail(sourceReplayTail, tailBudget)
     }
-    retainedBytes += metadataBytes
-    return withoutTail
   })
 }
 
-function boundReplayTail(
-  entry: RelayPtyPersistenceEntry,
-  maxBytes: number
-): RelayPtyReplayTail | undefined {
-  const tail = entry.replayTail
-  if (!tail) {
-    return undefined
-  }
+function boundReplayTail(tail: RelayPtyReplayTail, maxBytes: number): RelayPtyReplayTail {
   const clamped = clampUtf8TextTail(tail.data, maxBytes)
   return {
     data: clamped.text,
@@ -262,6 +281,12 @@ function assertEnvelopeEntryCount(value: readonly unknown[], maxEntries: number)
   }
 }
 
+function assertUniquePtyIds(ids: readonly string[], scope: string): void {
+  if (new Set(ids).size !== ids.length) {
+    throw new Error(`${scope} contains duplicate PTY ids`)
+  }
+}
+
 function assertLegacyEnvelopeRetainedBytes(entries: readonly RelayPtyRetainedFields[]): void {
   let retainedBytes = 0
   for (const entry of entries) {
@@ -275,4 +300,7 @@ function assertLegacyEnvelopeRetainedBytes(entries: readonly RelayPtyRetainedFie
   }
 }
 
-export { assertRelayPtyPersistenceFieldWithinLimit } from './pty-persistence-entry-normalization'
+export {
+  assertRelayPtyPersistenceFieldWithinLimit,
+  MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES
+} from '../shared/pty-persistence-wire-limits'

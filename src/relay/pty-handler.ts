@@ -1489,6 +1489,9 @@ export class PtyHandler {
 
   private async revive(params: Record<string, unknown>): Promise<void | RelayPtyReviveOutcomeV1> {
     const state = parseRelayPtyPersistenceState(params.state, MAX_RELAY_PTY_SESSIONS)
+    if (state.formatVersion === 2 && params.formatVersion !== 2) {
+      throw new Error('PTY persistence v2 state requires typed revive')
+    }
     if (params.formatVersion !== 2) {
       await this.reviveLegacy(state.entries)
       return

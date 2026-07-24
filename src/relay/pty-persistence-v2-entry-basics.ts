@@ -1,5 +1,6 @@
+import { assertRelayPtyPersistenceFieldWithinLimit } from '../shared/pty-persistence-wire-limits'
+
 const MAX_ENV_DELETE_KEYS = 1_024
-const MAX_PERSISTENCE_FIELD_BYTES = 64 * 1024
 
 export type RelayPtyV2EntryBasics = {
   attachIdentity?: { paneKey?: string; tabId?: string }
@@ -72,9 +73,7 @@ function optionalString(value: unknown, field: string): string | undefined {
 }
 
 function assertFieldSize(field: string, value: string): void {
-  if (Buffer.byteLength(value, 'utf8') > MAX_PERSISTENCE_FIELD_BYTES) {
-    throw new Error(`PTY persistence field "${field}" exceeds ${MAX_PERSISTENCE_FIELD_BYTES} bytes`)
-  }
+  assertRelayPtyPersistenceFieldWithinLimit(field, value)
 }
 
 function assertExactKeys(

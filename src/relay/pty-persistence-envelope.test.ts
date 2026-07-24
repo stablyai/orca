@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_RELAY_PTY_PERSISTENCE_ENTRY_BYTES,
   MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES,
   MAX_RELAY_PTY_PERSISTENCE_RETAINED_BYTES,
   MAX_RELAY_PTY_PERSISTENCE_STATE_BYTES,
@@ -23,6 +24,27 @@ function entry(index: number, overrides: Partial<RelayPtyPersistenceEntry> = {})
   }
 }
 
+function agentOwner(ptyId = 'pty-1') {
+  return {
+    claim: {
+      digestVersion: 1 as const,
+      keyId: 'claim-key',
+      identityDigest: 'a'.repeat(43),
+      worktreeScopeDigest: 'b'.repeat(43),
+      agent: 'codex' as const
+    },
+    generation: 'generation-1',
+    phase: 'live' as const,
+    ptyId,
+    surface: {
+      worktreeId: 'repo::/repo',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      terminalHandle: 'term_abc123'
+    }
+  }
+}
+
 describe('relay PTY persistence envelope', () => {
   it('round-trips normal state without changing retained fields', () => {
     const entries = [
@@ -43,24 +65,6 @@ describe('relay PTY persistence envelope', () => {
   })
 
   it('keeps the default array wire while round-tripping a strict v2 envelope', () => {
-    const owner = {
-      claim: {
-        digestVersion: 1 as const,
-        keyId: 'claim-key',
-        identityDigest: 'a'.repeat(43),
-        worktreeScopeDigest: 'b'.repeat(43),
-        agent: 'codex' as const
-      },
-      generation: 'generation-1',
-      phase: 'live' as const,
-      ptyId: 'pty-1',
-      surface: {
-        worktreeId: 'repo::/repo',
-        tabId: 'tab-1',
-        leafId: '11111111-1111-4111-8111-111111111111',
-        terminalHandle: 'term_abc123'
-      }
-    }
     const v2 = entry(1, {
       sourceIncarnationId: 'incarnation-1',
       replayTail: { data: 'tail', encoding: 'utf8', byteLength: 4, truncated: false },
@@ -70,7 +74,7 @@ describe('relay PTY persistence envelope', () => {
         launchAgent: 'codex',
         startedAt: 42
       },
-      agentOwners: [owner],
+      agentOwners: [agentOwner()],
       providerSession: { key: 'session_id', id: 'session-1' },
       orchestrationTaskId: 'task-1'
     })
@@ -159,6 +163,75 @@ describe('relay PTY persistence envelope', () => {
         50
       )
     ).toThrow('unknown field')
+  })
+
+  it('rejects duplicate v2 PTY ids before serialization or parsing', () => {
+    const v2 = entry(1, { sourceIncarnationId: 'incarnation-1' })
+
+    expect(() => serializeRelayPtyPersistenceEnvelope([v2, { ...v2 }], 50, 2)).toThrow(
+      'duplicate PTY ids'
+    )
+    expect(() =>
+      parseRelayPtyPersistenceState(
+        JSON.stringify({ schemaVersion: 2, entries: [v2, { ...v2, cwd: '/other' }] }),
+        50
+      )
+    ).toThrow('duplicate PTY ids')
+  })
+
+  it('rejects unknown nested agent-owner fields and mismatched owner PTY ids', () => {
+    const v2 = entry(1, { sourceIncarnationId: 'incarnation-1' })
+
+    expect(() =>
+      parseRelayPtyPersistenceState(
+        JSON.stringify({
+          schemaVersion: 2,
+          entries: [
+            {
+              ...v2,
+              agentOwners: [
+                { ...agentOwner(), claim: { ...agentOwner().claim, hookPayload: 'private' } }
+              ]
+            }
+          ]
+        }),
+        50
+      )
+    ).toThrow('unknown field')
+    expect(() =>
+      parseRelayPtyPersistenceState(
+        JSON.stringify({
+          schemaVersion: 2,
+          entries: [{ ...v2, agentOwners: [agentOwner('other-pty')] }]
+        }),
+        50
+      )
+    ).toThrow('agent owner is invalid')
+  })
+
+  it('retains an explicit truncated replay-tail marker when an entry budget removes all data', () => {
+    const replayTail = { data: 'tail', encoding: 'utf8' as const, byteLength: 4, truncated: false }
+    const truncatedMarker = { data: '', encoding: 'utf8' as const, byteLength: 0, truncated: true }
+    const v2 = entry(1, {
+      cwd: 'c'.repeat(MAX_RELAY_PTY_PERSISTENCE_FIELD_BYTES),
+      sourceIncarnationId: 'incarnation-1',
+      durableLaunch: { startupCommand: '', launchAgent: 'codex' },
+      replayTail
+    })
+    const fillBytes =
+      MAX_RELAY_PTY_PERSISTENCE_ENTRY_BYTES -
+      Buffer.byteLength(JSON.stringify({ ...v2, replayTail: truncatedMarker }), 'utf8')
+    v2.durableLaunch!.startupCommand = 'x'.repeat(fillBytes)
+
+    const serialized = serializeRelayPtyPersistenceEnvelope([v2], 50, 2)
+
+    expect(parseRelayPtyPersistenceState(serialized, 50).entries[0]?.replayTail).toEqual(
+      truncatedMarker
+    )
+    v2.durableLaunch!.startupCommand = 'x'.repeat(fillBytes + 1)
+    expect(() => serializeRelayPtyPersistenceEnvelope([v2], 50, 2)).toThrow(
+      'cannot retain a truncated replay tail'
+    )
   })
 
   it('accepts the field limit and rejects limit plus one', () => {
