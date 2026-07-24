@@ -2,6 +2,7 @@
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GitRepoModule from '../git/repo'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
 const {
@@ -46,7 +47,8 @@ const {
   getSshGitProviderMock,
   tryDeleteWslUncPathMock,
   recordCrashBreadcrumbMock,
-  promoteLocalDownloadedFolderMock
+  promoteLocalDownloadedFolderMock,
+  getRemoteCommitFileUrlMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   showSaveDialogMock: vi.fn(),
@@ -89,7 +91,8 @@ const {
   getSshGitProviderMock: vi.fn(),
   tryDeleteWslUncPathMock: vi.fn(),
   recordCrashBreadcrumbMock: vi.fn(),
-  promoteLocalDownloadedFolderMock: vi.fn()
+  promoteLocalDownloadedFolderMock: vi.fn(),
+  getRemoteCommitFileUrlMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -178,6 +181,11 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 }))
+
+vi.mock('../git/repo', async (importOriginal) => {
+  const actual = await importOriginal<typeof GitRepoModule>()
+  return { ...actual, getRemoteCommitFileUrl: getRemoteCommitFileUrlMock }
+})
 
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   resolveCommitMessageSettings: resolveCommitMessageSettingsMock,
@@ -323,7 +331,8 @@ describe('registerFilesystemHandlers', () => {
       getSshFilesystemProviderMock,
       getSshGitProviderMock,
       tryDeleteWslUncPathMock,
-      promoteLocalDownloadedFolderMock
+      promoteLocalDownloadedFolderMock,
+      getRemoteCommitFileUrlMock
     ]) {
       mock.mockReset()
     }
@@ -2516,6 +2525,106 @@ describe('registerFilesystemHandlers', () => {
     expect(sshRemoteCommitUrlMock).not.toHaveBeenCalled()
   })
 
+  it('routes ssh git:remoteCommitFileUrl through the SSH owner host', async () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    const getRemoteCommitFileUrl = vi.fn().mockResolvedValue({
+      status: 'ok',
+      url: `https://github.com/org/repo/blob/${sha}/src/a.ts`
+    })
+    getSshGitProviderMock.mockReturnValue({ getRemoteCommitFileUrl })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:remoteCommitFileUrl')!(null, {
+        worktreePath: '/remote/repo',
+        relativePath: 'src\\a.ts',
+        sha,
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual({
+      status: 'ok',
+      url: `https://github.com/org/repo/blob/${sha}/src/a.ts`
+    })
+    expect(getRemoteCommitFileUrl).toHaveBeenCalledWith('/remote/repo', 'src/a.ts', sha)
+  })
+
+  it('routes local WSL commit file URLs through the owning distro', async () => {
+    await withPlatform('win32', async () => {
+      const sha = '0123456789abcdef0123456789abcdef01234567'
+      const result = {
+        status: 'ok' as const,
+        url: `https://gitlab.com/group/repo/-/blob/${sha}/src/a.ts`
+      }
+      getRemoteCommitFileUrlMock.mockReturnValue(result)
+      const wslStore = {
+        ...store,
+        getRepos: () => [
+          {
+            id: 'repo-1',
+            path: WORKTREE_FEATURE_PATH,
+            displayName: 'repo',
+            badgeColor: '#000',
+            addedAt: 0
+          }
+        ],
+        getProjects: () => [
+          {
+            id: 'project-1',
+            sourceRepoIds: ['repo-1'],
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+          }
+        ],
+        getSettings: () => ({
+          workspaceDir: WORKSPACE_DIR,
+          localWindowsRuntimeDefault: { kind: 'windows-host' }
+        })
+      }
+
+      registerFilesystemHandlers(wslStore as never)
+
+      await expect(
+        handlers.get('git:remoteCommitFileUrl')!(null, {
+          worktreePath: WORKTREE_FEATURE_PATH,
+          relativePath: 'src/a.ts',
+          sha
+        })
+      ).resolves.toEqual(result)
+      expect(getRemoteCommitFileUrlMock).toHaveBeenCalledWith(
+        WORKTREE_FEATURE_PATH,
+        'src/a.ts',
+        sha,
+        { wslDistro: 'Ubuntu' }
+      )
+    })
+  })
+
+  it.each([
+    {
+      label: 'short object id',
+      relativePath: 'src/a.ts',
+      sha: 'abc123'
+    },
+    {
+      label: 'path traversal',
+      relativePath: '../secret.ts',
+      sha: '0123456789abcdef0123456789abcdef01234567'
+    }
+  ])('rejects commit file URL $label before SSH dispatch', async ({ relativePath, sha }) => {
+    const getRemoteCommitFileUrl = vi.fn()
+    getSshGitProviderMock.mockReturnValue({ getRemoteCommitFileUrl })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:remoteCommitFileUrl')!(null, {
+        worktreePath: '/remote/repo',
+        relativePath,
+        sha,
+        connectionId: 'conn-1'
+      })
+    ).rejects.toThrow()
+    expect(getRemoteCommitFileUrl).not.toHaveBeenCalled()
+  })
   it('routes ssh git:bulkDiscard through the SSH provider', async () => {
     const sshBulkDiscardMock = vi.fn().mockResolvedValue(undefined)
     getSshGitProviderMock.mockReturnValue({ bulkDiscardChanges: sshBulkDiscardMock })

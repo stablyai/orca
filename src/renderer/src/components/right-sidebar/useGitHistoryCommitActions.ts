@@ -18,6 +18,7 @@ import {
   type SourceControlRowOpenEvent
 } from './source-control-split-open'
 import type { GitHistoryCommitAction } from './GitHistoryCommitContextMenu'
+import { useGitHistoryCommitFileActions } from './useGitHistoryCommitFileActions'
 
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
@@ -30,10 +31,8 @@ type GitHistoryCommitActions = {
     event?: SourceControlRowOpenEvent
   ) => void
   handleCommitAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
-}
+} & ReturnType<typeof useGitHistoryCommitFileActions>
 
-// Commit-history panel actions (expand/load files, open diffs, context-menu
-// actions). Extracted from SourceControl to keep that component from growing.
 export function useGitHistoryCommitActions({
   activeWorktreeId,
   worktreePath,
@@ -184,6 +183,15 @@ export function useGitHistoryCommitActions({
     }
   }, [])
 
+  const commitFileActions = useGitHistoryCommitFileActions({
+    activeWorktreeId,
+    worktreePath,
+    activeRepoSettings,
+    createBrowserTab,
+    openCommitFile,
+    copyCommitText
+  })
+
   const handleCommitAction = useCallback(
     (action: GitHistoryCommitAction, item: GitHistoryItem): void => {
       if (action === 'open-remote') {
@@ -282,5 +290,11 @@ export function useGitHistoryCommitActions({
     [activeRepoSettings, activeWorktreeId, copyCommitText, createBrowserTab, worktreePath]
   )
 
-  return { loadCommitFiles, openHistoryCommitDiff, openCommitFile, handleCommitAction }
+  return {
+    loadCommitFiles,
+    openHistoryCommitDiff,
+    openCommitFile,
+    handleCommitAction,
+    ...commitFileActions
+  }
 }

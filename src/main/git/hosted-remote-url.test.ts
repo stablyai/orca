@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildHostedRemoteCommitUrl,
+  buildHostedRemoteCommitFileUrl,
   buildHostedRemoteFileUrl,
   parseHostedRemote
 } from './hosted-remote-url'
@@ -87,6 +88,28 @@ describe('hosted remote URLs', () => {
     expect(buildHostedRemoteCommitUrl('git@bitbucket.org:team/repo.git', sha)).toBe(
       `https://bitbucket.org/team/repo/commits/${sha}`
     )
+  })
+
+  it('builds snapshot file URLs per provider without line fragments', () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    expect(
+      buildHostedRemoteCommitFileUrl('git@github.com:Org/Repo.git', 'src/a file.ts', sha)
+    ).toBe(`https://github.com/Org/Repo/blob/${sha}/src/a%20file.ts`)
+    expect(
+      buildHostedRemoteCommitFileUrl('https://gitlab.com/group/sub/repo.git', 'src/a file.ts', sha)
+    ).toBe(`https://gitlab.com/group/sub/repo/-/blob/${sha}/src/a%20file.ts`)
+    expect(
+      buildHostedRemoteCommitFileUrl('git@bitbucket.org:team/repo.git', 'src/a file.ts', sha)
+    ).toBe(`https://bitbucket.org/team/repo/src/${sha}/src/a%20file.ts`)
+  })
+
+  it('returns null for unsupported commit file remotes or empty inputs', () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    expect(
+      buildHostedRemoteCommitFileUrl('git@example.com:team/repo.git', 'src/a.ts', sha)
+    ).toBeNull()
+    expect(buildHostedRemoteCommitFileUrl('git@github.com:Org/Repo.git', '', sha)).toBeNull()
+    expect(buildHostedRemoteCommitFileUrl('git@github.com:Org/Repo.git', 'src/a.ts', '')).toBeNull()
   })
 
   it('returns null for unsupported commit remotes or missing sha', () => {

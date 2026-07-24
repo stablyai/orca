@@ -2820,7 +2820,7 @@ describe('web git preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
-  it('routes remote commit URL requests through the runtime git API', async () => {
+  it('routes commit and commit-file URL requests through the runtime git API', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const worktree = {
       id: 'wt-1',
@@ -2864,6 +2864,17 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+          if (method === 'git.remoteCommitFileUrl') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: {
+                status: 'ok',
+                url: `https://git.example.com/project/blob/${TEST_COMMIT_OID}/src/a.ts`
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
           if (method === 'git.remoteCommitUrl') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -2890,6 +2901,17 @@ describe('web git preload API', () => {
     installWebPreloadApi()
 
     await expect(
+      globals.window.api.git.remoteCommitFileUrl({
+        worktreePath: '/workspace/repo',
+        relativePath: 'src/a.ts',
+        sha: TEST_COMMIT_OID
+      })
+    ).resolves.toEqual({
+      status: 'ok',
+      url: `https://git.example.com/project/blob/${TEST_COMMIT_OID}/src/a.ts`
+    })
+
+    await expect(
       globals.window.api.git.remoteCommitUrl({
         worktreePath: '/workspace/repo',
         sha: TEST_COMMIT_OID
@@ -2898,6 +2920,14 @@ describe('web git preload API', () => {
     expect(runtimeCalls).toEqual([
       { method: 'repo.list', params: undefined },
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
+      {
+        method: 'git.remoteCommitFileUrl',
+        params: {
+          worktree: 'id:wt-1',
+          relativePath: 'src/a.ts',
+          sha: TEST_COMMIT_OID
+        }
+      },
       { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } }
     ])
   })

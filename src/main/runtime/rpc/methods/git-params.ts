@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeRuntimeRelativePath } from '../../runtime-relative-paths'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -250,12 +251,36 @@ export const GitCheckout = WorktreeSelector.extend({
     )
 })
 
+const GitRelativePath = z
+  .unknown()
+  .transform((value) => (typeof value === 'string' ? value : ''))
+  .pipe(z.string().min(1, 'Missing relative path'))
+  .transform((value, context) => {
+    try {
+      return normalizeRuntimeRelativePath(value)
+    } catch {
+      context.addIssue({
+        code: 'custom',
+        message: 'Expected a Git-relative path'
+      })
+      return z.NEVER
+    }
+  })
+
 export const GitRemoteFileUrl = WorktreeSelector.extend({
   relativePath: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing relative path')),
   line: z.number().int().min(1)
+})
+
+export const GitRemoteCommitFileUrl = WorktreeSelector.extend({
+  relativePath: GitRelativePath,
+  sha: z
+    .unknown()
+    .transform((value) => (typeof value === 'string' ? value : ''))
+    .pipe(FullGitObjectId)
 })
 
 export const GitRemoteCommitUrl = WorktreeSelector.extend({

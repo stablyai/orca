@@ -94,6 +94,9 @@ import {
   compactSourceControlTree,
   flattenSourceControlTree,
   namespaceSourceControlTreeDirectoryKeys,
+  SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX,
+  SOURCE_CONTROL_TREE_FILE_PADDING_PX,
+  SOURCE_CONTROL_TREE_INDENT_PX,
   type SourceControlTreeNode
 } from './source-control-tree'
 import {
@@ -530,9 +533,6 @@ export const BRANCH_REFRESH_INTERVAL_MS = 30_000
 // Why: keep the overlay measurable so Radix Tooltip triggers don't get transient top-left placement on hover.
 const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
   'absolute right-0 top-0 bottom-0 flex shrink-0 items-center gap-1.5 bg-accent pr-3 pl-2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
-const SOURCE_CONTROL_TREE_INDENT_PX = 12
-const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
-const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 const CAPPED_STATUS_RETRY_TIMEOUT_MS = 15_000
 const SOURCE_CONTROL_QUIESCE_CONCURRENCY = 8
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
@@ -1045,6 +1045,10 @@ function SourceControlInner(): React.JSX.Element {
     settings?.sourceControlViewMode
   )
   const sourceControlViewMode = persistedSourceControlViewMode
+  // Commit files persist separately so the upper changes-layout control cannot alter them.
+  const sourceControlCommitViewMode = normalizeSourceControlViewMode(
+    settings?.sourceControlCommitViewMode
+  )
   const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
@@ -4470,6 +4474,16 @@ function SourceControlInner(): React.JSX.Element {
     })
   }, [settings, sourceControlViewMode, updateSettings])
 
+  const handleCommitFilesViewModeChange = useCallback(
+    (viewMode: SourceControlViewMode): void => {
+      if (!settings) {
+        return
+      }
+      updateSettings({ sourceControlCommitViewMode: viewMode })
+    },
+    [settings, updateSettings]
+  )
+
   // Clear selection on worktree or tab change
   useEffect(() => {
     clearSelection()
@@ -5058,13 +5072,18 @@ function SourceControlInner(): React.JSX.Element {
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
   )
 
-  const { loadCommitFiles, openHistoryCommitDiff, openCommitFile, handleCommitAction } =
-    useGitHistoryCommitActions({
-      activeWorktreeId,
-      worktreePath,
-      activeRepoSettings,
-      resolveSplitTargetGroupId
-    })
+  const {
+    loadCommitFiles,
+    openHistoryCommitDiff,
+    openCommitFile,
+    handleCommitAction,
+    handleCommitFileAction
+  } = useGitHistoryCommitActions({
+    activeWorktreeId,
+    worktreePath,
+    activeRepoSettings,
+    resolveSplitTargetGroupId
+  })
 
   // Why: route the note by relative filePath to whichever diff surface owns it — unstaged, then branch compare, else a plain editor tab.
   const handleOpenComment = useCallback(
@@ -6168,11 +6187,14 @@ function SourceControlInner(): React.JSX.Element {
                 state={gitHistoryState}
                 collapsed={collapsedSections.has('history')}
                 onToggle={() => toggleSection('history')}
-                onRefresh={() => void refreshGitHistory()}
+                commitFilesViewMode={sourceControlCommitViewMode}
+                onCommitFilesViewModeChange={settings ? handleCommitFilesViewModeChange : undefined}
+                onRefresh={refreshGitHistory}
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
                 onLoadCommitFiles={loadCommitFiles}
                 onOpenCommitFile={openCommitFile}
                 onCommitAction={handleCommitAction}
+                onCommitFileAction={handleCommitFileAction}
               />
             </div>
           )}
@@ -7604,7 +7626,10 @@ function SourceControlTreeDirectoryRow({
         aria-expanded={!isCollapsed}
       >
         <ChevronDown
-          className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
+          className={cn(
+            'size-3 shrink-0 transition-transform motion-reduce:transition-none',
+            isCollapsed && '-rotate-90'
+          )}
         />
         {isCollapsed ? (
           <Folder className="size-3 shrink-0" />
@@ -7696,7 +7721,10 @@ function SourceControlBranchTreeDirectoryRow({
         aria-expanded={!isCollapsed}
       >
         <ChevronDown
-          className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
+          className={cn(
+            'size-3 shrink-0 transition-transform motion-reduce:transition-none',
+            isCollapsed && '-rotate-90'
+          )}
         />
         {isCollapsed ? (
           <Folder className="size-3 shrink-0" />

@@ -279,6 +279,9 @@ describe('git RPC methods', () => {
       abortRuntimeGitRebase: vi.fn().mockResolvedValue({ ok: true }),
       pushRuntimeGit: vi.fn().mockResolvedValue({ ok: true }),
       getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3'),
+      getRuntimeGitRemoteCommitFileUrl: vi
+        .fn()
+        .mockResolvedValue({ status: 'ok', url: 'https://example.com/blob/abc/src/a.ts' }),
       getRuntimeGitRemoteCommitUrl: vi.fn().mockResolvedValue('https://example.com/commit/abc')
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
@@ -314,6 +317,13 @@ describe('git RPC methods', () => {
         line: 3
       })
     )
+    const commitFileUrlResponse = await dispatcher.dispatch(
+      makeRequest('git.remoteCommitFileUrl', {
+        worktree: 'id:wt-1',
+        relativePath: 'src/a.ts',
+        sha: commitOid
+      })
+    )
     const commitUrlResponse = await dispatcher.dispatch(
       makeRequest('git.remoteCommitUrl', {
         worktree: 'id:wt-1',
@@ -336,6 +346,15 @@ describe('git RPC methods', () => {
       undefined
     )
     expect(response).toMatchObject({ ok: true, result: 'https://example.com/file#L3' })
+    expect(runtime.getRuntimeGitRemoteCommitFileUrl).toHaveBeenCalledWith(
+      'id:wt-1',
+      'src/a.ts',
+      commitOid
+    )
+    expect(commitFileUrlResponse).toMatchObject({
+      ok: true,
+      result: { status: 'ok', url: 'https://example.com/blob/abc/src/a.ts' }
+    })
     expect(runtime.getRuntimeGitRemoteCommitUrl).toHaveBeenCalledWith('id:wt-1', commitOid)
     expect(commitUrlResponse).toMatchObject({ ok: true, result: 'https://example.com/commit/abc' })
   })
@@ -356,6 +375,36 @@ describe('git RPC methods', () => {
 
     expect(response.ok).toBe(false)
     expect(runtime.getRuntimeGitRemoteCommitUrl).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      label: 'short object id',
+      relativePath: 'src/a.ts',
+      sha: 'abc123'
+    },
+    {
+      label: 'path traversal',
+      relativePath: '../secret.ts',
+      sha: '0123456789abcdef0123456789abcdef01234567'
+    }
+  ])('rejects remote commit file URL requests with $label', async ({ relativePath, sha }) => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitRemoteCommitFileUrl: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.remoteCommitFileUrl', {
+        worktree: 'id:wt-1',
+        relativePath,
+        sha
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(runtime.getRuntimeGitRemoteCommitFileUrl).not.toHaveBeenCalled()
   })
 
   it('forwards force-with-lease push mode to the runtime', async () => {

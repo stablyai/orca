@@ -1436,4 +1436,47 @@ describe('SshGitProvider', () => {
   it('isGitRepo always returns true for remote paths', () => {
     expect(provider.isGitRepo('/any/path')).toBe(true)
   })
+  it('builds a commit file URL from origin on the SSH owner host', async () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    mux.request.mockImplementation((_method: string, params: { args: string[] }) =>
+      Promise.resolve({
+        stdout:
+          params.args[0] === 'remote'
+            ? 'git@gitlab.com:group/repo.git\n'
+            : 'refs/remotes/origin/main\n',
+        stderr: ''
+      })
+    )
+
+    await expect(
+      provider.getRemoteCommitFileUrl('/home/user/repo', 'src/a file.ts', sha)
+    ).resolves.toEqual({
+      status: 'ok',
+      url: `https://gitlab.com/group/repo/-/blob/${sha}/src/a%20file.ts`
+    })
+    expect(mux.request).toHaveBeenCalledWith('git.exec', {
+      args: ['remote', 'get-url', 'origin'],
+      cwd: '/home/user/repo',
+      __streamResponse: true
+    })
+    expect(mux.request).toHaveBeenCalledWith('git.exec', {
+      args: ['for-each-ref', '--format=%(refname)', '--contains', sha, 'refs/remotes/origin'],
+      cwd: '/home/user/repo',
+      __streamResponse: true
+    })
+  })
+
+  it('reports commit-not-on-remote when no origin ref contains the commit', async () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    mux.request.mockImplementation((_method: string, params: { args: string[] }) =>
+      Promise.resolve({
+        stdout: params.args[0] === 'remote' ? 'git@gitlab.com:group/repo.git\n' : '',
+        stderr: ''
+      })
+    )
+
+    await expect(
+      provider.getRemoteCommitFileUrl('/home/user/repo', 'src/a.ts', sha)
+    ).resolves.toEqual({ status: 'commit-not-on-remote' })
+  })
 })

@@ -9568,7 +9568,11 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
             "e5e81e59a6": "Resize commits",
-            "6d1e0a7c3b": "Failed to load commit files"
+            "6d1e0a7c3b": "Failed to load commit files",
+            "5e4f2a9c81": "More commit history actions"
+          },
+          "GitHistoryRefreshError": {
+            "retry": "Retry"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Close",
@@ -9855,10 +9859,13 @@
             "bf5082de46": "{{value0}} copied",
             "c06193ef57": "Failed to copy {{value0}}",
             "d172a4f068": "Commit hash",
+            "4e27a9bc16": "Relative path",
             "e283b50179": "Commit message",
             "f394c6128a": "No agent available to explain this commit",
             "04a5d7239b": "This repository has no supported web remote",
             "15b6e834ac": "Failed to open commit in browser",
+            "5f38bacd27": "Failed to open file in browser",
+            "56be207fbb": "No remotes found that contain this commit",
             "d37e68f61d": "Preparing branch for review…",
             "8d8f5c6c94": "Generating commit message…",
             "fda060d6ce": "Review the commit message, then retry Create PR.",
@@ -10614,6 +10621,12 @@
             "a1b2c3d4e5": "Loading files…",
             "b2c3d4e5f6": "No file changes in this commit",
             "c3d4e5f6a7": "Open all changes together"
+          },
+          "GitHistoryCommitFileContextMenu": {
+            "d4a67b210f": "Open Diff",
+            "e5b78c3210": "Open in Browser",
+            "f6c89d4321": "Copy Relative Path",
+            "a7d90e5432": "Copy Commit Hash"
           },
           "GitHistoryRow": {
             "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}",

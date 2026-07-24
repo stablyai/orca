@@ -2,17 +2,21 @@
 import { existsSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
-import type { BaseRefSearchResult } from '../../shared/types'
+import type { BaseRefSearchResult, GitRemoteCommitFileUrlResult } from '../../shared/types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
 import { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
-import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
+import {
+  buildHostedRemoteCommitFileUrl,
+  buildHostedRemoteCommitUrl,
+  buildHostedRemoteFileUrl
+} from './hosted-remote-url'
 import { getLocalGitCapabilityCache } from './git-capability-state'
 import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 
-type LocalGitExecOptions = {
+export type LocalGitExecOptions = {
   wslDistro?: string
 }
 
@@ -429,18 +433,16 @@ export function getRepoName(path: string): string {
 }
 
 /** Get the remote origin URL, or null if not set. */
-export function getRemoteUrl(path: string): string | null {
+export function getRemoteUrl(path: string, options: LocalGitExecOptions = {}): string | null {
   try {
-    return getRemoteUrlByName(path, 'origin')
+    return getRemoteUrlByName(path, 'origin', options)
   } catch {
     return null
   }
 }
 
-function getRemoteUrlByName(path: string, remote: string): string {
-  return gitExecFileSync(['remote', 'get-url', remote], {
-    cwd: path
-  }).trim()
+function getRemoteUrlByName(path: string, remote: string, options: LocalGitExecOptions): string {
+  return gitExecFileSync(['remote', 'get-url', remote], gitExecOptions(path, options)).trim()
 }
 
 function hasGitRef(path: string, ref: string): boolean {
@@ -1015,6 +1017,37 @@ export function getRemoteFileUrl(
   const defaultBranch = defaultBaseRef.replace(/^origin\//, '')
 
   return buildHostedRemoteFileUrl(remoteUrl, relativePath, defaultBranch, line)
+}
+
+/** Build a hosted URL for a file at an immutable commit snapshot. */
+export function getRemoteCommitFileUrl(
+  repoPath: string,
+  relativePath: string,
+  sha: string,
+  options: LocalGitExecOptions = {}
+): GitRemoteCommitFileUrlResult {
+  const remoteUrl = getRemoteUrl(repoPath, options)
+  if (!remoteUrl) {
+    return { status: 'no-remote' }
+  }
+  const url = buildHostedRemoteCommitFileUrl(remoteUrl, relativePath, sha)
+  if (!url) {
+    return { status: 'no-remote' }
+  }
+  // Why: a hosted URL 404s while the commit is unpushed. A failed probe keeps
+  // the legacy behavior of handing the URL to the browser.
+  try {
+    const containingRefs = gitExecFileSync(
+      ['for-each-ref', '--format=%(refname)', '--contains', sha, 'refs/remotes/origin'],
+      gitExecOptions(repoPath, options)
+    )
+    if (!containingRefs.trim()) {
+      return { status: 'commit-not-on-remote' }
+    }
+  } catch {
+    // Probe failed; fall through to the resolved URL.
+  }
+  return { status: 'ok', url }
 }
 
 /** Build a hosted URL (GitHub/GitLab/Bitbucket) for a commit; null when origin isn't a recognized host. */

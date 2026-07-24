@@ -2750,6 +2750,8 @@ export type GlobalSettings = {
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
+  /** Preferred Source Control commit-files layout. Per-user, not per-workspace. */
+  sourceControlCommitViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */
   sourceControlGroupOrder: SourceControlGroupOrder
   /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */
@@ -3549,6 +3551,24 @@ export type GitCommitCompareResult = {
   summary: GitCommitCompareSummary
   entries: GitBranchChangeEntry[]
 }
+
+/**
+ * Outcome of resolving a hosted web URL for a file at an immutable commit.
+ * 'commit-not-on-remote' means the commit is not reachable from any
+ * remote-tracking branch of the remote the URL would point at (i.e. unpushed),
+ * so the hosted URL would 404.
+ */
+export type GitRemoteCommitFileUrlResult =
+  | { status: 'ok'; url: string }
+  | { status: 'no-remote' }
+  | { status: 'commit-not-on-remote' }
+
+/** Signature of the provider/runtime boundary that resolves the URL. */
+export type GitRemoteCommitFileUrlResolver = (
+  path: string,
+  relativePath: string,
+  sha: string
+) => Promise<GitRemoteCommitFileUrlResult>
 
 export type GitDiffTextResult = {
   kind: 'text'

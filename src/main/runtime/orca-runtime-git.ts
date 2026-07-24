@@ -7,6 +7,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
+  GitRemoteCommitFileUrlResult,
   GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus,
@@ -25,7 +26,7 @@ import {
 } from '../../shared/source-control-ai'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import type { GitProviderStatusOptions } from '../providers/types'
-import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
+import { getRemoteCommitFileUrl, getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
   abortMerge,
   abortRebase,
@@ -931,6 +932,28 @@ export class RuntimeGitCommands {
       return provider.getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
     }
     return getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
+  }
+
+  async getRuntimeGitRemoteCommitFileUrl(
+    worktreeSelector: string,
+    relativePath: string,
+    sha: string
+  ): Promise<GitRemoteCommitFileUrlResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const normalizedRelativePath = normalizeRuntimeGitRelativePath(relativePath)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.getRemoteCommitFileUrl(target.worktree.path, normalizedRelativePath, sha)
+    }
+    return getRemoteCommitFileUrl(
+      target.worktree.path,
+      normalizedRelativePath,
+      sha,
+      localGitOptionsForTarget(target)
+    )
   }
 
   async getRuntimeGitRemoteCommitUrl(

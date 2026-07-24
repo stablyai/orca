@@ -127,6 +127,33 @@ export function buildHostedRemoteFileUrl(
   return `${baseUrl}/src/${encodedBranch}${filePathSuffix}${encodeBitbucketFileLineFragment(relativePath, line)}`
 }
 
+// Why: snapshot actions must never reuse the default-branch line-link contract.
+export function buildHostedRemoteCommitFileUrl(
+  remoteUrl: string,
+  relativePath: string,
+  sha: string
+): string | null {
+  const normalizedSha = sha.trim()
+  const encodedFilePath = encodeRelativePath(relativePath)
+  if (!normalizedSha || !encodedFilePath) {
+    return null
+  }
+  const remote = parseHostedRemote(remoteUrl)
+  if (!remote) {
+    return null
+  }
+
+  const baseUrl = `https://${remote.host}/${encodeRemotePath(remote.path)}`
+  const encodedSha = encodeURIComponent(normalizedSha)
+  if (remote.provider === 'github') {
+    return `${baseUrl}/blob/${encodedSha}/${encodedFilePath}`
+  }
+  if (remote.provider === 'gitlab') {
+    return `${baseUrl}/-/blob/${encodedSha}/${encodedFilePath}`
+  }
+  return `${baseUrl}/src/${encodedSha}/${encodedFilePath}`
+}
+
 export function buildHostedRemoteCommitUrl(remoteUrl: string, sha: string): string | null {
   const normalizedSha = sha.trim()
   if (!normalizedSha) {

@@ -19,8 +19,9 @@
  */
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
-import { waitForSessionReady } from './helpers/store'
+import { getBrowserTabs, waitForSessionReady } from './helpers/store'
 import {
+  commitLargeFileCountFollowUpChange,
   createLargeFileCountRepo,
   removeLargeFileCountRepo,
   removeLargeFileCountUntrackedTree
@@ -38,6 +39,7 @@ const MAX_HEAP_GROWTH_PER_CYCLE_MB = 75
 // bound means the panel is mounting rows proportional to the change set again.
 const MAX_MOUNTED_ROWS = 200
 const MAX_CAPPED_STATUS_PAYLOAD_BYTES = 200_000
+const MAX_MOUNTED_HISTORY_ROWS = 100
 
 type LoadMeasurement = {
   entryCount: number
@@ -530,6 +532,223 @@ test.describe('Source Control large file count (#8013)', () => {
 
       expect(measurement.entryCount).toBe(0)
       expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
+    } finally {
+      await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
+    }
+  })
+  test('a 5,000-file root commit stays bounded and supports snapshot actions', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    test.setTimeout(600_000)
+    const trackedFiles = Number(process.env.ORCA_GIT_HISTORY_COMMIT_FILE_COUNT ?? '5000')
+    const fixture = createLargeFileCountRepo({
+      trackedFiles,
+      originUrl: 'git@github.com:orca-e2e/large-history-fixture.git'
+    })
+    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
+    try {
+      await waitForSessionReady(orcaPage)
+      // Why: the fake github.com origin would trigger real hosted-review lookups;
+      // stub the fetch so the console-error assertion stays meaningful.
+      await orcaPage.evaluate(() => {
+        window.__store?.setState({ fetchHostedReviewForBranch: async () => null })
+      })
+      const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+
+      const historyMenu = orcaPage.getByRole('button', { name: 'More commit history actions' })
+      await expect(historyMenu).toBeVisible({ timeout: 30_000 })
+      await historyMenu.click()
+      const viewAsList = orcaPage.getByRole('menuitem', { name: 'View as list' })
+      await ((await viewAsList.count()) > 0
+        ? viewAsList.click()
+        : orcaPage.keyboard.press('Escape'))
+
+      const commitRows = orcaPage.locator('button[data-testid="git-history-row"]')
+      if ((await commitRows.count()) === 0) {
+        await orcaPage.getByRole('button', { name: /^Commits(?:\s+\d+\+?)?$/ }).click()
+      }
+      const rootCommit = commitRows.last()
+      await expect(rootCommit).toBeVisible({ timeout: 30_000 })
+      const commitSha = await rootCommit.getAttribute('data-commit-id')
+      if (!commitSha) {
+        throw new Error('Root commit row is missing its full object id')
+      }
+      await rootCommit.click()
+
+      const mountedFiles = orcaPage.locator('button[data-testid="git-history-commit-file"]')
+      await expect(mountedFiles.first()).toBeVisible({ timeout: 60_000 })
+      const historyVirtualList = mountedFiles
+        .first()
+        .locator('xpath=ancestor::div[@data-testid="source-control-virtual-list"]')
+      await expect(historyVirtualList).toHaveCount(1)
+      expect(await mountedFiles.count()).toBeLessThan(MAX_MOUNTED_HISTORY_ROWS)
+
+      const firstPath = await mountedFiles.first().getAttribute('data-file-path')
+      if (!firstPath) {
+        throw new Error('First virtualized commit file is missing its relative path')
+      }
+      const deepIndex = trackedFiles - 1
+      const deepPath = `src/dir-${String(Math.floor(deepIndex / 100)).padStart(4, '0')}/file-${String(deepIndex).padStart(6, '0')}.ts`
+
+      const scrollShape = await historyVirtualList.evaluate((list) => {
+        const scroller = list.parentElement
+        if (!scroller) {
+          throw new Error('History virtual list is missing its shared scroller')
+        }
+        const nestedScrollers = Array.from(list.querySelectorAll<HTMLElement>('*')).filter(
+          (element) => {
+            const overflowY = getComputedStyle(element).overflowY
+            return (
+              (overflowY === 'auto' || overflowY === 'scroll') &&
+              element.scrollHeight > element.clientHeight
+            )
+          }
+        ).length
+        scroller.scrollTop = scroller.scrollHeight
+        scroller.dispatchEvent(new Event('scroll'))
+        return {
+          nestedScrollers,
+          virtualHeight: Number.parseFloat((list as HTMLElement).style.height)
+        }
+      })
+
+      expect(scrollShape.nestedScrollers).toBe(0)
+      expect(scrollShape.virtualHeight).toBeGreaterThan(trackedFiles * 10)
+      const deepFile = orcaPage.locator(
+        `button[data-testid="git-history-commit-file"][data-file-path="${deepPath}"]`
+      )
+      await expect(deepFile).toBeVisible({ timeout: 30_000 })
+      await expect(
+        orcaPage.locator(
+          `button[data-testid="git-history-commit-file"][data-file-path="${firstPath}"]`
+        )
+      ).toHaveCount(0)
+      expect(await mountedFiles.count()).toBeLessThan(MAX_MOUNTED_HISTORY_ROWS)
+
+      const rendererErrors: string[] = []
+      const onPageError = (error: Error): void => {
+        rendererErrors.push(error.message)
+      }
+      const onConsole = (message: { type: () => string; text: () => string }): void => {
+        if (message.type() === 'error') {
+          rendererErrors.push(message.text())
+        }
+      }
+      orcaPage.on('pageerror', onPageError)
+      orcaPage.on('console', onConsole)
+      try {
+        await deepFile.focus()
+        const pathTooltip = orcaPage.getByRole('tooltip').filter({ hasText: deepPath }).last()
+        await expect(pathTooltip).toBeVisible({ timeout: 3_000 })
+        await expect
+          .poll(
+            () =>
+              deepFile.evaluate((element) => {
+                const describedBy = element.getAttribute('aria-describedby')?.split(/\s+/) ?? []
+                return describedBy.some((id) => {
+                  const description = document.getElementById(id)
+                  return (
+                    description?.getAttribute('role') === 'tooltip' &&
+                    description.offsetParent !== null
+                  )
+                })
+              }),
+            { timeout: 3_000 }
+          )
+          .toBe(true)
+        await orcaPage.mouse.move(1, 1)
+        await deepFile.evaluate((element) => (element as HTMLElement).blur())
+        await expect(pathTooltip).toBeHidden({ timeout: 3_000 })
+        await deepFile.hover()
+        await expect(pathTooltip).toBeVisible({ timeout: 3_000 })
+        await orcaPage.mouse.move(1, 1)
+        await expect(pathTooltip).toBeHidden({ timeout: 3_000 })
+
+        await deepFile.click({ button: 'right' })
+        const contextMenu = orcaPage.getByRole('menu').last()
+        await expect(contextMenu).toBeVisible()
+        await expect(contextMenu.getByRole('menuitem', { name: 'Open Diff' })).toBeVisible()
+        await expect(contextMenu.getByRole('menuitem', { name: 'Open in Browser' })).toBeVisible()
+        await expect(
+          contextMenu.getByRole('menuitem', { name: 'Copy Relative Path' })
+        ).toBeVisible()
+        await expect(contextMenu.getByRole('menuitem', { name: 'Copy Commit Hash' })).toBeVisible()
+        await orcaPage.keyboard.press('Escape')
+        await expect(contextMenu).toBeHidden()
+
+        await deepFile.click({ button: 'right' })
+        await orcaPage.getByRole('menuitem', { name: 'Open Diff' }).click()
+        await expect
+          .poll(
+            () =>
+              orcaPage.evaluate(
+                ({ targetWorktreeId, targetPath }) =>
+                  Boolean(
+                    window.__store
+                      ?.getState()
+                      .openFiles.find(
+                        (file) =>
+                          file.worktreeId === targetWorktreeId &&
+                          file.relativePath === targetPath &&
+                          file.isPreview !== true
+                      )
+                  ),
+                { targetWorktreeId: worktreeId, targetPath: deepPath }
+              ),
+            { timeout: 10_000 }
+          )
+          .toBe(true)
+
+        await deepFile.click({ button: 'right' })
+        await orcaPage.getByRole('menuitem', { name: 'Copy Relative Path' }).click()
+        await expect
+          .poll(() => orcaPage.evaluate(() => window.api.ui.readClipboardText()), {
+            timeout: 5_000
+          })
+          .toBe(deepPath)
+
+        await deepFile.click({ button: 'right' })
+        await orcaPage.getByRole('menuitem', { name: 'Open in Browser' }).press('Enter')
+        const expectedHostedUrl = `https://github.com/orca-e2e/large-history-fixture/blob/${commitSha}/${deepPath}`
+        await expect
+          .poll(
+            async () =>
+              (await getBrowserTabs(orcaPage, worktreeId)).some(
+                (tab) => tab.url === expectedHostedUrl
+              ),
+            { timeout: 10_000 }
+          )
+          .toBe(true)
+
+        // An unpushed commit 404s on the hosted remote, so the action surfaces
+        // a toast instead of opening a browser tab.
+        const followUpSha = commitLargeFileCountFollowUpChange(fixture.repoPath, deepPath)
+        await orcaPage.getByRole('button', { name: 'Refresh commits' }).click()
+        await expect
+          .poll(() => commitRows.first().getAttribute('data-commit-id'), { timeout: 30_000 })
+          .toBe(followUpSha)
+        // Collapse the root commit so its file row does not duplicate the follow-up one.
+        await commitRows.last().click()
+        await commitRows.first().click()
+        const followUpFile = orcaPage.locator(
+          `button[data-testid="git-history-commit-file"][data-file-path="${deepPath}"]`
+        )
+        await expect(followUpFile).toBeVisible({ timeout: 30_000 })
+        await followUpFile.click({ button: 'right' })
+        await orcaPage.getByRole('menuitem', { name: 'Open in Browser' }).click()
+        await expect(orcaPage.getByText('No remotes found that contain this commit')).toBeVisible({
+          timeout: 10_000
+        })
+        expect(
+          (await getBrowserTabs(orcaPage, worktreeId)).some((tab) => tab.url.includes(followUpSha))
+        ).toBe(false)
+
+        expect(rendererErrors).toEqual([])
+      } finally {
+        orcaPage.off('pageerror', onPageError)
+        orcaPage.off('console', onConsole)
+      }
     } finally {
       await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
     }

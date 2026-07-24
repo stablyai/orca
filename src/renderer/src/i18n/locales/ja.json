@@ -9545,7 +9545,11 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "エラー",
             "e5e81e59a6": "commits のサイズ変更",
-            "6d1e0a7c3b": "commit ファイルを読み込めませんでした"
+            "6d1e0a7c3b": "commit ファイルを読み込めませんでした",
+            "5e4f2a9c81": "その他のコミット履歴操作"
+          },
+          "GitHistoryRefreshError": {
+            "retry": "再試行"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "閉じる",
@@ -9832,10 +9836,13 @@
             "bf5082de46": "{{value0}}をコピーしました",
             "c06193ef57": "{{value0}}をコピーできませんでした",
             "d172a4f068": "Commit ハッシュ",
+            "4e27a9bc16": "相対パス",
             "e283b50179": "Commit メッセージ",
             "f394c6128a": "この commit を説明できる agent がありません",
             "04a5d7239b": "この repos には対応するWebリモートがありません",
             "15b6e834ac": "commit をブラウザーで開けませんでした",
+            "5f38bacd27": "ファイルをブラウザーで開けませんでした",
+            "56be207fbb": "この commit を含むリモートが見つかりません",
             "d37e68f61d": "レビュー用にブランチを準備中…",
             "8d8f5c6c94": "commit メッセージを生成中…",
             "fda060d6ce": "commit メッセージを確認してから、Create PR を再試行してください。",
@@ -10591,6 +10598,12 @@
             "a1b2c3d4e5": "ファイルを読み込み中…",
             "b2c3d4e5f6": "この commit にはファイルの変更がありません",
             "c3d4e5f6a7": "すべての変更をまとめて開く"
+          },
+          "GitHistoryCommitFileContextMenu": {
+            "d4a67b210f": "差分を開く",
+            "e5b78c3210": "ブラウザーで開く",
+            "f6c89d4321": "相対パスをコピー",
+            "a7d90e5432": "Commit ハッシュをコピー"
           },
           "GitHistoryRow": {
             "2f9c41ab07": "commit{{value0}}のファイルを表示: {{value1}}",

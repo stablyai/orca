@@ -9,6 +9,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
+  GitRemoteCommitFileUrlResult,
   GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus,
@@ -919,6 +920,31 @@ export async function getRuntimeGitRemoteFileUrl(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       relativePath: args.relativePath,
       line: args.line
+    },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitRemoteCommitFileUrl(
+  context: RuntimeGitContext,
+  args: { relativePath: string; sha: string }
+): Promise<GitRemoteCommitFileUrlResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.remoteCommitFileUrl({
+      worktreePath: resolveLocalWorktreePath(context),
+      relativePath: args.relativePath,
+      sha: args.sha,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitRemoteCommitFileUrlResult>(
+    target,
+    'git.remoteCommitFileUrl',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      relativePath: args.relativePath,
+      sha: args.sha
     },
     { timeoutMs: 15_000 }
   )

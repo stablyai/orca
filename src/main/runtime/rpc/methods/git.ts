@@ -20,6 +20,7 @@ import {
   GitHistory,
   GitPush,
   GitRebaseFromBase,
+  GitRemoteCommitFileUrl,
   GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitStatusParams,
@@ -360,6 +361,12 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+  }),
+  defineMethod({
+    name: 'git.remoteCommitFileUrl',
+    params: GitRemoteCommitFileUrl,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitRemoteCommitFileUrl(params.worktree, params.relativePath, params.sha)
   }),
   defineMethod({
     name: 'git.remoteCommitUrl',

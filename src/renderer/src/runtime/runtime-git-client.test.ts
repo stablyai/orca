@@ -11,6 +11,7 @@ import {
   getRuntimeGitDiff,
   getRuntimeGitHistory,
   getRuntimeGitIgnoredPaths,
+  getRuntimeGitRemoteCommitFileUrl,
   getRuntimeGitStatus,
   getRuntimeGitSubmoduleStatus,
   pushRuntimeGit,
@@ -37,6 +38,7 @@ const gitPush = vi.fn()
 const gitRebaseFromBase = vi.fn()
 const gitGenerateCommitMessage = vi.fn()
 const gitDiscoverCommitMessageModels = vi.fn()
+const gitRemoteCommitFileUrl = vi.fn()
 const gitCancelGenerateCommitMessage = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -60,6 +62,7 @@ beforeEach(() => {
   gitRebaseFromBase.mockReset()
   gitGenerateCommitMessage.mockReset()
   gitDiscoverCommitMessageModels.mockReset()
+  gitRemoteCommitFileUrl.mockReset()
   gitCancelGenerateCommitMessage.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
@@ -85,6 +88,7 @@ beforeEach(() => {
         rebaseFromBase: gitRebaseFromBase,
         generateCommitMessage: gitGenerateCommitMessage,
         discoverCommitMessageModels: gitDiscoverCommitMessageModels,
+        remoteCommitFileUrl: gitRemoteCommitFileUrl,
         cancelGenerateCommitMessage: gitCancelGenerateCommitMessage
       },
       runtime: { call: runtimeCall },
@@ -732,5 +736,70 @@ describe('runtime git client', () => {
       timeoutMs: 75_000
     })
     expect(gitDiscoverCommitMessageModels).not.toHaveBeenCalled()
+  })
+  it('resolves commit file URLs through local preload IPC', async () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    gitRemoteCommitFileUrl.mockResolvedValue({
+      status: 'ok',
+      url: 'https://github.com/org/repo/blob/sha/src/a.ts'
+    })
+
+    await expect(
+      getRuntimeGitRemoteCommitFileUrl(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          connectionId: 'ssh-1'
+        },
+        { relativePath: 'src/a.ts', sha }
+      )
+    ).resolves.toEqual({
+      status: 'ok',
+      url: 'https://github.com/org/repo/blob/sha/src/a.ts'
+    })
+
+    expect(gitRemoteCommitFileUrl).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      relativePath: 'src/a.ts',
+      sha,
+      connectionId: 'ssh-1'
+    })
+  })
+
+  it('resolves commit file URLs through the active runtime', async () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { status: 'ok', url: 'https://gitlab.com/group/repo/-/blob/sha/src/a.ts' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await expect(
+      getRuntimeGitRemoteCommitFileUrl(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo'
+        },
+        { relativePath: 'src/a.ts', sha }
+      )
+    ).resolves.toEqual({
+      status: 'ok',
+      url: 'https://gitlab.com/group/repo/-/blob/sha/src/a.ts'
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.remoteCommitFileUrl',
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'src/a.ts',
+        sha
+      },
+      timeoutMs: 15_000
+    })
+    expect(gitRemoteCommitFileUrl).not.toHaveBeenCalled()
   })
 })

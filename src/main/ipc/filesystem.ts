@@ -20,6 +20,7 @@ import type {
   GlobalSettings,
   GitStagingArea,
   GitPushTarget,
+  GitRemoteCommitFileUrlResult,
   GitUpstreamStatus,
   GitStatusResult,
   MarkdownDocument,
@@ -89,7 +90,7 @@ import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-messa
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { validateGitPushTarget } from '../git/push-target-validation'
-import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
+import { getRemoteCommitFileUrl, getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
@@ -101,6 +102,7 @@ import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
 import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
+import { normalizeRuntimeRelativePath } from '../runtime/runtime-relative-paths'
 import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
 import {
@@ -408,6 +410,17 @@ function validateFullGitObjectId(value: string, label: string): string {
     throw new Error(`${label} must be a full git object id`)
   }
   return value
+}
+
+function validateGitRelativeUrlPath(value: string): string {
+  if (value.includes('\0')) {
+    throw new Error('relativePath must be a Git-relative path')
+  }
+  const normalized = normalizeRuntimeRelativePath(value)
+  if (!normalized) {
+    throw new Error('relativePath must be a Git-relative path')
+  }
+  return normalized
 }
 
 /**
@@ -2164,6 +2177,37 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return getRemoteFileUrl(worktreePath, args.relativePath, args.line)
+    }
+  )
+
+  ipcMain.handle(
+    'git:remoteCommitFileUrl',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        relativePath: string
+        sha: string
+        connectionId?: string
+      }
+    ): Promise<GitRemoteCommitFileUrlResult> => {
+      const sha = validateFullGitObjectId(args.sha, 'sha')
+      const relativePath = validateGitRelativeUrlPath(args.relativePath)
+      // Why: origin belongs to the worktree owner host, not the Electron host.
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.getRemoteCommitFileUrl(args.worktreePath, relativePath, sha)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getRemoteCommitFileUrl(worktreePath, relativePath, sha, gitOptions)
     }
   )
 

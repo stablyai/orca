@@ -12,6 +12,8 @@ export type LargeFileCountRepoOptions = {
   modifiedFiles?: number
   /** Fan-out per directory; issue #8013 repos are wide trees, not one flat dir. */
   filesPerDirectory?: number
+  /** Optional origin used by hosted-link journeys. */
+  originUrl?: string
   /**
    * Minimum size of each untracked file. Untracked line stats read full file
    * contents (mtime-cached), so per-poll I/O cost only shows up when
@@ -106,6 +108,12 @@ export function createLargeFileCountRepo(
   )
   runGit(repoPath, ['add', '-A'])
   runGit(repoPath, ['commit', '-m', 'Initial large file count fixture', '--quiet'])
+  if (options.originUrl) {
+    runGit(repoPath, ['remote', 'add', 'origin', options.originUrl])
+    // Why: hosted-link journeys can't fetch the fake origin; mark the initial
+    // commit as the fetched remote tip so it counts as pushed.
+    runGit(repoPath, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+  }
 
   const untrackedFileBytes = options.untrackedFileBytes ?? 0
   const untrackedPadding =
@@ -134,4 +142,16 @@ export function createLargeFileCountRepo(
   }
 
   return { repoPath, trackedFiles, untrackedFiles, modifiedFiles }
+}
+
+/**
+ * Commits a follow-up change on top of the fixture history and returns its full
+ * object id. Hosted-link journeys use it to model an unpushed commit: origin's
+ * tracking ref stays on the initial commit, so the hosted URL would 404.
+ */
+export function commitLargeFileCountFollowUpChange(repoPath: string, relativePath: string): string {
+  writeFileSync(path.join(repoPath, relativePath), '// follow-up change\n', { flag: 'a' })
+  runGit(repoPath, ['add', relativePath])
+  runGit(repoPath, ['commit', '-m', 'Follow-up change', '--quiet'])
+  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoPath, encoding: 'utf8' }).trim()
 }

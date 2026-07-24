@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/types'
 import type * as GitStatusModule from '../git/status'
+import type * as GitRepoModule from '../git/repo'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type * as PullRequestContextModule from '../text-generation/pull-request-context'
 import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
@@ -19,7 +20,8 @@ const mocks = vi.hoisted(() => ({
   generatePullRequestFieldsFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
   resolveHostedReviewBodyForGeneration: vi.fn(),
-  getSshGitProvider: vi.fn()
+  getSshGitProvider: vi.fn(),
+  getRemoteCommitFileUrl: vi.fn()
 }))
 
 vi.mock('../git/status', async () => ({
@@ -27,6 +29,11 @@ vi.mock('../git/status', async () => ({
   abortMerge: mocks.abortMerge,
   abortRebase: mocks.abortRebase,
   getStagedCommitContext: mocks.getStagedCommitContext
+}))
+
+vi.mock('../git/repo', async () => ({
+  ...(await vi.importActual<typeof GitRepoModule>('../git/repo')),
+  getRemoteCommitFileUrl: mocks.getRemoteCommitFileUrl
 }))
 
 vi.mock('../git/checkout', () => ({
@@ -95,6 +102,7 @@ describe('RuntimeGitCommands', () => {
     mocks.resolveHostedReviewBodyForGeneration.mockImplementation(async ({ body }) => body)
     mocks.getSshGitProvider.mockReset()
     mocks.checkoutBranch.mockReset()
+    mocks.getRemoteCommitFileUrl.mockReset()
     mocks.listLocalBranches.mockReset()
   })
 
@@ -587,5 +595,59 @@ describe('RuntimeGitCommands', () => {
         cwd: worktreePath
       })
     )
+  })
+
+  it('resolves commit file URLs with the local worktree runtime options', async () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    mocks.getRemoteCommitFileUrl.mockResolvedValue({
+      status: 'ok',
+      url: 'https://github.com/org/repo/blob/sha/src/a.ts'
+    })
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('C:\\repo'),
+        localGitOptions: { wslDistro: 'Ubuntu' }
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await expect(
+      commands.getRuntimeGitRemoteCommitFileUrl('id:wt-1', 'src\\a.ts', sha)
+    ).resolves.toEqual({
+      status: 'ok',
+      url: 'https://github.com/org/repo/blob/sha/src/a.ts'
+    })
+
+    expect(mocks.getRemoteCommitFileUrl).toHaveBeenCalledWith('C:\\repo', 'src/a.ts', sha, {
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('resolves commit file URLs on the SSH owner host', async () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    const provider = {
+      getRemoteCommitFileUrl: vi.fn().mockResolvedValue({
+        status: 'ok',
+        url: 'https://gitlab.com/group/repo/-/blob/sha/src/a.ts'
+      })
+    }
+    mocks.getSshGitProvider.mockReturnValue(provider)
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('/remote/repo'),
+        connectionId: 'conn-1'
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await expect(
+      commands.getRuntimeGitRemoteCommitFileUrl('id:wt-1', 'src/a.ts', sha)
+    ).resolves.toEqual({
+      status: 'ok',
+      url: 'https://gitlab.com/group/repo/-/blob/sha/src/a.ts'
+    })
+
+    expect(provider.getRemoteCommitFileUrl).toHaveBeenCalledWith('/remote/repo', 'src/a.ts', sha)
+    expect(mocks.getRemoteCommitFileUrl).not.toHaveBeenCalled()
   })
 })
