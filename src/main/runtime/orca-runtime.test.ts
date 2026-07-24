@@ -38583,9 +38583,10 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
     ).toBe(BASE_TTL_MS)
   })
 
-  it('keeps a scratch repo scan cached past the base TTL while normal repos rescan', async () => {
-    // Why: the whole fix lives in the cache-stamp call site; pin the wiring so
-    // a revert to the flat TTL fails CI, not just the pure-function tests.
+  it('serves cached scans stale-while-revalidate and rescans only when the adaptive schedule is due', async () => {
+    // Why: cache lifetime is driven by the adaptive WorktreeScanSchedule (60s hot
+    // floor, exponential idle backoff, ±25% jitter), not the flat TTL; pin the
+    // call-site wiring so a revert to synchronous TTL rescans fails CI.
     vi.useFakeTimers()
     // Why: the shared listWorktrees stub keeps call history across this file's
     // tests; absolute counts need a clean baseline.
@@ -38613,13 +38614,19 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
       expect(scanCallsFor('/tmp/repo')).toBe(1)
       expect(scanCallsFor(scratchPath)).toBe(1)
 
+      // Inside the first scheduled interval (>=90s even with full downward
+      // jitter for an idle repo): serve the cache, no rescan for either repo.
       vi.advanceTimersByTime(BASE_TTL_MS + 1_000)
       await internals.listResolvedWorktrees()
-      expect(scanCallsFor('/tmp/repo')).toBe(2)
+      expect(scanCallsFor('/tmp/repo')).toBe(1)
       expect(scanCallsFor(scratchPath)).toBe(1)
 
-      vi.advanceTimersByTime(SCRATCH_TTL_MS)
+      // Past the max jittered first interval (150s): both repos come due and
+      // refresh in the background while the cached scan is still served.
+      vi.advanceTimersByTime(150_000)
       await internals.listResolvedWorktrees()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(scanCallsFor('/tmp/repo')).toBe(2)
       expect(scanCallsFor(scratchPath)).toBe(2)
     } finally {
       vi.useRealTimers()
