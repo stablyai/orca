@@ -1322,6 +1322,7 @@ export function HostScreen({
               actionTarget
                 ? [
                     ...buildWorktreeNavigationActions({
+                      colors,
                       hostId,
                       worktreeId: actionTarget.worktreeId,
                       worktreeName: actionTarget.displayName || actionTarget.repo,

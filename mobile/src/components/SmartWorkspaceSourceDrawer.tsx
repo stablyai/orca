@@ -25,9 +25,9 @@ import {
 } from '../tasks/smart-source-paste-intent'
 import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { BottomDrawer } from './BottomDrawer'
-import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-source-drawer-styles'
+import { createSmartWorkspaceSourceDrawerStyles } from './smart-workspace-source-drawer-styles'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
 
@@ -60,6 +60,8 @@ export function SmartWorkspaceSourceDrawer({
   onRepoChange,
   onClose
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createSmartWorkspaceSourceDrawerStyles)
   const availableModes = useMemo(() => resolveAvailableSmartModes(availability), [availability])
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')

@@ -140,7 +140,11 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/MobileHostCard'),
     import('../../app/h/[hostId]/accounts-screen-styles'),
     import('../../app/h/[hostId]/host-screen-chrome-styles'),
-    import('../../app/h/[hostId]/host-worktree-list-styles')
+    import('../../app/h/[hostId]/host-worktree-list-styles'),
+    import('../components/smart-workspace-source-drawer-styles'),
+    import('../agent-history/agent-history-styles'),
+    import('../browser/MobileBrowserKeyRow'),
+    import('../browser/MobileBrowserViewModeSwitch')
   ])
   const [
     bottomDrawer,
@@ -173,7 +177,11 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     hostCard,
     accountsScreen,
     hostChrome,
-    hostList
+    hostList,
+    smartDrawer,
+    agentHistory,
+    browserKeyRow,
+    browserViewMode
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -233,6 +241,19 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createHostWorktreeListStyles',
       factory: hostList.createHostWorktreeListStyles
+    },
+    {
+      name: 'createSmartWorkspaceSourceDrawerStyles',
+      factory: smartDrawer.createSmartWorkspaceSourceDrawerStyles
+    },
+    { name: 'createAgentHistoryStyles', factory: agentHistory.createAgentHistoryStyles },
+    {
+      name: 'createMobileBrowserKeyRowStyles',
+      factory: browserKeyRow.createMobileBrowserKeyRowStyles
+    },
+    {
+      name: 'createMobileBrowserViewModeSwitchStyles',
+      factory: browserViewMode.createMobileBrowserViewModeSwitchStyles
     }
   ]
 }
@@ -318,5 +339,14 @@ describe('themed style factories', () => {
     expect(list.sectionTitle.color).toBe(darkColors.textMuted)
     expect(list.confirmBtnDestructive.backgroundColor).toBe(darkColors.statusRed)
     expect(list.confirmBtnDestructiveText.color).toBe('#fff')
+
+    const { createSmartWorkspaceSourceDrawerStyles } =
+      await import('../components/smart-workspace-source-drawer-styles')
+    const { createAgentHistoryStyles } = await import('../agent-history/agent-history-styles')
+    const smartDrawerSheet = createSmartWorkspaceSourceDrawerStyles(darkColors)
+    expect(smartDrawerSheet.title.color).toBe(darkColors.textPrimary)
+    const history = createAgentHistoryStyles(darkColors)
+    expect(history.container.backgroundColor).toBe(darkColors.bgBase)
+    expect(history.title.color).toBe(darkColors.textPrimary)
   })
 })

@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { useHostClient } from '../transport/client-context'
 import type { RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -35,7 +35,7 @@ import {
   type MobileAiVaultResumeRepo
 } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
-import { styles } from './agent-history-styles'
+import { createAgentHistoryStyles } from './agent-history-styles'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
@@ -54,6 +54,8 @@ export function MobileAgentSessionHistoryPanel({
   worktreeId,
   name = ''
 }: MobileAgentSessionHistoryPanelProps) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createAgentHistoryStyles)
   const router = useRouter()
   const { client, state: connState } = useHostClient(hostId)
   const [worktrees, setWorktrees] = useState<Worktree[]>([])

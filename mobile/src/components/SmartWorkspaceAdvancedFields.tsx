@@ -1,6 +1,7 @@
 import { Platform, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 
 type Props = {
   composer: MobileComposerSource
@@ -11,6 +12,8 @@ type Props = {
 // pill is shown (the field itself is no longer the name input); the branch-name
 // override and reuse toggle mirror the desktop composer's advanced branch fields.
 export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createSmartWorkspaceAdvancedFieldsStyles)
   const selection = composer.smartNameSelection
   const showBranchOverride = selectedRepoIsGit && (!selection || selection.kind === 'branch')
   return (
@@ -65,38 +68,39 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
   )
 }
 
-const styles = StyleSheet.create({
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: typography.bodySize,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  reuseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm
-  },
-  reuseLabel: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  reuseSwitch: {
-    transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }]
-  }
-})
+export const createSmartWorkspaceAdvancedFieldsStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    field: {
+      marginBottom: spacing.md
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textSecondary,
+      marginBottom: spacing.xs
+    },
+    input: {
+      backgroundColor: colors.bgRaised,
+      color: colors.textPrimary,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
+      fontSize: typography.bodySize,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle
+    },
+    reuseRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm
+    },
+    reuseLabel: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.textSecondary
+    },
+    reuseSwitch: {
+      transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }]
+    }
+  })

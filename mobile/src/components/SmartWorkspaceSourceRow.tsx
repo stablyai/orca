@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { CaseSensitive, GitBranch, Sparkles } from 'lucide-react-native'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { TaskProviderLogo } from './TaskProviderLogo'
 
 type Props = {
@@ -16,7 +17,7 @@ type RowContent = {
   status?: string
 }
 
-function resolveRowContent(row: SourceRow): RowContent {
+function resolveRowContent(row: SourceRow, colors: ThemeColors): RowContent {
   switch (row.kind) {
     case 'use-name':
       return {
@@ -63,7 +64,9 @@ function resolveRowContent(row: SourceRow): RowContent {
 }
 
 export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
-  const content = resolveRowContent(row)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createSmartWorkspaceSourceRowStyles)
+  const content = resolveRowContent(row, colors)
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -91,44 +94,45 @@ export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  icon: {
-    width: 18,
-    alignItems: 'center'
-  },
-  copy: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  subtitle: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  pill: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2
-  },
-  pillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'capitalize'
-  }
-})
+export const createSmartWorkspaceSourceRowStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    icon: {
+      width: 18,
+      alignItems: 'center'
+    },
+    copy: {
+      flex: 1,
+      minWidth: 0
+    },
+    title: {
+      fontSize: typography.bodySize,
+      color: colors.textPrimary
+    },
+    subtitle: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 1
+    },
+    pill: {
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.button,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2
+    },
+    pillText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      textTransform: 'capitalize'
+    }
+  })
