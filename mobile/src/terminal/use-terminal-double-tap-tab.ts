@@ -17,6 +17,7 @@ export function useTerminalDoubleTapTab(): (handle: string) => boolean {
       })
       return () => {
         active = false
+        setEnabled(false)
         lastTapRef.current = null
       }
     }, [])
