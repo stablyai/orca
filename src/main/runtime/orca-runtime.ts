@@ -6434,16 +6434,18 @@ export class OrcaRuntimeService {
       .filter((group) => group.tabOrder.length > 0)
   }
 
-  /**
-   * Publishes a PTY-backed terminal tab snapshot to the synced mobile session,
-   * normalizing Pi-compatible titles based on launch or foreground ownership.
-   */
-  // Why: main has no matchMedia; mirror the renderer's no-matchMedia dark bias
-  // (getSystemPrefersDark, src/renderer/src/lib/terminal-theme.ts:38-43).
+  // Why dark-biased: main has no matchMedia, so a headless host mirrors the renderer's
+  // no-matchMedia fallback (getSystemPrefersDark, src/renderer/src/lib/terminal-theme.ts:38-43).
+  // An attached host can reach this too, where a light 'system' preference reads as dark —
+  // still strictly better than the phone's hardcoded fallback, which is what it replaces.
   private resolveHostMobileTerminalTheme(): RuntimeMobileTerminalTheme | undefined {
     return resolveRuntimeMobileTerminalTheme(this.store?.getSettings?.(), true)
   }
 
+  /**
+   * Publishes a PTY-backed terminal tab snapshot to the synced mobile session,
+   * normalizing Pi-compatible titles based on launch or foreground ownership.
+   */
   private publishPtyBackedMobileSessionTerminal(
     worktreeId: string,
     pty: RuntimePtyWorktreeRecord,

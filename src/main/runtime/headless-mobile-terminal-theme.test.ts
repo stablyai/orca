@@ -80,7 +80,9 @@ type RuntimeInternals = {
   ) => void
   createHeadlessMobileSessionTerminal: (
     worktreeId: string,
-    activate: boolean
+    activate: boolean,
+    afterTabId?: string,
+    opts?: Record<string, unknown>
   ) => Promise<{ tab: RuntimeMobileSessionTerminalTab }>
   resolveTerminalWorkspaceLaunchScope: unknown
   resolveWorkspaceTerminalStartupCwd: unknown
