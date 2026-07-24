@@ -1,5 +1,8 @@
 import type { ITheme } from '@xterm/xterm'
-import { getTheme, getThemeNames } from './terminal-themes-data'
+import {
+  BUILTIN_TERMINAL_THEME_NAMES,
+  getBuiltinTerminalThemePalette
+} from '../../../shared/terminal-themes'
 import type { GlobalSettings } from '../../../shared/types'
 import {
   makeCustomTerminalThemeSelection,
@@ -9,7 +12,7 @@ import {
   type TerminalCustomTheme
 } from '../../../shared/terminal-custom-themes'
 
-export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
+export { BUILTIN_TERMINAL_THEME_NAMES }
 
 export const DEFAULT_TERMINAL_THEME_DARK = 'Ghostty Default Style Dark'
 export const DEFAULT_TERMINAL_THEME_LIGHT = 'Builtin Tango Light'
@@ -42,7 +45,7 @@ export function getSystemPrefersDark(): boolean {
 }
 
 export function getBuiltinTheme(name: string): ITheme | null {
-  return getTheme(name)
+  return getBuiltinTerminalThemePalette(name)
 }
 
 function findCustomTheme(
@@ -68,7 +71,7 @@ export function getTerminalTheme(
   if (customTheme) {
     return terminalCustomThemeToXtermTheme(customTheme)
   }
-  return getTheme(selection)
+  return getBuiltinTerminalThemePalette(selection)
 }
 
 export function getTerminalThemePreview(
@@ -80,7 +83,7 @@ export function getTerminalThemePreview(
   if (theme) {
     return theme
   }
-  return getTheme(
+  return getBuiltinTerminalThemePalette(
     fallbackMode === 'light' ? DEFAULT_TERMINAL_THEME_LIGHT : DEFAULT_TERMINAL_THEME_DARK
   )
 }
@@ -92,7 +95,7 @@ export function getAvailableTerminalThemeOptions(
     value: name,
     label: name,
     group: 'built-in' as const,
-    previewTheme: getTheme(name)
+    previewTheme: getBuiltinTerminalThemePalette(name)
   }))
   const customOptions = normalizeTerminalCustomThemes(settings.terminalCustomThemes).map(
     (theme) => ({

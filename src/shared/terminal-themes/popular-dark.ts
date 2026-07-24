@@ -1,4 +1,4 @@
-import { mergeTerminalThemeCatalogs } from './shared'
+import { mergeTerminalThemeCatalogs } from './catalog-merge'
 import { POPULAR_DARK_CORE_TERMINAL_THEMES } from './popular-dark-core'
 import { POPULAR_DARK_EXTENDED_TERMINAL_THEMES } from './popular-dark-extended'
 
