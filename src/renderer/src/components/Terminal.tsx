@@ -70,6 +70,12 @@ import {
   takeAllPendingBackgroundTerminalWorktreeMounts,
   takePendingBackgroundTerminalWorktreeMount
 } from './terminal/background-terminal-worktree-mount'
+import {
+  MAX_BACKGROUND_MOUNTED_TERMINAL_WORKTREES,
+  collectLiveAgentTerminalAttribution,
+  evictExcessBackgroundTerminalWorktreeMounts,
+  isTerminalWorktreeEvictionSafe
+} from './terminal/terminal-worktree-mount-eviction'
 import { hasRegisteredRuntimeTerminalTab } from '../runtime/sync-runtime-graph'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
@@ -1034,6 +1040,33 @@ function Terminal(): React.JSX.Element | null {
       backgroundMountTabIdsByWorktreeRef.current.delete(id)
       activationDeferredMountTabIdsByWorktreeRef.current.delete(id)
     }
+  }
+  // Why: every visited worktree's surface was retained until deletion — unbounded xterm
+  // scrollback and the top Windows renderer-OOM crash cluster. Size gate keeps the
+  // agent/tab safety scans off the common small-session render path.
+  if (mountedWorktreeIdsRef.current.size > MAX_BACKGROUND_MOUNTED_TERMINAL_WORKTREES + 1) {
+    const liveAgents = collectLiveAgentTerminalAttribution(
+      useAppStore.getState().agentStatusByPaneKey
+    )
+    const portalWorktreeIds = new Set(activityTerminalPortals.map((portal) => portal.worktreeId))
+    evictExcessBackgroundTerminalWorktreeMounts({
+      mountedWorktreeIds: mountedWorktreeIdsRef.current,
+      hiddenSinceMsByWorktreeId: terminalWorktreeHiddenSinceRef.current,
+      backgroundMountTabIdsByWorktree: backgroundMountTabIdsByWorktreeRef.current,
+      activationDeferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
+      activeWorktreeId: renderedActiveWorktreeId,
+      nowMs: Date.now(),
+      isWorktreeEvictionSafe: (worktreeId) =>
+        !measurableBackgroundWorktreeIdsRef.current.has(worktreeId) &&
+        !portalWorktreeIds.has(worktreeId) &&
+        isTerminalWorktreeEvictionSafe({
+          worktreeId,
+          terminalTabs: tabsByWorktree[worktreeId] ?? [],
+          pendingStartupByTabId,
+          liveAgentWorktreeIds: liveAgents.worktreeIds,
+          liveAgentTabIds: liveAgents.tabIds
+        })
+    })
   }
   const anyMountedWorktreeHasLayout = computeAnyMountedWorktreeHasLayout(
     workspaceSurfaces.map((workspace) => workspace.id),
