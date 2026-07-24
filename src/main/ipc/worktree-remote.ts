@@ -79,9 +79,9 @@ import {
   getWorktreePathSettings,
   hasRepoWorktreeBasePath,
   shouldSetDisplayName,
-  mergeWorktree,
-  findCreatedWorktree
+  mergeWorktree
 } from './worktree-logic'
+import { findCreatedWorktree } from './created-worktree-reconciliation'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {

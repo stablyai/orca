@@ -9,7 +9,6 @@ type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDi
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
 export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
-export { findCreatedWorktree } from './created-worktree-reconciliation'
 export { mergeWorktree } from './worktree-metadata-merge'
 export { areWorktreePathsEqual } from './worktree-path-comparison'
 

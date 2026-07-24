@@ -808,9 +808,9 @@ import {
   mergeWorktree,
   sanitizeWorktreeName,
   shouldSetDisplayName,
-  areWorktreePathsEqual,
-  findCreatedWorktree
+  areWorktreePathsEqual
 } from '../ipc/worktree-logic'
+import { findCreatedWorktree } from '../ipc/created-worktree-reconciliation'
 import { worktreePathComparisonKey } from '../ipc/worktree-path-comparison'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
