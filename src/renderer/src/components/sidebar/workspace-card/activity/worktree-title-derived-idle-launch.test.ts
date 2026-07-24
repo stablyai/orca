@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
+const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
 
 function makeTab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -23,6 +24,19 @@ function makeSingleLayout(leafId: string): TerminalLayoutSnapshot {
   return {
     root: { type: 'leaf', leafId },
     activeLeafId: leafId,
+    expandedLeafId: null
+  }
+}
+
+function makeSplitLayout(): TerminalLayoutSnapshot {
+  return {
+    root: {
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: LEAF_ID_1 },
+      second: { type: 'leaf', leafId: LEAF_ID_2 }
+    },
+    activeLeafId: LEAF_ID_1,
     expandedLeafId: null
   }
 }
@@ -79,6 +93,26 @@ describe('launchAgent idle rows after a neutral title', () => {
       },
       ptyIdsByTabId: { 'tab-1': ['pty-plain'] },
       terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not invent Idle launchAgent rows for every split pane with a neutral title', () => {
+    const launchAgent: TuiAgent = 'codex'
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'demo-repo',
+          2: 'zsh'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
       now: 2000
     })
 

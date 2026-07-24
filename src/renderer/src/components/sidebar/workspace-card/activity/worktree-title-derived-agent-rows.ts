@@ -63,6 +63,11 @@ export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): Da
       continue
     }
     const layout = terminalLayoutsByTabId[tab.id]
+    const layoutLeafIds = collectRuntimePaneLeafIds(layout?.root ?? null)
+    // Why: launchAgent is tab-scoped. Idle fallback may only bind to the sole
+    // launch-owning leaf — multi-leaf tabs must not mint Idle rows for every
+    // neutral sibling shell (#10130 / CodeRabbit on #10178).
+    const launchAgentOwnerLeafId = layoutLeafIds.length === 1 ? layoutLeafIds[0] : null
     const paneTitles = runtimePaneTitlesByTabId[tab.id]
     const paneTitleEntries =
       paneTitles && Object.keys(paneTitles).length > 0
@@ -104,6 +109,7 @@ export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): Da
           ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
           paneForegroundAgentByPaneKey,
           now: args.now,
+          allowLaunchAgentIdleFallback: launchAgentOwnerLeafId === leafId,
           runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
         })
         if (!row || args.seenPaneKeys.has(row.paneKey)) {
@@ -119,6 +125,11 @@ export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): Da
     if (!leafId) {
       continue
     }
+    // Why: tab-title path emits at most one row; allow when that leaf is the
+    // sole owner, or topology is unknown (no layout leaves) so single-pane
+    // SSH idle still surfaces without a hydrated layout snapshot.
+    const allowLaunchAgentIdleFallback =
+      launchAgentOwnerLeafId === leafId || layoutLeafIds.length === 0
     const row = buildTitleDerivedAgentRow({
       tab,
       leafId,
@@ -126,6 +137,7 @@ export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): Da
       ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
       paneForegroundAgentByPaneKey,
       now: args.now,
+      allowLaunchAgentIdleFallback,
       runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
     })
     if (!row || args.seenPaneKeys.has(row.paneKey)) {
@@ -146,6 +158,8 @@ function buildTitleDerivedAgentRow(args: {
   ownerAgentType: AgentType | null
   paneForegroundAgentByPaneKey: Record<string, TitleDerivedPaneForeground>
   now: number
+  /** Why: idle launchAgent fallback is only safe for the launch-owning leaf. */
+  allowLaunchAgentIdleFallback?: boolean
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
   // Launch identity normalizes compatible title frames; stricter per-pane ownership below decides identity within splits.
@@ -180,10 +194,13 @@ function buildTitleDerivedAgentRow(args: {
   })
   const launchAgent = args.tab.launchAgent ?? null
   // Why: hook-less SSH Codex leaves a live pane at its cwd title after a turn (#10178).
-  // A process-identified pane is already idle above; this covers the title-only case.
+  // Idle fallback is only safe for the launch-owning leaf because launchAgent is tab-scoped.
   if (
     !identifiedAgentType &&
-    (!launchAgent || titleStatus === 'working' || titleStatus === 'permission')
+    (!launchAgent ||
+      !args.allowLaunchAgentIdleFallback ||
+      titleStatus === 'working' ||
+      titleStatus === 'permission')
   ) {
     return null
   }
