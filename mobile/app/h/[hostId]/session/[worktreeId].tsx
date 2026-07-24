@@ -162,6 +162,7 @@ import {
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
 } from '../../../../src/session/mobile-file-syntax'
+import { mobileScrollCache, setWithLRU } from '../../../../src/lib/mobile-scroll-cache'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
@@ -329,6 +330,7 @@ function MarkdownReader({
         editable={doc.editable && !doc.saving}
         onChange={onChange}
         onKeyboardInsetChange={setWebviewKeyboardInset}
+        scrollCacheKey={`${documentId}:markdown`}
       />
       {showFloatingActions ? (
         <View
@@ -582,6 +584,77 @@ function FileReader({
     return map
   }, [diffCommentsForFile])
 
+  // Scroll position persistence across tab switches.
+  const scrollCacheKey = doc?.id ? `${doc.id}:file` : null
+  const fileScrollYRef = useRef(0)
+  const fileScrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fileScrollRestoredRef = useRef(false)
+  const fileScrollRef = useRef<FlatList<RenderableDiffLine>>(null)
+  const sourceTextScrollRef = useRef<ScrollView>(null)
+
+  useEffect(() => {
+    return () => {
+      if (fileScrollThrottleRef.current !== null) {
+        clearTimeout(fileScrollThrottleRef.current)
+      }
+      if (scrollCacheKey && fileScrollYRef.current > 0) {
+        setWithLRU(mobileScrollCache, scrollCacheKey, fileScrollYRef.current)
+      }
+    }
+  }, [scrollCacheKey])
+
+  const captureFileScroll = useCallback(
+    (y: number) => {
+      fileScrollYRef.current = y
+      if (fileScrollThrottleRef.current !== null) {
+        return
+      }
+      fileScrollThrottleRef.current = setTimeout(() => {
+        fileScrollThrottleRef.current = null
+        if (scrollCacheKey) {
+          setWithLRU(mobileScrollCache, scrollCacheKey, fileScrollYRef.current)
+        }
+      }, 200)
+    },
+    [scrollCacheKey]
+  )
+
+  // Restore scroll position for FlatList (diff view) after content loads.
+  useEffect(() => {
+    if (fileScrollRestoredRef.current || !scrollCacheKey || doc?.status !== 'ready' || doc.kind !== 'diff') {
+      return
+    }
+    const target = mobileScrollCache.get(scrollCacheKey)
+    if (target === undefined || target <= 0) {
+      return
+    }
+    fileScrollRestoredRef.current = true
+    requestAnimationFrame(() => {
+      fileScrollRef.current?.scrollToOffset({ offset: target, animated: false })
+    })
+  }, [doc, scrollCacheKey])
+
+  // Restore scroll position for ScrollView (source text view) after content loads.
+  useEffect(() => {
+    if (fileScrollRestoredRef.current || !scrollCacheKey || doc?.status !== 'ready' || doc.kind === 'diff') {
+      return
+    }
+    const target = mobileScrollCache.get(scrollCacheKey)
+    if (target === undefined || target <= 0) {
+      return
+    }
+    fileScrollRestoredRef.current = true
+    let attempts = 0
+    const tryRestore = () => {
+      sourceTextScrollRef.current?.scrollTo({ y: target, animated: false })
+      attempts += 1
+      if (attempts < 15) {
+        requestAnimationFrame(tryRestore)
+      }
+    }
+    requestAnimationFrame(() => requestAnimationFrame(tryRestore))
+  }, [doc, scrollCacheKey])
+
   const startComment = useCallback((lineNumber: number) => {
     setActiveCommentLine(lineNumber)
     setCommentDraft('')
@@ -736,6 +809,7 @@ function FileReader({
           </View>
         ) : null}
         <FlatList
+          ref={fileScrollRef}
           data={activeDiffSyntax ?? plainDiffLines}
           style={styles.filePreviewScroll}
           contentContainerStyle={styles.filePreviewContent}
@@ -748,6 +822,8 @@ function FileReader({
           windowSize={7}
           removeClippedSubviews={Platform.OS !== 'web'}
           keyboardShouldPersistTaps="handled"
+          onScroll={(e) => captureFileScroll(e.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
         />
       </View>
     )
@@ -777,8 +853,11 @@ function FileReader({
   const renderSourceText = (content: string) => (
     <View style={styles.markdownEditor}>
       <ScrollView
+        ref={sourceTextScrollRef}
         style={styles.filePreviewScroll}
         contentContainerStyle={styles.filePreviewContent}
+        onScroll={(e) => captureFileScroll(e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
       >
         <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
           <MobileSyntaxSegments
