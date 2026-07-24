@@ -1088,24 +1088,8 @@ describe('createWebRuntimeSessionTerminal', () => {
       })
     ).resolves.toEqual({ status: 'created' })
 
-    expect(methods).toEqual([
-      'status.get',
-      'terminal.ensureAgentSession',
-      'session.tabs.createTerminal',
-      'session.tabs.list'
-    ])
+    expect(methods).toEqual(['status.get', 'session.tabs.createTerminal', 'session.tabs.list'])
     expect(runtimeCall.mock.calls[1]?.[0]).toMatchObject({
-      selector: ENVIRONMENT_ID,
-      method: 'terminal.ensureAgentSession',
-      params: {
-        kind: 'explicit',
-        worktree: `id:${WORKTREE_ID}`,
-        agent: 'codex',
-        providerSession: { key: 'session_id', id: 'session-1' },
-        presentation: 'background'
-      }
-    })
-    expect(runtimeCall.mock.calls[2]?.[0]).toMatchObject({
       params: {
         command: "codex resume 'session-1'",
         env: { CODEX_PROFILE: 'captured' },
