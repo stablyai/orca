@@ -28,18 +28,24 @@ import {
 } from './ai-vault-session-resume'
 import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { aiVaultProviderSessionKey } from '../../../../shared/ai-vault-session-display-title'
+import {
+  notifyAiVaultSessionPreparationFailure,
+  resolveAiVaultTargetWorkspacePath
+} from './ai-vault-session-launch-workspace-path'
 
 export function useAiVaultSessionLaunchActions({
   activeWorktree,
   activeWorktreeId,
   targetState,
-  agentCmdOverrides
+  agentCmdOverrides,
+  orcaCustomTitleByProviderKey
 }: {
   activeWorktree: Worktree | null
   activeWorktreeId: string | null
   targetState: AiVaultSessionResumeTargetState
   agentCmdOverrides?: Partial<Record<AiVaultAgent, string | null>>
+  orcaCustomTitleByProviderKey?: ReadonlyMap<string, string>
 }): {
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   copyResumeCommand: (session: AiVaultSession, worktreeId?: string | null) => Promise<void>
@@ -180,11 +186,14 @@ export function useAiVaultSessionLaunchActions({
         prepareAiVaultSessionContinuation({
           session,
           targetWorktreeId: targetId.worktreeId,
-          targetWorkspacePath
+          targetWorkspacePath,
+          orcaCustomTitle: orcaCustomTitleByProviderKey?.get(
+            aiVaultProviderSessionKey(session.agent, session.sessionId)
+          )
         })
       )
     },
-    [activeWorktree?.id, activeWorktreeId, targetState]
+    [activeWorktree?.id, activeWorktreeId, orcaCustomTitleByProviderKey, targetState]
   )
 
   const handleContinuationDialogOpenChange = useCallback((open: boolean): void => {
@@ -201,32 +210,6 @@ export function useAiVaultSessionLaunchActions({
     continuationRequest,
     handleContinuationDialogOpenChange
   }
-}
-
-function notifyAiVaultSessionPreparationFailure(error: unknown): void {
-  toast.error(
-    error instanceof Error
-      ? error.message
-      : translate(
-          'auto.components.right.sidebar.AiVaultPanel.prepareSessionResumeFailed',
-          'Could not prepare this session for resume.'
-        )
-  )
-}
-
-function resolveAiVaultTargetWorkspacePath(
-  state: AiVaultSessionResumeTargetState,
-  workspaceId: string
-): string | null {
-  const scope = parseWorkspaceKey(workspaceId)
-  if (scope?.type === 'folder') {
-    return (
-      state.folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
-  }
-  const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
-  return findWorktreeById(state.worktreesByRepo, worktreeId)?.path ?? null
 }
 
 export type AiVaultSessionLaunchTarget =

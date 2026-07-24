@@ -57,12 +57,24 @@ describe('AI Vault session continuation', () => {
       launchSource: 'sidebar',
       source: {
         sourceAgent: 'claude',
+        sourceTitle: 'Finish the editor refactor',
         lastPrompt: 'Finish the editor refactor',
         lastAssistantMessage: 'The component tests still need work.'
       }
     })
     expect(request.source.transcriptPath).toContain('session.jsonl')
     expect(request.source.capturedText).toContain('assistant: The component tests still need work.')
+  })
+
+  it('uses the Orca custom title for sourceTitle when provided', () => {
+    const request = prepareAiVaultSessionContinuation({
+      session: session(),
+      targetWorktreeId: 'worktree-1',
+      targetWorkspacePath: '/Users/ada/Desktop/current-worktree',
+      orcaCustomTitle: 'Editor refactor spike'
+    })
+
+    expect(request.source.sourceTitle).toBe('Editor refactor spike')
   })
 
   it('never treats a preview tool result as the user prompt', () => {

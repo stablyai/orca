@@ -29,6 +29,7 @@ import type { AgentStatusState } from '../../../../shared/agent-status-types'
 
 export function VaultSessionRow({
   session,
+  displayTitle,
   liveState,
   resumeStartup,
   realHomeResumeStartup,
@@ -54,6 +55,7 @@ export function VaultSessionRow({
   onOpenCwd
 }: {
   session: AiVaultSession
+  displayTitle: string
   liveState: AgentStatusState | null
   resumeStartup: AiVaultResumeStartup
   realHomeResumeStartup: AiVaultResumeStartup
@@ -99,7 +101,7 @@ export function VaultSessionRow({
       writeAiVaultSessionDragData(event.dataTransfer, {
         agent: session.agent,
         sessionId: session.sessionId,
-        title: session.title,
+        title: displayTitle,
         command: resumeStartup.command,
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
@@ -111,7 +113,7 @@ export function VaultSessionRow({
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [realHomeResumeStartup, resumeDisabled, session, resumeStartup]
+    [displayTitle, realHomeResumeStartup, resumeDisabled, session, resumeStartup]
   )
 
   return (
@@ -141,7 +143,7 @@ export function VaultSessionRow({
                 detailsExpanded ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'line-clamp-1'
               )}
             >
-              {session.title}
+              {displayTitle}
             </div>
             <SessionRowTrailingActions
               session={session}

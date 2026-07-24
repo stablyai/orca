@@ -8,6 +8,7 @@ import {
   parseVaultQuery
 } from './ai-vault-session-filters'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
+import { aiVaultProviderSessionKey } from './ai-vault-session-display-title'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',
@@ -112,5 +113,32 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
 
   it('builds preview search text from conversation turns', () => {
     expect(sessionPreviewSearchText(baseSession)).toContain('scope tabs')
+  })
+
+  it('matches query terms against the Orca custom title overlay', () => {
+    expect(
+      filterAiVaultSessions([baseSession], {
+        query: 'patient-sync',
+        agents: ['claude'],
+        scope: 'all',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        hideEmptySessions: true,
+        orcaCustomTitleByProviderKey: new Map([
+          [aiVaultProviderSessionKey('claude', 'session-1'), 'patient-sync spike']
+        ])
+      }).map((session) => session.id)
+    ).toEqual(['claude:1'])
+
+    expect(
+      filterAiVaultSessions([baseSession], {
+        query: 'patient-sync',
+        agents: ['claude'],
+        scope: 'all',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        hideEmptySessions: true
+      })
+    ).toEqual([])
   })
 })

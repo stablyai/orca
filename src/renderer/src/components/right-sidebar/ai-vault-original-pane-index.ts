@@ -1,4 +1,5 @@
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { aiVaultProviderSessionKey } from '../../../../shared/ai-vault-session-display-title'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
   promptsMatchSession,
@@ -23,12 +24,6 @@ export type AiVaultOriginalPaneIndex = {
   sleepingByProvider: ProviderIndex<SleepingEntry>
 }
 
-function providerKey(agent: string, sessionId: string): string {
-  // Why: unlike punctuation delimiters, NUL cannot collide with agent or
-  // provider-session text, so distinct identity pairs stay distinct keys.
-  return `${agent}\u0000${sessionId}`
-}
-
 function appendToIndex<T>(index: Map<string, T[]>, key: string, value: T): void {
   const entries = index.get(key)
   if (entries) {
@@ -50,7 +45,11 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
       continue
     }
     if (entry.providerSession) {
-      appendToIndex(liveByProvider, providerKey(entry.agentType, entry.providerSession.id), entry)
+      appendToIndex(
+        liveByProvider,
+        aiVaultProviderSessionKey(entry.agentType, entry.providerSession.id),
+        entry
+      )
     } else if (entry.providerSession === undefined) {
       appendToIndex(liveWithoutProviderByAgent, entry.agentType, entry)
     }
@@ -62,7 +61,7 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
     if (retained.entry.providerSession) {
       appendToIndex(
         retainedByProvider,
-        providerKey(retained.agentType, retained.entry.providerSession.id),
+        aiVaultProviderSessionKey(retained.agentType, retained.entry.providerSession.id),
         retained
       )
     } else if (retained.entry.providerSession === undefined) {
@@ -73,7 +72,7 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
     if (record) {
       appendToIndex(
         sleepingByProvider,
-        providerKey(record.agent, record.providerSession.id),
+        aiVaultProviderSessionKey(record.agent, record.providerSession.id),
         record
       )
     }
@@ -103,7 +102,7 @@ export function findOriginalAiVaultSessionPaneInIndex(
   index: AiVaultOriginalPaneIndex,
   session: AiVaultSession
 ): AiVaultOriginalPaneTarget | null {
-  const key = providerKey(session.agent, session.sessionId)
+  const key = aiVaultProviderSessionKey(session.agent, session.sessionId)
   const promptMatchedTargets: AiVaultOriginalPaneTarget[] = []
 
   for (const entry of index.liveByProvider.get(key) ?? []) {
@@ -175,7 +174,9 @@ export function findAiVaultSessionLiveStateInIndex(
   index: AiVaultOriginalPaneIndex,
   session: AiVaultSession
 ): AgentStatusState | null {
-  const direct = index.liveByProvider.get(providerKey(session.agent, session.sessionId))
+  const direct = index.liveByProvider.get(
+    aiVaultProviderSessionKey(session.agent, session.sessionId)
+  )
   if (direct?.[0]) {
     return direct[0].state
   }

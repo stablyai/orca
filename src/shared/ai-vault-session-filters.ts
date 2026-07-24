@@ -19,6 +19,10 @@ import {
 } from './ai-vault-types'
 import type { ExecutionHostId } from './execution-host'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
+import {
+  aiVaultProviderSessionKey,
+  resolveAiVaultSessionDisplayTitle
+} from './ai-vault-session-display-title'
 
 // Why: the plain project descriptor is relocated here (no runtime dep) so the
 // filter-state type can reference it without dragging the renderer-located
@@ -42,6 +46,8 @@ export type AiVaultSessionFilterState = {
   sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
   projectLabelByKey?: ReadonlyMap<string, string>
   hideEmptySessions: boolean
+  /** Orca tab renames keyed by aiVaultProviderSessionKey(agent, sessionId). */
+  orcaCustomTitleByProviderKey?: ReadonlyMap<string, string>
 }
 
 export type AiVaultSessionGroup = {
@@ -184,10 +190,16 @@ export function parseVaultQuery(query: string): ParsedQuery {
 function matchesQuery(
   session: AiVaultSession,
   parsed: ParsedQuery,
-  filters: Pick<AiVaultSessionFilterState, 'sessionProjectById' | 'projectLabelByKey'>
+  filters: Pick<
+    AiVaultSessionFilterState,
+    'sessionProjectById' | 'projectLabelByKey' | 'orcaCustomTitleByProviderKey'
+  >
 ): boolean {
+  const orcaCustomTitle = filters.orcaCustomTitleByProviderKey?.get(
+    aiVaultProviderSessionKey(session.agent, session.sessionId)
+  )
   const searchable = [
-    session.title,
+    resolveAiVaultSessionDisplayTitle(session.title, orcaCustomTitle),
     session.sessionId,
     session.agent,
     session.branch,
