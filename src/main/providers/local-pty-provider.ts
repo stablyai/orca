@@ -842,6 +842,8 @@ export class LocalPtyProvider implements IPtyProvider {
     if (concurrentWinner) {
       return concurrentWinner
     }
+    // Why: agent PTYs opt into Windows Job Object tree ownership; plain shells skip it.
+    const isAgentPty = Boolean(args.launchAgent || startupAgentRecognition)
     const spawnResult = spawnShellWithFallback({
       shellPath,
       shellArgs,
