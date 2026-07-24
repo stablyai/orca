@@ -4,10 +4,13 @@ import Foundation
 ///
 /// Why: tccd answers a freshly spawned helper process with
 /// `preflight_unknown` / `do_not_cache` for a short window after spawn, so the
-/// first Accessibility answers a new process sees can be `denied` even though
-/// the grant is real, flipping to `granted` moments later within the same pid
-/// (stablyai/orca#9458). Every CLI invocation spawns a fresh helper, so a
-/// one-shot check loses that race on every call.
+/// first Accessibility / Screen Recording preflight answers a new process sees
+/// can be `denied` even though the grant is real, flipping to `granted` moments
+/// later within the same pid (stablyai/orca#9458). The same race hits
+/// `CGPreflightScreenCaptureAccess()` while System Settings already shows
+/// Screen Recording enabled for Orca Computer Use — one-shot checks then keep
+/// the drag-assistant UI up forever. Every CLI invocation spawns a fresh
+/// helper, so a one-shot check loses that race on every call.
 public enum AccessibilityTrustSettling {
     public struct Outcome: Equatable {
         public let settled: Bool
