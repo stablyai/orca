@@ -1,8 +1,8 @@
 import { Pressable, View } from 'react-native'
 import { SquareChevronRight } from 'lucide-react-native'
 
-import { colors } from '../../../../src/theme/mobile-theme'
-import { styles } from './mobile-session-styles'
+import { useTheme, useThemedStyles } from '../../../../src/theme/theme-context'
+import { createMobileSessionStyles } from './mobile-session-styles'
 
 type Props = {
   disabled: boolean
@@ -10,6 +10,8 @@ type Props = {
 }
 
 export function QuickCommandsTabButton({ disabled, onPress }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileSessionStyles)
   return (
     <>
       <View style={styles.tabActionDivider} />

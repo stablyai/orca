@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react'
 import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import type { ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 
 export type NativeWebViewEngineEvent = {
   readonly nativeEvent?: object
@@ -78,6 +79,8 @@ export function TerminalWebViewEngineErrorOverlay({
   message,
   onReload
 }: TerminalWebViewEngineErrorOverlayProps) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createTerminalWebViewEngineErrorStyles)
   return (
     <View style={styles.errorOverlay}>
       <Text style={styles.errorTitle}>Terminal failed to load</Text>
@@ -92,39 +95,40 @@ export function TerminalWebViewEngineErrorOverlay({
   )
 }
 
-const styles = StyleSheet.create({
-  errorOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: 24,
-    backgroundColor: colors.terminalBg
-  },
-  errorTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center'
-  },
-  errorDetail: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center'
-  },
-  reloadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 36,
-    paddingHorizontal: 14,
-    borderRadius: 6,
-    backgroundColor: colors.surfaceBright
-  },
-  reloadButtonText: {
-    color: colors.terminalBg,
-    fontSize: 14,
-    fontWeight: '700'
-  }
-})
+export const createTerminalWebViewEngineErrorStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    errorOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      padding: 24,
+      backgroundColor: colors.terminalBg
+    },
+    errorTitle: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontWeight: '700',
+      textAlign: 'center'
+    },
+    errorDetail: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 18,
+      textAlign: 'center'
+    },
+    reloadButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      minHeight: 36,
+      paddingHorizontal: 14,
+      borderRadius: 6,
+      backgroundColor: colors.surfaceBright
+    },
+    reloadButtonText: {
+      color: colors.terminalBg,
+      fontSize: 14,
+      fontWeight: '700'
+    }
+  })

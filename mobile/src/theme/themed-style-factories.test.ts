@@ -144,7 +144,13 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/smart-workspace-source-drawer-styles'),
     import('../agent-history/agent-history-styles'),
     import('../browser/MobileBrowserKeyRow'),
-    import('../browser/MobileBrowserViewModeSwitch')
+    import('../browser/MobileBrowserViewModeSwitch'),
+    import('../../app/h/[hostId]/session/mobile-session-frame-styles'),
+    import('../../app/h/[hostId]/session/mobile-session-reader-styles'),
+    import('../../app/h/[hostId]/session/mobile-session-review-comment-styles'),
+    import('../../app/h/[hostId]/session/mobile-session-command-input-styles'),
+    import('../session/MobileAgentWorkingIndicator'),
+    import('../terminal/terminal-webview-engine-error-state')
   ])
   const [
     bottomDrawer,
@@ -181,7 +187,13 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     smartDrawer,
     agentHistory,
     browserKeyRow,
-    browserViewMode
+    browserViewMode,
+    sessionFrame,
+    sessionReader,
+    sessionReview,
+    sessionCommand,
+    workingIndicator,
+    engineError
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -254,6 +266,30 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createMobileBrowserViewModeSwitchStyles',
       factory: browserViewMode.createMobileBrowserViewModeSwitchStyles
+    },
+    {
+      name: 'createMobileSessionFrameStyles',
+      factory: sessionFrame.createMobileSessionFrameStyles
+    },
+    {
+      name: 'createMobileSessionReaderStyles',
+      factory: sessionReader.createMobileSessionReaderStyles
+    },
+    {
+      name: 'createMobileSessionReviewCommentStyles',
+      factory: sessionReview.createMobileSessionReviewCommentStyles
+    },
+    {
+      name: 'createMobileSessionCommandInputStyles',
+      factory: sessionCommand.createMobileSessionCommandInputStyles
+    },
+    {
+      name: 'createMobileAgentWorkingIndicatorStyles',
+      factory: workingIndicator.createMobileAgentWorkingIndicatorStyles
+    },
+    {
+      name: 'createTerminalWebViewEngineErrorStyles',
+      factory: engineError.createTerminalWebViewEngineErrorStyles
     }
   ]
 }
@@ -348,5 +384,15 @@ describe('themed style factories', () => {
     const history = createAgentHistoryStyles(darkColors)
     expect(history.container.backgroundColor).toBe(darkColors.bgBase)
     expect(history.title.color).toBe(darkColors.textPrimary)
+
+    const { createMobileSessionFrameStyles } =
+      await import('../../app/h/[hostId]/session/mobile-session-frame-styles')
+    const { createTerminalWebViewEngineErrorStyles } =
+      await import('../terminal/terminal-webview-engine-error-state')
+    const frame = createMobileSessionFrameStyles(darkColors)
+    expect(frame.container.backgroundColor).toBe(darkColors.bgBase)
+    const err = createTerminalWebViewEngineErrorStyles(darkColors)
+    expect(err.errorOverlay.backgroundColor).toBe(darkColors.terminalBg)
+    expect(err.errorTitle.color).toBe(darkColors.textPrimary)
   })
 })
