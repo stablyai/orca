@@ -1728,23 +1728,27 @@ export function registerPtyHandlers(
     droppedOutput?: boolean
   }
 
-  // Why: batching PTY data into short flush windows cuts IPC round-trips from hundreds/sec to ~120/sec; keystroke echo/redraws bypass it below.
-  const pendingData = new PtyPendingDataDrainQueue((id) => {
-    const runnableLane = activeRendererPtys.has(id) ? 'active' : 'background'
-    // Why first: hidden bytes are dropped from main's pending queue even when renderer credit is exhausted.
-    if (shouldDropHiddenRendererPtyData(id, getSettings?.())) {
+  // Why: bounded batch windows amortize renderer IPC; keystroke echo/redraws bypass them below.
+  const pendingData = new PtyPendingDataDrainQueue(
+    (id) => {
+      const runnableLane = activeRendererPtys.has(id) ? 'active' : 'background'
+      // Why first: hidden bytes are dropped from main's pending queue even when renderer credit is exhausted.
+      if (shouldDropHiddenRendererPtyData(id, getSettings?.())) {
+        return runnableLane
+      }
+      if (
+        !rendererPtyDispatcherReady ||
+        !canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })
+      ) {
+        return 'blocked'
+      }
       return runnableLane
-    }
-    if (
-      !rendererPtyDispatcherReady ||
-      !canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })
-    ) {
-      return 'blocked'
-    }
-    return runnableLane
-  })
+    },
+    () => isHiddenPtyDeliveryGateEnabled(getSettings?.())
+  )
   // Why: resuming a paused producer during exit can synchronously emit; those bytes must not queue behind pty:exit.
   const rendererExitingPtyIds = new Set<string>()
+  const rendererDeliveryRestoreNeededPtys = new Set<string>()
 
   function transitionHiddenRendererPtyDeliveryState(id: string, hidden: boolean) {
     const settings = getSettings?.()
@@ -1880,7 +1884,7 @@ export function registerPtyHandlers(
 
   // Why touched PTY only: pressure peaks are monotonic between explicit resets.
   function recordPtyRendererDeliveryPressure(id: string): void {
-    peakPendingChars = Math.max(peakPendingChars, pendingDataTotalChars)
+    peakPendingChars = Math.max(peakPendingChars, pendingData.totalPendingChars)
     peakMaxPendingCharsByPty = Math.max(
       peakMaxPendingCharsByPty,
       pendingData.get(id)?.data.length ?? 0
@@ -1893,24 +1897,16 @@ export function registerPtyHandlers(
   }
 
   function setPendingPtyData(id: string, pending: PendingPtyData): void {
-    const previousChars = pendingData.get(id)?.data.length ?? 0
     pendingData.set(id, pending)
-    pendingDataTotalChars += pending.data.length - previousChars
     recordPtyRendererDeliveryPressure(id)
   }
 
-  function deletePendingPtyData(id: string): boolean {
-    const previousChars = pendingData.get(id)?.data.length
-    if (previousChars === undefined) {
-      return false
-    }
-    pendingDataTotalChars -= previousChars
-    return pendingData.delete(id)
+  function deletePendingPtyData(id: string): void {
+    pendingData.delete(id)
   }
 
   function clearPendingPtyData(): void {
     pendingData.clear()
-    pendingDataTotalChars = 0
   }
 
   function readCurrentPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
@@ -2083,6 +2079,7 @@ export function registerPtyHandlers(
     rendererInFlightTotalChars = 0
     clearPendingPtyData()
     pendingOverflowMarkedPtys.clear()
+    rendererDeliveryRestoreNeededPtys.clear()
     // Why hold sends: the reloading page's pty:data listener is gone until it re-registers/handshakes, so bytes would drop into a listener-less page and re-pin the gate.
     rendererPtyDispatcherReady = false
     // Why: arm the self-heal watchdog so a never-arriving handshake can't hold the gate forever; the real handshake cancels it.
@@ -2274,9 +2271,10 @@ export function registerPtyHandlers(
     return writtenOff
   }
 
-  function sendPtyDataToRenderer(id: string, payload: PtyDataPayload): void {
+  function sendPtyDataToRenderer(id: string, payload: PtyDataPayload): boolean {
     const charCount = getPtyPayloadCharCount(payload)
     const accounting = rendererDeliveryAccountingByPty.get(id)
+    const hadAccounting = accounting !== undefined
     if (accounting) {
       accounting.sentChars += charCount
       accounting.lastSendAtMs = Date.now()
@@ -2290,7 +2288,43 @@ export function registerPtyHandlers(
     }
     rendererInFlightTotalChars += charCount
     recordPtyRendererDeliveryPressure(id)
-    mainWindow.webContents.send('pty:data', payload)
+    try {
+      mainWindow.webContents.send('pty:data', payload)
+    } catch (error) {
+      const current = rendererDeliveryAccountingByPty.get(id)
+      if (current) {
+        const inFlightBeforeRollback = current.sentChars - current.ackedChars
+        current.sentChars = Math.max(0, current.sentChars - charCount)
+        current.ackedChars = Math.min(current.ackedChars, current.sentChars)
+        const inFlightAfterRollback = current.sentChars - current.ackedChars
+        rendererInFlightTotalChars = Math.max(
+          0,
+          rendererInFlightTotalChars - (inFlightBeforeRollback - inFlightAfterRollback)
+        )
+        if (!hadAccounting && current.sentChars === 0) {
+          rendererDeliveryAccountingByPty.delete(id)
+        }
+      }
+      rendererDeliveryRestoreNeededPtys.add(id)
+      mainDeliveryBreadcrumbs.record('pty-data-send-failed', {
+        id: redactPtyIdForDiagnostics(id),
+        chars: charCount
+      })
+      console.error('[pty] renderer data send failed; payload will not be retried', error)
+      return false
+    }
+    if (rendererDeliveryRestoreNeededPtys.has(id)) {
+      try {
+        sendModelRestoreNeededMarker(id, 'delivery-heal', runtime?.getPtyOutputSequence(id))
+        rendererDeliveryRestoreNeededPtys.delete(id)
+      } catch (error) {
+        console.error(
+          '[pty] renderer delivery-heal marker send failed; restore remains pending',
+          error
+        )
+      }
+    }
+    return true
   }
 
   function rendererPtyIsKnownHidden(id: string): boolean {
@@ -2428,10 +2462,9 @@ export function registerPtyHandlers(
   }
 
   function invalidatePendingPtyDrainClassification(id?: string, schedule = true): void {
-    if (typeof id === 'string' && pendingData.get(id) === undefined) {
-      return
-    }
-    if (pendingData.invalidateAll() && schedule && !flushTimer) {
+    const invalidated =
+      typeof id === 'string' ? pendingData.invalidate(id) : pendingData.invalidateAll()
+    if (invalidated && schedule && !flushTimer) {
       schedulePendingDataFlush(0)
     }
   }
@@ -2480,6 +2513,7 @@ export function registerPtyHandlers(
     // Ordinary boot-window data is blocked in the queue; hidden-droppable entries still retire before renderer readiness.
     const settings = getSettings?.()
     let writes = 0
+    let sendFailed = false
     const round = pendingData.beginRound()
     let creditReleasedDuringFlush = false
     pendingDataFlushActive = true
@@ -2511,7 +2545,10 @@ export function registerPtyHandlers(
           pendingData.remove(selection)
           updateProducerFlowControl(id)
           // Why droppedOutput sentinel: pending-cap drop means the pane must repaint from the snapshot, not continue a gapped stream (data = carved query bytes only).
-          sendPtyDataToRenderer(id, { id, data: pending.data, droppedOutput: true })
+          if (!sendPtyDataToRenderer(id, { id, data: pending.data, droppedOutput: true })) {
+            sendFailed = true
+            break
+          }
           writes++
           continue
         }
@@ -2533,17 +2570,22 @@ export function registerPtyHandlers(
           pendingOverflowMarkedPtys.delete(id)
         }
         updateProducerFlowControl(id)
-        sendPtyDataToRenderer(
-          id,
-          makePtyDataPayload(
+        if (
+          !sendPtyDataToRenderer(
             id,
-            chunk,
-            pending.startSeq,
-            pending.containsBackgroundOutput,
-            pending.rawLength,
-            pending.transformed
+            makePtyDataPayload(
+              id,
+              chunk,
+              pending.startSeq,
+              pending.containsBackgroundOutput,
+              pending.rawLength,
+              pending.transformed
+            )
           )
-        )
+        ) {
+          sendFailed = true
+          break
+        }
         writes++
       }
     } finally {
@@ -2552,10 +2594,17 @@ export function registerPtyHandlers(
       pendingDataCreditReleasedDuringFlush = false
       pendingData.endRound(round)
     }
-    if (rendererPtyDispatcherReady && pendingData.size > 0 && writes === 0) {
+    if (rendererPtyDispatcherReady && pendingData.size > 0 && writes === 0 && !sendFailed) {
       ackGatedFlushSkipCount++
     }
-    recordPtyRendererDeliveryPressure()
+    if (sendFailed && pendingData.size > 0) {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      schedulePendingDataFlush(PTY_BATCH_DRAIN_CONTINUE_MS)
+      return
+    }
     if (pendingData.size > 0 && (writes > 0 || creditReleasedDuringFlush)) {
       // Why yield between slices: a background terminal can dump megabytes at once, and keystroke writes must not stall behind one flush.
       schedulePendingDataFlush(writes > 0 ? PTY_BATCH_DRAIN_CONTINUE_MS : 0)
@@ -2634,6 +2683,7 @@ export function registerPtyHandlers(
       // Why resume a dead PTY (no-op): avoid leaving a stale paused mark behind for a reused id.
       producerFlowControl.release(payload.id)
       pendingOverflowMarkedPtys.delete(payload.id)
+      rendererDeliveryRestoreNeededPtys.delete(payload.id)
       lastInputAtByPty.delete(payload.id)
       interactiveOutputCharsByPty.delete(payload.id)
       const releasedRendererCredit = getRendererInFlightCharsForPty(payload.id)
@@ -2649,7 +2699,6 @@ export function registerPtyHandlers(
           schedulePendingDataAfterCreditReport(true)
         }
       }
-      recordPtyRendererDeliveryPressure()
       mainWindow.webContents.send('pty:exit', {
         ...payload,
         ...(reversibleStopOwnersByPtyId.has(payload.id) ? { preserveRendererBinding: true } : {})
@@ -2792,16 +2841,15 @@ export function registerPtyHandlers(
       if (isInteractiveOutput && rendererPtyDispatcherReady) {
         // Why the reserve: keep input echo from being pinned behind unrelated bulk output; it's bounded and the per-PTY cap still prevents an active TUI runaway.
         if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
-          pendingData.set(payload.id, pending)
+          setPendingPtyData(payload.id, pending)
           if (shouldEmitPendingCapRestoreMarker) {
             sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
           }
           updateProducerFlowControl(payload.id)
-          recordPtyRendererDeliveryPressure()
           requestDeliveryResyncForGatedPty()
           return
         }
-        pendingData.delete(payload.id)
+        deletePendingPtyData(payload.id)
         clearFlushTimerIfIdle()
         if (shouldEmitPendingCapRestoreMarker) {
           sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
@@ -2827,7 +2875,7 @@ export function registerPtyHandlers(
         }
         return
       }
-      pendingData.set(payload.id, pending)
+      setPendingPtyData(payload.id, pending)
       if (shouldEmitPendingCapRestoreMarker) {
         sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
       }
@@ -5150,7 +5198,6 @@ export function registerPtyHandlers(
         acknowledged = accounting ? applyCumulativeAck(args.id, accounting.ackedChars + delta) : 0
       }
       tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, acknowledged)
-      recordPtyRendererDeliveryPressure()
       schedulePendingDataAfterCreditReport(acknowledged > 0)
     }
   )
@@ -5178,7 +5225,6 @@ export function registerPtyHandlers(
           tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
         }
       }
-      recordPtyRendererDeliveryPressure()
       schedulePendingDataAfterCreditReport(creditedAny)
     }
   )
@@ -5210,7 +5256,6 @@ export function registerPtyHandlers(
         writtenOff = writeOffLostRendererDelivery(args)
         creditedAny ||= writtenOff.length > 0
       }
-      recordPtyRendererDeliveryPressure()
       schedulePendingDataAfterCreditReport(creditedAny)
       let inFlightPtyCount = 0
       for (const accounting of rendererDeliveryAccountingByPty.values()) {

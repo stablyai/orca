@@ -12,7 +12,7 @@ const TOTAL_LIMIT = 12
 const ACTIVE_PER_PTY_RESERVE = 4
 const ACTIVE_TOTAL_RESERVE = 4
 
-type EngineKind = 'legacy' | 'queue'
+type EngineKind = 'reference' | 'queue'
 type Accounting = { sent: number; acked: number }
 type DeliveryEvent =
   | {
@@ -63,7 +63,7 @@ class DrainSchedulerEngine {
   private creditReleasedWhileDraining = false
   private notify: ((event: DeliveryEvent) => void) | null = null
   readonly events: DeliveryEvent[] = []
-  legacySnapshotEntryVisits = 0
+  referenceSnapshotEntryVisits = 0
 
   constructor(private readonly kind: EngineKind) {
     this.queue =
@@ -164,7 +164,7 @@ class DrainSchedulerEngine {
         ...entries.filter(([id]) => this.active.has(id)),
         ...entries.filter(([id]) => !this.active.has(id))
       ]
-      this.legacySnapshotEntryVisits += entries.length
+      this.referenceSnapshotEntryVisits += entries.length
       for (const [id, pending] of ordered) {
         if (writes >= MAX_WRITES || generation !== this.clearGeneration) {
           break
@@ -418,19 +418,19 @@ class DrainSchedulerEngine {
   }
 }
 
-type EnginePair = { legacy: DrainSchedulerEngine; queue: DrainSchedulerEngine }
+type EnginePair = { reference: DrainSchedulerEngine; queue: DrainSchedulerEngine }
 
 function createPair(): EnginePair {
   return {
-    legacy: new DrainSchedulerEngine('legacy'),
+    reference: new DrainSchedulerEngine('reference'),
     queue: new DrainSchedulerEngine('queue')
   }
 }
 
 function applyBoth(pair: EnginePair, operation: (engine: DrainSchedulerEngine) => void): void {
-  operation(pair.legacy)
+  operation(pair.reference)
   operation(pair.queue)
-  expect(pair.queue.snapshot()).toEqual(pair.legacy.snapshot())
+  expect(pair.queue.snapshot()).toEqual(pair.reference.snapshot())
 }
 
 function dataEvents(engine: DrainSchedulerEngine): Extract<DeliveryEvent, { kind: 'data' }>[] {
@@ -439,7 +439,7 @@ function dataEvents(engine: DrainSchedulerEngine): Extract<DeliveryEvent, { kind
   )
 }
 
-describe('PTY pending-data scheduler legacy differential', () => {
+describe('PTY pending-data hardened scheduler reference', () => {
   it('models scheduled ticks and positive, zero, duplicate, stale, and clamped ACKs', () => {
     const pair = createPair()
     applyBoth(pair, (engine) => engine.enqueue('a', { data: 'abcdefghijklmnopqrst' }))
@@ -530,6 +530,68 @@ describe('PTY pending-data scheduler legacy differential', () => {
     })
   })
 
+  it('freezes lane order while a background candidate gains live active reserve', () => {
+    const pair = createPair()
+    applyBoth(pair, (engine) =>
+      engine.enqueue('credit', { data: 'aaaaaaaa', rawLength: 8, transformed: true })
+    )
+    applyBoth(pair, (engine) => engine.tick())
+    applyBoth(pair, (engine) => engine.setActive('trigger', true))
+    applyBoth(pair, (engine) => engine.setActive('active-before', true))
+    applyBoth(pair, (engine) => engine.setDroppable('trigger', true))
+    applyBoth(pair, (engine) => engine.enqueue('trigger', { data: 'drop' }))
+    applyBoth(pair, (engine) => engine.enqueue('active-before', { data: 'aaaa' }))
+    applyBoth(pair, (engine) => engine.enqueue('reserve-later', { data: 'bbbb' }))
+    for (const engine of [pair.reference, pair.queue]) {
+      engine.setNotification((event) => {
+        if (event.kind === 'drop' && event.id === 'trigger') {
+          engine.setActive('reserve-later', true)
+        }
+      })
+    }
+
+    applyBoth(pair, (engine) => engine.tick())
+
+    expect(pair.queue.events.slice(-3)).toEqual([
+      { kind: 'drop', id: 'trigger', data: 'drop' },
+      { kind: 'data', id: 'active-before', data: 'aaaa', rawLength: 4 },
+      { kind: 'data', id: 'reserve-later', data: 'bbbb', rawLength: 4 }
+    ])
+  })
+
+  it('freezes lane order while an active candidate loses live reserve', () => {
+    const pair = createPair()
+    applyBoth(pair, (engine) =>
+      engine.enqueue('credit-a', { data: 'aaaaaaaa', rawLength: 8, transformed: true })
+    )
+    applyBoth(pair, (engine) =>
+      engine.enqueue('credit-b', { data: 'bbbb', rawLength: 4, transformed: true })
+    )
+    applyBoth(pair, (engine) => engine.tick())
+    applyBoth(pair, (engine) => engine.setActive('trigger', true))
+    applyBoth(pair, (engine) => engine.setActive('reserve-later', true))
+    applyBoth(pair, (engine) => engine.setDroppable('trigger', true))
+    applyBoth(pair, (engine) => engine.enqueue('trigger', { data: 'drop' }))
+    applyBoth(pair, (engine) => engine.enqueue('reserve-later', { data: 'held' }))
+    for (const engine of [pair.reference, pair.queue]) {
+      engine.setNotification((event) => {
+        if (event.kind === 'drop' && event.id === 'trigger') {
+          engine.setActive('reserve-later', false)
+        }
+      })
+    }
+
+    applyBoth(pair, (engine) => engine.tick())
+
+    expect(dataEvents(pair.queue).some((event) => event.id === 'reserve-later')).toBe(false)
+    expect(pair.queue.snapshot()).toMatchObject({
+      pending: [['reserve-later', { data: 'held' }]],
+      scheduledDelay: 0
+    })
+    applyBoth(pair, (engine) => engine.tick())
+    expect(pair.queue.debugQueue().blockedSize).toBe(1)
+  })
+
   it('orders final payloads before exit and only wakes blocked work for net-new credit', () => {
     const pair = createPair()
     applyBoth(pair, (engine) =>
@@ -557,16 +619,16 @@ describe('PTY pending-data scheduler legacy differential', () => {
     })
     expect(pair.queue.debugQueue().laneRebuildCount).toBe(rebuildsBeforeNoopExit)
 
-    pair.legacy.exit('credit-a')
+    pair.reference.exit('credit-a')
     pair.queue.exit('credit-a')
-    expect(pair.legacy.snapshot().scheduledDelay).toBeNull()
+    expect(pair.reference.snapshot().scheduledDelay).toBeNull()
     expect(pair.queue.snapshot().scheduledDelay).toBe(0)
     expect(pair.queue.snapshot()).toMatchObject({
-      pending: pair.legacy.snapshot().pending,
-      accounting: pair.legacy.snapshot().accounting,
-      totalInFlight: pair.legacy.snapshot().totalInFlight,
-      flowPending: pair.legacy.snapshot().flowPending,
-      events: pair.legacy.snapshot().events
+      pending: pair.reference.snapshot().pending,
+      accounting: pair.reference.snapshot().accounting,
+      totalInFlight: pair.reference.snapshot().totalInFlight,
+      flowPending: pair.reference.snapshot().flowPending,
+      events: pair.reference.snapshot().events
     })
   })
 
@@ -582,7 +644,7 @@ describe('PTY pending-data scheduler legacy differential', () => {
     applyBoth(pair, (engine) => engine.enqueue('held', { data: 'held' }))
     applyBoth(pair, (engine) => engine.enqueue('hidden', { data: 'drop' }))
     applyBoth(pair, (engine) => engine.setDroppable('hidden', true))
-    for (const engine of [pair.legacy, pair.queue]) {
+    for (const engine of [pair.reference, pair.queue]) {
       let exited = false
       engine.setNotification((event) => {
         if (!exited && event.kind === 'drop' && event.id === 'hidden') {
@@ -592,17 +654,17 @@ describe('PTY pending-data scheduler legacy differential', () => {
       })
     }
 
-    pair.legacy.tick()
+    pair.reference.tick()
     pair.queue.tick()
 
-    expect(pair.legacy.snapshot().scheduledDelay).toBeNull()
+    expect(pair.reference.snapshot().scheduledDelay).toBeNull()
     expect(pair.queue.snapshot().scheduledDelay).toBe(0)
     expect(pair.queue.snapshot()).toMatchObject({
-      pending: pair.legacy.snapshot().pending,
-      accounting: pair.legacy.snapshot().accounting,
-      totalInFlight: pair.legacy.snapshot().totalInFlight,
-      flowPending: pair.legacy.snapshot().flowPending,
-      events: pair.legacy.snapshot().events
+      pending: pair.reference.snapshot().pending,
+      accounting: pair.reference.snapshot().accounting,
+      totalInFlight: pair.reference.snapshot().totalInFlight,
+      flowPending: pair.reference.snapshot().flowPending,
+      events: pair.reference.snapshot().events
     })
     pair.queue.tick()
     expect(dataEvents(pair.queue).at(-1)).toMatchObject({ id: 'held', data: 'held' })
@@ -633,7 +695,7 @@ describe('PTY pending-data scheduler legacy differential', () => {
     const exitPair = createPair()
     applyBoth(exitPair, (engine) => engine.enqueue('partial', { data: 'abcdefgh' }))
     applyBoth(exitPair, (engine) => engine.enqueue('next', { data: 'next' }))
-    for (const engine of [exitPair.legacy, exitPair.queue]) {
+    for (const engine of [exitPair.reference, exitPair.queue]) {
       let exited = false
       engine.setNotification((event) => {
         if (!exited && event.kind === 'data' && event.id === 'partial') {
@@ -659,7 +721,7 @@ describe('PTY pending-data scheduler legacy differential', () => {
     const clearPair = createPair()
     applyBoth(clearPair, (engine) => engine.enqueue('first', { data: 'abcdefgh' }))
     applyBoth(clearPair, (engine) => engine.enqueue('detached', { data: 'detached' }))
-    for (const engine of [clearPair.legacy, clearPair.queue]) {
+    for (const engine of [clearPair.reference, clearPair.queue]) {
       let cleared = false
       engine.setNotification((event) => {
         if (!cleared && event.kind === 'data') {

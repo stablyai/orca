@@ -1,21 +1,14 @@
-export type PendingPtyData = {
-  data: string
-  startSeq?: number
-  rawLength?: number
-  transformed?: true
-  containsBackgroundOutput?: boolean
-  droppedOutput?: true
-}
+import type * as Contract from './pty-pending-data-drain-contract'
 
-export type PtyPendingDataDrainDisposition = 'active' | 'background' | 'blocked'
+export type * from './pty-pending-data-drain-contract'
 
-type LinkedLaneName = PtyPendingDataDrainDisposition
+type LinkedLaneName = Contract.PtyPendingDataDrainDisposition
 type NodeLaneName = LinkedLaneName | 'none' | 'selected'
 
 type PendingNode = {
   id: string
   allocationId: number
-  pending: PendingPtyData
+  pending: Contract.PendingPtyData
   previous: PendingNode | null
   next: PendingNode | null
   lane: NodeLaneName
@@ -24,18 +17,6 @@ type PendingNode = {
 }
 
 type Lane = { head: PendingNode | null; tail: PendingNode | null; size: number }
-
-type DrainPhase = 'active' | 'background' | 'done'
-
-export type PtyPendingDataDrainRound = {
-  readonly round: number
-  activeFrontier: number
-  backgroundFrontier: number
-  phase: DrainPhase
-  aborted: boolean
-}
-
-export type PtyPendingDataDrainSelection = Readonly<{ id: string; pending: PendingPtyData }>
 
 function createLane(): Lane {
   return { head: null, tail: null, size: 0 }
@@ -48,21 +29,32 @@ export class PtyPendingDataDrainQueue {
   private readonly blocked = createLane()
   private roundSerial = 0
   private lanePositionSerial = 0
-  private openRound: PtyPendingDataDrainRound | null = null
+  private openRound: Contract.PtyPendingDataDrainRound | null = null
   private selectedNode: PendingNode | null = null
   private relinkPending = false
   private createdNodeCount = 0
   private peakNodeCount = 0
   private selectionVisitCount = 0
   private laneRebuildCount = 0
+  private pendingChars = 0
+  private lastPolicyToken: unknown
 
-  constructor(private readonly classify: (id: string) => PtyPendingDataDrainDisposition) {}
+  constructor(
+    private readonly classify: (id: string) => Contract.PtyPendingDataDrainDisposition,
+    private readonly readPolicyToken?: () => unknown
+  ) {
+    this.lastPolicyToken = readPolicyToken?.()
+  }
 
   get size(): number {
     return this.nodes.size
   }
 
-  get(id: string): PendingPtyData | undefined {
+  get totalPendingChars(): number {
+    return this.pendingChars
+  }
+
+  get(id: string): Contract.PendingPtyData | undefined {
     return this.nodes.get(id)?.pending
   }
 
@@ -70,13 +62,13 @@ export class PtyPendingDataDrainQueue {
     return this.nodes.keys()
   }
 
-  *values(): IterableIterator<PendingPtyData> {
+  *values(): IterableIterator<Contract.PendingPtyData> {
     for (const node of this.nodes.values()) {
       yield node.pending
     }
   }
 
-  set(id: string, pending: PendingPtyData): void {
+  set(id: string, pending: Contract.PendingPtyData): void {
     const existing = this.nodes.get(id)
     if (!existing) {
       const node: PendingNode = {
@@ -90,6 +82,7 @@ export class PtyPendingDataDrainQueue {
         eligibleRound: this.roundSerial + 1
       }
       this.nodes.set(id, node)
+      this.pendingChars += pending.data.length
       this.createdNodeCount += 1
       this.peakNodeCount = Math.max(this.peakNodeCount, this.nodes.size)
       this.appendToLane(node, this.classify(id))
@@ -99,6 +92,7 @@ export class PtyPendingDataDrainQueue {
     if (existing === this.selectedNode) {
       throw new Error('Selected PTY pending data must commit before update')
     }
+    this.pendingChars += pending.data.length - existing.pending.data.length
     existing.pending = pending
     if (this.openRound) {
       // Why: renderer notification can synchronously append; defer the whole ID past this round's frontier.
@@ -109,12 +103,13 @@ export class PtyPendingDataDrainQueue {
     }
   }
 
-  delete(id: string): PendingPtyData | undefined {
+  delete(id: string): Contract.PendingPtyData | undefined {
     const node = this.nodes.get(id)
     if (!node) {
       return undefined
     }
     this.nodes.delete(id)
+    this.pendingChars -= node.pending.data.length
     this.unlink(node)
     if (this.selectedNode === node) {
       this.selectedNode = null
@@ -127,6 +122,7 @@ export class PtyPendingDataDrainQueue {
       this.openRound.aborted = true
     }
     this.nodes.clear()
+    this.pendingChars = 0
     this.resetLane(this.active)
     this.resetLane(this.background)
     this.resetLane(this.blocked)
@@ -140,19 +136,28 @@ export class PtyPendingDataDrainQueue {
     return this.requestRelink(this.nodes.size > 0)
   }
 
+  invalidate(id: string): boolean {
+    return this.requestRelink(this.nodes.has(id))
+  }
+
   reactivateBlocked(): boolean {
     return this.requestRelink(this.blocked.size > 0)
   }
 
-  beginRound(): PtyPendingDataDrainRound {
+  beginRound(): Contract.PtyPendingDataDrainRound {
     if (this.openRound) {
       throw new Error('PTY pending-data drain round already open')
     }
     this.roundSerial += 1
+    const policyToken = this.readPolicyToken?.()
+    if (!Object.is(policyToken, this.lastPolicyToken)) {
+      this.lastPolicyToken = policyToken
+      this.requestRelink(this.nodes.size > 0)
+    }
     if (this.relinkPending) {
       this.rebuildLanes()
     }
-    const round: PtyPendingDataDrainRound = {
+    const round: Contract.PtyPendingDataDrainRound = {
       round: this.roundSerial,
       activeFrontier: this.active.tail?.lanePosition ?? 0,
       backgroundFrontier: this.background.tail?.lanePosition ?? 0,
@@ -163,7 +168,7 @@ export class PtyPendingDataDrainQueue {
     return round
   }
 
-  takeNext(round: PtyPendingDataDrainRound): PtyPendingDataDrainSelection | null {
+  takeNext(round: Contract.PtyPendingDataDrainRound): Contract.PtyPendingDataDrainSelection | null {
     if (this.openRound !== round || round.aborted || round.phase === 'done') {
       return null
     }
@@ -188,30 +193,35 @@ export class PtyPendingDataDrainQueue {
     return null
   }
 
-  block(selection: PtyPendingDataDrainSelection): void {
+  block(selection: Contract.PtyPendingDataDrainSelection): void {
     const node = this.requireSelectedNode(selection)
     this.selectedNode = null
     this.appendToLane(node, 'blocked')
   }
 
-  remove(selection: PtyPendingDataDrainSelection): void {
+  remove(selection: Contract.PtyPendingDataDrainSelection): void {
     const node = this.requireSelectedNode(selection)
     this.selectedNode = null
     this.nodes.delete(node.id)
+    this.pendingChars -= node.pending.data.length
     node.lane = 'none'
   }
 
-  replaceWithRemainder(selection: PtyPendingDataDrainSelection, pending: PendingPtyData): void {
+  replaceWithRemainder(
+    selection: Contract.PtyPendingDataDrainSelection,
+    pending: Contract.PendingPtyData
+  ): void {
     const node = this.requireSelectedNode(selection)
     this.selectedNode = null
     this.nodes.delete(node.id)
+    this.pendingChars += pending.data.length - node.pending.data.length
     node.pending = pending
     node.eligibleRound = (this.openRound?.round ?? this.roundSerial) + 1
     this.nodes.set(node.id, node)
     this.appendToLane(node, this.classify(node.id))
   }
 
-  endRound(round: PtyPendingDataDrainRound): void {
+  endRound(round: Contract.PtyPendingDataDrainRound): void {
     if (this.openRound !== round) {
       return
     }
@@ -228,6 +238,7 @@ export class PtyPendingDataDrainQueue {
   getDebugSnapshot() {
     return {
       pendingSize: this.nodes.size,
+      totalPendingChars: this.pendingChars,
       activeRunnableSize: this.active.size,
       backgroundRunnableSize: this.background.size,
       blockedSize: this.blocked.size,
@@ -250,7 +261,7 @@ export class PtyPendingDataDrainQueue {
     }
   }
 
-  private requireSelectedNode(selection: PtyPendingDataDrainSelection): PendingNode {
+  private requireSelectedNode(selection: Contract.PtyPendingDataDrainSelection): PendingNode {
     const node = selection as PendingNode
     if (this.selectedNode !== node || this.nodes.get(node.id) !== node) {
       throw new Error('Stale PTY pending-data drain selection')
@@ -269,19 +280,15 @@ export class PtyPendingDataDrainQueue {
     this.resetLane(this.background)
     this.resetLane(this.blocked)
     for (const node of this.nodes.values()) {
-      node.previous = null
-      node.next = null
-      node.lane = 'none'
+      Object.assign(node, { previous: null, next: null, lane: 'none' as const })
+      node.eligibleRound = this.roundSerial
       this.appendToLane(node, this.classify(node.id))
     }
     this.relinkPending = false
   }
 
   private laneFor(name: LinkedLaneName): Lane {
-    if (name === 'active') {
-      return this.active
-    }
-    return name === 'background' ? this.background : this.blocked
+    return name === 'active' ? this.active : name === 'background' ? this.background : this.blocked
   }
 
   private appendToLane(node: PendingNode, name: LinkedLaneName): void {
@@ -304,9 +311,7 @@ export class PtyPendingDataDrainQueue {
 
   private unlink(node: PendingNode): void {
     if (node.lane === 'none' || node.lane === 'selected') {
-      node.previous = null
-      node.next = null
-      node.lane = 'none'
+      Object.assign(node, { previous: null, next: null, lane: 'none' as const })
       return
     }
     const lane = this.laneFor(node.lane)
@@ -321,14 +326,10 @@ export class PtyPendingDataDrainQueue {
       lane.tail = node.previous
     }
     lane.size -= 1
-    node.previous = null
-    node.next = null
-    node.lane = 'none'
+    Object.assign(node, { previous: null, next: null, lane: 'none' as const })
   }
 
   private resetLane(lane: Lane): void {
-    lane.head = null
-    lane.tail = null
-    lane.size = 0
+    Object.assign(lane, { head: null, tail: null, size: 0 })
   }
 }

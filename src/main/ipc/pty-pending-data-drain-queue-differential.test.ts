@@ -229,6 +229,9 @@ function expectEquivalent(
 ): void {
   expect([...queue.keys()]).toEqual([...legacy.keys()])
   expect([...queue.values()]).toEqual([...legacy.values()])
+  expect(queue.totalPendingChars).toBe(
+    [...legacy.values()].reduce((total, pending) => total + pending.data.length, 0)
+  )
   expect(queuePolicy.credit).toBe(legacyPolicy.credit)
   expect(queueTimeline).toEqual(legacyTimeline)
 }
@@ -313,9 +316,9 @@ function runSeed(seed: number): void {
   }
 }
 
-describe('PtyPendingDataDrainQueue legacy differential', () => {
+describe('PtyPendingDataDrainQueue shared-domain differential', () => {
   it.each([0x1a2b3c4d, 0x5eedc0de, 0x7f4a7c15])(
-    'matches frozen Map drain behavior for seed %i',
+    'matches frozen Map behavior in the ordinary non-reentrant domain for seed %i',
     (seed) => {
       runSeed(seed)
     }

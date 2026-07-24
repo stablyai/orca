@@ -116,6 +116,103 @@ describe('PtyPendingDataDrainQueue', () => {
     expect(queue.getDebugSnapshot().createdNodeCount).toBe(3)
   })
 
+  it('rebuilds an earlier reentrant update before an untouched later ID in Map order', () => {
+    const { queue } = createQueueState()
+    queue.set('trigger', pending('trigger'))
+    queue.set('earlier', pending('old'))
+    queue.set('later', pending('later'))
+
+    const firstRound = queue.beginRound()
+    queue.remove(queue.takeNext(firstRound)!)
+    queue.set('earlier', pending('new'))
+    queue.endRound(firstRound)
+
+    const secondRound = queue.beginRound()
+    const order: string[] = []
+    for (;;) {
+      const selection = queue.takeNext(secondRound)
+      if (!selection) {
+        break
+      }
+      order.push(selection.id)
+      queue.remove(selection)
+    }
+    queue.endRound(secondRound)
+
+    expect(order).toEqual(['earlier', 'later'])
+  })
+
+  it('keeps aggregate pending chars exact across every owner transition', () => {
+    const { blocked, queue } = createQueueState()
+    queue.set('a', pending('abc'))
+    queue.set('b', pending('12345'))
+    expect(queue.totalPendingChars).toBe(8)
+
+    queue.set('a', pending('abcdef'))
+    expect(queue.totalPendingChars).toBe(11)
+    blocked.add('a')
+    queue.invalidate('a')
+    const blockedRound = queue.beginRound()
+    const b = queue.takeNext(blockedRound)!
+    queue.replaceWithRemainder(b, pending('12'))
+    queue.endRound(blockedRound)
+    expect(queue.totalPendingChars).toBe(8)
+
+    blocked.delete('a')
+    queue.reactivateBlocked()
+    const removalRound = queue.beginRound()
+    const first = queue.takeNext(removalRound)!
+    queue.remove(first)
+    queue.endRound(removalRound)
+    expect(queue.totalPendingChars).toBe(2)
+
+    expect(queue.delete('b')).toEqual(pending('12'))
+    expect(queue.totalPendingChars).toBe(0)
+    queue.set('c', pending('tail'))
+    queue.clear()
+    expect(queue.getDebugSnapshot()).toMatchObject({
+      pendingSize: 0,
+      totalPendingChars: 0
+    })
+  })
+
+  it('relinks only when the exact derived settings token changes', () => {
+    const settings = {
+      terminalMainSideEffectAuthority: true,
+      terminalHiddenDeliveryGate: true,
+      unrelated: 0
+    }
+    const queue = new PtyPendingDataDrainQueue(
+      () => 'background',
+      () => settings.terminalMainSideEffectAuthority && settings.terminalHiddenDeliveryGate
+    )
+    queue.set('a', pending('a'))
+    const firstRound = queue.beginRound()
+    queue.endRound(firstRound)
+    const baseline = queue.getDebugSnapshot().laneRebuildCount
+
+    settings.unrelated += 1
+    const unrelatedRound = queue.beginRound()
+    queue.endRound(unrelatedRound)
+    expect(queue.getDebugSnapshot().laneRebuildCount).toBe(baseline)
+
+    settings.terminalHiddenDeliveryGate = false
+    const disabledRound = queue.beginRound()
+    queue.endRound(disabledRound)
+    expect(queue.getDebugSnapshot().laneRebuildCount).toBe(baseline + 1)
+
+    settings.terminalMainSideEffectAuthority = false
+    settings.terminalHiddenDeliveryGate = true
+    const equivalentRound = queue.beginRound()
+    queue.endRound(equivalentRound)
+    expect(queue.getDebugSnapshot().laneRebuildCount).toBe(baseline + 1)
+
+    settings.terminalMainSideEffectAuthority = true
+    const enabledRound = queue.beginRound()
+    queue.endRound(enabledRound)
+    expect(queue.getDebugSnapshot().laneRebuildCount).toBe(baseline + 2)
+  })
+
   it('does not follow a detached successor after reentrant delete or clear', () => {
     const deleted = createQueueState().queue
     deleted.set('a', pending('a'))
