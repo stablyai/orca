@@ -5861,17 +5861,22 @@ function SourceControlInner(): React.JSX.Element {
                             {canRevertAll && (
                               <ActionButton
                                 icon={discardHasUntracked ? Trash : Undo2}
-                                // Why: for untracked files, discard deletes outright (rm -rf), so label the destructive variant explicitly.
+                                // Why: for untracked files, discard deletes outright (rm -rf), so label the destructive variant explicitly — including when a Combine Untracked with Changes section mixes modified and untracked rows.
                                 title={
                                   area === 'untracked'
                                     ? translate(
                                         'auto.components.right.sidebar.SourceControl.2f609a2e7c',
                                         'Delete all untracked'
                                       )
-                                    : translate(
-                                        'auto.components.right.sidebar.SourceControl.ce41708855',
-                                        'Discard all'
-                                      )
+                                    : discardHasUntracked
+                                      ? translate(
+                                          'auto.components.right.sidebar.SourceControl.discardAllMixedUntracked',
+                                          'Discard changes and delete untracked files'
+                                        )
+                                      : translate(
+                                          'auto.components.right.sidebar.SourceControl.ce41708855',
+                                          'Discard all'
+                                        )
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation()
@@ -7648,10 +7653,15 @@ function SourceControlTreeDirectoryRow({
                       'auto.components.right.sidebar.SourceControl.9b367363b6',
                       'Delete untracked in folder'
                     )
-                  : translate(
-                      'auto.components.right.sidebar.SourceControl.6d7f2a47e5',
-                      'Discard folder'
-                    )
+                  : actionPaths.discardHasUntracked
+                    ? translate(
+                        'auto.components.right.sidebar.SourceControl.discardFolderMixedUntracked',
+                        'Discard changes and delete untracked files in folder'
+                      )
+                    : translate(
+                        'auto.components.right.sidebar.SourceControl.6d7f2a47e5',
+                        'Discard folder'
+                      )
               }
               onClick={(event) => {
                 event.stopPropagation()

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import type { Page } from '@playwright/test'
@@ -15,14 +16,12 @@ async function openSourceControl(page: Page): Promise<void> {
   await page.getByRole('button', { name: /Source Control/ }).click()
 }
 
-async function seedUntrackedAndModifiedFiles(page: Page): Promise<SeededChanges> {
-  return page.evaluate(async () => {
-    const store = window.__store
-    if (!store) {
+async function getActiveWorktree(page: Page): Promise<{ id: string; path: string }> {
+  return page.evaluate(() => {
+    const state = window.__store?.getState()
+    if (!state) {
       throw new Error('window.__store is not available')
     }
-
-    const state = store.getState()
     const worktreeId = state.activeWorktreeId
     const worktree = Object.values(state.worktreesByRepo)
       .flat()
@@ -30,27 +29,45 @@ async function seedUntrackedAndModifiedFiles(page: Page): Promise<SeededChanges>
     if (!worktree) {
       throw new Error('active worktree not found')
     }
-
-    const separator = worktree.path.includes('\\') ? '\\' : '/'
-    const untrackedFileName = `orca-combine-untracked-${Date.now()}.txt`
-    await window.api.fs.writeFile({
-      filePath: `${worktree.path}${separator}${untrackedFileName}`,
-      content: 'new untracked file\n'
-    })
-
-    const modifiedFileName = 'README.md'
-    const modifiedFilePath = `${worktree.path}${separator}${modifiedFileName}`
-    const original = await window.api.fs.readFile({ filePath: modifiedFilePath })
-    await window.api.fs.writeFile({
-      filePath: modifiedFilePath,
-      content: `${original.content}\n<!-- orca-combine-untracked-changes e2e -->\n`
-    })
-
-    const status = await window.api.git.status({ worktreePath: worktree.path })
-    state.setGitStatus(worktree.id, status)
-
-    return { untrackedFileName, modifiedFileName }
+    return { id: worktree.id, path: worktree.path }
   })
+}
+
+async function seedUntrackedAndModifiedFiles(page: Page): Promise<SeededChanges> {
+  // Why: worktree.path uses the OS-native separator of the machine running
+  // Orca — resolve the seeded file paths with node:path here (Node context)
+  // rather than inferring the separator inside the renderer callback.
+  const worktree = await getActiveWorktree(page)
+  const untrackedFileName = `orca-combine-untracked-${Date.now()}.txt`
+  const untrackedFilePath = path.join(worktree.path, untrackedFileName)
+  const modifiedFileName = 'README.md'
+  const modifiedFilePath = path.join(worktree.path, modifiedFileName)
+
+  await page.evaluate(
+    async ({ worktreeId, worktreePath, untrackedFilePath, modifiedFilePath }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+
+      await window.api.fs.writeFile({
+        filePath: untrackedFilePath,
+        content: 'new untracked file\n'
+      })
+
+      const original = await window.api.fs.readFile({ filePath: modifiedFilePath })
+      await window.api.fs.writeFile({
+        filePath: modifiedFilePath,
+        content: `${original.content}\n<!-- orca-combine-untracked-changes e2e -->\n`
+      })
+
+      const status = await window.api.git.status({ worktreePath })
+      store.getState().setGitStatus(worktreeId, status)
+    },
+    { worktreeId: worktree.id, worktreePath: worktree.path, untrackedFilePath, modifiedFilePath }
+  )
+
+  return { untrackedFileName, modifiedFileName }
 }
 
 async function setCombineUntrackedChanges(page: Page, enabled: boolean): Promise<void> {
