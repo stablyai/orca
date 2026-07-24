@@ -3033,7 +3033,7 @@ export type PreloadApi = {
     onFileDrop: (callback: (data: NativeFileDropPayload) => void) => () => void
     getZoomLevel: () => number
     setZoomLevel: (level: number) => void
-    syncTrafficLights: (zoomFactor: number) => void
+    syncWindowChrome: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
     setTerminalInputFocused: (focused: boolean) => void
     setFloatingTerminalInputFocused: (focused: boolean) => void

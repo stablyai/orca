@@ -1983,52 +1983,61 @@ describe('createMainWindow', () => {
     expect(destroy).not.toHaveBeenCalled()
   })
 
-  it('ignores traffic light sync IPC on non-macOS', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
+  it('syncs native window chrome with UI zoom by platform', () => {
+    for (const platform of ['darwin', 'win32', 'linux'] satisfies NodeJS.Platform[]) {
+      browserWindowMock.mockReset()
+      vi.mocked(ipcMain.on).mockReset()
+      const webContents = {
+        on: vi.fn(),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn()
+      }
+      const browserWindowInstance = {
+        webContents,
+        on: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        setWindowButtonPosition: vi.fn(),
+        setTitleBarOverlay: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+      browserWindowMock.mockImplementation(function () {
+        return browserWindowInstance
+      })
+
+      withPlatform(platform, () => {
+        createMainWindow(null)
+        const syncListener = vi
+          .mocked(ipcMain.on)
+          .mock.calls.find(([channel]) => channel === 'ui:sync-window-chrome')?.[1]
+
+        expect(syncListener).toBeTypeOf('function')
+        syncListener?.({} as never, 1.2)
+      })
+
+      if (platform === 'darwin') {
+        expect(browserWindowInstance.setWindowButtonPosition).toHaveBeenCalledWith({
+          x: 16,
+          y: 16
+        })
+      } else {
+        expect(browserWindowInstance.setWindowButtonPosition).not.toHaveBeenCalled()
+      }
+      if (platform === 'win32') {
+        expect(browserWindowInstance.setTitleBarOverlay).toHaveBeenCalledWith({ height: 43 })
+      } else {
+        expect(browserWindowInstance.setTitleBarOverlay).not.toHaveBeenCalled()
+      }
     }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      setWindowButtonPosition: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null)
-
-    const syncListener = vi
-      .mocked(ipcMain.on)
-      .mock.calls.find(([channel]) => channel === 'ui:sync-traffic-lights')?.[1]
-
-    expect(syncListener).toBeTypeOf('function')
-
-    syncListener?.({} as never, 1.2)
-
-    if (process.platform === 'darwin') {
-      expect(browserWindowInstance.setWindowButtonPosition).toHaveBeenCalledWith({ x: 16, y: 16 })
-      return
-    }
-
-    expect(browserWindowInstance.setWindowButtonPosition).not.toHaveBeenCalled()
   })
 
   it('intercepts Cmd+B for sidebar when the markdown editor is not focused', () => {

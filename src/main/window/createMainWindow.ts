@@ -136,12 +136,16 @@ const TRAFFIC_LIGHT_X = 16
 const MIN_WIDTH = 600
 const MIN_HEIGHT = 400
 
-function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void {
-  if (process.platform !== 'darwin' || win.isDestroyed()) {
+function syncWindowChrome(win: BrowserWindow, zoomFactor: number): void {
+  if (win.isDestroyed()) {
     return
   }
-  const y = Math.round(TITLEBAR_CSS_CENTER * zoomFactor - TRAFFIC_LIGHT_RADIUS)
-  win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y })
+  if (process.platform === 'darwin') {
+    const y = Math.round(TITLEBAR_CSS_CENTER * zoomFactor - TRAFFIC_LIGHT_RADIUS)
+    win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y })
+  } else if (process.platform === 'win32') {
+    win.setTitleBarOverlay({ height: Math.round(TITLEBAR_CSS_HEIGHT * zoomFactor) })
+  }
 }
 
 type CreateMainWindowOptions = {
@@ -258,7 +262,7 @@ export function createMainWindow(
       : {}),
     // Why: Linux ignores titleBarStyle 'hidden'; frame:false drops the native frame so we don't get a double title bar (renderer draws its own).
     ...(process.platform === 'linux' ? { frame: false } : {}),
-    // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts on zoom change.
+    // Why: initial position for 1x zoom; syncWindowChrome() adjusts on zoom change.
     ...(process.platform === 'darwin'
       ? {
           trafficLightPosition: {
@@ -298,10 +302,9 @@ export function createMainWindow(
   mainWindow.webContents.on('dom-ready', () => {
     const level = store?.getUI().uiZoomLevel ?? 0
     mainWindow.webContents.setZoomLevel(level)
-    // Why: native traffic lights don't scale with CSS zoom; reposition on startup to stay aligned with the zoomed titlebar.
-    if (process.platform === 'darwin') {
-      syncTrafficLightPosition(mainWindow, Math.pow(1.2, level))
-    }
+    // Why: native window controls don't scale with webFrame zoom; keep their
+    // platform chrome aligned with the restored CSS titlebar height.
+    syncWindowChrome(mainWindow, Math.pow(1.2, level))
   })
 
   // Why: macOS+Electron 41 re-emits ready-to-show on webview-guest creation; a one-shot guard stops re-running maximize() after resize (#591).
@@ -994,11 +997,11 @@ export function createMainWindow(
       mainWindow.close()
     }
   }
-  const trafficLightChannel = 'ui:sync-traffic-lights'
-  const onSyncTrafficLights = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
-    syncTrafficLightPosition(mainWindow, zoomFactor)
+  const windowChromeChannel = 'ui:sync-window-chrome'
+  const onSyncWindowChrome = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
+    syncWindowChrome(mainWindow, zoomFactor)
   }
-  ipcMain.on(trafficLightChannel, onSyncTrafficLights)
+  ipcMain.on(windowChromeChannel, onSyncWindowChrome)
 
   // Why: renderer-drawn window controls on Windows/Linux replicate the native title-bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
@@ -1061,7 +1064,7 @@ export function createMainWindow(
     floatingTerminalInputFocused = false
     shortcutRecorderFocused = false
     clearRendererRecoveryTimer()
-    ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
+    ipcMain.removeListener(windowChromeChannel, onSyncWindowChrome)
     ipcMain.removeListener(minimizeChannel, onMinimize)
     ipcMain.removeListener(maximizeChannel, onMaximize)
     browserManager.setDictationShortcutForwardingPredicate(null)
