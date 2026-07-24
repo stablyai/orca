@@ -18,6 +18,7 @@ const dropByTabPrefix = vi.fn()
 beforeEach(() => {
   resetAgentPaneAuthorityAliasesForTests()
   vi.clearAllMocks()
+  transferPaneAuthority.mockResolvedValue({ kind: 'transferred' })
   vi.stubGlobal('window', {
     api: {
       agentStatus: {
@@ -69,7 +70,7 @@ describe('agent pane authority', () => {
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
   })
 
-  it('keeps a physical pane routed through chained detaches until its current owner closes', () => {
+  it('keeps a physical pane routed through chained detaches until its current owner closes', async () => {
     const store = createTestStore()
     store.getState().setAgentStatus(SOURCE, { state: 'working', prompt: 'source' })
     store.setState({
@@ -94,6 +95,7 @@ describe('agent pane authority', () => {
     store
       .getState()
       .transferAgentPaneAuthority({ fromPaneKey: TARGET, toPaneKey: FINAL, ptyId: 'pty-1' })
+    await vi.waitFor(() => expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(FINAL))
     store.getState().dropAgentStatusByTabPrefix('tab-source')
 
     expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(FINAL)
@@ -121,5 +123,79 @@ describe('agent pane authority', () => {
     expect(store.getState().agentStatusByPaneKey[SOURCE]).toBeUndefined()
     expect(store.getState().agentStatusByPaneKey[FINAL]).toBeUndefined()
     expect(store.getState().recentlyRetiredAgentStatusPaneKeys[SOURCE]).toBe(true)
+  })
+
+  it('commits renderer authority only after main acknowledges the durable transfer', async () => {
+    let resolveTransfer: ((result: { kind: 'transferred' }) => void) | undefined
+    transferPaneAuthority.mockImplementationOnce(
+      () =>
+        new Promise((resolve: (result: { kind: 'transferred' }) => void) => {
+          resolveTransfer = resolve
+        })
+    )
+    const store = createTestStore()
+    store.getState().setAgentStatus(SOURCE, { state: 'working', prompt: 'source' })
+
+    store
+      .getState()
+      .transferAgentPaneAuthority({ fromPaneKey: SOURCE, toPaneKey: TARGET, ptyId: 'pty-1' })
+
+    expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(SOURCE)
+    expect(store.getState().agentStatusByPaneKey[SOURCE]?.prompt).toBe('source')
+    await vi.waitFor(() => expect(resolveTransfer).toBeTypeOf('function'))
+    resolveTransfer!({ kind: 'transferred' })
+    await vi.waitFor(() => expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(TARGET))
+    expect(store.getState().agentStatusByPaneKey[TARGET]?.prompt).toBe('source')
+  })
+
+  it('keeps renderer authority at the source when main rejects the durable transfer', async () => {
+    transferPaneAuthority.mockResolvedValueOnce({ kind: 'not-owned' })
+    const store = createTestStore()
+    store.getState().setAgentStatus(SOURCE, { state: 'working', prompt: 'source' })
+
+    store
+      .getState()
+      .transferAgentPaneAuthority({ fromPaneKey: SOURCE, toPaneKey: TARGET, ptyId: 'pty-1' })
+    await vi.waitFor(() => expect(transferPaneAuthority).toHaveBeenCalledTimes(1))
+
+    expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(SOURCE)
+    expect(store.getState().agentStatusByPaneKey[SOURCE]?.prompt).toBe('source')
+    expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
+  })
+
+  it('keeps renderer authority at the source when durability retries are exhausted', async () => {
+    vi.useFakeTimers()
+    try {
+      transferPaneAuthority.mockResolvedValue({ kind: 'durability-failed' })
+      const store = createTestStore()
+      store.getState().setAgentStatus(SOURCE, { state: 'working', prompt: 'source' })
+
+      store
+        .getState()
+        .transferAgentPaneAuthority({ fromPaneKey: SOURCE, toPaneKey: TARGET, ptyId: 'pty-1' })
+      await vi.runAllTimersAsync()
+
+      expect(transferPaneAuthority).toHaveBeenCalledTimes(3)
+      expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(SOURCE)
+      expect(store.getState().agentStatusByPaneKey[SOURCE]?.prompt).toBe('source')
+      expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps renderer authority at the source when the IPC invoke rejects', async () => {
+    transferPaneAuthority.mockRejectedValueOnce(new Error('IPC closed'))
+    const store = createTestStore()
+    store.getState().setAgentStatus(SOURCE, { state: 'working', prompt: 'source' })
+
+    store
+      .getState()
+      .transferAgentPaneAuthority({ fromPaneKey: SOURCE, toPaneKey: TARGET, ptyId: 'pty-1' })
+    await vi.waitFor(() => expect(transferPaneAuthority).toHaveBeenCalledTimes(1))
+
+    expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(SOURCE)
+    expect(store.getState().agentStatusByPaneKey[SOURCE]?.prompt).toBe('source')
+    expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
   })
 })

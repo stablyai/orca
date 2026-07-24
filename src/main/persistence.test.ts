@@ -11117,6 +11117,73 @@ describe('Store host-partitioned workspace sessions', () => {
     ).toBeUndefined()
   })
 
+  it('transfers durable pane state after the renderer topology has already moved the owned PTY', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/worktree'
+    const sourcePaneKey = `tab-1:${TEST_LEAF_1}`
+    const targetPaneKey = `tab-2:${TEST_LEAF_1}`
+    store.addRepo(makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-a' }))
+    store.setWorkspaceSession(
+      {
+        ...makeBoundHostSession('runtime-pty'),
+        tabsByWorktree: {
+          [worktreeId]: [
+            {
+              ...makeBoundHostSession('runtime-pty').tabsByWorktree[worktreeId]![0]!,
+              ptyId: 'sibling-pty'
+            },
+            {
+              id: 'tab-2',
+              worktreeId,
+              title: 'Detached terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 2,
+              ptyId: 'runtime-pty'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            root: { type: 'leaf', leafId: TEST_LEAF_2 },
+            activeLeafId: TEST_LEAF_2,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_2]: 'sibling-pty' }
+          },
+          'tab-2': {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'runtime-pty' }
+          }
+        },
+        terminalPtyIncarnationsByPaneKey: { [sourcePaneKey]: 'runtime-incarnation' },
+        terminalArchiveHintsByPaneKey: {
+          [sourcePaneKey]: { launchAgent: 'codex' as const, startedAt: 10 }
+        }
+      },
+      'runtime:env-a'
+    )
+
+    expect(
+      store.transferTerminalArchivePaneDurableStateForOwnedPty({
+        fromPaneKey: sourcePaneKey,
+        toPaneKey: targetPaneKey,
+        ptyId: 'runtime-pty'
+      })
+    ).toEqual({ kind: 'transferred' })
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalPtyIncarnationsByPaneKey?.[targetPaneKey]
+    ).toBe('runtime-incarnation')
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalArchiveHintsByPaneKey?.[targetPaneKey]
+    ).toMatchObject({ launchAgent: 'codex' })
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalArchiveHintsByPaneKey?.[sourcePaneKey]
+    ).toBeUndefined()
+  })
+
   it('sync-flushes archive retirement behind a topology fence that stale session replays cannot rebase', async () => {
     const store = await createStore()
     const worktreeId = 'repo-1::/worktree'

@@ -6443,8 +6443,9 @@ export class Store {
     toPaneKey: string
     ptyId: string
   }): TerminalArchivePaneDurableTransferResult {
-    const parsed = parsePaneKey(args.fromPaneKey)
-    if (!parsed) {
+    const source = parsePaneKey(args.fromPaneKey)
+    const target = parsePaneKey(args.toPaneKey)
+    if (!source || !target) {
       return { kind: 'not-owned' }
     }
     for (const repo of this.state.repos) {
@@ -6454,13 +6455,12 @@ export class Store {
         if (getRepoIdFromWorktreeId(worktreeId) !== repo.id) {
           continue
         }
-        if (!tabs.some((tab) => tab.id === parsed.tabId)) {
-          continue
-        }
-        if (
-          session.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] !==
-          args.ptyId
-        ) {
+        const ownershipProven = [source, target].some(
+          (pane) =>
+            tabs.some((tab) => tab.id === pane.tabId) &&
+            session.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] === args.ptyId
+        )
+        if (!ownershipProven) {
           continue
         }
         try {

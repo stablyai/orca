@@ -1,9 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/terminal-windows-shift-enter'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
+const transferPaneAuthority = vi.fn()
+
+beforeEach(() => {
+  transferPaneAuthority.mockReset()
+  transferPaneAuthority.mockResolvedValue({ kind: 'transferred' })
+  vi.stubGlobal('window', { api: { agentStatus: { transferPaneAuthority } } })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('syncPaneDetachPtyOwnership agent identity', () => {
-  it('moves process, hook, launch, and resume authority to the detached leaf', () => {
+  it('moves process, hook, launch, and resume authority to the detached leaf after main acknowledges it', async () => {
     const store = createTestStore()
     const worktreeId = 'repo::/repo/worktree'
     const sourceTabId = 'tab-source'
@@ -77,6 +89,11 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       sourceTabId,
       targetTabId
     })
+
+    await vi.waitFor(() => expect(transferPaneAuthority).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() =>
+      expect(store.getState().agentStatusByPaneKey[targetPaneKey]).toBeDefined()
+    )
 
     const state = store.getState()
     expect(state.paneForegroundAgentByPaneKey[sourcePaneKey]).toBeUndefined()

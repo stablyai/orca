@@ -47,17 +47,30 @@ import {
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 import { retainTransientAgentStatusClearedConnection } from '@/lib/transient-agent-status-clear-retention'
 
-function persistAgentPaneAuthorityTransfer(
-  args: { fromPaneKey: string; toPaneKey: string; ptyId?: string },
-  attempt = 0
-): void {
-  const request = window.api?.agentStatus?.transferPaneAuthority?.(args)
-  void Promise.resolve(request).then((result) => {
-    if (result?.kind === 'durability-failed' && attempt < 2) {
-      // Renderer membership moves first; retry only a confirmed transient durable failure.
-      setTimeout(() => persistAgentPaneAuthorityTransfer(args, attempt + 1), 100 * (attempt + 1))
+function persistAgentPaneAuthorityTransfer(args: {
+  fromPaneKey: string
+  toPaneKey: string
+  ptyId?: string
+}): Promise<boolean> {
+  return (async () => {
+    for (let attempt = 0; attempt <= 2; attempt += 1) {
+      try {
+        const result = await (typeof window === 'undefined'
+          ? undefined
+          : window.api?.agentStatus?.transferPaneAuthority?.(args))
+        if (result?.kind === 'transferred') {
+          return true
+        }
+        if (result?.kind !== 'durability-failed' || attempt === 2) {
+          return false
+        }
+      } catch {
+        return false
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 100 * (attempt + 1)))
     }
-  })
+    return false
+  })()
 }
 
 /** Snapshot of a finished/vanished agent status entry, kept so the dashboard and sidebar hover
@@ -1196,6 +1209,67 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     }
   })
 
+  let agentPaneAuthorityTransferQueue = Promise.resolve()
+
+  const commitAgentPaneAuthorityTransfer = (args: {
+    fromPaneKey: string
+    toPaneKey: string
+    ptyId?: string | null
+  }): void => {
+    const transfer = transferAgentPaneAuthorityAlias(args)
+    if (!transfer || transfer.previousOwnerPaneKey === transfer.ownerPaneKey) {
+      return
+    }
+    const from = transfer.previousOwnerPaneKey
+    const to = transfer.ownerPaneKey
+    const targetTabId = getTabIdFromPaneKey(to) ?? undefined
+    const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
+    set((s) => ({
+      agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
+        ...entry,
+        paneKey: to,
+        tabId: targetTabId
+      })),
+      runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
+        s.runtimeAgentOrchestrationByPaneKey,
+        from,
+        to
+      ),
+      retainedAgentsByPaneKey: movePaneKeyedRecord(
+        s.retainedAgentsByPaneKey,
+        from,
+        to,
+        (retained) => ({
+          ...retained,
+          entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
+          tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
+        })
+      ),
+      sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
+        s.sleepingAgentSessionsByPaneKey,
+        from,
+        to,
+        (record) => ({ ...record, paneKey: to, tabId: targetTabId })
+      ),
+      agentLaunchConfigByPaneKey: movePaneKeyedRecord(
+        s.agentLaunchConfigByPaneKey,
+        from,
+        to,
+        (entry) => ({
+          ...entry,
+          identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
+        })
+      ),
+      acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
+      paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
+      unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
+      unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
+      lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
+      cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
+      retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
+    }))
+  }
+
   const clearSleepingAgentSessionsByPaneKey = (paneKeys: readonly string[]): void => {
     if (paneKeys.length === 0) {
       return
@@ -1317,65 +1391,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     },
 
     transferAgentPaneAuthority: ({ fromPaneKey, toPaneKey, ptyId }) => {
-      const transfer = transferAgentPaneAuthorityAlias({ fromPaneKey, toPaneKey, ptyId })
-      if (!transfer || transfer.previousOwnerPaneKey === transfer.ownerPaneKey) {
-        return
-      }
-      const from = transfer.previousOwnerPaneKey
-      const to = transfer.ownerPaneKey
-      const targetTabId = getTabIdFromPaneKey(to) ?? undefined
-      const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
-      set((s) => ({
-        agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
-          ...entry,
-          paneKey: to,
-          tabId: targetTabId
-        })),
-        runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
-          s.runtimeAgentOrchestrationByPaneKey,
-          from,
-          to
-        ),
-        retainedAgentsByPaneKey: movePaneKeyedRecord(
-          s.retainedAgentsByPaneKey,
-          from,
-          to,
-          (retained) => ({
-            ...retained,
-            entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
-            tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
-          })
-        ),
-        sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
-          s.sleepingAgentSessionsByPaneKey,
-          from,
-          to,
-          (record) => ({ ...record, paneKey: to, tabId: targetTabId })
-        ),
-        agentLaunchConfigByPaneKey: movePaneKeyedRecord(
-          s.agentLaunchConfigByPaneKey,
-          from,
-          to,
-          (entry) => ({
-            ...entry,
-            identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
-          })
-        ),
-        acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
-        paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
-        unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
-        unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
-        lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
-        cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
-        retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
-      }))
-      if (typeof window !== 'undefined') {
-        persistAgentPaneAuthorityTransfer({
-          fromPaneKey: from,
-          toPaneKey: to,
-          ...(transfer.ptyId ? { ptyId: transfer.ptyId } : {})
+      // Why: chained detaches must commit in main's acknowledged order so a later target is never sent before its predecessor exists.
+      agentPaneAuthorityTransferQueue = agentPaneAuthorityTransferQueue.then(async () => {
+        const transferred = await persistAgentPaneAuthorityTransfer({
+          fromPaneKey,
+          toPaneKey,
+          ...(ptyId ? { ptyId } : {})
         })
-      }
+        if (transferred) {
+          commitAgentPaneAuthorityTransfer({ fromPaneKey, toPaneKey, ptyId })
+        }
+      })
     },
 
     setRuntimeAgentOrchestrationByPaneKey: (entries) => {
