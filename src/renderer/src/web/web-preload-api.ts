@@ -770,6 +770,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
+    zaiCredentials: createZaiCredentialsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
@@ -2802,8 +2803,10 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     kimi: null,
     antigravity: null,
     minimax: null,
+    zai: null,
     grok: null,
     minimaxCookieConfigured: false,
+    zaiApiKeyConfigured: false,
     grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
@@ -2821,8 +2824,19 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
     refreshMiniMax: () => Promise.resolve(empty),
+    refreshZai: () => Promise.resolve(empty),
     refreshGrok: () => Promise.resolve(empty),
     onUpdate: () => noopUnsubscribe
+  }
+}
+
+function createZaiCredentialsApi(): NonNullable<Partial<PreloadApi>['zaiCredentials']> {
+  const notConfigured = { configured: false }
+  const unsupportedError = new Error('Z.ai API key storage is only available in the desktop app.')
+  return {
+    getStatus: () => Promise.resolve(notConfigured),
+    saveApiKey: () => Promise.reject(unsupportedError),
+    clearApiKey: () => Promise.resolve(notConfigured)
   }
 }
 

@@ -73,6 +73,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     geminiCliOAuthEnabled: false,
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
+    zaiApiKeyConfigured: false,
     grokAuthConfigured: false,
     ...overrides
   }
@@ -127,6 +128,7 @@ describe('hasUsageProviderSettings', () => {
       false
     )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ zaiApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
   })
 
@@ -158,6 +160,9 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('claude', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('kimi', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
+    expect(
+      hasUsageProviderSettingsForProvider('zai', usageSettings({ zaiApiKeyConfigured: true }))
+    ).toBe(true)
   })
 
   it('requires both a checked Antigravity item and Gemini OAuth as the durable Antigravity signal', () => {
@@ -299,6 +304,20 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
+  it('keeps Z.ai visible while the snapshot is pending when an API key is configured', () => {
+    const visible = getVisibleUsageProvider(
+      'zai',
+      null,
+      usageSettings({ zaiApiKeyConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'zai',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
+
   it('keeps MiniMax visible when the fetch returns unavailable for a configured cookie', () => {
     const unavailable = provider('unavailable', {
       provider: 'minimax',
@@ -322,6 +341,18 @@ describe('getVisibleUsageProvider', () => {
         usageSettings()
       )
     ).toBe(null)
+  })
+
+  it('keeps Z.ai visible for an unavailable configured API key and hides it otherwise', () => {
+    const unavailable = provider('unavailable', {
+      provider: 'zai',
+      error: 'Z.ai API key is invalid.'
+    })
+    expect(
+      getVisibleUsageProvider('zai', unavailable, usageSettings({ zaiApiKeyConfigured: true }))
+    ).toBe(unavailable)
+    expect(getVisibleUsageProvider('zai', null, usageSettings())).toBe(null)
+    expect(getVisibleUsageProvider('zai', unavailable, usageSettings())).toBe(null)
   })
 
   it('keeps Antigravity visible while the snapshot is pending when checked and Gemini OAuth is on', () => {
@@ -373,6 +404,7 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
+          zai: null,
           grok: null
         },
         usageSettings()
@@ -391,6 +423,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: undefined,
           minimax: undefined,
+          zai: undefined,
           grok: undefined
         },
         usageSettings()
@@ -409,6 +442,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
+          zai: provider('unavailable', { provider: 'zai' }),
           grok: provider('unavailable', { provider: 'grok' })
         },
         usageSettings()
@@ -427,6 +461,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
+          zai: provider('unavailable', { provider: 'zai' }),
           grok: provider('unavailable', { provider: 'grok' })
         },
         usageSettings({
@@ -456,6 +491,7 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
+          zai: null,
           grok: null
         },
         null
@@ -474,6 +510,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
+          zai: provider('unavailable', { provider: 'zai' }),
           grok: provider('unavailable', { provider: 'grok' })
         },
         usageSettings()
@@ -492,7 +529,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          zai: provider('unavailable', { provider: 'zai' })
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
@@ -512,7 +550,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          zai: provider('unavailable', { provider: 'zai' })
         },
         usageSettings({ antigravityUsageConfigured: true })
       )

@@ -24,6 +24,7 @@ const mockStoreState = {
     kimi: null,
     antigravity: null,
     minimax: null,
+    zai: null,
     grok: {
       provider: 'grok',
       session: null,
@@ -38,6 +39,7 @@ const mockStoreState = {
       status: 'ok'
     },
     minimaxCookieConfigured: false,
+    zaiApiKeyConfigured: false,
     grokAuthConfigured: true,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },

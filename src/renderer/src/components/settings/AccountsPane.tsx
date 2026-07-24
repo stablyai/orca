@@ -24,11 +24,8 @@ import {
   ExternalLink,
   HelpCircle,
   Loader2,
-  Lock,
-  LockOpen,
   Plus,
   RefreshCw,
-  ShieldCheck,
   Trash2,
   X
 } from 'lucide-react'
@@ -38,7 +35,8 @@ import {
   GeminiIcon,
   MiniMaxIcon,
   OpenAIIcon,
-  OpenCodeGoIcon
+  OpenCodeGoIcon,
+  ZaiIcon
 } from '../status-bar/icons'
 import { toast } from 'sonner'
 import {
@@ -48,10 +46,12 @@ import {
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsMiniMaxSearchEntries,
+  getAccountsZaiSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { ProviderSecretCredential, useProviderSecretCredential } from './ProviderSecretCredential'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -74,7 +74,6 @@ import {
   type ProviderAccountRuntimeView
 } from './provider-account-visibility'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
 import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState,
@@ -90,8 +89,19 @@ export { getAccountsPaneSearchEntries }
 
 const EMPTY_WSL_DISTROS: string[] = []
 const MINIMAX_CONSOLE_URL = 'https://platform.minimax.io/console/usage'
+const ZAI_CONSOLE_URL = 'https://z.ai/manage-apikey'
+const miniMaxCredentialApi = {
+  getStatus: () => window.api.minimaxCredentials.getStatus(),
+  save: (credential: string) => window.api.minimaxCredentials.saveCookie(credential),
+  clear: () => window.api.minimaxCredentials.clearCookie()
+}
+const zaiCredentialApi = {
+  getStatus: () => window.api.zaiCredentials.getStatus(),
+  save: (credential: string) => window.api.zaiCredentials.saveApiKey(credential),
+  clear: () => window.api.zaiCredentials.clearApiKey()
+}
 
-function formatMiniMaxRelativeRefresh(updatedAt: number, now: number): string {
+function formatProviderRelativeRefresh(updatedAt: number, now: number): string {
   const diffMs = Math.max(0, now - updatedAt)
   if (diffMs < 60_000) {
     return translate('auto.components.settings.AccountsPane.3a30aaf526', 'just now')
@@ -330,13 +340,53 @@ export function AccountsPane({
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
+  const zaiRateLimits = useAppStore((s) => s.rateLimits.zai)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
-  const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
-  const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
-  const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
+  const miniMaxCredential = useProviderSecretCredential({
+    ...miniMaxCredentialApi,
+    requiredMessage: translate(
+      'auto.components.settings.AccountsPane.2f24f244a4',
+      'MiniMax cookie is required.'
+    ),
+    notSavedMessage: translate(
+      'auto.components.settings.AccountsPane.8e6f0cb1d8',
+      'MiniMax cookie was not saved.'
+    ),
+    savedMessage: translate(
+      'auto.components.settings.AccountsPane.8d61637a77',
+      'MiniMax cookie saved.'
+    ),
+    updateFailedMessage: translate(
+      'auto.components.settings.AccountsPane.b43e761fe5',
+      'MiniMax cookie update failed.'
+    ),
+    loadFailureLogLabel: 'Failed to load MiniMax credential status:',
+    onChanged: () => recordFeatureInteraction('usage-tracking')
+  })
+  const zaiCredential = useProviderSecretCredential({
+    ...zaiCredentialApi,
+    requiredMessage: translate(
+      'auto.components.settings.AccountsPane.zaiRequired',
+      'Z.ai API key is required.'
+    ),
+    notSavedMessage: translate(
+      'auto.components.settings.AccountsPane.zaiNotSaved',
+      'Z.ai API key was not saved.'
+    ),
+    savedMessage: translate(
+      'auto.components.settings.AccountsPane.zaiSaved',
+      'Z.ai API key saved.'
+    ),
+    updateFailedMessage: translate(
+      'auto.components.settings.AccountsPane.zaiUpdateFailed',
+      'Z.ai API key update failed.'
+    ),
+    loadFailureLogLabel: 'Failed to load Z.ai API key status:',
+    onChanged: () => recordFeatureInteraction('usage-tracking')
+  })
   const localAccountRuntime = getSelectedAccountRuntime(
     settings,
     wslSupportedPlatform,
@@ -442,76 +492,6 @@ export function AccountsPane({
     recordedOpenCodeSettingEditsRef.current.add(field)
     recordFeatureInteraction('usage-tracking')
   }
-
-  const refreshMiniMaxCredentialStatus = async (): Promise<void> => {
-    try {
-      const status = await window.api.minimaxCredentials.getStatus()
-      setMiniMaxConfigured(status.configured)
-    } catch (error) {
-      console.error('Failed to load MiniMax credential status:', error)
-    }
-  }
-
-  const saveMiniMaxCookie = async (): Promise<void> => {
-    if (!miniMaxCookieDraft.trim()) {
-      toast.error(
-        translate('auto.components.settings.AccountsPane.2f24f244a4', 'MiniMax cookie is required.')
-      )
-      return
-    }
-    setMiniMaxCredentialBusy(true)
-    try {
-      const status = await window.api.minimaxCredentials.saveCookie(miniMaxCookieDraft.trim())
-      if (!status.configured) {
-        throw new Error(
-          translate(
-            'auto.components.settings.AccountsPane.8e6f0cb1d8',
-            'MiniMax cookie was not saved.'
-          )
-        )
-      }
-      setMiniMaxConfigured(status.configured)
-      setMiniMaxCookieDraft('')
-      recordFeatureInteraction('usage-tracking')
-      toast.success(
-        translate('auto.components.settings.AccountsPane.8d61637a77', 'MiniMax cookie saved.')
-      )
-    } catch (error) {
-      toast.error(
-        translate(
-          'auto.components.settings.AccountsPane.b43e761fe5',
-          'MiniMax cookie update failed.'
-        ),
-        { description: String((error as Error)?.message ?? error) }
-      )
-    } finally {
-      setMiniMaxCredentialBusy(false)
-    }
-  }
-
-  const clearMiniMaxCookie = async (): Promise<void> => {
-    setMiniMaxCredentialBusy(true)
-    try {
-      const status = await window.api.minimaxCredentials.clearCookie()
-      setMiniMaxConfigured(status.configured)
-      setMiniMaxCookieDraft('')
-      recordFeatureInteraction('usage-tracking')
-    } catch (error) {
-      toast.error(
-        translate(
-          'auto.components.settings.AccountsPane.b43e761fe5',
-          'MiniMax cookie update failed.'
-        ),
-        { description: String((error as Error)?.message ?? error) }
-      )
-    } finally {
-      setMiniMaxCredentialBusy(false)
-    }
-  }
-
-  useEffect(() => {
-    void refreshMiniMaxCredentialStatus()
-  }, [])
 
   useEffect(() => {
     // Why: remote snapshots stream usage refreshes after the synchronous ready
@@ -1649,63 +1629,42 @@ export function AccountsPane({
           </a>
         </div>
 
-        <div
-          className={cn(
-            'flex items-start gap-3 rounded-lg border bg-muted/20 p-3',
-            miniMaxConfigured ? 'border-border/60' : 'border-border/40'
-          )}
-        >
-          <ShieldCheck
-            className={cn(
-              'mt-0.5 size-4 shrink-0',
-              miniMaxConfigured ? 'text-foreground' : 'text-muted-foreground'
-            )}
-          />
-          <div className="space-y-0.5">
-            <p className="text-xs font-medium">
-              {miniMaxConfigured
-                ? translate('auto.components.settings.AccountsPane.0b8c1c7e02', 'Stored locally')
-                : translate('auto.components.settings.AccountsPane.1fd1b1b6b4', 'Cookie not set')}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.AccountsPane.5e08b0fe57',
-                'Stored locally and sent only to platform.minimax.io for usage refreshes.'
-              )}
-            </p>
-          </div>
-        </div>
-
-        <SearchableSetting
-          title={translate(
+        <ProviderSecretCredential
+          state={miniMaxCredential}
+          credentialLabel={translate(
             'auto.components.settings.AccountsPane.21d6eb141e',
             'MiniMax Session Cookie'
           )}
-          description={translate(
+          settingDescription={translate(
             'auto.components.settings.AccountsPane.33bba5ad83',
             'Paste your MiniMax session cookie for local rate-limit fetching.'
           )}
           keywords={['minimax', 'cookie', 'session', 'rate limit', 'status bar']}
-          className="space-y-2"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Label>
-                {translate(
-                  'auto.components.settings.AccountsPane.21d6eb141e',
-                  'MiniMax Session Cookie'
-                )}
-              </Label>
-              <Badge
-                variant={miniMaxConfigured ? 'secondary' : 'outline'}
-                className="h-5 gap-1 rounded-full px-2 text-[10px] font-medium text-muted-foreground"
-              >
-                {miniMaxConfigured ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
-                {miniMaxConfigured
-                  ? translate('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')
-                  : translate('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
-              </Badge>
-            </div>
+          placeholder={translate(
+            'auto.components.settings.AccountsPane.b8a4f21c3e',
+            'Paste the Cookie header from DevTools'
+          )}
+          configuredStatusLabel={translate(
+            'auto.components.settings.AccountsPane.0b8c1c7e02',
+            'Stored locally'
+          )}
+          unconfiguredStatusLabel={translate(
+            'auto.components.settings.AccountsPane.1fd1b1b6b4',
+            'Cookie not set'
+          )}
+          storageDescription={translate(
+            'auto.components.settings.AccountsPane.5e08b0fe57',
+            'Stored locally and sent only to platform.minimax.io for usage refreshes.'
+          )}
+          savedLabel={translate('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')}
+          notSavedLabel={translate('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
+          saveLabel={translate('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
+          replaceLabel={translate('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')}
+          forgetLabel={translate(
+            'auto.components.settings.AccountsPane.316ca4e610',
+            'Forget cookie'
+          )}
+          labelAction={
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -1721,66 +1680,29 @@ export function AccountsPane({
                 <MiniMaxCookieHelpPopover />
               </PopoverContent>
             </Popover>
-          </div>
-          <div className="flex gap-2">
-            <Input
-              type="password"
-              value={miniMaxCookieDraft}
-              onChange={(e) => setMiniMaxCookieDraft(e.target.value)}
-              placeholder={translate(
-                'auto.components.settings.AccountsPane.b8a4f21c3e',
-                'Paste the Cookie header from DevTools'
-              )}
-              spellCheck={false}
-              className="flex-1 text-xs"
-            />
-            <Button
-              size="xs"
-              onClick={() => void saveMiniMaxCookie()}
-              disabled={miniMaxCredentialBusy || !miniMaxCookieDraft.trim()}
-              className="h-7 shrink-0 text-xs"
-            >
-              {miniMaxCredentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
-              {miniMaxConfigured
-                ? translate('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')
-                : translate('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
-            </Button>
-            {miniMaxConfigured ? (
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => void clearMiniMaxCookie()}
-                disabled={miniMaxCredentialBusy}
-                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-              >
-                {translate('auto.components.settings.AccountsPane.316ca4e610', 'Forget cookie')}
-              </Button>
-            ) : null}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.AccountsPane.79418c782a',
-              'Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).'
-            )}
-          </p>
-          {miniMaxConfigured &&
-          miniMaxRateLimits?.status === 'ok' &&
-          miniMaxRateLimits.error === null ? (
-            <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.AccountsPane.53f7b8c7a2',
-                'Last refresh: {{value0}}',
-                { value0: formatMiniMaxRelativeRefresh(miniMaxRateLimits.updatedAt, Date.now()) }
-              )}
-            </p>
-          ) : null}
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.AccountsPane.31d24a4e87',
-              'Cookie expires when you sign out in the browser.'
-            )}
-          </p>
-        </SearchableSetting>
+          }
+          guidance={translate(
+            'auto.components.settings.AccountsPane.79418c782a',
+            'Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).'
+          )}
+          lastRefreshLabel={
+            miniMaxCredential.configured &&
+            miniMaxRateLimits?.status === 'ok' &&
+            miniMaxRateLimits.error === null
+              ? translate(
+                  'auto.components.settings.AccountsPane.53f7b8c7a2',
+                  'Last refresh: {{value0}}',
+                  {
+                    value0: formatProviderRelativeRefresh(miniMaxRateLimits.updatedAt, Date.now())
+                  }
+                )
+              : null
+          }
+          trailingGuidance={translate(
+            'auto.components.settings.AccountsPane.31d24a4e87',
+            'Cookie expires when you sign out in the browser.'
+          )}
+        />
 
         <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
           <div className="flex items-center justify-between gap-3">
@@ -1850,6 +1772,83 @@ export function AccountsPane({
             />
           </SearchableSetting>
         </div>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsZaiSearchEntries()) ? (
+      <section key="zai" id="accounts-zai" className="space-y-4 scroll-mt-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <ZaiIcon size={16} />
+              {translate('auto.components.settings.AccountsPane.zaiTitle', 'Z.ai GLM')}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.AccountsPane.zaiDescription',
+                'Configure Z.ai GLM usage tracking with an API key.'
+              )}
+            </p>
+          </div>
+          <a
+            href={ZAI_CONSOLE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {translate('auto.components.settings.AccountsPane.openConsole', 'Open console')}
+            <ExternalLink className="size-3" />
+          </a>
+        </div>
+        <ProviderSecretCredential
+          state={zaiCredential}
+          credentialLabel={translate(
+            'auto.components.settings.AccountsPane.zaiApiKeyLabel',
+            'Z.ai API Key'
+          )}
+          settingDescription={translate(
+            'auto.components.settings.AccountsPane.zaiApiKeyDescription',
+            'Paste your Z.ai API key for local rate-limit fetching.'
+          )}
+          keywords={['z.ai', 'glm', 'api key', 'rate limit', 'status bar']}
+          placeholder={translate(
+            'auto.components.settings.AccountsPane.zaiApiKeyPlaceholder',
+            'Enter API key'
+          )}
+          configuredStatusLabel={translate(
+            'auto.components.settings.AccountsPane.storedLocally',
+            'Stored locally'
+          )}
+          unconfiguredStatusLabel={translate(
+            'auto.components.settings.AccountsPane.apiKeyNotSet',
+            'API key not set'
+          )}
+          storageDescription={translate(
+            'auto.components.settings.AccountsPane.zaiStoredCopy',
+            'Stored locally and sent only to api.z.ai for usage refreshes.'
+          )}
+          savedLabel={translate('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')}
+          notSavedLabel={translate('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
+          saveLabel={translate('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
+          replaceLabel={translate('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')}
+          forgetLabel={translate('auto.components.settings.AccountsPane.zaiForget', 'Forget key')}
+          guidance={translate(
+            'auto.components.settings.AccountsPane.zaiConsoleCopy',
+            'Create or manage API keys in the official Z.ai console.'
+          )}
+          lastRefreshLabel={
+            zaiCredential.configured &&
+            zaiRateLimits?.status === 'ok' &&
+            zaiRateLimits.error === null
+              ? translate(
+                  'auto.components.settings.AccountsPane.53f7b8c7a2',
+                  'Last refresh: {{value0}}',
+                  {
+                    value0: formatProviderRelativeRefresh(zaiRateLimits.updatedAt, Date.now())
+                  }
+                )
+              : null
+          }
+        />
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (

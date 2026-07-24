@@ -53,6 +53,7 @@ const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
   'opencode-go',
   'kimi',
   'minimax',
+  'zai',
   'grok'
 ]
 
@@ -590,5 +591,12 @@ describe('ProviderIcon', () => {
     expect(markup.startsWith('<img')).toBe(true)
     expect(markup).toContain('aria-hidden="true"')
     expect(markup).toMatch(/src="[^"]+"/)
+  })
+
+  it('renders the Z.ai icon for the zai provider', () => {
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'zai' }))
+    expect(markup).toContain('<svg')
+    expect(markup).toContain('width="13"')
+    expect(markup).toContain('height="13"')
   })
 })

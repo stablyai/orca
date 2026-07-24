@@ -15,6 +15,10 @@ describe('getProviderDisplayName', () => {
     expect(getProviderDisplayName('minimax')).toBe('MiniMax')
   })
 
+  it('returns the Z.ai GLM brand name', () => {
+    expect(getProviderDisplayName('zai')).toBe('Z.ai GLM')
+  })
+
   it('returns the existing provider brand names', () => {
     expect(getProviderDisplayName('claude')).toBe('Claude')
     expect(getProviderDisplayName('codex')).toBe('Codex')

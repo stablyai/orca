@@ -402,10 +402,11 @@ describe('client UI RPC methods', () => {
       ...getDefaultUIState(),
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex', 'kimi', 'minimax', 'grok', 'antigravity', 'ports'],
+      statusBarItems: ['codex', 'kimi', 'minimax', 'zai', 'grok', 'antigravity', 'ports'],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
       _minimaxStatusBarDefaultAdded: true,
+      _zaiStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {
@@ -444,10 +445,11 @@ describe('client UI RPC methods', () => {
     const payload = {
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex', 'kimi', 'minimax', 'grok', 'antigravity', 'ports'],
+      statusBarItems: ['codex', 'kimi', 'minimax', 'zai', 'grok', 'antigravity', 'ports'],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
       _minimaxStatusBarDefaultAdded: true,
+      _zaiStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {

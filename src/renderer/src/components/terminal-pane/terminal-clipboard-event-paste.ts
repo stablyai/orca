@@ -37,10 +37,6 @@ export function firesNativePasteEvent(event: PasteChordEvent, isMac: boolean): b
     return true
   }
   return (
-    event.key === 'Insert' &&
-    event.shiftKey &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.altKey
+    event.key === 'Insert' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey
   )
 }

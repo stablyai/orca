@@ -110,7 +110,10 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       // a pending DOM target, so honor its armed window to swallow the follow-up
       // native paste event that xterm would otherwise forward to the PTY — but
       // only for the terminal's own surface, never unrelated document pastes.
-      if (isTerminalNativePasteTarget(event.target) && shouldSuppressPrimarySelectionNativePaste()) {
+      if (
+        isTerminalNativePasteTarget(event.target) &&
+        shouldSuppressPrimarySelectionNativePaste()
+      ) {
         suppressEvent(event)
       }
     }

@@ -14,8 +14,10 @@ export type UsageProviderSettings = Pick<
   // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
   // which never yields data while that opt-in is off.
   antigravityUsageConfigured: boolean
-  // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
+  // Why: MiniMax/Grok/Z.ai credentials live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
+  // Why: this credential-backed provider has no GlobalSettings field; the rate-limit state is the renderer's durable signal.
+  zaiApiKeyConfigured: boolean
   grokAuthConfigured: boolean
 }
 
@@ -27,6 +29,7 @@ type UsageProviderSnapshots = {
   kimi: ProviderRateLimits | null | undefined
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
+  zai: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
 }
 
@@ -77,6 +80,7 @@ export function hasUsageProviderSettings(
     // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
+    settings?.zaiApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true
   )
 }
@@ -108,6 +112,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true
+  }
+  if (providerId === 'zai') {
+    return settings.zaiApiKeyConfigured === true
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
@@ -165,6 +172,7 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
+    isProviderSnapshotPending(providers.zai) ||
     isProviderSnapshotPending(providers.grok)
   ) {
     return false
@@ -178,6 +186,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
+    !isProviderConfigured(providers.zai) &&
     !isProviderConfigured(providers.grok)
   )
 }

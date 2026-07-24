@@ -11,10 +11,12 @@ import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
+import { fetchZaiRateLimits } from './zai-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
+import { hasZaiApiKey } from '../zai/zai-api-key-store'
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
@@ -41,6 +43,10 @@ vi.mock('./minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
 
+vi.mock('./zai-fetcher', () => ({
+  fetchZaiRateLimits: vi.fn()
+}))
+
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
 }))
@@ -51,6 +57,10 @@ vi.mock('./grok-auth', () => ({
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
+}))
+
+vi.mock('../zai/zai-api-key-store', () => ({
+  hasZaiApiKey: vi.fn(() => false)
 }))
 
 type Deferred<T> = {
@@ -130,6 +140,7 @@ function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchOpenCodeGoRateLimits).mockImplementation(async () => okProvider('opencode-go', 0))
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
+  vi.mocked(fetchZaiRateLimits).mockImplementation(async () => okProvider('zai', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
 }
 
@@ -176,6 +187,7 @@ describe('RateLimitService', () => {
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
     vi.mocked(fetchKimiRateLimits).mockResolvedValue(okProvider('kimi', 0, Date.now()))
     vi.mocked(fetchMiniMaxRateLimits).mockResolvedValue(okProvider('minimax', 0, Date.now()))
+    vi.mocked(fetchZaiRateLimits).mockResolvedValue(okProvider('zai', 0, Date.now()))
     vi.mocked(fetchGrokRateLimits).mockResolvedValue({
       provider: 'grok',
       session: null,
@@ -185,6 +197,7 @@ describe('RateLimitService', () => {
       status: 'unavailable'
     })
     vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
+    vi.mocked(hasZaiApiKey).mockReturnValue(false)
     vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
   })
 
@@ -469,6 +482,7 @@ describe('RateLimitService', () => {
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
+      service.setZaiConfigResolver(() => ({ apiKey: 'glm-key' }))
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -588,7 +602,9 @@ describe('RateLimitService', () => {
       // The 15- and 30-minute poll cycles land inside the 40-minute window: other providers refresh, Claude is skipped.
       await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
       expect(vi.mocked(fetchCodexRateLimits).mock.calls.length).toBeGreaterThan(1)
+      expect(vi.mocked(fetchZaiRateLimits).mock.calls.length).toBeGreaterThan(1)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().zai?.status).toBe('ok')
 
       await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
@@ -1260,7 +1276,14 @@ describe('RateLimitService', () => {
 
   it('aborts the active fetch cycle and clears queued refreshes on stop', async () => {
     const service = new RateLimitService()
-    const capturedSignals: { claude?: AbortSignal; codex?: AbortSignal; grok?: AbortSignal } = {}
+    const capturedSignals: {
+      claude?: AbortSignal
+      codex?: AbortSignal
+      grok?: AbortSignal
+      zai?: AbortSignal
+    } = {}
+    service.setZaiConfigResolver(() => ({ apiKey: 'glm-key' }))
+    vi.mocked(hasZaiApiKey).mockReturnValue(true)
 
     vi.mocked(fetchClaudeRateLimits).mockImplementation(
       (options) =>
@@ -1295,6 +1318,17 @@ describe('RateLimitService', () => {
           )
         })
     )
+    vi.mocked(fetchZaiRateLimits).mockImplementation(
+      (options) =>
+        new Promise((resolve) => {
+          capturedSignals.zai = options.signal
+          options.signal?.addEventListener(
+            'abort',
+            () => resolve(errorProvider('zai', 'aborted')),
+            { once: true }
+          )
+        })
+    )
 
     const activeFetch = serviceInternals(service).fetchAll()
     await Promise.resolve()
@@ -1308,6 +1342,7 @@ describe('RateLimitService', () => {
     expect(capturedSignals.claude?.aborted).toBe(true)
     expect(capturedSignals.codex?.aborted).toBe(true)
     expect(capturedSignals.grok?.aborted).toBe(true)
+    expect(capturedSignals.zai?.aborted).toBe(true)
 
     await queuedRefresh
     await activeFetch
@@ -1315,6 +1350,7 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchZaiRateLimits).toHaveBeenCalledTimes(1)
   })
 
   it('aborts inactive Claude preview fetches on stop', async () => {
@@ -2148,6 +2184,105 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
     expect(state.minimax?.status).toBe('error')
     expect(state.minimax?.error).toBe('MiniMax session cookie could not be decrypted')
+    expect(state.claude?.status).toBe('ok')
+  })
+
+  it('fetches Z.ai alongside other providers when a config resolver is set', async () => {
+    const service = new RateLimitService()
+    service.setZaiConfigResolver(() => ({ apiKey: 'glm-key' }))
+    vi.mocked(hasZaiApiKey).mockReturnValue(true)
+    vi.mocked(fetchZaiRateLimits).mockResolvedValueOnce(okProvider('zai', 33, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchZaiRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchZaiRateLimits).toHaveBeenCalledWith({
+      apiKey: 'glm-key',
+      signal: expect.any(AbortSignal)
+    })
+    const state = service.getState()
+    expect(state.zai?.status).toBe('ok')
+    expect(state.zai?.session?.usedPercent).toBe(33)
+    expect(state.zaiApiKeyConfigured).toBe(true)
+  })
+
+  it('discards the previous Z.ai snapshot when its config hash changes', async () => {
+    const service = new RateLimitService()
+    let apiKey = 'glm-key-1'
+    service.setZaiConfigResolver(() => ({ apiKey }))
+    vi.mocked(fetchZaiRateLimits)
+      .mockResolvedValueOnce(okProvider('zai', 44, Date.now()))
+      .mockResolvedValueOnce(okProvider('zai', 12, Date.now()))
+
+    await service.refresh()
+    expect(service.getState().zai?.session?.usedPercent).toBe(44)
+
+    apiKey = 'glm-key-2'
+    await service.refresh()
+
+    expect(fetchZaiRateLimits).toHaveBeenCalledTimes(2)
+    expect(service.getState().zai?.session?.usedPercent).toBe(12)
+  })
+
+  it('does not apply an in-flight Z.ai result after credential invalidation', async () => {
+    const service = new RateLimitService()
+    const firstZai = deferred<ProviderRateLimits>()
+    const secondZai = deferred<ProviderRateLimits>()
+    service.setZaiConfigResolver(() => ({ apiKey: 'glm-key' }))
+    vi.mocked(fetchZaiRateLimits)
+      .mockImplementationOnce(() => firstZai.promise)
+      .mockImplementationOnce(() => secondZai.promise)
+
+    const firstRefresh = service.refresh()
+    await Promise.resolve()
+
+    service.invalidateZaiCredentialState()
+    const queuedRefresh = service.refresh()
+    await Promise.resolve()
+
+    firstZai.resolve(okProvider('zai', 55, Date.now()))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(service.getState().zai?.status).toBe('fetching')
+    expect(service.getState().zai?.session).toBeNull()
+
+    secondZai.resolve(okProvider('zai', 14, Date.now()))
+    await firstRefresh
+    await queuedRefresh
+
+    expect(fetchZaiRateLimits).toHaveBeenCalledTimes(2)
+    expect(service.getState().zai?.session?.usedPercent).toBe(14)
+  })
+
+  it('stores a one-way Z.ai config fingerprint instead of the raw API key and resets it on invalidation', async () => {
+    const service = new RateLimitService()
+    const rawApiKey = 'glm-key-super-secret'
+    service.setZaiConfigResolver(() => ({ apiKey: rawApiKey }))
+
+    await service.refresh()
+
+    const hashedState = service as unknown as { lastZaiConfigHash: string }
+    expect(hashedState.lastZaiConfigHash).not.toContain(rawApiKey)
+    expect(hashedState.lastZaiConfigHash).toMatch(/^[a-f0-9]{64}\|$/)
+
+    service.invalidateZaiCredentialState()
+    expect(hashedState.lastZaiConfigHash).toBe('')
+  })
+
+  it('isolates Z.ai config resolver failures from other providers', async () => {
+    const service = new RateLimitService()
+    service.setZaiConfigResolver(() => {
+      throw new Error('Z.ai API key could not be decrypted')
+    })
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(fetchZaiRateLimits).not.toHaveBeenCalled()
+    expect(state.zai?.status).toBe('error')
+    expect(state.zai?.error).toBe('Z.ai API key could not be decrypted')
     expect(state.claude?.status).toBe('ok')
   })
 
