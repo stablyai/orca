@@ -54,30 +54,13 @@ type WorktreePaletteSelectionCandidateEntry = {
   type: string
 }
 
-// Why every rendered CommandItem type belongs here: an id missing from this list fails the
-// `includes` check in getNextWorktreePaletteSelection, so arrowing onto that row snaps the
-// highlight back to the top — making the whole section mouse-only.
-const SELECTABLE_ENTRY_TYPES = [
-  'worktree',
-  'create-worktree',
-  'settings',
-  'quick-action',
-  'browser-page',
-  'workspace-tab',
-  'simulator-tab',
-  'project-target'
-] as const
-
-type WorktreePaletteSelectableEntryType = (typeof SELECTABLE_ENTRY_TYPES)[number]
-
-const SELECTABLE_ENTRY_TYPE_SET = new Set<string>(SELECTABLE_ENTRY_TYPES)
-
+// Why: every rendered row is a CommandItem except section headers and hint rows,
+// so exclude those two instead of allowlisting item types — an allowlist drifted
+// once already (workspace/simulator tabs were unreachable by arrow keys).
 export function isSelectableWorktreePaletteEntry(
   entry: WorktreePaletteSelectionCandidateEntry
-): entry is WorktreePaletteSelectionCandidateEntry & {
-  type: WorktreePaletteSelectableEntryType
-} {
-  return SELECTABLE_ENTRY_TYPE_SET.has(entry.type)
+): boolean {
+  return entry.type !== 'section-header' && entry.type !== 'hint'
 }
 
 export function getWorktreePaletteSelectionItemIds<
