@@ -1,37 +1,35 @@
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok'
+import {
+  NATIVE_CHAT_AGENT_ADAPTERS,
+  type NativeChatTranscriptAgent
+} from './native-chat-agent-adapters'
+
+export type { NativeChatTranscriptAgent } from './native-chat-agent-adapters'
+
+/** Projects a registry descriptor to its supported-agent identity. */
+function nativeChatAgentId({ agent }: { agent: string }): string {
+  return agent
+}
 
 /** Agents whose transcripts the native chat view can parse and render. */
-export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
-  'claude',
-  'openclaude',
-  'codex',
-  'grok'
-])
+export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(
+  NATIVE_CHAT_AGENT_ADAPTERS.list().map(nativeChatAgentId)
+)
 
+/** Returns whether an agent has a built-in Chat UI adapter. */
 export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
-  return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
+  return NATIVE_CHAT_AGENT_ADAPTERS.get(agent) !== null
 }
 
 /** True when the agent renders a digit-commit question selector that ignores
- *  typed label text (pasting "Blue" + Enter commits the highlighted FIRST
- *  option — STA-1860): Claude's AskUserQuestion and Codex 0.145's
- *  request_user_input card both behave this way, so answers must be delivered
- *  as per-option keystrokes. Other agents commit a pasted answer. */
+ *  typed label text. The adapter owns this input policy independently from its
+ *  transcript family. */
 export function shouldStepNativeChatAskAnswer(agent: string | null | undefined): boolean {
-  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  return transcriptAgent === 'claude' || transcriptAgent === 'codex'
+  return NATIVE_CHAT_AGENT_ADAPTERS.get(agent)?.askAnswerMode === 'step-lines'
 }
 
+/** Resolves the transcript format family used by an agent's built-in adapter. */
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {
-  // Why: OpenClaude writes the Claude transcript format and layout even though
-  // Orca preserves its distinct agent identity for launch and UI behavior.
-  if (agent === 'claude' || agent === 'openclaude') {
-    return 'claude'
-  }
-  if (agent === 'codex' || agent === 'grok') {
-    return agent
-  }
-  return null
+  return NATIVE_CHAT_AGENT_ADAPTERS.get(agent)?.transcriptAgent ?? null
 }

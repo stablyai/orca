@@ -12,7 +12,7 @@ import {
 } from './transcript-incremental-reader'
 import { createTranscriptNativeWatcher } from './transcript-native-watcher'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
-import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
+import { nativeChatTranscriptAdapterForAgent } from './native-chat-transcript-adapters'
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
@@ -23,10 +23,12 @@ const ROTATION_RETRY_MS = 25
 const MAX_ROTATION_RETRY_MS = 2_000
 let activeWatcherCount = 0
 
+/** Returns the number of installed transcript watchers for diagnostics and tests. */
 export function getActiveNativeChatWatcherCount(): number {
   return activeWatcherCount
 }
 
+/** Captures bytes immediately before an offset to detect same-size transcript replacement. */
 async function boundaryFingerprint(filePath: string, offset: number): Promise<string> {
   if (offset <= 0) {
     return ''
@@ -43,10 +45,11 @@ async function boundaryFingerprint(filePath: string, offset: number): Promise<st
 }
 
 /**
- * Install the live-tail engine on an already-resolved file path. Returns null
- * when the file doesn't exist yet, so the caller falls back to resolve-polling.
- * A failed native watch still installs a reconciliation-only subscription: some
- * remote filesystems allow stat/read while rejecting fs.watch entirely.
+ * Installs the live-tail engine on an already-resolved file path with the
+ * registered line and lifecycle decoders. Returns null when the file doesn't
+ * exist yet, so the caller falls back to resolve-polling. A failed native watch
+ * still installs a reconciliation-only subscription: some remote filesystems
+ * allow stat/read while rejecting fs.watch entirely.
  */
 export async function installTranscriptWatcher(
   filePath: string,
@@ -59,7 +62,7 @@ export async function installTranscriptWatcher(
     return null
   }
   const { onAppend, onInitialSnapshot, onReplace, initialLimit } = args
-  const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
+  const decodeLifecycle = nativeChatTranscriptAdapterForAgent(args.agent)?.decodeLifecycle ?? null
 
   const state: IncrementalTranscriptState = {
     offset: 0,
@@ -79,6 +82,7 @@ export async function installTranscriptWatcher(
   let pendingReadRequested = false
   let rotationRetryCount = 0
 
+  /** Schedules bounded exponential retry when a watcher cannot rebind after rotation. */
   function scheduleRotationRetry(): void {
     if (closed) {
       return
@@ -92,6 +96,7 @@ export async function installTranscriptWatcher(
     }
   }
 
+  /** Reads newly appended records and emits visible messages with authoritative lifecycle state. */
   async function readAndEmitAppends(): Promise<void> {
     let lifecycle: NativeChatTurnLifecycle | undefined
     const remaining = await readIncrementalTranscriptMessages(
@@ -113,6 +118,7 @@ export async function installTranscriptWatcher(
     }
   }
 
+  /** Commits file identity after a drain and schedules another pass for concurrent writes. */
   async function finishSuccessfulDrain(startVersion: TranscriptFileVersion): Promise<void> {
     watchedBoundary = await boundaryFingerprint(filePath, state.offset)
     const completedVersion = await readTranscriptFileVersion(filePath)
@@ -134,6 +140,7 @@ export async function installTranscriptWatcher(
     scheduleRotationRetry()
   }
 
+  /** Reconciles one observed file version against the incremental reader state. */
   async function drainOnce(): Promise<void> {
     const current = await readTranscriptFileVersion(filePath)
     const currentBoundary = await boundaryFingerprint(filePath, state.offset)
@@ -239,6 +246,7 @@ export async function installTranscriptWatcher(
     await finishSuccessfulDrain(current)
   }
 
+  /** Serializes requested drains while coalescing writes that arrive during an active read. */
   async function drain(): Promise<void> {
     if (closed) {
       return
@@ -272,6 +280,7 @@ export async function installTranscriptWatcher(
     }
   }
 
+  /** Requests reconciliation from either a native watch event or the fallback scheduler. */
   async function reconcile(): Promise<void> {
     if (closed) {
       return

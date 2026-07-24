@@ -2,11 +2,11 @@ import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { installTranscriptWatcher } from './transcript-watch-engine'
+import { nativeChatTranscriptAdapterForAgent } from './native-chat-transcript-adapters'
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
-import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
 export { getActiveNativeChatWatcherCount } from './transcript-watch-engine'
@@ -37,6 +37,7 @@ const INITIAL_RESOLVE_POLL_MS = 500
 const MAX_RESOLVE_POLL_MS = 5_000
 const FALLBACK_RESOLVE_POLL_MS = 5_000
 
+/** Returns a trusted explicit JSONL path that can be retried without recursive discovery. */
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
   return path && extname(path) === '.jsonl' ? path : null
@@ -61,6 +62,7 @@ function subscribeViaResolvePoll(
   let lastFallbackResolveAt = Date.now()
   const exactPath = exactTranscriptPath(args)
 
+  /** Schedules the next resolve attempt with bounded backoff. */
   function scheduleAttempt(): void {
     if (closed) {
       return
@@ -85,6 +87,7 @@ function subscribeViaResolvePoll(
     }
   }
 
+  /** Resolves and installs the watcher once, then backs off when the file is not flushed yet. */
   async function runAttempt(): Promise<void> {
     if (closed) {
       return
@@ -151,7 +154,7 @@ function subscribeViaResolvePoll(
 export async function subscribeNativeChatTranscript(
   args: SubscribeNativeChatTranscriptArgs
 ): Promise<NativeChatTranscriptSubscription> {
-  const decode = nativeChatLineDecoderForAgent(args.agent)
+  const decode = nativeChatTranscriptAdapterForAgent(args.agent)?.decodeLine ?? null
   if (!decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally
     // unsubscribe without null-checks.

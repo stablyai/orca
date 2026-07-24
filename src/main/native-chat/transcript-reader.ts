@@ -4,14 +4,9 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine
-} from './transcript-line-decoders'
+import { nativeChatTranscriptAdapterForAgent } from './native-chat-transcript-adapters'
 import { decodeTranscriptStream } from './transcript-stream-lines'
 
 export type ReadTranscriptResult =
@@ -45,17 +40,11 @@ export async function readNativeChatTranscript(
     return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
   try {
-    const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-    if (transcriptAgent === 'claude') {
-      return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
+    const adapter = nativeChatTranscriptAdapterForAgent(agent)
+    if (!adapter) {
+      return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
     }
-    if (transcriptAgent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
-    }
-    if (transcriptAgent === 'grok') {
-      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
-    }
-    return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
+    return { messages: await readTranscript(filePath, adapter.decodeLine) }
   } catch (err) {
     // Why: ENOENT after a successful resolve is the same first-flush/rotation
     // race as an unresolved path — keep it retry-worthy (#8401).
@@ -66,6 +55,7 @@ export async function readNativeChatTranscript(
   }
 }
 
+/** Streams and decodes every complete transcript record from a resolved file. */
 async function readTranscript(
   filePath: string,
   decode: (line: string, fallbackId: string) => NativeChatMessage | null

@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { getNativeChatAgentProfile } from './native-chat-agent-profiles'
 
 describe('native chat agent picker profiles', () => {
+  it('returns stable frozen profiles for hook dependency safety', () => {
+    const first = getNativeChatAgentProfile('codex')
+    const second = getNativeChatAgentProfile('codex')
+
+    expect(second).toBe(first)
+    expect(Object.isFrozen(first)).toBe(true)
+  })
+
   it('keeps Codex dollar skills separate from slash commands', () => {
     expect(getNativeChatAgentProfile('codex')).toMatchObject({
       skillPrefix: '$',
