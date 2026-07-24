@@ -224,10 +224,7 @@ import {
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import * as livePtyGate from '../claude-accounts/live-pty-gate'
-import {
-  encodePowerShellCommand,
-  getPowerShellOsc133Bootstrap
-} from '../powershell-osc133-bootstrap'
+import { getPowerShellOsc133Bootstrap } from '../powershell-osc133-bootstrap'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
   SSH_SESSION_EXPIRED_ERROR
@@ -235,12 +232,17 @@ import {
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
 
-const POWERSHELL_OSC133_ARGS = [
-  '-NoLogo',
-  '-NoExit',
-  '-EncodedCommand',
-  encodePowerShellCommand(getPowerShellOsc133Bootstrap())
-]
+// Why: the encoded payload also carries a cwd-dependent Set-Location suffix (PR #7435), so assert
+// the arg shape plus the bootstrap it must contain; windows-shell-args.test.ts owns the exact
+// payload contract.
+function expectPowerShellOsc133Spawn(expectedShell: string): void {
+  const [shell, shellArgs] = spawnMock.mock.calls.at(-1) ?? []
+  expect(shell).toBe(expectedShell)
+  expect(shellArgs?.slice(0, 3)).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand'])
+  expect(Buffer.from(shellArgs?.[3] ?? '', 'base64').toString('utf16le')).toContain(
+    getPowerShellOsc133Bootstrap()
+  )
+}
 // Why: Windows resolves a bare PowerShell name to an absolute exe before ConPTY, else CreateProcessW fails with error 5 (PR #6537 / #5161).
 const RESOLVED_WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const RESOLVED_PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
@@ -8220,11 +8222,7 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(mainWindow as never)
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-        POWERSHELL_OSC133_ARGS,
-        expect.any(Object)
-      )
+      expectPowerShellOsc133Spawn('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
     })
 
     it('sets Console encoding for pwsh.exe', async () => {
@@ -8233,11 +8231,7 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(mainWindow as never)
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
-        POWERSHELL_OSC133_ARGS,
-        expect.any(Object)
-      )
+      expectPowerShellOsc133Spawn('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
     })
 
     it('sets PYTHONUTF8=1 in the spawn environment on Windows', async () => {
@@ -8293,11 +8287,7 @@ describe('registerPtyHandlers', () => {
       )
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        RESOLVED_WINDOWS_POWERSHELL,
-        POWERSHELL_OSC133_ARGS,
-        expect.any(Object)
-      )
+      expectPowerShellOsc133Spawn(RESOLVED_WINDOWS_POWERSHELL)
     })
 
     it('uses the host shell when resolved project runtime overrides a stale WSL shell default', async () => {
@@ -8417,11 +8407,7 @@ describe('registerPtyHandlers', () => {
       )
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        RESOLVED_WINDOWS_POWERSHELL,
-        POWERSHELL_OSC133_ARGS,
-        expect.any(Object)
-      )
+      expectPowerShellOsc133Spawn(RESOLVED_WINDOWS_POWERSHELL)
     })
 
     it('spawns pwsh.exe when PowerShell 7 is selected and available', async () => {
@@ -8440,11 +8426,7 @@ describe('registerPtyHandlers', () => {
       )
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        RESOLVED_PWSH7,
-        POWERSHELL_OSC133_ARGS,
-        expect.any(Object)
-      )
+      expectPowerShellOsc133Spawn(RESOLVED_PWSH7)
     })
 
     it('keeps PowerShell 7 selected when the pwsh availability probe is cold-false', async () => {
@@ -8463,11 +8445,7 @@ describe('registerPtyHandlers', () => {
       )
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        RESOLVED_PWSH7,
-        POWERSHELL_OSC133_ARGS,
-        expect.any(Object)
-      )
+      expectPowerShellOsc133Spawn(RESOLVED_PWSH7)
       expect(isPwshAvailableMock).not.toHaveBeenCalled()
     })
 
@@ -8487,11 +8465,7 @@ describe('registerPtyHandlers', () => {
       )
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, shellOverride: 'pwsh.exe' })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        RESOLVED_PWSH7,
-        POWERSHELL_OSC133_ARGS,
-        expect.any(Object)
-      )
+      expectPowerShellOsc133Spawn(RESOLVED_PWSH7)
       expect(isPwshAvailableMock).not.toHaveBeenCalled()
     })
 
