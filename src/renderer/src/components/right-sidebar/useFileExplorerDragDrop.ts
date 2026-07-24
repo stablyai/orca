@@ -28,7 +28,7 @@ type UseFileExplorerDragDropResult = {
   dropTargetDir: string | null
   setDropTargetDir: (dir: string | null) => void
   dragSourcePath: string | null
-  setDragSourcePath: (path: string | null) => void
+  setDragSourcePath: (path: string | null, isDirectory?: boolean) => void
   isRootDragOver: boolean
   isNativeDragOver: boolean
   nativeDropTargetDir: string | null
@@ -61,7 +61,13 @@ export function useFileExplorerDragDrop({
   const [isRootDragOver, setIsRootDragOver] = useState(false)
   const rootDragCounterRef = useRef(0)
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null)
-  const [dragSourcePath, setDragSourcePath] = useState<string | null>(null)
+  const [dragSourcePath, setDragSourcePathState] = useState<string | null>(null)
+  const dragSourceIsDirectoryRef = useRef(false)
+
+  const setDragSourcePath = useCallback((path: string | null, isDirectory = false) => {
+    setDragSourcePathState(path)
+    dragSourceIsDirectoryRef.current = path !== null && isDirectory
+  }, [])
 
   const [isNativeDragOver, setIsNativeDragOver] = useState(false)
   const nativeRootDragCounterRef = useRef(0)
@@ -77,7 +83,7 @@ export function useFileExplorerDragDrop({
     setDragSourcePath(null)
     setIsNativeDragOver(false)
     setNativeDropTargetDir(null)
-  }, [])
+  }, [setDragSourcePath])
 
   const stopAndClearDragState = useCallback(() => {
     clearDragState()
@@ -107,7 +113,9 @@ export function useFileExplorerDragDrop({
     activeWorktreeId,
     refreshDir,
     getOperationOwnerForPath,
-    setDropTargetDir
+    setDropTargetDir,
+    dragSourcePath,
+    dragSourceIsDirectoryRef
   })
 
   const clearNativeDragState = useCallback(() => {
