@@ -63,20 +63,20 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it('rebuilds when a config root appears after the first install', () => {
+  it('rebuilds when an explicitly-set config root appears after the first install', () => {
     withHome((home) => {
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
-        HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
-      } as NodeJS.ProcessEnv)
+      const userConfig = join(home, 'my-opencode')
+      const env = { HOME: home, ORCA_WSL_HOOK_INSTANCE: 'inst1' } as NodeJS.ProcessEnv
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), env)
       const source = '// v1\n'
       install({ opencodePluginSource: source })
 
-      // Why: the user runs opencode outside Orca (or creates the dir by hand) after the
-      // relay connected; keying the cache on the plugin source alone would never mirror it.
-      const userConfig = join(home, '.config', 'opencode')
+      // Why: the source dir is resolved per call, so a dir that only becomes
+      // resolvable later still gets mirrored; keying the cache on the plugin
+      // source alone would leave the overlay plugin-only for the relay's life.
       mkdirSync(userConfig, { recursive: true })
       writeFileSync(join(userConfig, 'opencode.json'), '{"model":"late"}')
+      env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = userConfig
 
       const dir = install({ opencodePluginSource: source }).overlayDirs.opencode as string
       expect(readFileSync(join(dir, 'opencode.json'), 'utf8')).toBe('{"model":"late"}')
@@ -128,17 +128,17 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it("mirrors the guest's default config root so it keeps applying in WSL panes", () => {
+  it('mirrors an explicitly-set config root so overriding the var does not drop it', () => {
     withHome((home) => {
-      // Why: nothing explicit is discoverable from the relay's own env, so without
-      // this default the overlay would hold only Orca's plugin and the user's real
-      // OpenCode config would silently stop applying once the pane points at it.
-      const userConfig = join(home, '.config', 'opencode')
+      // Why: setting OPENCODE_CONFIG_DIR to the overlay removes the user's own value
+      // from OpenCode's config-dir list, so that one must be mirrored in.
+      const userConfig = join(home, 'my-opencode')
       mkdirSync(userConfig, { recursive: true })
       writeFileSync(join(userConfig, 'opencode.json'), '{"model":"user-set"}')
 
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
+        ORCA_OPENCODE_SOURCE_CONFIG_DIR: userConfig,
         ORCA_WSL_HOOK_INSTANCE: 'inst1'
       } as NodeJS.ProcessEnv)
       const dir = install({ opencodePluginSource: '// v1\n' }).overlayDirs.opencode as string
@@ -148,21 +148,23 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it('honours XDG_CONFIG_HOME for the default config root', () => {
+  it('does not mirror the XDG default config root', () => {
     withHome((home) => {
-      const xdg = join(home, 'xdg')
-      const userConfig = join(xdg, 'opencode')
-      mkdirSync(userConfig, { recursive: true })
-      writeFileSync(join(userConfig, 'opencode.json'), '{"model":"xdg"}')
+      // Why: OpenCode APPENDS OPENCODE_CONFIG_DIR to its config-dir list rather than
+      // replacing it, so ~/.config/opencode is read anyway — mirroring it here would
+      // load the user's config and plugins twice.
+      const defaultConfig = join(home, '.config', 'opencode')
+      mkdirSync(defaultConfig, { recursive: true })
+      writeFileSync(join(defaultConfig, 'opencode.json'), '{"model":"default"}')
 
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        XDG_CONFIG_HOME: xdg,
         ORCA_WSL_HOOK_INSTANCE: 'inst1'
       } as NodeJS.ProcessEnv)
       const dir = install({ opencodePluginSource: '// v1\n' }).overlayDirs.opencode as string
 
-      expect(readFileSync(join(dir, 'opencode.json'), 'utf8')).toBe('{"model":"xdg"}')
+      expect(existsSync(join(dir, 'opencode.json'))).toBe(false)
+      expect(existsSync(join(dir, 'plugins', 'orca-opencode-status.js'))).toBe(true)
     })
   })
 

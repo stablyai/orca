@@ -4,7 +4,6 @@
 // unit-testable without binding the hook server. Scope is OpenCode only for
 // now; the payload/response shape matches the SSH relay so Pi/OMP are additive.
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 
 import { getRelayOpenCodePluginPath, type PluginOverlayManager } from './plugin-overlay'
 import { resolveOpenCodeSourceConfigDir } from './plugin-overlay-env'
@@ -21,23 +20,11 @@ export type InstallPluginsResult = {
 
 export type InstallPluginsHandler = (params: Record<string, unknown>) => InstallPluginsResult
 
-function resolveGuestOpenCodeConfigDir(env: NodeJS.ProcessEnv): string | undefined {
-  const explicit = resolveOpenCodeSourceConfigDir(env as Record<string, string>, env.SHELL)
-  if (explicit) {
-    return explicit
-  }
-  // Why: nothing explicit is normally discoverable from the relay's own env, and
-  // without a source dir the overlay holds ONLY Orca's plugin — so pointing
-  // OPENCODE_CONFIG_DIR at it would stop the guest user's real ~/.config/opencode
-  // (models, agents, skills, mcp) from applying in WSL panes, where it applied before.
-  const home = env.HOME
-  if (!home) {
-    return undefined
-  }
-  const defaultDir = join(env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode')
-  return existsSync(defaultDir) ? defaultDir : undefined
-}
-
+// Why NOT to fall back to ~/.config/opencode here: OpenCode APPENDS
+// OPENCODE_CONFIG_DIR to its config-dir list, it does not replace it — the
+// XDG default is always read too. Mirroring the default into the overlay would
+// load the user's config (and plugins) twice. Only an explicitly-set dir is
+// mirrored, because that one leaves the list when we override the var.
 export function createInstallPluginsHandler(
   pluginOverlay: PluginOverlayManager,
   env: NodeJS.ProcessEnv
@@ -69,7 +56,7 @@ export function createInstallPluginsHandler(
       const incoming = typeof opencode === 'string' ? opencode : null
       // Re-resolved every call so a config root created after the first install still
       // gets mirrored; the rc scan is memoized and the default branch is one existsSync.
-      const sourceDir = resolveGuestOpenCodeConfigDir(env)
+      const sourceDir = resolveOpenCodeSourceConfigDir(env as Record<string, string>, env.SHELL)
       const cached = materialized
       if (
         cached &&
