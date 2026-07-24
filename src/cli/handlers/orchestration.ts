@@ -139,15 +139,19 @@ async function resolveOrchestrationTerminalHandle(
   }
   const envHandle = process.env.ORCA_TERMINAL_HANDLE
   if (envHandle && envHandle.length > 0) {
-    if (flagName === 'from' && options.validateEnvHandle) {
-      // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
+    if (options.validateEnvHandle) {
+      // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after an app restart remints the pane; don't bake it into coordinator preambles or listen on a dead mailbox.
       const live = await isLiveTerminalHandle(envHandle, client)
       if (!live) {
         const reminted = await resolveOrchestrationPaneTerminalHandle(client)
         if (reminted) {
           return reminted
         }
-        throwNoActiveSenderTerminal()
+        // Why: sender path must fail loudly; recipient (--terminal) path falls through to active-terminal resolution.
+        if (flagName === 'from') {
+          throwNoActiveSenderTerminal()
+        }
+        return await getTerminalHandle(flags, cwd, client)
       }
     }
     return envHandle
@@ -391,7 +395,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
-    const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
+    const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal', {
+      validateEnvHandle: true
+    })
 
     // Why: Claude Code auto-backgrounds subprocesses silent ~2 min; emit JSON keepalives to stderr (stdout stays one payload). See §3.4.
     const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
