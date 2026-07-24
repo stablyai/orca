@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -31,7 +32,8 @@ type ChecksPanelTerminalWorktree = {
  * the *remote* shell's OSC 7 path, which must not resolve a local worktree.
  * getCwd reads the local shell pid, so it is correct for that case. Remote
  * runtime PTYs are skipped (their cwd lives on the relay host). Polling is
- * gated on panel visibility, so a hidden panel does no background work and the
+ * gated on both panel visibility and window visibility, so a hidden panel or a
+ * hidden/minimized window does no background work (no `lsof` spawns) and the
  * caller's fallback worktree is used.
  *
  * Resolution is scoped to locally-executing worktrees: the cwd comes from a
@@ -123,11 +125,18 @@ export function useChecksPanelTerminalWorktree(args: {
       }
     }
 
-    void refresh()
-    const interval = window.setInterval(refresh, TERMINAL_CWD_POLL_MS)
+    // Why: getCwd shells out to `lsof` on macOS every tick (poll cadence >
+    // the 1.5s per-pid cache TTL, so each tick is a guaranteed miss). Gate on
+    // window visibility so a hidden/minimized window spawns no subprocesses;
+    // the helper runs an immediate refresh on becoming visible so a `cd` made
+    // while hidden is picked up promptly on return.
+    const stopInterval = installWindowVisibilityInterval({
+      run: () => void refresh(),
+      intervalMs: TERMINAL_CWD_POLL_MS
+    })
     return () => {
       disposed = true
-      window.clearInterval(interval)
+      stopInterval()
     }
   }, [activeTerminalPtyId, shouldPollCwd])
 

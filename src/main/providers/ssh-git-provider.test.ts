@@ -57,7 +57,12 @@ describe('SshGitProvider', () => {
   })
 
   it('getStatus sends git.status request', async () => {
-    const statusResult = { entries: [], conflictOperation: 'unknown' }
+    const statusResult = {
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      conflictOperation: 'unknown',
+      didHitLimit: true,
+      statusLength: 1_001
+    }
     mux.request.mockResolvedValue(statusResult)
 
     const result = await provider.getStatus('/home/user/repo')

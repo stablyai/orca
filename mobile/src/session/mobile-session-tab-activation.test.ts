@@ -25,8 +25,14 @@ describe('mobile session tab activation', () => {
       }
     )
     expect(sendRequest).toHaveBeenCalledTimes(2)
-    expect(sendRequest).toHaveBeenNthCalledWith(1, 'terminal.focus', { terminal: 'terminal-1' })
-    expect(sendRequest).toHaveBeenNthCalledWith(2, 'terminal.focus', { terminal: 'terminal-1' })
+    expect(sendRequest).toHaveBeenNthCalledWith(1, 'terminal.focus', {
+      terminal: 'terminal-1',
+      navigation: 'host'
+    })
+    expect(sendRequest).toHaveBeenNthCalledWith(2, 'terminal.focus', {
+      terminal: 'terminal-1',
+      navigation: 'host'
+    })
   })
 
   it('retries session-tab activation with the same target after cutover', async () => {
@@ -38,7 +44,8 @@ describe('mobile session tab activation', () => {
       worktree: 'id:worktree-1',
       tabId: 'tab-1',
       leafId: 'leaf-1',
-      notifyClients: false as const
+      notifyClients: false as const,
+      navigation: 'caller' as const
     }
 
     await expect(activateMobileSessionTab(clientWith(sendRequest), params)).resolves.toMatchObject({
@@ -67,7 +74,8 @@ describe('mobile session tab activation', () => {
       activateMobileSessionTab(clientWith(sendRequest), {
         worktree: 'id:worktree-1',
         tabId: 'tab-1',
-        notifyClients: false
+        notifyClients: false,
+        navigation: 'caller'
       })
     ).rejects.toBeInstanceOf(LogicalClientCutoverError)
     expect(sendRequest).toHaveBeenCalledTimes(2)

@@ -55,8 +55,7 @@ const SendParams = z
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
     threadId: OptionalString,
     payload: OptionalString,
-    // Why: the sender's pane key is the remint-stable identity used to verify
-    // worker_done/heartbeat ownership; the from handle stays routing metadata.
+    // Why: pane key is the remint-stable identity used to verify worker_done/heartbeat ownership; the from handle stays routing metadata.
     senderPaneKey: OptionalString,
     devMode: OptionalBoolean
   })
@@ -67,8 +66,7 @@ const SendParams = z
     ) {
       return
     }
-    // Why: dispatch lifecycle messages are authority/liveness signals for one
-    // coordinator. Fanout creates lifecycle mail in unrelated terminals.
+    // Why: dispatch lifecycle messages are authority/liveness signals for one coordinator; fanout would create lifecycle mail in unrelated terminals.
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: getLifecycleGroupRecipientError(params.type),
@@ -81,9 +79,7 @@ const CheckParams = z
     terminal: OptionalString,
     unread: OptionalBoolean,
     peek: OptionalBoolean,
-    // Why: `all` surfaces every message for the handle and skips mark-read.
-    // Previously the only way to ask for "all" was the hidden RPC trick
-    // `{unread: false}`. See design doc §3.2 / §3.3.
+    // Why: `all` surfaces every message and skips mark-read; legacy encoding was the `{unread: false}` trick (design doc §3.2/§3.3).
     all: OptionalBoolean,
     types: OptionalString,
     inject: OptionalBoolean,
@@ -91,9 +87,7 @@ const CheckParams = z
     timeoutMs: OptionalFiniteNumber
   })
   .superRefine((params, ctx) => {
-    // Why: the CLI encodes --peek as {peek:true, unread:false} so pre-peek
-    // runtimes degrade to the non-consuming all mode; that pair is one mode,
-    // not a conflict.
+    // Why: CLI encodes --peek as {peek:true, unread:false} for pre-peek runtimes, so that pair is one mode, not a conflict.
     const modes = [
       params.unread === true,
       params.peek === true,
@@ -115,9 +109,7 @@ const ReplyParams = z.object({
 
 const InboxParams = z.object({
   limit: OptionalFiniteNumber,
-  // Why: filters the inbox listing to a specific handle so coordinators can
-  // ask "everything for this handle" with either `inbox` or `check --all`
-  // and get agreeing results. See design doc §3.3.
+  // Why: filters the inbox to a handle so inbox and check --all give agreeing results (design doc §3.3).
   terminal: OptionalString
 })
 
@@ -133,8 +125,7 @@ const TaskCreateParams = z.object({
 const TaskListParams = z.object({
   status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),
   ready: OptionalBoolean,
-  // Why: truncating specs server-side keeps `--brief` cheap over SSH/relay
-  // transports instead of shipping full specs the CLI then throws away.
+  // Why: server-side truncation keeps --brief cheap over SSH/relay instead of shipping full specs the CLI throws away.
   brief: OptionalBoolean
 })
 
@@ -158,9 +149,7 @@ const TaskUpdateParams = z.object({
 
 const DispatchParams = z.object({
   task: requiredString('Missing --task'),
-  // Why: --to is only required for real dispatches. When --dry-run is set the
-  // caller is previewing the preamble and no terminal is targeted, so allow it
-  // to be absent. The handler enforces presence before any side-effecting work.
+  // Why: --to is optional so --dry-run can preview without a target; the handler enforces presence before any side-effecting work.
   to: OptionalString,
   from: OptionalString,
   inject: OptionalBoolean,
@@ -209,8 +198,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
-      // Why: older live shells may lack ORCA_PANE_KEY, but the runtime still
-      // knows the pane behind their resolved handle; persist that authority.
+      // Why: older shells may lack ORCA_PANE_KEY, but the runtime still knows the pane behind their handle; persist that authority.
       const senderPaneKey = params.senderPaneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
 
       if (!isGroupAddress(params.to)) {
@@ -226,14 +214,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           payload: params.payload,
           senderPaneKey
         })
-        // Why: worker_done/heartbeat sent via `send` must release the dispatch
-        // lock before waking recipients — a coordinator woken by delivery may
-        // immediately dispatch to the same terminal, which fails if the lock
-        // is still held.
+        // Why: reconcile releases the dispatch lock before waking recipients, else a woken coordinator re-dispatches while the lock is still held.
         if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
           const reconciled = reconcileLifecycleMessage(db, msg)
-          // Why: a suppressed message is already read; waking a `check --wait`
-          // waiter for it would return an empty result before the deadline.
+          // Why: a suppressed message is already read, so skip the notify that would wake a check --wait waiter to an empty result.
           if (reconciled.action === 'suppressed') {
             return { message: msg }
           }
@@ -249,9 +233,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         return { message: msg }
       }
 
-      // Why: group addresses fan out to one message per recipient so each gets
-      // independent read-tracking, but they share a thread_id so the conversation
-      // can be correlated (Section 4.5).
+      // Why: fan out one message per recipient (independent read-tracking) but share a thread_id for correlation (Section 4.5).
       const { terminals } = await runtime.listTerminals()
       const handles = resolveGroupAddress(params.to, from, terminals, (handle: string) =>
         runtime.getAgentStatusForHandle(handle)
@@ -301,10 +283,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         throw new Error(`Invalid --types: ${invalidTypes.join(',')}`)
       }
 
-      // Why: `all` short-circuits to "everything for the handle, no marking."
-      // Explicit `unread: false` is also honored for one release as a compat
-      // shim so in-flight callers don't break (see design doc §5). Otherwise
-      // today's behavior is preserved: default is unread-only + mark-read.
+      // Why: unread:false is honored for one release as a compat shim so in-flight callers don't break (design doc §5).
       const showAll = params.all === true || (params.unread === false && params.peek !== true)
       const consumeUnread = !showAll && params.peek !== true
 
@@ -315,9 +294,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
         let visibleMessages = messages
         if (consumeUnread && messages.length > 0) {
-          // Why: manual coordinators can consume lifecycle messages before
-          // the coordinator loop sees them, but unread `check` is still an
-          // authoritative read path for worker_done/heartbeat.
+          // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.
           visibleMessages = messages.map((message) => {
             const reconciled = reconcileLifecycleMessage(db, message)
             return reconciled.action === 'rejected'
@@ -343,12 +320,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         return result
       }
 
-      // Why: blocking wait lets coordinators replace sleep+poll loops with a
-      // single call that resolves when a message arrives or the timeout
-      // expires. The `signal` plumbed from the RPC transport aborts this
-      // waiter the moment the client socket closes, so a killed client
-      // releases its long-poll slot immediately rather than after the full
-      // timeoutMs. See design doc §3.1 counter-lifecycle.
+      // Why: signal aborts this waiter when the client socket closes, freeing the long-poll slot immediately rather than after timeoutMs (design doc §3.1).
       await runtime.waitForMessage(handle, {
         typeFilter: typeFilter as string[] | undefined,
         timeoutMs: params.timeoutMs ?? undefined,
@@ -391,10 +363,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: InboxParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      // Why: when `terminal` is provided, mirror `check --all` output for that
-      // handle (same rows in the same sequence order). Stale/unknown handles
-      // return an empty list instead of erroring, matching the "historical
-      // rows survive handle deletion" rule in design doc §3.3.
+      // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
       const messages = params.terminal
         ? db.getAllMessagesForHandle(params.terminal, params.limit)
         : db.getInbox(params.limit)
@@ -436,10 +405,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskListParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      // Why: listTasksWithDispatch returns the same rows as listTasks plus
-      // assignee_handle + dispatch_id joined in for tasks that currently have an
-      // active dispatch. Non-dispatched tasks get NULL for those fields, so
-      // consumers reading the legacy shape are unaffected.
+      // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
       const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
         ready: params.ready
@@ -481,13 +447,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         throw new Error(`Task not found: ${params.task}`)
       }
 
-      // Why: --inject --dry-run lets a coordinator preview the exact preamble
-      // text that would be injected without mutating task state or touching the
-      // target terminal. Skips the ready-status check so coordinators can inspect
-      // the preamble for already-dispatched or blocked tasks too. No dispatch
-      // context exists yet (that happens after the ready-status check), so
-      // dispatchId is a placeholder — the real injected preamble gets a real
-      // ctx.id below.
+      // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
       if (params.dryRun) {
         const preamble = buildDispatchPreamble({
           taskId: task.id,
@@ -512,10 +472,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
       }
 
-      // Why: dispatching with --inject to a bare shell (zsh/bash) dumps the
-      // preamble as shell commands, producing gibberish. Check both OSC title
-      // status and foreground process — Claude Code doesn't emit recognized OSC
-      // titles on startup, so title-only detection misses freshly spawned agents.
+      // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
       if (params.inject) {
         const hasAgent = await runtime.isTerminalRunningAgent(to)
         if (!hasAgent) {
@@ -533,10 +490,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         runtime.getTerminalPaneKey(to) ?? undefined
       )
 
-      // Why: preamble is built here (not before ctx) so `dispatchId` can be
-      // the real ctx.id — the preamble-hardening PR made dispatchId required
-      // so heartbeats can attribute liveness to a specific dispatch context,
-      // not just a task.
+      // Why: built after ctx so dispatchId is the real ctx.id, letting heartbeats attribute liveness to a specific dispatch context, not just a task.
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
@@ -558,9 +512,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
       }
 
-      // Why: returnPreamble is opt-in because the preamble is several hundred
-      // bytes and most callers don't need it in the response. Exposing it
-      // supports coordinators that want to log what was injected for auditing.
+      // Why: returnPreamble is opt-in because the preamble is several hundred bytes most callers don't need in the response.
       if (params.returnPreamble) {
         return { dispatch: ctx, injected, preamble }
       }
@@ -578,10 +530,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
       const ctx = db.getDispatchContext(params.task)
 
-      // Why: --preamble lets callers inspect the exact preamble text that was
-      // (or would be) injected for this task. The preamble is derived from the
-      // current task spec, so even after dispatch completes the text can be
-      // regenerated deterministically.
+      // Why: the preamble is derived from the current task spec, so it can be regenerated deterministically even after dispatch completes.
       if (params.preamble) {
         const task = db.getTask(params.task)
         if (!task) {
@@ -590,9 +539,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         const workerHandle = ctx?.assignee_handle ?? 'worker'
         const preamble = buildDispatchPreamble({
           taskId: task.id,
-          // Why: prefer the existing dispatch context's id if we have one
-          // (so the preview matches what was actually injected); fall back
-          // to a placeholder when no dispatch has occurred yet.
+          // Why: use the real ctx.id when present so the preview matches what was injected; placeholder when no dispatch has occurred yet.
           dispatchId: ctx?.id ?? 'ctx_preview',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
@@ -611,12 +558,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     name: 'orchestration.ask',
     params: AskParams,
     handler: async (params, { runtime, signal }) => {
-      // Why: group addresses have no unambiguous answer semantics (whose
-      // reply wins? first? consensus?) and the ~60-LOC scope is not the
-      // place to design that. Rejecting here closes the silent-timeout
-      // footgun where a worker passing `--to @reviewers` would have the
-      // decision_gate inserted against a literal string no one subscribes
-      // to. Workers that need fan-out fall back to `send --type decision_gate`.
+      // Why: group addresses have no unambiguous answer semantics; rejecting avoids a silent timeout on a decision_gate no one subscribes to.
       if (isGroupAddress(params.to)) {
         throw new Error(
           'ask does not support group addresses; use send --type decision_gate for fan-out questions'
@@ -648,11 +590,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const deadline = Date.now() + timeoutMs
       const afterSequence = outbound.sequence
 
-      // Why: loop with a remaining-budget guard so an unrelated distractor
-      // message that wakes waitForMessage does not cause indefinite iteration.
-      // waitForMessage is handle-scoped, so we re-query by thread on every
-      // wake-up to separate "reply in my thread arrived" from "something
-      // else was delivered to this handle."
+      // Why: waitForMessage is handle-scoped, so re-query by thread each wake and bound by remaining budget so distractor messages can't loop forever.
       while (true) {
         const replies = db.getThreadMessagesFor(threadId, from, afterSequence)
         if (replies.length > 0) {
@@ -672,8 +610,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (remainingMs <= 0) {
           return { answer: null, messageId: null, threadId, timedOut: true }
         }
-        // Why: if the asking client disconnects, release the waiter immediately
-        // while leaving the already-sent decision gate visible to the recipient.
+        // Why: signal releases the waiter on client disconnect while the already-sent decision gate stays visible to the recipient.
         await runtime.waitForMessage(from, { timeoutMs: remainingMs, signal })
       }
     }

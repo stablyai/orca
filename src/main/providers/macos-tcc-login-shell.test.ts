@@ -1,23 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as LoginSessionPtyProbe from './macos-login-session-pty-probe'
 
-const { existsSyncMock, userInfoMock, execFileMock, stdinEndMock } = vi.hoisted(() => ({
-  existsSyncMock: vi.fn(),
-  userInfoMock: vi.fn(),
-  execFileMock: vi.fn(),
-  stdinEndMock: vi.fn()
-}))
+const { existsSyncMock, userInfoMock, execFileMock, stdinEndMock, ptyProbeMock } = vi.hoisted(
+  () => ({
+    existsSyncMock: vi.fn(),
+    userInfoMock: vi.fn(),
+    execFileMock: vi.fn(),
+    stdinEndMock: vi.fn(),
+    ptyProbeMock: vi.fn()
+  })
+)
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
 vi.mock('node:os', () => ({ userInfo: userInfoMock }))
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+vi.mock('./macos-login-session-pty-probe', async (importOriginal) => ({
+  ...(await importOriginal<typeof LoginSessionPtyProbe>()),
+  runMacosLoginSessionPtyProbe: ptyProbeMock
+}))
 
 import {
   prepareMacosTccLoginShell,
+  probeMacosLoginSessionAlive,
   resetMacosLoginShellPreflightForTests,
   wrapShellSpawnForMacosTccAttribution
 } from './macos-tcc-login-shell'
 
 type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) => void
+const ACCEPTED_OUTCOME = { ok: true, conclusive: true, reason: 'accepted' } as const
+const REJECTED_OUTCOME = { ok: false, conclusive: true, reason: 'rejected' } as const
 
 describe('wrapShellSpawnForMacosTccAttribution', () => {
   let origPlatform: PropertyDescriptor | undefined
@@ -39,6 +50,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         return { stdin: { end: stdinEndMock } }
       }
     )
+    ptyProbeMock.mockResolvedValue({ ok: true, conclusive: true, reason: 'accepted' })
     resetMacosLoginShellPreflightForTests()
   })
 
@@ -51,6 +63,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     } else {
       process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = origDisable
     }
+    vi.restoreAllMocks()
     vi.clearAllMocks()
   })
 
@@ -96,11 +109,12 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     )
   })
 
-  it('caches a failed login preflight for later terminal spawns', async () => {
+  it('caches a conclusive PAM rejection for later terminal spawns', async () => {
     setPlatform('darwin')
     execFileMock.mockImplementation(
       (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
-        callback(new Error('timed out'), '', '')
+        // login(1) exiting non-zero on its own is a deterministic PAM verdict.
+        callback(Object.assign(new Error('login incorrect'), { code: 1 }), '', '')
         return { stdin: { end: stdinEndMock } }
       }
     )
@@ -112,6 +126,84 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     expect(wrapShellSpawnForMacosTccAttribution('/bin/bash', ['-l']).file).toBe('/bin/bash')
     expect(execFileMock).toHaveBeenCalledTimes(1)
     expect(console.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('backs off repeated transient timeouts instead of delaying every terminal spawn (F1)', async () => {
+    setPlatform('darwin')
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    // A probe our own SIGKILL cap killed proves nothing about PAM; it must retry.
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(Object.assign(new Error('timed out'), { killed: true }), '', '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const first = await prepareMacosTccLoginShell()
+    expect(first).toEqual({ ok: false, conclusive: false, reason: 'timeout' })
+    // Degraded probe fails open to a direct shell for this spawn...
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
+
+    // ...without making every subsequent terminal pay the same 500 ms timeout.
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledOnce()
+
+    now += 5_000
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+
+    // Repeated failures back off further rather than spawning login(1) every 5 seconds.
+    now += 5_000
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+    now += 5_000
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('self-heals to the login wrapper once a re-probe succeeds (F1)', async () => {
+    setPlatform('darwin')
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    let attempt = 0
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        attempt += 1
+        if (attempt === 1) {
+          callback(Object.assign(new Error('timed out'), { killed: true }), '', '')
+        } else {
+          callback(null, 'ORCA_LOGIN_PREFLIGHT_OK', '')
+        }
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await prepareMacosTccLoginShell()
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledOnce()
+    now += 5_000
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
+  })
+
+  it('returns a conclusive outcome the daemon can log structurally (F2)', async () => {
+    setPlatform('darwin')
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(null, 'Login incorrect\nlogin: ', '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const outcome = await prepareMacosTccLoginShell()
+    expect(outcome).toEqual({ ok: false, conclusive: true, reason: 'rejected' })
+    // A second call is short-circuited by the cache, so nothing new to log.
+    expect(await prepareMacosTccLoginShell()).toBeNull()
   })
 
   it('rejects a marker emitted by a preflight that does not exit cleanly', async () => {
@@ -258,5 +350,202 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
       args: ['-l']
     })
     expect(execFileMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('probeMacosLoginSessionAlive', () => {
+  let origPlatform: PropertyDescriptor | undefined
+  let origDisable: string | undefined
+
+  function setPlatform(value: string): void {
+    Object.defineProperty(process, 'platform', { configurable: true, value })
+  }
+
+  beforeEach(() => {
+    origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    origDisable = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+    delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+    existsSyncMock.mockReturnValue(true)
+    userInfoMock.mockReturnValue({ username: 'ada', homedir: '/Users/ada' })
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(null, 'ORCA_LOGIN_PREFLIGHT_OK', '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+    ptyProbeMock.mockResolvedValue({ ok: true, conclusive: true, reason: 'accepted' })
+    resetMacosLoginShellPreflightForTests()
+  })
+
+  afterEach(() => {
+    if (origPlatform) {
+      Object.defineProperty(process, 'platform', origPlatform)
+    }
+    if (origDisable === undefined) {
+      delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+    } else {
+      process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = origDisable
+    }
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+  })
+
+  it('re-probes even after a cached acceptance', async () => {
+    setPlatform('darwin')
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    const outcome = await probeMacosLoginSessionAlive()
+    expect(outcome).toEqual({ ok: true, conclusive: true, reason: 'accepted' })
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reuses an in-flight startup warmup instead of spawning a duplicate probe', async () => {
+    setPlatform('darwin')
+    let finishPreflight!: ExecFileCallback
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        finishPreflight = callback
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+
+    const warmup = prepareMacosTccLoginShell()
+    const freshProbe = probeMacosLoginSessionAlive()
+    expect(execFileMock).toHaveBeenCalledOnce()
+
+    finishPreflight(null, 'ORCA_LOGIN_PREFLIGHT_OK', '')
+    await expect(Promise.all([warmup, freshProbe])).resolves.toEqual([
+      ACCEPTED_OUTCOME,
+      ACCEPTED_OUTCOME
+    ])
+    expect(execFileMock).toHaveBeenCalledOnce()
+  })
+
+  it('does not let a spawn-path probe overwrite a newer death verdict', async () => {
+    setPlatform('darwin')
+    const callbacks: ExecFileCallback[] = []
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callbacks.push(callback)
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+
+    const freshProbe = probeMacosLoginSessionAlive()
+    const spawnProbe = prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+
+    callbacks[0](Object.assign(new Error('login incorrect'), { code: 1 }), '', '')
+    await expect(freshProbe).resolves.toEqual(REJECTED_OUTCOME)
+    callbacks[1](null, 'ORCA_LOGIN_PREFLIGHT_OK', '')
+    await expect(spawnProbe).resolves.toEqual(ACCEPTED_OUTCOME)
+
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
+  })
+
+  it('flips the spawn wrapper off when a fresh probe conclusively rejects (dead login session)', async () => {
+    setPlatform('darwin')
+    await prepareMacosTccLoginShell()
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
+
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(Object.assign(new Error('login incorrect'), { code: 1 }), '', '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+    const outcome = await probeMacosLoginSessionAlive()
+    expect(outcome).toEqual({ ok: false, conclusive: true, reason: 'rejected' })
+    // The dead-session daemon must stop minting login(1) prompt zombies (#7936).
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
+  })
+
+  it('does not overwrite the cached verdict on an inconclusive probe', async () => {
+    setPlatform('darwin')
+    await prepareMacosTccLoginShell()
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(Object.assign(new Error('killed'), { killed: true }), '', '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+    ptyProbeMock.mockResolvedValue({ ok: false, conclusive: false, reason: 'timeout' })
+    const outcome = await probeMacosLoginSessionAlive()
+    expect(outcome).toEqual({ ok: false, conclusive: false, reason: 'timeout' })
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
+  })
+
+  it('returns null off macOS and when disabled', async () => {
+    setPlatform('linux')
+    expect(await probeMacosLoginSessionAlive()).toBeNull()
+    setPlatform('darwin')
+    process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = '1'
+    expect(await probeMacosLoginSessionAlive()).toBeNull()
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('escalates an inconclusive pipe probe to a PTY probe and accepts its verdict', async () => {
+    setPlatform('darwin')
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(Object.assign(new Error('killed'), { killed: true }), '', '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+    const outcome = await probeMacosLoginSessionAlive()
+    expect(outcome).toEqual({ ok: true, conclusive: true, reason: 'accepted' })
+    expect(execFileMock).toHaveBeenCalledOnce()
+    expect(ptyProbeMock).toHaveBeenCalledWith('ada', '/Users/ada', 4_000, 1_024, undefined)
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
+  })
+
+  it('treats a PTY-probe rejection as conclusive and flips the wrapper off', async () => {
+    setPlatform('darwin')
+    await prepareMacosTccLoginShell()
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(Object.assign(new Error('killed'), { killed: true }), '', '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+    ptyProbeMock.mockResolvedValue({ ok: false, conclusive: true, reason: 'rejected' })
+    const outcome = await probeMacosLoginSessionAlive()
+    expect(outcome).toEqual({ ok: false, conclusive: true, reason: 'rejected' })
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
+  })
+
+  it('stays inconclusive when both pipe and PTY probes time out', async () => {
+    setPlatform('darwin')
+    await prepareMacosTccLoginShell()
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(Object.assign(new Error('killed'), { killed: true }), '', '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+    ptyProbeMock.mockResolvedValue({ ok: false, conclusive: false, reason: 'timeout' })
+    const outcome = await probeMacosLoginSessionAlive()
+    expect(outcome).toEqual({ ok: false, conclusive: false, reason: 'timeout' })
+    // Inconclusive must not disturb the cached acceptance.
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
+  })
+
+  it('does not start a PTY fallback after the watch cancels its pipe probe', async () => {
+    setPlatform('darwin')
+    const abortController = new AbortController()
+    abortController.abort()
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(Object.assign(new Error('aborted'), { code: 'ABORT_ERR' }), '', '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+
+    await expect(probeMacosLoginSessionAlive(abortController.signal)).resolves.toEqual({
+      ok: false,
+      conclusive: false,
+      reason: 'error'
+    })
+    expect(ptyProbeMock).not.toHaveBeenCalled()
   })
 })

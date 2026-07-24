@@ -33,14 +33,9 @@ function gitExecOptions(
 }
 
 /**
- * Ordered probe list used to resolve a repo's default base ref when no
- * explicit origin/HEAD symbolic-ref is set. `returnAs` is the short-name
- * format the UI expects (matches how `git for-each-ref --format=%(refname:short)`
- * would render the ref).
- *
- * Why: shared between the local path (getDefaultBaseRefAsync) and the SSH
- * relay path in src/main/ipc/repos.ts so both resolve identical defaults
- * for equivalent repo states.
+ * Ordered probe list for a repo's default base ref when no origin/HEAD symbolic-ref is set.
+ * `returnAs` is the short-name format the UI expects (as `for-each-ref --format=%(refname:short)` renders it).
+ * Shared local/SSH so both resolve identical defaults.
  */
 export const DEFAULT_BASE_REF_PROBES: readonly { ref: string; returnAs: string }[] = [
   { ref: 'refs/remotes/origin/main', returnAs: 'origin/main' },
@@ -50,12 +45,8 @@ export const DEFAULT_BASE_REF_PROBES: readonly { ref: string; returnAs: string }
 ]
 
 /**
- * Walk DEFAULT_BASE_REF_PROBES in order, returning the first ref whose
- * existence is confirmed by `hasRef`. Returns null if none exist.
- *
- * Why: abstracts the "how do we test a ref exists" detail so the local
- * path (hasGitRefAsync) and the SSH path (provider.exec rev-parse) can
- * share a single authoritative probe ordering.
+ * Walk DEFAULT_BASE_REF_PROBES in order, returning the first ref `hasRef` confirms, or null.
+ * Abstracts the existence test so local and SSH paths share one authoritative probe ordering.
  */
 async function resolveDefaultBaseRefFromProbes(
   hasRef: (ref: string) => Promise<boolean>
@@ -68,9 +59,7 @@ async function resolveDefaultBaseRefFromProbes(
   return null
 }
 
-/**
- * Check if a path is a valid git repository (regular or bare).
- */
+/** Check if a path is a valid git repository (regular or bare). */
 export function isGitRepo(path: string): boolean {
   try {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
@@ -80,8 +69,7 @@ export function isGitRepo(path: string): boolean {
     return false
   }
 
-  // Authoritative positive signal: ask git directly. Covers regular work
-  // trees, linked worktrees (gitfile), submodules, and bare repos.
+  // Ask git directly first — authoritative for work trees, linked worktrees, submodules, and bare repos.
   const gitProbeResult = probeGitRepo(path)
   if (gitProbeResult === 'repo') {
     return true
@@ -90,20 +78,11 @@ export function isGitRepo(path: string): boolean {
     return false
   }
 
-  // Why: `git rev-parse` can fail to produce a clean answer for reasons
-  // unrelated to repo-ness — a transient spawn failure or git-shim hiccup in
-  // the packaged app, resource pressure in the Electron main process, or a
-  // repo whose config errors out. Treating every such failure as "not a repo"
-  // silently downgrades a real repository to a plain folder (worktrees, SCM,
-  // PRs all disappear) and is the regression behind the spurious "Open as
-  // Folder" prompt. Fall back to a validated `.git` marker so a directory that
-  // genuinely carries Git metadata is still recognized; a directory with only
-  // a garbage `.git` file has no valid marker and is correctly rejected.
+  // Why: rev-parse can fail for reasons unrelated to repo-ness (spawn hiccup, config error); fall back to a
+  // validated `.git` marker instead of downgrading a real repo to a plain folder (the spurious "Open as Folder" bug).
   const markerScan = scanGitMarkerSync(path)
   if (markerScan.status === 'valid' && !warnedMarkerFallbackThisSession) {
-    // Why: warn only once per session. The folder scanner calls isGitRepo for
-    // many paths; if git is genuinely unavailable, warning per path would flood
-    // the main-process logs without adding signal beyond the first occurrence.
+    // Why: warn once per session; the folder scanner calls isGitRepo for many paths and would otherwise flood logs.
     warnedMarkerFallbackThisSession = true
     console.warn('[isGitRepo] git rev-parse could not confirm repo; accepted via .git marker', {
       path
@@ -179,23 +158,16 @@ export function getGitRepoRoot(path: string): string {
 export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: string): string {
   const inputWsl = parseWslUncPath(inputPath)
   if (inputWsl && rootPath.startsWith('/')) {
-    // Why: WSL git reports Linux-native roots; Orca must persist the UNC path so
-    // later local git calls keep routing through the WSL-aware runner.
+    // Why: WSL git reports Linux-native roots; persist the UNC path so later git calls keep routing through the WSL runner.
     return toWindowsWslPath(rootPath, inputWsl.distro)
   }
   return normalizeRuntimePathSeparators(rootPath)
 }
 
 /**
- * Filesystem-only check for genuine Git metadata, used as a fallback when git
- * cannot give a clean answer. Strict enough to reject a directory whose `.git`
- * is a garbage file (preserving the validation added in 18ed7b27d):
- * - `.git` directory: accepted only if it has real common or linked-worktree
- *   gitdir shape, so empty/incomplete `.git/` folders are rejected.
- * - `.git` file: accepted only if its `gitdir:` target resolves to valid Git
- *   metadata, covering linked worktrees and submodules.
- * - bare repo root: accepted when HEAD + objects/ + refs/ are present and the
- *   config does not mark it as a regular worktree admin dir.
+ * Filesystem-only fallback check for genuine Git metadata when git can't answer cleanly. Strict enough to
+ * reject a garbage `.git` file (validation from 18ed7b27d): accepts a `.git` dir/file with real gitdir shape
+ * or a bare-repo root (HEAD + objects/ + refs/, not a worktree admin dir).
  */
 function scanGitMarkerSync(path: string): GitMarkerScanResult {
   const realPath = resolveRealPathSync(path)
@@ -207,8 +179,7 @@ function scanGitMarkerSync(path: string): GitMarkerScanResult {
       realPathScan.status === 'valid' &&
       pathsReferToSameEntry(lexicalScan.rootPath, realPathScan.rootPath)
     ) {
-      // Why: preserve lexical spellings such as /var vs /private/var, but let a
-      // symlink from one repo into another bind to the real target repo like git.
+      // Why: preserve lexical spellings (/var vs /private/var), but let a cross-repo symlink bind to the real target like git.
       return lexicalScan
     }
     return realPathScan
@@ -439,18 +410,14 @@ function isGitBooleanFalse(value: string): boolean {
   return ['', 'false', 'no', 'off', '0'].includes(value.toLowerCase())
 }
 
-/**
- * Get a human-readable name for the repo from its path.
- */
+/** Get a human-readable name for the repo from its path. */
 export function getRepoName(path: string): string {
   const name = basename(path)
   // Strip .git suffix from bare repos
   return name.endsWith('.git') ? name.slice(0, -4) : name
 }
 
-/**
- * Get the remote origin URL, or null if not set.
- */
+/** Get the remote origin URL, or null if not set. */
 export function getRemoteUrl(path: string): string | null {
   try {
     return getRemoteUrlByName(path, 'origin')
@@ -486,8 +453,7 @@ function getVerifiedOriginHeadBaseRef(path: string): string | null {
       cwd: path
     }).trim()
 
-    // Why: origin/HEAD may survive a default-branch rename while pointing at a
-    // deleted ref; verify before trusting it over the probe list.
+    // Why: origin/HEAD may survive a default-branch rename pointing at a deleted ref; verify before trusting it.
     return ref && hasGitRef(path, ref) ? gitRefToDefaultBaseRef(ref) : null
   } catch {
     return null
@@ -495,14 +461,8 @@ function getVerifiedOriginHeadBaseRef(path: string): string | null {
 }
 
 /**
- * Resolve the default base ref for new worktrees.
- * Prefer the remote primary branch over a potentially stale local branch.
- *
- * Why: returns `null` when no candidate ref is resolvable. Previously this
- * fell through to a hardcoded `'origin/main'` even when that ref did not
- * exist, which silently handed `git worktree add` a bad ref and produced
- * an opaque git error. Callers now fail loudly with a useful message, or
- * degrade gracefully for non-creation uses (e.g. hosted URL building).
+ * Resolve the default base ref for new worktrees, preferring the remote primary over a stale local branch.
+ * Returns null when nothing resolves (rather than a hardcoded `origin/main`) so callers fail loudly or degrade.
  */
 export function getDefaultBaseRef(path: string): string | null {
   const originHeadBaseRef = getVerifiedOriginHeadBaseRef(path)
@@ -510,8 +470,7 @@ export function getDefaultBaseRef(path: string): string | null {
     return originHeadBaseRef
   }
 
-  // Why: walk the shared DEFAULT_BASE_REF_PROBES list so the sync path and the
-  // async/SSH paths cannot drift on which refs are tried or in what order.
+  // Why: walk the shared DEFAULT_BASE_REF_PROBES so sync and async/SSH paths can't drift on ref order.
   for (const { ref, returnAs } of DEFAULT_BASE_REF_PROBES) {
     if (hasGitRef(path, ref)) {
       return returnAs
@@ -528,14 +487,8 @@ export async function getBaseRefDefault(
 }
 
 /**
- * Return { ahead, behind } for localRef vs remoteRef, or null on git failure.
- *
- * Why: `rev-list --left-right --count A...B` emits `<ahead>\t<behind>` —
- * ahead = commits on A not reachable from B; behind = commits on B not
- * reachable from A. This is the merge-base-symmetric delta used by the
- * stale-base dispatch guard (§3.1). Returning null on any failure (bad
- * ref, corrupt repo, non-numeric output) lets callers degrade gracefully
- * instead of failing dispatch on a probe error.
+ * Return { ahead, behind } (merge-base-symmetric delta) for localRef vs remoteRef, or null on failure.
+ * ahead = commits on localRef not in remoteRef; behind = the reverse. Used by the stale-base dispatch guard (§3.1).
  */
 export function getRemoteDrift(
   repoPath: string,
@@ -559,12 +512,8 @@ export function getRemoteDrift(
 }
 
 /**
- * Up to `limit` commit subjects present on remoteRef but not localRef, in
- * recency order. Returns [] on git failure.
- *
- * Why: powers the preamble drift section (§3.2) so a worker dispatched
- * against an acknowledged-stale base can see at a glance whether the
- * drift touches their task area.
+ * Up to `limit` commit subjects on remoteRef but not localRef, recency order; [] on git failure.
+ * Powers the preamble drift section (§3.2) so a worker sees whether stale-base drift touches its area.
  */
 export function getRecentDriftSubjects(
   repoPath: string,
@@ -584,29 +533,18 @@ export function getRecentDriftSubjects(
   }
 }
 
-/**
- * Parse `git remote` stdout into a count of configured remotes.
- *
- * Why: shared between the local path and the SSH relay path so the
- * count semantics cannot drift.
- */
+/** Parse `git remote` stdout into a remote count. Shared local/SSH so count semantics can't drift. */
 export function parseRemoteCount(stdout: string): number {
   return stdout.split('\n').filter((line) => line.trim().length > 0).length
 }
 
-/**
- * Count the repo's configured remotes by shelling out `git remote`.
- * Returns 0 on error — callers use 0 as "unknown / do not render the
- * multi-remote hint", preserving today's no-hint behavior on failure.
- */
+/** Count configured remotes via `git remote`; returns 0 on error (callers read 0 as "unknown / no hint"). */
 export async function getRemoteCount(path: string): Promise<number> {
   try {
     const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
     return parseRemoteCount(stdout)
   } catch (err) {
-    // Why: surface the failure for diagnostics; callers treat 0 as "unknown /
-    // do not render the multi-remote hint", but silently swallowing the error
-    // makes a missing hint impossible to debug.
+    // Why: log so a missing multi-remote hint is debuggable; callers still treat 0 as "unknown".
     console.warn('[getRemoteCount] git remote failed', { path, err })
     return 0
   }
@@ -638,17 +576,10 @@ async function resolveVerifiedOriginHeadBaseRefViaExec(exec: GitExec): Promise<s
 }
 
 /**
- * Resolve the default base ref given a git exec callback. Prefers
- * origin/HEAD's symbolic-ref target; falls back to DEFAULT_BASE_REF_PROBES.
+ * Resolve the default base ref via a git exec callback: prefer origin/HEAD's symbolic-ref target,
+ * else fall back to DEFAULT_BASE_REF_PROBES. Shared local/SSH so both transports agree.
  *
- * Why: shared between the local path (via gitExecFileAsync) and the SSH
- * relay path (via provider.exec) so both paths return identical results
- * for equivalent repo states. Accepting an exec callback avoids coupling
- * this helper to either transport. Callers that want transport-level
- * diagnostics should log inside their own exec callback before rethrowing —
- * this helper swallows symbolic-ref's catch because a non-zero exit is the
- * expected signal for "origin/HEAD is unset" and not distinguishable here
- * from a genuine transport failure.
+ * Why swallow symbolic-ref's error: a non-zero exit is the expected "origin/HEAD unset" signal, not a failure.
  */
 export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<string | null> {
   const originHeadBaseRef = await resolveVerifiedOriginHeadBaseRefViaExec(exec)
@@ -678,30 +609,10 @@ async function getDefaultBaseRefAsync(
 }
 
 /**
- * Build the argv for `git for-each-ref` used by ref search, given an
- * already-normalized query string.
+ * Build the argv for `git for-each-ref` used by ref search, given an already-normalized query.
  *
- * Why: glob `refs/remotes/*\/*` (not `refs/remotes/origin/*`) so fork
- * workflows can discover branches from any configured remote (e.g.
- * `upstream/main`). The picker would otherwise structurally deny the
- * correct answer for fork contributors — see docs/upstream-base-ref-design.md.
- *
- * Why paired leaf/ancestor globs for a single-segment query: `git for-each-ref`
- * uses fnmatch-style globs where `*` does NOT cross `/`. Slash-named branch
- * refs need an ancestor-segment glob for `user` in `user/feature`, a leaf glob
- * for `feature`, and the same remote-side shape so typing a remote name like
- * `upstream` keeps working.
- *
- * Why the multi-segment branch: the picker displays results as
- * `upstream/main`, so users naturally retype that format. With a single
- * glob, `upstream/main` becomes `refs/remotes/*upstream/main*\/*` — five
- * path segments, zero matches. Splitting on `/` and emitting one
- * `*<token>*` per ref segment maps directly to git's ref structure
- * (`refs/remotes/<remote>/<branch>`, `refs/heads/<branch>`) and makes
- * display-format queries actually find the ref on screen.
- *
- * Why shared: the local path and the SSH relay path must send the exact
- * same argv so results cannot diverge between transports.
+ * Why: glob every remote (`refs/remotes/*\/*`), not just origin, so fork workflows can find branches like
+ * `upstream/main` — see docs/upstream-base-ref-design.md. Shared with the SSH relay path so argv can't diverge.
  */
 const REF_SEARCH_CANDIDATE_MULTIPLIER = 4
 const REF_SEARCH_LEGACY_HEADROOM = 100
@@ -737,30 +648,18 @@ export function buildSearchBaseRefsArgv(
     '--sort=-committerdate',
     ...(excludeRemoteHead
       ? [
-          // Why: exclude remote HEAD pseudo-refs before --count so the bounded
-          // candidate window is spent on refs the picker can actually display.
+          // Why: exclude remote HEAD pseudo-refs before --count so the candidate window holds displayable refs.
           '--exclude=refs/remotes/**/HEAD'
         ]
       : []),
-    // Why: empty Branch-tab searches use broad globs; cap git output before
-    // execFile/SSH buffers capture every ref in very large repositories.
+    // Why: cap git output so broad globs don't overflow execFile/SSH buffers in very large repos.
     `--count=${candidateCount}`
   ]
-  // Why: split on `/` so display-format queries (`upstream/main`) route
-  // each token to one git ref segment. Filter empty tokens so trailing
-  // (`upstream/`), leading (`/main`), or doubled (`upstream//main`)
-  // slashes don't produce empty `**` segments that degrade to useless
-  // patterns. A single remaining token means the user hasn't committed
-  // to a remote-plus-branch query yet — route through the widened
-  // single-segment globs below instead of pinning to one segment.
+  // Why: split on `/` so display-format queries route each token to one ref segment; filter empties from stray slashes.
   const tokens = getRefSearchTokens(normalizedQuery)
   if (tokens.length <= 1) {
     const q = tokens[0] ?? ''
-    // Why `**`, not `*`: git for-each-ref globs are fnmatch-style where a
-    // single `*` does NOT cross `/`. Slash-named branches (`user/feature`)
-    // are the norm, so match both leaf and ancestor branch-name segments.
-    // The remote ancestor glob also preserves remote-name queries like
-    // `upstream` while `**/` keeps flat names like `main` working.
+    // Why `**` not `*`: fnmatch `*` can't cross `/`, so match slash-named branches at both leaf and ancestor segments.
     return [
       ...base,
       `refs/heads/**/*${q}*`,
@@ -769,11 +668,7 @@ export function buildSearchBaseRefsArgv(
       `refs/remotes/**/*${q}*/**`
     ]
   }
-  // Why: multi-token queries like `upstream/main` map one `*token*` per
-  // ref segment, so each token is matched within a single git ref
-  // segment (fnmatch `*` cannot cross `/`). The picker displays results
-  // as `<remote>/<branch>`, so users naturally retype that format; this
-  // branch is what makes re-typing a visible result actually find it.
+  // Why: one `*token*` per ref segment because fnmatch `*` can't cross `/`; lets a retyped `<remote>/<branch>` result match.
   const segmented = tokens.map((token) => `*${token}*`).join('/')
   const substringQuery = tokens.join('/')
   const remoteBranchRootPatterns =
@@ -785,9 +680,7 @@ export function buildSearchBaseRefsArgv(
       : [`refs/remotes/*/${substringQuery}*`, `refs/remotes/*/${substringQuery}*/**`]
   const segmentedPatterns = [`refs/remotes/${segmented}`, `refs/heads/${segmented}`]
   const branchRootPatterns = [
-    // Why: branch names often contain slashes (`plan/docs`). Segment-wise
-    // display-format globs only align with `<remote>/<branch>`; these root
-    // patterns also match the local branch name beneath any configured remote.
+    // Why: branch names often contain slashes (plan/docs); these root patterns also match a local branch beneath any remote.
     `refs/heads/${substringQuery}*`,
     `refs/heads/${substringQuery}*/**`,
     ...remoteBranchRootPatterns
@@ -865,9 +758,7 @@ export async function getDefaultRemote(
   options: LocalGitExecOptions = {}
 ): Promise<string> {
   const defaultRef = await getDefaultBaseRefAsync(path, options)
-  // Why: getDefaultBaseRefAsync returns null when no default branch can be
-  // detected (e.g. a brand-new repo with no commits on origin). Guard so we
-  // don't crash on .includes(); fall through to the remote-list heuristics.
+  // Why: getDefaultBaseRefAsync returns null when no default branch exists; guard so .includes() can't crash.
   const defaultBranch = defaultRef
     ? defaultRef.includes('/')
       ? defaultRef.split('/').slice(1).join('/')
@@ -930,14 +821,11 @@ export async function searchBaseRefDetails(
   const normalizedQuery = normalizeRefSearchQuery(query)
 
   try {
-    // Why: argv (including the two-remote-glob rationale) lives in
-    // buildSearchBaseRefsArgv so the SSH sibling cannot drift.
+    // Why: argv lives in buildSearchBaseRefsArgv so the SSH sibling cannot drift.
     const remotes = await listRemoteNames(path)
     const tokens = getRefSearchTokens(normalizedQuery)
     if (tokens.length > 1) {
-      // Why: ambiguous slash queries need both display-format matches
-      // (`upstream/feat`) and local branch-name matches (`plan/docs`).
-      // Parse and merge buckets before the final limit so neither side starves.
+      // Why: slash queries need both display-format and local-branch matches; merge before the limit so neither starves.
       const results = await Promise.all([
         runSearchBaseRefsGit(path, normalizedQuery, limit, {
           remoteNames: remotes,
@@ -959,10 +847,7 @@ export async function searchBaseRefDetails(
     })
     return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
   } catch (err) {
-    // Why: surface the failure for diagnostics; callers treat `[]` as "no
-    // matches", but silently swallowing the error makes a missing result
-    // set impossible to debug. Mirrors the SSH sibling in
-    // src/main/ipc/repos.ts.
+    // Why: log so a missing result set is debuggable; callers still treat [] as "no matches".
     console.warn('[searchBaseRefs] for-each-ref failed', { path, err })
     return []
   }
@@ -981,15 +866,8 @@ async function listRemoteNames(path: string, options: LocalGitExecOptions = {}):
 }
 
 /**
- * Parse `git for-each-ref --format=%(refname)%00%(refname:short)` stdout
- * into a deduped list of short refs, filtering out `<remote>/HEAD`
- * pseudo-refs, honoring a limit.
- *
- * Why: shared between the local `searchBaseRefs` and the SSH branch in
- * `src/main/ipc/repos.ts` so both return identical, correctly-filtered
- * results. The same bug class (wrong filter ordering, HEAD leaking into
- * results, duplicate short refs) that motivated this helper originally
- * lived in a single location; two copies double the regression surface.
+ * Parse `git for-each-ref --format=%(refname)%00%(refname:short)` stdout into a deduped list of short
+ * refs, dropping `<remote>/HEAD` pseudo-refs. Shared with the SSH branch in ipc/repos.ts so filtering can't drift.
  */
 export function parseAndFilterSearchRefs(stdout: string, limit: number): string[] {
   return parseAndFilterSearchRefDetails(stdout, limit).map((entry) => entry.refName)
@@ -1010,22 +888,13 @@ export function parseAndFilterSearchRefDetails(
       .map((line) => {
         const nul = line.indexOf('\0')
         if (nul < 0) {
-          // Why: defensive fallback for an unlikely %(refname) format change.
-          // Drop the entry — emitting a full refname as a "short" ref would
-          // hand callers a ref they can't use (and would bypass the HEAD
-          // filter below, since we could no longer tell a `<remote>/HEAD`
-          // pseudo-ref from a local branch named `foo/HEAD`).
+          // Why: no NUL means an unexpected %(refname) format; drop it rather than hand callers an unusable "short" ref.
           return null
         }
         return { full: line.slice(0, nul), short: line.slice(nul + 1) }
       })
       .filter((entry): entry is { full: string; short: string } => entry !== null)
-      // Why: drop `refs/remotes/<remote>/HEAD` pseudo-refs. Uses `.+` (not
-      // `[^/]+`) because git allows slashes in remote names, so nested
-      // remotes like `refs/remotes/foo/bar/HEAD` also match. A local branch
-      // named `foo/HEAD` (rare but valid per git check-ref-format) is
-      // preserved because its `full` is `refs/heads/foo/HEAD`, which does
-      // not match this pattern.
+      // Why: drop `<remote>/HEAD` pseudo-refs; `.+` (not `[^/]+`) since git allows slashes in remote names.
       .filter(({ full }) => !/^refs\/remotes\/.+\/HEAD$/.test(full))
       .filter(({ short }) => {
         if (seen.has(short)) {
@@ -1038,9 +907,7 @@ export function parseAndFilterSearchRefDetails(
         refName: short,
         localBranchName: resolveLocalBranchName(full, short, sortedRemotes)
       }))
-      // Why: `Math.max(0, limit)` — treat pathological `limit <= 0` as
-      // "zero results" rather than "at least 1". More honest than silently
-      // returning a single ref when the caller explicitly asked for none.
+      // Why: Math.max(0, limit) so pathological limit <= 0 yields zero results, not one.
       .slice(0, Math.max(0, limit))
   )
 }
@@ -1099,9 +966,7 @@ export async function getBranchConflictKind(
         return false
       }
       const shortRef = trimmed.replace(/^refs\/remotes\//, '')
-      // Why: git allows slashes in remote names. Use the configured remote
-      // list so foo/bar/feature resolves as branch "feature" for remote
-      // "foo/bar", matching searchBaseRefDetails.
+      // Why: git allows slashes in remote names; use the configured list so foo/bar/feature resolves to branch "feature".
       return resolveLocalBranchName(trimmed, shortRef, remoteNames) === branchName
     })
 
@@ -1121,10 +986,7 @@ function isAllowedRemoteBaseRef(refName: string, allowedBaseRef: string | undefi
   return refName === normalizedAllowedRef
 }
 
-/**
- * Build a hosted URL (e.g. GitHub, GitLab, Bitbucket) for a specific file
- * and line in the repo. Returns null when the remote isn't a recognized host.
- */
+/** Build a hosted URL (GitHub/GitLab/Bitbucket) for a file+line; null when the remote isn't a recognized host. */
 export function getRemoteFileUrl(
   repoPath: string,
   relativePath: string,
@@ -1144,10 +1006,7 @@ export function getRemoteFileUrl(
   return buildHostedRemoteFileUrl(remoteUrl, relativePath, defaultBranch, line)
 }
 
-/**
- * Build a hosted URL (e.g. GitHub, GitLab, Bitbucket) for a commit. Returns
- * null when the origin remote isn't a recognized host.
- */
+/** Build a hosted URL (GitHub/GitLab/Bitbucket) for a commit; null when origin isn't a recognized host. */
 export function getRemoteCommitUrl(repoPath: string, sha: string): string | null {
   const remoteUrl = getRemoteUrl(repoPath)
   if (!remoteUrl) {

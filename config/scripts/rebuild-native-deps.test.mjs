@@ -179,6 +179,34 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
+  it.skipIf(process.platform !== 'win32')(
+    'does not rebuild a healthy node-pty when another Windows addon fails its probe',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
+        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+        writeFakeLoadableNodePty(projectDir)
+        writeFakeNodePtyConptyPayload(projectDir, process.arch)
+
+        const result = runRebuildScript(projectDir, {
+          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
+          npm_config_platform: 'win32',
+          npm_config_arch: process.arch
+        })
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(result.stdout).toContain('Rebuilding failed native modules: windows-native-registry')
+        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
+        expect(rebuildCall.onlyModules).toEqual(['windows-native-registry'])
+      } finally {
+        rmSync(projectDir, { recursive: true, force: true })
+      }
+    }
+  )
+
   it.skipIf(process.platform === 'win32')(
     'rebuilds when Electron can load node-pty but patched build artifacts are missing',
     () => {
@@ -256,7 +284,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         })
 
         expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Native modules do not load in Electron; rebuilding.')
+        expect(result.stdout).toContain('Rebuilding failed native modules: node-pty')
         expect(result.stdout).toContain("expected build/Release so Orca's node-pty patch is active")
 
         const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())

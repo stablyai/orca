@@ -41,6 +41,7 @@ export function createAccumulator(args: {
     messageCount: 0,
     totalTokens: 0,
     previewMessages: [],
+    lastUserPrompt: null,
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
     latestTimestampMs: 0
@@ -112,6 +113,7 @@ export function finalizeSession(
     messageCount: accumulator.messageCount,
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
+    ...(accumulator.lastUserPrompt ? { lastUserPrompt: accumulator.lastUserPrompt } : {}),
     queuedMessageCount: accumulator.queuedMessageCount,
     subagentTranscriptCount: accumulator.subagentTranscriptCount,
     resumeCommand: buildAiVaultResumeCommand({

@@ -17,7 +17,7 @@
 
 import { _electron as electron } from '@stablyai/playwright-test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { seedFreshProfile } from './onboarding-profile.mjs'
 
@@ -30,6 +30,15 @@ const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 const TERMINAL_SURFACE_VISIBLE = '[data-terminal-tab-id]:visible'
 const XTERM_CONTAINER_VISIBLE = '.xterm:visible'
 const XTERM_INPUT = '.xterm-helper-textarea'
+const RESTRICTED_E2E_ENV_KEYS = new Set([
+  'HOME',
+  'USERPROFILE',
+  'CODEX_HOME',
+  'ORCA_CODEX_HOME',
+  'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
+  'ORCA_E2E_HOME_DIR',
+  'ORCA_E2E_USER_DATA_DIR'
+])
 
 /**
  * Launch the installed Orca.exe. Pointing userDataDir at a harness-owned temp
@@ -45,11 +54,33 @@ export async function launchInstalledApp({
   seedProfile = null,
   extraEnv = {}
 }) {
-  const { ELECTRON_RUN_AS_NODE: _drop, ...cleanEnv } = process.env
+  const {
+    ELECTRON_RUN_AS_NODE: _drop,
+    CODEX_HOME: _codexHome,
+    ORCA_CODEX_HOME: _orcaCodexHome,
+    ...cleanEnv
+  } = process.env
+  void _drop
+  void _codexHome
+  void _orcaCodexHome
+  const restrictedExtraEnvKey = Object.keys(extraEnv).find((key) =>
+    RESTRICTED_E2E_ENV_KEYS.has(key.toUpperCase())
+  )
+  if (restrictedExtraEnvKey) {
+    throw new Error(`extraEnv.${restrictedExtraEnvKey} cannot override E2E home isolation`)
+  }
   mkdirSync(userDataDir, { recursive: true })
   if (seedProfile) {
     seedFreshProfile(userDataDir, seedProfile)
   }
+  // Why: userData relocation does not change Node's home; the packaged E2E
+  // must not resolve the default Codex account against the runner's profile.
+  const requestedIsolatedHome = path.join(userDataDir, 'home')
+  mkdirSync(requestedIsolatedHome, { recursive: true })
+  // Why: temp paths on runners use 8.3 aliases (RUNNER~1). Git canonicalizes
+  // worktree paths, so a non-canonical HOME makes created worktrees invisible
+  // to the app's listing comparisons.
+  const isolatedHome = realpathSync.native(requestedIsolatedHome)
   const app = await electron.launch({
     executablePath: exePath,
     args: [],
@@ -57,8 +88,12 @@ export async function launchInstalledApp({
       ...cleanEnv,
       // Packaged main honors ORCA_E2E_USER_DATA_DIR to relocate userData
       // (logs/daemon/terminal-history) under a controlled dir.
+      ...extraEnv,
       ORCA_E2E_USER_DATA_DIR: userDataDir,
-      ...extraEnv
+      HOME: isolatedHome,
+      USERPROFILE: isolatedHome,
+      ORCA_E2E_HOME_DIR: isolatedHome,
+      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0'
     }
   })
   // If firstWindow times out (the launched main never shows a window), the
@@ -202,6 +237,10 @@ export async function waitForTerminalReady(page, timeoutMs = 60_000, terminalTab
  *     workspace (which would mask a broken restore).
  */
 export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_000 } = {}) {
+  // Why: the agent-CLI feature-wall modal can already be up at first interaction
+  // (it renders off an async capability check that races app launch). Use the
+  // Escape-free dismissal so we never inject a keypress into a restored terminal.
+  await dismissKnownOverlays(page)
   const visibleTerminal = page.locator(TERMINAL_SURFACE_VISIBLE).first()
   if (await visibleTerminal.isVisible().catch(() => false)) {
     await waitForTerminalReady(page, timeoutMs)
@@ -229,32 +268,81 @@ export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_
  * plain terminal (not an agent), then submit "Create worktree".
  */
 async function createWorkspaceFromSeededRepo(page, timeoutMs) {
-  await page
+  // One shared deadline so the whole create path stays within the caller's
+  // budget instead of granting each later step a fresh fixed window.
+  const deadline = Date.now() + timeoutMs
+  const newWorkspace = page
     .getByRole(NEW_WORKSPACE_BUTTON.role, { name: NEW_WORKSPACE_BUTTON.name })
     .first()
-    .click({ timeout: timeoutMs })
-  // Choose the plain-terminal mode (best-effort — if it is already the default
-  // or the label differs, the create below still produces a worktree).
-  await page
-    .getByRole('button', { name: 'Blank Terminal' })
-    .first()
-    .click({ timeout: 15_000 })
-    .catch(() => {})
+  if (!(await tryClickWithKnownOverlayRetry(page, newWorkspace, deadline - Date.now()))) {
+    // Preserve Playwright's locator diagnostics without exceeding the caller's
+    // timeout by another full click attempt.
+    await newWorkspace.click({ timeout: 1 })
+  }
+  const composer = page.getByRole('dialog', { name: 'Create worktree' }).last()
+  await composer.waitFor({ state: 'visible', timeout: Math.max(1, deadline - Date.now()) })
   // Submit. The create button's accessible name carries the shortcut hint
   // ("Create worktreeCtrl"), so match by prefix; fall back to the documented
   // Ctrl+Enter shortcut if the button is not directly clickable.
-  const created = await page
-    .getByRole('button', { name: /^Create worktree/ })
-    .last()
-    .click({ timeout: 15_000 })
-    .then(() => true)
-    .catch(() => false)
+  const created = await tryClickWithKnownOverlayRetry(
+    page,
+    composer.getByRole('button', { name: /^Create worktree/ }).last(),
+    Math.max(0, deadline - Date.now())
+  )
   if (!created) {
     await page.keyboard.press('Control+Enter')
   }
 }
 
 const OVERLAY_DISMISS_LABELS = ['Got it', 'Dismiss setup scripts', 'Dismiss tip', 'Dismiss update']
+const CLI_FEATURE_TIP_TITLE = 'Let agents drive Orca with the Orca CLI'
+
+async function dismissKnownOverlays(page) {
+  let acted = false
+  const cliFeatureTip = page.getByRole('dialog', { name: CLI_FEATURE_TIP_TITLE }).first()
+  if (await cliFeatureTip.isVisible().catch(() => false)) {
+    // Why: a global "Close" role also matches the Windows/Linux title-bar button.
+    const dialogClose = cliFeatureTip.locator('[data-slot="dialog-close"]').first()
+    if (await dialogClose.isVisible().catch(() => false)) {
+      const clicked = await dialogClose
+        .click({ timeout: 3_000 })
+        .then(() => true)
+        .catch(() => false)
+      acted ||= clicked
+    }
+  }
+  for (const name of OVERLAY_DISMISS_LABELS) {
+    const btn = page.getByRole('button', { name }).first()
+    if (await btn.isVisible().catch(() => false)) {
+      const clicked = await btn
+        .click({ timeout: 3_000 })
+        .then(() => true)
+        .catch(() => false)
+      acted ||= clicked
+    }
+  }
+  return acted
+}
+
+async function tryClickWithKnownOverlayRetry(page, locator, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  do {
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) {
+      return false
+    }
+    try {
+      await locator.click({ timeout: Math.min(5_000, remainingMs) })
+      return true
+    } catch (error) {
+      if (page.isClosed()) {
+        throw error
+      }
+      await dismissKnownOverlays(page)
+    }
+  } while (Date.now() < deadline)
+  return false
+}
 
 /**
  * Best-effort dismissal of the modals/banners that appear after creating a
@@ -264,14 +352,7 @@ const OVERLAY_DISMISS_LABELS = ['Got it', 'Dismiss setup scripts', 'Dismiss tip'
  */
 export async function dismissOverlays(page, rounds = 3) {
   for (let i = 0; i < rounds; i++) {
-    let acted = false
-    for (const name of OVERLAY_DISMISS_LABELS) {
-      const btn = page.getByRole('button', { name }).first()
-      if (await btn.isVisible().catch(() => false)) {
-        await btn.click({ timeout: 3_000 }).catch(() => {})
-        acted = true
-      }
-    }
+    const acted = await dismissKnownOverlays(page)
     await page.keyboard.press('Escape').catch(() => {})
     if (!acted) {
       return
@@ -316,12 +397,7 @@ export async function listTabIds(page) {
 export async function focusActiveTerminal(page, terminalTabId = null) {
   // A feature-tip modal can appear late and swallow keystrokes; clear any before
   // focusing so typed commands actually reach the shell.
-  for (const name of OVERLAY_DISMISS_LABELS) {
-    const btn = page.getByRole('button', { name }).first()
-    if (await btn.isVisible().catch(() => false)) {
-      await btn.click({ timeout: 2_000 }).catch(() => {})
-    }
-  }
+  await dismissKnownOverlays(page)
   const selector = terminalTabId
     ? `[data-terminal-tab-id="${terminalTabId}"]:visible`
     : TERMINAL_SURFACE_VISIBLE

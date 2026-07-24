@@ -37,6 +37,9 @@ export function ExperimentalPane({
   const showAgentsView = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentsView
   ])
+  const showAgentDashboard = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().agentDashboard
+  ])
   const showNativeChat = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().nativeChat
   ])
@@ -144,6 +147,52 @@ export function ExperimentalPane({
                 }`}
               />
             </button>
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showAgentDashboard ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.agentDashboard.title',
+            'Agent Dashboard'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.agentDashboard.description',
+            'Pop-out Kanban board for monitoring agents across worktrees.'
+          )}
+          keywords={getExperimentalSearchEntry().agentDashboard.keywords}
+          className="space-y-3 py-2"
+          id="experimental-agent-dashboard"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.agentDashboard.title',
+                  'Agent Dashboard'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.agentDashboard.copy',
+                  'Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={settings.experimentalAgentDashboardPopout === true}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.agentDashboard.toggleLabel',
+                'Toggle Agent Dashboard'
+              )}
+              onChange={() =>
+                updateSettings({
+                  experimentalAgentDashboardPopout:
+                    settings.experimentalAgentDashboardPopout !== true
+                })
+              }
+            />
           </div>
         </SearchableSetting>
       ) : null}

@@ -1,8 +1,9 @@
-/* eslint-disable max-lines -- Why: the GitHub slice co-locates all cache + fetch logic for
-PR, issue, checks, and comments data so the dedup and invalidation patterns stay consistent. */
+/* eslint-disable max-lines -- Why: the GitHub slice co-locates cache + fetch logic for PR/issue/checks/comments so dedup and invalidation patterns stay consistent. */
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
+import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
+import { githubProjectIdentityKey } from '../../../../shared/github-project-identity'
 import type {
   ClassifiedError,
   GitHubOwnerRepo,
@@ -71,9 +72,7 @@ import {
 } from '../../../../shared/task-source-context'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
-// Why: declared separately from CacheEntry<T> (not a generified E parameter)
-// because project-view has a single GraphQL source — no issue/PR-source
-// fallback — and the error union is distinct. Shared structural shape only.
+// Why: separate from CacheEntry<T> — project-view has a single GraphQL source (no issue/PR fallback) and a distinct error union.
 export type ProjectViewCacheEntry<T> = {
   data: T | null
   fetchedAt: number
@@ -93,31 +92,17 @@ export type GitHubPatchWorkItemOptions = {
   sourceContext?: TaskSourceContext | null
 }
 
-/** Optimistic, IPC-free patch shape for `projectViewCache` rows.
- *  Why: the dialog already issues mutations via slug-addressed IPCs and only
- *  needs to keep the Project table view in sync optimistically. Replacing
- *  `addLabels`/`removeLabels` deltas with full `labels`/`assignees` arrays
- *  matches what the dialog's local state already tracks (`localLabels`,
- *  `localAssignees`) and avoids redundant set-merge logic at the call site. */
+/** Optimistic, IPC-free patch shape for `projectViewCache` rows; uses full `labels`/`assignees` arrays (not add/remove deltas) to match the dialog's local state and avoid set-merge at the call site. */
 export type ProjectRowContentPatch = {
   title?: string
   body?: string
-  /** Why: accept the renderer's lowercase work-item state vocabulary
-   *  ('open' | 'closed' | 'merged' | 'draft') and translate to GitHub's
-   *  UPPERCASE row.content.state when applying. The reducer only writes
-   *  what callers send; merged/draft are passed through for completeness
-   *  even though the dialog edits only flip open↔closed today. */
+  /** Lowercase renderer state vocab, translated to GitHub's UPPERCASE `row.content.state` on apply; merged/draft pass through though the dialog only flips open↔closed today. */
   state?: 'open' | 'closed' | 'merged' | 'draft'
   labels?: string[]
   assignees?: string[]
 }
 
-// Why: queryOverride participates in the cache key so an overridden search
-// does not clobber the default-view cache entry, and vice versa. `undefined`
-// means "use the view's stored filter" — the unfiltered cache entry. An
-// empty string is a *distinct* override meaning "no filter", which produces
-// different rows when the view's stored filter is non-empty, so it gets its
-// own cache key.
+// Why: queryOverride is part of the cache key; `undefined` = the view's stored filter, `''` = a distinct "no filter" override that gets its own entry.
 function queryOverrideKeyPart(queryOverride: string | undefined): string {
   if (queryOverride === undefined) {
     return ''
@@ -158,8 +143,7 @@ function getPRRefreshRuntimeRepoTarget(
   if (!ownerRuntimeEnvironmentId) {
     return null
   }
-  // Why: PR refreshes must follow the repo owner host, not the Active Server
-  // dropdown. A runtime-owned worktree can be visible while Local desktop is focused.
+  // Why: PR refreshes must follow the repo owner host, not the Active Server dropdown (a runtime-owned worktree can show while Local is focused).
   return getRuntimeRepoTarget(
     state,
     candidate.repoPath,
@@ -170,8 +154,7 @@ function getPRRefreshRuntimeRepoTarget(
 }
 
 function shouldEnqueueLocalPRRefresh(candidate: GitHubPRRefreshCandidate): boolean {
-  // Why: the local PR coordinator owns local git and SSH bridge refreshes, but
-  // runtime-owned repos and disconnected SSH repos must not hit the IPC crash path.
+  // Why: the local coordinator owns local git + SSH-bridge refreshes; runtime-owned and disconnected-SSH repos must not hit the IPC crash path.
   if (getPRRefreshOwnerRuntimeEnvironmentId(candidate) !== null) {
     return false
   }
@@ -190,8 +173,7 @@ function enqueueLocalGitHubPRRefresh(
   if (!enqueue) {
     return
   }
-  // Why: main can reject stale/unknown local paths; renderer refresh triggers
-  // are best-effort and must not become unhandled rejection crash breadcrumbs.
+  // Why: renderer refresh triggers are best-effort — main may reject stale paths, and this must not become an unhandled-rejection crash.
   void enqueue(args)
     .then((queued) =>
       queued === false || queued?.kind === 'fallback' ? onNotQueued?.() : undefined
@@ -231,8 +213,7 @@ function settingsForGitHubRepoOwner(
       ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
       : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
   }
-  // Why: local and SSH-owned GitHub lookups are served by the desktop client;
-  // host focus must not redirect them to the currently selected runtime.
+  // Why: local and SSH-owned GitHub lookups run on the desktop client; host focus must not redirect them to the selected runtime.
   return settings
     ? { ...settings, activeRuntimeEnvironmentId: null }
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
@@ -425,9 +406,7 @@ function countGitHubWorkItemsForRepo(
 }
 
 function isGitHubUnavailableWorkItemsError(error: unknown): boolean {
-  // Why: remote-runtime transport failures can also say "timed out" or
-  // "unavailable". Only runtime_error came from the GitHub method itself;
-  // other RPC codes must not be attributed to GitHub.
+  // Why: only `runtime_error` came from the GitHub method; other RPC transport failures ("timed out"/"unavailable") must not be blamed on GitHub.
   if (error instanceof RuntimeRpcCallError && error.code !== 'runtime_error') {
     return false
   }
@@ -441,15 +420,15 @@ export function projectViewCacheKey(
   projectNumber: number,
   resolvedViewId: string,
   queryOverride?: string,
-  sourceScope = 'local'
+  sourceScope = 'local',
+  host?: string
 ): string {
-  return `github-project:${sourceScope}:${ownerType}:${owner}:${projectNumber}:${resolvedViewId}${queryOverrideKeyPart(queryOverride)}`
+  const projectKey = githubProjectIdentityKey({ ownerType, owner, number: projectNumber, host })
+  return `github-project:${sourceScope}:${projectKey}:${resolvedViewId}${queryOverrideKeyPart(queryOverride)}`
 }
 
 function projectViewRequestKey(args: GetProjectViewTableArgs, sourceScope: string): string {
-  // Why: callers without `viewId` can't compute the resolved cache key up
-  // front. Use the input-arg signature for inflight dedup; the resolved
-  // cache key is only known after the main-process IPC returns.
+  // Why: without `viewId` the resolved cache key isn't known until the IPC returns, so dedup on the input-arg signature instead.
   const selector = args.viewId
     ? `id:${args.viewId}`
     : args.viewNumber !== undefined
@@ -457,7 +436,13 @@ function projectViewRequestKey(args: GetProjectViewTableArgs, sourceScope: strin
       : args.viewName
         ? `name:${args.viewName}`
         : 'default'
-  return `${sourceScope}:${args.ownerType}:${args.owner}:${args.projectNumber}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
+  const projectKey = githubProjectIdentityKey({
+    ownerType: args.ownerType,
+    owner: args.owner,
+    number: args.projectNumber,
+    host: args.host
+  })
+  return `${sourceScope}:${projectKey}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
 }
 
 function projectViewSourceScope(settings: AppState['settings']): string {
@@ -476,20 +461,13 @@ function settingsForProjectViewCacheKey(
   return { ...settings, activeRuntimeEnvironmentId: null }
 }
 
-// Why: module-scope inflight map — must mirror `inflightWorkItemsRequests`
-// (dedup + force-refresh semantics). Reuses the work-item concurrency gate:
-// the gate exists to bound `gh` subprocess pressure at the renderer boundary,
-// and project-view fetches pressure the same subprocess budget. Two separate
-// gates would let concurrent Project + work-item fetches blow past the cap.
+// Why: reuses the work-item concurrency gate since project-view and work-item fetches share the same gh subprocess budget; separate gates would blow the cap.
 const inflightProjectViewRequests = new Map<
   string,
   { promise: Promise<GetProjectViewTableResult>; force: boolean }
 >()
 
-// Why: derive an optimistic GitHubProjectFieldValue from a mutation value so
-// the patched row re-renders immediately. Single-select and iteration lookups
-// consult the field config on the cached table; the result is best-effort and
-// is overwritten by the authoritative payload on next refresh.
+// Why: optimistic field value so the patched row re-renders immediately; best-effort, overwritten by the authoritative payload on next refresh.
 function optimisticFieldValueFromMutation(
   table: GitHubProjectTable,
   fieldId: string,
@@ -587,10 +565,7 @@ function rollbackRowIfPresent(
   rowId: string,
   previousRow: GitHubProjectRow
 ): void {
-  // Why: the cache entry may have moved (rapid project switch) or the row may
-  // no longer exist by the time the mutation response returns. Skip rollback
-  // in that case — resurrecting stale data into a newly selected project would
-  // show the wrong row.
+  // Why: skip rollback when the entry moved (rapid project switch) or the row is gone, else stale data would surface in the newly selected project.
   const entry = get().projectViewCache[cacheKey]
   if (!entry?.data) {
     return
@@ -618,47 +593,24 @@ function parseSlugAndNumber(
 export type WorkItemsCacheSources = {
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
-  /** Raw origin remote (if any). Required-nullable so selector code can
-   *  distinguish the raw candidate from the effective PR source. */
+  /** Raw origin remote (if any); required-nullable so the selector can distinguish it from the effective PR source. */
   originCandidate: GitHubOwnerRepo | null
-  /** Raw upstream remote (if any) — present so the selector can render
-   *  independently of the currently-effective preference. Required-nullable
-   *  (matches siblings `issues`/`prs`) so consumers only branch on `null`
-   *  vs value, not a three-state (undefined | null | value). */
+  /** Raw upstream remote (if any); required-nullable (like `issues`/`prs`) so consumers branch on null-vs-value, not a three-state. */
   upstreamCandidate: GitHubOwnerRepo | null
 }
 
-// Why: the indicator and retry banner both need the resolved owner/repo for
-// the failing side. Stamping the slug onto the error keeps the banner copy
-// correct even when the error outlives the cache entry's `sources` field
-// (e.g. on partial-success merges where `data` is retained from a later read).
+// Why: stamp the slug on the error so banner copy stays correct even when the error outlives the entry's `sources` field.
 export type WorkItemsCacheError = ClassifiedError & { source: GitHubOwnerRepo }
 
 export type CacheEntry<T> = {
   data: T | null
   fetchedAt: number
   headSha?: string
-  /**
-   * Resolved issue/PR owner/repo slugs for this entry. Set only on entries
-   * populated by `fetchWorkItems` — PR and issue single-item caches don't
-   * carry sources since the indicator surfaces derive from list reads.
-   */
+  /** Resolved issue/PR owner/repo slugs; set only on `fetchWorkItems` entries (single-item PR/issue caches don't carry sources). */
   sources?: WorkItemsCacheSources
-  /**
-   * Per-side classified error. Present when one (or both) of the underlying
-   * gh list calls failed. Partial-success reads keep `data` from the
-   * successful side and record the failing side here so the banner + list
-   * render together.
-   */
+  /** Per-side classified error; on partial success `data` keeps the good side and the failing side is recorded here so banner + list render together. */
   error?: WorkItemsCacheError
-  /**
-   * True when the resolver fell back to origin because the user's preferred
-   * `'upstream'` remote is no longer configured for this repo. Consumers
-   * surface a one-time toast per session/repo; TaskPage tracks the
-   * already-toasted set so repeated refreshes don't re-toast.
-   * Typed as `?: true` (not `?: boolean`) to encode the invariant "present
-   * iff fell-back" — an explicit `false` write would be a bug.
-   */
+  /** True when the resolver fell back to origin because the preferred `'upstream'` remote is gone; typed `?: true` (never `false`) to encode "present iff fell-back". */
   issueSourceFellBack?: true
 }
 
@@ -701,13 +653,9 @@ function bypassesGitHubPRRefreshFreshness(reason: GitHubPRRefreshReason): boolea
 const CACHE_TTL = 300_000 // 5 minutes (stale data shown instantly, then refreshed)
 const CHECKS_CACHE_TTL = 60_000 // 1 minute — checks change more frequently
 const EMPTY_CHECKS_CACHE_TTL = 10_000
-// Why: the NewWorkspace page's work-item list is a browse surface, not a
-// source of truth, so 60s staleness is fine — stale data renders instantly
-// while a background refresh keeps it current.
+// Why: the work-item list is a browse surface, not a source of truth, so 60s staleness is fine (SWR keeps it current).
 const WORK_ITEMS_CACHE_TTL = 60_000
-// Why: match repos.ts so error toasts surfaced from this slice share the same
-// long-lived duration — the user needs time to read + act on persist failures
-// rather than having the toast vanish behind default short-lived timings.
+// Why: long-lived (matches repos.ts) so the user has time to read + act on persist failures before the toast vanishes.
 const ERROR_TOAST_DURATION = 60_000
 
 const inflightPRRequests = new Map<
@@ -750,10 +698,7 @@ export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
   prRefreshStartedHostedReviewEntries.clear()
 }
 
-// Why: cap in-flight cross-repo fan-out and hover-prefetches at the renderer
-// boundary — the main-side gate is behind the IPC queue, so it can't see a
-// stampede until the calls are already mid-flight. 8 balances responsiveness
-// against gh rate-limit pressure.
+// Why: cap fan-out at the renderer boundary (main-side gate is behind IPC, can't stop a stampede in time); 8 balances responsiveness vs gh rate limits.
 const WORK_ITEM_FETCH_CONCURRENCY = 8
 let workItemFetchInFlight = 0
 const workItemFetchWaiters: (() => void)[] = []
@@ -764,15 +709,13 @@ async function acquireWorkItemSlot(): Promise<void> {
     return
   }
   await new Promise<void>((resolve) => workItemFetchWaiters.push(resolve))
-  // Why: resolver has already claimed the slot on our behalf, so we don't
-  // re-increment here. Pairing convention: acquireWorkItemSlot + releaseWorkItemSlot.
+  // Why: the resolver already claimed the slot on our behalf, so don't re-increment here.
 }
 
 function releaseWorkItemSlot(): void {
   const next = workItemFetchWaiters.shift()
   if (next) {
-    // Hand the slot off directly — net count unchanged — so we can't race a
-    // third caller into the cap between decrement and resolve.
+    // Hand the slot off directly (net count unchanged) so a third caller can't race into the cap between decrement and resolve.
     next()
     return
   }
@@ -926,7 +869,7 @@ function evictRepoCacheEntries<T>(
 }
 
 function normalizedRepoIdentity(repo: GitHubOwnerRepo): string {
-  return `${repo.owner.toLowerCase()}/${repo.repo.toLowerCase()}`
+  return githubRepoIdentityKey(repo)
 }
 
 function normalizedHeadSha(headSha?: string): string | null {
@@ -994,9 +937,7 @@ function hasUsableCommentPayload(result: GitHubCommentResult): result is {
   )
 }
 
-// Why: 500 entries is generous enough that active developers will never hit it
-// during normal use, but prevents the cache from growing without bound across
-// many repos and branches over a long-running session.
+// Why: bound cache growth across many repos/branches over a long session; 500 is above realistic use.
 const MAX_CACHE_ENTRIES = 500
 type GitHubPRFallbackSource = NonNullable<GitHubPRRefreshAlias['fallbackPRSource']>
 
@@ -1061,8 +1002,7 @@ function findUniqueWorktreeById(
   lookupIndex = buildWorktreeLookupIndex(state)
 ): Worktree | null {
   const match = lookupIndex.byId.get(worktreeId)?.unique ?? null
-  // Why: metadata persistence is keyed only by worktree id. If two hosts own
-  // that id, the index marks it non-unique and destructive clears fail closed.
+  // Why: metadata persistence is keyed only by worktree id; an id owned by two hosts is non-unique so destructive clears fail closed.
   if (!match || executionHostId === undefined) {
     return match
   }
@@ -1105,9 +1045,7 @@ function shouldClearDivergedLinkedMergedPR(args: {
     requestHeadOid !== null &&
     pr?.number === linkedPRNumber &&
     pr.state === 'merged' &&
-    // Head-scoped: only clear the worktree whose exact head diverged, so a
-    // PR-number-coalesced refresh broadcast cannot clear a sibling worktree that
-    // is still on the PR's line of work.
+    // Head-scoped: clear only the worktree whose head diverged, so a PR-number-coalesced broadcast can't clear a sibling still on the PR's line of work.
     pr.headDivergedFromMergedPRAtOid === requestHeadOid &&
     pr.headSha !== requestHeadOid &&
     pr.confirmedContainedHeadOid !== requestHeadOid
@@ -1132,11 +1070,7 @@ function shouldApplyDivergedLinkedPRClear(args: {
   )
 }
 
-// Why: a linked PR is a branch-scoped hint. When a lookup returns the linked
-// open or draft PR while the worktree sits on a different branch — and neither
-// the push target nor the worktree HEAD still points at the PR head — the link is stale
-// (a branch switch whose identity-path clear was missed) and would otherwise
-// pin Checks to the previous branch's PR on every refresh.
+// Why: a linked PR is branch-scoped; it's stale once the worktree switched branches with neither push target nor HEAD at the PR head, else Checks stays pinned to the old branch's PR.
 export function shouldClearBranchMismatchedLinkedOpenPR(args: {
   pr: PRInfo | null
   linkedPRNumber: number | null
@@ -1150,16 +1084,14 @@ export function shouldClearBranchMismatchedLinkedOpenPR(args: {
   return (
     linkedPRNumber != null &&
     pr?.number === linkedPRNumber &&
-    // Draft reviews are open PRs too; their distinct renderer state must not
-    // leave the same stale durable link permanently wedged after a branch switch.
+    // Draft reviews are open PRs too; don't let their distinct renderer state leave a stale durable link wedged after a branch switch.
     (pr.state === 'open' || pr.state === 'draft') &&
     requestHeadOid !== null &&
     headRefName !== '' &&
     currentBranch !== '' &&
     headRefName !== currentBranch &&
     (pushTargetBranch === null || pushTargetBranch !== headRefName) &&
-    // A worktree parked on the PR's own head commit is the same line of work
-    // (e.g. a PR checkout under a renamed local branch); keep the link.
+    // A worktree parked on the PR's head commit is the same line of work (e.g. renamed local branch); keep the link.
     !(pr.headSha != null && pr.headSha === requestHeadOid)
   )
 }
@@ -1175,8 +1107,7 @@ function shouldApplyBranchMismatchedLinkedPRClear(args: {
     Boolean(worktree) &&
     requestHeadOid !== null &&
     worktree?.linkedPR === linkedPRNumber &&
-    // Branch-scoped: only clear while the worktree is still on the branch the
-    // mismatch was computed against; a newer switch gets its own validation.
+    // Branch-scoped: clear only while still on the branch the mismatch was computed against; a newer switch re-validates.
     worktree.branch.replace(/^refs\/heads\//, '') === branch.replace(/^refs\/heads\//, '') &&
     worktree.head === requestHeadOid &&
     worktree.isBare !== true &&
@@ -1217,9 +1148,7 @@ function buildPRRefreshCandidate(
     true
   )
   const cachedFallbackPRNumber = cachedPR?.number ?? null
-  // Why: a merged PR stays a valid fallback when the worktree sits on its head or
-  // on a commit confirmed to be part of the PR; anything else means the branch
-  // moved on and the number must not resurrect the old merged PR.
+  // Why: a merged PR is a valid fallback only while the worktree sits on its head or a confirmed-contained commit — else the branch moved on.
   const cachedMergedPRMovedPastHead =
     worktree.linkedPR == null &&
     cachedPR?.state === 'merged' &&
@@ -1246,8 +1175,7 @@ function buildPRRefreshCandidate(
     cacheKey,
     worktreeId: worktree.id,
     currentHeadOid: worktree.head ?? null,
-    // Why: persisted linked PR metadata is exact, while PR cache numbers are
-    // only fallback hints after branch lookup misses.
+    // Why: persisted linked PR metadata is exact; PR cache numbers are only fallback hints after branch-lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
     fallbackPRNumber,
     fallbackPRSource,
@@ -1294,8 +1222,7 @@ function githubHostedReviewFallbackPRNumber(
 function shouldClearHostedReviewForNoGitHubPR(
   entry: AppState['hostedReviewCache'][string] | undefined
 ): boolean {
-  // Why: a GitHub-only miss should not create or refresh provider-neutral
-  // branch misses that suppress discovery for GitLab/other hosted reviews.
+  // Why: a GitHub-only miss must not suppress GitLab/other hosted-review discovery via provider-neutral branch misses.
   if (!entry) {
     return false
   }
@@ -1390,8 +1317,7 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
   if (args.pr && hostedReviewEntry?.data && hostedReviewEntry.data.provider !== 'github') {
     return { cache: args.cache, accepted: false }
   }
-  // Why: a hosted-review row may only protect itself from an authoritative
-  // miss when the paired PR cache is preserving a terminal, head-current PR.
+  // Why: a hosted-review row survives an authoritative miss only when the paired PR cache preserves a terminal, head-current PR.
   if (
     !args.pr &&
     args.linkedPRNumber == null &&
@@ -1407,6 +1333,15 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
   if (!args.pr && !shouldClearHostedReviewForNoGitHubPR(hostedReviewEntry)) {
     return { cache: args.cache, accepted: hostedReviewEntry?.data == null }
   }
+  // Why: hosted-review fallbacks may be stale exact links; inherit branch provenance only when already proven.
+  const branchLookupGitHubPRNumber =
+    args.pr &&
+    args.linkedPRNumber == null &&
+    (args.fallbackPRSource !== 'hosted-review' ||
+      args.pr.number !== args.fallbackPRNumber ||
+      hostedReviewEntry?.branchLookupGitHubPRNumber === args.pr.number)
+      ? args.pr.number
+      : undefined
   return {
     cache: {
       ...args.cache,
@@ -1415,7 +1350,8 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
         fetchedAt: args.fetchedAt,
         linkedReviewHintKey: args.pr
           ? linkedReviewHintKey({ linkedGitHubPR: args.pr.number })
-          : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry)
+          : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry),
+        ...(branchLookupGitHubPRNumber !== undefined ? { branchLookupGitHubPRNumber } : {})
       }
     },
     accepted: true
@@ -1429,8 +1365,7 @@ function shouldWritePRCacheForHostedReviewSync(args: {
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
 }): boolean {
-  // Why: PR-status grouping reads prCache while cards read hostedReviewCache.
-  // If a GitHub PR result was rejected for the card, don't let grouping drift.
+  // Why: grouping reads prCache while cards read hostedReviewCache; keep them from drifting when a result is rejected for the card.
   if (args.hostedReviewSyncAccepted) {
     return true
   }
@@ -1465,13 +1400,10 @@ function shouldPreserveExistingPRForFallbackMiss(args: {
   ) {
     return false
   }
-  // Why: the common found/non-merged paths do not depend on worktree state.
-  // Gate the global lookup so batched refresh aliases do not multiply full scans.
+  // Why: gate the global worktree scan so batched refresh aliases don't multiply full scans (common paths don't need it).
   const worktree = args.worktreeId ? findWorktreeById(args.state, args.worktreeId) : null
   const worktreeHead = worktree?.head
-  // Why: merged branch PRs are only safe to keep when cached PR metadata still
-  // matches the commit this stored worktree is actually on — exactly, or via a
-  // head confirmed to be part of the merged PR.
+  // Why: keep a merged PR only when its cached head matches the worktree head — exactly or a confirmed-contained commit.
   const preservesMergedPRForCurrentHead =
     typeof worktreeHead === 'string' &&
     worktreeHead.length > 0 &&
@@ -1690,10 +1622,7 @@ function applyGitHubPRResultToCaches(args: {
   }
 }
 
-/**
- * Evict the oldest entries from a cache record when it exceeds the max size.
- * Returns a pruned copy, or the original reference if no eviction was needed.
- */
+/** Evicts the oldest entries when over max size; returns a pruned copy, or the original reference if nothing was evicted. */
 function evictStaleEntries<T extends { fetchedAt: number }>(
   cache: Record<string, T>,
   maxEntries = MAX_CACHE_ENTRIES
@@ -1721,11 +1650,7 @@ function withBoundedCacheEntry<T extends { fetchedAt: number }>(
   return evictStaleEntries({ ...cache, [key]: entry })
 }
 
-// Why: the prRefresh* maps are keyed by PR cache key (repo/branch/execution-host)
-// — an ephemeral, unbounded key space over a long session. They have no
-// `fetchedAt` to sort by, so bound them by insertion order (oldest-touched keys
-// evicted first; the writers move each touched key to the end). An evicted
-// long-idle branch simply restarts from a clean state, which is acceptable.
+// Why: prRefresh* maps have no `fetchedAt` to sort by, so bound them by insertion order (oldest-touched evicted first; an evicted long-idle branch restarts clean).
 function capRecordByInsertionOrder<T>(
   record: Record<string, T>,
   maxEntries = MAX_CACHE_ENTRIES
@@ -1748,12 +1673,7 @@ function capPrRefreshSequences(
   return capRecordByInsertionOrder(sequences, maxEntries)
 }
 
-// Why: prRefreshStates backs visible status pills (refreshing/queued/paused/error)
-// so — unlike the invisible sequence guard — eviction must never drop an in-progress
-// indicator. Bound it well above any realistic tracked-branch count, and when over
-// cap evict *settled* statuses (error/skipped) first; only fall back to evicting an
-// active (in-flight/queued/paused) entry as a last-resort hard memory bound that
-// realistic usage never reaches. Evicted entries self-heal on the next refresh event.
+// Why: backs visible status pills, so evict *settled* (error/skipped) before active entries and never drop an in-progress indicator; evicted entries self-heal on next refresh.
 const MAX_PR_REFRESH_STATE_ENTRIES = 2000
 const SETTLED_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>(['error', 'skipped'])
 const ACTIVE_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>([
@@ -1767,9 +1687,7 @@ function isPRRefreshStateExpired(state: PRRefreshState, now: number): boolean {
   return expiryAt !== null && now > expiryAt
 }
 
-/**
- * Captures the exact refresh snapshot a later timeout or request is allowed to clear.
- */
+/** Captures the exact refresh snapshot a later timeout or request is allowed to clear. */
 export function buildGitHubPRRefreshStateClearToken(
   state: PRRefreshState | undefined,
   sequences: Record<string, number>,
@@ -1785,9 +1703,7 @@ export function buildGitHubPRRefreshStateClearToken(
   }
 }
 
-/**
- * Returns the wall-clock expiry for transient refresh states; settled states persist.
- */
+/** Returns the wall-clock expiry for transient refresh states; settled states persist. */
 export function getGitHubPRRefreshStateExpiryAt(state: PRRefreshState | undefined): number | null {
   if (!state) {
     return null
@@ -1807,9 +1723,7 @@ function isExpiredActivePRRefreshState(state: PRRefreshState, now: number): bool
   return ACTIVE_PR_REFRESH_STATUSES.has(state.status) && isPRRefreshStateExpired(state, now)
 }
 
-/**
- * Reads refresh state for UI selectors while hiding stale active entries from view.
- */
+/** Reads refresh state for UI selectors while hiding stale active entries from view. */
 export function getEffectiveGitHubPRRefreshState(
   states: Record<string, PRRefreshState>,
   cacheKey: string,
@@ -1907,10 +1821,7 @@ export type GitHubSlice = {
   prRefreshSequences: Record<string, number>
   prRefreshStates: Record<string, PRRefreshState>
   prVisibleRefreshGeneration: number
-  // Why: keyed by repoId + limit + query so remote repos with the same path on
-  // different SSH targets do not share issue/PR results.
-  // from cache instantly on mount (and on hover-prefetch from sidebar buttons)
-  // while a background refresh keeps the list fresh.
+  // Why: keyed by repoId + limit + query so same-path repos on different SSH targets don't share results.
   workItemsCache: Record<string, CacheEntry<GitHubWorkItem[]>>
   fetchPRForBranch: (
     repoPath: string,
@@ -1994,11 +1905,7 @@ export type GitHubSlice = {
     token: PRRefreshStateClearToken,
     now?: number
   ) => void
-  /**
-   * Why: returns cached work items immediately (null if none) and fires a
-   * background refresh when stale. Callers can render the cached list while
-   * the SWR revalidate hydrates the latest.
-   */
+  /** SWR: returns cached work items immediately (null if none) and fires a background refresh when stale. */
   getCachedWorkItems: (
     repoId: string,
     limit: number,
@@ -2006,14 +1913,7 @@ export type GitHubSlice = {
     repoPath?: string,
     sourceContext?: TaskSourceContext | null
   ) => GitHubWorkItem[] | null
-  /**
-   * Why: the Tasks view header reads sources from the cache to render the
-   * "Issues from owner/repo" indicator, and the Tasks empty/partial banner
-   * reads `error` here to show the retry affordance. Returning a thin view of
-   * the cache entry (never the items) keeps this a cheap selector the
-   * component can subscribe to without dragging the whole work-item array
-   * through the equality check.
-   */
+  /** Returns a thin view (sources + error, never items) so it stays a cheap selector without dragging the whole work-item array through the equality check. */
   getWorkItemsSourcesAndError: (
     repoId: string,
     limit: number,
@@ -2021,19 +1921,8 @@ export type GitHubSlice = {
     repoPath?: string
   ) => { sources: WorkItemsCacheSources | null; error: WorkItemsCacheError | null }
   /**
-   * Why: the dialog renders the "Issue from owner/repo" chip for a single work
-   * item but may be opened before the Tasks view has populated the primary
-   * `(repoPath, PER_REPO_FETCH_LIMIT, '')` cache entry — e.g. when the user
-   * searches for an issue by query. Falls back to scanning `workItemsCache`
-   * for any entry keyed by `${repoPath}::` that carries resolved sources,
-   * returning that entry's `sources` directly. Sources are repo-level
-   * (query-independent), so any sibling entry is safe to reuse.
-   *
-   * Returning a single stable reference means the dialog can subscribe to just
-   * this selector instead of the whole `workItemsCache`, so unrelated cache
-   * writes don't force a re-render. Cache entries are fully replaced (not
-   * mutated) on every write, so reference equality is preserved between
-   * unchanged entries.
+   * Falls back to any `${repoPath}::` cache entry with resolved sources when the primary entry isn't populated yet — sources are repo-level (query-independent), so any sibling is safe to reuse.
+   * Returns a single stable reference so the dialog can subscribe to just this selector; entries are replaced (not mutated) on write, preserving reference equality between unchanged entries.
    */
   getWorkItemsAnySourcesForRepo: (
     repoId: string,
@@ -2048,17 +1937,8 @@ export type GitHubSlice = {
     options?: FetchOptions
   ) => Promise<GitHubWorkItem[]>
   /**
-   * Why: fan out a single work-item query across multiple repos. Partial
-   * failures don't reject — a repo that both fails to fetch *and* has no
-   * cached fallback contributes nothing and increments `failedCount`, which
-   * the caller surfaces as a "N of M projects failed to load" banner. A repo
-   * served from stale cache on rejection is NOT counted as failed — matching
-   * the single-repo behavior of quietly serving stale data.
-   *
-   * `githubUnavailable` is true when every selected GitHub source refresh failed
-   * because GitHub was unreachable/unavailable (5xx outage, network, or rate
-   * limit), even when stale cache data remains available. The caller uses it to
-   * attribute the stale/empty list instead of showing a normal-looking result.
+   * Fan out one work-item query across repos; partial failures don't reject — a repo with no cached fallback increments `failedCount`, but one served stale cache on rejection isn't counted.
+   * `githubUnavailable`: every selected GitHub source refresh failed because GitHub was unreachable (5xx/network/rate-limit), even if stale cache remains — lets the caller attribute the stale/empty list.
    */
   fetchWorkItemsAcrossRepos: (
     repos: {
@@ -2096,10 +1976,7 @@ export type GitHubSlice = {
     query: string,
     perRepoLimit: number
   ) => Promise<{ totalCount: number; totalPages: number }>
-  /**
-   * Fire-and-forget prefetch used by UI entry points (hover/focus of the
-   * "new workspace" buttons) to warm the cache before the page mounts.
-   */
+  /** Fire-and-forget prefetch to warm the cache before the page mounts (hover/focus of the "new workspace" buttons). */
   prefetchWorkItems: (
     repoId: string,
     repoPath: string,
@@ -2113,25 +1990,9 @@ export type GitHubSlice = {
     repoId?: string | null,
     options?: GitHubPatchWorkItemOptions
   ) => void
-  /**
-   * Monotonic counter bumped whenever a repo's issue-source preference is
-   * flipped. Subscribers (TaskPage's fetch effect) include this in their
-   * dependency array to force a re-fetch after preference changes — the
-   * work-items cache eviction alone isn't enough because the effect keys on
-   * `selectedRepos`/`appliedTaskSearch`/`taskRefreshNonce` and wouldn't
-   * otherwise notice the cache went empty.
-   */
+  /** Monotonic counter bumped on issue-source preference flips; subscribers include it in their deps to force a re-fetch, since cache eviction alone won't trip effects keyed on selectedRepos/search/nonce. */
   workItemsInvalidationNonce: number
-  /**
-   * Persist a per-repo issue-source preference, update the local Repo record
-   * for reactive UI, and invalidate all cached work-items entries that key
-   * off this repo's identity so the Tasks list re-fetches against the new source.
-   *
-   * Why invalidate all `${repoId}::*` keys and not only the primary entry:
-   * preferences flip the issue source for every list query (query-less +
-   * user-entered queries alike). Surgical eviction of the primary key alone
-   * would leave stale results in alternate-query cache lines.
-   */
+  /** Persist the preference, update the local Repo record, and invalidate all `${repoId}::*` cache keys — not just the primary — so alternate-query lines don't serve stale results after the source flips. */
   setIssueSourcePreference: (
     repoId: string,
     repoPath: string,
@@ -2165,22 +2026,11 @@ export type GitHubSlice = {
     rowId: string,
     issueType: { id: string; name: string; color: string | null; description: string | null } | null
   ) => Promise<GitHubProjectMutationResult>
-  /** Optimistic, IPC-free patcher for a single `projectViewCache` row's
-   *  `content`. Used by GitHubItemDialog when `projectOrigin` is set so the
-   *  Project table re-renders immediately after dialog edits — `patchWorkItem`
-   *  alone only walks `workItemsCache` and would leave the Project view stale
-   *  until the next refresh. The actual write is dispatched separately via
-   *  the slug-addressed update IPCs. */
+  /** Optimistic, IPC-free patcher for a single `projectViewCache` row's `content`; `patchWorkItem` only walks `workItemsCache` and would leave the Project view stale until the next refresh. */
   patchProjectRowContent: (cacheKey: string, rowId: string, patch: ProjectRowContentPatch) => void
 }
 
-/**
- * Normalizes the `github.prForBranch` runtime RPC result into a
- * {@link PRRefreshOutcome}. Current hosts return the full outcome (with a
- * `kind`), so a runtime `upstream-error` is preserved instead of collapsing to a
- * false accepted "no PR". A legacy host that still returns `PRInfo | null` is
- * mapped to `found` / `no-pr` to preserve backward behavior on that host only.
- */
+/** Normalizes `github.prForBranch` into a {@link PRRefreshOutcome}: preserves a runtime `upstream-error` instead of collapsing to a false "no PR"; a legacy host returning `PRInfo | null` maps to `found`/`no-pr`. */
 function normalizeRuntimePRForBranchOutcome(
   result: PRRefreshOutcome | PRInfo | null
 ): PRRefreshOutcome {
@@ -2243,8 +2093,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const sourceScope = projectViewSourceScope(get().settings)
     const requestKey = projectViewRequestKey(args, sourceScope)
 
-    // Fast path: when the caller supplies `viewId`, we already know the
-    // resolved cache key and can serve a fresh entry directly.
+    // Fast path: a caller-supplied `viewId` gives the resolved cache key up front, so serve a fresh entry directly.
     const maybeKnownKey = args.viewId
       ? projectViewCacheKey(
           args.ownerType,
@@ -2252,7 +2101,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           args.projectNumber,
           args.viewId,
           args.queryOverride,
-          sourceScope
+          sourceScope,
+          args.host
         )
       : null
     if (!options?.force && maybeKnownKey) {
@@ -2264,9 +2114,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const existing = inflightProjectViewRequests.get(requestKey)
     if (existing) {
-      // Why: mirror fetchWorkItems force-refresh semantics — a forcing caller
-      // must not silently dedupe to a non-forcing in-flight request; wait for
-      // that to settle (result discarded) and then issue a fresh forced call.
+      // Why: a forcing caller must not dedupe to a non-forcing in-flight request; wait for it to settle, then issue a fresh forced call (mirrors fetchWorkItems).
       if (options?.force && !existing.force) {
         await existing.promise.catch(() => {})
       } else {
@@ -2294,7 +2142,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             table.project.number,
             table.selectedView.id,
             args.queryOverride,
-            sourceScope
+            sourceScope,
+            table.project.host
           )
           set((s) => ({
             projectViewCache: withBoundedCacheEntry(s.projectViewCache, key, {
@@ -2303,9 +2152,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             })
           }))
         } else if (maybeKnownKey) {
-          // Only stamp the error onto the cache when we have a resolved key
-          // (i.e. caller supplied viewId). Otherwise we have nowhere to write
-          // it — the renderer classifies the error directly from the envelope.
+          // Why: only stamp the error when we have a resolved key; without one there's nowhere to write it and the renderer classifies from the envelope.
           set((s) => ({
             projectViewCache: withBoundedCacheEntry(s.projectViewCache, maybeKnownKey, {
               data: s.projectViewCache[maybeKnownKey]?.data ?? null,
@@ -2316,9 +2163,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
         return envelope
       } catch (err) {
-        // Why: IPC boundary must not throw across the promise — wrap any
-        // unexpected error in the classified envelope so the renderer has
-        // a single shape to render.
+        // Why: the IPC boundary must not throw across the promise — wrap unexpected errors in the classified envelope for a single renderer shape.
         console.error('Failed to fetch GitHub project view:', err)
         return {
           ok: false,
@@ -2384,6 +2229,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             'github.project.updateItemField',
             {
               projectId: table.project.id,
+              host: table.project.host,
               itemId: rowId,
               fieldId,
               value
@@ -2392,6 +2238,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           )
         : await window.api.gh.updateProjectItemField({
             projectId: table.project.id,
+            host: table.project.host,
             itemId: rowId,
             fieldId,
             value
@@ -2442,6 +2289,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             'github.project.clearItemField',
             {
               projectId: table.project.id,
+              host: table.project.host,
               itemId: rowId,
               fieldId
             },
@@ -2449,6 +2297,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           )
         : await window.api.gh.clearProjectItemField({
             projectId: table.project.id,
+            host: table.project.host,
             itemId: rowId,
             fieldId
           })
@@ -2530,18 +2379,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const optimisticRow: GitHubProjectRow = { ...previousRow, content: nextContent }
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
-    // Why: PRs and issues both accept label/assignee edits through the issue
-    // endpoint — GitHub PRs are issues for labels/assignees. Title/body for
-    // PRs goes through updatePullRequestBySlug; for issues through
-    // updateIssueBySlug. We dispatch both as needed.
+    // Why: labels/assignees go through the issue endpoint for both (GitHub PRs are issues for those); title/body split PR→updatePullRequestBySlug vs issue→updateIssueBySlug.
     let envelope: GitHubProjectMutationResult = { ok: true }
-    // Why: Project rows may be slug-only and have no registered Orca repo.
-    // Fall back to the view source encoded in the cache key, not focused host.
+    // Why: slug-only Project rows have no registered Orca repo, so fall back to the view source in the cache key, not the focused host.
     const target = getActiveRuntimeTarget(
       settingsForProjectRowOwner(
         get(),
         owner,
         repo,
+        table.project.host,
         settingsForProjectViewCacheKey(get().settings, cacheKey)
       )
     )
@@ -2552,6 +2398,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       const args = {
         owner,
         repo,
+        host: table.project.host,
         number,
         updates: {
           ...(updates.title !== undefined ? { title: updates.title } : {}),
@@ -2583,6 +2430,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       const args = {
         owner,
         repo,
+        host: table.project.host,
         number,
         updates: {
           ...(updates.title !== undefined ? { title: updates.title } : {}),
@@ -2663,19 +2511,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       content: { ...previousRow.content, issueType }
     }
     applyRowPatch(set, cacheKey, rowId, optimistic)
-    // Why: slug-only Project rows still belong to the source host that loaded
-    // the view; focused host may have changed after the table was fetched.
+    // Why: slug-only Project rows belong to the host that loaded the view, which may differ from the now-focused host.
     const target = getActiveRuntimeTarget(
       settingsForProjectRowOwner(
         get(),
         owner,
         repo,
+        table.project.host,
         settingsForProjectViewCacheKey(get().settings, cacheKey)
       )
     )
     const args = {
       owner,
       repo,
+      host: table.project.host,
       number,
       issueTypeId: issueType?.id ?? null
     }
@@ -2713,11 +2562,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       nextContent.body = patch.body
     }
     if (patch.state !== undefined) {
-      // Why: ProjectV2 row.state mirrors GitHub's UPPERCASE state enum
-      // ('OPEN' | 'CLOSED' | 'MERGED'). The dialog tracks lowercase
-      // ('open' | 'closed') matching `GitHubWorkItem['state']`. Translate
-      // here so the optimistic patch matches the canonical row shape and
-      // the next authoritative fetch overwrites cleanly.
+      // Why: ProjectV2 row.state is GitHub's UPPERCASE enum ('OPEN'|'CLOSED'|'MERGED') but the dialog tracks lowercase; upper-case so the patch matches the canonical row shape.
       nextContent.state = patch.state.toUpperCase()
     }
     if (patch.labels !== undefined) {
@@ -2806,9 +2651,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
     const existing = inflightWorkItemsRequests.get(inflightKey)
     if (existing) {
-      // Why: a user-initiated refresh (force=true) must not silently dedupe to
-      // a less-fresh fetch already in flight. noCache=true is stricter than a
-      // cacheable forced landing probe because it must bypass gh api's cache too.
+      // Why: a forcing/noCache caller must not dedupe to a weaker in-flight fetch (noCache is stricter — it must bypass gh api's cache too).
       if ((options?.force && !existing.force) || (options?.noCache && !existing.noCache)) {
         await existing.promise.catch(() => {})
       } else {
@@ -2824,19 +2667,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           query: query || undefined,
           ...(options?.noCache ? { noCache: true } : {})
         })
-        // Why: stamp repoId at the renderer fetch boundary so every downstream
-        // consumer (cross-repo merge, row rendering, drawer) can rely on the
-        // field being present. Main doesn't know Orca's Repo.id.
+        // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
         const items: GitHubWorkItem[] = envelope.items.map((item) => ({ ...item, repoId }))
-        // Why: only surface the issues-side error in the cache entry. The
-        // parent design doc §2 scopes feature 1 to the new class of silent
-        // wrongness introduced by the issue-source split in #1076; PR-side
-        // failures existed before and are out of scope for this banner.
+        // Why: only surface issues-side errors here; PR-side failures predate the issue-source split (#1076) and are out of scope for this banner (design doc §2).
         const issuesError = envelope.errors?.issues
-        // Why: if the main process resolved `errors.issues` but not `sources.issues`,
-        // the renderer has no slug to render in the banner copy, so the error is
-        // dropped from the cache entry. Log it so this rare case is at least visible
-        // in devtools rather than disappearing silently.
+        // Why: errors.issues without sources.issues has no slug for the banner, so it's dropped from the cache; log it so this rare case is visible in devtools.
         if (issuesError && !envelope.sources.issues) {
           console.warn(
             '[workItems] dropping issues-side error with no resolved source:',
@@ -2853,14 +2688,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           currentRepo,
           options?.sourceContext
         )
-        // Why: host focus changes are allowed, but repo ownership changes mean
-        // this response belongs to an older execution host bucket.
+        // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).
         if ((currentHostId ?? null) !== (ownerHostId ?? null)) {
           return items
         }
-        // Why: clearing in-flight entries lets the next fetch start, but the
-        // old promise can still settle. Do not let pre-flip source data
-        // repopulate the cache after the invalidation nonce changes.
+        // Why: the old promise can still settle after the in-flight clear; don't let pre-flip source data repopulate the cache once the invalidation nonce changed.
         if (get().workItemsInvalidationNonce !== requestInvalidationNonce) {
           return items
         }
@@ -2875,8 +2707,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }))
         return items
       } catch (err) {
-        // Why: surface the error to the caller; keep stale cache entry so the
-        // UI can continue to render something useful while the user retries.
+        // Why: rethrow but keep the stale cache entry so the UI still renders while the user retries.
         if (!isGitHubWorkItemsSshRemoteRequiredError(err)) {
           console.error('Failed to fetch GitHub work items:', err)
         }
@@ -2912,12 +2743,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             sourceContext: r.sourceContext ?? options?.sourceContext
           })
         } catch (err) {
-          // Why: fall back to any cache entry (stale or not) before declaring
-          // this repo failed. Matches single-repo behavior of silently serving
-          // stale data on error. A repo is only counted as failed when it has
-          // nothing at all to contribute.
-          // Why: must use perRepoLimit (not displayLimit) so the cache key
-          // matches what fetchWorkItems wrote.
+          // Why: fall back to any cache entry (stale or not) before declaring this repo failed; only count as failed when it has nothing to contribute.
+          // Why: use perRepoLimit (not displayLimit) so the cache key matches what fetchWorkItems wrote.
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             skippedSourceCount += 1
             return [] as GitHubWorkItem[]
@@ -2947,10 +2774,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       })
     )
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
-    // Why: one repo can fail with a 5xx while another succeeds (or fails for a
-    // permission reason). Only claim a global availability failure when every
-    // eligible source failed for a GitHub reachability reason; intentionally
-    // skipped SSH repos are not GitHub sources for this calculation.
+    // Why: only claim global unavailability when every eligible source failed for a reachability reason; skipped SSH repos aren't GitHub sources here.
     const githubUnavailable =
       requestFailureCount > 0 &&
       requestFailureCount === repos.length - skippedSourceCount &&
@@ -2986,13 +2810,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             query: query || undefined,
             page
           })
-          // Why: page-N partial failures don't participate in the cache's per-repo
-          // error banner (which is keyed on the initial-fetch cache entry). Log the
-          // classified issues-side error so pagination failures are at least
-          // observable in logs rather than silently truncating the merged list. A
-          // richer surface would require threading per-page errors back to the
-          // caller and wiring a transient pagination banner — deferred per parent
-          // design doc §6 scope.
+          // Why: page-N failures aren't in the per-repo banner (keyed on the initial fetch); log them so pagination failures are observable instead of silently truncating (richer surface deferred, design doc §6).
           if (envelope.errors?.issues) {
             console.warn(
               `[workItems] next page ${r.repoId} issues-side partial failure:`,
@@ -3023,9 +2841,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
     const counts = await Promise.all(
       repos.map(async (r) => {
-        // Why: same stampede cap as the item-fetch paths — without a slot,
-        // a 90-repo selection dispatches 90 concurrent count IPCs before the
-        // main-side rate-limit guard can see the first 403.
+        // Why: same stampede cap as item-fetch — without a slot a 90-repo selection fires 90 concurrent count IPCs before the main-side rate-limit guard sees the first 403.
         await acquireWorkItemSlot()
         try {
           const requestState = get()
@@ -3052,8 +2868,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     )
     return {
       totalCount: counts.reduce((sum, count) => sum + count, 0),
-      // Why: each repo advances independently by the same numbered page. A sum
-      // divided by page width undercounts when one repo owns most results.
+      // Why: repos advance independently by page, so take the max across repos — a sum/page-width undercounts when one repo owns most results.
       totalPages: counts.reduce(
         (maxPages, count) => Math.max(maxPages, Math.ceil(count / normalizedLimit)),
         0
@@ -3085,7 +2900,6 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       options?.sourceContext
     )
     const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
-    // Skip when the cache is fresh or a request is already in flight.
     if (isFresh(cached, WORK_ITEMS_CACHE_TTL) || inflightWorkItemsRequests.has(inflightKey)) {
       return
     }
@@ -3133,10 +2947,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repo?.executionHostId,
       repo !== undefined
     )
-    // Why: if a prior caller without a linkedPR cached `null` for this branch,
-    // the worktree-card lookup (which has a linked PR fallback) would otherwise
-    // return null forever. Refetch when the cached miss could now resolve via
-    // the linkedPR path.
+    // Why: a prior linkedPR-less caller may have cached null for this branch; refetch so the cached miss can now resolve via the linkedPR path.
     const linkedPRNumber = options?.linkedPRNumber ?? null
     const explicitFallbackPRNumber = options?.fallbackPRNumber ?? null
     const hostedReviewFallbackPRNumber = githubHostedReviewFallbackPRNumber(
@@ -3159,10 +2970,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const linkedRefetch =
       cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)
     if (!options?.force && !linkedRefetch && isFresh(cached)) {
-      // Why: a fresh cache hit still carries the head-scoped divergence signal.
-      // If a prior clear was declined because the head moved mid-request and the
-      // worktree is now back on that diverged head, clear the durable link the
-      // cache would otherwise keep serving until it expires.
+      // Why: even a fresh cache hit carries the head-scoped divergence signal; if a prior clear was declined for a mid-request head move and we're back on that head, clear the durable link.
       if (
         options?.worktreeId &&
         linkedPRNumber != null &&
@@ -3280,11 +3088,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         const pr: PRInfo | null =
           outcome.kind === 'found' ? outcome.pr : outcome.kind === 'no-pr' ? null : null
         if (outcome.kind === 'upstream-error') {
-          // Why: the runtime RPC path does not flow through the coordinator
-          // broadcast that populates prRefreshStates on native execution, so a
-          // runtime/SSH gh failure would otherwise show generic "checking" copy.
-          // Record the classified error + schedule here so the Checks panel shows
-          // the same classified failure copy as native (design criterion 2).
+          // Why: the runtime RPC path skips the coordinator broadcast that fills prRefreshStates on native, so record the classified error here for Checks parity with native (design criterion 2).
           if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {
             set((s) => {
               const nextStates = { ...s.prRefreshStates }
@@ -3307,8 +3111,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           let skippedStaleLinkedPRLookup = false
           let didUpdatePRCache = false
           set((s) => {
-            // Why: unlinking a PR while an exact linked-PR lookup is in flight
-            // must prevent that older result from restoring the manual link UI.
+            // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
             if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
               skippedStaleLinkedPRLookup = true
               return {}
@@ -3354,8 +3157,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             linkedPRNumber != null &&
             shouldClearDivergedLinkedMergedPR({ pr, linkedPRNumber, requestHeadOid })
           ) {
-            // Why: only clear the durable link that produced this exact probe;
-            // branch/head drift means the stale result no longer owns the worktree.
+            // Why: only clear the durable link that produced this exact probe; drift means the stale result no longer owns the worktree.
             void get().updateWorktreeMeta(
               options.worktreeId,
               { linkedPR: null },
@@ -3391,8 +3193,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               options.worktreeId,
               { linkedPR: null },
               {
-                // Why: the branch-scoped PR refetch below updates both GitHub
-                // caches; the generic metadata refresh would duplicate provider work.
+                // Why: the branch-scoped PR refetch below updates both caches; the generic metadata refresh would duplicate provider work.
                 suppressHostedReviewRefresh: true,
                 shouldApply: () =>
                   shouldApplyBranchMismatchedLinkedPRClear({
@@ -3408,8 +3209,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   })
               }
             )
-            // Re-resolve by branch right away so visible Checks recover on this
-            // refresh instead of keeping the stale linked PR cached.
+            // Re-resolve by branch now so Checks recover this refresh instead of serving the stale linked PR.
             void get().fetchPRForBranch(repoPath, branch, {
               force: true,
               repoId,
@@ -4010,8 +3810,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repo !== undefined
     )
 
-    // Optimistic update: toggle isResolved on all comments in this thread immediately
-    // so the UI feels instant. Reverts if the API call fails.
+    // Optimistic toggle of isResolved for this thread; reverts if the API call fails.
     const prev = get().commentsCache[cacheKey]?.data
     if (prev) {
       set((s) => ({
@@ -4039,7 +3838,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           ? await callRuntimeRpc<boolean>(
               { kind: 'environment', environmentId: requestContext.target.environmentId },
               'github.resolveReviewThread',
-              { repo: requestContext.target.runtimeRepoId, threadId, resolve },
+              {
+                repo: requestContext.target.runtimeRepoId,
+                threadId,
+                resolve,
+                prRepo: options?.prRepo ?? null
+              },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.resolveReviewThread({
@@ -4047,6 +3851,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               repoId,
               threadId,
               resolve,
+              prRepo: options?.prRepo ?? null,
               sourceContext: options?.sourceContext
             })
     } catch (err) {
@@ -4135,9 +3940,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   applyGitHubPRRefreshEvent: (event) => {
-    // Why: the sidebar/left-list refresh for local repos flows through the main
-    // PR coordinator (not fetchPRForBranch), so it must run the same guarded
-    // clear when main stamps a merged linked PR whose head has diverged.
+    // Why: local-repo sidebar refresh routes through the main PR coordinator, so run the same guarded diverged-merged-PR clear.
     const divergedLinkedPRClears: {
       worktreeId: string
       linkedPRNumber: number
@@ -4173,8 +3976,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
           continue
         }
-        // Why: delete-then-set moves this key to the end of insertion order so
-        // capPrRefreshSequences evicts genuinely idle keys, not active ones.
+        // Why: delete-then-set re-orders this key last so capPrRefreshSequences evicts idle, not active, keys.
         delete nextSequences[alias.cacheKey]
         nextSequences[alias.cacheKey] = event.sequence
         changed = true
@@ -4271,14 +4073,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 })()
               : null
           const linkedPRNumber = alias.linkedPRNumber ?? null
-          // Why: one coordinator outcome can fan out to many linked aliases.
-          // Build one lazy index instead of rescanning all worktrees per alias.
+          // Why: one outcome fans out to many aliases; build one lazy index instead of rescanning worktrees per alias.
           const worktreeLookupIndex =
             alias.worktreeId && linkedPRNumber != null
               ? (linkedWorktreeLookupIndex ??= buildWorktreeLookupIndex(s))
               : undefined
-          // Why: queued local refreshes may finish after the user unlinks an
-          // exact PR; those older results must not restore the manual-link UI.
+          // Why: a queued refresh finishing after the user unlinks an exact PR must not restore the manual-link UI.
           if (
             isStaleExactLinkedPRLookup(s, alias.worktreeId, linkedPRNumber, worktreeLookupIndex)
           ) {
@@ -4295,8 +4095,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                     worktreeLookupIndex
                   )
                 : null
-            // Why: only an event that won the sequence gate above owns metadata
-            // side effects; rejected late outcomes must not unlink a newer PR.
+            // Why: only the sequence-gate winner owns metadata side effects; late outcomes must not unlink a newer PR.
             if (
               worktree &&
               linkedPRNumber != null &&
@@ -4379,13 +4178,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               s.hostedReviewCache[hostedReviewCacheKey]
             )
           } else {
-            // Why: rate-limit pauses/skips can follow an in-flight broadcast
-            // without an outcome; the cached request-start snapshot is no
-            // longer live and would otherwise accumulate per refresh sequence.
+            // Why: pause/skip can follow an in-flight broadcast with no outcome; drop the stale request-start snapshot.
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
-          // Why: delete-then-set moves this key to the end of insertion order so
-          // capRecordByInsertionOrder evicts genuinely idle keys, not active ones.
+          // Why: delete-then-set re-orders this key last so capRecordByInsertionOrder evicts idle, not active, keys.
           delete nextStates[alias.cacheKey]
           const isPaused = event.status === 'paused'
           nextStates[alias.cacheKey] = {
@@ -4394,9 +4190,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             updatedAt: Date.now(),
             pausedUntil: event.pausedUntil,
             skippedReason: event.skippedReason,
-            // Why: a paused refresh is a rate-limit gate. Map its pausedUntil into
-            // the unified schedule so the panel shows the auto-retry time and
-            // disables manual Retry until the limit resets.
+            // Why: paused = rate-limit gate; map pausedUntil into the schedule to show auto-retry and disable manual Retry.
             nextAutoRetryAt: isPaused ? event.pausedUntil : undefined,
             retryDisabledUntil: isPaused ? event.pausedUntil : undefined
           }
@@ -4406,8 +4200,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return changed
         ? {
             prRefreshSequences: capPrRefreshSequences(nextSequences),
-            // Why: bound prRefreshStates too (same unbounded PR-cache-key space),
-            // but with status-aware eviction so visible in-progress pills survive.
+            // Why: bound prRefreshStates with status-aware eviction so visible in-progress pills survive.
             prRefreshStates: capPrRefreshStates(nextStates),
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache
@@ -4452,9 +4245,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   refreshAllGitHub: () => {
-    // Invalidate comments cache so it refreshes on next access.
-    // Also evict old entries from retained caches to prevent unbounded growth
-    // across many repos and branches over a long-running session.
+    // Clear comments cache; evict stale entries to bound long-session growth across repos/branches.
     set((s) => ({
       commentsCache: {},
       prCache: evictStaleEntries(s.prCache),
@@ -4465,9 +4256,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
     }))
 
-    // Why: prRequestGenerations tracks only live inflight fetches and is
-    // cleared when the active request settles. Do not prune it here; deleting
-    // a live generation would make the corresponding response look stale.
+    // Why: don't prune prRequestGenerations here — deleting a live generation makes its response look stale.
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()
@@ -4643,8 +4432,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           ? getTaskSourceCacheScope(options.sourceContext)
           : null
       for (const key of Object.keys(nextCache)) {
-        // Why: task edits from one host/account must not optimistically patch
-        // another host's visually identical GitHub issue or PR cache entry.
+        // Why: don't patch another host/account's visually identical issue/PR cache entry.
         if (sourceScope && key !== sourceScope && !key.startsWith(`${sourceScope}::`)) {
           continue
         }
@@ -4652,8 +4440,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         if (!entry?.data) {
           continue
         }
-        // Why: GitHub issue/PR ids are only unique within a repo. Cross-repo
-        // task views can contain the same `pr:42` id from multiple repos.
+        // Why: issue/PR ids are only unique within a repo; cross-repo views can share `pr:42`.
         const idx = entry.data.findIndex(
           (item) => item.id === itemId && (!repoId || item.repoId === repoId)
         )
@@ -4670,10 +4457,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   setIssueSourcePreference: async (repoId, repoPath, preference) => {
-    // Why: optimistically patch the local Repo first so the segmented control
-    // reflects the new selection on the same frame. On IPC failure we resync
-    // from disk via `fetchRepos()` below so the UI doesn't lie about what's
-    // persisted.
+    // Why: optimistically patch the local Repo so the segmented control updates this frame; resync via fetchRepos on IPC failure.
     set((s) => ({
       repos: s.repos.map((r) =>
         r.id === repoId
@@ -4685,49 +4469,29 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       )
     }))
     try {
-      // Why: persist via the generic `repos:update` channel rather than a
-      // dedicated gh-namespaced handler. Single write path → single
-      // `repos:changed` broadcast → other windows re-fetch. The store layer
-      // normalizes `'auto'` to `undefined` so the persisted record drops
-      // the key entirely (see main/persistence.ts#updateRepo).
+      // Why: use the generic `repos:update` channel so a single write → single `repos:changed` broadcast re-fetches other windows.
+      // Why: map 'auto' to undefined so persistence drops the key entirely (see main/persistence.ts#updateRepo).
       const updates = { issueSourcePreference: preference === 'auto' ? undefined : preference }
-      // Why: persist to the repo's owner host (same routing as updateRepo) so the
-      // write lands where the repo lives, not on the focused runtime.
+      // Why: route to the repo's owner host (like updateRepo) so the write lands where the repo lives, not the focused runtime.
       const target = getActiveRuntimeTarget(getSettingsForRepoRuntimeOwner(get(), repoId))
       await (target.kind === 'local'
         ? window.api.repos.update({ repoId, updates })
         : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
     } catch (err) {
       console.error('Failed to persist issue-source preference:', err)
-      // Why: surface the persist failure so the user understands why the
-      // pill visually reverts (optimistic patch above → resync via
-      // fetchRepos below). Without this toast, the UI silently snaps back
-      // and the user has no clue the write failed.
+      // Why: without this toast the pill silently snaps back (optimistic patch + resync) and the user wouldn't know the write failed.
       toast.error(
         translate('auto.store.slices.github.d49ef4b944', 'Failed to save issue-source preference'),
         {
           duration: ERROR_TOAST_DURATION
         }
       )
-      // Why: the optimistic patch above may now disagree with disk. Resync
-      // rather than leave a lie on screen. We only refetch repos — the cache
-      // eviction below is still safe to run; worst case we trigger a
-      // harmless re-fetch of work items against the pre-flip preference.
+      // Why: the optimistic patch may now disagree with disk; resync rather than leave a lie on screen.
       void get().fetchRepos()
     }
-    // Why: wipe in-flight dedupe entries for this repo BEFORE bumping the
-    // invalidation nonce. The bump triggers a re-run of TaskPage's fetch
-    // effect; if the inflight map still held a pre-flip entry, the new
-    // dispatch could collapse onto it and skip the source swap. Clearing
-    // first makes the "new fetch gets a fresh request" invariant impossible
-    // to trip on later refactors that change zustand or React flush timing.
+    // Why: clear inflight dedupe BEFORE bumping the nonce so the re-triggered fetch can't collapse onto a pre-flip in-flight entry.
     clearInflightWorkItemsForRepo(repoId, repoPath)
-    // Why: evict every cache entry keyed on this repo AFTER the IPC
-    // resolves. If we evicted before awaiting, an overlapping fetch triggered
-    // by a different subscriber would hit main with the pre-flip persisted
-    // preference and repopulate the cache with stale-source data. Work-items
-    // cache keys are repo-scoped, but we also drop legacy path-scoped entries
-    // that may have been restored from older persisted cache data.
+    // Why: evict AFTER the await so an overlapping fetch can't repopulate with pre-flip data; also drops legacy path-scoped keys.
     set((s) => {
       const prefix = `${repoId}::`
       const legacyPrefix = `${repoPath}::`
@@ -4737,11 +4501,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           next[key] = entry
         }
       }
-      // Why: bump the invalidation nonce so the Tasks list's fetch effect
-      // — which keys on `[selectedRepos, appliedTaskSearch, taskRefreshNonce,
-      // taskSource, workItemsInvalidationNonce]` — re-runs and re-populates
-      // the just-evicted entries. Evicting alone wouldn't trigger the effect
-      // because it doesn't depend on the cache.
+      // Why: the Tasks fetch effect keys on the nonce, not the cache, so bump it to re-run and re-populate the evicted entries.
       return { workItemsCache: next, workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }
     })
   },
@@ -4778,9 +4538,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     })
   },
 
-  // Why: activation is the user's strongest freshness signal. A PR can merge
-  // seconds after the last sidebar poll; enqueue through the coordinator so
-  // clicks revalidate PR state without bypassing coalescing/rate-limit guards.
+  // Why: activation is the strongest freshness signal; route through the coordinator to keep coalescing/rate-limit guards.
   refreshGitHubForWorktreeIfStale: (worktreeId) => {
     const state = get()
     let worktree: Worktree | undefined

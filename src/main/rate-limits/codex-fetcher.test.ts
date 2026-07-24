@@ -53,6 +53,31 @@ function makeRpcChild() {
   return child
 }
 
+function respondToRpcRateLimitRead(
+  rpcChild: ReturnType<typeof makeRpcChild>,
+  rateLimits: unknown
+): void {
+  rpcChild.stdin.write.mockImplementation((line: string) => {
+    const msg = JSON.parse(line) as { id?: number; method?: string }
+    if (msg.method === 'initialize') {
+      setTimeout(() => {
+        rpcChild.stdout.emit(
+          'data',
+          Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+        )
+      }, 0)
+    }
+    if (msg.method === 'account/rateLimits/read') {
+      setTimeout(() => {
+        rpcChild.stdout.emit(
+          'data',
+          Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { rateLimits } })}\n`)
+        )
+      }, 0)
+    }
+  })
+}
+
 function makePtyTerm() {
   let dataHandler: ((data: string) => void) | null = null
   let exitHandler: (() => void) | null = null
@@ -325,38 +350,12 @@ describe('fetchCodexRateLimits', () => {
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
-  it('normalizes Codex RPC remaining-minute windows to fixed display durations', async () => {
+  it('normalizes near-canonical Codex RPC windows to fixed display durations', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
-    rpcChild.stdin.write.mockImplementation((line: string) => {
-      const msg = JSON.parse(line) as { id?: number; method?: string }
-      if (msg.method === 'initialize') {
-        setTimeout(() => {
-          rpcChild.stdout.emit(
-            'data',
-            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
-          )
-        }, 0)
-      }
-      if (msg.method === 'account/rateLimits/read') {
-        setTimeout(() => {
-          rpcChild.stdout.emit(
-            'data',
-            Buffer.from(
-              `${JSON.stringify({
-                jsonrpc: '2.0',
-                id: msg.id,
-                result: {
-                  rateLimits: {
-                    primary: { usedPercent: 0, windowDurationMins: 299 },
-                    secondary: { usedPercent: 0, windowDurationMins: 10079 }
-                  }
-                }
-              })}\n`
-            )
-          )
-        }, 0)
-      }
+    respondToRpcRateLimitRead(rpcChild, {
+      primary: { usedPercent: 0, windowDurationMins: 299 },
+      secondary: { usedPercent: 0, windowDurationMins: 10079 }
     })
 
     const resultPromise = fetchCodexRateLimits()
@@ -366,6 +365,42 @@ describe('fetchCodexRateLimits', () => {
 
     expect(result.session?.windowMinutes).toBe(300)
     expect(result.weekly?.windowMinutes).toBe(10080)
+  })
+
+  it('keeps a weekly-only Codex primary window out of the 5-hour slot', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, {
+      primary: { usedPercent: 22, windowDurationMins: 10080 },
+      secondary: null
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: null,
+      weekly: { usedPercent: 22, windowMinutes: 10080 }
+    })
+  })
+
+  it('does not map a duplicate session-duration window into the weekly slot', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, {
+      primary: { usedPercent: 11, windowDurationMins: 300 },
+      secondary: { usedPercent: 12, windowDurationMins: 300 }
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: { usedPercent: 11, windowMinutes: 300 },
+      weekly: null
+    })
   })
 
   it('fills reset-credit count from the backend when the installed app-server omits it', async () => {

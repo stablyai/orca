@@ -29,6 +29,7 @@ describe('electron-builder config', () => {
         '!native{,/**/*}',
         '!skills{,/**/*}',
         '!skill-guides{,/**/*}',
+        '!skill-stubs{,/**/*}',
         '!resources/skills/**',
         '!tests{,/**/*}',
         '!pr-evidence{,/**/*}',

@@ -7,7 +7,8 @@ import {
   RuntimeEnvironmentStoreError,
   addEnvironmentFromPairingCode,
   listEnvironments,
-  markEnvironmentUsed
+  markEnvironmentUsed,
+  updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
 
 function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
@@ -53,6 +54,35 @@ describe('runtime environment store', () => {
       })
     ).toThrow(RuntimeEnvironmentStoreError)
     expect(listEnvironments(userDataPath)).toEqual([first])
+  })
+
+  it('advances pairing revisions across equal and backward clock readings', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const environment = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'dev box',
+      pairingCode: pairingCode(),
+      now: 100
+    })
+
+    const sameClock = updateEnvironmentFromPairingCode(userDataPath, environment.id, {
+      pairingCode: pairingCode('ws://192.0.2.10:6768'),
+      now: 100
+    })
+    const backwardClock = updateEnvironmentFromPairingCode(userDataPath, environment.id, {
+      pairingCode: pairingCode('ws://192.0.2.11:6768'),
+      now: 50
+    })
+    const laterClock = updateEnvironmentFromPairingCode(userDataPath, environment.id, {
+      pairingCode: pairingCode('ws://192.0.2.12:6768'),
+      now: 200
+    })
+
+    expect([
+      sameClock.pairingRevision,
+      backwardClock.pairingRevision,
+      laterClock.pairingRevision
+    ]).toEqual([101, 102, 200])
   })
 
   it('throttles lastUsedAt writes so it does not rewrite the store on every runtime call', () => {

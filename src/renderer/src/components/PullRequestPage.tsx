@@ -179,6 +179,8 @@ import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
+import { githubProjectHost } from '../../../shared/github-project-identity'
+import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
 import {
   findGithubPrWorkspaceAttachment,
   getGithubPrWorkspaceAttachmentLabel
@@ -223,23 +225,18 @@ import {
 import { translate } from '@/i18n/i18n'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
-// Why: the GH item dialog can be opened from any work-item list surface and
-// doesn't have the full owner/repo context the list's cache entry carries.
-// Parsing the canonical `https://github.com/{owner}/{repo}/...` URL is the
-// simplest reliable source — the URL is already present on every work item
-// and survives the main-process → IPC boundary. Non-GitHub hosts return null,
-// which matches the indicator's suppression rule.
+// Why: the item URL is the only host-aware repository identity present on every work item across IPC.
 function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
   try {
     const parsed = new URL(url)
-    if (parsed.hostname !== 'github.com') {
+    if ((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || !parsed.host) {
       return null
     }
     const segments = parsed.pathname.split('/').filter(Boolean)
     if (segments.length < 2) {
       return null
     }
-    return { owner: segments[0], repo: segments[1] }
+    return { owner: segments[0], repo: segments[1], host: parsed.host }
   } catch {
     return null
   }
@@ -286,21 +283,35 @@ function normalizeItemDialogTab(
   return tab ?? 'conversation'
 }
 
-/** Why: Project-origin rows don't always belong to the active local repo.
- *  When set, GHEditSection routes label/assignee/state mutations through
- *  slug-addressed IPCs against `owner`/`repo` instead of through `repoPath`,
- *  preventing edits from silently landing on the workspace's repo when the
- *  Project view is showing rows from a different repo. See
- *  docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
- */
+/** When set, GHEditSection routes label/assignee/state edits through slug-addressed IPCs (owner/repo) instead of `repoPath`, so Project rows from another repo aren't edited on the workspace repo. See docs/design/github-project-view-tasks.md. */
 export type PullRequestPageProjectOrigin = {
   owner: string
   repo: string
+  host?: string
   number: number
   type: 'issue' | 'pr'
   projectId: string
   projectItemId: string
   cacheKey: string
+}
+
+// Why: every PR mutation needs the same host-pinned identity so process GH_HOST
+// cannot redirect a github.com item or a Project row to the wrong server.
+function resolvePullRequestRepo(
+  item: Pick<GitHubWorkItem, 'prRepo' | 'url'>,
+  projectOrigin?: Pick<PullRequestPageProjectOrigin, 'owner' | 'repo' | 'host'>
+): GitHubOwnerRepo | null {
+  const repo =
+    item.prRepo ??
+    (projectOrigin
+      ? {
+          owner: projectOrigin.owner,
+          repo: projectOrigin.repo,
+          host: projectOrigin.host
+        }
+      : null) ??
+    parseOwnerRepoFromItemUrl(item.url)
+  return repo ? { ...repo, host: githubProjectHost(repo.host) } : null
 }
 
 type PullRequestPageProps = {
@@ -317,11 +328,7 @@ type PullRequestPageProps = {
     reviewRequests: GitHubAssignableUser[]
   ) => void
   onClose: () => void
-  /** Optional Project-origin context. When set, edits in the dialog are
-   *  routed via slug-addressed mutation IPCs against the row's actual repo
-   *  instead of the active workspace's `repoPath`. Both can be set
-   *  simultaneously (Project mode where the row also lives in the active
-   *  workspace) — slug routing wins for writes. */
+  /** Optional Project-origin context; when set, slug-addressed IPCs route writes to the row's repo instead of `repoPath` (both may be set — slug wins for writes). */
   projectOrigin?: PullRequestPageProjectOrigin
 }
 
@@ -549,8 +556,7 @@ function PRAssigneesPanel({
   )
   const { isPending, run } = useImmediateMutation()
 
-  // Why: PR assignees can change through background refetches; sync them
-  // before paint so the right rail never shows a stale reviewer/assignee split.
+  // Why: sync assignees before paint (background refetches change them) so the right rail never shows a stale split.
   if (
     assigneesSource.itemId !== item.id ||
     assigneesSource.repoId !== item.repoId ||
@@ -577,7 +583,8 @@ function PRAssigneesPanel({
     slugOwner,
     slugRepo,
     assigneeLogins,
-    sourceSettings
+    sourceSettings,
+    projectOrigin?.host ?? assigneeSlug?.host
   )
   const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, sourceSettings)
   const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
@@ -745,12 +752,14 @@ function PRReviewersPanel({
   loading,
   repoPath,
   sourceContext,
+  projectOrigin,
   onReviewersRequested
 }: {
   item: GitHubWorkItem
   loading: boolean
   repoPath: string | null
   sourceContext?: TaskSourceContext | null
+  projectOrigin?: PullRequestPageProjectOrigin
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -812,8 +821,7 @@ function PRReviewersPanel({
     }
   }, [cancelReviewerInputFocusFrame])
 
-  // Why: reviewer edits are optimistic, but item switches/refetches must clear
-  // stale local requests before paint; a passive Effect leaves one stale render.
+  // Why: clear stale optimistic review requests before paint on item switch/refetch (a passive Effect leaves one stale render).
   if (
     reviewRequestsSource.itemId !== item.id ||
     reviewRequestsSource.repoId !== item.repoId ||
@@ -851,19 +859,23 @@ function PRReviewersPanel({
     return Array.from(byLogin.values())
   }, [item.author, item.latestReviews, localReviewRequests])
 
-  const reviewSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const reviewRepo = useMemo(
+    () => resolvePullRequestRepo(item, projectOrigin),
+    [item, projectOrigin]
+  )
   const reviewerMetadataBySlug = useRepoAssigneesBySlug(
-    open && reviewSlug ? reviewSlug.owner : null,
-    open && reviewSlug ? reviewSlug.repo : null,
+    open && reviewRepo ? reviewRepo.owner : null,
+    open && reviewRepo ? reviewRepo.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    sourceSettings
+    sourceSettings,
+    reviewRepo?.host
   )
   const reviewerMetadataByPath = useRepoAssignees(
-    open && !reviewSlug ? repoPath : null,
-    open && !reviewSlug ? item.repoId : null,
+    open && !reviewRepo ? repoPath : null,
+    open && !reviewRepo ? item.repoId : null,
     sourceSettings
   )
-  const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
+  const reviewerMetadata = reviewRepo ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
   const reviewers = getGitHubPRReviewerRows(displayItem)
   const authorLogin = item.author?.toLowerCase() ?? null
@@ -993,7 +1005,12 @@ function PRReviewersPanel({
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.requestPRReviewers',
-              { repo: runtimeRepo, prNumber: item.number, reviewers: logins },
+              {
+                repo: runtimeRepo,
+                prNumber: item.number,
+                reviewers: logins,
+                prRepo: reviewRepo
+              },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.requestPRReviewers({
@@ -1001,7 +1018,8 @@ function PRReviewersPanel({
               repoId: item.repoId,
               sourceContext,
               prNumber: item.number,
-              reviewers: logins
+              reviewers: logins,
+              prRepo: reviewRepo
             })
       if (!reviewerPanelMountedRef.current) {
         return
@@ -1083,7 +1101,12 @@ function PRReviewersPanel({
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.removePRReviewers',
-              { repo: runtimeRepo, prNumber: item.number, reviewers: logins },
+              {
+                repo: runtimeRepo,
+                prNumber: item.number,
+                reviewers: logins,
+                prRepo: reviewRepo
+              },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.removePRReviewers({
@@ -1091,7 +1114,8 @@ function PRReviewersPanel({
               repoId: item.repoId,
               sourceContext,
               prNumber: item.number,
-              reviewers: logins
+              reviewers: logins,
+              prRepo: reviewRepo
             })
       if (!reviewerPanelMountedRef.current) {
         return
@@ -1428,13 +1452,7 @@ function isPRFileViewed(file: GitHubPRFile): boolean {
   return file.viewerViewedState === 'VIEWED'
 }
 
-// Why: SWR cache for the work-item details fetch. Reopening the same drawer
-// pays full IPC + `gh` process startup latency without this; with it, cached
-// data paints immediately while a background refetch keeps the view honest.
-// Cache is keyed by repoPath + issueSourcePreference + type + number so
-// upstream/origin source toggles and issue#N vs pr#N never collide. Bounded
-// to ~50 entries to cap memory; entries older than FRESH_MS trigger a
-// background refetch on open. See docs/gh-work-item-drawer-cache.md.
+// SWR cache: reopening a drawer paints cached data instantly while a background refetch reconciles. See docs/gh-work-item-drawer-cache.md.
 const WORK_ITEM_DETAILS_CACHE_MAX = 50
 const WORK_ITEM_DETAILS_FRESH_MS = 30_000
 const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for this GitHub item.'
@@ -1446,10 +1464,7 @@ type WorkItemDetailsCacheEntry = {
 }
 const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
-// Why: drawers subscribe via useSyncExternalStore so reopening a cached item
-// paints synchronously on first render. Stability of the snapshot relies on
-// every cache write replacing the entry object identity (delete+set), which
-// touchWorkItemDetailsCache already does.
+// Why: useSyncExternalStore snapshot stability relies on every cache write replacing the entry object identity (delete+set).
 const workItemDetailsCacheListeners = new Set<() => void>()
 function subscribeWorkItemDetailsCache(listener: () => void): () => void {
   workItemDetailsCacheListeners.add(listener)
@@ -1471,8 +1486,7 @@ function getWorkItemDetailsCacheKey(args: {
   type: 'issue' | 'pr'
   number: number
 }): string {
-  // Why: include all axes that change which (repo, item) the IPC resolves to.
-  // `\0` separator avoids ambiguity between fields that may contain `:` or `/`.
+  // Why: `\0` separator avoids collisions between key fields that may contain `:` or `/`.
   const keyParts = args.sourceCacheScope
     ? [args.repoId, args.sourceCacheScope, args.issueSourcePreference ?? 'auto', args.type]
     : [args.repoId, args.issueSourcePreference ?? 'auto', args.type]
@@ -1480,8 +1494,7 @@ function getWorkItemDetailsCacheKey(args: {
 }
 
 function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
-  // Why: re-insert to move to MRU position; Map preserves insertion order so
-  // the oldest key is always first when evicting.
+  // Why: re-insert moves the key to MRU; Map insertion order keeps the oldest key first when evicting.
   workItemDetailsCache.delete(key)
   workItemDetailsCache.set(key, entry)
   while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
@@ -1494,12 +1507,9 @@ function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry
   notifyWorkItemDetailsCache()
 }
 
-// Why: exposed so mutation handlers (in this file and elsewhere) can drop a
-// stale entry after a successful local mutation. Cross-window invalidation
-// arrives via the `gh:workItemMutated` event listener installed below.
+// Exposed so mutation handlers can drop a stale entry after a local mutation (cross-window invalidation arrives via the `gh:workItemMutated` listener below).
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
-  // Why: bump generation so an in-flight fetch launched before this exact-key
-  // invalidation will not write its stale result back into the cache.
+  // Why: bump generation so an in-flight fetch launched before this invalidation won't write its stale result back.
   workItemDetailsCacheGeneration += 1
   const existed = workItemDetailsCache.delete(key)
   if (existed) {
@@ -1507,16 +1517,10 @@ export function invalidateWorkItemDetailsCacheForKey(key: string): void {
   }
 }
 
-// Why: monotonically increases on every invalidation so an in-flight refetch
-// that started before a mutation can detect that its result is stale and
-// must not be written back. Without this, a mutation that lands while a
-// refetch is in flight would have its invalidation silently undone when the
-// stale promise resolves and re-populates the entry.
+// Why: monotonic counter so an in-flight refetch that started before a mutation detects its result is stale and skips the write-back.
 let workItemDetailsCacheGeneration = 0
 
-// Why: when we don't have the exact cache key (e.g. an event from another
-// window only carries repoPath + number + type), drop every entry that
-// matches the (repoPath, type, number) tuple regardless of source preference.
+// Why: without the exact key (cross-window events carry only repoPath+number+type), drop every entry matching that tuple regardless of source preference.
 function invalidateWorkItemDetailsCacheByMatch(args: {
   repoPath: string
   repoId?: string
@@ -1612,11 +1616,7 @@ function patchCachedWorkItemBody(cacheKey: string, body: string): void {
   })
 }
 
-// Why: install once at module load — every dialog instance shares the cache,
-// so a single subscription is enough. Main targets the registered app renderer
-// for non-origin mutations, and this listener invalidates the matching entry.
-// We track the unsubscribe so
-// Vite HMR doesn't accumulate listeners across module reloads in dev.
+// Install once at module load (all dialogs share the cache); track the unsubscribe so Vite HMR doesn't accumulate listeners across reloads.
 let workItemMutatedUnsub: (() => void) | undefined
 let workItemDetailsCacheEventUnsub: (() => void) | undefined
 if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
@@ -1639,11 +1639,9 @@ if (typeof import.meta !== 'undefined' && import.meta.hot) {
   })
 }
 
-// Why: bounded LRU — opening many PRs with many files during a session
-// would otherwise grow this module-level map without bound until reload.
+// Why: bounded LRU so a session of opening many PR files can't grow this module map without bound.
 const PR_FILE_CONTENT_CACHE_MAX = 64
-// Why: raw-content overflow is only a sentinel; force the reported size past
-// the render budget so downstream checks reliably choose fallback mode.
+// Why: overflow sentinel — force reported size past the render budget so downstream reliably picks fallback mode.
 const GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT = MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1
 const PR_FILE_CONTENT_CACHE_MAX_BYTES = MAX_RENDERED_DIFF_COMBINED_CHARACTERS * 4
 type PRFileContentCacheEntry = {
@@ -1709,8 +1707,7 @@ function touchPRFileContentCache(
 
   const existing = prFileContentCache.get(key)
   prFileContentCacheBytes -= existing?.byteCount ?? 0
-  // Why: re-insert to move to the most-recently-used position; Map preserves
-  // insertion order so the oldest key is always first when evicting.
+  // Why: re-insert moves the key to MRU; Map insertion order makes the oldest key first when evicting.
   prFileContentCache.delete(key)
   const byteCount = retainedByteCount
   prFileContentCache.set(key, { value, byteCount })
@@ -1734,6 +1731,7 @@ function getPRFileContentCacheKey(args: {
   repoId: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   file: GitHubPRFile
   headSha: string
   baseSha: string
@@ -1747,6 +1745,7 @@ function getPRFileContentCacheKey(args: {
     repositoryKey,
     sourceKey,
     args.prNumber,
+    args.prRepo ? githubRepoIdentityKey(args.prRepo) : '',
     args.file.path,
     args.file.oldPath ?? '',
     args.file.status,
@@ -1760,6 +1759,7 @@ function loadPRFileContents(args: {
   repoId: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   file: GitHubPRFile
   headSha: string
   baseSha: string
@@ -1780,6 +1780,7 @@ function loadPRFileContents(args: {
           {
             repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
             prNumber: args.prNumber,
+            prRepo: args.prRepo ?? null,
             path: args.file.path,
             oldPath: args.file.oldPath,
             status: args.file.status,
@@ -1793,6 +1794,7 @@ function loadPRFileContents(args: {
           repoId: args.repoId,
           sourceContext: args.sourceContext,
           prNumber: args.prNumber,
+          prRepo: args.prRepo ?? null,
           path: args.file.path,
           oldPath: args.file.oldPath,
           status: args.file.status,
@@ -1825,6 +1827,7 @@ function addIssueCommentForRepo(args: {
   number: number
   body: string
   type?: 'issue' | 'pr'
+  prRepo?: GitHubOwnerRepo | null
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
   if (runtimeHost) {
@@ -1834,7 +1837,8 @@ function addIssueCommentForRepo(args: {
       {
         repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         number: args.number,
-        body: args.body
+        body: args.body,
+        prRepo: args.prRepo ?? null
       },
       { timeoutMs: 30_000 }
     ).then((result) => {
@@ -1859,7 +1863,8 @@ function addIssueCommentForRepo(args: {
     sourceContext: args.sourceContext,
     number: args.number,
     body: args.body,
-    type: args.type
+    type: args.type,
+    prRepo: args.prRepo ?? null
   })
 }
 
@@ -1868,6 +1873,7 @@ function addPRReviewCommentForRepo(args: {
   repoPath: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   commitId: string
   path: string
   line: number
@@ -1882,6 +1888,7 @@ function addPRReviewCommentForRepo(args: {
       {
         repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         prNumber: args.prNumber,
+        prRepo: args.prRepo ?? null,
         commitId: args.commitId,
         path: args.path,
         line: args.line,
@@ -1910,6 +1917,7 @@ function addPRReviewCommentForRepo(args: {
     repoId: args.repoId,
     sourceContext: args.sourceContext,
     prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null,
     commitId: args.commitId,
     path: args.path,
     line: args.line,
@@ -1923,6 +1931,7 @@ function addPRReviewCommentReplyForRepo(args: {
   repoPath: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   commentId: number
   body: string
   threadId?: string
@@ -1937,6 +1946,7 @@ function addPRReviewCommentReplyForRepo(args: {
       {
         repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         prNumber: args.prNumber,
+        prRepo: args.prRepo ?? null,
         commentId: args.commentId,
         body: args.body,
         threadId: args.threadId,
@@ -1965,6 +1975,7 @@ function addPRReviewCommentReplyForRepo(args: {
     repoId: args.repoId,
     sourceContext: args.sourceContext,
     prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null,
     commentId: args.commentId,
     body: args.body,
     threadId: args.threadId,
@@ -2001,6 +2012,7 @@ function setPRFileViewedForRepo(args: {
   repoPath: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   pullRequestId: string
   path: string
   viewed: boolean
@@ -2012,6 +2024,7 @@ function setPRFileViewedForRepo(args: {
       'github.setPRFileViewed',
       {
         repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
+        prRepo: args.prRepo ?? null,
         pullRequestId: args.pullRequestId,
         path: args.path,
         viewed: args.viewed
@@ -2038,6 +2051,7 @@ function setPRFileViewedForRepo(args: {
     repoId: args.repoId,
     sourceContext: args.sourceContext,
     prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null,
     pullRequestId: args.pullRequestId,
     path: args.path,
     viewed: args.viewed
@@ -2211,6 +2225,7 @@ type PRFilesCombinedDiffViewerProps = {
   repoId: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   prUrl: string
   headSha: string | undefined
   baseSha: string | undefined
@@ -2226,6 +2241,7 @@ function PRFilesCombinedDiffViewer({
   repoId,
   sourceContext,
   prNumber,
+  prRepo,
   prUrl,
   headSha,
   baseSha,
@@ -2270,8 +2286,7 @@ function PRFilesCombinedDiffViewer({
   const inlineReviewComments = useMemo<DecoratedDiffComment[]>(
     () =>
       comments.flatMap((comment): DecoratedDiffComment[] => {
-        // Why: stale threads keep originalLine for the sidebar, but rendering
-        // that number inline can attach the comment to unrelated current code.
+        // Why: outdated threads keep originalLine for the sidebar, but rendering it inline can attach the comment to unrelated current code.
         if (comment.isOutdated || !comment.path || typeof comment.line !== 'number') {
           return []
         }
@@ -2303,15 +2318,16 @@ function PRFilesCombinedDiffViewer({
       JSON.stringify({
         repoId,
         prNumber,
+        prRepo: prRepo ? githubRepoIdentityKey(prRepo) : null,
         headSha: headSha ?? null,
         baseSha: baseSha ?? null,
         files: diffEntrySignature
       }),
-    [baseSha, diffEntrySignature, headSha, prNumber, repoId]
+    [baseSha, diffEntrySignature, headSha, prNumber, prRepo, repoId]
   )
   const viewStateKey = useMemo(
-    () => [repoId || repoPath, prNumber].join('\0'),
-    [prNumber, repoId, repoPath]
+    () => [repoId || repoPath, prNumber, prRepo ? githubRepoIdentityKey(prRepo) : ''].join('\0'),
+    [prNumber, prRepo, repoId, repoPath]
   )
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sideBySide, setSideBySide] = useState(false)
@@ -2329,8 +2345,7 @@ function PRFilesCombinedDiffViewer({
   sectionsRef.current = sections
 
   useEffect(() => {
-    // Why: even cached restores represent a new PR/file generation; stale async
-    // diff loads from the previous view must not patch the restored sections.
+    // Why: bump generation so stale async diff loads from the previous view can't patch the restored sections.
     generationRef.current += 1
     const cached = prFilesDiffViewStateCache.get(viewStateKey)
     if (cached && cached.entrySignature === entrySignature) {
@@ -2426,6 +2441,7 @@ function PRFilesCombinedDiffViewer({
           repoId,
           sourceContext,
           prNumber,
+          prRepo,
           file,
           headSha,
           baseSha
@@ -2474,7 +2490,7 @@ function PRFilesCombinedDiffViewer({
           )
         })
     },
-    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath, sourceContext]
+    [baseSha, fileByPath, headSha, prNumber, prRepo, repoId, repoPath, sourceContext]
   )
 
   const retrySection = useCallback(
@@ -2709,6 +2725,7 @@ function PRFilesCombinedDiffViewer({
         repoId,
         sourceContext,
         prNumber,
+        prRepo,
         commitId: headSha,
         path: section.path,
         line: lineNumber,
@@ -2728,7 +2745,7 @@ function PRFilesCombinedDiffViewer({
       )
       return true
     },
-    [headSha, onCommentAdded, prNumber, repoId, repoPath, sourceContext]
+    [headSha, onCommentAdded, prNumber, prRepo, repoId, repoPath, sourceContext]
   )
 
   const renderViewedCheckbox = useCallback(
@@ -2876,6 +2893,7 @@ function CommentCodeContext({
   repoId,
   sourceContext,
   prNumber,
+  prRepo,
   files,
   headSha,
   baseSha
@@ -2885,6 +2903,7 @@ function CommentCodeContext({
   repoId: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   files: GitHubPRFile[]
   headSha: string | undefined
   baseSha: string | undefined
@@ -2908,7 +2927,16 @@ function CommentCodeContext({
       return
     }
     let cancelled = false
-    loadPRFileContents({ repoPath, repoId, sourceContext, prNumber, file, headSha, baseSha })
+    loadPRFileContents({
+      repoPath,
+      repoId,
+      sourceContext,
+      prNumber,
+      prRepo,
+      file,
+      headSha,
+      baseSha
+    })
       .then((result) => {
         if (!cancelled) {
           setContents(result)
@@ -2922,15 +2950,14 @@ function CommentCodeContext({
     return () => {
       cancelled = true
     }
-  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath, sourceContext])
+  }, [baseSha, file, headSha, line, prNumber, prRepo, repoId, repoPath, sourceContext])
 
   const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
     contextExpansionState,
     comment.id
   )
   if (resolvedContextExpansionState !== contextExpansionState) {
-    // Why: comment rows can be reused when a PR refreshes; reset before paint
-    // so expanded context from the previous comment is never shown on the next.
+    // Why: rows are reused across PR refreshes; reset before paint so the previous comment's expanded context isn't shown on the next.
     setContextExpansionState(resolvedContextExpansionState)
   }
   const contextBefore = resolvedContextExpansionState.contextBefore
@@ -3269,15 +3296,13 @@ function ConversationTab({
   }, [])
 
   if (resolvedReplyingTo !== replyingTo) {
-    // Why: comment filters/refetches can hide the active reply target; clear it
-    // before paint so a stale composer does not flash for the wrong comment set.
+    // Why: clear before paint when filters/refetches hide the reply target, so a stale composer doesn't flash for the wrong comment set.
     setReplyingTo(resolvedReplyingTo)
   }
 
   const resolvedBodyDraft = resolveGitHubBodyDraft(bodyDraft, body, bodyEditing)
   if (shouldSyncGitHubBodyDraft(bodyDraft, body, bodyEditing)) {
-    // Why: background detail refreshes can change the body while the editor is
-    // closed; reconcile before paint so reopening never sees a stale draft.
+    // Why: reconcile before paint so a background body refresh while the editor is closed doesn't show a stale draft on reopen.
     setBodyDraft(resolvedBodyDraft)
   }
 
@@ -3295,8 +3320,12 @@ function ConversationTab({
   }, [bodyEditing, cancelBodyTextareaFocusFrame])
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
   const markdownGitHubRepo = useMemo(
-    () => (projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : bodySlug),
+    () =>
+      projectOrigin
+        ? { owner: projectOrigin.owner, repo: projectOrigin.repo, host: projectOrigin.host }
+        : bodySlug,
     [bodySlug, projectOrigin]
   )
   const canEditBody =
@@ -3362,6 +3391,7 @@ function ConversationTab({
               repoId: item.repoId,
               sourceContext,
               prNumber: item.number,
+              prRepo,
               commentId: comment.id,
               body: replyBody,
               threadId: comment.threadId,
@@ -3374,7 +3404,8 @@ function ConversationTab({
               sourceContext,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
-              type: item.type
+              type: item.type,
+              prRepo
             })
 
       if (!result.ok) {
@@ -3395,6 +3426,7 @@ function ConversationTab({
       item.repoId,
       item.type,
       onCommentAdded,
+      prRepo,
       repoPath,
       sourceContext
     ]
@@ -3425,6 +3457,7 @@ function ConversationTab({
           loading={loading}
           repoPath={repoPath}
           sourceContext={sourceContext}
+          projectOrigin={projectOrigin}
           onReviewersRequested={onReviewersRequested}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
@@ -3540,6 +3573,7 @@ function ConversationTab({
           repoId={item.repoId}
           sourceContext={sourceContext}
           prNumber={item.number}
+          prRepo={prRepo}
           files={files}
           headSha={headSha}
           baseSha={baseSha}
@@ -3620,9 +3654,7 @@ function ConversationTab({
     <div
       className={cn(
         'grid min-w-0 gap-5 px-4 py-4',
-        // Why: the drawer expands nearly full-width on narrow app windows, so
-        // keep PR controls beside the conversation instead of hiding them below
-        // long review threads.
+        // Why: on narrow windows the drawer is near full-width, so keep PR controls beside the conversation, not below long threads.
         item.type === 'pr' && 'grid-cols-[minmax(0,1fr)_300px]'
       )}
     >
@@ -3800,6 +3832,7 @@ function ConversationTab({
             sourceContext={sourceContext}
             issueNumber={item.number}
             itemType={item.type}
+            prRepo={prRepo}
             mentionOptions={mentionOptions}
             onCommentAdded={onCommentAdded}
           />
@@ -3844,6 +3877,7 @@ function PRActionsPanel({
     )
   )
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
+  const prRepo = resolvePullRequestRepo(item, projectOrigin)
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
   const canMutateState = localState !== 'merged' && canMutateWithRepoContext
@@ -3907,6 +3941,7 @@ function PRActionsPanel({
         sourceContext,
         projectOrigin,
         number: item.number,
+        prRepo,
         updates: { state: nextState }
       })
       toast.success(
@@ -3959,7 +3994,7 @@ function PRActionsPanel({
                 repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
                 prNumber: item.number,
                 method,
-                prRepo: item.prRepo ?? null
+                prRepo
               },
               { timeoutMs: 30_000 }
             )
@@ -3969,7 +4004,7 @@ function PRActionsPanel({
               sourceContext,
               prNumber: item.number,
               method,
-              prRepo: item.prRepo ?? null
+              prRepo
             })
       if (!result.ok) {
         toast.error(result.error)
@@ -4016,7 +4051,7 @@ function PRActionsPanel({
                 prNumber: item.number,
                 enabled,
                 method: enabled ? mergeMethods.defaultMethod : undefined,
-                prRepo: item.prRepo ?? null
+                prRepo
               },
               { timeoutMs: 30_000 }
             )
@@ -4027,7 +4062,7 @@ function PRActionsPanel({
               prNumber: item.number,
               enabled,
               method: enabled ? mergeMethods.defaultMethod : undefined,
-              prRepo: item.prRepo ?? null
+              prRepo
             })
       if (!result.ok) {
         toast.error(result.error)
@@ -4373,8 +4408,7 @@ function getChecksSummaryLabel(checks: PRCheckDetail[]): string {
   if (counts.failing > 0) {
     return `${counts.failing} ${counts.failing === 1 ? 'check' : 'checks'} failing`
   }
-  // Why: action_required (e.g. a workflow awaiting approval) blocks merge but is
-  // not a failure; call it out distinctly so users know a manual step is needed.
+  // Why: action_required (e.g. workflow awaiting approval) blocks merge but isn't a failure, so surface it distinctly.
   if (counts.needsAction > 0) {
     return `${counts.needsAction} ${counts.needsAction === 1 ? 'check needs' : 'checks need'} action`
   }
@@ -4443,8 +4477,7 @@ function ChecksTab({
   const mountedRef = useMountedRef()
   const resolvedChecksState = resolveGitHubChecksTabState(checksState, checks)
   if (resolvedChecksState !== checksState) {
-    // Why: parent check refreshes replace the source list; clear local refresh
-    // and inline detail state before stale rows/details can paint.
+    // Why: reconcile before paint when a parent check refresh replaces the source list, so stale rows/details never show.
     setChecksState(resolvedChecksState)
   }
   const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
@@ -4536,7 +4569,7 @@ function ChecksTab({
     },
     [item, targetRepoId]
   )
-  const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
   const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const sorted = [...list].sort(
@@ -4600,6 +4633,7 @@ function ChecksTab({
             sourceContext,
             prNumber: item.number,
             headSha,
+            prRepo,
             noCache: true
           }))) as PRCheckDetail[]
       setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
@@ -4643,7 +4677,8 @@ function ChecksTab({
                 repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
                 prNumber: item.number,
                 headSha,
-                failedOnly
+                failedOnly,
+                prRepo
               },
               { timeoutMs: 30_000 }
             )
@@ -4653,7 +4688,8 @@ function ChecksTab({
               sourceContext,
               prNumber: item.number,
               headSha,
-              failedOnly
+              failedOnly,
+              prRepo
             })
         if (!result.ok) {
           toast.error(result.error)
@@ -4681,6 +4717,7 @@ function ChecksTab({
       headSha,
       item.number,
       item.repoId,
+      prRepo,
       runtimeHost,
       rerunning,
       repoId,
@@ -5518,16 +5555,10 @@ function MentionTextarea({
   )
 }
 
-// Why: when the dialog opens for a Project row whose repo differs from the
-// active workspace, mutations must target the row's actual repo via
-// slug-addressed IPCs. Otherwise edits silently apply to the workspace's
-// repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
-// to a thrown rejection so the existing `useImmediateMutation` flow
-// (which expects throws on failure) continues to work unchanged.
+// Why: Project-row mutations must target the row's repo via slug-addressed IPCs, else edits silently apply to the active workspace's repo.
 function getGitHubMutationSettings(repoId: string | null | undefined) {
   const state = useAppStore.getState()
-  // Why: project-origin mutations are slug-addressed, but when we know the
-  // backing repo id they must still execute on that repo's owner host.
+  // Why: slug-addressed project-origin mutations must still run on the backing repo's owner host when we know its id.
   return getSettingsForRepoRuntimeOwner(state, repoId ?? null)
 }
 
@@ -5548,6 +5579,7 @@ async function runIssueUpdate(args: {
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
+      host: githubProjectHost(args.projectOrigin.host),
       number: args.number,
       updates: args.updates
     }
@@ -5628,7 +5660,11 @@ async function runWorkItemBodyUpdate(args: {
 }): Promise<void> {
   if (args.item.type === 'pr') {
     const targetSlug = args.projectOrigin
-      ? { owner: args.projectOrigin.owner, repo: args.projectOrigin.repo }
+      ? {
+          owner: args.projectOrigin.owner,
+          repo: args.projectOrigin.repo,
+          host: args.projectOrigin.host
+        }
       : args.parsedSlug
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
@@ -5641,6 +5677,7 @@ async function runWorkItemBodyUpdate(args: {
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
+      host: githubProjectHost(targetSlug.host),
       number: args.item.number,
       updates: { body: args.body }
     }
@@ -5689,6 +5726,7 @@ async function runPullRequestStateUpdate(args: {
   sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   number: number
+  prRepo?: GitHubOwnerRepo | null
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
@@ -5700,6 +5738,7 @@ async function runPullRequestStateUpdate(args: {
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
+      host: githubProjectHost(args.projectOrigin.host),
       number: args.number,
       updates: args.updates
     }
@@ -5746,6 +5785,7 @@ async function runPullRequestStateUpdate(args: {
           {
             repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
             prNumber: args.number,
+            prRepo: args.prRepo ?? null,
             updates: args.updates
           },
           { timeoutMs: 30_000 }
@@ -5755,6 +5795,7 @@ async function runPullRequestStateUpdate(args: {
           repoId: args.repoId ?? undefined,
           sourceContext: args.sourceContext,
           prNumber: args.number,
+          prRepo: args.prRepo ?? null,
           updates: args.updates
         })
   if (!res.ok) {
@@ -5797,9 +5838,7 @@ function GHEditSection({
   localLabels: string[]
   onStateChange: (state: GitHubWorkItem['state']) => void
   onLabelsChange: (labels: string[]) => void
-  /** Why: called after a successful issue mutation so the parent dialog can
-   *  invalidate its work-item-details cache entry. Without this, reopening the
-   *  drawer in the FRESH_MS window would paint pre-mutation data. */
+  /** Called after a successful issue mutation so the parent can invalidate its details cache; otherwise a reopen within FRESH_MS paints pre-mutation data. */
   onMutated: () => void
   assignees: string[]
   onUse: (item: GitHubWorkItem) => void
@@ -5825,11 +5864,7 @@ function GHEditSection({
     [repoOwnerSettings, sourceContext]
   )
   const { isPending, run } = useImmediateMutation()
-  // Why: when the dialog opens from a Project view, mutations route through
-  // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
-  // `workItemsCache` — `patchWorkItem` only walks the latter, so without this
-  // helper the Project table would render stale data until manual refresh.
-  // See docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
+  // Why: patchWorkItem only updates workItemsCache; Project-view rows also need projectViewCache patched or the table stays stale. See docs/design/github-project-view-tasks.md.
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
       if (!projectOrigin) {
@@ -5840,9 +5875,7 @@ function GHEditSection({
     [projectOrigin, patchProjectRowContent]
   )
 
-  // Why: when projectOrigin is set we MUST read labels/assignees from the
-  // row's repo, not from the workspace path — otherwise the popovers list
-  // values from a different repo than the writes target.
+  // Why: with projectOrigin set, read labels/assignees from the row's repo (not workspace path) so popovers match where writes target.
   const slugOwner = projectOrigin?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
@@ -5850,19 +5883,28 @@ function GHEditSection({
     projectOrigin ? null : repoId,
     sourceSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)
+  const repoLabelsBySlug = useRepoLabelsBySlug(
+    slugOwner,
+    slugRepo,
+    sourceSettings,
+    projectOrigin?.host
+  )
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
     sourceSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(
+    slugOwner,
+    slugRepo,
+    assignees,
+    sourceSettings,
+    projectOrigin?.host
+  )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
-  // Why: sync local assignees when item changes or when the detail fetch
-  // resolves with real data — but skip if the user already made an
-  // optimistic edit so we don't clobber in-flight changes.
+  // Why: sync local assignees on item change / detail resolve, but skip if the user made an optimistic edit so we don't clobber in-flight changes.
   useEffect(() => {
     if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
@@ -6004,8 +6046,7 @@ function GHEditSection({
         ? prevAssignees.filter((l) => l !== login)
         : [...prevAssignees, login]
 
-      // Why: the optimistic guard is scoped to this repo item so switching
-      // items does not suppress the next item's assignee sync.
+      // Why: scope the optimistic guard to this repo item so switching items doesn't suppress the next item's assignee sync.
       editedAssigneesItemKeyRef.current = assigneesItemKey
       if (isAssigned) {
         run('assignees', {
@@ -6275,6 +6316,7 @@ function GHCommentComposer({
   sourceContext,
   issueNumber,
   itemType,
+  prRepo,
   mentionOptions,
   onCommentAdded
 }: {
@@ -6284,6 +6326,7 @@ function GHCommentComposer({
   sourceContext?: TaskSourceContext | null
   issueNumber: number
   itemType: 'issue' | 'pr'
+  prRepo?: GitHubOwnerRepo | null
   mentionOptions: MentionOption[]
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
@@ -6323,7 +6366,8 @@ function GHCommentComposer({
         sourceContext,
         number: issueNumber,
         body: bodyState.body,
-        type: itemType
+        type: itemType,
+        prRepo
       })
       if (!mountedRef.current) {
         return
@@ -6331,8 +6375,7 @@ function GHCommentComposer({
       if (result.ok) {
         setBody('')
         requestAnimationFrame(autoGrow)
-        // Why: use the comment returned by GitHub so the optimistic row shows
-        // the real login/avatar immediately instead of waiting for a reopen.
+        // Why: use GitHub's returned comment so the optimistic row shows the real login/avatar without a reopen.
         onCommentAdded(result.comment)
       } else {
         toast.error(
@@ -6362,6 +6405,7 @@ function GHCommentComposer({
     sourceContext,
     issueNumber,
     itemType,
+    prRepo,
     onCommentAdded
   ])
   const canSubmitComment = hasBoundedCommentBodyText(body)
@@ -6417,8 +6461,7 @@ function GHCommentComposer({
   )
 }
 
-// Why: the issue-source indicator is issue-only and lives on GitHubItemDialog;
-// PullRequestPage doesn't render it.
+// Note: the issue-source indicator is issue-only and lives on GitHubItemDialog, not here.
 
 export default function PullRequestPage({
   workItem,
@@ -6440,8 +6483,7 @@ export default function PullRequestPage({
   const [linkCopyState, setLinkCopyState] = useState(() => createGitHubLinkCopyState(workItemId))
   const resolvedLinkCopyState = resolveGitHubLinkCopyState(linkCopyState, workItemId)
   if (resolvedLinkCopyState !== linkCopyState) {
-    // Why: switching GitHub items should not paint a stale copied indicator
-    // from the previous item while waiting for a passive Effect pass.
+    // Why: reconcile before paint so switching items doesn't flash the previous item's copied indicator.
     setLinkCopyState(resolvedLinkCopyState)
   }
   const linkCopied = resolvedLinkCopyState.copied
@@ -6461,11 +6503,7 @@ export default function PullRequestPage({
     ? getGithubPrWorkspaceAttachmentLabel(attachedWorkspace)
     : null
 
-  // Why: the cache key has to include the issue source preference so a user
-  // toggling between origin/upstream for the same issue number doesn't read
-  // back the wrong repo's details. We pull it from the repos slice rather
-  // than threading it as a prop because every existing call site already has
-  // the repo registered in the store.
+  // Why: key must include issue source preference so origin/upstream toggles for the same issue number don't read back the wrong repo's details.
   const issueSourcePreference = useAppStore((s) => {
     if (!repoPath && !effectiveRepoId) {
       return undefined
@@ -6496,8 +6534,7 @@ export default function PullRequestPage({
     issueSourcePreference
   ])
 
-  // Why: reset lifted edit state when the dialog switches items or when the
-  // same item receives an optimistic cache patch from the surrounding table.
+  // Why: reset lifted edit state on item switch or when the same item gets an optimistic cache patch from the table.
   useEffect(() => {
     if (workItemState && workItemLabels) {
       setLocalState(workItemState)
@@ -6548,20 +6585,12 @@ export default function PullRequestPage({
     }
   }, [effectiveRepoId, handleUseWorkItem, workItem])
 
-  // Why: track comments added optimistically before the detail fetch resolves
-  // so they can be merged into the fetch result instead of being overwritten.
+  // Why: hold optimistically-added comments so they merge into the fetch result instead of being overwritten.
   const optimisticCommentsRef = useRef<PRComment[]>([])
-  // Why: track the last item we fetched so we can distinguish "reopen same
-  // item" from "switch to a different item". Reopening the same item must
-  // preserve optimistic comments because gh's 60s response cache will return
-  // stale data that doesn't include the just-posted comment.
+  // Why: track last fetched item to distinguish reopen from switch — reopen must preserve optimistic comments since gh's 60s cache omits the just-posted one.
   const prevItemIdRef = useRef<string | null>(null)
 
-  // Why: when this dialog opens immediately after another Radix overlay
-  // (e.g. the New Issue dialog) closed, Radix may leave `pointer-events: none`
-  // on <body>. That silently kills clicks on the header's Close/open-in-GitHub
-  // buttons. Poll a few frames to clear it whenever Radix re-applies it during
-  // its own mount sequence.
+  // Why: Radix can leave `pointer-events: none` on <body> when opening right after another overlay closes, killing header clicks; poll a few frames to clear it.
   useEffect(() => {
     if (!workItem) {
       return
@@ -6590,10 +6619,7 @@ export default function PullRequestPage({
     }
   }, [workItem])
 
-  // Why: subscribe to the module-level cache so reopening a cached item
-  // paints synchronously on first render. getSnapshot returns the entry
-  // object directly — touchWorkItemDetailsCache writes always replace entry
-  // identity (delete+set), so Map.get is referentially stable between writes.
+  // Why: subscribe to the module cache so reopening a cached item paints synchronously; writes replace entry identity (delete+set), so Map.get is a stable snapshot.
   const cachedEntry = useSyncExternalStore(
     subscribeWorkItemDetailsCache,
     useCallback(
@@ -6602,24 +6628,15 @@ export default function PullRequestPage({
     )
   )
 
-  // Why: bumped by appendOptimisticComment on cold open (no cached details
-  // yet) so the details memo re-runs and surfaces the optimistic comment via
-  // the loading-shell fallback. Without this, the comment would sit in the
-  // ref alone and not render until the in-flight fetch lands. The cache
-  // notify path handles the warm case.
+  // Why: bumped on cold open (no cached details) so the details memo re-runs and surfaces the optimistic comment via the loading shell; cache-notify handles the warm case.
   const [optimisticTick, setOptimisticTick] = useState(0)
 
-  // Why: merge optimistic comments into the cached details. Keyed off
-  // cachedEntry identity (stable) rather than the optimistic ref array (a
-  // fresh array each render) to avoid unnecessary recomputation. Cache
-  // notifications after optimistic writes will re-render this anyway.
+  // Why: merge optimistic comments into cached details; keyed off stable cachedEntry identity (not the per-render ref array) to avoid needless recompute.
   const details = useMemo<GitHubWorkItemDetails | null>(() => {
     const cachedDetails = cachedEntry?.details ?? null
     const opt = optimisticCommentsRef.current
     if (!cachedDetails) {
-      // Why: details may still be loading on a cold open — surface optimistic
-      // comments via a minimal shell so a comment posted before the fetch
-      // resolves isn't held invisibly in ref-land.
+      // Why: on a cold open details may still be loading; surface optimistic comments via a minimal shell so a just-posted comment isn't held invisibly in the ref.
       if (opt.length > 0 && workItem) {
         return { item: workItem, body: '', comments: [...opt] }
       }
@@ -6637,11 +6654,7 @@ export default function PullRequestPage({
       ...cachedDetails,
       comments: [...cachedDetails.comments, ...missing]
     }
-    // Why: optimisticTick is the rerender signal for cold-open writes — the
-    // memo reads optimisticCommentsRef.current (a ref, no subscription), so
-    // bumping the tick is what forces this memo to re-run. The lint flags it
-    // as "unnecessary" because it's not referenced in the body, but removing
-    // it would silently break the cold-open optimistic-shell path.
+    // Why: optimisticTick isn't read in the body but is the rerender signal for cold-open writes (memo reads a ref); removing it breaks the optimistic shell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cachedEntry, workItem, optimisticTick])
 
@@ -6649,10 +6662,7 @@ export default function PullRequestPage({
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
   const detailsLoaded = Boolean(cachedEntry?.details)
 
-  // Why: if a cross-window mutation invalidates the open drawer's entry
-  // (cachedEntry becomes undefined while workItem is still set), the main
-  // fetch effect won't re-run because its deps haven't changed. Bump a local
-  // tick so the fetch effect fires a refetch in that case.
+  // Why: if a cross-window mutation invalidates the open drawer's entry (cachedEntry undefined, fetch deps unchanged), bump a tick so it refetches.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
     if (workItem && detailsCacheKey && !cachedEntry) {
@@ -6664,11 +6674,7 @@ export default function PullRequestPage({
     if (!workItem || !effectiveRepoId || !detailsCacheKey || !canUseDetailsRepoContext) {
       return
     }
-    // Why: only clear optimistic comments when switching to a genuinely
-    // different item. When reopening the same item (close → reopen), the
-    // gh API's 60s response cache will return stale data that omits the
-    // just-posted comment — preserving the optimistic ref lets the merge
-    // logic above re-attach it to the stale response.
+    // Why: only clear optimistic comments on a genuine item switch; on reopen gh's 60s cache omits the just-posted comment, so preserve the ref for re-merge.
     if (workItem.id !== prevItemIdRef.current) {
       optimisticCommentsRef.current = []
     }
@@ -6682,9 +6688,7 @@ export default function PullRequestPage({
       return
     }
 
-    // Why: dedupe concurrent opens for the same key — concurrent dialogs or
-    // a rapid close→reopen must share one in-flight promise instead of
-    // racing two `gh` subprocesses against each other.
+    // Why: dedupe concurrent opens on the same key so a rapid close→reopen shares one in-flight promise instead of racing two `gh` subprocesses.
     const inflight: Promise<GitHubWorkItemDetails | null> =
       cached?.pending ??
       lookupGitHubWorkItemDetailsForSource({
@@ -6695,9 +6699,7 @@ export default function PullRequestPage({
         type: workItem.type
       })
 
-    // Why: snapshot the invalidation generation at fetch start; if the
-    // generation advances before we resolve, a mutation invalidated the
-    // entry mid-flight and we must not write a stale result back.
+    // Why: snapshot the generation so a mid-flight invalidation (generation advance) blocks writing a stale result back.
     const launchedAtGeneration = workItemDetailsCacheGeneration
 
     if (!cached?.pending) {
@@ -6714,8 +6716,7 @@ export default function PullRequestPage({
         const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
         const prev = workItemDetailsCache.get(detailsCacheKey)
         if (invalidatedMidFlight && prev?.pending !== inflight) {
-          // Why: entry was deliberately dropped; do not recreate it. If the
-          // entry still exists (later open repopulated it) leave it alone too.
+          // Why: entry was deliberately dropped (or later repopulated) — don't recreate or clobber it.
           return
         }
         // Why: null means unavailable/not found, not loaded empty content.
@@ -6746,9 +6747,7 @@ export default function PullRequestPage({
         if (invalidatedMidFlight && prev?.pending !== inflight) {
           return
         }
-        // Why: stale-on-error — keep cached data if we have it, drop the
-        // pending promise so the next open can retry. Only surface the
-        // blocking error when nothing is cached.
+        // Why: stale-on-error — keep cached data, drop the pending promise so next open retries; surface the error only when nothing is cached.
         touchWorkItemDetailsCache(detailsCacheKey, {
           details: prev?.details ?? null,
           fetchedAt: prev?.fetchedAt ?? 0,
@@ -6765,8 +6764,7 @@ export default function PullRequestPage({
     refetchTick
   ])
 
-  // Why: the state pill's icon must track the resolved state so a merged PR
-  // reads as merged (purple GitMerge) rather than wearing the open-PR glyph.
+  // Why: icon must track resolved state so a merged PR reads as merged, not as the open-PR glyph.
   const Icon =
     workItem?.type === 'pr'
       ? localState === 'merged'
@@ -6791,8 +6789,7 @@ export default function PullRequestPage({
     if (!workItem || details?.item.reviewRequests === undefined) {
       return
     }
-    // Why: PR details can carry fresher reviewer metadata than the list row;
-    // push it back so the Tasks review chip doesn't keep a stale snapshot.
+    // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
     onReviewRequestsChange?.(
       { id: workItem.id, repoId: workItem.repoId },
       details.item.reviewRequests
@@ -6805,8 +6802,7 @@ export default function PullRequestPage({
   const filesUnavailable = details?.filesUnavailable ?? false
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
-  // Why: clipboard IPC can resolve after the page unmounts; skip copied-state
-  // feedback instead of starting its reset timer on a stale surface.
+  // Why: clipboard IPC can resolve after unmount; skip copied-state feedback rather than start a reset timer on a stale surface.
   const linkCopyMountedRef = useRef(false)
   const linkCopiedResetTimerRef = useRef<number | null>(null)
   const clearLinkCopiedResetTimer = useCallback((): void => {
@@ -6820,8 +6816,7 @@ export default function PullRequestPage({
     (node: HTMLButtonElement | null) => {
       linkCopyMountedRef.current = node !== null
       if (node === null) {
-        // Why: the copied-state timer belongs to the copy control surface;
-        // clear it when that surface detaches without a passive cleanup Effect.
+        // Why: clear the copied-state timer on ref detach instead of via a passive cleanup Effect.
         clearLinkCopiedResetTimer()
       }
     },
@@ -6833,8 +6828,7 @@ export default function PullRequestPage({
       return
     }
     try {
-      // Why: Electron's clipboard IPC is reliable even when browser clipboard
-      // APIs lose focus/activation inside nested overlay surfaces.
+      // Why: Electron clipboard IPC works even when browser clipboard APIs lose focus/activation in nested overlays.
       await window.api.ui.writeClipboardText(workItem.url)
       if (!linkCopyMountedRef.current) {
         return
@@ -6856,15 +6850,9 @@ export default function PullRequestPage({
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
-      // Why: skip refreshDetails() — gh api --cache 60s returns stale data
-      // that overwrites the optimistic comment. The next dialog open (after
-      // cache expiry) will pick up the server-confirmed version.
+      // Why: skip refreshDetails() — gh api --cache 60s returns stale data that would overwrite the optimistic comment.
       optimisticCommentsRef.current.push(comment)
-      // Why: write through the module-level cache so subscribers (this
-      // drawer plus any concurrent ones on the same item) re-render with the
-      // optimistic comment. Mark fetchedAt as stale (0) so the next open
-      // still triggers a background refresh to pick up server-side fields
-      // like reaction groups or thread bindings.
+      // Why: write through the shared cache so subscribers re-render; fetchedAt=0 forces a background refresh next open for server-side fields.
       if (detailsCacheKey) {
         const prev = workItemDetailsCache.get(detailsCacheKey)
         if (prev?.details) {
@@ -6882,10 +6870,7 @@ export default function PullRequestPage({
           }
         }
       }
-      // Why: when the cache has no details yet (still loading), no cache
-      // write/notify fires above. Bump local state so the details memo
-      // re-runs and surfaces the optimistic comment via the loading-shell
-      // fallback instead of holding it invisibly in the ref.
+      // Why: cache empty (still loading) so no write/notify above; bump local state so the memo re-runs and surfaces the optimistic comment.
       setOptimisticTick((n) => n + 1)
     },
     [detailsCacheKey]
@@ -6895,8 +6880,7 @@ export default function PullRequestPage({
     if (!workItem) {
       return
     }
-    // Why: local repos can invalidate every source-preference variant; runtime-only
-    // entries need their exact source-scoped key because there is no local path.
+    // Why: local repos invalidate all source-preference variants; runtime-only entries need their exact source-scoped key (no local path).
     if (repoPath) {
       invalidateWorkItemDetailsCacheByMatch({
         repoPath,
@@ -6938,6 +6922,7 @@ export default function PullRequestPage({
           repoPath: repoPath ?? '',
           sourceContext,
           prNumber: workItem.number,
+          prRepo: resolvePullRequestRepo(workItem, projectOrigin),
           pullRequestId: details.pullRequestId,
           path,
           viewed
@@ -6967,6 +6952,7 @@ export default function PullRequestPage({
       canUseDetailsRepoContext,
       details?.pullRequestId,
       detailsCacheKey,
+      projectOrigin,
       repoPath,
       sourceContext,
       workItem
@@ -7073,8 +7059,7 @@ export default function PullRequestPage({
             </span>
           </h1>
           <div className="flex shrink-0 items-center gap-2">
-            {/* Why: Orca's signature affordance — keep this primary so it stands out
-                against GitHub's familiar surface. */}
+            {/* Why: Orca's signature affordance — keep primary so it stands out against GitHub's familiar surface. */}
             <DropdownMenu modal={false}>
               <ButtonGroup>
                 <Button
@@ -7149,8 +7134,7 @@ export default function PullRequestPage({
                 translate('auto.components.PullRequestPage.77d9388fb0', 'unknown')}
             </span>
           </span>
-          {/* Why: the scannable base ← head idiom reads faster than a prose
-              sentence and matches how reviewers think about merge direction. */}
+          {/* Why: base ← head scans faster than prose and matches how reviewers think about merge direction. */}
           <span className="flex flex-wrap items-center gap-1.5">
             {baseBranch ? (
               <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[12px] text-foreground">
@@ -7216,9 +7200,7 @@ export default function PullRequestPage({
             onValueChange={(value) => setTab(value as ItemDialogTab)}
             className="flex h-full min-h-0 flex-col gap-0"
           >
-            {/* Why: page-level tabs sit on a flat strip; the line variant
-                already paints an underline under the active tab via its own
-                ::after, so don't add a second border that boxes the trigger. */}
+            {/* Why: the line variant already underlines the active tab via ::after; a second border would box the trigger. */}
             <TabsList
               variant="line"
               className="mx-0 justify-start gap-2 border-b border-border/60 bg-transparent px-6"
@@ -7314,8 +7296,7 @@ export default function PullRequestPage({
                     <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : filesUnavailable && files.length === 0 ? (
-                  // Why: the file fetch failed (rate limit, auth, unresolved
-                  // remote); offer a retry instead of implying the PR is empty.
+                  // Why: fetch failed (rate limit/auth/unresolved remote); offer retry instead of implying the PR is empty.
                   <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
                     <div className="text-[12px] text-muted-foreground">
                       {translate(
@@ -7340,6 +7321,7 @@ export default function PullRequestPage({
                     repoId={effectiveRepoId ?? ''}
                     sourceContext={sourceContext}
                     prNumber={workItem.number}
+                    prRepo={resolvePullRequestRepo(workItem, projectOrigin)}
                     prUrl={workItem.url}
                     headSha={details?.headSha}
                     baseSha={details?.baseSha}

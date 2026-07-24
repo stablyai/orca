@@ -16,6 +16,7 @@
 
 require "base64"
 require "json"
+require_relative "ios_release_version"
 
 default_platform(:ios)
 
@@ -66,25 +67,6 @@ def current_mobile_version(config)
   config.fetch("expo").fetch("version")
 end
 
-def truthy_option?(value)
-  %w[1 true yes on].include?(value.to_s.strip.downcase)
-end
-
-def bump_patch_version(version)
-  match = version.match(/\A(\d+)\.(\d+)\.(\d+)\z/)
-  UI.user_error!("Cannot bump non-semver mobile version '#{version}'") unless match
-
-  "#{match[1]}.#{match[2]}.#{match[3].to_i + 1}"
-end
-
-def resolve_requested_version(options, config)
-  requested = options[:version].to_s.strip
-  return requested unless requested.empty?
-
-  current_version = current_mobile_version(config)
-  truthy_option?(options[:bump_patch]) ? bump_patch_version(current_version) : current_version
-end
-
 # Returns true when `version`'s App Store train is closed to new build uploads.
 # `app` is a Spaceship::ConnectAPI::App the caller looks up (nil if lookup
 # failed). On a nil app or any API error, degrade to "open": we then proceed as
@@ -113,13 +95,7 @@ platform :ios do
   lane :prepare_release_version do |options|
     api_key = app_store_connect_api_key_from_env
     config = load_mobile_app_config
-    version = resolve_requested_version(options, config)
 
-    # Fail fast (seconds) if the resolved version's App Store train is already
-    # closed: Apple would otherwise reject the upload ~20 min later with 90186.
-    # Bumping the version is left to the human (the bump_patch input or a
-    # "Prepare mobile X" commit) so the marketing version stays a deliberate,
-    # release-notes-bearing decision rather than something CI invents.
     app =
       begin
         Spaceship::ConnectAPI::App.find(BUNDLE_ID)
@@ -127,11 +103,31 @@ platform :ios do
         UI.error("Could not look up App Store app #{BUNDLE_ID} (#{error.message}); skipping closed-train check.")
         nil
       end
+    version =
+      begin
+        IosReleaseVersion.resolve(
+          requested: options[:version],
+          bump_patch: options[:bump_patch],
+          current_version: current_mobile_version(config),
+          train_closed: ->(candidate) { version_train_closed?(app, candidate) },
+        )
+      rescue ArgumentError => error
+        UI.user_error!(error.message)
+      end
+
+    # Explicit and checked-in versions still fail fast when closed. Patch bumps
+    # skip closed trains above because workflow-only releases can outpace Git.
     if version_train_closed?(app, version)
+      retry_guidance =
+        if IosReleaseVersion.truthy?(options[:bump_patch])
+          "Use a higher release_version or land a \"Prepare mobile <version>\" commit."
+        else
+          "Re-dispatch with bump_patch_version: true (or a higher release_version), " \
+            "or land a \"Prepare mobile <version>\" commit."
+        end
       UI.user_error!(
         "iOS version #{version} is already submitted/released on the App Store and cannot accept " \
-        "new builds. Re-dispatch with bump_patch_version: true (or a higher release_version), " \
-        "or land a \"Prepare mobile <version>\" commit.",
+        "new builds. #{retry_guidance}",
       )
     end
 

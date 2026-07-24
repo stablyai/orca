@@ -21,7 +21,12 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared
 
 export { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 
-type CacheEntry<T> = { data: T | null; fetchedAt: number; linkedReviewHintKey?: string }
+type CacheEntry<T> = {
+  data: T | null
+  fetchedAt: number
+  linkedReviewHintKey?: string
+  branchLookupGitHubPRNumber?: number
+}
 type FetchOptions = {
   force?: boolean
   repoId?: string
@@ -448,7 +453,16 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                 hostedReviewCache: withHostedReviewCacheEntry(state.hostedReviewCache, cacheKey, {
                   data: review,
                   fetchedAt: Date.now(),
-                  linkedReviewHintKey: hintKey
+                  linkedReviewHintKey: hintKey,
+                  // Why: fallback PR hints come from this branch's PR cache; preserve that provenance separately from request identity.
+                  ...(review?.provider === 'github' &&
+                  options?.linkedGitHubPR == null &&
+                  options?.linkedGitLabMR == null &&
+                  options?.linkedBitbucketPR == null &&
+                  options?.linkedAzureDevOpsPR == null &&
+                  options?.linkedGiteaPR == null
+                    ? { branchLookupGitHubPRNumber: review.number }
+                    : {})
                 })
               }
             })

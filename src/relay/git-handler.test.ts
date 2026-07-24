@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: this file covers ~14 distinct relay git
-   handlers plus the addWorktree state machine (--no-track + push.autoSetupRemote
-   probe/write across four flow branches). Splitting per-handler would scatter
-   related coverage without a meaningful boundary. */
+/* eslint-disable max-lines -- Why: one file covers ~14 relay git handlers + the addWorktree state machine; splitting would scatter related coverage. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
@@ -501,10 +498,7 @@ describe('GitHandler', () => {
       expect(staged!.removed).toBe(1)
     })
 
-    // Why: regression for issue #1503 — git's default core.quotePath=true
-    // emits non-ASCII paths as octal-escaped, double-quoted strings (e.g.
-    // "docs/\346\227\245\346\234\254\350\252\236/sample.md"), which made the
-    // sidebar show gibberish and broke downstream blob reads.
+    // Why: regression for #1503 — default core.quotePath=true octal-escapes non-ASCII paths (breaks sidebar + blob reads).
     it('preserves UTF-8 paths in status output', async () => {
       gitInit(tmpDir)
       const utf8Dir = path.join(tmpDir, 'docs', '日本語')
@@ -521,10 +515,7 @@ describe('GitHandler', () => {
       expect(entry!.path).toBe('docs/日本語/sample.md')
     })
 
-    // Why: regression for issue #1503 on the porcelain v2 type-1 entry parser
-    // branch (tracked + modified). The existing UTF-8 test exercises only the
-    // untracked '?' branch; this one exercises the path-reconstruction code in
-    // parseStatusOutput that joins parts.slice(8).
+    // Why: regression for #1503 on the porcelain v2 type-1 (tracked+modified) parser branch, which the untracked '?' test misses.
     it('preserves UTF-8 paths for tracked-modified entries', async () => {
       gitInit(tmpDir)
       const utf8Dir = path.join(tmpDir, 'docs', '日本語')
@@ -682,8 +673,7 @@ describe('GitHandler', () => {
       )
     })
 
-    // Why: `git submodule add` against a local path is blocked since git 2.38
-    // unless protocol.file.allow=always is set explicitly.
+    // Why: `git submodule add` against a local path is blocked since git 2.38 unless protocol.file.allow=always is set.
     function addSubmodule(parent: string, name: string): string {
       const src = mkdtempSync(path.join(tmpdir(), 'relay-subsrc-'))
       extraDirs.push(src)
@@ -772,9 +762,7 @@ describe('GitHandler', () => {
       expect(result.modifiedContent).toBe(`Subproject commit ${newOid}\n`)
     })
 
-    // Why: a moved gitlink with a clean submodule worktree has no uncommitted
-    // rows, so status/diff must surface the committed file changes between the
-    // recorded and checked-out commits.
+    // Why: a moved gitlink with a clean submodule has no uncommitted rows, so status/diff must surface the committed commit-range changes.
     it('lists commit-range files and diffs them when the pointer moved', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
@@ -1038,16 +1026,13 @@ describe('GitHandler', () => {
       }
     })
 
-    // Why: regression for issue #1503 on the branch-diff path. Without
-    // -c core.quotePath=false the diff --name-status output is octal-escaped,
-    // which broke the "Committed on branch" file list.
+    // Why: regression for #1503 on the branch-diff path; without -c core.quotePath=false diff paths are octal-escaped.
     it('preserves UTF-8 paths in branch-compare entries', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
       gitCommit(tmpDir, 'initial')
 
-      // Capture the default branch name before switching, so the test works
-      // regardless of whether git's init.defaultBranch is master or main.
+      // Capture the default branch name so the test works regardless of init.defaultBranch (master vs main).
       const baseRef = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
@@ -1495,10 +1480,7 @@ describe('GitHandler', () => {
       await expect(retry).rejects.toThrow('commitOid must be a full git object id')
     })
 
-    // Why: regression for issue #1503 on git.branchDiff. The branchCompare test
-    // covers loadBranchChanges in git-handler.ts, but branchDiffEntries in
-    // git-handler-ops.ts is a separate code path that also passes
-    // -c core.quotePath=false and must round-trip UTF-8.
+    // Why: regression for #1503 on git.branchDiff — branchDiffEntries is a separate quotePath=false path that must round-trip UTF-8.
     it('preserves UTF-8 paths in branch-diff entries', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
@@ -1521,11 +1503,7 @@ describe('GitHandler', () => {
         filePath: 'docs/日本語/sample.md'
       })) as Record<string, unknown>[]
 
-      // Without includePatch, branchDiffEntries returns one stub entry per
-      // changed file. Asserting length===1 confirms the filter matched the
-      // raw UTF-8 path emitted by `git diff --name-status` — if quotePath
-      // were left at default, the entry's path would be the octal-quoted
-      // form and the filter at git-handler-ops.ts:230-237 would not match.
+      // length===1 confirms the path filter matched the raw UTF-8 path; octal-quoted (default quotePath) wouldn't match.
       expect(result).toHaveLength(1)
     })
   })
@@ -1546,10 +1524,7 @@ describe('GitHandler', () => {
     })
 
     it('reports ahead/behind counts against a real upstream remote', async () => {
-      // Why: the upstream branch exists but isn't configured — exercise the
-      // full path through `git rev-parse HEAD@{u}` + `rev-list --left-right`
-      // so a future refactor can't silently break the happy-path roundtrip
-      // the no-upstream test doesn't cover.
+      // Why: exercise the configured-upstream happy path (rev-parse HEAD@{u} + rev-list --left-right) the no-upstream test misses.
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
@@ -1575,9 +1550,7 @@ describe('GitHandler', () => {
           stdio: 'pipe'
         })
 
-        // Add two local commits (ahead=2), then reset behind the remote tip
-        // and add one different commit so we end up ahead=1, behind=0 vs.
-        // upstream; then reset to first commit to produce behind=1 ahead=0.
+        // Juggle local commits/resets to produce specific ahead/behind counts vs. upstream.
         writeFileSync(path.join(tmpDir, 'ahead1.txt'), 'a1')
         gitCommit(tmpDir, 'ahead1')
         writeFileSync(path.join(tmpDir, 'ahead2.txt'), 'a2')
@@ -1652,8 +1625,7 @@ describe('GitHandler', () => {
           dispatcher.callRequest('git.fetch', { worktreePath: tmpDir })
         ).resolves.not.toThrow()
 
-        // FETCH_HEAD is created by any successful fetch, confirming the
-        // remote was actually contacted (not just silently no-op'd).
+        // FETCH_HEAD exists only after a successful fetch, confirming the remote was actually contacted.
         await expect(fs.access(path.join(tmpDir, '.git', 'FETCH_HEAD'))).resolves.toBeUndefined()
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })
@@ -1892,10 +1864,7 @@ describe('GitHandler', () => {
     })
 
     it('rethrows upstreamStatus failures that are not "no upstream configured"', async () => {
-      // Why: the handler's catch is narrowed to only swallow the expected
-      // "no upstream" signal. A non-repo path should surface its error rather
-      // than silently returning hasUpstream=false, which would mask auth or
-      // corruption failures in production.
+      // Why: the catch only swallows "no upstream"; other errors must surface so auth/corruption failures aren't masked.
       const nonRepoDir = path.join(tmpDir, 'not-a-repo')
       await fs.mkdir(nonRepoDir, { recursive: true })
 
@@ -1972,9 +1941,7 @@ describe('GitHandler', () => {
     it.skipIf(process.platform === 'win32')(
       'leaves an ordinary repo reached via a symlinked path unchanged',
       async () => {
-        // A symlink alias defeats the path-string gate (git reports the
-        // realpath toplevel); the git-common-dir gate must still skip the
-        // rewrite for an ordinary repo so the reported path is untouched.
+        // A symlink alias defeats the path-string gate; the git-common-dir gate must still skip rewrite for an ordinary repo.
         const repoPath = path.join(tmpDir, 'plain-repo')
         mkdirSync(repoPath)
         gitInit(repoPath)
@@ -1998,10 +1965,7 @@ describe('GitHandler', () => {
     it.skipIf(process.platform === 'win32')(
       'leaves the main entry unchanged when scanned via a linked worktree',
       async () => {
-        // A linked worktree has a `.git` pointer file like a separate-git-dir
-        // checkout, but its porcelain main entry is the real main working root.
-        // The git-common-dir gate must skip the rewrite so the main entry is
-        // not overwritten with the linked worktree's own toplevel.
+        // The git-common-dir gate must skip rewrite so a linked worktree's main entry isn't overwritten with its own toplevel.
         const repoPath = path.join(tmpDir, 'main-repo')
         mkdirSync(repoPath)
         gitInit(repoPath)
@@ -2413,10 +2377,7 @@ describe('GitHandler', () => {
   })
 
   describe('addWorktree', () => {
-    // Why: relay handler tests for addWorktree use a mock-injection approach
-    // to deterministically control git exit codes (in particular `--get` exit
-    // 1 vs other non-zero codes) without relying on the test host's global
-    // git config. Mirrors the pattern in src/main/git/worktree.test.ts.
+    // Why: mock git to control exit codes (e.g. --get exit 1 vs other) deterministically, independent of host git config.
     function setupMockedHandler(roots: string[]) {
       const ctx = new RelayContext()
       for (const r of roots) {
@@ -2498,10 +2459,7 @@ describe('GitHandler', () => {
     })
 
     it('qualifies bare branch name as refs/heads/ when a same-named tag exists', async () => {
-      // Why: repos that fetch with --tags can end up with a local tag named
-      // 'main', making `git worktree add ... main` fail with "fatal: Ambiguous
-      // object name". Qualifying as refs/heads/main tells git exactly which
-      // object to use.
+      // Why: a local tag named 'main' makes bare-name `worktree add ... main` ambiguous; refs/heads/ disambiguates.
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' }) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
@@ -2617,10 +2575,7 @@ describe('GitHandler', () => {
     })
 
     it('treats --get success with empty stdout as "already set" (key present but blank)', async () => {
-      // Why: `git config --get key` exits 0 if the key has any value at any
-      // scope, including an explicitly empty string. We must not fall through
-      // to `--local set true` and overwrite that. Mirrors the local addWorktree
-      // parity case in src/main/git/worktree.test.ts.
+      // Why: --get exits 0 for any value including empty string, so an empty value must not fall through to set-true.
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
@@ -2643,10 +2598,7 @@ describe('GitHandler', () => {
     })
 
     it('does not write --local when --get fails with non-unset code (corrupt config)', async () => {
-      // Why: exit 1 from `git config --get` means "key unset" — anything else
-      // is a real read failure (parse error, locked file). We must NOT fall
-      // through to `--local set true`, which would silently overwrite
-      // whatever value the user actually has.
+      // Why: only --get exit 1 means "unset"; any other code is a real read failure, so don't fall through to set-true.
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
@@ -2704,9 +2656,7 @@ describe('GitHandler', () => {
     })
 
     it('does not write config when worktree add itself fails', async () => {
-      // Why: a refactor that moves the config block earlier could try to
-      // probe config against a worktree directory that was never created. Pin
-      // the ordering invariant: config calls happen only after worktree add succeeds.
+      // Why: config probes must run only after worktree add succeeds (never against an uncreated dir).
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockRejectedValueOnce(new Error('worktree add failed'))

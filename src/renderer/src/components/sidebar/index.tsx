@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
+import { createSingleFlightCoalescer, type SingleFlightCoalescer } from './single-flight-coalescer'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -45,6 +46,7 @@ function Sidebar({
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
+  const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
@@ -73,13 +75,16 @@ function Sidebar({
     document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
   }, [])
 
-  // Fetch worktrees when repos are added/removed
   const repoCount = repos.length
+  const previousRepoCountRef = React.useRef(repoCount)
   useEffect(() => {
-    if (repoCount > 0) {
-      fetchAllWorktrees()
+    const repoCountChanged = previousRepoCountRef.current !== repoCount
+    previousRepoCountRef.current = repoCount
+    // Why: App owns the initial all-host scan; partial startup catalogs must not trigger broad scans or stale-state purges.
+    if (startupWorktreeRefreshCompleted && repoCountChanged && repoCount > 0) {
+      void fetchAllWorktrees()
     }
-  }, [repoCount, fetchAllWorktrees])
+  }, [repoCount, startupWorktreeRefreshCompleted, fetchAllWorktrees])
 
   // Why: a runtime host coming online/offline must refresh the sidebar so its
   // worktrees appear/drop, the same way SSH state changes already refetch. Only
@@ -100,19 +105,25 @@ function Sidebar({
     [runtimeStatusByEnvironmentId]
   )
   const previousOnlineRuntimeEnvKeyRef = React.useRef<string | null>(null)
+  // Coalesce staggered wake reconnects so K hosts can't fire K sidebar remounts and freeze (#8539).
+  const reconnectRefreshRef = React.useRef<SingleFlightCoalescer | null>(null)
+  if (reconnectRefreshRef.current === null) {
+    reconnectRefreshRef.current = createSingleFlightCoalescer(() =>
+      fetchAllWorktrees().then(() => fetchWorktreeLineage())
+    )
+  }
   useEffect(() => {
-    // Skip the initial value — startup/repoCount effects already fetch. Only
-    // refetch when the online-host set actually changes.
-    if (previousOnlineRuntimeEnvKeyRef.current === null) {
-      previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
-      return
-    }
-    if (previousOnlineRuntimeEnvKeyRef.current === onlineRuntimeEnvKey) {
-      return
-    }
+    const previousOnlineRuntimeEnvKey = previousOnlineRuntimeEnvKeyRef.current
     previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
-    void fetchAllWorktrees().then(() => fetchWorktreeLineage())
-  }, [onlineRuntimeEnvKey, fetchAllWorktrees, fetchWorktreeLineage])
+    if (
+      previousOnlineRuntimeEnvKey === null ||
+      previousOnlineRuntimeEnvKey === onlineRuntimeEnvKey ||
+      !startupWorktreeRefreshCompleted
+    ) {
+      return
+    }
+    reconnectRefreshRef.current?.request()
+  }, [onlineRuntimeEnvKey, startupWorktreeRefreshCompleted])
 
   useEffect(() => {
     if (!sidebarOpen && workspaceBoardRenderedOpen) {

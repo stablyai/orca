@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeveloperPermissionRequestResult } from '../../../../shared/developer-permissions-types'
+import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import { handleVoiceDictationToggle, VoicePane } from './VoicePane'
@@ -32,8 +33,12 @@ const deniedMicrophoneResult: DeveloperPermissionRequestResult = {
   status: 'denied',
   openedSystemSettings: false
 }
+const EMPTY_SPEECH_CATALOG: SpeechModelManifest[] = []
 
-function makeSettings(voiceEnabled: boolean): GlobalSettings {
+function makeSettings(voiceEnabled?: boolean): GlobalSettings {
+  if (voiceEnabled === undefined) {
+    return {} as GlobalSettings
+  }
   return {
     voice: {
       ...getDefaultVoiceSettings(),
@@ -51,7 +56,7 @@ function installWindowApi(
         request: vi.fn(requestMicrophonePermission)
       },
       speech: {
-        getCatalog: vi.fn(async () => []),
+        getCatalog: vi.fn(async () => EMPTY_SPEECH_CATALOG),
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
         clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
@@ -63,12 +68,17 @@ function installWindowApi(
 }
 
 async function renderVoicePane(args: {
-  voiceEnabled: boolean
+  voiceEnabled?: boolean
   markFeatureTipsSeen: (ids: string[]) => void
   updateSettings: (updates: Partial<GlobalSettings>) => void
   requestMicrophonePermission?: () => Promise<DeveloperPermissionRequestResult>
   recordFeatureInteraction?: (id: string) => void
-}): Promise<{ button: HTMLButtonElement; root: Root; container: HTMLDivElement }> {
+}): Promise<{
+  button: HTMLButtonElement
+  root: Root
+  container: HTMLDivElement
+  refreshModelStates: ReturnType<typeof vi.fn>
+}> {
   const refreshModelStates = vi.fn()
   useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -95,7 +105,7 @@ async function renderVoicePane(args: {
     throw new Error('Voice Dictation switch was not rendered')
   }
 
-  return { button, root, container }
+  return { button, root, container, refreshModelStates }
 }
 
 async function clickSwitch(button: HTMLButtonElement): Promise<void> {
@@ -107,7 +117,7 @@ async function clickSwitch(button: HTMLButtonElement): Promise<void> {
   })
 }
 
-describe('VoicePane dictation switch', () => {
+describe('VoicePane', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     document.body.innerHTML = ''
@@ -116,6 +126,24 @@ describe('VoicePane dictation switch', () => {
   beforeEach(() => {
     useAppStoreMock.mockReset()
     useShortcutLabelMock.mockReset()
+  })
+
+  it('fetches speech data once across re-renders when voice settings are absent', async () => {
+    const updateSettings = vi.fn()
+    const { root, refreshModelStates } = await renderVoicePane({
+      markFeatureTipsSeen: vi.fn(),
+      updateSettings
+    })
+
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        root.render(<VoicePane settings={{} as GlobalSettings} updateSettings={updateSettings} />)
+      })
+    }
+    act(() => root.unmount())
+
+    expect(window.api.speech.getCatalog).toHaveBeenCalledTimes(1)
+    expect(refreshModelStates).toHaveBeenCalledTimes(1)
   })
 
   it('clicking the switch marks the voice tip seen before disabling voice settings', async () => {

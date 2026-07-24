@@ -63,6 +63,34 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect('sendSharedControlEncryptedBinary' in sharedControlProtocol).toBe(false)
   })
 
+  it('replaces a stuck pre-ready socket when a one-shot probe proves reachability', () => {
+    const connection = new RemoteRuntimeSharedControlConnection({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:1',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+    })
+    const close = vi.fn()
+    const cleanup = vi.fn()
+    const open = vi.fn()
+    const unsafe = connection as unknown as {
+      state: string
+      ws: { readyState: number; close: () => void } | null
+      socketCleanup: (() => void) | null
+      open: () => void
+    }
+    unsafe.state = 'awaiting_ready'
+    unsafe.ws = { readyState: 0, close }
+    unsafe.socketCleanup = cleanup
+    unsafe.open = open
+
+    connection.reconnectNow()
+
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledOnce()
+    expect(open).toHaveBeenCalledOnce()
+  })
+
   it('logs unknown response ids without breaking pending requests', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const server = await createServer({ sendUnknownResponseBeforeResponse: true })
@@ -172,10 +200,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const server = await createServer({ closeAfterFirstStreamingResponse: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
     const onClose = vi.fn()
+    const onError = vi.fn()
 
     await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
       onResponse: vi.fn(),
-      onError: vi.fn(),
+      onError,
       onClose
     })
 
@@ -186,22 +215,25 @@ describe('RemoteRuntimeSharedControlConnection', () => {
         'runtime.clientEvents.subscribe'
       ])
     )
+    expect(onError).toHaveBeenCalledTimes(1)
     expect(onClose).not.toHaveBeenCalled()
 
     connection.close()
   })
 
-  it('emits one final close when reconnect attempts are exhausted', async () => {
+  it('keeps passive subscriptions alive after reaching the capped reconnect delay', async () => {
     const server = await createServer()
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
     const onClose = vi.fn()
 
     const unsafe = connection as unknown as {
-      reconnectAttempt: number
+      reconnect: {
+        attempt: number
+        scheduleWithDefaultBackoff: (intentionallyClosed: boolean, open: () => void) => void
+      }
       subscriptions: Map<string, unknown>
-      scheduleReconnect: () => void
     }
-    unsafe.reconnectAttempt = 7
+    unsafe.reconnect.attempt = 7
     unsafe.subscriptions.set('sub-1', {
       requestId: 'sub-1',
       method: 'runtime.clientEvents.subscribe',
@@ -213,13 +245,13 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       remoteSubscriptionId: null
     })
 
-    unsafe.scheduleReconnect()
+    unsafe.reconnect.scheduleWithDefaultBackoff(false, () => {})
 
-    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
     expect(connection.getDiagnostics()).toMatchObject({
-      state: 'closed',
-      reconnectAttempt: 7,
-      subscriptionCount: 0
+      state: 'reconnecting',
+      reconnectAttempt: 8,
+      subscriptionCount: 1
     })
 
     connection.close()
@@ -234,7 +266,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     await expect(connection.request('worktree.ps', undefined, 1000)).resolves.toMatchObject({
       ok: true
     })
-    ;(connection as unknown as { reconnectAttempt: number }).reconnectAttempt = 3
+    ;(connection as unknown as { reconnect: { attempt: number } }).reconnect.attempt = 3
 
     await vi.waitFor(() =>
       expect(connection.getDiagnostics()).toMatchObject({ reconnectAttempt: 0 })

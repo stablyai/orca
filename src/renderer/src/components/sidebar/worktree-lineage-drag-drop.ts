@@ -1,3 +1,6 @@
+import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import { getLineageRenderInfo } from './worktree-lineage-projection'
+
 const WORKTREE_CARD_CONTENT_TARGET_SELECTOR = '[data-worktree-card-hover-trigger]'
 const WORKTREE_DRAG_ROW_SELECTOR = '[data-worktree-drag-id]'
 
@@ -52,13 +55,22 @@ export function getWorktreeLineageDropTargetId(args: {
 export function getReorderedWorktreeIdsToUnnest(args: {
   draggedIds: readonly string[]
   sourceGroupIds: readonly string[]
-  lineageById: Readonly<Record<string, unknown>>
+  lineageById: Readonly<Record<string, WorktreeLineage>>
+  worktreeMap: ReadonlyMap<string, Worktree>
+  cyclicLineageIds: ReadonlySet<string>
 }): string[] {
   const ids: string[] = []
   const seen = new Set<string>()
   const sourceGroupIdSet = new Set(args.sourceGroupIds)
   for (const id of args.draggedIds) {
-    if (seen.has(id) || !sourceGroupIdSet.has(id) || !args.lineageById[id]) {
+    const worktree = args.worktreeMap.get(id)
+    if (
+      seen.has(id) ||
+      !sourceGroupIdSet.has(id) ||
+      !worktree ||
+      getLineageRenderInfo(worktree, args.lineageById, args.worktreeMap, args.cyclicLineageIds)
+        .state !== 'valid'
+    ) {
       continue
     }
     seen.add(id)

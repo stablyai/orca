@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as React from 'react'
 import type { FsChangedPayload, GitPushTarget, GitStatusResult } from '../../../../shared/types'
+import { DEFAULT_GIT_STATUS_LIMIT } from '../../../../shared/git-status-limit'
 
 const worktree = { id: 'repo-1::/repo', repoId: 'repo-1', path: '/repo' }
 const repo = { id: 'repo-1', path: '/repo', kind: 'git', connectionId: null as string | null }
@@ -671,7 +672,7 @@ describe('useGitStatusPolling', () => {
       {
         expectStatusCall: false,
         stateOverrides: {
-          gitStatusHugeByWorktree: { [worktree.id]: { limit: 10_000 } }
+          gitStatusHugeByWorktree: { [worktree.id]: { limit: DEFAULT_GIT_STATUS_LIMIT } }
         }
       }
     )
@@ -711,7 +712,7 @@ describe('useGitStatusPolling', () => {
         expectStatusCall: false,
         documentStub: visibilityDocument,
         stateOverrides: {
-          gitStatusHugeByWorktree: { [worktree.id]: { limit: 10_000 } }
+          gitStatusHugeByWorktree: { [worktree.id]: { limit: DEFAULT_GIT_STATUS_LIMIT } }
         }
       }
     )

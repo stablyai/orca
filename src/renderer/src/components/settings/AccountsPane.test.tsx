@@ -51,6 +51,36 @@ describe('AccountsPane', () => {
     expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
   })
 
+  it('selects the WSL account location under auto when the global project runtime is WSL', () => {
+    // Why: navigator.userAgent is a read-only prototype getter, so shadow it with
+    // a configurable own property and remove that shadow afterward to restore it.
+    const originalOwnUserAgent = Object.getOwnPropertyDescriptor(globalThis.navigator, 'userAgent')
+    Object.defineProperty(globalThis.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      configurable: true
+    })
+    try {
+      const markup = renderPane(
+        {
+          ...getDefaultSettings('/tmp'),
+          localAccountRuntime: 'auto',
+          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+        },
+        { wslSupportedPlatform: true, wslCapabilitiesLoading: true }
+      )
+
+      expect(markup).toContain('aria-label="Account location"')
+      // The resolved WSL radio is the checked option (disabled while capabilities load).
+      expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
+    } finally {
+      if (originalOwnUserAgent) {
+        Object.defineProperty(globalThis.navigator, 'userAgent', originalOwnUserAgent)
+      } else {
+        delete (globalThis.navigator as { userAgent?: string }).userAgent
+      }
+    }
+  })
+
   it('keeps the runtime label inside the localized account copy', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 

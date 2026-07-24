@@ -5,7 +5,6 @@ import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo, Repo } from '../../../../shared/types'
 import type { GitHubPRMergeMethod } from '../../../../shared/types'
-import { GITHUB_PR_MERGE_METHOD_LABELS } from '../../../../shared/github-pr-merge-methods'
 import {
   mergeGitHubHostedReview,
   setGitHubHostedReviewAutoMerge,
@@ -64,21 +63,6 @@ export function useHostedReviewActions({
 
   const handleMerge = useCallback(
     async (method: GitHubPRMergeMethod = defaultMergeMethod) => {
-      // Why: choosing a strategy from the merge dropdown must not merge on its
-      // own — confirm first, matching every other PR/MR merge surface (#7943).
-      const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
-      const confirmed = await confirm({
-        title: `${label} ${shortLabel} ${isGitLab ? '!' : '#'}${review.number}?`,
-        description: translate(
-          'auto.components.right.sidebar.use.hosted.review.actions.e475c29b17',
-          'This will merge the {{value0}}.',
-          { value0: reviewLabel }
-        ),
-        confirmLabel: label
-      })
-      if (!confirmed) {
-        return
-      }
       setMerging(true)
       setActionError(null)
       try {
@@ -106,17 +90,7 @@ export function useHostedReviewActions({
         setMerging(false)
       }
     },
-    [
-      confirm,
-      githubPR?.prRepo,
-      isGitLab,
-      shortLabel,
-      reviewLabel,
-      defaultMergeMethod,
-      onRefreshReview,
-      repo,
-      review.number
-    ]
+    [githubPR?.prRepo, isGitLab, defaultMergeMethod, onRefreshReview, repo, review.number]
   )
 
   const handleAutoMerge = useCallback(async () => {
@@ -198,6 +172,7 @@ export function useHostedReviewActions({
           : await updateGitHubHostedReviewState({
               repo,
               prNumber: review.number,
+              prRepo: githubPR?.prRepo ?? null,
               nextState
             })
         if (!result.ok) {
@@ -230,6 +205,7 @@ export function useHostedReviewActions({
     },
     [
       confirm,
+      githubPR?.prRepo,
       isGitLab,
       onRefreshReview,
       repo,

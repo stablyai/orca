@@ -13,6 +13,7 @@ import {
   MAX_UNTRACKED_LINE_COUNT_BYTES,
   parseNumstat
 } from './git-uncommitted-line-stats'
+import { DEFAULT_GIT_STATUS_LIMIT } from './git-status-limit'
 
 function mockFileStat(size: number, mtimeMs = 1) {
   return {
@@ -146,13 +147,15 @@ describe('collectUntrackedAdditions', () => {
   })
 
   it('keeps the cache effective across polls for a status-limit-sized change set', async () => {
-    // Why: git status caps at DEFAULT_GIT_STATUS_LIMIT (10,000) entries. A
-    // cache smaller than one scan FIFO-evicts every entry mid-scan, so the
+    // Why: a cache smaller than the status cap FIFO-evicts every entry, so the
     // next poll re-reads every file (#8013). Scan the full limit twice; the
     // second pass must be stat-only.
     lstatMock.mockResolvedValue(mockFileStat(5, 7))
     readFileMock.mockResolvedValue(Buffer.from('a\nb\nc'))
-    const paths = Array.from({ length: 10_000 }, (_, i) => `poll-scale/file-${i}.ts`)
+    const paths = Array.from(
+      { length: DEFAULT_GIT_STATUS_LIMIT },
+      (_, i) => `poll-scale/file-${i}.ts`
+    )
 
     await collectUntrackedAdditions('/repo', paths)
     const firstPassReads = readFileMock.mock.calls.length

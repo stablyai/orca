@@ -8,6 +8,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -240,6 +241,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                 ))}
         </p>
       </SearchableSetting>
+      <GeneralRemoteServerUpdates />
     </section>
   )
 }

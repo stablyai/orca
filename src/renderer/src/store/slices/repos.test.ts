@@ -295,7 +295,13 @@ describe('repo slice runtime routing', () => {
       })
     ).resolves.toEqual({
       project,
-      setup: { ...setup, hostId: 'runtime:env-1', executionHostId: 'runtime:env-1' },
+      setup: {
+        ...setup,
+        hostId: 'runtime:env-1',
+        executionHostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        connectionId: null
+      },
       repo: { ...remoteRepo, executionHostId: 'runtime:env-1' }
     })
 
@@ -465,7 +471,13 @@ describe('repo slice runtime routing', () => {
       })
     ).resolves.toEqual({
       project,
-      setup: { ...setup, hostId: 'runtime:env-1', executionHostId: 'runtime:env-1' },
+      setup: {
+        ...setup,
+        hostId: 'runtime:env-1',
+        executionHostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        connectionId: null
+      },
       repo: { ...clonedRepo, executionHostId: 'runtime:env-1' }
     })
 

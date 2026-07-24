@@ -28,9 +28,11 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTabRevealWebglAtlasRecovery: () => scheduleTabRevealWebglAtlasRecovery()
 }))
 const resetTerminalLinkifierHoverState = vi.fn()
+const isTerminalLinkifierHoverActive = vi.fn((_terminal: unknown) => false)
 vi.mock('@/lib/pane-manager/terminal-linkifier-hover-reset', () => ({
   resetTerminalLinkifierHoverState: (terminal: unknown) =>
-    resetTerminalLinkifierHoverState(terminal)
+    resetTerminalLinkifierHoverState(terminal),
+  isTerminalLinkifierHoverActive: (terminal: unknown) => isTerminalLinkifierHoverActive(terminal)
 }))
 
 type FakeManager = {
@@ -113,6 +115,37 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     resumeTerminalVisibility(resumeArgs(manager, false))
 
     expect(order).toEqual(['resume-rendering', 'reveal-repaint'])
+  })
+
+  it('resets each pane linkifier hover cache on window wake recovery so links recover without a scroll', () => {
+    const first = { name: 'pane-a' }
+    const second = { name: 'pane-b' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: first }, { terminal: second }])
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(first)
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(second)
+  })
+
+  it('keeps a genuinely-hovered link intact on window wake recovery', () => {
+    const hovered = { name: 'hovered-pane' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: hovered }])
+    isTerminalLinkifierHoverActive.mockReturnValueOnce(true)
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(resetTerminalLinkifierHoverState).not.toHaveBeenCalled()
   })
 
   it('schedules the atlas-clearing repaint on genuine wake recovery', () => {

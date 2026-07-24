@@ -1,5 +1,6 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveTabId,
@@ -360,7 +361,8 @@ async function startHiddenPtyOutputBurst(page: Page, ptyId: string, runId: strin
     '},1);',
     '},30);'
   ].join('')
-  await sendToTerminal(page, ptyId, `node -e ${JSON.stringify(script)}\r`)
+  // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+  await runNodeScriptInTerminal(page, ptyId, script, { prefix: 'orca-tab-switch-burst' })
 }
 
 async function writeStaticTabContent(

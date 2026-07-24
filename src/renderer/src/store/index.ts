@@ -28,6 +28,7 @@ import { createAgentStatusSlice } from './slices/agent-status'
 import { createPaneForegroundAgentSlice } from './slices/pane-foreground-agent'
 import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
+import { createRuntimeDetectedAgentsSlice } from './slices/runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
 import { createDictationSlice } from './slices/dictation'
 import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
@@ -38,8 +39,13 @@ import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-conf
 import { createRecentlyClosedTabsSlice } from './slices/recently-closed-tabs'
 import { createOrcaProfilesSlice } from './slices/orca-profiles'
 import { createNewIssueDraftSlice } from './slices/new-issue-draft'
+import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { e2eConfig } from '@/lib/e2e-config'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import {
+  registerRendererMemoryProfileContributor,
+  summarizeStateCollectionSizes
+} from '@/lib/renderer-memory-profile'
 
 export const useAppStore = create<AppState>()((...a) => ({
   ...createRepoSlice(...a),
@@ -70,6 +76,7 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createPaneForegroundAgentSlice(...a),
   ...createDiffCommentsSlice(...a),
   ...createDetectedAgentsSlice(...a),
+  ...createRuntimeDetectedAgentsSlice(...a),
   ...createWorktreeNavHistorySlice(...a),
   ...createDictationSlice(...a),
   ...createWorkspaceCleanupSlice(...a),
@@ -79,10 +86,17 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createPinnedTabCloseConfirmSlice(...a),
   ...createRecentlyClosedTabsSlice(...a),
   ...createOrcaProfilesSlice(...a),
-  ...createNewIssueDraftSlice(...a)
+  ...createNewIssueDraftSlice(...a),
+  ...createRemoteServerUpdatesSlice(...a)
 }))
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
+
+// Why: names the fattest store slices in renderer_memory_highwater breadcrumbs
+// so OOM crash reports identify what grew without a local repro.
+registerRendererMemoryProfileContributor('store', () =>
+  summarizeStateCollectionSizes(useAppStore.getState(), 20)
+)
 
 export type { AppState } from './types'
 

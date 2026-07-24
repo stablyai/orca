@@ -185,12 +185,11 @@ export function getWindowSections(
 // `text-background` for primary text and `text-background/50` for secondary
 // to stay readable inside the inverted tooltip container.
 
-// Why: color always tracks % used so urgency reads correctly even when the meter
-// fills with % remaining (#8560) — low remaining still turns red, not green.
-// Green = comfortable (<60% used), yellow = caution (60-80%), red = critical (≥80%).
+// Why: urgency color tracks % used even when fill represents % remaining;
+// low usage stays neutral so persistent chrome stays quiet.
 export function barColor(usedPct: number): string {
   if (usedPct < 60) {
-    return 'bg-green-500'
+    return 'bg-muted-foreground/40'
   }
   if (usedPct < 80) {
     return 'bg-yellow-500'

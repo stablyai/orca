@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
+import { GitBranch, GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
 import type {
   GitBranchCompareSummary,
   GitUpstreamStatus,
@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { HostedReviewHeaderLink, HostedReviewIcon } from './hosted-review-header-chrome'
 import {
   shouldShowSourceControlBranchContextRow,
@@ -19,6 +21,7 @@ import {
 import { SourceControlHeaderOverflowMenu } from './source-control-header-overflow-menu'
 
 type SourceControlHeaderToolbarProps = {
+  gitIdentityDisplay: WorktreeGitIdentityDisplay | null
   filterQuery: string
   filterExpanded: boolean
   onFilterQueryChange: (value: string) => void
@@ -41,6 +44,56 @@ type SourceControlHeaderToolbarProps = {
   compareBaseRef: string | null
   upstreamStatus?: GitUpstreamStatus
   manualReviewUrl?: string | null
+}
+
+// Why: its own row above the toolbar so branch identity coexists with the Create PR
+// button instead of competing for the single toolbar slot (#9787 restore).
+function SourceControlGitIdentityRow({
+  display
+}: {
+  display: WorktreeGitIdentityDisplay
+}): React.JSX.Element {
+  if (display.kind === 'detached') {
+    return (
+      <div data-testid="source-control-git-identity-row" className="mb-1 flex min-w-0 items-center">
+        <DetachedHeadBadge
+          display={display}
+          side="bottom"
+          className="min-w-0 max-w-full shrink"
+          tabIndex={0}
+        />
+      </div>
+    )
+  }
+
+  const branchName = display.branchName
+  const label = translate(
+    'auto.components.right.sidebar.SourceControl.a4e93c21d7',
+    'Current branch: {{value0}}',
+    { value0: branchName }
+  )
+
+  return (
+    <div data-testid="source-control-git-identity-row" className="mb-1 flex min-w-0 items-center">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className="flex min-w-0 items-center gap-1 rounded-sm font-mono text-[10.5px] font-medium leading-none text-foreground/90 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label={label}
+            tabIndex={0}
+          >
+            <GitBranch className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+            {/* Why: match the 'vs main' base-ref typography (font/size/color) but no
+                underline — this label isn't clickable, so the underline would mislead. */}
+            <span className="min-w-0 truncate">{branchName}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6} className="max-w-72 break-all font-mono">
+          {branchName}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
 }
 
 function HostedReviewToolbarLink({
@@ -124,6 +177,7 @@ function renderOverflowMenu(
 }
 
 export function SourceControlHeaderToolbar({
+  gitIdentityDisplay,
   filterQuery,
   filterExpanded,
   onFilterQueryChange,
@@ -190,6 +244,7 @@ export function SourceControlHeaderToolbar({
 
   return (
     <div className="border-b border-border px-3 pt-1.5 pb-1">
+      {gitIdentityDisplay ? <SourceControlGitIdentityRow display={gitIdentityDisplay} /> : null}
       <div
         className={cn('flex min-w-0 items-center gap-1', filterExpanded && 'w-full gap-1.5')}
         data-filter-expanded={filterExpanded ? 'true' : 'false'}

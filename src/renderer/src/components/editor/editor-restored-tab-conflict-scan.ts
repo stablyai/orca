@@ -1,13 +1,4 @@
-// Why: a dirty tab restored from a workspace session carries edits based on
-// disk content that may have changed while the app was closed (an agent write,
-// a sync tool). The in-memory changed-on-disk mark does not survive restarts,
-// so without this scan a resumed autosave would silently overwrite that newer
-// content (issue #7265 follow-up). The scan re-derives the conflict from
-// ground truth: it reads each restored dirty tab's file and compares the disk
-// signature against the persisted edit baseline. Autosave is hard-suspended
-// for those tabs (pendingDiskBaselineVerification, set at hydration) until a
-// verification resolves — otherwise the read would merely race the autosave
-// timer and a slow remote read would lose.
+// Why: a restored dirty tab's changed-on-disk mark doesn't survive restarts (issue #7265), so re-derive the conflict from disk — else a resumed autosave silently overwrites newer content; autosave stays suspended (pendingDiskBaselineVerification) until verification resolves.
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
@@ -20,38 +11,24 @@ import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 
 type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
-// Why: SSH/runtime reads fail while the connection is still coming up after
-// launch. Retry fast for the first minute, then keep probing slowly —
-// giving up on a transport error would either strand the tab's autosave
-// suspension or lift it unverified right as the transport comes back up.
-// Only a definitive not-found (file deleted while the app was closed) ends
-// the loop early; see probeFileMissing.
+// Retry fast then slow: reads fail while SSH/runtime transport is still coming up; giving up would strand autosave suspension.
 const VERIFY_RETRY_MS = 2_000
 const VERIFY_SLOW_RETRY_MS = 15_000
 const VERIFY_FAST_ATTEMPTS = 30
-// Why: a session restored with many dirty tabs would otherwise fire one disk
-// read per tab simultaneously — on SSH/remote runtimes that's N concurrent
-// 15s-timeout RPCs competing with connection recovery at startup. Verifies
-// beyond the cap queue and start as slots free up; none are dropped.
+// Cap concurrent reads: many restored dirty tabs would otherwise fire N concurrent 15s RPCs competing with startup connection recovery.
 const MAX_CONCURRENT_VERIFY_READS = 3
 
 export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
-  // Why: dedupes queued + in-flight verifications; the store's pending flag is
-  // the durable "needs verification" signal.
+  // Dedupes queued + in-flight verifications; the store's pending flag is the durable "needs verification" signal.
   const inFlightFileIds = new Set<string>()
   const attemptsByFileId = new Map<string, number>()
   const retryTimers = new Set<ReturnType<typeof setTimeout>>()
-  // Why: queue ids, not OpenFile snapshots. Ids are paths, so a snapshot can go
-  // stale (close/reopen or save at the same path) while it waits for a slot;
-  // the live file is re-read at dispatch instead.
+  // Queue ids, not OpenFile snapshots: a snapshot can go stale (close/reopen or same-path save) while it waits for a slot.
   const verifyQueue: string[] = []
   let activeVerifyReads = 0
   let disposed = false
 
-  // Why: distinguishes "file was deleted while the app was closed" (a
-  // definitive not-found) from a transport still coming up. Only local/SSH
-  // paths can be probed — for runtime-owned files window.api.fs would stat
-  // the client-local path and misreport a remote file as gone.
+  // Only local/SSH paths can be probed: for runtime-owned files window.api.fs would stat the client path and misreport it as gone.
   const probeFileMissing = async (file: OpenFile): Promise<boolean> => {
     const settings = settingsForRuntimeOwner(store.getState().settings, file.runtimeEnvironmentId)
     if (settings?.activeRuntimeEnvironmentId?.trim()) {
@@ -70,9 +47,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   }
 
   const verify = async (file: OpenFile): Promise<void> => {
-    // Why: OpenFile ids are file paths — a marker left behind by an early
-    // exit would silently skip every future verification of a reopened
-    // same-path tab. Only a scheduled retry may keep the marker set.
+    // ids are file paths: a stray leftover marker would skip a reopened same-path tab, so only a scheduled retry keeps it set.
     let retryScheduled = false
     try {
       const state = store.getState()
@@ -90,9 +65,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       if (!liveFile) {
         return
       }
-      // Why: verification resolved — lift the autosave suspension regardless
-      // of outcome. If a save raced the read, the save already re-baselined
-      // and cleared the flag itself; wasPending distinguishes that case.
+      // Verification resolved: lift autosave suspension regardless of outcome; wasPending flags a save that already re-baselined.
       const wasPending = liveFile.pendingDiskBaselineVerification === true
       store.getState().clearPendingDiskBaselineVerification(file.id)
       if (
@@ -117,10 +90,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         if (disposed) {
           return
         }
-        // Why: a definitive not-found IS ground truth — there is no newer
-        // disk content for a save to clobber, so verification is resolved.
-        // Converge to the live delete affordance (tombstone mark) instead of
-        // retrying forever with the tab's autosave silently suspended.
+        // Definitive not-found = resolved: no newer disk content for a save to clobber, so mark deleted instead of retrying forever.
         const liveFile = store.getState().openFiles.find((f) => f.id === file.id)
         if (!liveFile) {
           return
@@ -157,10 +127,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   const pumpVerifyQueue = (): void => {
     while (!disposed && activeVerifyReads < MAX_CONCURRENT_VERIFY_READS && verifyQueue.length > 0) {
       const fileId = verifyQueue.shift()!
-      // Why: re-read the live file when the slot opens. A queued id may now
-      // resolve to a reopened or saved same-path tab, so re-validate it against
-      // the current state before spending a disk read; skipping frees the dedupe
-      // marker so a later scan can re-queue it if it needs verification again.
+      // Re-read live file: a queued id may now be a reopened/saved same-path tab; re-validate before a disk read, and skipping frees the dedupe marker so a later scan can re-queue it.
       const file = store.getState().openFiles.find((f) => f.id === fileId)
       if (
         !file ||
@@ -178,8 +145,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         activeVerifyReads -= 1
         pumpVerifyQueue()
       }
-      // Why: verify() never rejects by design, but a rejection here must still
-      // release the slot or the queue stalls permanently.
+      // verify() never rejects, but a stray rejection must still free the slot or the queue stalls.
       void verify(file).then(onSettled, onSettled)
     }
   }

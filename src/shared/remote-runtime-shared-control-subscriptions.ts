@@ -53,9 +53,12 @@ export function handleSharedControlLogicalResponse(args: {
 
 export function closeSharedControlLogicalSubscription(args: {
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
-  subscription: SharedControlLogicalSubscription<unknown>
+  subscription?: SharedControlLogicalSubscription<unknown>
   request: (method: string, params: unknown) => void
 }): void {
+  if (!args.subscription) {
+    return
+  }
   const cleanup = getCleanupRequest(args.subscription)
   if (cleanup) {
     finishSharedControlSubscription(args.subscriptions, args.subscription, false)

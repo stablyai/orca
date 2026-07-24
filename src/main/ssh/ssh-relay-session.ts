@@ -1,12 +1,5 @@
 /* oxlint-disable max-lines */
-// Why: consolidates all relay lifecycle state (multiplexer, providers, abort
-// controller, initialization flag) into a single class per SSH target.
-// Previously this state was scattered across 5 module-level Maps/Sets in
-// ssh.ts and ssh-relay-helpers.ts, with 3 separate code paths for initial
-// connect, network-blip reconnect, and cleanup — each partially duplicating
-// provider registration/teardown logic. This class is the single authority
-// for relay session state, eliminating the class of bugs where one path
-// forgets a step that another path handles.
+// Why: single authority for all relay lifecycle state per SSH target (previously scattered across module Maps/Sets with duplicated paths).
 
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
@@ -14,18 +7,16 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
-import {
-  SshPtyProvider,
-  isSshPtyIdentityMismatchError,
-  isSshPtyNotFoundError
-} from '../providers/ssh-pty-provider'
+import { SshPtyProvider } from '../providers/ssh-pty-provider'
+import type { SshPtyExitCallback } from '../providers/ssh-pty-provider-contract'
+import { isSshPtyIdentityMismatchError, isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
-import { installRemoteManagedAgentHooks } from '../agent-hooks/remote-managed-hook-installers'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
+  AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
@@ -41,7 +32,9 @@ import {
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
-  setPtyOwnership
+  setPtyOwnership,
+  restorePtyIncarnation,
+  isCurrentPtyExit
 } from '../ipc/pty'
 import {
   recordHiddenRendererPtyDataDrop,
@@ -75,9 +68,11 @@ import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
-import { shellEscape } from './ssh-connection-utils'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
+
+type SshPtyExitPayload = Parameters<SshPtyExitCallback>[0]
+type PendingPtyReattach = { exits: SshPtyExitPayload[] }
 
 type RemoteCliBridgeEnv = {
   remoteHome: string
@@ -90,69 +85,6 @@ type RemoteCliBridgeEnv = {
 }
 
 type ExpectedPtyIdentity = { paneKey?: string; tabId?: string }
-
-const REMOTE_GROK_HOME_MAX_LENGTH = 4096
-const REMOTE_GROK_HOME_PROBE_TIMEOUT_MS = 8_000
-
-function defaultRemoteGrokHome(remoteHome: string): string {
-  const home = remoteHome.replace(/\/+$/, '') || remoteHome
-  return `${home}/.grok`
-}
-
-function normalizeRemoteGrokHome(candidate: string): string | null {
-  if (
-    candidate.length === 0 ||
-    candidate.length > REMOTE_GROK_HOME_MAX_LENGTH ||
-    candidate !== candidate.trim() ||
-    !candidate.startsWith('/') ||
-    candidate.includes('\\') ||
-    hasControlCharacter(candidate)
-  ) {
-    return null
-  }
-  return candidate.replace(/\/+$/, '') || '/'
-}
-
-function hasControlCharacter(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 0x1f || code === 0x7f
-  })
-}
-
-function loginShellCommand(shell: string, command: string): string {
-  const shellName = shell.split('/').at(-1)
-  const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
-  return `${shellEscape(shell)} ${mode} ${shellEscape(command)}`
-}
-
-async function resolveRemoteGrokHome(
-  connection: SshConnection,
-  remoteHome: string
-): Promise<string> {
-  const fallback = defaultRemoteGrokHome(remoteHome)
-  try {
-    // Why: remote PTYs start login shells, so probe the same profile-derived
-    // environment instead of the relay service or local Electron environment.
-    const shellOutput = await execCommand(connection, "printenv SHELL || printf '/bin/sh\\n'", {
-      timeoutMs: REMOTE_GROK_HOME_PROBE_TIMEOUT_MS
-    })
-    const shell = shellOutput.trim().split(/\r?\n/, 1)[0]
-    if (!shell?.startsWith('/') || hasControlCharacter(shell)) {
-      return fallback
-    }
-    // Why: this runs inside the user's actual login shell, which may be fish or
-    // tcsh. External commands avoid shell-specific variable/conditional syntax.
-    const probe = `printenv GROK_HOME | head -c ${REMOTE_GROK_HOME_MAX_LENGTH + 1}`
-    const output = await execCommand(connection, loginShellCommand(shell, probe), {
-      wrapCommand: false,
-      timeoutMs: REMOTE_GROK_HOME_PROBE_TIMEOUT_MS
-    })
-    return normalizeRemoteGrokHome(output.split(/\r?\n/, 1)[0] ?? '') ?? fallback
-  } catch {
-    return fallback
-  }
-}
 
 function expectedIdentityForLease(lease: {
   tabId?: string
@@ -204,20 +136,11 @@ export class SshRelaySession {
   private mux: SshChannelMultiplexer | null = null
   private abortController: AbortController | null = null
   private muxDisposeCleanup: (() => void) | null = null
-  // Why: store the notification-handler disposer so teardownProviders can
-  // release it on reconnect/shutdown. Symmetric with muxDisposeCleanup; while
-  // the old mux's handler array is GC'd along with the mux today, holding the
-  // disposer is cheap insurance against future code that retains the old mux.
+  // Why: hold the notification-handler disposer so teardownProviders can release it on reconnect/shutdown (symmetric with muxDisposeCleanup).
   private muxNotificationCleanup: (() => void) | null = null
-  // Why: when the relay exec channel closes but the SSH connection stays
-  // up, the onStateChange reconnect path never fires. This callback lets
-  // ssh.ts wire up relay-level reconnect from outside the session.
+  // Why: onStateChange never fires when the relay channel closes but SSH stays up; this callback lets ssh.ts drive relay-level reconnect.
   private _onRelayLost: ((targetId: string) => void) | null = null
-  // Why: a wire-handshake mismatch is terminal — the daemon and client are at
-  // different versions, no amount of backoff retry will reconcile them. This
-  // separate callback lets ssh.ts surface the failure to the user and skip
-  // the relay-lost backoff loop entirely. Distinct from _onRelayLost because
-  // _onRelayLost expects a recoverable transport drop.
+  // Why: version mismatch is terminal, so it needs a separate callback from _onRelayLost (which expects a recoverable transport drop).
   private _onTerminalRelayError:
     | ((targetId: string, err: RelayVersionMismatchError) => void)
     | null = null
@@ -227,6 +150,7 @@ export class SshRelaySession {
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private forwardedReattachReplayByPty = new Map<string, ForwardedReplayFingerprint>()
+  private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
 
   constructor(
     readonly targetId: string,
@@ -271,11 +195,7 @@ export class SshRelaySession {
     return this._state
   }
 
-  // Why: TypeScript narrows _state after control-flow checks and then
-  // rejects comparisons like `this._state === 'disposed'` inside async
-  // methods where it "knows" the state was e.g. 'deploying'. But dispose()
-  // can mutate _state from another call stack between await points. This
-  // helper defeats narrowing so the disposed checks compile correctly.
+  // Why: dispose() can mutate _state across await points, so defeat TS's control-flow narrowing that would otherwise reject the 'disposed' check.
   private isDisposed(): boolean {
     return (this._state as RelaySessionState) === 'disposed'
   }
@@ -320,9 +240,7 @@ export class SshRelaySession {
     mux.notify(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, { graceTimeSeconds: 0 })
   }
 
-  // Why: single entry point for relay setup — used by both initial connect
-  // and app-restart reconnect. Having one path eliminates the risk of
-  // forgetting a registration step.
+  // Why: single entry point for relay setup (initial connect + app-restart reconnect) so no path forgets a registration step.
   async establish(conn: SshConnection, graceTimeSeconds?: number): Promise<void> {
     if (this._state !== 'idle') {
       throw new Error(`Cannot establish relay session in state: ${this._state}`)
@@ -347,10 +265,7 @@ export class SshRelaySession {
             }
           : null
 
-      // Why: dispose() can fire during the await above (e.g. user clicks
-      // disconnect while relay is deploying). If so, the session is already
-      // cleaned up — creating a mux and registering providers would leak
-      // resources with no owner to dispose them.
+      // Why: dispose() can fire during the await above; if it did, creating a mux/providers now would leak with no owner to dispose them.
       if (this.isDisposed()) {
         const orphanMux = new SshChannelMultiplexer(transport)
         orphanMux.dispose()
@@ -361,12 +276,7 @@ export class SshRelaySession {
       this.mux = mux
       const ownsAttempt = (): boolean => this.mux === mux && !this.isDisposed()
 
-      // Why: verify the relay is actually responsive before registering
-      // providers. In --connect mode the bridge may have already closed
-      // (e.g. the grace-period relay exited because it had no PTYs), and
-      // registerRelayRoots would silently swallow all mux errors, leaving
-      // the session in 'ready' state with a dead mux. A round-trip request
-      // here fails fast so doConnect() can report the real error.
+      // Why: round-trip the relay before registering providers so a closed --connect bridge fails fast instead of leaving a 'ready' session on a dead mux.
       await mux.request('session.resolveHome', { path: '~' })
 
       const registered = await this.registerProviders(mux, ownsAttempt)
@@ -377,11 +287,7 @@ export class SshRelaySession {
         throw new Error('Session disposed during establish')
       }
 
-      // Why: the mux's transport can close during registerProviders (e.g.
-      // the --connect bridge exits). registerRelayRoots swallows mux errors
-      // (notifications no-op when disposed, git.listWorktrees requests are
-      // try/caught), so establish would otherwise reach 'ready' with a dead
-      // mux. Checking isDisposed catches this silent failure.
+      // Why: registerProviders swallows mux errors, so an isDisposed check catches a transport that closed mid-registration before we reach 'ready'.
       if (mux.isDisposed()) {
         throw new Error('Relay connection lost during provider registration')
       }
@@ -391,8 +297,7 @@ export class SshRelaySession {
         throw new Error('Session disposed during establish')
       }
 
-      // Why: explicit disconnect keeps PTY ownership so a later manual connect
-      // must reattach those remote PTYs through the fresh relay connection.
+      // Why: explicit disconnect keeps PTY ownership, so a later manual connect must reattach those remote PTYs.
       await this.reattachKnownPtys(ownsAttempt)
 
       if (!ownsAttempt()) {
@@ -405,22 +310,12 @@ export class SshRelaySession {
       this.startPortScanning()
       this._onReady?.(this.targetId)
     } catch (err) {
-      // Why: if deployAndLaunchRelay succeeded but registerProviders threw
-      // partway through, the mux is live and some providers may be partially
-      // registered. teardownProviders cleans up everything so a subsequent
-      // establish() call starts from a clean slate.
+      // Why: registerProviders can throw with a live mux and partial registration — tear everything down so a retry starts clean.
       if (!this.isDisposed()) {
         this.teardownProviders('connection_lost')
         this._state = 'idle'
       }
-      // Why: a wire-handshake mismatch on the FIRST connect is also terminal
-      // — the deployed relay binary on disk does not match a still-running
-      // daemon (typically because a legacy daemon from before the
-      // versioned-dir change is still alive). Notify the terminal-error
-      // callback so ssh.ts surfaces an actionable message and the caller's
-      // catch path doesn't conflate this with a transient deploy failure.
-      // We still rethrow so doConnect's existing failure path runs (clean up
-      // the SSH connection); ssh.ts's handler is idempotent.
+      // Why: a version mismatch on first connect is terminal (deployed binary vs. a still-running legacy daemon); notify the callback but still rethrow.
       if (isRelayVersionMismatchError(err)) {
         console.warn(
           `[ssh-relay-session] Terminal relay version mismatch on initial connect for ${this.targetId}: ${err.message}`
@@ -431,14 +326,9 @@ export class SshRelaySession {
     }
   }
 
-  // Why: network-blip reconnect path. Tears down the old provider stack,
-  // deploys a fresh relay, and re-attaches any PTYs that survived the
-  // relay's grace window. Guarded by an AbortController so overlapping
-  // reconnect attempts (fast connection flaps) cancel the stale one.
+  // Why: network-blip reconnect; AbortController-guarded so overlapping attempts from fast flaps cancel the stale one.
   async reconnect(conn: SshConnection, graceTimeSeconds?: number): Promise<void> {
-    // Why: only allow reconnect from 'ready' or 'reconnecting'. Calling
-    // reconnect from 'deploying' would tear down a mux that establish() is
-    // concurrently using. 'idle' means no session was established yet.
+    // Why: reconnect only from 'ready'/'reconnecting' — from 'deploying' it would tear down a mux establish() is still using; 'idle' has no session yet.
     if (this._state !== 'ready' && this._state !== 'reconnecting') {
       return
     }
@@ -451,8 +341,7 @@ export class SshRelaySession {
     this._state = 'reconnecting'
     this.currentConnection = conn
 
-    // Why: stop scanning before teardownProviders so the polling timer doesn't
-    // fire against a disposed multiplexer.
+    // Why: stop scanning before teardownProviders so the poll timer can't fire against a disposed multiplexer.
     this.stopPortScanning()
     await this.portForwardManager.removeAllForwards(this.targetId)
     this.broadcastEmptyLists()
@@ -476,9 +365,7 @@ export class SshRelaySession {
           : null
 
       if (abortController.signal.aborted || this.isDisposed()) {
-        // Why: the relay is already running on the remote. Creating a temporary
-        // multiplexer and immediately disposing it sends a clean shutdown to the
-        // relay process so it doesn't linger until its grace timer expires.
+        // Why: relay is already running remotely — a throwaway mux we immediately dispose sends a clean shutdown so it doesn't linger until grace expires.
         const orphanMux = new SshChannelMultiplexer(transport)
         orphanMux.dispose()
         return
@@ -492,9 +379,7 @@ export class SshRelaySession {
         !abortController.signal.aborted &&
         !this.isDisposed()
 
-      // Why: same health check as establish() — verify the relay is
-      // responsive before registering providers so a dead --connect bridge
-      // fails fast instead of silently producing a dead mux.
+      // Why: same health check as establish() — round-trip the relay before registering providers so a dead --connect bridge fails fast.
       await mux.request('session.resolveHome', { path: '~' })
       if (!ownsAttempt()) {
         if (!mux.isDisposed()) {
@@ -515,10 +400,7 @@ export class SshRelaySession {
         throw new Error('Relay connection lost during provider registration')
       }
 
-      // Why: dispose() can fire during registerProviders or the attach loop
-      // below. If it did, providers and mux were already cleaned up by
-      // dispose() — but this.mux was reassigned above, so the new mux
-      // would leak. Clean it up and bail.
+      // Why: dispose() during registration/attach already cleaned up, but this.mux was reassigned above — clean up the new mux so it doesn't leak.
       if (!ownsAttempt()) {
         if (this.mux === mux) {
           this.teardownProviders('shutdown')
@@ -540,16 +422,11 @@ export class SshRelaySession {
       this.startPortScanning()
       this._onReady?.(this.targetId)
     } catch (err) {
-      // Why: clean up the mux if it was created but registration failed
-      // partway through. Without this, the mux's keepalive/timeout timers
-      // continue running on a half-initialized session.
+      // Why: tear down a partially-registered mux so its keepalive/timeout timers don't keep running on a half-initialized session.
       if (this.abortController === abortController && !this.isDisposed()) {
         this.teardownProviders('connection_lost')
       }
-      // Why: a version-mismatch is terminal. Fire the typed callback so
-      // ssh.ts can surface a "please reconnect manually" notice and skip the
-      // relay-lost backoff loop entirely. We do NOT keep state at
-      // 'reconnecting' — there's no transient drop to recover from.
+      // Why: version-mismatch is terminal — fire the typed callback and drop out of 'reconnecting' since backoff retry can't reconcile it.
       if (isRelayVersionMismatchError(err)) {
         console.warn(
           `[ssh-relay-session] Terminal relay version mismatch for ${this.targetId}: ${err.message}`
@@ -560,17 +437,12 @@ export class SshRelaySession {
         this._onTerminalRelayError?.(this.targetId, err)
         return
       }
-      // Why: stay in 'reconnecting' rather than reverting to 'ready', because
-      // the provider stack is already torn down. The SSH connection manager
-      // will fire another onStateChange when it reconnects again.
+      // Why: stay in 'reconnecting' (not 'ready') since the provider stack is torn down; the SSH manager will fire another onStateChange to retry.
       console.warn(
         `[ssh-relay-session] Failed to re-establish relay for ${this.targetId}: ${err instanceof Error ? err.message : String(err)}`
       )
       if (this.abortController === abortController && !this.isDisposed()) {
-        // Why: non-not-found PTY attach failures are usually transient mux or
-        // relay transport failures. Treat them like relay loss so ssh.ts's
-        // bounded backoff retries instead of stranding the session forever in
-        // reconnecting.
+        // Why: treat non-not-found attach failures as relay loss so ssh.ts's bounded backoff retries instead of stranding the session in 'reconnecting'.
         this._onRelayLost?.(this.targetId)
       }
     } finally {
@@ -586,8 +458,7 @@ export class SshRelaySession {
     }
     this.abortController?.abort()
     this.stopPortScanning()
-    // Why: fire-and-forget — nothing rebinds after dispose, so we don't
-    // need to wait for the OS to release ports.
+    // Why: fire-and-forget — nothing rebinds after dispose, so no need to await port release.
     void this.portForwardManager.removeAllForwards(this.targetId)
     this.broadcastEmptyLists()
     this.teardownProviders('shutdown')
@@ -603,9 +474,7 @@ export class SshRelaySession {
     this.abortController?.abort()
     this.stopPortScanning()
     this.broadcastEmptyLists()
-    // Why: app/window disconnect is non-destructive for remote PTYs. The relay
-    // owns the grace timer, so Orca must unregister local providers without
-    // clearing PTY ownership needed for reattach.
+    // Why: window disconnect is non-destructive — unregister local providers but keep PTY ownership so reattach works (relay owns the grace timer).
     this.teardownProviders('connection_lost')
     this.store.markSshRemotePtyLeases(this.targetId, 'detached')
     this.currentConnection = null
@@ -614,11 +483,7 @@ export class SshRelaySession {
 
   // ── Private ───────────────────────────────────────────────────────
 
-  // Why: when the relay exec channel closes (e.g. --connect bridge exits,
-  // relay process crashes) but the SSH connection stays up, there is no
-  // automatic recovery — onStateChange only fires on SSH-level reconnects.
-  // This watcher detects relay-level channel loss and fires onRelayLost
-  // so ssh.ts can trigger session.reconnect() with the still-live SSH conn.
+  // Why: onStateChange only fires on SSH-level reconnects, so watch for relay-channel loss while SSH stays up and fire onRelayLost.
   private watchMuxForRelayLoss(mux: SshChannelMultiplexer): void {
     this.muxDisposeCleanup?.()
     this.muxDisposeCleanup = mux.onDispose((reason) => {
@@ -631,8 +496,7 @@ export class SshRelaySession {
     })
   }
 
-  // Why: shared by establish() and reconnect() — the exact same provider
-  // registration sequence, eliminating the duplication that caused bugs.
+  // Why: shared by establish() and reconnect() so both use the exact same registration sequence.
   private async registerProviders(
     mux: SshChannelMultiplexer,
     shouldContinue?: () => boolean
@@ -655,10 +519,7 @@ export class SshRelaySession {
     try {
       await this.installRemoteOrcaCliLauncher()
     } catch (error) {
-      // Why: the remote `orca` CLI launcher is a convenience bridge. On session-
-      // limited remotes (MaxSessions=1) the relay bridge holds the only slot,
-      // so this raw-connection install can fail — that must not fail the
-      // whole connection, matching the managed-hook install above.
+      // Why: on MaxSessions=1 remotes the relay holds the only slot, so this raw-connection install can fail — don't fail the whole connection.
       console.warn(
         `[ssh-relay-session] remote orca CLI launcher install failed for ${this.targetId}: ${
           error instanceof Error ? error.message : String(error)
@@ -679,8 +540,7 @@ export class SshRelaySession {
       connection.usesSystemSshTransport?.() === true
         ? undefined
         : (options?: { signal?: AbortSignal }) => this.requireReadyConnection().sftp(options)
-    // Why: getHostPlatform() falls back to this.hostPlatform when the full
-    // remote CLI bridge env is incomplete, so path rules still match the host.
+    // Why: getHostPlatform() falls back to this.hostPlatform when bridge env is incomplete, so path rules still match the host.
     const hostPlatform = this.getHostPlatform() ?? undefined
     const fsProvider = new SshFilesystemProvider(
       this.targetId,
@@ -728,11 +588,7 @@ export class SshRelaySession {
     })
   }
 
-  // Why: the relay can inject ORCA_AGENT_HOOK_* env into SSH PTYs, but
-  // hook-script agents (Claude/Codex/Gemini/etc.) still need their config
-  // files on the remote host to call Orca's managed script. Install those
-  // configs before registering the PTY provider so newly spawned agent panes
-  // report status from their first prompt.
+  // Why: hooks must exist before PTY spawn; relay-local work keeps all managed installs to one SSH round trip.
   private async installManagedHooksOnRemote(mux: SshChannelMultiplexer): Promise<void> {
     if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       return
@@ -741,46 +597,38 @@ export class SshRelaySession {
       this.remoteCliBridgeEnv?.hostPlatform &&
       isWindowsRemoteHost(this.remoteCliBridgeEnv.hostPlatform)
     ) {
-      // Why: managed hook installers currently emit POSIX hook scripts and paths.
-      // Windows remotes still get relay-injected env plus plugin overlays.
+      // Why: managed hook installers emit POSIX-only scripts/paths; Windows remotes rely on relay-injected env + plugin overlays instead.
       return
     }
 
-    let remoteHome: string
     try {
-      const result = (await mux.request('session.resolveHome', { path: '~' })) as {
-        resolvedPath?: unknown
+      const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()
+      const params = hostKeyFingerprint ? { hostKeyFingerprint } : {}
+      const result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
+        errors?: unknown
       }
-      if (typeof result.resolvedPath !== 'string' || result.resolvedPath.length === 0) {
+      if (typeof result.errors === 'number' && result.errors > 0) {
         console.warn(
-          `[ssh-relay-session] skipped remote managed hook install for ${this.targetId}: could not resolve remote home`
+          `[ssh-relay-session] ${result.errors} remote managed hook installers failed for ${this.targetId}`
         )
+      }
+    } catch (error) {
+      // Why: teardown routinely cancels this best-effort request; only warn for
+      // installer failures that survive the connection lifecycle.
+      const code = (error as { code?: unknown })?.code
+      if (
+        code === -32601 ||
+        code === 'CONNECTION_LOST' ||
+        code === 'DISPOSED' ||
+        mux.isDisposed()
+      ) {
         return
       }
-      remoteHome = result.resolvedPath
-    } catch (error) {
       console.warn(
-        `[ssh-relay-session] skipped remote managed hook install for ${this.targetId}: ${
+        `[ssh-relay-session] relay managed hook install failed for ${this.targetId}: ${
           error instanceof Error ? error.message : String(error)
         }`
       )
-      return
-    }
-
-    let sftp: Awaited<ReturnType<SshConnection['sftp']>> | null = null
-    try {
-      const connection = this.requireReadyConnection()
-      const remoteGrokHome = await resolveRemoteGrokHome(connection, remoteHome)
-      sftp = await connection.sftp()
-      await installRemoteManagedAgentHooks(sftp, remoteHome, { grokHomeDir: remoteGrokHome })
-    } catch (error) {
-      console.warn(
-        `[ssh-relay-session] remote managed hook install failed for ${this.targetId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      )
-    } finally {
-      ;(sftp as { end?: () => void } | null)?.end?.()
     }
   }
 
@@ -848,17 +696,7 @@ export class SshRelaySession {
     })
   }
 
-  // Why: ship the OpenCode plugin / Pi extension source bodies to the relay
-  // so it can materialize overlay dirs and inject OPENCODE_CONFIG_DIR
-  // / PI_CODING_AGENT_DIR into spawn env. The strings change as we add agent
-  // events (recent additions: cursor, pi); pinning them to the relay binary
-  // would force a relay redeploy on every Orca update. See
-  // docs/design/agent-status-over-ssh.md §4 + §8 (commit #7).
-  //
-  // Best-effort: a -32601 from an older relay (no handler installed) is
-  // swallowed; the user just doesn't get OpenCode/Pi status reporting until
-  // they upgrade. Hook-script-based agents use a separate explicit remote
-  // installer flow because that mutates user-owned agent config files.
+  // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy (agent-status-over-ssh.md §4/§8). Best-effort.
   private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
     if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       return
@@ -870,11 +708,7 @@ export class SshRelaySession {
         ompExtensionSource: getPiAgentStatusExtensionSource('omp')
       })
     } catch (err) {
-      // Why: -32601 = older relay without the handler (treat as soft skip).
-      // CONNECTION_LOST / DISPOSED come from the multiplexer when it tears
-      // down mid-flight (routine on session shutdown / reconnect race) — not
-      // a real failure to surface; suppress to avoid log spam on every clean
-      // disconnect.
+      // Why: -32601 = older relay without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.
       const code = (err as { code?: unknown })?.code
       if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED') {
         return
@@ -901,25 +735,12 @@ export class SshRelaySession {
     })
   }
 
-  // Why: route the relay's `agent.hook` JSON-RPC notification into Orca's
-  // shared `agentHookServer` via `ingestRemote`. The wire envelope carries
-  // `connectionId: null` (the relay does not know Orca's local handle); we
-  // stamp the real value here from `this.targetId` so the renderer can drop
-  // in-flight events for connections that have torn down. After wiring is
-  // in place we kick off a request-driven replay so any cached payload from
-  // before the channel was up survives the reconnect — see §5 Path 3.
-  //
-  // The Orca-side mux's `notificationHandlers` is a flat array — each
-  // handler must filter by method name itself.
+  // Why: relay sends connectionId:null, so stamp this.targetId here so the renderer can drop events from torn-down connections.
   private wireUpAgentHookEvents(mux: SshChannelMultiplexer): void {
     if (!isRemoteAgentHooksEnabled()) {
       return
     }
-    // Why: capture the disposer so teardownProviders can release the
-    // notification handler symmetrically with muxDisposeCleanup. Even though
-    // the disposed mux's handler array is GC'd along with it today, retaining
-    // the disposer makes "registerProviders called twice on the same mux"
-    // safe by future-proofing against duplicate handler registration.
+    // Why: capture the disposer so teardownProviders can release this handler and re-wiring can't double-register it.
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = mux.onNotification((method, params) => {
       if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
@@ -946,11 +767,7 @@ export class SshRelaySession {
       if (typeof envelope.paneKey !== 'string') {
         return
       }
-      // Why: forward env/version verbatim so Orca's warn-once cross-build /
-      // dev-vs-prod diagnostics fire on remote events the same as on local
-      // ones — see docs/design/agent-status-over-ssh.md §3 ("Replay /
-      // version mismatch") and the relay's wire envelope at
-      // src/shared/agent-hook-relay.ts.
+      // Why: forward env/version verbatim so cross-build warn-once diagnostics fire on remote events too (agent-status-over-ssh.md §3).
       agentHookServer.ingestRemote(
         {
           paneKey: envelope.paneKey,
@@ -979,12 +796,7 @@ export class SshRelaySession {
       )
     })
 
-    // Why: ask the relay to replay every cached paneKey it remembers. Issued
-    // *after* the handler is wired so the request-driven replay shape
-    // strictly trails our subscription on the dispatcher's single write
-    // callback. Best-effort: a relay that does not know the method
-    // (e.g. older relay binary) returns -32601; CONNECTION_LOST / DISPOSED
-    // arise from mux teardown mid-flight on routine reconnect/shutdown.
+    // Why: request replay of cached paneKeys only after the handler is wired, so replayed events can't arrive before we subscribe. Best-effort.
     void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch((err) => {
       const code = (err as { code?: unknown })?.code
       if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED') {
@@ -993,9 +805,7 @@ export class SshRelaySession {
       if (mux.isDisposed()) {
         return
       }
-      // Why: a normal disconnect/teardown rejects the in-flight request with
-      // "Multiplexer disposed"; suppress the warn for that path so reconnect
-      // cycles aren't noisy.
+      // Why: suppress the warn when a normal teardown rejects the in-flight request, so reconnect cycles aren't noisy.
       if (mux.isDisposed()) {
         return
       }
@@ -1020,8 +830,7 @@ export class SshRelaySession {
     if (reason === 'shutdown') {
       clearPtyOwnershipForConnection(this.targetId)
     } else {
-      // Why: handlers are detached above, so no late event can recreate a
-      // stamped status between this clear and reconnect replay.
+      // Why: handlers detached above, so no late event can re-stamp status between this clear and reconnect replay.
       agentHookServer.clearStatusEntriesForConnection(this.targetId)
     }
 
@@ -1039,10 +848,7 @@ export class SshRelaySession {
     unregisterSshGitProvider(this.targetId)
   }
 
-  // Why: kept for back-compat with old relay binaries during the upgrade
-  // window — those still gate FS ops on registered roots. New relays no-op
-  // these notifications. Tracked for removal once the relay-version floor
-  // moves past the cutover (see docs/relay-fs-allowlist-removal.md).
+  // Why: back-compat for old relays that gate FS ops on registered roots; removable post-cutover (docs/relay-fs-allowlist-removal.md).
   private async registerRelayRoots(mux: SshChannelMultiplexer): Promise<void> {
     const remoteRepos = this.store.getRepos().filter((r) => r.connectionId === this.targetId)
 
@@ -1069,9 +875,7 @@ export class SshRelaySession {
     )
   }
 
-  // Why: extracted so establish() and reconnect() share exactly the same
-  // event wiring. Previously forgetting to wire onReplay on one path
-  // caused silent terminal blanking after reconnect.
+  // Why: shared by establish()/reconnect() so both paths reset renderer lists the same way.
   private broadcastEmptyLists(): void {
     const win = this.getMainWindow()
     if (!win || win.isDestroyed()) {
@@ -1091,17 +895,13 @@ export class SshRelaySession {
     if (!this.mux || this.isDisposed()) {
       return
     }
-    // Why: each scan walks /proc/*/fd on the remote host, so the scanner skips
-    // ticks entirely while no window can show the results (hidden to tray or
-    // minimized overnight) and rescans immediately when the window returns.
+    // Why: each scan walks /proc/*/fd remotely, so skip ticks while the window is hidden and rescan when it returns.
     const scanner = new PortScanner({
       isWindowVisible: () => isMainWindowVisible(this.getMainWindow()),
       onWindowBecameVisible: onMainWindowBecameVisible
     })
     this.portScanner = scanner
-    // Why: capture the scanner instance so that a late ports.detect callback
-    // from a previous relay session (before reconnect replaced it) is silently
-    // discarded instead of publishing stale results into the new session.
+    // Why: guard against a late ports.detect callback from a pre-reconnect scanner publishing stale results into the new session.
     scanner.startScanning(this.targetId, this.mux, (targetId, ports, platform) => {
       if (this.portScanner !== scanner) {
         return
@@ -1131,11 +931,7 @@ export class SshRelaySession {
       if (!win || win.isDestroyed()) {
         return
       }
-      // Why: hidden-delivery gate parity with ipc/pty.ts — runtime ingestion
-      // above already consumed the chunk; gated renderer delivery is dropped
-      // and one out-of-band pty:modelRestoreNeeded signal latches
-      // model-restore-needed for reveal. Never an in-band pty:data sentinel:
-      // OSC-9999-only chunks legitimately strip to empty in the renderer.
+      // Why: hidden-delivery gate parity with ipc/pty.ts — latch model-restore out-of-band, never an in-band pty:data sentinel (OSC-9999-only chunks strip to empty).
       const store = this.store as { getSettings?: Store['getSettings'] }
       if (shouldDropHiddenRendererPtyData(payload.id, store.getSettings?.())) {
         const drop = recordHiddenRendererPtyDataDrop(payload.id, rawLength)
@@ -1164,17 +960,30 @@ export class SshRelaySession {
       }
     })
     ptyProvider.onExit((payload) => {
-      const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
-      clearProviderPtyState(payload.id)
-      deletePtyOwnership(payload.id)
-      this.forwardedReattachReplayByPty.delete(payload.id)
-      this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
-      this.runtime?.onPtyExit(payload.id, payload.code)
-      const win = this.getMainWindow()
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('pty:exit', payload)
+      const pendingReattach = this.pendingPtyReattaches.get(payload.id)
+      if (pendingReattach) {
+        // Why: attach response and exit can share one transport batch, before incarnation restoration runs.
+        pendingReattach.exits.push(payload)
+        return
       }
+      if (!isCurrentPtyExit(payload)) {
+        return
+      }
+      this.retireExitedPty(payload)
     })
+  }
+
+  private retireExitedPty(payload: SshPtyExitPayload): void {
+    const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
+    clearProviderPtyState(payload.id)
+    deletePtyOwnership(payload.id)
+    this.forwardedReattachReplayByPty.delete(payload.id)
+    this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
+    this.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
+    const win = this.getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:exit', payload)
+    }
   }
 
   private replayFingerprint(data: string): string {
@@ -1209,10 +1018,9 @@ export class SshRelaySession {
     const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
       .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
+    const activeLeaseByPtyId = new Map(activeLeases.map((lease) => [lease.ptyId, lease]))
     const leasedPtyIds = activeLeases.map((lease) => lease.ptyId)
-    // Why: carry each lease's pane identity into the attach so the relay can
-    // reject cross-generation id collisions even between split panes in one tab.
-    // Older leases may lack leafId, so tabId remains the compatibility fallback.
+    // Why: pass pane identity so the relay can reject cross-generation id collisions; tabId falls back for pre-leafId leases.
     const expectedIdentityByPtyId = new Map(
       activeLeases
         .map((lease): [string, ExpectedPtyIdentity] | null => {
@@ -1221,8 +1029,7 @@ export class SshRelaySession {
         })
         .filter((entry): entry is [string, ExpectedPtyIdentity] => entry !== null)
     )
-    // Why: after app restart, ptyOwnership is empty but durable SSH leases
-    // still describe remote PTYs that survived in the relay grace window.
+    // Why: after app restart ptyOwnership is empty, but durable SSH leases still describe grace-window survivors.
     const ptyIds = Array.from(
       new Set([
         ...getPtyIdsForConnection(this.targetId).map((ptyId) =>
@@ -1239,6 +1046,9 @@ export class SshRelaySession {
       if (!shouldContinue()) {
         return
       }
+      const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+      const pendingReattach: PendingPtyReattach = { exits: [] }
+      this.pendingPtyReattaches.set(appPtyId, pendingReattach)
       try {
         const expectedIdentity = expectedIdentityByPtyId.get(ptyId)
         const attachResult =
@@ -1248,15 +1058,55 @@ export class SshRelaySession {
         if (!shouldContinue()) {
           return
         }
-        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+        const exitDuringAttach = pendingReattach.exits.find(
+          (exit) =>
+            !exit.incarnationId ||
+            !attachResult.incarnationId ||
+            exit.incarnationId === attachResult.incarnationId
+        )
+        if (exitDuringAttach) {
+          if (attachResult.incarnationId) {
+            restorePtyIncarnation(appPtyId, attachResult.incarnationId)
+            this.runtime?.acceptPtyIncarnationForExit(appPtyId, attachResult.incarnationId)
+          }
+          this.retireExitedPty(exitDuringAttach)
+          continue
+        }
         setPtyOwnership(appPtyId, this.targetId)
+        if (attachResult.incarnationId) {
+          restorePtyIncarnation(appPtyId, attachResult.incarnationId)
+          const lease = activeLeaseByPtyId.get(ptyId)
+          if (lease?.worktreeId && lease.tabId && lease.leafId) {
+            this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
+              tabId: lease.tabId,
+              leafId: lease.leafId,
+              incarnationId: attachResult.incarnationId
+            })
+            // Why: reconnect may be the first new-relay response that can backfill exact exit fencing.
+            try {
+              this.store.persistPtyBinding({
+                worktreeId: lease.worktreeId,
+                tabId: lease.tabId,
+                leafId: lease.leafId,
+                ptyId: appPtyId,
+                incarnationId: attachResult.incarnationId
+              })
+            } catch (error) {
+              // Why: this backfill improves future fencing but must not disconnect an already-live relay PTY.
+              console.error('[ssh-relay-session] Failed to persist reconnect incarnation:', error)
+            }
+          } else {
+            this.runtime?.onPtySpawned(appPtyId, attachResult.incarnationId, {
+              awaitsRegistration: false
+            })
+          }
+        }
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'attached')
         this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
       } catch (err) {
         if (!isSshPtyNotFoundError(err)) {
           throw err
         }
-        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
         if (isSshPtyIdentityMismatchError(err)) {
           console.warn(
             `[ssh-relay-session] Ignoring stale PTY ${ptyId} for ${this.targetId} after relay identity mismatch: ${
@@ -1274,12 +1124,14 @@ export class SshRelaySession {
         deletePtyOwnership(appPtyId)
         this.forwardedReattachReplayByPty.delete(appPtyId)
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')
-        // Why: if the new relay cannot reattach this id, the remote backing
-        // process is gone. Tell the renderer so it clears stale pane bindings
-        // instead of keeping a cursor-only terminal.
+        // Why: reattach failure means the remote process is gone; tell the renderer to clear the stale pane.
         const win = this.getMainWindow()
         if (win && !win.isDestroyed()) {
           win.webContents.send('pty:exit', { id: appPtyId, code: -1 })
+        }
+      } finally {
+        if (this.pendingPtyReattaches.get(appPtyId) === pendingReattach) {
+          this.pendingPtyReattaches.delete(appPtyId)
         }
       }
     }
