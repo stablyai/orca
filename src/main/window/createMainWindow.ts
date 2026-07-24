@@ -130,6 +130,7 @@ function isMacAppPasteInput(input: Electron.Input): boolean {
 
 // Why: titlebar content center sits ~18 CSS px from top (×zoom); traffic lights are ~12px tall, so top edge = center − 6.
 const TITLEBAR_CSS_CENTER = 18
+const TITLEBAR_CSS_HEIGHT = TITLEBAR_CSS_CENTER * 2
 const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
 const MIN_WIDTH = 600
@@ -245,6 +246,16 @@ export function createMainWindow(
         : process.platform === 'win32'
           ? 'hidden'
           : undefined,
+    // Why: Windows needs a real native maximize caption button for the Windows 11
+    // Snap Layout hover menu. The overlay preserves our custom titlebar content
+    // while letting Windows own min/max/close hit-testing and system behavior.
+    ...(process.platform === 'win32'
+      ? {
+          titleBarOverlay: {
+            height: TITLEBAR_CSS_HEIGHT
+          }
+        }
+      : {}),
     // Why: Linux ignores titleBarStyle 'hidden'; frame:false drops the native frame so we don't get a double title bar (renderer draws its own).
     ...(process.platform === 'linux' ? { frame: false } : {}),
     // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts on zoom change.

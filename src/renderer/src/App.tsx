@@ -27,6 +27,7 @@ import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import {
   isPairedWebClientWindow,
+  shouldRenderCustomWindowControls,
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
@@ -209,10 +210,18 @@ const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
 const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
-// Why: Windows and Linux remove the native title bar so the renderer draws its own chrome; paired web clients run in a browser tab and must not.
+const isWebClient = isPairedWebClientWindow()
+// Why: Windows and Linux both place app content in the titlebar area; paired
+// web clients run in a browser tab and must not reserve desktop chrome.
 const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
   platform: shortcutPlatform,
-  isWebClient: isPairedWebClientWindow()
+  isWebClient
+})
+// Why: Windows uses Electron's native Window Controls Overlay for Win11 Snap
+// Layouts. Only frameless Linux still needs renderer-drawn caption buttons.
+const hasCustomWindowControls = shouldRenderCustomWindowControls({
+  platform: shortcutPlatform,
+  isWebClient
 })
 
 async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
@@ -246,7 +255,8 @@ type ShortcutDispatchInput = {
   preventDefault: () => void
 }
 
-// Why: Windows and Linux both remove the native title bar, so we render our own min/max/close buttons (Fluent/Win11-style SVGs).
+// Why: frameless Linux has no native caption buttons, so render our own
+// min/max/close controls. Windows uses the native Window Controls Overlay.
 function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
@@ -2626,8 +2636,8 @@ function App(): React.JSX.Element {
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
       <SkillFreshnessNudge />
       <PinnedTabCloseDialog />
-      {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
-      {hasCustomTitleBar && <WindowControls />}
+      {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so Linux WindowControls stay clickable. */}
+      {hasCustomWindowControls && <WindowControls />}
     </div>
   )
 }

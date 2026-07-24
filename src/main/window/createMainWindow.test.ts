@@ -195,7 +195,8 @@ describe('createMainWindow', () => {
       })
     } else if (process.platform === 'win32') {
       expect(browserWindowOptions).toMatchObject({
-        titleBarStyle: 'hidden'
+        titleBarStyle: 'hidden',
+        titleBarOverlay: { height: 36 }
       })
     } else {
       // Linux: native frame is dropped so the renderer titlebar isn't stacked
@@ -265,12 +266,16 @@ describe('createMainWindow', () => {
 
   it('sets platform-specific titlebar and frame options for every desktop platform', () => {
     for (const [platform, expected] of [
-      ['darwin', { titleBarStyle: 'hiddenInset', frame: undefined }],
-      ['win32', { titleBarStyle: 'hidden', frame: undefined }],
-      ['linux', { titleBarStyle: undefined, frame: false }]
+      ['darwin', { titleBarStyle: 'hiddenInset', titleBarOverlay: undefined, frame: undefined }],
+      ['win32', { titleBarStyle: 'hidden', titleBarOverlay: { height: 36 }, frame: undefined }],
+      ['linux', { titleBarStyle: undefined, titleBarOverlay: undefined, frame: false }]
     ] satisfies [
       NodeJS.Platform,
-      { titleBarStyle: string | undefined; frame: boolean | undefined }
+      {
+        titleBarStyle: string | undefined
+        titleBarOverlay: { height: number } | undefined
+        frame: boolean | undefined
+      }
     ][]) {
       browserWindowMock.mockReset()
       const webContents = {
@@ -306,6 +311,7 @@ describe('createMainWindow', () => {
 
       const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
       expect(browserWindowOptions.titleBarStyle).toBe(expected.titleBarStyle)
+      expect(browserWindowOptions.titleBarOverlay).toEqual(expected.titleBarOverlay)
       expect(browserWindowOptions.frame).toBe(expected.frame)
     }
   })

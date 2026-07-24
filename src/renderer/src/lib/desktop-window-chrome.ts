@@ -13,3 +13,13 @@ export function shouldRenderDesktopWindowChrome({
 }: DesktopWindowChromeInput): boolean {
   return !isWebClient && (platform === 'win32' || platform === 'linux')
 }
+
+export function shouldRenderCustomWindowControls({
+  platform,
+  isWebClient
+}: DesktopWindowChromeInput): boolean {
+  // Why: Windows uses Electron's native Window Controls Overlay so the
+  // maximize button exposes Windows 11 Snap Layouts. Frameless Linux still
+  // needs the renderer-drawn min/max/close controls.
+  return !isWebClient && platform === 'linux'
+}
