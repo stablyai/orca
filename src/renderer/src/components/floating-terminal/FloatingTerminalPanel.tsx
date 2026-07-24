@@ -1024,6 +1024,15 @@ export function FloatingTerminalPanel({
         return true
       }
       if (matches('tab.close')) {
+        // Why: when the active terminal tab has split panes, defer to the
+        // terminal pane keyboard handler which closes only the focused pane.
+        if (
+          activeClosableTab?.contentType === 'terminal' &&
+          isFloatingTerminalInput &&
+          state.terminalLayoutsByTabId[activeClosableTab.entityId]?.root?.type === 'split'
+        ) {
+          return false
+        }
         consume()
         if (activeClosableTab) {
           closeFloatingItem(activeClosableTab.id)
@@ -1040,6 +1049,24 @@ export function FloatingTerminalPanel({
       if (matchesFloatingChrome('tab.rename') && activeTab) {
         consume()
         state.setRenamingTabId(activeTab.id)
+        return true
+      }
+      // Why: workspace.selectByIndex is intercepted by the main process and
+      // sent as IPC — remap it to floating tab switching when the panel owns focus.
+      const worktreeIndex = matchKeybindingDigitIndex(
+        'workspace.selectByIndex',
+        input,
+        platform,
+        state.keybindings,
+        floatingChromeMatchOptions
+      )
+      if (worktreeIndex !== null) {
+        const visibleId = visibleFloatingTabOrder[worktreeIndex]
+        if (!visibleId) {
+          return false
+        }
+        consume()
+        activateFloatingItem(visibleId)
         return true
       }
       const selectedTabIndex = matchKeybindingDigitIndex(
