@@ -86,7 +86,11 @@ export function buildSkillCommandForRuntime(
     currentPlatform
   )
   if (resolvedRuntime.runtime !== 'wsl') {
-    return normalizedCommand
+    return wrapWindowsSkillCommandWithNpxPrerequisite(
+      normalizedCommand,
+      resolvedRuntime,
+      currentPlatform
+    )
   }
 
   const distroArg = resolvedRuntime.wslDistro?.trim()
@@ -122,6 +126,28 @@ function normalizeWindowsSkillUpdateCommand(
   // Windows, while reinstalling from the same repo source is idempotent and
   // keeps the setup affordance working.
   return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
+}
+
+function wrapWindowsSkillCommandWithNpxPrerequisite(
+  command: string,
+  runtime: LocalAgentRuntime,
+  currentPlatform: NodeJS.Platform
+): string {
+  const trimmedCommand = command.trim()
+  if (
+    runtime.runtime === 'wsl' ||
+    currentPlatform !== 'win32' ||
+    !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)
+  ) {
+    return command
+  }
+
+  const missingNpxGuidance =
+    'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx, then restart Orca and try again. & echo If Node.js is already installed, add it to PATH before restarting Orca. & exit /b 1'
+  const executableCommand = trimmedCommand.replace(/^npx\b/i, 'npx.cmd')
+  // Why: cmd.exe provides one shell-neutral boundary for PowerShell, Command
+  // Prompt, and Git Bash while executing the exact shim that the preflight found.
+  return `cmd.exe /d /s /c "where.exe npx.cmd >nul 2>nul & if errorlevel 1 (${missingNpxGuidance}) else (${executableCommand})"`
 }
 
 function getSkillCommandPlatform(): NodeJS.Platform {

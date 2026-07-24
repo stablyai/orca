@@ -10,6 +10,8 @@ import { OrchestrationPane } from './OrchestrationPane'
 const INSTALL_COMMAND =
   'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
 const UPDATE_COMMAND = INSTALL_COMMAND
+const WINDOWS_INSTALL_COMMAND =
+  'cmd.exe /d /s /c "where.exe npx.cmd >nul 2>nul & if errorlevel 1 (echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx, then restart Orca and try again. & echo If Node.js is already installed, add it to PATH before restarting Orca. & exit /b 1) else (npx.cmd skills add https://github.com/stablyai/orca --skill orchestration --global)"'
 
 const mocks = vi.hoisted(() => ({
   dialogProps: [] as Record<string, unknown>[],
@@ -163,8 +165,8 @@ describe('OrchestrationPane', () => {
 
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
-        command: INSTALL_COMMAND,
-        installedCommand: UPDATE_COMMAND
+        command: WINDOWS_INSTALL_COMMAND,
+        installedCommand: WINDOWS_INSTALL_COMMAND
       })
     )
 
@@ -199,10 +201,10 @@ describe('OrchestrationPane', () => {
 
     expect(mocks.dialogProps.at(-1)).toEqual(
       expect.objectContaining({
-        command: INSTALL_COMMAND,
+        command: WINDOWS_INSTALL_COMMAND,
         open: true
       })
     )
-    expect(rendered.textContent).toContain(INSTALL_COMMAND)
+    expect(rendered.textContent).toContain(WINDOWS_INSTALL_COMMAND)
   })
 })

@@ -29,6 +29,12 @@ function getWslOuterShellScript(command: string): string {
 }
 
 describe('CliSkillRuntimeSetup runtime helpers', () => {
+  const windowsNpxPreflightPrefix =
+    'cmd.exe /d /s /c "where.exe npx.cmd >nul 2>nul & if errorlevel 1 ('
+  const windowsNpxGuidance =
+    'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx, then restart Orca and try again. & echo If Node.js is already installed, add it to PATH before restarting Orca. & exit /b 1'
+  const windowsNpxCommand = (command: string): string => command.replace(/^npx\b/i, 'npx.cmd')
+
   it('wraps WSL skill installs as a directly runnable selected-distro command', () => {
     const skillCommand = 'npx skills add orchestration --global'
     const command = buildSkillInstallCommandForRuntime(skillCommand, {
@@ -41,6 +47,25 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     expect(command).toBe(
       `& { $PSNativeCommandArgumentPassing = 'Legacy'; wsl.exe -d 'Ubuntu' -- sh -c 'eval \\"\`printf %s ${encoded} | base64 -d\`\\"' } # Runs: ${skillCommand}`
     )
+    expect(decodeWslLoginShellScript(command)).toContain(
+      'exec "$_orca_wsl_shell" -ilc \'npx skills add orchestration --global\''
+    )
+  })
+
+  it('keeps a Windows-selected WSL install inside WSL without the host preflight', () => {
+    const skillCommand = 'npx skills add orchestration --global'
+    const command = buildSkillCommandForRuntime(
+      skillCommand,
+      {
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        label: 'WSL Ubuntu'
+      },
+      'win32'
+    )
+
+    expect(command).toContain("wsl.exe -d 'Ubuntu'")
+    expect(command).not.toContain('where.exe npx.cmd')
     expect(decodeWslLoginShellScript(command)).toContain(
       'exec "$_orca_wsl_shell" -ilc \'npx skills add orchestration --global\''
     )
@@ -118,7 +143,34 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     }
   )
 
-  it('reinstalls Windows-host skill updates through the add path', () => {
+  it('preflights npx before Windows-host skill installs', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])
+
+    expect(
+      buildSkillCommandForRuntime(
+        installCommand,
+        {
+          runtime: 'host',
+          label: 'Windows'
+        },
+        'win32'
+      )
+    ).toBe(
+      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${windowsNpxCommand(installCommand)})"`
+    )
+  })
+
+  it('treats missing runtime as a preflighted Windows host fallback for skill installs', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])
+
+    expect(buildSkillCommandForRuntime(installCommand, undefined, 'win32')).toBe(
+      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${windowsNpxCommand(installCommand)})"`
+    )
+  })
+
+  it('reinstalls Windows-host skill updates after the npx preflight', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+
     expect(
       buildSkillCommandForRuntime(
         'npx skills update orchestration --global',
@@ -128,13 +180,34 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         },
         'win32'
       )
-    ).toBe(buildAgentFeatureSkillInstallCommand(['orchestration']))
+    ).toBe(
+      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${windowsNpxCommand(installCommand)})"`
+    )
   })
 
-  it('treats missing runtime as a Windows host fallback for skill updates', () => {
+  it('treats missing runtime as a preflighted Windows host fallback for skill updates', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli'])
+
     expect(
       buildSkillCommandForRuntime('npx skills update orca-cli --global', undefined, 'win32')
-    ).toBe(buildAgentFeatureSkillInstallCommand(['orca-cli']))
+    ).toBe(
+      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${windowsNpxCommand(installCommand)})"`
+    )
+  })
+
+  it('keeps non-Windows host skill installs on the direct npx path', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+
+    expect(
+      buildSkillCommandForRuntime(
+        installCommand,
+        {
+          runtime: 'host',
+          label: 'This device'
+        },
+        'linux'
+      )
+    ).toBe(installCommand)
   })
 
   it('keeps non-Windows host skill updates on the update path', () => {
@@ -148,6 +221,19 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         'linux'
       )
     ).toBe('npx skills update orchestration --global')
+  })
+
+  it('does not wrap unrelated Windows host commands', () => {
+    expect(
+      buildSkillCommandForRuntime(
+        'orca skills list',
+        {
+          runtime: 'host',
+          label: 'Windows'
+        },
+        'win32'
+      )
+    ).toBe('orca skills list')
   })
 
   it('preserves the selected WSL distro for skill discovery', () => {

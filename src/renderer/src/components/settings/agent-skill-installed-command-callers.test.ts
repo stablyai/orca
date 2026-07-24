@@ -68,7 +68,11 @@ const updateCapableCallers = new Map<string, readonly string[]>([
 const installOnlyCallers = new Map<string, readonly string[]>([
   [
     'src/renderer/src/components/emulator-pane/MobileEmulatorAgentSetupGuideSteps.tsx',
-    ['showInstallWhenInstalled={!setup.cliSkillInstalled}']
+    [
+      'buildSkillCommandForRuntime(',
+      'command={skillInstallCommand}',
+      'showInstallWhenInstalled={!setup.cliSkillInstalled}'
+    ]
   ]
 ])
 
@@ -127,6 +131,17 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     expect(source).toContain('installedCommand={orchestrationUpdateCommand}')
     expect(source).not.toContain('Copy update command')
     expect(source).not.toContain('copyUpdateCommand')
+  })
+
+  it('routes the combined feature-tip install through runtime command setup', () => {
+    const source = readRepoFile(
+      'src/renderer/src/components/feature-tips/CliSkillSetupTerminal.tsx'
+    )
+
+    expect(source).toContain('buildSkillCommandForRuntime(')
+    expect(source).toContain('command={skillCommand}')
+    expect(source).toContain('shellOverride={activeSkillRuntime.terminalShellOverride}')
+    expect(source).not.toContain('command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}')
   })
 
   it('fails when a production caller can show the default Update action without installedCommand', () => {
