@@ -22,8 +22,24 @@ export type CodexSessionResumePreparation =
   | { outcome: 'resume'; codexHomePath: string }
   | { outcome: 'fresh'; claimedCodexProvenance: boolean }
 
+// Why: provenance may fold Win32's extended drive spelling, never arbitrary device namespaces.
+function toCodexTrustedPathComparisonCopy(filePath: string): string | null {
+  if (filePath.startsWith('\\\\.\\')) {
+    return null
+  }
+  if (!filePath.startsWith('\\\\?\\')) {
+    return filePath
+  }
+  return filePath.match(/^\\\\\?\\([A-Za-z]:[\\/][\s\S]*)$/)?.[1] ?? null
+}
+
 function isCodexRolloutInsideSessionsRoot(sessionsRoot: string, filePath: string): boolean {
-  const relativePath = relativePathInsideRoot(sessionsRoot, filePath)
+  const comparisonSessionsRoot = toCodexTrustedPathComparisonCopy(sessionsRoot)
+  const comparisonFilePath = toCodexTrustedPathComparisonCopy(filePath)
+  if (!comparisonSessionsRoot || !comparisonFilePath) {
+    return false
+  }
+  const relativePath = relativePathInsideRoot(comparisonSessionsRoot, comparisonFilePath)
   return Boolean(relativePath && ROLLOUT_RELATIVE_PATH.test(relativePath.replace(/\\/g, '/')))
 }
 
