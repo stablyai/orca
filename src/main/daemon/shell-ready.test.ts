@@ -98,7 +98,11 @@ async function runInteractiveZshRc(args: {
   return output
 }
 
-function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
+function runInteractiveBashRcfile(
+  rcfileContent: string,
+  tempDir: string,
+  envOverrides: Record<string, string> = {}
+): string {
   const rcfile = join(tempDir, 'bash-osc133-rcfile')
   writeFileSync(rcfile, rcfileContent)
 
@@ -112,7 +116,8 @@ function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): strin
         ...process.env,
         HOME: tempDir,
         ORCA_SHELL_READY_MARKER: '1',
-        TERM: process.env.TERM || 'xterm'
+        TERM: process.env.TERM || 'xterm',
+        ...envOverrides
       },
       timeout: 5000
     }
@@ -511,6 +516,27 @@ describePosix('daemon shell-ready launch config', () => {
       expectBashOsc133Lifecycle(output)
     }
   )
+
+  // Why: the precmd hook runs first in PROMPT_COMMAND, so leaking its own status makes
+  // prompt frameworks (powerline-go, starship) report a phantom failure every prompt.
+  itWithBash('passes the command exit status through to later prompt hooks', async () => {
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      [
+        '__orca_exit_probe() { printf "EXIT_PROBE:%s\\n" "$?"; }',
+        "PROMPT_COMMAND='__orca_exit_probe'"
+      ].join('\n')
+    )
+
+    // Why: normal terminals run with the marker disabled, where the trailing marker test used to leak 1.
+    const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath, {
+      ORCA_SHELL_READY_MARKER: '0'
+    })
+
+    expect(output).toContain('EXIT_PROBE:0')
+    expect(output).toContain('EXIT_PROBE:1')
+  })
 
   itWithBash(
     'preserves prompt hooks and existing DEBUG traps without fake command markers',

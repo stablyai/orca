@@ -143,6 +143,8 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\\033]133;A\\007"
+  # Why: printf would mask the command's status from the user's prompt chain.
+  return "$exit_code"
 }
 __orca_osc133_prompt_done() {
   unset __orca_in_prompt_command
@@ -254,6 +256,8 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\\033]133;A\\007"
+  # Why: printf would mask the command's status from later precmd hooks.
+  return "$exit_code"
 }
 __orca_osc133_preexec() {
   printf "\\033]133;C\\007"
