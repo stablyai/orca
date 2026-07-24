@@ -54,8 +54,8 @@ export function createInstallPluginsHandler(
     if (pluginOverlay.hasOpenCodeSource()) {
       // An omitted source leaves the manager's cache untouched, so it counts as unchanged.
       const incoming = typeof opencode === 'string' ? opencode : null
-      // Re-resolved every call so a config root created after the first install still
-      // gets mirrored; the rc scan is memoized and the default branch is one existsSync.
+      // Explicit-only (see header). Constant in practice for a relay's lifetime, so
+      // keying the cache on it is defensive; the rc scan behind it is memoized.
       const sourceDir = resolveOpenCodeSourceConfigDir(env as Record<string, string>, env.SHELL)
       const cached = materialized
       if (

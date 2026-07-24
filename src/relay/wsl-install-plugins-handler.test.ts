@@ -63,17 +63,17 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it('rebuilds when an explicitly-set config root appears after the first install', () => {
+  it('rebuilds if the resolved source dir ever changes (defensive)', () => {
     withHome((home) => {
+      // The relay's env is fixed for its lifetime, so nothing in production reaches
+      // this branch today; it exists so a plugin-only overlay can't outlive a source
+      // dir becoming resolvable. Simulated by mutating the env the factory captured.
       const userConfig = join(home, 'my-opencode')
       const env = { HOME: home, ORCA_WSL_HOOK_INSTANCE: 'inst1' } as NodeJS.ProcessEnv
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), env)
       const source = '// v1\n'
       install({ opencodePluginSource: source })
 
-      // Why: the source dir is resolved per call, so a dir that only becomes
-      // resolvable later still gets mirrored; keying the cache on the plugin
-      // source alone would leave the overlay plugin-only for the relay's life.
       mkdirSync(userConfig, { recursive: true })
       writeFileSync(join(userConfig, 'opencode.json'), '{"model":"late"}')
       env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = userConfig
