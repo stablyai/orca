@@ -12,6 +12,7 @@ import {
   type CodexSettingsPromotionHomes,
   type CodexSettingsPromotionPlan
 } from './config-settings-promotion'
+import { readCodexSettingsBaseline } from './config-settings-baseline'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
 import {
   createTomlLineScanState,
@@ -48,8 +49,14 @@ export function syncSystemConfigIntoManagedCodexHome(
     return
   }
   if (mirrorResult.status === 'skipped-missing-source') {
-    // Why: advancing now would mark the unmirrored runtime change as promoted,
-    // so it could never retry once the source config reappears.
+    // Why: advancing an existing baseline would mark the unmirrored runtime
+    // change as promoted, so it could never retry once the source reappears.
+    // A runtime home seeded outside the mirror (WSL, per-account) has no
+    // baseline at all, and promotion stays inert until one exists — bootstrap
+    // it, since nothing is promotable yet and so nothing can be stranded.
+    if (!readCodexSettingsBaseline(homes.runtimeHomePath)) {
+      snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
+    }
     return
   }
   // Why: the baseline advances only after a successful mirror; recording an

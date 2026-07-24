@@ -240,6 +240,27 @@ describe('codex settings write-back promotion', () => {
     expect(readRuntimeConfig()).toContain('model = "o4"')
   })
 
+  it('bootstraps a baseline while the system config is missing so promotion still arms', () => {
+    // Why: WSL and per-account homes seed a runtime config before any mirror runs,
+    // so skipping without a baseline would leave promotion inert forever.
+    setRuntimeConfig('model = "seeded"\n\n[features]\nhooks = true\n')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(existsSync(systemConfigPath())).toBe(false)
+    expect(existsSync(baselinePath())).toBe(true)
+    expect(readRuntimeConfig()).toContain('[features]')
+
+    simulateCodexSettingWrite('model', '"o4"')
+    // The source finally appears holding the value the runtime was seeded from,
+    // so the in-Codex change is the only side that moved and must promote.
+    writeSystemConfig('model = "seeded"\n')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readSystemConfig()).toBe('model = "o4"\n')
+    expect(readRuntimeConfig()).toContain('model = "o4"')
+  })
+
   it('inserts a key ~/.codex lacks into the preamble without disturbing the rest', () => {
     writeSystemConfig('# my codex config\nmodel = "gpt-5"\n\n[features]\nhooks = true\n')
     syncSystemConfigIntoManagedCodexHome()
