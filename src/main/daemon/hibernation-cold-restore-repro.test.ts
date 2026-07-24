@@ -37,7 +37,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     await manager.checkpoint(sessionId, em.getSnapshot())
     em.dispose()
 
-    const info = reader.detectColdRestore(sessionId)
+    const info = await reader.detectColdRestore(sessionId)
     expect(info).not.toBeNull()
     // Adapter uses rehydrateSequences + snapshotAnsi for non-alt-screen → non-empty.
     expect(info!.modes.alternateScreen).toBe(false)
@@ -59,7 +59,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     await manager.checkpoint(sessionId, em.getSnapshot())
     em.dispose()
 
-    const info = reader.detectColdRestore(sessionId)
+    const info = await reader.detectColdRestore(sessionId)
     // Session is eligible (endedAt null) and the agent's snapshot is intact.
     expect(info).not.toBeNull()
     expect(info!.modes.alternateScreen).toBe(true)
@@ -88,7 +88,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     await manager.checkpoint(sessionId, em.getSnapshot())
     em.dispose()
 
-    const info = reader.detectColdRestore(sessionId)
+    const info = await reader.detectColdRestore(sessionId)
     const adapterScrollback = info!.modes.alternateScreen
       ? info!.scrollbackAnsi || info!.snapshotAnsi || null
       : info!.rehydrateSequences + info!.snapshotAnsi
@@ -118,7 +118,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     await manager.checkpoint(sessionId, em.getSnapshot())
     em.dispose()
 
-    const info = reader.detectColdRestore(sessionId)
+    const info = await reader.detectColdRestore(sessionId)
     expect(info!.modes.alternateScreen).toBe(true)
     const adapterScrollback = info!.scrollbackAnsi || info!.snapshotAnsi || null
     expect(adapterScrollback).not.toContain(ALT_SCREEN_ON)

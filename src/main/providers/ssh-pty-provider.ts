@@ -281,6 +281,14 @@ export class SshPtyProvider implements IPtyProvider {
     return result as string | null
   }
 
+  async inspectProcess(
+    id: string
+  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+    return (await this.mux.request('pty.inspectProcess', {
+      id: this.toRelayPtyId(id)
+    })) as { foregroundProcess: string | null; hasChildProcesses: boolean }
+  }
+
   async serialize(ids: string[]): Promise<string> {
     const result = await this.mux.request('pty.serialize', {
       ids: ids.map((id) => this.toRelayPtyId(id))

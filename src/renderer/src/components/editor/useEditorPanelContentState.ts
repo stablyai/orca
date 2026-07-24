@@ -149,15 +149,21 @@ export function useEditorPanelContentState({
           throw new Error(WORKTREE_OWNER_NOT_READY_ERROR)
         }
         if (restoredOpenFile?.filePath === filePath && restoredOpenFile.relativePath === filePath) {
-          if (readSettings?.activeRuntimeEnvironmentId?.trim() || connectionId) {
+          const externalSshTargetId = restoredOpenFile.externalSshTargetId?.trim()
+          if (
+            !externalSshTargetId &&
+            (readSettings?.activeRuntimeEnvironmentId?.trim() || connectionId)
+          ) {
             // Why: restored external-file tabs contain client-local absolute
             // paths. Remote runtime and SSH workspaces cannot read those paths
             // without an explicit upload/import flow.
             throw new Error('External local files are not available for remote workspaces.')
           }
-          // Why: restored external-file tabs need their main-process path grant
-          // refreshed because that authorization is only held in memory.
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+          if (!externalSshTargetId) {
+            // Why: restored external-file tabs need their main-process path grant
+            // refreshed because that authorization is only held in memory.
+            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+          }
         }
         const readScope = getRuntimeFileReadScope(readSettings, connectionId)
         const key = inFlightReadKey(readScope, filePath)
@@ -174,6 +180,7 @@ export function useEditorPanelContentState({
             relativePath: restoredOpenFile?.relativePath ?? relativePath,
             worktreeId,
             connectionId,
+            expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
             includeLocalLogMetadata:
               restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
           }) as Promise<FileContent>

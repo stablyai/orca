@@ -80,11 +80,14 @@ import {
   installDevParentDisconnectQuit,
   installDevParentSignalQuit,
   installDevParentWatchdog,
-  installUncaughtPipeErrorGuard,
   isDevParentShutdownRequested,
   patchPackagedProcessPath,
   shouldInstallManagedHooks
 } from './startup/configure-process'
+import {
+  installUncaughtPipeErrorGuard,
+  installUnhandledRejectionLogging
+} from './startup/main-process-error-guards'
 import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
@@ -174,6 +177,7 @@ import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import {
   attachClaudeLivePtyPersistence,
+  onLiveClaudePtysDrained,
   seedLiveClaudePtysFromPersistence
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
@@ -183,6 +187,7 @@ import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branc
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
+import { setDefaultWslDistroOverride } from './git/runner'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
@@ -205,6 +210,7 @@ import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/head
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
+import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import {
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
@@ -242,7 +248,6 @@ import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservatio
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
 import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
-import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
@@ -461,6 +466,8 @@ const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
   : undefined
 
 installUncaughtPipeErrorGuard()
+// Why (issue #9441): without this, one rejected background promise during startup restore kills main silently (exit 1, no crash report).
+installUnhandledRejectionLogging()
 // Why: expose the app version via process.env so main and the forked daemon can set TERM_PROGRAM_VERSION without importing electron.
 process.env.ORCA_APP_VERSION = app.getVersion()
 configureRemoteServerUpdater({
@@ -1823,7 +1830,13 @@ app.whenReady().then(async () => {
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
   logStartupMilestone('store-loaded')
+  // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
+  setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
   store.onSettingsChanged((updates, settings) => {
+    if ('terminalWindowsWslDistro' in updates) {
+      // Why: synchronize fallback WSL distro updates to runner.
+      setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
+    }
     if ('showMenuBarIcon' in updates) {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
@@ -1831,6 +1844,12 @@ app.whenReady().then(async () => {
   })
   // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.
   attachClaudeLivePtyPersistence(store)
+  // Why: while a live claude defers the managed OAuth refresh, usage shows
+  // "Waiting for Claude session"; refetch when the last live PTY exits so the
+  // error clears immediately instead of after the failure backoff.
+  onLiveClaudePtysDrained(() => {
+    void rateLimits?.refreshAfterClaudeLivePtysDrained()
+  })
   const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()
   seedLiveClaudePtysFromPersistence(persistedClaudePtyIds)
   if (persistedClaudePtyIds.length > 0) {
@@ -1838,7 +1857,6 @@ app.whenReady().then(async () => {
       `[claude-live-pty] Seeded ${persistedClaudePtyIds.length} persisted Claude session id(s) into the refresh gate`
     )
   }
-  selfHealRuntimeEnvironmentFocus({ store, userDataPath: app.getPath('userData') })
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)
@@ -2533,7 +2551,19 @@ app.on('will-quit', (e) => {
     // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
     // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-    Promise.allSettled([daemonTeardown, rpcStopAndClear, watcherShutdown, emulatorShutdown])
+    // Why: a wedged transport (half-open post-sleep socket) can leave one
+    // member unsettled forever and block app.quit() until Force Quit (#9447).
+    settleTeardownWithinDeadline([
+      { name: 'daemon', promise: daemonTeardown },
+      { name: 'runtime-rpc', promise: rpcStopAndClear },
+      { name: 'watchers', promise: watcherShutdown },
+      { name: 'emulator', promise: emulatorShutdown }
+    ])
+      .then((pendingTeardowns) => {
+        if (pendingTeardowns.length > 0) {
+          console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
+        }
+      })
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())
       .catch(() => {

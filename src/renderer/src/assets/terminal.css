@@ -506,3 +506,27 @@
   margin-top: var(--orca-pane-title-height);
   height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
 }
+
+/* Ghostty-style URL hover: glued to the pane's true bottom-left corner. */
+.pane-link-tooltip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  margin: 0;
+  /* Square on the window corner so the chrome itself has no inset gap. */
+  border-radius: 0 4px 0 0;
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-bottom: none;
+  border-left: none;
+  padding: 4px 8px;
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: 11px;
+  font-family: inherit;
+  color: #a1a1aa;
+  background: rgba(24, 24, 27, 0.85);
+}

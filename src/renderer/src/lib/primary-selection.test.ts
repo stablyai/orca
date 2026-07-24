@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   PRIMARY_SELECTION_MAX_LENGTH,
+  armPrimarySelectionNativePasteSuppression,
   getPrimarySelectionText,
   readPrimarySelectionText,
   resetPrimarySelectionForTests,
   setPrimarySelectionEnabled,
   setPrimarySelectionText,
+  shouldSuppressPrimarySelectionNativePaste,
   shouldUseSystemPrimarySelectionClipboard
 } from './primary-selection'
 
@@ -127,5 +129,53 @@ describe('primary selection buffer', () => {
 
     expect(setPrimarySelectionText('hello')).toBe(true)
     await expect(readPrimarySelectionText()).resolves.toBe('hello')
+  })
+})
+
+describe('primary-selection native paste suppression', () => {
+  beforeEach(() => {
+    resetPrimarySelectionForTests()
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('does not arm suppression while primary selection is disabled', () => {
+    armPrimarySelectionNativePasteSuppression(1_000)
+    expect(shouldSuppressPrimarySelectionNativePaste(1_000)).toBe(false)
+  })
+
+  it('does not arm suppression off Linux, where there is no native follow-up paste', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' })
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+    expect(shouldSuppressPrimarySelectionNativePaste(1_000)).toBe(false)
+  })
+
+  it('suppresses the follow-up native paste within the armed window', () => {
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+
+    expect(shouldSuppressPrimarySelectionNativePaste(1_000)).toBe(true)
+    expect(shouldSuppressPrimarySelectionNativePaste(1_700)).toBe(true)
+  })
+
+  it('stops suppressing once the armed window elapses', () => {
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+
+    expect(shouldSuppressPrimarySelectionNativePaste(1_800)).toBe(false)
+  })
+
+  it('clears the armed window when primary selection is disabled', () => {
+    setPrimarySelectionEnabled(true)
+    armPrimarySelectionNativePasteSuppression(1_000)
+
+    setPrimarySelectionEnabled(false)
+    setPrimarySelectionEnabled(true)
+
+    expect(shouldSuppressPrimarySelectionNativePaste(1_000)).toBe(false)
   })
 })

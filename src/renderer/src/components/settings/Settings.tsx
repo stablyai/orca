@@ -280,7 +280,9 @@ function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
+  const setActiveRuntimeEnvironmentPreference = useAppStore(
+    (s) => s.setActiveRuntimeEnvironmentPreference
+  )
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
@@ -1612,7 +1614,7 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('servers') ? (
                     <RuntimeEnvironmentsPane
                       settings={settings}
-                      switchRuntimeEnvironment={switchRuntimeEnvironment}
+                      setActiveRuntimeEnvironmentPreference={setActiveRuntimeEnvironmentPreference}
                       canGeneratePairingUrl={!isWebClient}
                       allowLocalRuntime={!isWebClient}
                       addServerIntentSignal={remoteServerAddIntentSignal}

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  appendReleaseRow,
   assertReleasedHistoryPreserved,
   classifyFile,
   collectPackageFiles,
@@ -12,6 +13,7 @@ import {
   isToleratedReleaseMappingPrefix,
   normalizeText,
   packageDigest,
+  releasedHistoryFromCommitted,
   sortManifestFiles
 } from './generate-skill-bundle-manifest.mjs'
 
@@ -215,6 +217,102 @@ describe('skill bundle manifest generator', () => {
     ).toBe(false)
     expect(isToleratedReleaseMappingPrefix('not json', artifacts)).toBe(false)
     expect(isToleratedReleaseMappingPrefix(serialized({ schemaVersion: 1 }), artifacts)).toBe(false)
+  })
+
+  it('seeds released history from the committed ledger and drops the floating tail', () => {
+    const snapshot = (releaseRevision, packageDigest) => ({ releaseRevision, packageDigest })
+    const committedRegistry = {
+      schemaVersion: 1,
+      skills: {
+        // released revs 1..2 named by the mapping, plus an unreleased tail at 3
+        'orca-cli': [snapshot(1, 'aaa'), snapshot(2, 'bbb'), snapshot(3, 'unreleased')],
+        // no mapping row -> fall back to all-but-tail
+        'orca-linear': [snapshot(1, 'ccc'), snapshot(2, 'tail')]
+      }
+    }
+    const committedMapping = {
+      schemaVersion: 1,
+      releases: [{ appVersion: '1.0.0', skills: { 'orca-cli': 2 } }]
+    }
+
+    const seeded = releasedHistoryFromCommitted(committedRegistry, committedMapping)
+
+    // The unreleased tail is dropped; only mapping-named revisions survive.
+    expect(seeded.registry.skills['orca-cli']).toEqual([snapshot(1, 'aaa'), snapshot(2, 'bbb')])
+    expect(seeded.registry.skills['orca-linear']).toEqual([snapshot(1, 'ccc')])
+    expect(seeded.releasedSnapshotCounts).toEqual({ 'orca-cli': 2, 'orca-linear': 1 })
+    // The seed clones the mapping so a later release append cannot alias committed state.
+    expect(seeded.mapping).toEqual(committedMapping)
+    expect(seeded.mapping).not.toBe(committedMapping)
+  })
+
+  it('returns an empty ledger when no committed artifacts exist', () => {
+    const seeded = releasedHistoryFromCommitted(null, null)
+    expect(seeded.registry.skills).toEqual({})
+    expect(seeded.releasedSnapshotCounts).toEqual({})
+    expect(seeded.mapping.releases).toEqual([])
+  })
+
+  it('appends one release row, stripping the v-prefix and deduping identical tails', () => {
+    const artifacts = {
+      currentManifest: {
+        skills: [
+          { name: 'orca-cli', releaseRevision: 36 },
+          { name: 'orca-linear', releaseRevision: 8 }
+        ]
+      },
+      releaseMapping: {
+        schemaVersion: 1,
+        releases: [{ appVersion: '1.4.151', skills: { 'orca-cli': 35, 'orca-linear': 8 } }]
+      }
+    }
+
+    appendReleaseRow(artifacts, 'v1.4.160')
+    expect(artifacts.releaseMapping.releases.at(-1)).toEqual({
+      appVersion: '1.4.160',
+      skills: { 'orca-cli': 36, 'orca-linear': 8 }
+    })
+
+    // A second release over identical revisions adds no row.
+    appendReleaseRow(artifacts, '1.4.161')
+    expect(artifacts.releaseMapping.releases).toHaveLength(2)
+  })
+
+  it('overwrites the trailing row when a failed cut is re-cut at the same version', () => {
+    const artifacts = {
+      currentManifest: { skills: [{ name: 'orca-cli', releaseRevision: 37 }] },
+      releaseMapping: {
+        schemaVersion: 1,
+        releases: [
+          { appVersion: '1.4.151', skills: { 'orca-cli': 35 } },
+          // The failed cut already pushed this row to main at revision 36.
+          { appVersion: '1.4.160', skills: { 'orca-cli': 36 } }
+        ]
+      }
+    }
+
+    appendReleaseRow(artifacts, '1.4.160')
+
+    // One row per version: the tag ships revision 37, so 36 must not linger.
+    expect(artifacts.releaseMapping.releases).toEqual([
+      { appVersion: '1.4.151', skills: { 'orca-cli': 35 } },
+      { appVersion: '1.4.160', skills: { 'orca-cli': 37 } }
+    ])
+  })
+
+  it('refuses to rewrite an already-shipped version behind the trailing row', () => {
+    const artifacts = {
+      currentManifest: { skills: [{ name: 'orca-cli', releaseRevision: 37 }] },
+      releaseMapping: {
+        schemaVersion: 1,
+        releases: [
+          { appVersion: '1.4.151', skills: { 'orca-cli': 35 } },
+          { appVersion: '1.4.160', skills: { 'orca-cli': 36 } }
+        ]
+      }
+    }
+
+    expect(() => appendReleaseRow(artifacts, '1.4.151')).toThrow(/already has a row for 1\.4\.151/)
   })
 
   it.runIf(process.platform !== 'win32')(

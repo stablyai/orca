@@ -3333,3 +3333,65 @@ describe('createUISlice space navigation', () => {
     expect(store.getState().activeView).toBe('tasks')
   })
 })
+
+describe('openDiffNotesSendMenuForActiveWorktree', () => {
+  function stubDiffNotesStore(
+    comments: { sentAt?: number }[],
+    activeWorktreeId: string | null = 'wt-1'
+  ): { store: StoreApi<AppState>; setRightSidebarTab: ReturnType<typeof vi.fn> } {
+    const store = createUIStore()
+    const setRightSidebarTab = vi.fn()
+    store.setState({
+      activeWorktreeId,
+      getDiffComments: () => comments,
+      setRightSidebarTab,
+      setRightSidebarOpen: vi.fn()
+    } as unknown as Partial<AppState>)
+    return { store, setRightSidebarTab }
+  }
+
+  it('reveals Source Control and bumps the open request when unsent notes exist', () => {
+    const { store, setRightSidebarTab } = stubDiffNotesStore([{ sentAt: 10 }, {}])
+
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(true)
+    expect(setRightSidebarTab).toHaveBeenCalledWith('source-control')
+    expect(store.getState().diffNotesSendMenuOpenRequest).toMatchObject({
+      worktreeId: 'wt-1',
+      nonce: 1
+    })
+    expect(store.getState().diffNotesSendMenuOpenRequest?.issuedAt).toBeTypeOf('number')
+
+    // A second request increments the nonce so the menu reopens.
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(true)
+    expect(store.getState().diffNotesSendMenuOpenRequest).toMatchObject({
+      worktreeId: 'wt-1',
+      nonce: 2
+    })
+  })
+
+  it('is a no-op when every note is already sent', () => {
+    const { store, setRightSidebarTab } = stubDiffNotesStore([{ sentAt: 10 }])
+
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(false)
+    expect(setRightSidebarTab).not.toHaveBeenCalled()
+    expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+
+  it('is a no-op when there is no active worktree', () => {
+    const { store } = stubDiffNotesStore([{}], null)
+
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(false)
+    expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+
+  it('clears the request only for the matching worktree', () => {
+    const { store } = stubDiffNotesStore([{}])
+    store.getState().openDiffNotesSendMenuForActiveWorktree()
+
+    store.getState().consumeDiffNotesSendMenuOpenRequest('other-wt')
+    expect(store.getState().diffNotesSendMenuOpenRequest).not.toBeNull()
+
+    store.getState().consumeDiffNotesSendMenuOpenRequest('wt-1')
+    expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+})

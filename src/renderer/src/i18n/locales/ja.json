@@ -181,7 +181,8 @@
       "slices": {
         "browser": {
           "d175274b6d": "新規ブラウザタブ",
-          "08fc23631d": "ブラウザ"
+          "08fc23631d": "ブラウザ",
+          "remoteCookieImportUnavailable": "Manual cookie file import is unavailable while a remote runtime is active."
         },
         "editor": {
           "dcb521ed29": "このファイルは競合状態にありますが、編集できる作業ツリー ファイルがありません。",
@@ -660,7 +661,8 @@
         "4f78ba5885": "ワークスペースが同期されました",
         "ef223fbb6b": "A device tried to connect but is not paired",
         "11992d0337": "If this was your phone or another Orca client, re-pair it from Settings → Mobile.",
-        "6573cfe955": "Open Mobile Settings"
+        "6573cfe955": "Open Mobile Settings",
+        "unresolvedTerminalWorktreeOwner": "Terminal creation is unavailable because the worktree owner could not be resolved"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "まだ形になりつつある新機能。試してみてください。",
@@ -1250,7 +1252,17 @@
         "noRunTargets": "このプロジェクトには実行ターゲットが準備されていません。",
         "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする",
         "branchName": "ブランチ名",
-        "branchNamePlaceholder": "feature/my-branch"
+        "branchNamePlaceholder": "feature/my-branch",
+        "connectTimedOut": "Connection timed out. It may still be connecting in the background.",
+        "connectingHost": "Connecting…",
+        "connectHost": "Connect",
+        "addHost": "Add host",
+        "addHostHint": "Register another machine or Orca server",
+        "addSshHost": "Add SSH host",
+        "addSshHostHint": "Use an existing machine over SSH",
+        "addRemoteOrcaServer": "Add Remote Orca Server",
+        "addRemoteOrcaServerHint": "Pair another Orca runtime",
+        "hostConnectionFailed": "Connection failed"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "ワークツリーを作成する",
@@ -1451,7 +1463,8 @@
         "4725b0e931": "クイック オープン スキャンが大きすぎます (",
         "b227d88520": "{{value0}} ファイルが見つかりました",
         "995be8ea22": "コピー",
-        "cf144856dc": "コピーされました"
+        "cf144856dc": "コピーされました",
+        "344f8a48dd": "on the host running the Quick Open scan to enable fast, gitignore-aware listing:"
       },
       "SelectedTextCopyMenu": {
         "9b40d7b018": "コピー"
@@ -2891,7 +2904,8 @@
                   "5a9c83c04b": "任意のファイル、URL、agent などを開きます...",
                   "90eb94dc48": "http:// または https:// URL を入力します。",
                   "5553b283ce": "URL またはファイル パスを入力します。",
-                  "queryTooLarge": "検索テキストが大きすぎます。"
+                  "queryTooLarge": "検索テキストが大きすぎます。",
+                  "absolutePathRemoteBlocked": "絶対パスにはローカル ワークスペースが必要です。"
                 }
               },
               "menu": {
@@ -4233,7 +4247,9 @@
           "ca74db7550": "SSH 経由のリモートプロジェクト",
           "021538e1d1": "SSH が切断されました",
           "runtimeHostDisconnected": "サーバーが切断されました",
+          "runtimeHostDisconnectedNamed": "{{hostName}} が切断されました",
           "runtimeHostProject": "Orca サーバー上のプロジェクト",
+          "runtimeHostProjectNamed": "{{hostName}} 上のプロジェクト",
           "automationCreated": "自動化により作成",
           "branchIdentity": "ブランチ",
           "branchFolderPathIdentity": "ブランチまたはフォルダパス",
@@ -4402,7 +4418,23 @@
           "0bed8727db": "移動または削除された可能性があります。ワークスペースを更新するか、Orca からワークスペースを削除します。",
           "3921d3d9a5": "ワークスペースフォルダーが見つかりませんでした。",
           "f387af445b": "ワークスペース パスは有効なローカル パスではありません。",
-          "3ec372b664": "ファイルマネージャー"
+          "3ec372b664": "ファイルマネージャー",
+          "localOnly": "Local only",
+          "remoteSsh": "Remote SSH",
+          "remoteRuntimeUnsupported": "Opening this path in a local app is not available.",
+          "remoteRuntimeUnsupportedDetail": "Switch to a local or SSH workspace, then try again.",
+          "sshTargetNotFound": "SSH host is no longer available.",
+          "sshTargetNotFoundDetail": "Refresh workspaces or reconnect the host, then try again.",
+          "sshTargetInvalid": "SSH host configuration is incomplete.",
+          "sshTargetInvalidDetail": "Edit or reconnect the SSH host, then try again.",
+          "sshAliasRequired": "VS Code needs an SSH config alias for this host.",
+          "sshAliasRequiredDetail": "Add a Host alias for {{host}}:{{port}} to your local SSH config, reconnect the workspace, then try again.",
+          "remoteEditorUnsupported": "This app cannot open SSH workspaces.",
+          "remoteEditorUnsupportedDetail": "Choose VS Code or use the app locally.",
+          "remotePathInvalid": "Path is not valid for the SSH host.",
+          "remotePathInvalidDetail": "Refresh the workspace before trying again.",
+          "remoteLaunchFailed": "Could not open the path in VS Code.",
+          "remoteLaunchFailedDetail": "Check the VS Code command configured on this machine."
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "未読:",
@@ -4498,7 +4530,14 @@
           "worktree": {
             "flow": {
               "c460fecc4a": "一部のワークスペースのスリープに失敗しました",
-              "8bc3fc0671": "ワークスペースのスリープに失敗しました"
+              "8bc3fc0671": "ワークスペースのスリープに失敗しました",
+              "legacy": {
+                "unverified": "The older host runtime could not confirm terminal shutdown. The workspace was kept open; update the host and try again."
+              },
+              "host": {
+                "unverified": "The host could not confirm terminal shutdown. The workspace was kept open; check the connection and try again."
+              },
+              "retry": "The workspace was kept open. Try again; if the problem continues, check the host connection."
             }
           }
         },
@@ -4807,7 +4846,8 @@
           "sshImportFailed": "SSH 構成のインポートに失敗しました。",
           "importing": "インポート中...",
           "importSshConfig": "~/.ssh/config をインポートします",
-          "sshPersistenceDefault": "このホスト上のリモートターミナルは、終了するかリレーをリセットするまで動作し続けます。"
+          "sshPersistenceDefault": "このホスト上のリモートターミナルは、終了するかリレーをリセットするまで動作し続けます。",
+          "advanced": "Advanced"
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "再接続に失敗しました",
@@ -5072,7 +5112,11 @@
           "3f1bdf3cb4": "環境テキストが大きすぎるため安全に解析できません。",
           "codexSessionSource": "インポートするCodexホーム",
           "codexSessionSourceInfo": "Codex履歴のインポートについて",
-          "codexSessionSourceTooltip": "Orcaは分離されたホームでCodexを実行します。既存のCodexホームを指定してセッション履歴をインポートします。空の場合、~/.codexを使用します。"
+          "codexSessionSourceTooltip": "Orcaは分離されたホームでCodexを実行します。既存のCodexホームを指定してセッション履歴をインポートします。空の場合、~/.codexを使用します。",
+          "03e1a5081a": "on {{value0}}",
+          "25a41a9aad": "Re-detect agents installed on the active server",
+          "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
+          "retryDetection": "Retry"
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
@@ -5425,7 +5469,7 @@
           "dfbc12c8c8": "ハードウェア デバッグおよび USB デバイスと通信するデバイス ツール。",
           "bf51e4a542": "USB デバイス",
           "f903bf20b5": "ネットワーク上の開発サーバーを検出してアクセスします。",
-          "e7bb06007c": "ローカルネットワーク",
+          "e7bb06007c": "LAN",
           "4a73f5217a": "他のローカル アプリを制御するスクリプトの Apple Events。",
           "e119f0d66b": "オートメーション",
           "7ca17b62c8": "プロジェクト、worktree、またはシンボリックリンクされたファイルが macOS の保護フォルダーに触れる場合に推奨されます。",
@@ -5481,9 +5525,14 @@
           },
           "agentDashboard": {
             "title": "Agent Dashboard",
-            "description": "Pop-out Kanban board for monitoring agents across worktrees.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.",
-            "toggleLabel": "Toggle Agent Dashboard"
+            "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
+            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
+            "toggleLabel": "Toggle Agent Dashboard",
+            "modeLabel": "Open as",
+            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
+            "modeAriaLabel": "Agent Dashboard open mode",
+            "modeInWindow": "In-window",
+            "modePopout": "Pop-out"
           }
         },
         "FloatingWorkspacePane": {
@@ -5674,6 +5723,11 @@
         },
         "YamlThemeImportButton": {
           "label": "YAML からインポート"
+        },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "プレフィックスにスペースや ~ ^ : ? * [ \\ などの特殊文字は使用できません",
+          "64d70b156a": "ブランチ名は {{example}} になります",
+          "808f9a726e": "プレフィックスは適用されません"
         },
         "GitPane": {
           "d2eede4c54": "Orca の帰属を commits、PR、Issue に追加します。",
@@ -5933,7 +5987,7 @@
           "668016be7a": "コンピューターとスマートフォンで。",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "インストール",
-          "9fc5d203ff": "Orca Mobile はこのコンピュータに直接接続します。同じローカル ネットワークから離れた場所で使用するには、コンピューターとスマートフォンを同じプライベート オーバーレイ ネットワーク上に配置し、そのネットワーク アドレスを選択して QR コードを生成します。",
+          "9fc5d203ff": "Orca Mobile はこのコンピュータに直接接続します。同じ LAN から離れた場所で使用するには、コンピューターとスマートフォンを同じプライベート オーバーレイ ネットワーク上に配置し、そのネットワーク アドレスを選択して QR コードを生成します。",
           "39fad211d9": "テールネットを使用して Wi-Fi の外部に接続する",
           "a9db5d771d": "ネットワークインターフェースを更新する",
           "b2c384cfd6": "インターフェースが見つかりません",
@@ -5964,7 +6018,7 @@
           "6436e56546": "モバイルペアリング用のQRコード",
           "1b1b70279a": "まだデバイスがペアリングされていません。",
           "1592afcc7a": "まだデバイスがペアリングされていません。 Orca モバイル アプリで QR コードをスキャンします。",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
+          "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。再生成してからお試しください。"
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub リリース",
@@ -6278,6 +6332,7 @@
           "removeSetup": "削除",
           "hostSetupBlockedVersion": "Orca server version is incompatible",
           "hostSetupMissingCapability": "Update Orca on this host to set up projects",
+          "hostSetupConnectionRequired": "プロジェクトをインポートまたはクローンする前に、このホストに接続してください",
           "setupProjectOnHost": "別のホストで設定",
           "setupProjectOnHostHelp": "Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.",
           "setupExistingFolder": "既存フォルダをインポート",
@@ -6405,7 +6460,6 @@
           "b5b5114cb0": "{{value0}} を削除しました。",
           "6cb6eae14f": "実行環境の保存に失敗しました。",
           "7b5986c8df": "{{value0}} を保存しました。準備ができたら、アクティブサーバーで切り替えてください。",
-          "a5b58465b6": "{{value0}} に接続されています。",
           "5ef712f407": "「{{value0}}」という名前のサーバーはすでに存在します。",
           "0c55a47480": "名前とペアリングコードは必須です。",
           "e6410d72c3": "ランタイム環境の読み込みに失敗しました。",
@@ -6453,7 +6507,10 @@
           "versionUnavailable": "Orca version unavailable",
           "updateServer": "Update",
           "reviewServerUpdates": "Server updates",
-          "orcaVersion": "Orca v{{value0}}"
+          "orcaVersion": "Orca v{{value0}}",
+          "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
+          "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
+          "updatingServers": "Updating servers…"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "{{value0}}をコピー"
@@ -6587,8 +6644,8 @@
           "fbb428db98": "選択済み:",
           "fac59213fc": "組み込みテーマを検索する",
           "search_terminal_themes": "terminal テーマを検索",
-          "cb330ef7f8": "{{value0}}の",
-          "c822571b2e": "「{{value0}}」に一致",
+          "cb330ef7f8": "/{{value0}}",
+          "c822571b2e": " 「{{value0}}」に一致",
           "3119c012a5": "文字列"
         },
         "SettingsSidebar": {
@@ -7595,14 +7652,14 @@
         "developer": {
           "permissions": {
             "search": {
-              "3363889768": "ローカルネットワーク、USB、Bluetooth",
+              "3363889768": "LAN、USB、Bluetooth",
               "6c82846f66": "デバイス",
               "11653d3f42": "MDNS",
               "78a10b826f": "ボンジュール",
               "e3fbc48083": "ブルートゥース",
               "c4a4a02ea4": "USB",
               "fa3239cd42": "ローカルネットワーク",
-              "acad3d4743": "terminal セッションから使用されるデバイスおよびローカル ネットワーク ツールを許可します。",
+              "acad3d4743": "terminal セッションから使用されるデバイス ツールと LAN アクセスを許可します。",
               "3e0131e45d": "icloud",
               "ce07159ff5": "デスクトップ",
               "a0c19119fb": "ダウンロード",
@@ -7706,7 +7763,7 @@
             },
             "agentDashboard": {
               "title": "Agent Dashboard",
-              "description": "Pop-out Kanban board for monitoring agents across worktrees."
+              "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
             }
           }
         },
@@ -9242,9 +9299,9 @@
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "スマートフォンはモバイル回線または Wi‑Fi から接続できます。サインインが必要です。",
           "signInRequired": "Orca Mobile Relay を使用するにはサインインしてください。",
-          "relayUnavailable": "このビルドでは Orca Relay を利用できません。ローカルネットワークをご利用ください。",
+          "relayUnavailable": "このビルドでは Orca Relay を利用できません。LAN をご利用ください。",
           "signInAgain": "再サインイン",
-          "localTitle": "ローカルネットワーク"
+          "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
           "title": "スマートフォンをペアリング",
@@ -9822,7 +9879,6 @@
             "b715ef615b": "{{value1}}より{{value0}}commits 進んでいます",
             "c1a8f3e204": "{{value0}}より1commit 遅れています",
             "d2b9g4f315": "{{value1}}より{{value0}}commits 遅れています",
-            "e9c2a5d416": "{{value0}}と同じ状態",
             "4b4a7de138": "ブラウザでレビューページを開く",
             "createPrIntentCommitBlockedSummary": "コミットがブロックされました：{{value0}} イシューを修正して、PR作成を再試行してください。",
             "pushRecovery": {
@@ -9840,7 +9896,11 @@
               "834cb3f23d": "AIで修正",
               "783a808870": "閉じる"
             },
-            "97e7124eac": "Source Control を更新できませんでした。もう一度お試しください。"
+            "97e7124eac": "Source Control を更新できませんでした。もう一度お試しください。",
+            "b8c2e1a904": "{{value0}} → {{value1}}",
+            "a4e93c21d7": "現在のブランチ: {{value0}}",
+            "c7d4e2f801": "ベース ref を変更: {{value0}}",
+            "f3a1b8c204": "upstream"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -10990,7 +11050,7 @@
             "preview": "プレビュー",
             "stable": "安定版"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
+          "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。"
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -13732,7 +13792,10 @@
       "closed": "No live terminal — this agent's pane has closed.",
       "focusWorktree": "Focus worktree",
       "close": "Close"
-    }
+    },
+    "close": "Close dashboard",
+    "settings": "Agent Dashboard settings",
+    "settingsTooltip": "Board settings"
   },
   "dashboard": {
     "sidebar": {

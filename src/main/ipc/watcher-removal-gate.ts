@@ -2,6 +2,10 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
+import {
+  TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE,
+  WATCHER_REMOVAL_IN_PROGRESS_MESSAGE
+} from '../../shared/worktree-removal-fence-error'
 
 type WatcherRemovalGateState = {
   connectionId: string | null
@@ -20,7 +24,7 @@ export class WatcherRemovalInProgressError extends Error {
   readonly code = 'watcher_removal_in_progress'
 
   constructor() {
-    super('File watcher cannot start while the worktree is being removed')
+    super(WATCHER_REMOVAL_IN_PROGRESS_MESSAGE)
     this.name = 'WatcherRemovalInProgressError'
   }
 }
@@ -29,7 +33,7 @@ export class TerminalRemovalInProgressError extends Error {
   readonly code = 'terminal_removal_in_progress'
 
   constructor() {
-    super('Terminal cannot start while the worktree is being removed')
+    super(TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE)
     this.name = 'TerminalRemovalInProgressError'
   }
 }

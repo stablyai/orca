@@ -97,6 +97,72 @@ describe('RelayControlClient', () => {
     )
   })
 
+  it('rejects a control handshake that never receives a proof response', async () => {
+    const server = new WebSocketServer({ port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('expected TCP relay test server')
+    }
+    const keypair = nacl.box.keyPair()
+    const client = new RelayControlClient({
+      cellUrl: `http://127.0.0.1:${address.port}`,
+      relayJwt: 'scoped-token',
+      relayHostId: createHash('sha256').update(keypair.publicKey).digest('base64url').slice(0, 16),
+      assignmentEpoch: 1,
+      identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
+      keypair: {
+        ...keypair,
+        publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
+      },
+      appVersion: '1.2.3',
+      onConnectionOpen: vi.fn(),
+      onDrain: vi.fn(),
+      onClose: vi.fn(),
+      connectDeadlineMs: 20
+    })
+    clients.push(client)
+
+    await expect(client.connect()).rejects.toThrow('relay_control_connect_timeout')
+  })
+
+  it('settles an opening control immediately when ownership closes', async () => {
+    const server = new WebSocketServer({ port: 0, perMessageDeflate: false })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.once('listening', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('expected TCP relay test server')
+    }
+    const keypair = nacl.box.keyPair()
+    const client = new RelayControlClient({
+      cellUrl: `http://127.0.0.1:${address.port}`,
+      relayJwt: 'scoped-token',
+      relayHostId: createHash('sha256').update(keypair.publicKey).digest('base64url').slice(0, 16),
+      assignmentEpoch: 1,
+      identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
+      keypair: {
+        ...keypair,
+        publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
+      },
+      appVersion: '1.2.3',
+      onConnectionOpen: vi.fn(),
+      onDrain: vi.fn(),
+      onClose: vi.fn()
+    })
+    clients.push(client)
+    const accepted = new Promise<void>((resolve) => {
+      server.once('connection', () => resolve())
+    })
+    const connecting = client.connect()
+
+    await accepted
+    client.closeNow()
+
+    await expect(connecting).rejects.toThrow('relay_control_closed')
+  })
+
   it('proves the host key and drives control/data commands without URL credentials', async () => {
     const server = new WebSocketServer({ port: 0, perMessageDeflate: false })
     servers.push(server)

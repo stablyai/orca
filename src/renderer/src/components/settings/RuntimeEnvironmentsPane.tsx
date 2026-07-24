@@ -67,7 +67,7 @@ const NO_RUNTIME_VALUE = '__none__'
 
 type RuntimeEnvironmentsPaneProps = {
   settings: GlobalSettings
-  switchRuntimeEnvironment: (environmentId: string | null) => Promise<boolean>
+  setActiveRuntimeEnvironmentPreference: (environmentId: string | null) => Promise<boolean>
   canGeneratePairingUrl?: boolean
   allowLocalRuntime?: boolean
   addServerIntentSignal?: number
@@ -200,6 +200,13 @@ export function getActiveServerModeDescription(allowLocalRuntime: boolean): stri
       )
 }
 
+export function isRuntimeEnvironmentRemovalBlocked(
+  activeRuntimeEnvironmentId: string | null | undefined,
+  environmentId: string
+): boolean {
+  return activeRuntimeEnvironmentId === environmentId
+}
+
 type RuntimeServerConnectionState = 'connected' | 'checking' | 'disconnected'
 
 export function getRuntimeServerConnectionState(
@@ -251,7 +258,7 @@ function getRuntimeServerDotClass(state: RuntimeServerConnectionState): string {
 
 export function RuntimeEnvironmentsPane({
   settings,
-  switchRuntimeEnvironment,
+  setActiveRuntimeEnvironmentPreference,
   canGeneratePairingUrl = true,
   allowLocalRuntime = true,
   addServerIntentSignal
@@ -294,7 +301,9 @@ export function RuntimeEnvironmentsPane({
     switchingValue !== null ||
     removingId !== null ||
     disconnectingId !== null
-  const removingActiveServer = pendingRemove?.id === settings.activeRuntimeEnvironmentId
+  const removingActiveServer = pendingRemove
+    ? isRuntimeEnvironmentRemovalBlocked(settings.activeRuntimeEnvironmentId, pendingRemove.id)
+    : false
   const searchEntry = canGeneratePairingUrl
     ? getRuntimeEnvironmentsSearchEntry()
     : getWebRuntimeEnvironmentsSearchEntry()
@@ -447,12 +456,6 @@ export function RuntimeEnvironmentsPane({
     }
     setIsSaving(true)
     try {
-      if (!allowLocalRuntime && settings.activeRuntimeEnvironmentId) {
-        const disconnected = await switchRuntimeEnvironment(null)
-        if (!disconnected) {
-          return
-        }
-      }
       const result = await window.api.runtimeEnvironments.addFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode
@@ -463,27 +466,18 @@ export function RuntimeEnvironmentsPane({
       }
       await loadEnvironments()
       if (!allowLocalRuntime) {
-        const switched = await switchRuntimeEnvironment(result.environment.id)
-        if (!switched) {
+        const connected = await connectEnvironment(result.environment)
+        if (!connected) {
           await window.api.runtimeEnvironments.remove({ selector: result.environment.id })
           await loadEnvironments()
           return
-        }
-        if (mountedRef.current) {
-          toast.success(
-            translate(
-              'auto.components.settings.RuntimeEnvironmentsPane.a5b58465b6',
-              'Connected to {{value0}}.',
-              { value0: result.environment.name }
-            )
-          )
         }
       } else {
         if (mountedRef.current) {
           toast.success(
             translate(
               'auto.components.settings.RuntimeEnvironmentsPane.7b5986c8df',
-              'Saved {{value0}}. Use Advanced > Default runtime to make it the default.',
+              'Saved {{value0}}. Use Advanced > Active Server to make it the default.',
               { value0: result.environment.name }
             )
           )
@@ -516,31 +510,16 @@ export function RuntimeEnvironmentsPane({
     setRemovingId(environment.id)
     setRemoveError(null)
     try {
-      if (settings.activeRuntimeEnvironmentId === environment.id) {
-        const switched = await switchRuntimeEnvironment(null)
-        if (!switched) {
-          if (mountedRef.current) {
-            setRemoveError(
-              allowLocalRuntime
-                ? 'Could not switch to Local desktop. Fix the issue and try again.'
-                : 'Could not disconnect from this server. Fix the issue and try again.'
+      if (isRuntimeEnvironmentRemovalBlocked(settings.activeRuntimeEnvironmentId, environment.id)) {
+        if (mountedRef.current) {
+          setRemoveError(
+            translate(
+              'auto.components.settings.RuntimeEnvironmentsPane.removeActiveServerBlocked',
+              'Choose another Active Server in Advanced before removing this server.'
             )
-          }
-          return false
+          )
         }
-        if (!allowLocalRuntime) {
-          await loadEnvironments()
-          if (mountedRef.current) {
-            toast.success(
-              translate(
-                'auto.components.settings.RuntimeEnvironmentsPane.b5b5114cb0',
-                'Removed {{value0}}.',
-                { value0: environment.name }
-              )
-            )
-          }
-          return true
-        }
+        return false
       }
       await window.api.runtimeEnvironments.remove({ selector: environment.id })
       await loadEnvironments()
@@ -575,19 +554,6 @@ export function RuntimeEnvironmentsPane({
     setDisconnectingId(environment.id)
     setSwitchError(null)
     try {
-      if (settings.activeRuntimeEnvironmentId === environment.id) {
-        const switched = await switchRuntimeEnvironment(null)
-        if (!switched) {
-          if (mountedRef.current) {
-            setSwitchError(
-              allowLocalRuntime
-                ? 'Could not switch to Local desktop. Fix the issue and try again.'
-                : 'Could not disconnect from this server. Fix the issue and try again.'
-            )
-          }
-          return false
-        }
-      }
       await window.api.runtimeEnvironments.disconnect({ selector: environment.id })
       // Why: disconnect is non-destructive; keep the saved server but show the
       // user that this live client is no longer attached to it.
@@ -715,7 +681,7 @@ export function RuntimeEnvironmentsPane({
     setSwitchingValue(value)
     setSwitchError(null)
     try {
-      const switched = await switchRuntimeEnvironment(
+      const switched = await setActiveRuntimeEnvironmentPreference(
         allowLocalRuntime && value === LOCAL_RUNTIME_VALUE ? null : value
       )
       if (switched) {
@@ -1139,7 +1105,7 @@ export function RuntimeEnvironmentsPane({
                 <Label id="runtime-active-server-label">
                   {translate(
                     'auto.components.settings.RuntimeEnvironmentsPane.64b6bea541',
-                    'Default runtime'
+                    'Active Server'
                   )}
                 </Label>
                 <p className="text-xs text-muted-foreground">
@@ -1419,15 +1385,10 @@ export function RuntimeEnvironmentsPane({
             </DialogTitle>
             <DialogDescription>
               {removingActiveServer
-                ? allowLocalRuntime
-                  ? translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.9f7665a01b',
-                      'Removing the active server first switches Orca back to Local desktop. Existing host sessions are left alone.'
-                    )
-                  : translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.b2fda48c39',
-                      'Removing the active server disconnects this browser from that host. Existing host sessions are left alone.'
-                    )
+                ? translate(
+                    'auto.components.settings.RuntimeEnvironmentsPane.removeActiveServerDescription',
+                    'Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.'
+                  )
                 : translate(
                     'auto.components.settings.RuntimeEnvironmentsPane.ed3e3f069d',
                     'This removes the saved server from Orca. It does not change the active server.'

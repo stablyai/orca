@@ -190,6 +190,76 @@ describe('useEditorPanelContentState', () => {
     )
   })
 
+  it('loads an external SSH-host image when the tab is pinned to that target', async () => {
+    const activeFile = createOpenFile({
+      id: '/tmp/ssh-preview.png',
+      filePath: '/tmp/ssh-preview.png',
+      relativePath: '/tmp/ssh-preview.png',
+      worktreeId: 'repo-ssh::/home/user/project',
+      externalSshTargetId: 'ssh-1'
+    } as never)
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
+    mocks.readRuntimeFileContent.mockResolvedValue({
+      content: 'base64-image',
+      isBinary: true,
+      isImage: true,
+      mimeType: 'image/png'
+    })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.isImage).toBe(true))
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/ssh-preview.png',
+        relativePath: '/tmp/ssh-preview.png',
+        worktreeId: 'repo-ssh::/home/user/project',
+        connectionId: 'ssh-1',
+        expectedExternalSshTargetId: 'ssh-1'
+      })
+    )
+  })
+
+  it('rejects an external SSH-host tab after its target owner changes', async () => {
+    const activeFile = createOpenFile({
+      id: '/tmp/ssh-preview.png',
+      filePath: '/tmp/ssh-preview.png',
+      relativePath: '/tmp/ssh-preview.png',
+      worktreeId: 'repo-ssh::/home/user/project',
+      externalSshTargetId: 'ssh-original'
+    } as never)
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-replacement')
+    mocks.readRuntimeFileContent.mockRejectedValue(
+      new Error('External SSH files are not available after the workspace host changes.')
+    )
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() =>
+      expect(latestFileContents[activeFile.id]?.loadError).toBe(
+        'External SSH files are not available after the workspace host changes.'
+      )
+    )
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'ssh-replacement',
+        expectedExternalSshTargetId: 'ssh-original'
+      })
+    )
+  })
+
   it('loads folder workspace branch diffs through the path-specific SSH connection', async () => {
     const activeFile = createOpenFile({
       id: 'branch-diff',

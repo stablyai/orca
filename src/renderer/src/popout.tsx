@@ -21,7 +21,7 @@ import type { GlobalSettings } from '../../shared/types'
 // theme, i18n, error boundary) rather than inheriting anything from the main
 // window. It shares the preload/window.api but not the DOM or JS context.
 recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env.DEV })
-installRendererCrashDiagnostics()
+installRendererCrashDiagnostics('dashboard-popout')
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
   applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })

@@ -479,7 +479,9 @@ describe('fetchReposForAllHosts', () => {
     await store.getState().fetchReposForAllHosts()
 
     expectSharedProjectMetadata(store.getState().projects, sharedProjectId)
-    expect(store.getState().projectHostSetups).toEqual(
+    const setups = store.getState().projectHostSetups
+    expect(setups).toHaveLength(2)
+    expect(setups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           projectId: sharedProjectId,

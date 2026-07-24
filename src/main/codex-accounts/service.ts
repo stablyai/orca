@@ -12,6 +12,20 @@ import type {
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
 } from '../../shared/types'
+import type {
+  CodexRateLimitResetOutcome,
+  CodexRateLimitResetResult,
+  RateLimitState,
+  RateLimitRuntimeTarget
+} from '../../shared/rate-limit-types'
+import {
+  buildCodexResetCreditExpectedScope,
+  type CodexResetCreditExpectedScope
+} from '../../shared/codex-reset-credit-scope'
+import type {
+  CodexResetCreditAttemptLedger,
+  DurableCodexResetCreditAttempt
+} from '../../shared/codex-reset-credit-attempt-ledger'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
 import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
@@ -90,6 +104,79 @@ type ManagedHomeLocation = {
   wslLinuxHomePath: string | null
 }
 
+export type CodexResetCreditRejectedBeforeProviderReason =
+  | 'targetChanged'
+  | 'accountChanged'
+  | 'accountRevisionChanged'
+  | 'accountRuntimeChanged'
+  | 'offerUnavailable'
+  | 'offerChanged'
+
+export type CodexResetCreditConsumedResult = {
+  outcome: CodexRateLimitResetOutcome
+  scope: CodexResetCreditExpectedScope
+  codex: CodexRateLimitAccountsState
+  rateLimits: RateLimitState
+}
+
+export type CodexResetCreditRejectedBeforeProviderResult = {
+  status: 'rejectedBeforeProvider'
+  retryDisposition: 'discardAttempt'
+  reason: CodexResetCreditRejectedBeforeProviderReason
+  scope: CodexResetCreditExpectedScope
+  codex: CodexRateLimitAccountsState
+  rateLimits: RateLimitState
+}
+
+export type CodexResetCreditConsumeResult =
+  | CodexResetCreditConsumedResult
+  | CodexResetCreditRejectedBeforeProviderResult
+
+type CodexResetCreditAttempt = {
+  expectedScope: CodexResetCreditExpectedScope
+  scopeKey: string
+  accountScopeKey: string
+  state: 'fresh' | 'providerPending' | 'settled'
+  promise: Promise<CodexResetCreditConsumeResult> | null
+  settledOutcome: CodexRateLimitResetOutcome | null
+}
+
+class CodexResetCreditScopeRejection extends Error {
+  constructor(
+    readonly reason: CodexResetCreditRejectedBeforeProviderReason,
+    readonly rateLimits: RateLimitState,
+    message: string
+  ) {
+    super(message)
+    this.name = 'CodexResetCreditScopeRejection'
+  }
+}
+
+function resetScopeKey(scope: CodexResetCreditExpectedScope): string {
+  return JSON.stringify([
+    scope.target.runtime,
+    scope.target.wslDistro,
+    scope.accountId,
+    scope.accountRevision,
+    scope.offerRevision
+  ])
+}
+
+function resetAccountScopeKey(
+  scope: Pick<CodexResetCreditExpectedScope, 'target' | 'accountId' | 'accountRevision'>
+): string {
+  return JSON.stringify([
+    scope.target.runtime,
+    scope.target.wslDistro,
+    scope.accountId,
+    scope.accountRevision
+  ])
+}
+
+function sameRateLimitTarget(left: RateLimitRuntimeTarget, right: RateLimitRuntimeTarget): boolean {
+  return left.runtime === right.runtime && left.wslDistro === right.wslDistro
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
@@ -158,6 +245,11 @@ function loginAuthChanged(
 export class CodexAccountService {
   // Why: serialize the read-modify-write of settings; overlapping calls (e.g. double-click Add) would lose updates.
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private readonly resetAttemptsByKey = new Map<string, CodexResetCreditAttempt>()
+  private readonly resetAttemptKeyByOffer = new Map<string, string>()
+  private readonly unresolvedResetKeyByAccountScope = new Map<string, string>()
+  private durableResetLedger: CodexResetCreditAttemptLedger | null = null
+  private resetLedgerLoadError: Error | null = null
 
   constructor(
     private readonly store: Store,
@@ -165,6 +257,7 @@ export class CodexAccountService {
     private readonly runtimeHome: CodexRuntimeHomeService,
     private readonly lifecycle: CodexAccountServiceLifecycle = {}
   ) {
+    this.hydrateResetCreditAttempts()
     this.safeSyncCanonicalConfigToManagedHomes()
   }
 
@@ -200,6 +293,406 @@ export class CodexAccountService {
     target?: CodexAccountSelectionTarget
   ): Promise<CodexRateLimitAccountsState> {
     return this.serializeMutation(() => this.doSelectAccount(accountId, target))
+  }
+
+  consumeRateLimitResetCredit(
+    idempotencyKey: string,
+    expectedScope: CodexResetCreditExpectedScope
+  ): Promise<CodexResetCreditConsumeResult> {
+    if (this.resetLedgerLoadError) {
+      return Promise.reject(this.resetLedgerLoadError)
+    }
+    const scopeKey = resetScopeKey(expectedScope)
+    const accountScopeKey = resetAccountScopeKey(expectedScope)
+    const existing = this.resetAttemptsByKey.get(idempotencyKey)
+    if (existing) {
+      if (existing.scopeKey !== scopeKey) {
+        return Promise.reject(new Error('That idempotency key belongs to a different reset scope.'))
+      }
+      if (existing.state === 'settled' && existing.settledOutcome) {
+        return this.serializeMutation(async () => {
+          const { rateLimits } = this.validateResetCreditScope(expectedScope, false)
+          return {
+            outcome: existing.settledOutcome!,
+            scope: existing.expectedScope,
+            codex: this.getSnapshot(),
+            rateLimits
+          }
+        })
+      }
+      if (existing.promise) {
+        return existing.promise
+      }
+      return this.startResetCreditAttempt(idempotencyKey, expectedScope, existing)
+    }
+
+    const unresolvedKey = this.unresolvedResetKeyByAccountScope.get(accountScopeKey)
+    if (unresolvedKey && unresolvedKey !== idempotencyKey) {
+      return Promise.reject(
+        new Error('A previous reset attempt for this account still has an unknown outcome.')
+      )
+    }
+    const claimedKey = this.resetAttemptKeyByOffer.get(scopeKey)
+    if (claimedKey && claimedKey !== idempotencyKey) {
+      return Promise.reject(new Error('That reset-credit offer was already attempted.'))
+    }
+
+    const attempt: CodexResetCreditAttempt = {
+      expectedScope,
+      scopeKey,
+      accountScopeKey,
+      state: 'fresh',
+      promise: null,
+      settledOutcome: null
+    }
+    this.resetAttemptsByKey.set(idempotencyKey, attempt)
+    this.resetAttemptKeyByOffer.set(scopeKey, idempotencyKey)
+    return this.startResetCreditAttempt(idempotencyKey, expectedScope, attempt)
+  }
+
+  async consumeCurrentRateLimitResetCredit(): Promise<CodexRateLimitResetResult> {
+    if (this.resetLedgerLoadError) {
+      throw this.resetLedgerLoadError
+    }
+    const initialRateLimits = this.rateLimits.getState()
+    const initialTarget = { ...initialRateLimits.codexTarget }
+    const initialSettings = this.store.getSettings()
+    const selectedAccountId = getSelectedCodexAccountIdForTarget(initialSettings, initialTarget)
+    if (selectedAccountId) {
+      const account = initialSettings.codexManagedAccounts.find(
+        (candidate) => candidate.id === selectedAccountId
+      )
+      const pendingAttempt = account
+        ? this.getPendingResetAttemptForAccount(initialTarget, account)
+        : null
+      const expectedScope =
+        pendingAttempt?.expectedScope ??
+        (account
+          ? buildCodexResetCreditExpectedScope({
+              target: initialTarget,
+              account: this.toSummary(account),
+              limits: initialRateLimits.codex
+            })
+          : null)
+      if (!expectedScope) {
+        throw new Error('The managed Codex reset-credit offer is no longer available.')
+      }
+      // Why: do not enter the mutation queue first; the coordinator owns that
+      // queue and nested serialization would deadlock behind this operation.
+      const result = await this.consumeRateLimitResetCredit(
+        pendingAttempt?.idempotencyKey ?? randomUUID(),
+        expectedScope
+      )
+      if ('status' in result) {
+        throw new Error('The Codex account or reset offer changed before reset.')
+      }
+      return { outcome: result.outcome, state: result.rateLimits }
+    }
+
+    return this.serializeMutation(async () => {
+      if (this.resetLedgerLoadError) {
+        throw this.resetLedgerLoadError
+      }
+      const target = this.rateLimits.getState().codexTarget
+      if (!sameRateLimitTarget(target, initialTarget)) {
+        throw new Error('The active Codex rate-limit target changed before reset.')
+      }
+      if (getSelectedCodexAccountIdForTarget(this.store.getSettings(), target)) {
+        throw new Error('The selected Codex account changed before reset.')
+      }
+      if (this.hasPendingResetForTarget(target)) {
+        throw new Error('A previous reset attempt for this target still has an unknown outcome.')
+      }
+      const codexHomePath = this.runtimeHome.prepareForRateLimitFetch(target)
+      return this.rateLimits.consumeCodexRateLimitResetCredit({
+        idempotencyKey: randomUUID(),
+        target,
+        codexHomePath
+      })
+    })
+  }
+
+  private getPendingResetAttemptForAccount(
+    target: RateLimitRuntimeTarget,
+    account: CodexManagedAccount
+  ): { idempotencyKey: string; expectedScope: CodexResetCreditExpectedScope } | null {
+    const accountScopeKey = resetAccountScopeKey({
+      target,
+      accountId: account.id,
+      accountRevision: account.updatedAt
+    })
+    const idempotencyKey = this.unresolvedResetKeyByAccountScope.get(accountScopeKey)
+    if (!idempotencyKey) {
+      return null
+    }
+    const attempt = this.resetAttemptsByKey.get(idempotencyKey)
+    if (attempt?.state !== 'providerPending') {
+      throw new Error('Codex reset-credit attempt state is inconsistent.')
+    }
+    // Why: a durable providerPending attempt can only be resolved with its original key.
+    return { idempotencyKey, expectedScope: attempt.expectedScope }
+  }
+
+  private hasPendingResetForTarget(target: RateLimitRuntimeTarget): boolean {
+    return [...this.resetAttemptsByKey.values()].some(
+      (attempt) =>
+        attempt.state === 'providerPending' &&
+        sameRateLimitTarget(attempt.expectedScope.target, target)
+    )
+  }
+
+  private startResetCreditAttempt(
+    idempotencyKey: string,
+    expectedScope: CodexResetCreditExpectedScope,
+    attempt: CodexResetCreditAttempt
+  ): Promise<CodexResetCreditConsumeResult> {
+    const promise = this.serializeMutation(async (): Promise<CodexResetCreditConsumeResult> => {
+      const isFresh = attempt.state === 'fresh'
+      let validation: { managedHomePath: string; rateLimits: RateLimitState }
+      try {
+        validation = this.validateResetCreditScope(expectedScope, isFresh)
+      } catch (error) {
+        if (isFresh && error instanceof CodexResetCreditScopeRejection) {
+          this.releaseFreshResetAttempt(idempotencyKey, attempt)
+          return {
+            status: 'rejectedBeforeProvider',
+            retryDisposition: 'discardAttempt',
+            reason: error.reason,
+            scope: expectedScope,
+            codex: this.getSnapshot(),
+            rateLimits: error.rateLimits
+          }
+        }
+        throw error
+      }
+      if (isFresh) {
+        this.persistResetAttempt({
+          idempotencyKey,
+          expectedScope,
+          state: 'providerPending'
+        })
+        attempt.state = 'providerPending'
+        this.unresolvedResetKeyByAccountScope.set(attempt.accountScopeKey, idempotencyKey)
+      }
+      const { outcome, state } = await this.rateLimits.consumeCodexRateLimitResetCredit({
+        idempotencyKey,
+        target: expectedScope.target,
+        codexHomePath: validation.managedHomePath
+      })
+      // Why: queued account selection may start as soon as this mutation resolves;
+      // capture both account selection and usage before releasing the queue.
+      const result: CodexResetCreditConsumedResult = {
+        outcome,
+        scope: expectedScope,
+        codex: this.getSnapshot(),
+        rateLimits: state
+      }
+      this.persistResetAttempt({
+        idempotencyKey,
+        expectedScope,
+        state: 'settled',
+        outcome
+      })
+      attempt.state = 'settled'
+      attempt.settledOutcome = outcome
+      if (this.unresolvedResetKeyByAccountScope.get(attempt.accountScopeKey) === idempotencyKey) {
+        this.unresolvedResetKeyByAccountScope.delete(attempt.accountScopeKey)
+      }
+      return result
+    })
+    attempt.promise = promise
+    void promise.then(
+      () => {
+        attempt.promise = null
+      },
+      () => {
+        attempt.promise = null
+        if (attempt.state === 'fresh') {
+          this.releaseFreshResetAttempt(idempotencyKey, attempt)
+        }
+      }
+    )
+    return promise
+  }
+
+  private validateResetCreditScope(
+    expectedScope: CodexResetCreditExpectedScope,
+    requireCurrentOffer: boolean
+  ): { managedHomePath: string; rateLimits: RateLimitState } {
+    const rateLimitState = this.rateLimits.getState()
+    if (!sameRateLimitTarget(rateLimitState.codexTarget, expectedScope.target)) {
+      throw new CodexResetCreditScopeRejection(
+        'targetChanged',
+        rateLimitState,
+        'The active Codex rate-limit target changed before reset.'
+      )
+    }
+
+    const settings = this.store.getSettings()
+    if (
+      getSelectedCodexAccountIdForTarget(settings, expectedScope.target) !== expectedScope.accountId
+    ) {
+      throw new CodexResetCreditScopeRejection(
+        'accountChanged',
+        rateLimitState,
+        'The selected Codex account changed before reset.'
+      )
+    }
+    const account = settings.codexManagedAccounts.find(
+      (candidate) => candidate.id === expectedScope.accountId
+    )
+    if (!account || account.updatedAt !== expectedScope.accountRevision) {
+      throw new CodexResetCreditScopeRejection(
+        'accountRevisionChanged',
+        rateLimitState,
+        'The selected Codex account was updated before reset.'
+      )
+    }
+    const normalizedAccountTarget = normalizeCodexAccountSelectionTarget(
+      getCodexSelectionTargetForAccount(account)
+    )
+    if (!sameRateLimitTarget(normalizedAccountTarget, expectedScope.target)) {
+      throw new CodexResetCreditScopeRejection(
+        'accountRuntimeChanged',
+        rateLimitState,
+        'The selected Codex account belongs to a different runtime.'
+      )
+    }
+
+    const currentScope = buildCodexResetCreditExpectedScope({
+      target: rateLimitState.codexTarget,
+      account: this.toSummary(account),
+      limits: rateLimitState.codex
+    })
+    // Why: a same-key replay resolves an already-started provider mutation;
+    // its credit snapshot may have refreshed, but its account/runtime identity may not change.
+    if (requireCurrentOffer && !currentScope) {
+      throw new CodexResetCreditScopeRejection(
+        'offerUnavailable',
+        rateLimitState,
+        'The Codex reset-credit offer is no longer available.'
+      )
+    }
+    if (
+      requireCurrentOffer &&
+      currentScope &&
+      resetScopeKey(expectedScope) !== resetScopeKey(currentScope)
+    ) {
+      throw new CodexResetCreditScopeRejection(
+        'offerChanged',
+        rateLimitState,
+        'The Codex reset-credit offer changed before reset.'
+      )
+    }
+
+    return { managedHomePath: account.managedHomePath, rateLimits: rateLimitState }
+  }
+
+  private hydrateResetCreditAttempts(): void {
+    try {
+      const ledger = this.store.getCodexResetCreditAttemptLedger()
+      this.durableResetLedger = ledger
+      for (const durable of ledger.attempts) {
+        const scopeKey = resetScopeKey(durable.expectedScope)
+        const accountScopeKey = resetAccountScopeKey(durable.expectedScope)
+        this.resetAttemptsByKey.set(durable.idempotencyKey, {
+          expectedScope: durable.expectedScope,
+          scopeKey,
+          accountScopeKey,
+          state: durable.state,
+          promise: null,
+          settledOutcome: durable.state === 'settled' ? durable.outcome : null
+        })
+        this.resetAttemptKeyByOffer.set(scopeKey, durable.idempotencyKey)
+        if (durable.state === 'providerPending') {
+          this.unresolvedResetKeyByAccountScope.set(accountScopeKey, durable.idempotencyKey)
+        }
+      }
+    } catch (error) {
+      this.resetLedgerLoadError =
+        error instanceof Error ? error : new Error('Codex reset-credit attempt ledger is corrupt')
+    }
+  }
+
+  private persistResetAttempt(nextAttempt: DurableCodexResetCreditAttempt): void {
+    if (!this.durableResetLedger) {
+      throw (
+        this.resetLedgerLoadError ?? new Error('Codex reset-credit attempt ledger is unavailable')
+      )
+    }
+    const index = this.durableResetLedger.attempts.findIndex(
+      (attempt) => attempt.idempotencyKey === nextAttempt.idempotencyKey
+    )
+    const attempts = [...this.durableResetLedger.attempts]
+    if (index === -1) {
+      attempts.push(nextAttempt)
+    } else {
+      attempts[index] = nextAttempt
+    }
+    const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
+    this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
+    this.durableResetLedger = structuredClone(nextLedger)
+  }
+
+  private releaseFreshResetAttempt(idempotencyKey: string, attempt: CodexResetCreditAttempt): void {
+    if (attempt.state !== 'fresh') {
+      return
+    }
+    this.resetAttemptsByKey.delete(idempotencyKey)
+    if (this.resetAttemptKeyByOffer.get(attempt.scopeKey) === idempotencyKey) {
+      this.resetAttemptKeyByOffer.delete(attempt.scopeKey)
+    }
+  }
+
+  // Why: a removed account's managed home is gone, so its unresolved providerPending
+  // attempt can never validate or be replayed; drop it so a target-scoped default reset
+  // is not wedged forever by hasPendingResetForTarget matching the orphan.
+  private discardResetAttemptsForRemovedAccount(accountId: string): void {
+    const staleAttempts: [string, CodexResetCreditAttempt][] = []
+    for (const [idempotencyKey, attempt] of this.resetAttemptsByKey) {
+      if (attempt.expectedScope.accountId === accountId) {
+        staleAttempts.push([idempotencyKey, attempt])
+      }
+    }
+    if (staleAttempts.length === 0) {
+      return
+    }
+    const staleKeySet = new Set(staleAttempts.map(([idempotencyKey]) => idempotencyKey))
+    if (this.durableResetLedger) {
+      const attempts = this.durableResetLedger.attempts.filter(
+        (attempt) => !staleKeySet.has(attempt.idempotencyKey)
+      )
+      if (attempts.length !== this.durableResetLedger.attempts.length) {
+        const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
+        // Persist first so a failed durability barrier leaves the in-memory
+        // fail-closed guards aligned with the ledger that will reload.
+        this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
+        this.durableResetLedger = structuredClone(nextLedger)
+      }
+    }
+    for (const [idempotencyKey, attempt] of staleAttempts) {
+      this.resetAttemptsByKey.delete(idempotencyKey)
+      if (this.resetAttemptKeyByOffer.get(attempt.scopeKey) === idempotencyKey) {
+        this.resetAttemptKeyByOffer.delete(attempt.scopeKey)
+      }
+      if (this.unresolvedResetKeyByAccountScope.get(attempt.accountScopeKey) === idempotencyKey) {
+        this.unresolvedResetKeyByAccountScope.delete(attempt.accountScopeKey)
+      }
+    }
+  }
+
+  // Why: quota probes against a cold per-account CODEX_HOME can take 10–25s
+  // (RPC + PTY fallback) and queue behind an in-flight global usage refresh.
+  // The refresh synchronously flips usage to "fetching" before its first await,
+  // so the switcher updates immediately; the probe itself must never block or
+  // fail the already-durable account mutation.
+  private startQuotaRefreshInBackground(
+    outgoingAccountId: string | null | undefined,
+    target: CodexAccountSelectionTarget | undefined
+  ): void {
+    void this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, target).catch((error) => {
+      console.error('[codex-accounts] Quota refresh after account change failed:', error)
+    })
   }
 
   private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
@@ -252,7 +745,7 @@ export class CodexAccountService {
 
       // Why: switching activates the new account, so cache the outgoing account's usage for the switcher.
       const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
-      await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, targetSelection)
+      this.startQuotaRefreshInBackground(outgoingAccountId, targetSelection)
       return this.getSnapshot()
     } catch (error) {
       this.safeRemoveManagedHome(managedHomePath, accountId)
@@ -308,7 +801,7 @@ export class CodexAccountService {
     this.runtimeHome.syncForCurrentSelection(accountTarget)
 
     // Why: re-auth can change the underlying Codex identity, so force a fresh read to avoid showing stale quota.
-    await this.rateLimits.refreshForCodexAccountChange(undefined, accountTarget)
+    this.startQuotaRefreshInBackground(undefined, accountTarget)
     return this.getSnapshot()
   }
 
@@ -337,7 +830,8 @@ export class CodexAccountService {
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
     this.rateLimits.evictInactiveCodexCache(accountId)
-    await this.rateLimits.refreshForCodexAccountChange(
+    this.discardResetAttemptsForRemovedAccount(accountId)
+    this.startQuotaRefreshInBackground(
       getSelectedCodexAccountIdForTarget(settings, getCodexSelectionTargetForAccount(account)) ===
         accountId
         ? accountId
@@ -386,7 +880,7 @@ export class CodexAccountService {
       this.lifecycle.onHostSystemDefaultSelected?.()
     }
 
-    await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, effectiveTarget)
+    this.startQuotaRefreshInBackground(outgoingAccountId, effectiveTarget)
     return this.getSnapshot()
   }
 

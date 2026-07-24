@@ -14,5 +14,4 @@ export type EmulatorSessionState = {
 
 export type EmulatorBridgeOptions = {
   waitForEndpointReady?: (endpoint: string) => Promise<boolean>
-  fetchAccessibilityTree?: (axUrl: string) => Promise<unknown>
 }

@@ -45,6 +45,7 @@ const imeHarness = vi.hoisted(() => ({
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
+    cols = 80
     rows = 24
     buffer = { active: { cursorY: 0 } }
     writeCallbacks: (() => void)[] = []
@@ -135,6 +136,7 @@ import { AgentTerminalPreview } from './AgentTerminalPreview'
 
 describe('AgentTerminalPreview', () => {
   const input = vi.fn(async (_ptyId: string, _data: string) => true)
+  const fit = vi.fn(async (_ptyId: string, cols: number, rows: number) => ({ cols, rows }))
   const ack = vi.fn(async () => {})
   const unsubscribe = vi.fn(async () => {})
   const connect = vi.fn()
@@ -163,6 +165,7 @@ describe('AgentTerminalPreview', () => {
         terminalPreview: {
           connect,
           input,
+          fit,
           ack,
           unsubscribe,
           onData: (listener: (payload: unknown) => void) => {
@@ -541,6 +544,34 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     expect(connect).toHaveBeenLastCalledWith('pty-live', { scrollbackRows: 24 })
     expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+  })
+
+  it('claims a grid sized to the dialog box and never re-requests an unchanged target', async () => {
+    vi.useFakeTimers()
+    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+    await vi.waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+
+    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
+    const box = host.parentElement!
+    Object.defineProperty(box, 'clientWidth', { configurable: true, value: 900 })
+    Object.defineProperty(box, 'clientHeight', { configurable: true, value: 480 })
+    // 80×24 grid rendered at 800×384 → 10×16 cells → the box holds 90×30.
+    const screen = document.createElement('div')
+    screen.className = 'xterm-screen'
+    Object.defineProperty(screen, 'offsetWidth', { configurable: true, value: 800 })
+    Object.defineProperty(screen, 'offsetHeight', { configurable: true, value: 384 })
+    host.appendChild(screen)
+
+    await vi.advanceTimersByTimeAsync(200)
+    expect(fit).toHaveBeenCalledTimes(1)
+    expect(fit).toHaveBeenCalledWith('pty-1', 90, 30)
+
+    // A reconnect (e.g. the host reclaiming the grid) computes the same
+    // target — no repeat claim, so no resize tug-of-war with the host.
+    act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
+    await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2))
+    await vi.advanceTimersByTimeAsync(400)
+    expect(fit).toHaveBeenCalledTimes(1)
   })
 
   it('delays repeated capture after an overflow and cancels the retry on unmount', async () => {

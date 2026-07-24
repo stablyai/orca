@@ -249,7 +249,6 @@ export class RuntimeEmulatorCommands {
 
   async emulatorAx(params: EmulatorTargetParams): Promise<unknown> {
     const worktreeId = await this.resolveWorktreeId(params.worktree)
-    // Via the bridge (not runCapability directly) so iOS gets the session's /ax endpoint.
     return this.requireEmulatorBridge().accessibilityTree({
       device: params.device ?? params.emulator,
       worktreeId

@@ -1109,8 +1109,10 @@ async function resolvePrWorkItemSource(
     getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions),
     getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
   ])
-  const source =
-    preference === 'upstream' ? (upstreamCandidate ?? originCandidate) : originCandidate
+  // Why: fork-contribution PRs live on the upstream repo (the fork's own PR
+  // list is almost always empty), so 'auto' resolves upstream-first exactly
+  // like the issue side. Only an explicit 'origin' pick pins PRs to the fork.
+  const source = preference === 'origin' ? originCandidate : (upstreamCandidate ?? originCandidate)
   return { source, originCandidate, upstreamCandidate }
 }
 

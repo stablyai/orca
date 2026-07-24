@@ -172,4 +172,74 @@ describe('renderer crash diagnostics', () => {
       diagnostics.recordRendererCrashBreadcrumb('renderer_bootstrap_started')
     ).not.toThrow()
   })
+
+  it('emits one-shot renderer_memory_highwater breadcrumbs with profile counts', async () => {
+    const memory = (window.performance as unknown as { memory: Record<string, number> }).memory
+    memory.usedJSHeapSize = 0.7 * memory.jsHeapSizeLimit
+    const getElementsByTagName = vi.fn(() => ({ length: 4321 }))
+    const querySelectorAll = vi.fn(() => ({ length: 6 }))
+    vi.stubGlobal('document', {
+      getElementsByTagName,
+      querySelectorAll
+    })
+    const profile = await import('./renderer-memory-profile')
+    const unregister = profile.registerRendererMemoryProfileContributor('store', () => ({
+      worktrees: 12
+    }))
+
+    diagnostics.installRendererCrashDiagnostics()
+    const highwaterCalls = (): unknown[] =>
+      recordBreadcrumbMock.mock.calls.filter(
+        (call) => (call[0] as { name: string }).name === 'renderer_memory_highwater'
+      )
+    expect(highwaterCalls()).toHaveLength(1)
+    expect(recordBreadcrumbMock).toHaveBeenCalledWith({
+      name: 'renderer_memory_highwater',
+      data: expect.objectContaining({
+        thresholdPct: 60,
+        rendererSurface: 'main',
+        domNodes: 4321,
+        terminalElements: 6,
+        browserWebviews: 4,
+        registeredBrowserGuests: 3,
+        'store.worktrees': 12
+      })
+    })
+
+    // Why: the interval sampler must not re-emit an already-crossed threshold.
+    const tick = setIntervalMock.mock.calls[0][0] as () => void
+    tick()
+    expect(highwaterCalls()).toHaveLength(1)
+
+    memory.usedJSHeapSize = 0.85 * memory.jsHeapSizeLimit
+    tick()
+    expect(highwaterCalls()).toHaveLength(2)
+    expect(recordBreadcrumbMock).toHaveBeenCalledWith({
+      name: 'renderer_memory_highwater',
+      data: expect.objectContaining({ thresholdPct: 80 })
+    })
+
+    // Why: a heap that jumps straight past 80% must emit both levels at once.
+    diagnostics._disposeRendererCrashDiagnosticsForTests()
+    recordBreadcrumbMock.mockClear()
+    diagnostics.installRendererCrashDiagnostics()
+    expect(highwaterCalls()).toHaveLength(2)
+    expect(getElementsByTagName).toHaveBeenCalledTimes(3)
+    expect(querySelectorAll).toHaveBeenCalledTimes(3)
+
+    unregister()
+  })
+
+  it('skips highwater emission when heap readings are not finite', () => {
+    const memory = (window.performance as unknown as { memory: Record<string, number> }).memory
+    memory.usedJSHeapSize = Number.NaN
+
+    diagnostics.installRendererCrashDiagnostics()
+
+    expect(
+      recordBreadcrumbMock.mock.calls.some(
+        (call) => (call[0] as { name: string }).name === 'renderer_memory_highwater'
+      )
+    ).toBe(false)
+  })
 })

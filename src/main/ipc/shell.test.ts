@@ -542,6 +542,29 @@ describe('registerShellHandlers', () => {
       ])
     })
 
+    it('opens a manual port-22 target with a host-only authority when username is blank', async () => {
+      sshTargets.set(
+        'ssh-1',
+        createSshTarget({
+          source: 'manual',
+          configHost: 'builder.example.com',
+          host: 'builder.example.com',
+          username: ''
+        })
+      )
+      resolveCliCommandMock.mockReturnValueOnce('/usr/local/bin/code')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(
+        handler({}, { path: '/srv/project', command: 'code', connectionId: 'ssh-1' })
+      ).resolves.toEqual({ ok: true })
+      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith('/usr/local/bin/code', [
+        '--remote',
+        'ssh-remote+builder.example.com',
+        '/srv/project'
+      ])
+    })
+
     it('rejects relative SSH paths before resolving or spawning a launcher', async () => {
       sshTargets.set('ssh-1', createSshTarget())
       const handler = getHandler('shell:openInExternalEditor')

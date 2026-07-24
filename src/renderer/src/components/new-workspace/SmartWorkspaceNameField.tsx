@@ -1377,7 +1377,7 @@ export default function SmartWorkspaceNameField({
                     event.preventDefault()
                     onPlainEnter?.()
                   }}
-                  className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50"
+                  className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-sm shadow-xs outline-none focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
                 >
                   <SelectionIcon kind={selectedSource.kind} />
                   <span className="min-w-0 flex-1 truncate font-medium leading-none text-foreground">
@@ -1508,7 +1508,9 @@ export default function SmartWorkspaceNameField({
                     }}
                     placeholder={placeholder}
                     disabled={disabled}
-                    className="h-9 pl-8 text-sm"
+                    // Why: match the project/run-on comboboxes' solid `bg-background` — the input's
+                    // default transparent fill made it read a different color on light mode.
+                    className="h-9 bg-background pl-8 text-sm"
                   />
                 </>
               )}

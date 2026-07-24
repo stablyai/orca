@@ -10,6 +10,7 @@ import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
@@ -27,6 +28,8 @@ import {
   isAgentSessionOwnerBinding,
   type AgentSessionOwnerBinding
 } from '../../shared/agent-session-host-authority'
+import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
+import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -40,17 +43,10 @@ import { resolveWslSessionContext } from './wsl-session-context'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
-
-type ColdRestorePayload = {
-  scrollback: string
-  cwd: string
-  cols: number
-  rows: number
-  oscLinks?: TerminalOscLinkRange[]
-}
+import { ColdRestorePayloadCache, type ColdRestorePayload } from './cold-restore-payload-cache'
+import { PtyProcessListAdmission } from '../providers/pty-process-list-admission'
 
 type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { incarnationId?: string }[]>
@@ -134,8 +130,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Why: StrictMode/re-render remounts can call createOrAttach for a just-killed session; tombstones stop the daemon resurrecting it (Map evicts oldest-first, per terminal-host.ts).
   private killedSessionTombstones = new Map<string, number>()
   // Why: React StrictMode double-mounts; this sticky cache returns the same cold restore data on remount until the renderer acknowledges it.
-  private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private sleepRestoreSessionIds = new Set<string>()
+  private coldRestoreCache = new ColdRestorePayloadCache(undefined, (sessionId) => {
+    this.sleepRestoreSessionIds.delete(sessionId)
+  })
   private activeSessionIds = new Set<string>()
   private sessionIncarnations = new Map<string, string>()
   private pendingSpawnOperationsBySessionId = new Map<string, Set<PendingDaemonSpawnOperation>>()
@@ -254,9 +252,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro
     })?.distro
-    const detectColdRestore = (options?: { ignoreCleanEnd?: boolean }): ColdRestoreInfo | null => {
+    const detectColdRestore = async (options?: {
+      ignoreCleanEnd?: boolean
+    }): Promise<ColdRestoreInfo | null> => {
       const restoreInfo =
-        this.historyReader?.detectColdRestore(sessionId, { ...options, wslDistro }) ?? null
+        (await this.historyReader?.detectColdRestore(sessionId, { ...options, wslDistro })) ?? null
       if (!restoreInfo) {
         return null
       }
@@ -293,7 +293,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if ((await this.getAppliedSize(sessionId)) !== null) {
         restoreSkippedForLiveSession = true
       } else {
-        restoreInfo = detectColdRestore()
+        restoreInfo = await detectColdRestore()
       }
     }
     let effectiveCwd = restoreInfo?.cwd ?? opts.cwd
@@ -403,7 +403,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Why: the probe→createOrAttach gap is racy — the session can exit in between, so re-detect to match the unprobed restore path.
     // Why ignoreCleanEnd: the raced exit event can write endedAt before the reply; nulling the restore here would delete the checkpoint instead of restoring it.
     if (result.isNew && restoreSkippedForLiveSession) {
-      restoreInfo = detectColdRestore({ ignoreCleanEnd: true })
+      restoreInfo = await detectColdRestore({ ignoreCleanEnd: true })
       scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
       if (restoreInfo && scrollback) {
         // Why: the aliveness probe raced with session death, so the first
@@ -435,7 +435,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.initialCwds.set(sessionId, effectiveCwd)
       }
     } else if (!result.isNew && result.historySeeded === false) {
-      restoreInfo = detectColdRestore()
+      restoreInfo = await detectColdRestore()
       scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
     }
 
@@ -655,7 +655,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
       await this.checkpointSessions([id], { final: true, teardown: true })
       const wslDistro = this.wslDistrosBySessionId.get(id)
-      const detected = this.historyReader?.detectColdRestore(id, { wslDistro }) ?? null
+      const detected = (await this.historyReader?.detectColdRestore(id, { wslDistro })) ?? null
       const restoreInfo = detected
         ? {
             ...detected,
@@ -670,7 +670,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
       if (coldRestore) {
         this.coldRestoreCache.set(id, coldRestore)
-        this.sleepRestoreSessionIds.add(id)
+        if (this.coldRestoreCache.has(id)) {
+          this.sleepRestoreSessionIds.add(id)
+        }
         // Why: physical exit must not mark intentional sleep as a clean end; the final checkpoint stays the wake-time recovery authority.
         this.historyManager?.suspendSession(id)
       }
@@ -822,6 +824,18 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return foregroundProcess !== null && !isShellProcess(foregroundProcess)
   }
 
+  async inspectProcess(
+    id: string
+  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+    if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
+      throw new Error('terminal_liveness_unavailable')
+    }
+    return this.client.request<{
+      foregroundProcess: string | null
+      hasChildProcesses: boolean
+    }>('inspectProcess', { sessionId: id })
+  }
+
   async getForegroundProcess(id: string): Promise<string | null> {
     try {
       const result = await this.client.request<{ foregroundProcess: string | null }>(
@@ -909,21 +923,28 @@ export class DaemonPtyAdapter implements IPtyProvider {
       undefined,
       remainingRequestTimeoutMs(opts?.deadlineMs)
     )
-    return result.sessions
-      .filter((s) => s.isAlive)
-      .map((s) => {
-        const { worktreeId } = parsePtySessionId(s.sessionId)
-        return {
-          id: s.sessionId,
-          ...(s.incarnationId ? { incarnationId: s.incarnationId } : {}),
+    const admission = new PtyProcessListAdmission()
+    const processes: PtyProcessInfo[] = []
+    for (const session of result.sessions) {
+      if (!session.isAlive) {
+        continue
+      }
+      const { worktreeId } = parsePtySessionId(session.sessionId)
+      processes.push(
+        admission.admit({
+          id: session.sessionId,
+          ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
           // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
-          cwd: s.cwd ?? this.initialCwds.get(s.sessionId) ?? '',
+          cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
           title: 'shell',
           ...(worktreeId ? { worktreeId } : {}),
-          ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {}),
-          ...this.validatedAgentSessionOwners(s.agentSessionOwners)
-        }
-      })
+          ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+          ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+          ...this.validatedAgentSessionOwners(session.agentSessionOwners)
+        })
+      )
+    }
+    return processes
   }
 
   private validatedAgentSessionOwners(
@@ -932,10 +953,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (owners === undefined) {
       return {}
     }
-    if (!Array.isArray(owners) || !owners.every(isAgentSessionOwnerBinding)) {
+    if (
+      !Array.isArray(owners) ||
+      owners.length > MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES ||
+      !owners.every((owner) => isAgentSessionOwnerBinding(owner) && owner.phase === 'live')
+    ) {
       throw new Error('agent_session_ownership_unknown')
     }
-    return owners.length > 0 ? { agentSessionOwners: owners } : {}
+    return owners.length > 0
+      ? { agentSessionOwners: owners.map(cloneAgentSessionOwnerBinding) }
+      : {}
   }
 
   // Why: the Manage Sessions panel needs the full SessionInfo (pid, state,

@@ -133,6 +133,7 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
@@ -843,6 +844,7 @@ export function useIpcEvents(): void {
     type PendingAgentStatusEvent = {
       data: AgentStatusIpcPayload
       firstSeenAt: number
+      replay: boolean
     }
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
@@ -1486,18 +1488,6 @@ export function useIpcEvents(): void {
           splitTelemetrySource
         }) => {
           try {
-            if (isRuntimeEnvironmentActive()) {
-              if (requestId) {
-                window.api.ui.replyTerminalCreate({
-                  requestId,
-                  error: translate(
-                    'auto.hooks.useIpcEvents.60428567b4',
-                    'Local terminal reveal is unavailable while a remote runtime is active'
-                  )
-                })
-              }
-              return
-            }
             const store = useAppStore.getState()
             const terminalPresentation = resolveTerminalPresentation({ presentation, activate })
             const shouldActivate = terminalPresentation === 'focused'
@@ -1710,23 +1700,34 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTerminalCreate((data) => {
         try {
-          // Why: runtime-session requests are host-owned tabs materialized by this renderer, not ordinary local creates.
-          if (isRuntimeEnvironmentActive() && data.source !== 'runtime-session') {
-            window.api.ui.replyTerminalCreate({
-              requestId: data.requestId,
-              error: translate(
-                'auto.hooks.useIpcEvents.7a64b31991',
-                'Local terminal creation is unavailable while a remote runtime is active'
-              )
-            })
-            return
-          }
           const store = useAppStore.getState()
           const worktreeId = data.worktreeId ?? store.activeWorktreeId
           if (!worktreeId) {
             window.api.ui.replyTerminalCreate({
               requestId: data.requestId,
               error: translate('auto.hooks.useIpcEvents.f000b2ff76', 'No active worktree')
+            })
+            return
+          }
+          const worktreeRoute = resolveTerminalWorktreeRoute(store, worktreeId)
+          if (!worktreeRoute) {
+            window.api.ui.replyTerminalCreate({
+              requestId: data.requestId,
+              error: translate(
+                'auto.hooks.useIpcEvents.unresolvedTerminalWorktreeOwner',
+                'Terminal creation is unavailable because the worktree owner could not be resolved'
+              )
+            })
+            return
+          }
+          // Why: runtime-session requests are host-owned tabs materialized by this renderer, not ordinary local creates.
+          if (worktreeRoute.runtimeEnvironmentId && data.source !== 'runtime-session') {
+            window.api.ui.replyTerminalCreate({
+              requestId: data.requestId,
+              error: translate(
+                'auto.hooks.useIpcEvents.7a64b31991',
+                'Local terminal creation is unavailable while a remote runtime is active'
+              )
             })
             return
           }
@@ -2921,8 +2922,15 @@ export function useIpcEvents(): void {
       }, PENDING_AGENT_STATUS_RETRY_MS)
     }
 
-    function enqueuePendingAgentStatus(data: AgentStatusIpcPayload): void {
-      pendingAgentStatusEvents.push({ data, firstSeenAt: Date.now() })
+    function enqueuePendingAgentStatus(
+      data: AgentStatusIpcPayload,
+      options?: { replay?: boolean }
+    ): void {
+      pendingAgentStatusEvents.push({
+        data,
+        firstSeenAt: Date.now(),
+        replay: options?.replay === true
+      })
       while (pendingAgentStatusEvents.length > MAX_PENDING_AGENT_STATUS_EVENTS) {
         pendingAgentStatusEvents.shift()
       }
@@ -2945,7 +2953,7 @@ export function useIpcEvents(): void {
           if (now - event.firstSeenAt > PENDING_AGENT_STATUS_TTL_MS) {
             continue
           }
-          const result = applyAgentStatus(event.data, { retry: true })
+          const result = applyAgentStatus(event.data, { retry: true, replay: event.replay })
           if (result === 'pending') {
             remaining.push(event)
           }
@@ -3012,17 +3020,27 @@ export function useIpcEvents(): void {
         }
       }
       if (!exists) {
-        // Why: a non-empty paneKey with no matching tab is a routing failure to track.
-        // Skip during replay — main's durable cache legitimately holds closed-tab entries.
-        if (options?.replay !== true) {
-          if (options?.retry !== true) {
-            track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
-            // Why: live hook IPC can beat tab/layout hydration; retry so a transient pane-key miss doesn't drop completion state.
-            enqueuePendingAgentStatus(data)
+        // Why: startup snapshot replay can beat tab/layout hydration too.
+        // Reuse the same bounded retry queue when the row still carries
+        // runtime-backed worktree provenance so the cached status can adopt
+        // once the pane becomes visible.
+        if (options?.replay === true) {
+          if (data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
+            if (options?.retry !== true) {
+              enqueuePendingAgentStatus(data, { replay: true })
+            }
+            return 'pending'
           }
-          return 'pending'
+          return 'dropped'
         }
-        return 'dropped'
+        if (options?.retry !== true) {
+          // Why: empty paneKeys are dropped in main before IPC fanout. Reaching
+          // this branch means a non-empty paneKey escaped without a matching
+          // renderer tab, so track the adoption/routing failure separately.
+          track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
+          enqueuePendingAgentStatus(data)
+        }
+        return 'pending'
       }
       if (options?.replay !== true && options?.retry !== true) {
         for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {

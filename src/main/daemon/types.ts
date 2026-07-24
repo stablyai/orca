@@ -1,11 +1,13 @@
 import type {
   ConfirmForegroundProcessRequest,
-  GetForegroundProcessRequest
+  GetForegroundProcessRequest,
+  InspectProcessRequest
 } from './daemon-foreground-process-protocol'
 
 export type {
   ConfirmForegroundProcessRequest,
-  GetForegroundProcessRequest
+  GetForegroundProcessRequest,
+  InspectProcessRequest
 } from './daemon-foreground-process-protocol'
 
 // ─── Protocol Version ────────────────────────────────────────────────
@@ -24,6 +26,7 @@ export {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
@@ -302,6 +305,7 @@ export type DaemonRequest =
   | DetachRequest
   | GetCwdRequest
   | GetForegroundProcessRequest
+  | InspectProcessRequest
   | ConfirmForegroundProcessRequest
   | ClearScrollbackRequest
   | ShutdownRequest
@@ -355,6 +359,7 @@ export type SessionInfo = {
   shellState: ShellReadyState
   isAlive: boolean
   terminalHandle?: string
+  wslDistro?: string | null
   pid: number | null
   cwd: string | null
   cols: number

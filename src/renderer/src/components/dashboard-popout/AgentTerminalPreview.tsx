@@ -20,12 +20,14 @@ import {
 } from '@/components/terminal-pane/terminal-ime-native-text-forwarder'
 import { getMacNativeTextInputSourceTracker } from '@/components/terminal-pane/terminal-ime-input-source'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
+import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { translate } from '@/i18n/i18n'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { installPreviewClipboardShortcuts } from './preview-clipboard-shortcuts'
+import { createPreviewGridClaim } from './preview-grid-claim'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
@@ -38,27 +40,30 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Live peek at an agent's terminal, streaming from the main process's per-PTY
- * headless emulator. The terminal is created at the pane's REAL cols/rows —
- * the serialized ANSI was produced at those dimensions, and replaying it into
- * a narrower terminal rewraps every full-width line into garbage. The box
- * stays fixed; the oversized terminal is scaled down to fit the width and
- * bottom-anchored so the tail (prompt, status line) stays visible. Keystrokes
- * pass through to the PTY; DOM renderer so it never grabs a WebGL context.
+ * Live interactive view of an agent's terminal, streaming from the main
+ * process's per-PTY headless emulator. On open it claims the PTY grid for the
+ * dialog's own box (see createPreviewGridClaim), so the terminal renders
+ * properly sized rather than scaled. The terminal itself is always created at
+ * the PTY's REAL cols/rows — serialized ANSI replayed into different
+ * dimensions rewraps into garbage — and when someone else owns the grid (a
+ * phone, a host reclaim) the oversized frame is scaled down to fit and
+ * anchored so the cursor stays visible. Keystrokes pass through to the PTY;
+ * DOM renderer so it never grabs a WebGL context.
  */
 export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const settings = useAppStore((state) => state.settings)
   const systemPrefersDark = useSystemPrefersDark()
-  const terminalTheme = useMemo(() => {
+  const { terminalTheme, terminalMode } = useMemo(() => {
     if (!settings) {
-      return null
+      return { terminalTheme: null, terminalMode: 'dark' as const }
     }
     const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-    return composeActiveTerminalTheme(
+    const theme = composeActiveTerminalTheme(
       appearance.theme ?? getBuiltinTheme(appearance.themeName),
       settings
     )
+    return { terminalTheme: theme, terminalMode: appearance.mode }
   }, [settings, systemPrefersDark])
   // A null snapshot means no serializer knows this pty (it died or was never
   // spawned this session) — say so instead of painting a silent blank terminal.
@@ -111,6 +116,24 @@ export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.El
         fitToBox()
       })
     }
+
+    const gridClaim = createPreviewGridClaim({
+      ptyId,
+      container,
+      getTerminal: () => terminal
+    })
+    // Box growth/shrink (window resize) changes the reachable grid.
+    const boxResizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            scheduleFit()
+            gridClaim.schedule()
+          })
+    if (container.parentElement) {
+      boxResizeObserver?.observe(container.parentElement)
+    }
+    boxResizeObserver?.observe(container)
 
     let replayDepth = 0
     const writeReplayed = (chunk: string, onDone?: () => void): void => {
@@ -209,59 +232,11 @@ export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.El
       if (!terminal) {
         return
       }
-      const platform = getShortcutPlatform()
-      const consumedClipboardKeys = new Set<string>()
-      const consumeEvent = (event: KeyboardEvent): false => {
-        event.preventDefault()
-        event.stopPropagation()
-        return false
-      }
-      terminal.attachCustomKeyEventHandler((event) => {
-        if (imeNativeTextForwarder?.claimKeyEvent(event)) {
-          // Why: bypass xterm's kitty encoder for native-text keydowns so the committed glyph survives via the input event.
-          return false
-        }
-        if (event.type !== 'keydown') {
-          const keyIdentity = event.code || event.key
-          if (consumedClipboardKeys.has(keyIdentity)) {
-            if (event.type === 'keyup') {
-              consumedClipboardKeys.delete(keyIdentity)
-            }
-            return consumeEvent(event)
-          }
-          return true
-        }
-        const keybindings = useAppStore.getState().keybindings
-        if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
-          const keyIdentity = event.code || event.key
-          const firstKeydown = !consumedClipboardKeys.has(keyIdentity)
-          consumedClipboardKeys.add(keyIdentity)
-          const selection = terminal?.getSelection()
-          if (firstKeydown && selection) {
-            void window.api.ui.writeClipboardText(selection).catch(() => undefined)
-          }
-          return consumeEvent(event)
-        }
-        // Why: plain Mod+V is the Edit-menu accelerator, which reaches this window as ui:appMenuPaste — matching it here too would paste twice.
-        const isMenuPasteChord =
-          (platform === 'darwin'
-            ? event.metaKey && !event.ctrlKey
-            : event.ctrlKey && !event.metaKey) &&
-          !event.altKey &&
-          !event.shiftKey &&
-          event.key.toLowerCase() === 'v'
-        if (
-          !isMenuPasteChord &&
-          keybindingMatchesAction('terminal.paste', event, platform, keybindings)
-        ) {
-          const keyIdentity = event.code || event.key
-          if (!consumedClipboardKeys.has(keyIdentity)) {
-            consumedClipboardKeys.add(keyIdentity)
-            void pasteClipboardText(document.activeElement, 'keyboard')
-          }
-          return consumeEvent(event)
-        }
-        return true
+      installPreviewClipboardShortcuts({
+        terminal,
+        claimImeKeyEvent: (event) => imeNativeTextForwarder?.claimKeyEvent(event) ?? false,
+        pasteClipboardText: (activeElement, source) =>
+          void pasteClipboardText(activeElement, source)
       })
     }
 
@@ -298,6 +273,10 @@ export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.El
           cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
           rows: clamp(snap.rows ?? FALLBACK_ROWS, 2, 200),
           theme: terminalTheme ?? undefined,
+          minimumContrastRatio: resolveTerminalMinimumContrastRatio(
+            terminalTheme?.background,
+            terminalMode
+          ),
           scrollback: 1000
         })
         try {
@@ -351,6 +330,7 @@ export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.El
         writeReplayed('', requestRefresh)
       }
       scheduleFit()
+      gridClaim.schedule()
       terminal.focus()
     }
 
@@ -416,6 +396,8 @@ export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.El
       if (retryTimer) {
         clearTimeout(retryTimer)
       }
+      gridClaim.dispose()
+      boxResizeObserver?.disconnect()
       offAppMenuPaste()
       offData?.()
       userInputDisposable?.dispose()
@@ -423,7 +405,7 @@ export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.El
       void window.api.terminalPreview.unsubscribe(ptyId)
       terminal?.dispose()
     }
-  }, [ptyId, terminalTheme])
+  }, [ptyId, terminalTheme, terminalMode])
 
   return (
     // Why: a size FIXED by the viewport (not shrink-to-fit) + overflow-hidden

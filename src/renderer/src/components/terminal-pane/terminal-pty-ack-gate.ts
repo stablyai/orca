@@ -106,9 +106,6 @@ export function deliverPtyDataWithDeferredAck(
   deliverTerminalDataWithDeferredCredit(() => ackPtyData(ptyId, chars), deliver)
 }
 
-/** Claims the in-progress delivery's credit for the output scheduler. Returns
- *  a fire-once callback, or null when outside a delivery or already claimed
- *  (only the FIRST scheduler write of a delivery carries the credit). */
 export function takeCurrentPtyDeliveryAckCredit(): (() => void) | null {
   return takeCurrentTerminalDeliveryCredit()
 }

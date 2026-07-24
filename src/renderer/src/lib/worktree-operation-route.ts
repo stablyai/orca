@@ -4,8 +4,14 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveIndexedWorktreeOwner } from './worktree-runtime-owner-index'
+import {
+  findFolderWorkspaceOwner,
+  getExecutionHostIdForFolderWorkspace,
+  type FolderWorkspaceRuntimeOwnerState
+} from './folder-workspace-runtime-owner'
 
 export type WorktreeOperationRoute = {
   executionHostId: ExecutionHostId | null
@@ -24,12 +30,11 @@ type WorktreeOperationOwnerRecord = {
   runtimeOwnerEnvironmentId?: string
 }
 
-type WorktreeOperationRouteState = {
+// settings/runtimeEnvironments come from FolderWorkspaceRuntimeOwnerState's legacy-owner base.
+type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
   repos?: readonly Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'>[]
-  settings?: Pick<NonNullable<AppState['settings']>, 'activeRuntimeEnvironmentId'> | null
   worktreesByRepo?: Record<string, readonly WorktreeOperationOwnerRecord[]>
   detectedWorktreesByRepo?: Record<string, { worktrees: readonly WorktreeOperationOwnerRecord[] }>
-  runtimeEnvironments?: readonly { id: string }[]
   runtimeEnvironmentCatalogHydrated?: boolean
   removedRuntimeEnvironmentIds?: ReadonlySet<string>
 }
@@ -102,6 +107,13 @@ export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  // Why: folder workspaces are not Git worktrees — they never appear in the worktree/repo
+  // catalogs scanned below, so without this branch a plain local folder workspace reads as an
+  // unresolved cross-host identity and every owner-routed operation fails closed (#10251).
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  if (workspaceScope?.type === 'folder') {
+    return resolveFolderWorkspaceOperationRoute(state, workspaceScope.folderWorkspaceId)
+  }
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (explicitResolution.kind !== 'missing') {
     return explicitResolution
@@ -145,6 +157,28 @@ export function resolveWorktreeOperationRouteResult(
   return mayBeLegacyLocal
     ? { kind: 'resolved', route: { executionHostId: 'local', runtimeEnvironmentId: null } }
     : { kind: 'missing' }
+}
+
+function resolveFolderWorkspaceOperationRoute(
+  state: WorktreeOperationRouteState,
+  folderWorkspaceId: string
+): WorktreeOperationRouteResolution {
+  if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
+    // Why: deleted/stale folder ids keep failing closed like unknown worktrees.
+    return { kind: 'missing' }
+  }
+  // Why: a found folder record is positive identity evidence, so keep terminal-owner parity;
+  // the worktree legacy hydration gates would fail local folders closed whenever unrelated
+  // runtimes exist — the exact #10251 symptom.
+  const executionHostId = getExecutionHostIdForFolderWorkspace(state, folderWorkspaceId)
+  const parsedHost = parseExecutionHostId(executionHostId)
+  return {
+    kind: 'resolved',
+    route: {
+      executionHostId,
+      runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+    }
+  }
 }
 
 export function resolveExplicitWorktreeOperationRouteResult(

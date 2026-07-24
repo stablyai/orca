@@ -370,14 +370,77 @@ function buildReleasedHistory() {
   return { registry, mapping }
 }
 
-// Why: the artifacts must be pure functions of skills/ bytes and release-tag
-// history. Stamping the app version made every release cut invalidate the
-// committed output on all open branches and drag skill CI onto unrelated PRs.
-async function buildArtifacts() {
+// Why: released history is authoritative committed data, advanced only at
+// release cut. Seeding generation from the committed registry + mapping makes
+// ordinary verify/regeneration a pure function of working-tree bytes, so it
+// never walks git tags — the root cause of recurring lint drift when a clone
+// holds stray, deleted, or fork tags the committed artifacts predate.
+function releasedHistoryFromCommitted(committedRegistry, committedMapping) {
+  const registry = { schemaVersion: SNAPSHOT_REGISTRY_SCHEMA_VERSION, skills: {} }
+  const releasedSnapshotCounts = {}
+  const mapping =
+    committedMapping && committedMapping.schemaVersion === RELEASE_MAPPING_SCHEMA_VERSION
+      ? structuredClone(committedMapping)
+      : { schemaVersion: RELEASE_MAPPING_SCHEMA_VERSION, releases: [] }
+  if (committedRegistry && committedRegistry.schemaVersion === SNAPSHOT_REGISTRY_SCHEMA_VERSION) {
+    const mappedCounts = releasedSnapshotCountsFromMapping(mapping)
+    for (const [name, snapshots] of Object.entries(committedRegistry.skills ?? {})) {
+      // The committed registry carries at most one unreleased tail beyond the
+      // revisions named by the mapping; drop it and recompute it from bytes.
+      const releasedCount = mappedCounts?.[name] ?? Math.max(0, snapshots.length - 1)
+      registry.skills[name] = snapshots.slice(0, releasedCount)
+      releasedSnapshotCounts[name] = releasedCount
+    }
+  }
+  return { registry, mapping, releasedSnapshotCounts }
+}
+
+// Why: disaster recovery only. Reconstruct released history from the immutable
+// release tags when the committed ledger must be rebuilt from scratch. Kept off
+// the verify/regenerate path — walking tags there is what coupled lint to the
+// executing clone's tag state and broke it on version bumps, new tags, and
+// stray/deleted local tags.
+function releasedHistoryFromTags() {
   const { registry, mapping } = buildReleasedHistory()
   const releasedSnapshotCounts = Object.fromEntries(
     Object.entries(registry.skills).map(([name, snapshots]) => [name, snapshots.length])
   )
+  return { registry, mapping, releasedSnapshotCounts }
+}
+
+// Why: release cut is the single authoritative point where working-tree bytes
+// become an immutable released revision. Append one mapping row for the version,
+// mirroring the historical dedupe where consecutive identical skill trees share
+// the earliest release's row.
+function appendReleaseRow(artifacts, version) {
+  const appVersion = version.startsWith('v') ? version.slice(1) : version
+  const currentRevisions = {}
+  for (const skill of artifacts.currentManifest.skills) {
+    currentRevisions[skill.name] = skill.releaseRevision
+  }
+  const releases = artifacts.releaseMapping.releases
+  const last = releases.at(-1)
+  if (last && isDeepStrictEqual(last.skills, currentRevisions)) {
+    return
+  }
+  // Why: a cut that pushed the version bump to main but died before pushing the
+  // tag is re-cut at the same version. If skills changed in between, appending
+  // would leave two rows claiming this version and the stale one would name
+  // revisions that tag never ships — overwrite, since the tag ships these bytes.
+  if (last?.appVersion === appVersion) {
+    releases[releases.length - 1] = { appVersion, skills: currentRevisions }
+    return
+  }
+  // Why: an earlier row means re-cutting an already-shipped version, which the
+  // cut workflow refuses upstream. Fail rather than corrupt shipped provenance.
+  if (releases.some((release) => release.appVersion === appVersion)) {
+    throw new Error(`Release mapping already has a row for ${appVersion}.`)
+  }
+  releases.push({ appVersion, skills: currentRevisions })
+}
+
+async function buildArtifacts(releasedHistory) {
+  const { registry, mapping, releasedSnapshotCounts } = releasedHistory
   const skillDirectories = (await readdir(SKILLS_ROOT, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
@@ -557,13 +620,32 @@ async function verifyArtifacts(artifacts) {
 }
 
 async function main() {
-  const artifacts = await buildArtifacts()
-  assertReleasedHistoryPreserved(
-    await readCommittedRegistry(),
-    artifacts,
-    await readCommittedReleaseMapping()
-  )
-  await (process.argv.includes('--write') ? writeArtifacts : verifyArtifacts)(artifacts)
+  const argv = process.argv.slice(2)
+  const rebuildFromTags = argv.includes('--rebuild-from-tags')
+  const releaseIndex = argv.indexOf('--release')
+  const releaseVersion = releaseIndex >= 0 ? argv[releaseIndex + 1] : null
+  if (releaseIndex >= 0 && !releaseVersion) {
+    throw new Error('--release requires a version argument, e.g. --release 1.4.160')
+  }
+
+  const committedRegistry = await readCommittedRegistry()
+  const committedMapping = await readCommittedReleaseMapping()
+  const releasedHistory = rebuildFromTags
+    ? releasedHistoryFromTags()
+    : releasedHistoryFromCommitted(committedRegistry, committedMapping)
+  const artifacts = await buildArtifacts(releasedHistory)
+
+  if (releaseVersion) {
+    appendReleaseRow(artifacts, releaseVersion)
+  }
+
+  // Why: released snapshots are append-only. The committed registry/mapping are
+  // read fresh here so the artifacts (which may have appended a release row) can
+  // never alias what we validate against.
+  assertReleasedHistoryPreserved(committedRegistry, artifacts, committedMapping)
+
+  const shouldWrite = releaseVersion !== null || argv.includes('--write')
+  await (shouldWrite ? writeArtifacts : verifyArtifacts)(artifacts)
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
@@ -574,6 +656,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
 }
 
 export {
+  appendReleaseRow,
   assertReleasedHistoryPreserved,
   buildArtifacts,
   buildReleasedHistory,
@@ -584,6 +667,7 @@ export {
   isToleratedReleaseMappingPrefix,
   normalizeText,
   packageDigest,
+  releasedHistoryFromCommitted,
   sortManifestFiles,
   verifyArtifacts,
   writeArtifacts
