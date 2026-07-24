@@ -236,7 +236,11 @@ import {
   getSettingsForWorktreeRuntimeOwner
 } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import {
+  buildAgentResumeStartupPlan,
+  quoteStartupArg,
+  resolveStartupShell
+} from '@/lib/tui-agent-startup'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
   resolveTuiAgentLaunchArgs,
@@ -4609,6 +4613,32 @@ export function connectPanePty(
               : {})
           }
         : undefined
+    const buildPendingStartupCommandText = (startup: PendingStartupCommand): string => {
+      const env = mergeStartupEnvWithPaneIdentity(startup.env)
+      const entries = env
+        ? Object.entries(env).filter(([name]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+        : []
+      if (entries.length === 0) {
+        return startup.command
+      }
+      const shell = resolveStartupShell(getColdRestoreAgentResumePlatform())
+      if (shell === 'powershell') {
+        const assignments = entries
+          .map(([name, value]) => `$env:${name} = ${quoteStartupArg(value, shell)}`)
+          .join('; ')
+        return `${assignments}; ${startup.command}`
+      }
+      if (shell === 'cmd') {
+        const assignments = entries
+          .map(([name, value]) => `set ${quoteStartupArg(`${name}=${value}`, shell)}`)
+          .join(' & ')
+        return `${assignments} & ${startup.command}`
+      }
+      const assignments = entries
+        .map(([name, value]) => quoteStartupArg(`${name}=${value}`, shell))
+        .join(' ')
+      return `env ${assignments} ${startup.command}`
+    }
     const startFreshColdRestoreAgentResume = (
       startup: ColdRestoreAgentResumeStartup | null = buildColdRestoreAgentResumeStartup(),
       options: FreshSpawnOptions = {}
@@ -4677,7 +4707,7 @@ export function connectPanePty(
           if (pendingStartupCommand !== startup || disposed) {
             return
           }
-          const command = startup.command
+          const command = buildPendingStartupCommandText(startup)
           const submitted = shouldDeliverStartupViaTerminalPaste
             ? await runTerminalPasteStartupCommand(command)
             : transport.sendInput(`${command}\r`)
@@ -7412,6 +7442,7 @@ export function connectPanePty(
             window.api.pty.ackColdRestore(ptyId)
           }
           if (didPrepareResume && !coldRestoreStartup) {
+            pendingStartupCommand = preparedStartup
             schedulePendingStartupCommandDelivery()
           }
         }

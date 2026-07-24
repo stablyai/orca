@@ -5,6 +5,7 @@ import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import {
   execInTerminal,
+  splitActiveTerminalPane,
   waitForActivePaneHookDescriptor,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
@@ -13,6 +14,7 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 
 const PROVIDER_SESSION_ID = 'e2e-quit-resume-session'
@@ -31,8 +33,9 @@ function readDaemonPid(userDataDir: string): number {
 
 test.describe.configure({ mode: 'serial' })
 
-test('resumes an agent session after quit when its daemon PTY died while the app was closed', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+test('resumes a done Codex TUI in its split pane after quit when the daemon PTY died', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
+  test.setTimeout(180_000)
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
@@ -54,35 +57,45 @@ test('resumes an agent session after quit when its daemon PTY died while the app
     await ensureTerminalVisible(page)
     await waitForActiveTerminalManager(page, 30_000)
     await waitForPaneCount(page, 1, 30_000)
+    await splitActiveTerminalPane(page, 'horizontal')
+    await waitForPaneCount(page, 2, 30_000)
 
     const marker = `AGENT_QUIT_RESUME_${Date.now()}`
     const descriptor = await waitForActivePaneHookDescriptor(page)
+    const hookEndpoint = await readHookEndpoint(firstApp)
     const firstPtyId = await waitForActivePanePtyId(page)
     await execInTerminal(page, firstPtyId, `echo ${marker}`)
     await waitForTerminalOutput(page, marker)
 
-    // Why: a real agent run reports its provider session id over the hook
-    // server; seeding the same store entry keeps this test hermetic (no agent
-    // CLI install or auth) while exercising the identical persistence path.
-    await page.evaluate(
-      ({ paneKey, worktreeId: wtId, providerSessionId }) => {
-        window.__store
-          ?.getState()
-          .setAgentStatus(
-            paneKey,
-            { state: 'working', prompt: 'finish the task', agentType: 'codex' },
-            'Codex',
-            undefined,
-            { worktreeId: wtId },
-            { providerSession: { key: 'session_id', id: providerSessionId } }
-          )
-      },
-      {
-        paneKey: descriptor.paneKey,
-        worktreeId: descriptor.worktreeId,
-        providerSessionId: PROVIDER_SESSION_ID
-      }
-    )
+    // Why: use the real hook server so the done snapshot is persisted and
+    // replayed during the second launch before the pane cold-restores.
+    await emitCodexHookStatus(hookEndpoint, {
+      paneKey: descriptor.paneKey,
+      worktreeId: descriptor.worktreeId,
+      state: 'working',
+      sessionId: PROVIDER_SESSION_ID,
+      prompt: 'finish the task'
+    })
+    await emitCodexHookStatus(hookEndpoint, {
+      paneKey: descriptor.paneKey,
+      worktreeId: descriptor.worktreeId,
+      state: 'done',
+      sessionId: PROVIDER_SESSION_ID,
+      lastAssistantMessage: 'Task complete'
+    })
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            (paneKey) => window.__store?.getState().agentStatusByPaneKey[paneKey],
+            descriptor.paneKey
+          ),
+        { timeout: 15_000 }
+      )
+      .toMatchObject({
+        state: 'done',
+        providerSession: { key: 'session_id', id: PROVIDER_SESSION_ID }
+      })
 
     const daemonPid = readDaemonPid(session.userDataDir)
 
@@ -105,7 +118,7 @@ test('resumes an agent session after quit when its daemon PTY died while the app
       .toBe(worktreeId)
     await ensureTerminalVisible(secondLaunch.page)
     await waitForActiveTerminalManager(secondLaunch.page, 30_000)
-    await waitForPaneCount(secondLaunch.page, 1, 30_000)
+    await waitForPaneCount(secondLaunch.page, 2, 30_000)
 
     // The quit-captured provider session id must drive a resume command into
     // the cold-restored pane (the command text echoes in the terminal).
