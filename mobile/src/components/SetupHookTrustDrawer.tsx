@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { BottomDrawer } from './BottomDrawer'
 
 export type SetupTrustPrompt = {
@@ -33,6 +34,8 @@ export function SetupHookTrustDrawer({
   onDontRun,
   onClose
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createSetupHookTrustDrawerStyles)
   return (
     <BottomDrawer visible={visible && prompt != null} onClose={onClose}>
       {prompt ? (
@@ -77,61 +80,62 @@ export function SetupHookTrustDrawer({
   )
 }
 
-const styles = StyleSheet.create({
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  trustHeader: {
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  trustScriptBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md,
-    marginBottom: spacing.md
-  },
-  trustScriptLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.sm
-  },
-  trustScriptText: {
-    fontSize: 13,
-    fontFamily: typography.monoFamily,
-    color: colors.textPrimary
-  },
-  trustActionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    overflow: 'hidden'
-  },
-  trustActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  trustActionText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    fontWeight: '500'
-  },
-  trustActionSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
-})
+export const createSetupHookTrustDrawerStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    title: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textPrimary
+    },
+    subtitle: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginTop: 2
+    },
+    trustHeader: {
+      paddingHorizontal: spacing.xs,
+      marginBottom: spacing.md
+    },
+    trustScriptBox: {
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      padding: spacing.md,
+      marginBottom: spacing.md
+    },
+    trustScriptLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      marginBottom: spacing.sm
+    },
+    trustScriptText: {
+      fontSize: 13,
+      fontFamily: typography.monoFamily,
+      color: colors.textPrimary
+    },
+    trustActionGroup: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.input,
+      overflow: 'hidden'
+    },
+    trustActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md
+    },
+    trustActionText: {
+      flex: 1,
+      fontSize: typography.bodySize,
+      color: colors.textPrimary,
+      fontWeight: '500'
+    },
+    trustActionSeparator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    }
+  })

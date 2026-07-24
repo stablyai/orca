@@ -1,7 +1,8 @@
 import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { BottomDrawer } from './BottomDrawer'
 
 export type ActionSheetAction = {
@@ -43,6 +44,8 @@ type ContentProps = {
 }
 
 export function ActionSheetContent({ title, message, actions, onClose }: ContentProps) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createActionSheetModalStyles)
   return (
     <>
       {(title || message) && (
@@ -143,62 +146,63 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
   )
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  message: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  actionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  actionDisabled: {
-    opacity: 0.58
-  },
-  actionPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  actionTextBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  actionText: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  actionTextDisabled: {
-    color: colors.textSecondary
-  },
-  actionTextDestructive: {
-    color: colors.statusRed
-  },
-  actionHint: {
-    marginTop: 2,
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  }
-})
+export const createActionSheetModalStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.xs,
+      paddingBottom: spacing.sm
+    },
+    title: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textMuted
+    },
+    message: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2
+    },
+    actionGroup: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden'
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    },
+    action: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    actionDisabled: {
+      opacity: 0.58
+    },
+    actionPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    actionTextBlock: {
+      flex: 1,
+      minWidth: 0
+    },
+    actionText: {
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    actionTextDisabled: {
+      color: colors.textSecondary
+    },
+    actionTextDestructive: {
+      color: colors.statusRed
+    },
+    actionHint: {
+      marginTop: 2,
+      fontSize: typography.metaSize,
+      color: colors.textMuted
+    }
+  })

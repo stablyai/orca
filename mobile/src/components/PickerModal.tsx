@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { BottomDrawer } from './BottomDrawer'
 
 export type PickerOption<T extends string = string> = {
@@ -38,6 +39,7 @@ export function PickerModal<T extends string = string>({
   onClose,
   zIndex
 }: Props<T>) {
+  const styles = useThemedStyles(createPickerModalStyles)
   return (
     <BottomDrawer visible={visible} onClose={onClose} zIndex={zIndex}>
       <View style={styles.header}>
@@ -64,6 +66,8 @@ function PickerModalContent<T extends string = string>({
 }: PickerModalContentProps<T>) {
   // Why: closed BottomDrawer instances return null, so keeping option rows in
   // this child avoids rebuilding hidden picker contents on every parent render.
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createPickerModalStyles)
   return (
     <View style={styles.group}>
       {options.map((opt, i) => {
@@ -115,57 +119,58 @@ function PickerModalContent<T extends string = string>({
   )
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowDisabled: {
-    opacity: 0.45
-  },
-  rowContent: {
-    flex: 1,
-    minWidth: 0
-  },
-  rowIcon: {
-    width: 22,
-    alignItems: 'center',
-    marginRight: spacing.sm
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  rowLabelSelected: {
-    fontWeight: '600'
-  },
-  rowSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
-  }
-})
+export const createPickerModalStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.xs,
+      paddingBottom: spacing.sm
+    },
+    title: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textMuted
+    },
+    group: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden'
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    rowDisabled: {
+      opacity: 0.45
+    },
+    rowContent: {
+      flex: 1,
+      minWidth: 0
+    },
+    rowIcon: {
+      width: 22,
+      alignItems: 'center',
+      marginRight: spacing.sm
+    },
+    rowLabel: {
+      fontSize: typography.bodySize,
+      color: colors.textPrimary
+    },
+    rowLabelSelected: {
+      fontWeight: '600'
+    },
+    rowSubtitle: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 1
+    }
+  })

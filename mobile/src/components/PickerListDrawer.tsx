@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography, type ThemeColors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { BottomDrawer } from './BottomDrawer'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 
@@ -25,6 +26,8 @@ export function PickerListDrawer<T extends { id: string; label: string }>({
   onClose,
   renderIcon
 }: Props<T>) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createPickerListDrawerStyles)
   const [closing, setClosing] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const drawerVisible = visible && !closing
@@ -103,50 +106,52 @@ export function PickerListDrawer<T extends { id: string; label: string }>({
 }
 
 function PickerSeparator() {
+  const styles = useThemedStyles(createPickerListDrawerStyles)
   return <View style={styles.separator} />
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    maxHeight: 420,
-    flexGrow: 0
-  },
-  emptyContent: {
-    minHeight: spacing.xl
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  itemPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  itemText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  itemTextSelected: {
-    fontWeight: '600'
-  }
-})
+export const createPickerListDrawerStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.xs,
+      paddingBottom: spacing.sm
+    },
+    title: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textMuted
+    },
+    group: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden',
+      maxHeight: 420,
+      flexGrow: 0
+    },
+    emptyContent: {
+      minHeight: spacing.xl
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    },
+    item: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    itemPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    itemText: {
+      flex: 1,
+      fontSize: typography.bodySize,
+      color: colors.textPrimary
+    },
+    itemTextSelected: {
+      fontWeight: '600'
+    }
+  })

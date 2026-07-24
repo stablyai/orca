@@ -5,30 +5,153 @@ import { darkColors, lightColors } from './mobile-theme'
 // Why identity: factories only need key-set + deep-inequality checks; RN is unavailable in vitest.
 vi.mock('react-native', () => ({
   StyleSheet: {
-    create: <T extends Record<string, unknown>>(sheet: T): T => sheet
-  }
+    create: <T extends Record<string, unknown>>(sheet: T): T => sheet,
+    hairlineWidth: 1,
+    absoluteFillObject: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }
+  },
+  Platform: {
+    OS: 'ios',
+    select: <T>(spec: { ios?: T; android?: T; default?: T }) => spec.ios ?? spec.default
+  },
+  View: 'View',
+  Text: 'Text',
+  Pressable: 'Pressable',
+  TextInput: 'TextInput',
+  FlatList: 'FlatList',
+  ActivityIndicator: 'ActivityIndicator',
+  Switch: 'Switch',
+  Modal: 'Modal',
+  ScrollView: 'ScrollView',
+  Keyboard: { dismiss: () => undefined, addListener: () => ({ remove: () => undefined }) },
+  BackHandler: { addEventListener: () => ({ remove: () => undefined }) },
+  useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
 
-// Appended by every themed-styles batch. Empty until the first conversion lands.
+vi.mock('lucide-react-native', () => ({
+  Check: () => null,
+  Edit3: () => null,
+  Trash2: () => null,
+  Download: () => null,
+  Search: () => null,
+  X: () => null
+}))
+
+vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
+vi.mock('../layout/responsive-layout', () => ({
+  useResponsiveLayout: () => ({ isWideLayout: false, modalMaxWidth: 480, width: 390 })
+}))
+vi.mock('../dictation/use-dictation-setup-poller', () => ({
+  useDictationSetupPoller: () => undefined
+}))
+vi.mock('../dictation/mobile-dictation-setup', () => ({
+  downloadDictationModel: async () => undefined,
+  fetchDictationSetup: async () => null,
+  isModelInFlight: () => false,
+  setDictationConfig: async () => undefined
+}))
+vi.mock('../platform/haptics', () => ({
+  triggerError: () => undefined,
+  triggerSuccess: () => undefined
+}))
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
+vi.mock('react-native-gesture-handler', () => ({
+  Gesture: { Pan: () => ({ onUpdate: () => ({}), onEnd: () => ({}) }) },
+  GestureDetector: ({ children }: { children: unknown }) => children,
+  GestureHandlerRootView: ({ children }: { children: unknown }) => children
+}))
+vi.mock('react-native-reanimated', () => ({
+  default: {
+    View: 'Animated.View',
+    ScrollView: 'Animated.ScrollView',
+    createAnimatedComponent: (c: unknown) => c
+  },
+  useSharedValue: (v: unknown) => ({ value: v }),
+  useAnimatedStyle: () => ({}),
+  useAnimatedScrollHandler: () => ({}),
+  withSpring: (v: unknown) => v,
+  withTiming: (v: unknown) => v,
+  runOnJS: (fn: unknown) => fn,
+  interpolate: () => 0,
+  Extrapolation: { CLAMP: 'clamp' }
+}))
+
+// Appended by every themed-styles batch. Load after mocks so component modules resolve.
 type StyleFactory = {
   readonly name: string
   readonly factory: (colors: ThemeColors) => Record<string, unknown>
 }
 
-const THEMED_STYLE_FACTORIES: readonly StyleFactory[] = []
+async function loadBatch1Factories(): Promise<readonly StyleFactory[]> {
+  const [
+    bottomDrawer,
+    pickerModal,
+    pickerList,
+    confirm,
+    textInput,
+    actionSheet,
+    rightDrawer,
+    setupTrust,
+    dictation,
+    searchField
+  ] = await Promise.all([
+    import('../components/bottom-drawer-styles'),
+    import('../components/PickerModal'),
+    import('../components/PickerListDrawer'),
+    import('../components/ConfirmModal'),
+    import('../components/TextInputModal'),
+    import('../components/ActionSheetModal'),
+    import('../components/RightDrawer'),
+    import('../components/SetupHookTrustDrawer'),
+    import('../components/MobileDictationSetupSheet'),
+    import('../components/MobileSearchField')
+  ])
+  return [
+    { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
+    { name: 'createPickerModalStyles', factory: pickerModal.createPickerModalStyles },
+    { name: 'createPickerListDrawerStyles', factory: pickerList.createPickerListDrawerStyles },
+    { name: 'createConfirmModalStyles', factory: confirm.createConfirmModalStyles },
+    { name: 'createTextInputModalStyles', factory: textInput.createTextInputModalStyles },
+    { name: 'createActionSheetModalStyles', factory: actionSheet.createActionSheetModalStyles },
+    { name: 'createRightDrawerStyles', factory: rightDrawer.createRightDrawerStyles },
+    {
+      name: 'createSetupHookTrustDrawerStyles',
+      factory: setupTrust.createSetupHookTrustDrawerStyles
+    },
+    {
+      name: 'createMobileDictationSetupSheetStyles',
+      factory: dictation.createMobileDictationSetupSheetStyles
+    },
+    { name: 'createMobileSearchFieldStyles', factory: searchField.createMobileSearchFieldStyles }
+  ]
+}
 
 describe('themed style factories', () => {
-  // Intentional seed: this PR only adds palettes. Conversion batches append factories.
-  it('starts empty until themed-styles conversion batches register factories', () => {
-    expect(THEMED_STYLE_FACTORIES).toHaveLength(0)
-  })
-
-  it('emits the same keys in both palettes and differs in value', () => {
-    for (const { name, factory } of THEMED_STYLE_FACTORIES) {
+  it('emits the same keys in both palettes and differs in value', async () => {
+    const factories = await loadBatch1Factories()
+    for (const { name, factory } of factories) {
       const darkSheet = factory(darkColors)
       const lightSheet = factory(lightColors)
       expect(Object.keys(darkSheet).sort(), name).toEqual(Object.keys(lightSheet).sort())
       expect(darkSheet, name).not.toEqual(lightSheet)
     }
+  })
+
+  it('keeps batch-1 dark palette values byte-identical to pre-conversion tokens', async () => {
+    const { createBottomDrawerStyles } = await import('../components/bottom-drawer-styles')
+    const { createConfirmModalStyles } = await import('../components/ConfirmModal')
+
+    // Behavioural identity: same tokens reach the same style properties under dark.
+    const drawer = createBottomDrawerStyles(darkColors)
+    expect(drawer.drawer.backgroundColor).toBe(darkColors.bgBase)
+    expect(drawer.handle.backgroundColor).toBe(darkColors.textMuted)
+    // Scrim stays a fixed literal in both modes (desktop uses one scrim; STYLEGUIDE Floating).
+    expect(drawer.backdrop.backgroundColor).toBe('rgba(0,0,0,0.5)')
+
+    const confirm = createConfirmModalStyles(darkColors)
+    expect(confirm.title.color).toBe(darkColors.textPrimary)
+    expect(confirm.destructiveButton.backgroundColor).toBe(darkColors.statusRed)
+    expect(confirm.destructiveText.color).toBe('#fff')
   })
 })
