@@ -8,12 +8,14 @@ const {
   gitExecFileSyncMock,
   translateWslOutputPathsMock,
   statMock,
+  readFileMock,
   resolveGitDirMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
   statMock: vi.fn(),
+  readFileMock: vi.fn(),
   resolveGitDirMock: vi.fn()
 }))
 
@@ -30,7 +32,7 @@ vi.mock('./status', () => ({
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
-  return { ...actual, stat: statMock }
+  return { ...actual, stat: statMock, readFile: readFileMock }
 })
 
 import { clearGitCapabilityStateForTests } from './git-capability-state'
@@ -85,6 +87,23 @@ function mockGitCommands(results: Record<string, MockResult>): void {
   })
 }
 
+function enoent(): Error {
+  return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+}
+
+// Why: a non-empty pattern file is necessary but not sufficient — `git sparse-checkout disable`
+// leaves it behind, so detection also reads the gitdir config for core.sparseCheckout. Serve that
+// config only for the gitdirs a test wants sparse; everything else reads as absent.
+function mockSparseCheckoutEnabledFor(isSparseGitDirConfig: (configPath: string) => boolean): void {
+  readFileMock.mockImplementation(async (filePath: string) => {
+    const normalized = String(filePath).replaceAll('\\', '/')
+    if (normalized.endsWith('/config') && isSparseGitDirConfig(normalized)) {
+      return '[core]\n\tsparseCheckout = true\n'
+    }
+    throw enoent()
+  })
+}
+
 function getGitCalls(): string[] {
   return gitExecFileAsyncMock.mock.calls.map((call) => `git ${call[0].join(' ')}`)
 }
@@ -101,9 +120,11 @@ describe('removeWorktree', () => {
     translateWslOutputPathsMock.mockReset()
     translateWslOutputPathsMock.mockImplementation((output: string) => output)
     statMock.mockReset()
-    // Default: no worktree has a sparse-checkout config file. Tests that need
-    // sparse detection override this.
-    statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    // Default: no worktree has a sparse-checkout pattern file, and no gitdir config enables
+    // sparse checkout. Tests that need sparse detection override both.
+    statMock.mockRejectedValue(enoent())
+    readFileMock.mockReset()
+    readFileMock.mockRejectedValue(enoent())
     resolveGitDirMock.mockReset()
     resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
   })
@@ -936,9 +957,11 @@ describe('listWorktrees', () => {
     translateWslOutputPathsMock.mockReset()
     translateWslOutputPathsMock.mockImplementation((output: string) => output)
     statMock.mockReset()
-    // Default: no worktree has a sparse-checkout config file. Tests that need
-    // sparse detection override this.
-    statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    // Default: no worktree has a sparse-checkout pattern file, and no gitdir config enables
+    // sparse checkout. Tests that need sparse detection override both.
+    statMock.mockRejectedValue(enoent())
+    readFileMock.mockReset()
+    readFileMock.mockRejectedValue(enoent())
     resolveGitDirMock.mockReset()
     resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
   })
@@ -1087,8 +1110,9 @@ describe('listWorktrees', () => {
       if (filePath.includes('repo-feature') && filePath.includes('sparse-checkout')) {
         return { isFile: () => true, size: 32 }
       }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      throw enoent()
     })
+    mockSparseCheckoutEnabledFor((configPath) => configPath.includes('repo-feature'))
 
     const worktrees = await listWorktrees('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')
 
@@ -1143,8 +1167,9 @@ describe('listWorktrees', () => {
       if (filePath.replaceAll('\\', '/').includes(sparseWorktreePath)) {
         return { isFile: () => true, size: 32 }
       }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      throw enoent()
     })
+    mockSparseCheckoutEnabledFor((configPath) => configPath.includes(sparseWorktreePath))
 
     let completed = false
     const listPromise = listWorktrees('/repo').finally(() => {
@@ -1256,9 +1281,11 @@ describe('addSparseWorktree', () => {
     translateWslOutputPathsMock.mockReset()
     translateWslOutputPathsMock.mockImplementation((output: string) => output)
     statMock.mockReset()
-    // Default: no worktree has a sparse-checkout config file. Tests that need
-    // sparse detection override this.
-    statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    // Default: no worktree has a sparse-checkout pattern file, and no gitdir config enables
+    // sparse checkout. Tests that need sparse detection override both.
+    statMock.mockRejectedValue(enoent())
+    readFileMock.mockReset()
+    readFileMock.mockRejectedValue(enoent())
     resolveGitDirMock.mockReset()
     resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
   })
