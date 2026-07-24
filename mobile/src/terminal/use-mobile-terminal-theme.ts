@@ -8,6 +8,7 @@ import { selectMobileTerminalTheme } from './terminal-theme-slot-selection'
 import type { MobileTerminalTheme } from './terminal-webview-contract'
 
 // Why the literal: mobile chrome is dark-only on this branch, so this IS the app mode.
+// PR7 replaces this one line with `const { mode } = useTheme()`.
 const APP_MODE = 'dark'
 
 /** Applies the device-local slot choice on top of the host-pushed palette. */
