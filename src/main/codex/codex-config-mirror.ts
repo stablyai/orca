@@ -15,16 +15,16 @@ import {
 import { readCodexSettingsBaseline } from './config-settings-baseline'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
 import {
-  createTomlLineScanState,
-  getTomlTableHeader,
-  isTomlStructuralLine,
-  updateTomlLineScanState
-} from './config-toml-line-scan'
-import {
-  normalizeCodexProjectPathForLookup,
-  normalizeCodexProjectPathForRevocationLookup,
-  parseCodexProjectHeaderPath
-} from './config-toml-trust'
+  deduplicateProjectTomlSections,
+  getProjectTrustLevel,
+  getRevocationTomlSectionHeaderKey,
+  getTomlSectionHeaderKey,
+  getTomlSections,
+  isRuntimePreservedTomlSection,
+  isRuntimeProjectTomlSection,
+  joinTomlBlocks,
+  stripRuntimeOwnedTomlSections
+} from './config-toml-runtime-owned-sections'
 
 export function syncSystemConfigIntoManagedCodexHome(
   homes: CodexSettingsPromotionHomes = {
@@ -81,15 +81,16 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
   const systemConfigExists = existsSync(systemConfigPath)
   const runtimeConfigExists = existsSync(runtimeConfigPath)
-  if (!systemConfigExists) {
-    // Why: a missing source is not an authoritative empty config. Merging it
-    // would erase every ordinary setting from an existing managed runtime.
+  const rawSystemConfig = systemConfigExists ? readAgentStateFileSync(systemConfigPath) : ''
+  // Why: a missing or blank source is not an authoritative empty config. Merging
+  // it would erase every ordinary setting from an existing managed runtime, and
+  // a 0-byte file is what a half-written or unhydrated cloud-synced home shows.
+  if (rawSystemConfig.trim() === '') {
     return runtimeConfigExists
       ? { status: 'skipped-missing-source' }
       : { status: 'mirrored', preservedConflictKeys: new Set() }
   }
 
-  const rawSystemConfig = readAgentStateFileSync(systemConfigPath)
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)
   if (!runtimeConfigExists) {
     writeFileAtomically(
@@ -172,144 +173,4 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
       )
       .map((section) => section.block)
   ])
-}
-
-type TomlSection = {
-  header: string
-  block: string
-  start: number
-}
-
-function stripRuntimeOwnedTomlSections(
-  config: string,
-  runtimeProjectHeaders = new Set<string>()
-): string {
-  const lines = config.split('\n')
-  const sourceSections = getTomlSections(config)
-  const sections = deduplicateProjectTomlSections(sourceSections)
-  const firstSectionIndex = sourceSections[0]?.start ?? -1
-  const preamble = firstSectionIndex === -1 ? config : lines.slice(0, firstSectionIndex).join('\n')
-  return joinTomlBlocks([
-    preamble,
-    ...sections
-      .filter((section) => !isRuntimeHookTrustTomlSection(section.header))
-      .filter(
-        (section) =>
-          !isRuntimeProjectTomlSection(section.header) ||
-          !runtimeProjectHeaders.has(getTomlSectionHeaderKey(section.header)) ||
-          getProjectTrustLevel(section.block) === 'untrusted'
-      )
-      .map((section) => section.block)
-  ])
-}
-
-function getTomlSections(config: string): TomlSection[] {
-  const lines = config.split('\n')
-  const sections: TomlSection[] = []
-  let sectionStart = -1
-  let sectionHeader: string | null = null
-  let scanState = createTomlLineScanState()
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const header = isTomlStructuralLine(scanState) ? getTomlTableHeader(lines[index] ?? '') : null
-    if (!header) {
-      scanState = updateTomlLineScanState(scanState, lines[index] ?? '')
-      continue
-    }
-
-    if (sectionStart !== -1) {
-      sections.push({
-        header: sectionHeader ?? '',
-        block: lines.slice(sectionStart, index).join('\n'),
-        start: sectionStart
-      })
-    }
-    sectionStart = index
-    sectionHeader = header
-    scanState = updateTomlLineScanState(scanState, lines[index] ?? '')
-  }
-
-  if (sectionStart !== -1) {
-    sections.push({
-      header: sectionHeader ?? '',
-      block: lines.slice(sectionStart).join('\n'),
-      start: sectionStart
-    })
-  }
-  return sections
-}
-
-function isRuntimePreservedTomlSection(header: string): boolean {
-  return isRuntimeHookTrustTomlSection(header) || isRuntimeProjectTomlSection(header)
-}
-
-function isRuntimeHookTrustTomlSection(header: string): boolean {
-  const trimmed = header.trim()
-  // Why: Codex's config writer materializes the parent table on Windows. It is
-  // part of runtime-owned trust and must survive the next config mirror too.
-  return trimmed === '[hooks.state]' || trimmed.startsWith('[hooks.state.')
-}
-
-function isRuntimeProjectTomlSection(header: string): boolean {
-  return parseCodexProjectHeaderPath(header) !== null
-}
-
-function getTomlSectionHeaderKey(header: string): string {
-  const projectPath = parseCodexProjectHeaderPath(header)
-  return projectPath === null
-    ? header.trim()
-    : `project:${normalizeCodexProjectPathForLookup(projectPath)}`
-}
-
-// Why: configs written before WSL tails compared case-sensitively can hold a
-// revocation under drifted casing; match it loosely so trust is not resurrected.
-function getRevocationTomlSectionHeaderKey(header: string): string {
-  const projectPath = parseCodexProjectHeaderPath(header)
-  return projectPath === null
-    ? header.trim()
-    : `project:${normalizeCodexProjectPathForRevocationLookup(projectPath)}`
-}
-
-// Why: hook upsert already removes both quote representations, while its paired
-// Windows slash variants are required for Codex 0.140 and must remain distinct.
-function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSection[] {
-  const deduplicated: TomlSection[] = []
-  const projectIndexes = new Map<string, number>()
-  for (const section of sections) {
-    if (!isRuntimeProjectTomlSection(section.header)) {
-      deduplicated.push(section)
-      continue
-    }
-    const key = getTomlSectionHeaderKey(section.header)
-    const existingIndex = projectIndexes.get(key)
-    if (existingIndex === undefined) {
-      projectIndexes.set(key, deduplicated.length)
-      deduplicated.push(section)
-      continue
-    }
-    const existing = deduplicated[existingIndex]
-    if (
-      existing &&
-      getProjectTrustLevel(existing.block) !== 'untrusted' &&
-      getProjectTrustLevel(section.block) === 'untrusted'
-    ) {
-      // Why: revocation must survive self-healing regardless of duplicate order.
-      deduplicated[existingIndex] = section
-    }
-  }
-  return deduplicated
-}
-
-function getProjectTrustLevel(block: string): 'trusted' | 'untrusted' | null {
-  const match =
-    /^[ \t]*trust_level[ \t]*=[ \t]*(?:"(trusted|untrusted)"|'(trusted|untrusted)')[ \t\r]*(?:#.*)?$/m.exec(
-      block
-    )
-  const trustLevel = match?.[1] ?? match?.[2] ?? null
-  return trustLevel === 'trusted' || trustLevel === 'untrusted' ? trustLevel : null
-}
-
-function joinTomlBlocks(blocks: string[]): string {
-  const normalizedBlocks = blocks.map((block) => block.trim()).filter((block) => block.length > 0)
-  return normalizedBlocks.length === 0 ? '' : `${normalizedBlocks.join('\n\n')}\n`
 }

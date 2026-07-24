@@ -44,6 +44,7 @@
     "../src/main/codex/config-toml-deprecated-hook-flag.ts",
     "../src/main/codex/config-toml-key-path.ts",
     "../src/main/codex/config-toml-line-scan.ts",
+    "../src/main/codex/config-toml-runtime-owned-sections.ts",
     "../src/main/codex/config-toml-trust.ts",
     "../src/main/codex/hook-service.ts",
     "../src/main/codex/hook-trust-promotion.ts",

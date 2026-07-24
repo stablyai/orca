@@ -27,6 +27,7 @@ import {
   type CodexSettingsConflict
 } from './config-settings-baseline'
 import { resolveUntrackedCodexSetting } from './config-settings-conflict-resolution'
+import { extractOrdinaryCodexSettings } from './config-toml-runtime-owned-sections'
 
 // Why: the mirror reverts in-Codex config changes each launch; promotion salvages them by diffing the last baseline.
 
@@ -253,7 +254,13 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   // Why: a dangling symlink may target an unmade dir tree; create its real parent so the atomic temp write has a home.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
   const targetExists = existsSync(writeTarget.path)
-  const systemContent = targetExists ? readAgentStateFileSync(writeTarget.path) : ''
+  // Why: seeding a brand-new ~/.codex/config.toml from the promoted keys alone
+  // would leave a skeleton the next mirror treats as authoritative, deleting
+  // every other runtime setting (mcp_servers, features). With no system config
+  // the runtime IS the user's config, so carry its ordinary settings across.
+  const systemContent = targetExists
+    ? readAgentStateFileSync(writeTarget.path)
+    : extractOrdinaryCodexSettings(readAgentStateFileSync(runtimeTomlPath))
   const nextContent = upsertPromotedSettingsInContent(systemContent, updates)
   if (nextContent === systemContent) {
     return { conflicts, runtimeValuesToPreserve }

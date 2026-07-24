@@ -288,6 +288,28 @@ describe('codex settings write-back promotion', () => {
     expect(readRuntimeConfig()).toContain('model = "gpt-5.5-codex"')
   })
 
+  it('keeps runtime-only settings when promotion has to create ~/.codex/config.toml', () => {
+    // Why: `codex mcp add` inside an Orca-launched Codex writes into the runtime
+    // home. Seeding ~/.codex from the promoted keys alone made the next mirror
+    // treat that skeleton as authoritative and delete the MCP server for good.
+    expect(existsSync(join(tmpHome, '.codex'))).toBe(false)
+    syncSystemConfigIntoManagedCodexHome()
+
+    setRuntimeConfig(
+      '[features]\nhooks = true\n\n[mcp_servers.linear]\ncommand = "npx"\n\n[projects."/repo"]\ntrust_level = "trusted"\n'
+    )
+    simulateCodexSettingWrite('model', '"o4"')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).toContain('[mcp_servers.linear]')
+    expect(readRuntimeConfig()).toContain('[features]')
+    expect(readRuntimeConfig()).toContain('model = "o4"')
+    // Trust stays runtime-owned; Orca must not write it into the real ~/.codex.
+    expect(readRuntimeConfig()).toContain('[projects."/repo"]')
+    expect(readSystemConfig()).not.toContain('[projects."/repo"]')
+    expect(readSystemConfig()).toContain('[mcp_servers.linear]')
+  })
+
   it('does not promote a key deletion', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
