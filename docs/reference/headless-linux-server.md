@@ -33,7 +33,9 @@ dedicated `orca` service user with the setuid sandbox restored, `/opt/orca`).
 
 Either way it advertises the host's default-route address (the listener
 itself binds all interfaces) and prints the pairing URL when the server
-reports ready. Useful flags: `--pairing-address <addr>` (Tailscale/LAN-only
+reports ready. The pairing URL is a secret — it grants access to this
+runtime, so share it only with the client you intend to pair and keep it out
+of shared logs and tickets. Useful flags: `--pairing-address <addr>` (Tailscale/LAN-only
 or reverse-proxy setups), `--port <port>`, `--version <tag>` (pin instead of
 latest), `--user root` (runs with `--no-sandbox`), `--appimage <path>`
 (offline install), `--no-start`, `--uninstall [--purge]`, `--help`.
