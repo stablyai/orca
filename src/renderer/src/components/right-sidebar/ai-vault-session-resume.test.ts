@@ -608,4 +608,18 @@ describe('aiVaultSessionRowResumeGating', () => {
       canCopyResumeCommand: true
     })
   })
+
+  it('blocks resume while the provider session is still running', () => {
+    expect(aiVaultSessionRowResumeGating(sessionWithTurns, unblocked, true)).toEqual({
+      resumeDisabled: true,
+      canCopyResumeCommand: true
+    })
+  })
+
+  it('allows resume after an agent in the original pane reaches done', () => {
+    expect(aiVaultSessionRowResumeGating(sessionWithTurns, unblocked, false)).toEqual({
+      resumeDisabled: false,
+      canCopyResumeCommand: true
+    })
+  })
 })

@@ -29,6 +29,7 @@ import {
 import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { jumpToRunningAiVaultSessionPane } from './ai-vault-original-pane-actions'
 
 export function useAiVaultSessionLaunchActions({
   activeWorktree,
@@ -93,13 +94,15 @@ export function useAiVaultSessionLaunchActions({
 
   const handleResume = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
-      const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
-        sessionFilePath: session.filePath,
-        sessionExecutionHostId: session.executionHostId,
-        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
-        targetWorktreeId,
-        targetState
-      })
+      const targetId = jumpToRunningAiVaultSessionPane(session)
+        ? null
+        : resolveAiVaultSessionLaunchTargetOrNotify({
+            sessionFilePath: session.filePath,
+            sessionExecutionHostId: session.executionHostId,
+            activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+            targetWorktreeId,
+            targetState
+          })
       if (!targetId) {
         return
       }

@@ -209,11 +209,13 @@ function resolveAiVaultResumeTargetState(args: {
 // affordance is gated on content alone.
 export function aiVaultSessionRowResumeGating(
   session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>,
-  state: Pick<AiVaultSessionResumeState, 'blocked'> | null
+  state: Pick<AiVaultSessionResumeState, 'blocked'> | null,
+  sessionRunning = false
 ): { resumeDisabled: boolean; canCopyResumeCommand: boolean } {
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   return {
-    resumeDisabled: (state?.blocked ?? true) || !hasResumableContent,
+    // Why: two agent processes must not concurrently resume the same provider transcript.
+    resumeDisabled: sessionRunning || (state?.blocked ?? true) || !hasResumableContent,
     canCopyResumeCommand: hasResumableContent
   }
 }

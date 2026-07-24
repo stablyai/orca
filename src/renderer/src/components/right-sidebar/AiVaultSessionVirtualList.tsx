@@ -288,6 +288,8 @@ function AiVaultVirtualRow({
 
   const isActiveStickyHeader = row.type === 'group' && activeStickyHeaderIndex === index
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
+  const sessionLiveState = row.type === 'session' ? getSessionLiveState(row.session) : null
+  const sessionRunning = sessionLiveState !== null && sessionLiveState !== 'done'
   const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
   // Why: omit the jump affordance when the session already lives in the
   // worktree on screen — jumping there is a no-op.
@@ -307,7 +309,7 @@ function AiVaultVirtualRow({
   // empty conversation, so it is never offered as normally resumable.
   const resumeGating =
     row.type === 'session'
-      ? aiVaultSessionRowResumeGating(row.session, resumeState)
+      ? aiVaultSessionRowResumeGating(row.session, resumeState, sessionRunning)
       : { resumeDisabled: true, canCopyResumeCommand: false }
   const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState) : ''
   const canOpenLocalSessionPaths =
@@ -336,7 +338,7 @@ function AiVaultVirtualRow({
       ) : (
         <VaultSessionRow
           session={row.session}
-          liveState={getSessionLiveState(row.session)}
+          liveState={sessionLiveState}
           resumeStartup={buildResumeStartup(row.session, resumeState?.worktreeId)}
           realHomeResumeStartup={buildResumeStartup(
             { ...row.session, codexHome: null },

@@ -7,12 +7,35 @@ import { useAppStore } from '@/store'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
-import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
+import {
+  findAiVaultSessionLiveState,
+  findOriginalAiVaultSessionPane
+} from './ai-vault-original-pane'
 import {
   createLazyAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex,
   findOriginalAiVaultSessionPaneInIndex
 } from './ai-vault-original-pane-index'
+
+// Why: resume clicks can outlive rendered state; recheck before starting a duplicate process.
+export function jumpToRunningAiVaultSessionPane(session: AiVaultSession): boolean {
+  const state = useAppStore.getState()
+  const liveState = findAiVaultSessionLiveState(state, session)
+  if (liveState === null || liveState === 'done') {
+    return false
+  }
+  const target = findOriginalAiVaultSessionPane(state, session)
+  if (!target || !activateAndRevealWorktree(target.worktreeId)) {
+    return false
+  }
+  const activeState = useAppStore.getState()
+  activeState.setActiveTabType('terminal')
+  activateTabAndFocusPane(target.tabId, target.leafId, {
+    flashFocusedPane: true,
+    scrollToBottomIfOutputSinceLastView: true
+  })
+  return true
+}
 
 export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
