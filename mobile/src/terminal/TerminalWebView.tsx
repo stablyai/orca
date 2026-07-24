@@ -109,7 +109,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         onWebReady?.()
       }
       // Why: reload clears queued commands, so readiness must always restore the
-      // native-selected theme even when its value did not change in React.
+      // native-selected theme even when its value did not change in React. This is
+      // state restore only — the theme write is value-gated, so the iOS foreground
+      // repaint is owned by the visibilitychange handler in
+      // terminal-webview-webgl-recovery-injected.ts, not by this re-post.
       sendToWebView({ type: 'set-theme', terminalTheme })
       flushPendingMessages()
     },

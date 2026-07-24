@@ -159,4 +159,52 @@ describe('mobile terminal-webview contrast floor gate', () => {
 
     expect(writes.contrast).toBe(1)
   })
+
+  it('skips the write when the very first palette already equals the seeded default', () => {
+    // terminal-webview-html.ts:292 seeds terminalTheme with defaultTheme, not null, so the
+    // gate must already hold on the first apply — the null seed elsewhere short-circuits it.
+    const writes = { theme: 0 }
+    const term = {
+      options: {
+        set theme(next: unknown) {
+          writes.theme += 1
+          void next
+        },
+        set minimumContrastRatio(next: number) {
+          void next
+        }
+      }
+    }
+    const context = loadThemeInjected({
+      term,
+      document: {
+        documentElement: { style: { background: '' } },
+        body: { style: { background: '' } }
+      },
+      terminalTheme: { background: '#1a1b26', foreground: '#c0caf5' }
+    }) as ThemeInjectedContext
+
+    context.applyTerminalTheme({ theme: { background: '#1a1b26', foreground: '#c0caf5' } })
+
+    expect(writes.theme).toBe(0)
+  })
+
+  it('keeps the module palette current when no terminal exists yet', () => {
+    // Why this matters: terminal-webview-html.ts:713 applies a theme and only then runs
+    // new Terminal({ theme: terminalTheme }), so moving the assignment inside `if (term)`
+    // would construct the terminal from a stale default.
+    const context = loadThemeInjected({
+      // terminal-webview-html.ts declares `term` before the terminal is constructed.
+      term: null,
+      document: {
+        documentElement: { style: { background: '' } },
+        body: { style: { background: '' } }
+      }
+    }) as ThemeInjectedContext
+
+    context.applyTerminalTheme({ theme: { background: '#282828' } })
+
+    expect(context.terminalTheme).toMatchObject({ background: '#282828' })
+    expect(context.terminalMinimumContrastRatio).toBe(DARK_FLOOR)
+  })
 })
