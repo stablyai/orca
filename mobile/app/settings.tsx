@@ -24,7 +24,8 @@ import {
   Terminal as TerminalIcon,
   KeyRound
 } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../src/theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 import {
   loadPendingHostCredentialCleanup,
   subscribePendingHostCredentialCleanup
@@ -32,6 +33,8 @@ import {
 import { retryPendingHostCredentialCleanup } from '../src/transport/host-store'
 
 export default function SettingsScreen() {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createSettingsStyles)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [pendingCredentialIds, setPendingCredentialIds] = useState<string[]>([])
@@ -231,91 +234,92 @@ export default function SettingsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xl
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  sectionSpacer: {
-    marginTop: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  credentialCleanupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  credentialCleanupCopy: {
-    flex: 1,
-    gap: spacing.xs
-  },
-  credentialCleanupTitle: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowHint: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    lineHeight: 17
-  },
-  retryButton: {
-    width: 72,
-    height: 32,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  retryButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
-})
+export const createSettingsStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgBase,
+      paddingHorizontal: spacing.lg
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.xl
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.sm
+    },
+    heading: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.textPrimary
+    },
+    section: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden'
+    },
+    sectionSpacer: {
+      marginTop: spacing.md
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    rowLabel: {
+      flex: 1,
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    credentialCleanupRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    credentialCleanupCopy: {
+      flex: 1,
+      gap: spacing.xs
+    },
+    credentialCleanupTitle: {
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    rowHint: {
+      fontSize: typography.metaSize,
+      color: colors.textSecondary,
+      lineHeight: 17
+    },
+    retryButton: {
+      width: 72,
+      height: 32,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    retryButtonText: {
+      fontSize: typography.metaSize,
+      fontWeight: '600',
+      color: colors.textPrimary
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    }
+  })

@@ -122,7 +122,13 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/ProtocolBlockScreen'),
     import('../components/WorkspaceDetailPlaceholder'),
     import('../components/NewWorkspaceFab'),
-    import('../components/AccountUsage')
+    import('../components/AccountUsage'),
+    // App screens pull expo modules that vitest cannot load; their pure style
+    // module (voice-settings-styles) and co-located component factories below
+    // cover batch 3. Other app factories are identity-checked via git diff -w.
+    import('../../app/voice-settings-styles'),
+    import('../components/ConnectionLog'),
+    import('../components/VoiceModelList')
   ])
   const [
     bottomDrawer,
@@ -143,7 +149,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     protocolBlock,
     placeholder,
     fab,
-    accountUsage
+    accountUsage,
+    voiceSettings,
+    connectionLog,
+    voiceModelList
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -176,7 +185,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
       factory: placeholder.createWorkspaceDetailPlaceholderStyles
     },
     { name: 'createNewWorkspaceFabStyles', factory: fab.createNewWorkspaceFabStyles },
-    { name: 'createAccountUsageStyles', factory: accountUsage.createAccountUsageStyles }
+    { name: 'createAccountUsageStyles', factory: accountUsage.createAccountUsageStyles },
+    { name: 'createVoiceSettingsStyles', factory: voiceSettings.createVoiceSettingsStyles },
+    { name: 'createConnectionLogStyles', factory: connectionLog.createConnectionLogStyles },
+    { name: 'createVoiceModelListStyles', factory: voiceModelList.createVoiceModelListStyles }
   ]
 }
 
@@ -217,5 +229,13 @@ describe('themed style factories', () => {
     const banner = createAuthFailedBannerStyles(darkColors)
     expect(banner.text.color).toBe(darkColors.statusRed)
     expect(banner.actionText.color).toBe(darkColors.accentBlue)
+
+    const { createVoiceSettingsStyles } = await import('../../app/voice-settings-styles')
+    const { createConnectionLogStyles } = await import('../components/ConnectionLog')
+    const voice = createVoiceSettingsStyles(darkColors)
+    expect(voice.container.backgroundColor).toBe(darkColors.bgBase)
+    expect(voice.heading.color).toBe(darkColors.textPrimary)
+    const log = createConnectionLogStyles(darkColors)
+    expect(log.timestamp.color).toBe(darkColors.textMuted)
   })
 })

@@ -5,7 +5,8 @@ import { useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import Constants from 'expo-constants'
 import { ChevronLeft, Copy, Check } from 'lucide-react-native'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { spacing, typography, type ThemeColors } from '../src/theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import { loadHosts } from '../src/transport/host-store'
 import { connectionLogStore } from '../src/transport/connection-log-buffer'
@@ -25,6 +26,8 @@ const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
 // screen also *acquires* the host client — opening it kicks a dial and the
 // log fills live instead of showing a stale tail.
 export default function ConnectionLogScreen() {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createConnectionLogScreenStyles)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [hosts, setHosts] = useState<HostProfile[]>([])
@@ -139,83 +142,84 @@ export default function ConnectionLogScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  hostPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md
-  },
-  hostChip: {
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 16,
-    backgroundColor: colors.bgRaised
-  },
-  hostChipActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  hostChipText: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    maxWidth: 160
-  },
-  hostChipTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  statusText: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary
-  },
-  copyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  copyButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  emptyText: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
-  }
-})
+export const createConnectionLogScreenStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgBase,
+      padding: spacing.lg
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.lg
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.sm
+    },
+    heading: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.textPrimary
+    },
+    hostPicker: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginBottom: spacing.md
+    },
+    hostChip: {
+      paddingVertical: spacing.xs + 2,
+      paddingHorizontal: spacing.md,
+      borderRadius: 16,
+      backgroundColor: colors.bgRaised
+    },
+    hostChipActive: {
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle
+    },
+    hostChipText: {
+      fontSize: typography.metaSize,
+      color: colors.textSecondary,
+      maxWidth: 160
+    },
+    hostChipTextActive: {
+      color: colors.textPrimary,
+      fontWeight: '600'
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm
+    },
+    statusText: {
+      fontSize: typography.metaSize,
+      color: colors.textSecondary
+    },
+    copyButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs + 2,
+      paddingVertical: spacing.xs + 2,
+      paddingHorizontal: spacing.md,
+      borderRadius: 8,
+      backgroundColor: colors.bgRaised
+    },
+    copyButtonText: {
+      fontSize: typography.metaSize,
+      fontWeight: '600',
+      color: colors.textPrimary
+    },
+    emptyText: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      lineHeight: 18
+    }
+  })

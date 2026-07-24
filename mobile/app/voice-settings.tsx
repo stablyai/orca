@@ -3,8 +3,9 @@ import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 're
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
-import { colors, spacing } from '../src/theme/mobile-theme'
-import { voiceSettingsStyles as styles } from './voice-settings-styles'
+import { spacing } from '../src/theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../src/theme/theme-context'
+import { createVoiceSettingsStyles } from './voice-settings-styles'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useAllHostClients } from '../src/transport/client-context'
@@ -32,6 +33,8 @@ const DICTATION_MODES = [
 type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
 
 export default function VoiceSettingsScreen(): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createVoiceSettingsStyles)
   const router = useRouter()
   const insets = useSafeAreaInsets()
 

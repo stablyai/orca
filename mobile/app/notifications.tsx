@@ -3,7 +3,8 @@ import { AppState, Linking, View, Text, StyleSheet, Pressable, Switch } from 're
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { spacing, typography, type ThemeColors } from '../src/theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 import {
   loadPushNotificationsEnabled,
   savePushNotificationsEnabled
@@ -22,6 +23,8 @@ const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
 }
 
 export default function NotificationsScreen() {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createNotificationsStyles)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [pushEnabled, setPushEnabled] = useState(false)
@@ -109,70 +112,71 @@ export default function NotificationsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xl
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  hint: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18,
-    paddingHorizontal: spacing.md + 2,
-    paddingBottom: spacing.md
-  },
-  settingsButton: {
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md + 2,
-    marginBottom: spacing.md,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  settingsButtonPressed: {
-    opacity: 0.6
-  },
-  settingsButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  }
-})
+export const createNotificationsStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgBase,
+      padding: spacing.lg
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.xl
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.sm
+    },
+    heading: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.textPrimary
+    },
+    section: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden'
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowLabel: {
+      flex: 1,
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    hint: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      lineHeight: 18,
+      paddingHorizontal: spacing.md + 2,
+      paddingBottom: spacing.md
+    },
+    settingsButton: {
+      alignSelf: 'flex-start',
+      marginHorizontal: spacing.md + 2,
+      marginBottom: spacing.md,
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      borderRadius: 8,
+      backgroundColor: colors.bgRaised
+    },
+    settingsButtonPressed: {
+      opacity: 0.6
+    },
+    settingsButtonText: {
+      color: colors.textPrimary,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    }
+  })
