@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SimulatorDevice } from '../simctl-simulator-devices'
 import type { ServeSimHelperProcess } from '../serve-sim-helper-processes'
 
+type CaptureSimulatorLog = (
+  udid: string,
+  options?: { lines?: number; filters?: readonly string[]; window?: string }
+) => Promise<{ level?: string; message: string }[]>
+
 const {
   ensureSimulatorBootedMock,
   execServeSimCommandMock,
@@ -12,6 +17,7 @@ const {
   shutdownSimulatorDeviceMock,
   sendEmulatorGestureSequenceMock,
   parseServeSimDetachedSessionMock,
+  captureSimulatorLogMock,
   netFetchMock
 } = vi.hoisted(() => ({
   ensureSimulatorBootedMock: vi.fn(async () => {}),
@@ -23,6 +29,7 @@ const {
   shutdownSimulatorDeviceMock: vi.fn(async () => {}),
   sendEmulatorGestureSequenceMock: vi.fn(async () => {}),
   parseServeSimDetachedSessionMock: vi.fn(),
+  captureSimulatorLogMock: vi.fn<CaptureSimulatorLog>(async () => []),
   netFetchMock: vi.fn()
 }))
 
@@ -49,6 +56,10 @@ vi.mock('../serve-sim-helper-processes', () => ({
 
 vi.mock('../simulator-app-visibility', () => ({
   hideNativeSimulatorApp: hideNativeSimulatorAppMock
+}))
+
+vi.mock('../simctl-log-capture', () => ({
+  captureSimulatorLog: captureSimulatorLogMock
 }))
 
 vi.mock('../emulator-gesture-sender', () => ({
@@ -85,6 +96,8 @@ describe('IosEmulatorBackend', () => {
     sendEmulatorGestureSequenceMock.mockReset()
     sendEmulatorGestureSequenceMock.mockImplementation(async () => {})
     parseServeSimDetachedSessionMock.mockReset()
+    captureSimulatorLogMock.mockReset()
+    captureSimulatorLogMock.mockImplementation(async () => [])
     netFetchMock.mockReset()
   })
 
@@ -97,8 +110,43 @@ describe('IosEmulatorBackend', () => {
       launch: false,
       permissions: false,
       accessibilityTree: true,
-      logcat: false
+      logcat: true
     })
+  })
+
+  it('captures unified logs for the resolved simulator', async () => {
+    captureSimulatorLogMock.mockResolvedValue([{ level: 'Error', message: 'failed' }])
+    const backend = new IosEmulatorBackend()
+
+    await expect(backend.logcat('device-1', { lines: 20, filters: ['com.acme'] })).resolves.toEqual(
+      [{ level: 'Error', message: 'failed' }]
+    )
+    expect(captureSimulatorLogMock).toHaveBeenCalledWith('device-1', {
+      lines: 20,
+      filters: ['com.acme'],
+      window: '10m'
+    })
+  })
+
+  it('requires a filter and applies bounded iOS log defaults', async () => {
+    const backend = new IosEmulatorBackend()
+
+    await expect(backend.logcat('device-1')).rejects.toThrow('requires --filter')
+    await backend.logcat('device-1', { filters: ['  com.acme  '] })
+    expect(captureSimulatorLogMock).toHaveBeenCalledWith('device-1', {
+      lines: 500,
+      filters: ['com.acme'],
+      window: '10m'
+    })
+  })
+
+  it('rejects iOS log dumps above the line limit', async () => {
+    const backend = new IosEmulatorBackend()
+
+    await expect(
+      backend.logcat('device-1', { filters: ['com.acme'], lines: 10_001 })
+    ).rejects.toThrow('at most 10000 lines')
+    expect(captureSimulatorLogMock).not.toHaveBeenCalled()
   })
 
   it('fetches and normalizes the serve-sim accessibility tree', async () => {

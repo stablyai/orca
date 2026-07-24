@@ -129,6 +129,32 @@ describe('orca emulator CLI handlers', () => {
     )
   })
 
+  it('passes a log filter to the emulator runtime', async () => {
+    queueFixtures(callMock, okFixture('req_logcat', []))
+
+    await main(
+      [
+        'emulator',
+        'logcat',
+        '--device',
+        'device-1',
+        '--lines',
+        '20',
+        '--filter',
+        'com.example.App'
+      ],
+      '/repo/project'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('emulator.logcat', {
+      lines: 20,
+      filters: ['com.example.App'],
+      device: 'device-1',
+      emulator: undefined,
+      worktree: undefined
+    })
+  })
+
   it('rejects relative APK paths for remote runtimes', async () => {
     remoteMock.mockReturnValue(true)
 
